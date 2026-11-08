@@ -33,14 +33,23 @@ test("a proposed type is added to the draft model by keyboard, with a reason", a
   const why = page.getByLabel("Why? (required)");
   await expect(why).toBeFocused();
   await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(page.getByRole("alert")).toHaveText("Say what stands behind its links: Direct or Probabilistic.");
+  expect(await sent(page)).toHaveLength(0);
+  // Tab from the reason to the basis, and Space chooses it.
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel(/^Direct/)).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(page.getByLabel(/^Direct/)).toBeChecked();
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("alert")).toHaveText("Say why: a reason is required.");
   expect(await sent(page)).toHaveLength(0);
+  await page.getByLabel("Why? (required)").focus();
   await page.keyboard.type("Seen in three cases this month");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("status")).toHaveText(/Bribed added to the draft model/);
   await expect(page.getByRole("status")).toBeFocused();
   expect(await sent(page)).toEqual([
-    { path: "/v1/datasets/ds-1/model/proposals/p1/accept", body: { reason: "Seen in three cases this month" } },
+    { path: "/v1/datasets/ds-1/model/proposals/p1/accept", body: { basis: "direct", reason: "Seen in three cases this month" } },
   ]);
   await expect(page.getByText("In the draft model")).toBeVisible();
   registerCovered(REGISTRY, "add-a-proposed-type-to-the-draft-model-by-keyboard");
@@ -77,6 +86,8 @@ test("the proposer's own is refused in the Conduit's words, by keyboard", async 
   await tabTo(page, "Add Bribed to the draft model…");
   await page.keyboard.press("Enter");
   await page.keyboard.type("Mine, and useful");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Space");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("alert")).toHaveText(
     "You proposed this type, so another data engineer of the dataset decides it.",

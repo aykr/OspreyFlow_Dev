@@ -65,10 +65,15 @@ describe("ModelProposals", () => {
     const calls = serve(
       { status: 200, json: { proposals: [PENDING] } },
       { status: 200, json: { ...PENDING, status: "accepted" } },
-      { status: 200, json: { proposals: [{ ...PENDING, status: "accepted" }] } },
+      { status: 200, json: { proposals: [{ ...PENDING, status: "accepted", in_model: "draft" }] } },
     );
     mount();
     fireEvent.click(await screen.findByRole("button", { name: "Add Bribed to the draft model…" }));
+    fireEvent.change(screen.getByLabelText("Why? (required)"), { target: { value: "Seen in three cases" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the draft model" }));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Say what stands behind its links: Direct or Probabilistic.");
+    fireEvent.change(screen.getByLabelText("Why? (required)"), { target: { value: " " } });
+    fireEvent.click(screen.getByLabelText(/^Direct/));
     fireEvent.click(screen.getByRole("button", { name: "Add to the draft model" }));
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "Say why: a reason is required.");
     expect(calls).toHaveLength(1);
@@ -78,7 +83,11 @@ describe("ModelProposals", () => {
       "textContent",
       "Bribed added to the draft model: its links can be promoted once that version is made live.",
     );
-    expect(calls[1]).toEqual({ url: "http://api.test/v1/datasets/ds-1/model/proposals/p1/accept", method: "POST", body: { reason: "Seen in three cases" } });
+    expect(calls[1]).toEqual({
+      url: "http://api.test/v1/datasets/ds-1/model/proposals/p1/accept",
+      method: "POST",
+      body: { basis: "direct", reason: "Seen in three cases" },
+    });
     await waitFor(() => expect(screen.getByText("In the draft model")).toBeTruthy());
   });
 
@@ -112,5 +121,29 @@ describe("ModelProposals", () => {
     mount();
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", "The proposed link types could not be read. Open the tab again to retry.");
     expect(screen.queryByText("No link types have been proposed for this dataset.")).toBeNull();
+  });
+
+  it("offers an accepted type lost from the model to be added again, and says the model's refusal in its words", async () => {
+    const calls = serve(
+      { status: 200, json: { proposals: [{ ...PENDING, status: "accepted", in_model: null, decided_by: "dan", decision_reason: "Useful" }] } },
+      { status: 409, json: { error: "model_refused", detail: "this dataset already has a draft, version 4: save or discard it first" } },
+    );
+    mount();
+    expect(await screen.findByText("Accepted, not in the model")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Proposed link types (1 to decide)" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Decline Bribed…" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add Bribed to the draft model again…" }));
+    fireEvent.click(screen.getByLabelText(/^Probabilistic/));
+    fireEvent.change(screen.getByLabelText("Why? (required)"), { target: { value: "Lost with the draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add to the draft model" }));
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent", "this dataset already has a draft, version 4: save or discard it first");
+    expect(calls[1]!.body).toEqual({ basis: "probabilistic", reason: "Lost with the draft" });
+  });
+
+  it("tags an accepted type live once its version is", async () => {
+    serve({ status: 200, json: { proposals: [{ ...PENDING, status: "accepted", in_model: "live" }] } });
+    mount();
+    expect(await screen.findByText("In the live model")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Bribed/ })).toBeNull();
   });
 });

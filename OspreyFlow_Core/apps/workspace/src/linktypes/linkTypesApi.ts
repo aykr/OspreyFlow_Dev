@@ -27,6 +27,9 @@ export interface LinkTypeProposal {
   decision_reason?: string | null;
   basis?: "direct" | "probabilistic" | null;
   promoted_name?: string | null;
+  /** The dataset it belongs to (ADR-099 Amendment 3); a proposal naming one is decided on that
+   * dataset's Model tab, never here (ADR-090 Amendment 4). */
+  dataset_id?: string | null;
 }
 
 export interface ProposeLinkTypeInput {

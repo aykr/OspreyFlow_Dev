@@ -1,7 +1,7 @@
 // The fetch helper and refusal of every link-type call (ADR-090; ADR-143 decision 9): Bearer auth, and a
 // refusal thrown with the server's own sentence and a `kind` the form words its message from. It names
 // no path, so importing it says nothing of which place a screen calls (`test_place_routes.py`).
-export type LinkTypeErrorKind = "refused" | "not_found" | "forbidden" | "failed";
+export type LinkTypeErrorKind = "refused" | "model_refused" | "not_found" | "forbidden" | "failed";
 
 export class LinkTypeError extends Error {
   kind: LinkTypeErrorKind;
@@ -21,6 +21,11 @@ async function refusal(response: Response): Promise<LinkTypeError> {
   }
   if (body.error === "proposal_refused") {
     return new LinkTypeError("refused", body.detail ?? "That cannot be done.");
+  }
+  // A change to the dataset's domain model refused (a second draft opened meanwhile, a composite's
+  // model): the Conduit's own words (ADR-140 decision 5).
+  if (body.error === "model_refused") {
+    return new LinkTypeError("model_refused", body.detail ?? "The domain model cannot be changed now.");
   }
   if (body.error === "proposal_not_found" || response.status === 404) {
     return new LinkTypeError("not_found", "That proposal is no longer there.");

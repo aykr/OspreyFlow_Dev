@@ -20,14 +20,30 @@ export interface ModelProposalsProps {
 }
 
 type Decision = "accept" | "decline";
+type Basis = "" | "direct" | "probabilistic";
 
 const STATUS: Partial<Record<ProposalStatus, { words: string; tag: string }>> = {
   pending: { words: "Proposed", tag: "govuk-tag--yellow" },
-  accepted: { words: "In the draft model", tag: "govuk-tag--green" },
   rejected: { words: "Declined", tag: "govuk-tag--red" },
   withdrawn: { words: "Withdrawn", tag: "govuk-tag--grey" },
   merged: { words: "Merged", tag: "govuk-tag--grey" },
 };
+
+/** An accepted type's tag says where it stands in the dataset's model: live, in the draft, or lost
+ * from the draft (discarded, or saved without it), when it may be added again. */
+function statusOf(p: ModelProposal): { words: string; tag: string } {
+  if (p.status === "accepted") {
+    if (p.in_model === "live") return { words: "In the live model", tag: "govuk-tag--green" };
+    if (p.in_model === "draft") return { words: "In the draft model", tag: "govuk-tag--blue" };
+    return { words: "Accepted, not in the model", tag: "govuk-tag--orange" };
+  }
+  return STATUS[p.status] ?? { words: p.status, tag: "govuk-tag--grey" };
+}
+
+/** Pending, or accepted and lost from the model: still to decide. */
+function decidable(p: ModelProposal): boolean {
+  return p.status === "pending" || (p.status === "accepted" && !p.in_model);
+}
 
 export function title(p: ModelProposal): string {
   return p.label?.trim() || p.name;
@@ -43,6 +59,7 @@ function sentence(error: unknown): string {
   if (error instanceof LinkTypeError) {
     if (error.kind === "refused") return error.message;
     if (error.kind === "not_found") return "That proposal is no longer there to decide.";
+    if (error.kind === "model_refused") return error.message;
     if (error.kind === "forbidden") return "Deciding proposed types needs the right to accept types.";
   }
   return "Nothing was decided; try again.";
@@ -55,6 +72,7 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
   const [loadFailed, setLoadFailed] = useState(false);
   const [deciding, setDeciding] = useState<{ id: string; decision: Decision } | null>(null);
   const [reason, setReason] = useState("");
+  const [basis, setBasis] = useState<Basis>("");
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -103,6 +121,7 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
     openedBy.current = button.textContent;
     setDeciding({ id, decision });
     setReason("");
+    setBasis("");
     setProblem(null);
     setDone(null);
   };
@@ -113,6 +132,10 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
   };
   const decide = async (proposal: ModelProposal) => {
     if (!deciding || busy) return;
+    if (deciding.decision === "accept" && basis === "") {
+      setProblem("Say what stands behind its links: Direct or Probabilistic.");
+      return;
+    }
     if (reason.trim() === "") {
       setProblem("Say why: a reason is required.");
       return;
@@ -120,7 +143,7 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
     setBusy(true);
     setProblem(null);
     try {
-      await decideModelProposal(apiBaseUrl, bearerToken, datasetId, proposal.id, deciding.decision, reason.trim());
+      await decideModelProposal(apiBaseUrl, bearerToken, datasetId, proposal.id, deciding.decision, reason.trim(), basis || undefined);
       setDone(
         deciding.decision === "accept"
           ? `${title(proposal)} added to the draft model: its links can be promoted once that version is made live.`
@@ -135,7 +158,7 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
     }
   };
 
-  const pending = (proposals ?? []).filter((p) => p.status === "pending").length;
+  const pending = (proposals ?? []).filter(decidable).length;
   const button = (primary: boolean) =>
     govuk ? `govuk-button ${primary ? "" : "govuk-button--secondary"} model-proposals__button` : `btn ${primary ? "btn--primary" : ""}`;
   const muted = govuk ? "govuk-body-s" : "caption";
@@ -166,7 +189,7 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
       {proposals !== null && proposals.length > 0 && (
         <dl className={govuk ? "govuk-summary-list" : "model-proposals__list"} aria-label="Proposed link types" style={{ margin: 0, display: govuk ? undefined : "grid", gap: "var(--sp-8)" }}>
           {proposals.map((p) => {
-            const status = STATUS[p.status] ?? { words: p.status, tag: "govuk-tag--grey" };
+            const status = statusOf(p);
             const open = deciding?.id === p.id;
             return (
               <div key={p.id} className={govuk ? "govuk-summary-list__row" : undefined} data-proposal-id={p.id} style={govuk ? undefined : { borderBottom: "1px solid var(--border-subtle)", paddingBottom: "var(--sp-8)", display: "grid", gap: "var(--sp-4)" }}>
@@ -186,6 +209,8 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
                       proposal={p}
                       decision={deciding.decision}
                       reason={reason}
+                      basis={basis}
+                      onBasis={setBasis}
                       busy={busy}
                       problem={problem}
                       onReason={setReason}
@@ -194,14 +219,16 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
                     />
                   )}
                 </dd>
-                {p.status === "pending" && !open && (
+                {decidable(p) && !open && (
                   <dd className={govuk ? "govuk-summary-list__actions" : undefined} style={{ margin: 0, display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
                     <button type="button" className={button(true)} onClick={(e) => start(p.id, "accept", e.currentTarget)}>
-                      {`Add ${title(p)} to the draft model…`}
+                      {p.status === "accepted" ? `Add ${title(p)} to the draft model again…` : `Add ${title(p)} to the draft model…`}
                     </button>
-                    <button type="button" className={button(false)} onClick={(e) => start(p.id, "decline", e.currentTarget)}>
-                      {`Decline ${title(p)}…`}
-                    </button>
+                    {p.status === "pending" && (
+                      <button type="button" className={button(false)} onClick={(e) => start(p.id, "decline", e.currentTarget)}>
+                        {`Decline ${title(p)}…`}
+                      </button>
+                    )}
                   </dd>
                 )}
               </div>
@@ -218,13 +245,15 @@ function DecisionForm(props: {
   proposal: ModelProposal;
   decision: Decision;
   reason: string;
+  basis: Basis;
+  onBasis: (value: Basis) => void;
   busy: boolean;
   problem: string | null;
   onReason: (value: string) => void;
   onDecide: () => void;
   onCancel: () => void;
 }) {
-  const { govuk, proposal, decision, reason, busy, problem, onReason, onDecide, onCancel } = props;
+  const { govuk, proposal, decision, reason, basis, onBasis, busy, problem, onReason, onDecide, onCancel } = props;
   const verb = decision === "accept" ? "Add to the draft model" : "Decline";
   const fieldId = `model-proposal-reason-${proposal.id}`;
   return (
@@ -273,6 +302,34 @@ function DecisionForm(props: {
           style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }}
         />
       </div>
+      {decision === "accept" && (
+        <fieldset className={govuk ? "govuk-fieldset" : undefined} style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: "var(--sp-4)" }}>
+          <legend className={govuk ? "govuk-fieldset__legend govuk-fieldset__legend--s" : "caption"}>What stands behind its links? (required)</legend>
+          <div className={govuk ? "govuk-radios govuk-radios--small" : undefined} style={govuk ? undefined : { display: "grid", gap: "var(--sp-4)" }}>
+            {(["direct", "probabilistic"] as const).map((choice) => {
+              const id = `model-proposal-basis-${proposal.id}-${choice}`;
+              return (
+                <div key={choice} className={govuk ? "govuk-radios__item" : undefined} style={govuk ? undefined : { display: "flex", gap: "var(--sp-8)", alignItems: "baseline" }}>
+                  <input
+                    id={id}
+                    className={govuk ? "govuk-radios__input" : undefined}
+                    type="radio"
+                    name={`model-proposal-basis-${proposal.id}`}
+                    checked={basis === choice}
+                    disabled={busy}
+                    onChange={() => onBasis(choice)}
+                  />
+                  <label htmlFor={id} className={govuk ? "govuk-label govuk-radios__label" : undefined}>
+                    {choice === "direct"
+                      ? "Direct: a loader backs its links, from now on (links drawn before stay probabilistic)"
+                      : "Probabilistic: declared by an analyst, or statistically derived"}
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
       {problem && !govuk && (
         <p role="alert" className="caption" style={{ margin: 0 }}>
           {problem}

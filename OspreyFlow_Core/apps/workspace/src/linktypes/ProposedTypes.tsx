@@ -173,7 +173,10 @@ export function ProposedTypes({ apiBaseUrl, bearerToken, open, onClose, onDecide
             <span style={small}>
               Proposed by {p.proposed_by} in case {p.investigation_id}: “{p.reason}”
             </span>
-            {p.status === "pending" && (
+            {p.status === "pending" && p.dataset_id && (
+              <span style={small}>Decided by a data engineer of its dataset, on the Ingest Studio&apos;s Model tab.</span>
+            )}
+            {p.status === "pending" && !p.dataset_id && (
               <span style={{ display: "flex", gap: "var(--sp-8)" }}>
                 <button type="button" className="btn" aria-label={`Promote ${title(p)}…`} onClick={() => start(p, "promote")}>
                   Promote…

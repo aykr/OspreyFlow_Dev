@@ -24,16 +24,19 @@ const rows = [
     id: "p1", name: "BRIBED", label: "Bribed", from_types: ["Person"], to_types: ["Person"], directed: true,
     proposed_by: "alice", proposed_at: "2026-11-08T10:00:00Z", reason: "Paid a prison officer to carry items in",
     status: "pending", decided_by: null as string | null, decision_reason: null as string | null,
+    in_model: null as string | null, basis: null as string | null,
   },
   {
     id: "p2", name: "LOOKS_OUT_FOR", label: "Looks out for", from_types: ["Person"], to_types: ["Person"], directed: true,
     proposed_by: "bob", proposed_at: "2026-11-07T15:00:00Z", reason: "Keeps watch during a handover",
     status: "pending", decided_by: null as string | null, decision_reason: null as string | null,
+    in_model: null as string | null, basis: null as string | null,
   },
   {
     id: "p3", name: "SEEN_NEAR", label: "Seen near", from_types: ["Person"], to_types: ["Location"], directed: true,
     proposed_by: "bob", proposed_at: "2026-11-06T09:00:00Z", reason: "Near the gate at visiting time",
     status: "rejected", decided_by: "dan", decision_reason: "Use PRESENT_AT",
+    in_model: null as string | null, basis: null as string | null,
   },
 ];  // prettier-ignore
 
@@ -46,14 +49,17 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (path === "/v1/datasets/ds-1/model/proposals") return json(200, { proposals: rows });
   const decided = /^\/v1\/datasets\/ds-1\/model\/proposals\/([^/]+)\/(accept|decline)$/.exec(path);
   if (!decided) return json(404, { error: "proposal_not_found" });
-  const body = JSON.parse(String(init.body ?? "{}")) as { reason?: string };
+  const body = JSON.parse(String(init.body ?? "{}")) as { reason?: string; basis?: string };
   window.__PROPOSALS__!.sent.push({ path, body });
   const row = rows.find((r) => r.id === decided[1]);
   if (!row || row.status !== "pending") return json(404, { error: "proposal_not_found" });
   const refuse = (detail: string) => json(422, { error: "proposal_refused", detail });
   if (!String(body.reason ?? "").trim()) return refuse("Say why: a reason of at most 2000 characters is required.");
   if (row.proposed_by === reader) return refuse("You proposed this type, so another data engineer of the dataset decides it.");
+  if (decided[2] === "accept" && !body.basis) return json(422, { detail: [{ msg: "basis required" }] });
   row.status = decided[2] === "accept" ? "accepted" : "rejected";
+  row.in_model = decided[2] === "accept" ? "draft" : null;
+  row.basis = body.basis ?? null;
   row.decided_by = reader;
   row.decision_reason = String(body.reason);
   return json(200, row);

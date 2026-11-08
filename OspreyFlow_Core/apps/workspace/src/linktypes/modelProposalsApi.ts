@@ -19,6 +19,9 @@ export interface ModelProposal {
   decided_by?: string | null;
   decided_at?: string | null;
   decision_reason?: string | null;
+  basis?: "direct" | "probabilistic" | null;
+  /** Where its type stands in the dataset's model: live, in the draft, or neither. */
+  in_model?: "live" | "draft" | null;
 }
 
 const modelUrl = (base: string, datasetId: string) =>
@@ -43,8 +46,11 @@ export function decideModelProposal(
   proposalId: string,
   decision: "accept" | "decline",
   reason: string,
+  basis?: "direct" | "probabilistic",
 ): Promise<ModelProposal> {
-  return send(`${modelUrl(apiBaseUrl, datasetId)}/${encodeURIComponent(proposalId)}/${decision}`, bearerToken, {
-    reason,
-  });
+  return send(
+    `${modelUrl(apiBaseUrl, datasetId)}/${encodeURIComponent(proposalId)}/${decision}`,
+    bearerToken,
+    decision === "accept" ? { basis, reason } : { reason },
+  );
 }
