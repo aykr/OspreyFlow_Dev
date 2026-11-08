@@ -29,6 +29,8 @@ export interface Palette {
   surfaceRaised: string;
   surfaceHover: string;
   brass: string;
+  /** `--warning`: a drawn item, dashed amber wherever it appears (ADR-143 decision 4). */
+  warning: string;
   seq: readonly [string, string, string, string, string, string];
 }
 
@@ -56,6 +58,7 @@ const DARK: Palette = {
   surfaceRaised: SURFACE_RAISED_DARK_HEX,
   surfaceHover: SURFACE_HOVER_DARK_HEX,
   brass: BRASS_HEX,
+  warning: "#d9a63f",
   seq: SEQ_HEX,
 };
 
@@ -71,6 +74,7 @@ const LIGHT: Palette = {
   surfaceRaised: "#e8eced",
   surfaceHover: "#dde0e1",
   brass: "#8a6318",
+  warning: "#8f6410",
   seq: ["#cfebec", "#a0ced0", "#6eaeb2", "#358f94", "#007177", "#00535b"],
 };
 
