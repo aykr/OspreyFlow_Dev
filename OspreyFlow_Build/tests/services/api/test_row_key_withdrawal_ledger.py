@@ -458,3 +458,36 @@ async def test_the_record_lookups_are_indexed(runs: RecipeRunStore) -> None:
         "withdrawn_row_keys: CREATE INDEX" in definitions
         and "(withdrawn_by_load)" in definitions
     )
+
+
+async def test_a_records_own_key_merges_round_trip_and_no_run_view_carries_them(
+    runs: RecipeRunStore,
+) -> None:
+    """ADR-110 Amendment 16: the prior state a returning row's load kept comes back from the real
+    ledger exactly as written, for the revert; and the run's row, as `GET …/runs` shows it, carries
+    none of it (rule 3, `test_link_prior_state_never_told.py` for the report and its views)."""
+    import services.api.app as app_module
+    from schemas.domain import Handling, Principal
+    from schemas.ingest import LinkPriorState
+
+    from tests.services.api.test_link_prior_state_never_told import SCHEME, SENTINEL
+
+    recipe, case, load = new_id(), new_id(), new_id()
+    prior = LinkPriorState(
+        edge_id=new_id(), edge_type="TRANSACTED", revision=1, load_id=new_id(),
+        handling=Handling(classification="SECRET", handling_code="P", originator="unit-1",
+                          owning_unit="unit-1"),
+        stored={"properties": {"memo": SENTINEL}},
+    )  # fmt: skip
+    run_id = await _started(runs, recipe)
+    record = _keyed(load, recipe, case).model_copy(
+        update={"own_key_merges": [prior], "merged_edge_ids": [prior.edge_id]}
+    )
+    await runs.add_record(run_id, record)
+
+    held = await runs.load_record(load)
+    assert held is not None and held.own_key_merges == [prior]
+    assert held.own_key_merges[0].handling.classification == "SECRET"
+    (row,) = [r for r in await runs.for_recipe(recipe, limit=5) if r.run_id == run_id]
+    reader = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1")
+    assert SENTINEL not in app_module._schedule_run_view(row, reader, SCHEME).model_dump_json()

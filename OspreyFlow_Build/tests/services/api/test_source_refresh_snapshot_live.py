@@ -23,6 +23,7 @@ import csv
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from adapters.analytics_duckdb.testing import duckdb_adapter
@@ -145,7 +146,7 @@ class Refresh:
         )
         return int(page.total)
 
-    async def revert(self, load_id: str) -> None:
+    async def revert(self, load_id: str) -> Any:
         steps = Steps()
         deps = RevertDeps(
             ledger=self.runs,  # type: ignore[arg-type]
@@ -157,7 +158,7 @@ class Refresh:
             working_sets=WorkingSets(steps),
             invalidate_caches=no_caches,
         )
-        await revert(load_id, reverted_by="operator-1", deps=deps, now=NOW)
+        return await revert(load_id, reverted_by="operator-1", deps=deps, now=NOW)
 
 
 async def test_a_second_snapshot_missing_one_row_withdraws_its_events_and_the_revert_restores_them(
@@ -275,3 +276,63 @@ async def test_a_row_dropped_again_after_coming_back_is_left_in_place_in_words(
             in again.refresh_notes[0]
         )  # type: ignore[attr-defined]
         assert await refresh.events() == 3, "B's new event stays"
+
+
+async def test_a_returning_rows_load_reverts_and_the_chain_unwinds_live(
+    tmp_path: Path, runs: RecipeRunStore
+) -> None:
+    """ADR-110 Amendment 16 through the real revert, on real ArcadeDB, the run ledger and DuckDB:
+    B comes back and merges into its own link; its load reverts and the link is exactly as the
+    refresh left it; then the refresh reverts (B's key and event back to the first load); then the
+    first load reverts, and nothing of the file is left."""
+    from tests.ingest.test_row_elements import _key
+
+    async with (
+        arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
+        duckdb_adapter([], SCHEME) as analytics,
+    ):
+        refresh = Refresh(tmp_path, runs, graph, analytics)
+        first = await refresh.snapshot([A, B, C])
+        second = await refresh.snapshot([A, C])
+        (b_link,) = first.kept_row_elements[_key(B)].edge_ids  # type: ignore[attr-defined]
+        after_the_refresh = await graph.read_link_state(b_link)
+        back = await refresh.snapshot([A, B, C])
+        assert [m.edge_id for m in back.own_key_merges] == [b_link]  # type: ignore[attr-defined]
+        assert await refresh.events() == 3
+
+        undone = await refresh.revert(back.load_id)  # type: ignore[attr-defined]
+        assert [r.links_put_back for r in undone.reverted] == [1]
+        assert await graph.read_link_state(b_link) == after_the_refresh, "exactly as it was"
+        assert await refresh.events() == 2
+
+        await refresh.revert(second.load_id)  # type: ignore[attr-defined]
+        assert await refresh.events() == 3
+        await refresh.revert(first.load_id)  # type: ignore[attr-defined]
+        assert await refresh.values() == set() and await refresh.events() == 0
+
+
+async def test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live(
+    tmp_path: Path, runs: RecipeRunStore
+) -> None:
+    """ADR-110 Amendment 16, rule 3, live: another case's refresh of the same pair merges into the
+    link after B came back (the raw adapter stamps no dataset, so the two share it). The returning
+    load's revert is refused, nothing changes, and the words name no other case or load."""
+    async with (
+        arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
+        duckdb_adapter([], SCHEME) as analytics,
+    ):
+        ours = Refresh(tmp_path / "ours", runs, graph, analytics)
+        theirs = Refresh(tmp_path / "theirs", runs, graph, analytics)
+        await ours.snapshot([A, B, C])
+        await ours.snapshot([A, C])
+        back = await ours.snapshot([A, B, C])
+        await theirs.snapshot([B])
+        before = (await ours.values(), await ours.events())
+
+        with pytest.raises(RevertRefused) as refused:
+            await ours.revert(back.load_id)  # type: ignore[attr-defined]
+
+        (refusal,) = refused.value.refusals
+        assert (refusal.reason, refusal.count) == ("own_link_written_since", 1)
+        assert theirs.case not in refusal.words()
+        assert (await ours.values(), await ours.events()) == before, "nothing changed"
