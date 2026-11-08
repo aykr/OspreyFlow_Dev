@@ -33,7 +33,7 @@ owner column it changes and nothing else.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -53,7 +53,7 @@ from schemas.domain import Principal
 from schemas.rights import CUSTOM_ROLE_PREFIX, Right, rights_for
 
 from .audit import AuditWriter
-from .investigations import AccessLevel, InvestigationStore
+from .investigations import TEAM_GRANT_PREFIX, AccessLevel, InvestigationStore
 
 #: L2.5b's seam: the kinds a person owns that are read through the case lane's ownership route
 #: (L3.8), not yet on main. Said in the plan, so an administrator is never told the list is whole.
@@ -93,14 +93,15 @@ async def l38_owned_items(conn: asyncpg.Connection, person: str) -> list[OwnedIt
 
 
 _AUTHOR_ONLY_SQL = """
-SELECT i.id, i.name, h.dataset_id, d.name AS dataset_name
+SELECT i.id, i.name, h.dataset_id, d.name AS dataset_name,
+       ARRAY(SELECT o.account_id FROM investigation_grants o
+             WHERE o.investigation_id = i.id AND o.level = 'author' AND o.account_id <> $1
+             ORDER BY o.account_id) AS others
 FROM investigation_grants g
 JOIN investigations i ON i.id = g.investigation_id AND i.removed_at IS NULL
 LEFT JOIN home_cases h ON h.investigation_id = i.id
 LEFT JOIN datasets d ON d.id = h.dataset_id
 WHERE g.account_id = $1 AND g.level = 'author' AND i.owning_unit = $2
-  AND NOT EXISTS (SELECT 1 FROM investigation_grants o
-                  WHERE o.investigation_id = i.id AND o.level = 'author' AND o.account_id <> $1)
 ORDER BY i.id
 """
 
@@ -129,7 +130,38 @@ class _Plan:
     elsewhere: int
 
 
-async def _plan_items(conn: asyncpg.Connection, person: str, admin_unit: str | None) -> _Plan:
+def answering(
+    people: Sequence[PersonAccount], person: str, unit: str | None
+) -> Callable[[str], bool]:
+    """Whether another of a case's Author grants still answers for it once `person` is disabled
+    (round 2's finding 6): an enabled person of the case's unit, or a team with an enabled member
+    of that unit other than `person`. A disabled Author, or a team whose only member is `person`,
+    answers for nothing, so the case is theirs to transfer."""
+    by_id = {p.id: p for p in people}
+
+    def answers(account: str) -> bool:
+        if account.startswith(TEAM_GRANT_PREFIX):
+            role = f"{CUSTOM_ROLE_PREFIX}{account[len(TEAM_GRANT_PREFIX) :]}"
+            return any(
+                role in p.roles
+                and p.enabled
+                and not p.system_account
+                and p.org_unit == unit
+                and p.id != person
+                for p in people
+            )
+        other = by_id.get(account)
+        return bool(other and other.enabled and not other.system_account and other.org_unit == unit)
+
+    return answers
+
+
+async def _plan_items(
+    conn: asyncpg.Connection,
+    person: str,
+    admin_unit: str | None,
+    answers: Callable[[str], bool] | None = None,
+) -> _Plan:
     """Everything the person owns in the administrator's unit, each read with the unit in its own
     statement (rule 3); hotlists, watches, saved patterns, team leads and list schedules have no
     unit and are the person's wherever they are. Never a hotlist's identifier, a saved pattern's
@@ -138,6 +170,9 @@ async def _plan_items(conn: asyncpg.Connection, person: str, admin_unit: str | N
     items: list[OwnedItem] = []
     case_of: dict[tuple[str, str], str] = {}
     for row in await conn.fetch(_AUTHOR_ONLY_SQL, person, admin_unit):
+        others = list(row["others"])
+        if any(answers(o) for o in others) if answers is not None else others:
+            continue
         if row["dataset_id"] is not None:
             label = f"Author of the home case of the dataset {row['dataset_name']}"
             items.append(OwnedItem(kind="home_case_author", id=row["id"], label=label))
@@ -470,11 +505,22 @@ class AdminPeopleStore:
             }
         return people_rows(people, grants, cases, teams)
 
-    async def plan(self, person: str, *, admin_unit: str | None) -> DisablePlan:
+    async def plan(
+        self,
+        person: str,
+        *,
+        admin_unit: str | None,
+        people: Sequence[PersonAccount] | None = None,
+    ) -> DisablePlan:
         """The plan of the administrator's own unit; another unit's items are counted at the
         disable (`transfer` answers `elsewhere`), never listed."""
         async with self._pool.acquire() as conn:
-            plan = await _plan_items(conn, person, admin_unit)
+            plan = await _plan_items(
+                conn,
+                person,
+                admin_unit,
+                None if people is None else answering(people, person, admin_unit),
+            )
         return DisablePlan(person=person, items=plan.items, not_yet_listed=list(L38_OWNED_KINDS))
 
     async def transfer(
@@ -494,7 +540,9 @@ class AdminPeopleStore:
         nothing is left elsewhere, as the disable follows."""
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("LOCK TABLE investigation_grants IN SHARE ROW EXCLUSIVE MODE")
-            plan = await _plan_items(conn, person, admin_unit)
+            plan = await _plan_items(
+                conn, person, admin_unit, answering(list(who.people.values()), person, admin_unit)
+            )
             items = plan.items
             chosen = check_transfers(person, items, transfers, who, admin_unit)
             await _case_levels_hold(conn, plan, chosen, who)

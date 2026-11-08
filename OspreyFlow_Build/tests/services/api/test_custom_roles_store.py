@@ -388,3 +388,53 @@ async def test_a_write_that_finds_its_item_changed_rolls_every_transfer_back(
     assert raised.value.error == "changed_meanwhile"
     assert await world.raw.fetchval("SELECT owner_id FROM hotlists WHERE id = 'h1'") == "ana"
     assert await world.raw.fetchval("SELECT count(*) FROM audit_log") == 0
+
+
+# --- round 2 of the independent review --------------------------------------------------------------
+
+
+async def test_a_case_whose_other_author_answers_for_nothing_is_still_the_persons_to_transfer(
+    world: SimpleNamespace,
+) -> None:
+    """Finding 6: a disabled Author, or a team whose only member is the person, leaves the case
+    the person's alone; an enabled Author of the unit does not."""
+    role_id = await _team(world)
+    ana = _who("ana", [])
+    left = await world.cases.create(ana, name="Left by a leaver")
+    await world.cases.set_grant(left.id, "gone", AccessLevel.AUTHOR, by=ana)
+    teamed = await world.cases.create(ana, name="Only through ana's team")
+    await world.cases.set_grant(teamed.id, f"team:{role_id}", AccessLevel.AUTHOR, by=ana)
+    shared = await world.cases.create(ana, name="Shared")
+    await world.cases.set_grant(shared.id, "bea", AccessLevel.AUTHOR, by=ana)
+    people = [_person("ana", [f"role:{role_id}"]), _person("bea", ["analyst"]),
+              _person("gone", ["analyst"], enabled=False)]  # fmt: skip
+    plan = await world.people.plan("ana", admin_unit=UNIT, people=people)
+    listed = {i.id for i in plan.items if i.kind == "case_author"}
+    assert listed == {left.id, teamed.id}
+
+
+async def test_two_teams_never_share_a_name(world: SimpleNamespace) -> None:
+    first = await world.roles.create("Intel desk", [Right.INVESTIGATE], by="adm-1")
+    second = await world.roles.create("Intel desk two", [Right.INVESTIGATE], by="adm-1")
+    await world.roles.make_team(first.id, TeamInput(display_name="Intel", mailbox="i@example.org"),
+                                date(2026, 11, 8))  # fmt: skip
+    with pytest.raises(RoleRefused) as raised:
+        await world.roles.make_team(second.id, TeamInput(display_name=" intel ", mailbox="j@example.org"),
+                                    date(2026, 11, 8))  # fmt: skip
+    assert raised.value.error == "team_name_taken"
+
+
+async def test_the_people_lock_lets_one_holder_in_at_a_time(world: SimpleNamespace) -> None:
+    """Finding 3: the advisory lock itself, across two connections (two replicas alike)."""
+    import asyncio
+
+    order: list[str] = []
+
+    async def hold(name: str, wait: float) -> None:
+        async with world.roles.people_lock():
+            order.append(f"{name} in")
+            await asyncio.sleep(wait)
+            order.append(f"{name} out")
+
+    await asyncio.gather(hold("a", 0.3), hold("b", 0.0))
+    assert order in (["a in", "a out", "b in", "b out"], ["b in", "b out", "a in", "a out"])

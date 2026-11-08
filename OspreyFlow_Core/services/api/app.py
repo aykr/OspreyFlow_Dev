@@ -1594,6 +1594,9 @@ async def get_principal(
         identity = resolver.resolve(credentials.credentials)
     except PrincipalResolutionError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    # The token's own roles, kept apart for what must read a custom role's rights afresh later
+    # (the delta socket's ticket, `issue_ws_ticket`).
+    request.state.token_roles = list(identity.roles)
     identity = await with_custom_roles(request.app, identity)
     investigation_id = request.path_params.get("investigation_id")
     dataset_id = request.path_params.get("dataset_id")
@@ -11599,36 +11602,33 @@ async def set_person_roles_route(
     current = await custom_roles.current_rights()
     if missing := [r for r in custom_role_ids(body.roles) if r not in current]:
         raise HTTPException(status_code=422, detail=f"no such custom role: {', '.join(missing)}")
-    people = await identity_admin.list_people()
-    before = next((p for p in people if p.id == user_id), None)
-    if before is None:
-        raise HTTPException(status_code=404, detail={"error": "no_such_person"})
-    try:
-        given = rights_for(body.roles, current) - rights_for(before.roles, current)
-        held = rights_for(principal.roles)
-        if beyond := sorted(r.value for r in given if not giver_may_give(r, held)):
-            raise RoleRefused("beyond_your_rights",
-                              f"you cannot give a right you do not hold: {', '.join(beyond)}",
-                              rights=beyond)  # fmt: skip
-        all_teams = await custom_roles.teams(_today())
-        teams = {t.role_id for t in all_teams}
-        if before.system_account and teams & set(custom_role_ids(body.roles)):
-            raise RoleRefused("service_account", "a service account is never a team member")
-        # Only a member may be lead or cover (ADR-112 Amendment 5 decision 4): leaving the team
-        # is refused while they are either, so a lead never outlives their membership.
-        leaving = set(custom_role_ids(before.roles)) - set(custom_role_ids(body.roles))
-        if led := [t for t in all_teams if t.role_id in leaving and user_id in (t.lead, t.cover)]:
-            raise RoleRefused(
-                "lead_leaves_team",
-                f"{before.name} is the lead or cover of {led[0].display_name}: hand the lead "
-                "over, or end the cover, before taking the team's role away",
-            )
-        after = [p.model_copy(update={"roles": list(body.roles)}) if p.id == user_id else p
-                 for p in people]  # fmt: skip
-        leaves_no_people_manager(after, current)
-    except RoleRefused as error:
-        raise _role_refused(error) from None
-    person = await identity_admin.set_roles(user_id, body.roles)
+    async with custom_roles.people_lock():
+        people = await identity_admin.list_people()
+        before = next((p for p in people if p.id == user_id), None)
+        if before is None:
+            raise HTTPException(status_code=404, detail={"error": "no_such_person"})
+        try:
+            _may_give(principal, body.roles, before.roles, current)
+            all_teams = await custom_roles.teams(_today())
+            teams = {t.role_id for t in all_teams}
+            if before.system_account and teams & set(custom_role_ids(body.roles)):
+                raise RoleRefused("service_account", "a service account is never a team member")
+            # Only a member may be lead or cover (ADR-112 Amendment 5 decision 4): leaving the team
+            # is refused while they are either, so a lead never outlives their membership.
+            leaving = set(custom_role_ids(before.roles)) - set(custom_role_ids(body.roles))
+            led = [t for t in all_teams if t.role_id in leaving and user_id in (t.lead, t.cover)]
+            if led:
+                raise RoleRefused(
+                    "lead_leaves_team",
+                    f"{before.name} is the lead or cover of {led[0].display_name}: hand the lead "
+                    "over, or end the cover, before taking the team's role away",
+                )
+            after = [p.model_copy(update={"roles": list(body.roles)}) if p.id == user_id else p
+                     for p in people]  # fmt: skip
+            leaves_no_people_manager(after, current)
+        except RoleRefused as error:
+            raise _role_refused(error) from None
+        person = await identity_admin.set_roles(user_id, body.roles)
     await audit.record(principal=principal, action="set_person_roles",
                        resolved_query={"user_id": user_id, "roles": person.roles},
                        result_cardinality=1)  # fmt: skip
@@ -11743,20 +11743,21 @@ async def change_role_route(
     would leave no enabled person holding `manage_people` (ADR-145 Amendment 5)."""
     if await custom_roles.get(role_id, _today()) is None:
         raise HTTPException(status_code=404, detail={"error": "no_such_role"})
-    try:
-        rights = role_refusal(
-            body.name,
-            body.rights,
-            giver_rights=rights_for(principal.roles),
-            names_taken=await custom_roles.names(except_id=role_id),
-        )
-        current = await custom_roles.current_rights()
-        leaves_no_people_manager(
-            await identity_admin.list_people(), {**current, role_id: frozenset(rights)}
-        )
-        before, after = await custom_roles.update(role_id, body.name, rights, by=principal.id)
-    except RoleRefused as error:
-        raise _role_refused(error) from None
+    async with custom_roles.people_lock():
+        try:
+            rights = role_refusal(
+                body.name,
+                body.rights,
+                giver_rights=rights_for(principal.roles),
+                names_taken=await custom_roles.names(except_id=role_id),
+            )
+            current = await custom_roles.current_rights()
+            leaves_no_people_manager(
+                await identity_admin.list_people(), {**current, role_id: frozenset(rights)}
+            )
+            before, after = await custom_roles.update(role_id, body.name, rights, by=principal.id)
+        except RoleRefused as error:
+            raise _role_refused(error) from None
     await audit.record(
         principal=principal,
         action="change_custom_role",
@@ -11809,7 +11810,10 @@ async def make_team_route(
                 + " holds this role: take it away first",
             )
         )
-    team = await custom_roles.make_team(role_id, body, _today())
+    try:
+        team = await custom_roles.make_team(role_id, body, _today())
+    except RoleRefused as error:
+        raise _role_refused(error) from None
     await audit.record(
         principal=principal,
         action="make_team",
@@ -11962,11 +11966,19 @@ async def name_an_author_route(
         if account.startswith(TEAM_GRANT_PREFIX):
             team = account[len(TEAM_GRANT_PREFIX) :]
             return team in teams and any(
-                f"{CUSTOM_ROLE_PREFIX}{team}" in p.roles and p.enabled and not p.system_account
+                f"{CUSTOM_ROLE_PREFIX}{team}" in p.roles
+                and p.enabled
+                and not p.system_account
+                and p.org_unit == case.owning_unit
                 for p in people.values()
             )
         person = people.get(account)
-        return person is not None and person.enabled and not person.system_account
+        return (
+            person is not None
+            and person.enabled
+            and not person.system_account
+            and person.org_unit == case.owning_unit
+        )
 
     grants = await investigations.list_grants(case.id)
     if any(answers(a) for a, level in grants.items() if level is AccessLevel.AUTHOR):
@@ -11981,6 +11993,16 @@ async def name_an_author_route(
         )
     grantee = _grantee(account_id)
     await _may_hold_a_level(request, grantee, AccessLevel.AUTHOR, principal_names)
+    named = people.get(grantee)
+    if named is not None and named.org_unit != case.owning_unit:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "other_unit",
+                "message": f"{named.name} is of another unit: a case's level is held only within "
+                "its unit",
+            },
+        )
     await investigations.set_grant(case.id, grantee, AccessLevel.AUTHOR, by=principal)
     await audit.record(
         principal=principal,
@@ -11996,12 +12018,18 @@ async def name_an_author_route(
     dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
 )
 async def disable_plan_route(
-    user_id: str, principal: PrincipalDep, admin_people: AdminPeopleDep, audit: AuditDep
+    user_id: str,
+    principal: PrincipalDep,
+    admin_people: AdminPeopleDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
 ) -> DisablePlan:
     """*Disable…*: everything the person owns today, each needing *Transfer to…*, and the kinds not
     yet listed (L2.5b's seam, `admin_people.L38_OWNED_KINDS`)."""
     try:
-        plan = await admin_people.plan(user_id, admin_unit=principal.org_unit)
+        plan = await admin_people.plan(
+            user_id, admin_unit=principal.org_unit, people=await identity_admin.list_people()
+        )
     except DisableRefused as refused:
         raise HTTPException(
             status_code=409, detail={"error": refused.error, "message": refused.words}
@@ -12043,6 +12071,30 @@ def _within_your_reach(
         )
 
 
+def _may_give(
+    principal: Principal,
+    roles: Sequence[str],
+    before: Sequence[str],
+    current: Mapping[str, Iterable[Right]],
+) -> None:
+    """The owner's Q3b (a) wherever a person is given roles (ADR-145 Amendment 5): each right the
+    roles newly confer, through a built-in role, a single grant or a custom role's current rights,
+    is one the giver may give (`giver_may_give`), or `RoleRefused` (`beyond_your_rights`). The
+    roles' own names are checked first (`allowed_role`, and a custom role that exists, 422)."""
+    if refused := [r for r in roles if not allowed_role(r)]:
+        raise UnknownRoleError(f"not a role or right this deployment grants: {', '.join(refused)}")
+    if missing := [r for r in custom_role_ids(roles) if r not in current]:
+        raise HTTPException(status_code=422, detail=f"no such custom role: {', '.join(missing)}")
+    given = rights_for(roles, current) - rights_for(before, current)
+    held = rights_for(principal.roles)
+    if beyond := sorted(r.value for r in given if not giver_may_give(r, held)):
+        raise RoleRefused(
+            "beyond_your_rights",
+            f"you cannot give a right you do not hold: {', '.join(beyond)}",
+            rights=beyond,
+        )
+
+
 @app.post(
     "/v1/admin/people",
     status_code=201,
@@ -12052,12 +12104,18 @@ async def invite_person_route(
     body: InviteInput,
     principal: PrincipalDep,
     identity_admin: IdentityAdminDep,
+    custom_roles: CustomRolesDep,
     handling_scheme: HandlingSchemeDep,
     audit: AuditDep,
 ) -> SignInDelivery:
     """A new person (ADR-114 Amendment 5). The one-time code, when there is one, is in this answer
-    only — never in the audit record, never stored."""
+    only — never in the audit record, never stored. ADR-145 Amendment 5: no role whose rights the
+    inviter may not give (`_may_give`), before the identity provider is asked."""
     _within_your_reach(principal, body, handling_scheme)
+    try:
+        _may_give(principal, body.roles, [], await custom_roles.current_rights())
+    except RoleRefused as error:
+        raise _role_refused(error) from None
     made = await identity_admin.invite(body)
     await audit.record(principal=principal, action="invite_person",
                        resolved_query={"user_id": made.person.id, "username": made.person.username,
@@ -12110,60 +12168,72 @@ async def disable_person_route(
     administrator who did that by mistake would have no way back in."""
     if user_id == principal.id:
         raise HTTPException(status_code=409, detail={"error": "cannot_disable_yourself"})
-    people = await identity_admin.list_people()
-    current = await custom_roles.current_rights()
-    holders = {
-        t.role_id: frozenset(
-            p.id
-            for p in people
-            if f"{CUSTOM_ROLE_PREFIX}{t.role_id}" in p.roles and p.enabled and not p.system_account
-        )
-        for t in await custom_roles.teams(_today())
-    }
-    try:
-        moved, elsewhere = await admin_people.transfer(
-            user_id,
-            (body or DisableInput()).transfers,
-            recipients(people, current, holders),
-            by=principal,
-            audit=audit,
-            admin_unit=principal.org_unit,
-        )
-    except DisableRefused as refused:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": refused.error,
-                "message": refused.words,
-                "items": [i.model_dump() for i in refused.items],
-            },
-        ) from None
-    if elsewhere:
-        # Each unit's administrator transfers their own share; the account is disabled once
-        # nothing is left in any unit. The transfers just made stand, audited.
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error": "other_unit",
-                "message": f"{len(moved)} transferred, and those stand; not disabled yet: "
-                + OTHER_UNIT,
-            },
-        )
-    try:
-        person = await identity_admin.set_enabled(user_id, False)
-    except IdentityAdminRefused as error:
-        # Amendment 5 point 8: the transfers are committed and stand; the account is still enabled.
-        await audit.record(
-            principal=principal,
-            action="disable_person_incomplete",
-            resolved_query={"user_id": user_id, "transferred": len(moved), "why": str(error)},
-            result_cardinality=0,
-        )
-        raise HTTPException(status_code=502, detail={
-            "error": "disable_incomplete",
-            "message": f"every item was transferred ({len(moved)}), and those transfers stand, but "
-            f"the identity provider did not disable the account: {error}. Disable them again; "
-            "there is nothing left to transfer."}) from None  # fmt: skip
+    async with custom_roles.people_lock():
+        people = await identity_admin.list_people()
+        current = await custom_roles.current_rights()
+        # The lock-out, read fresh under the lock (the caller's own token may be stale).
+        try:
+            leaves_no_people_manager(
+                [p.model_copy(update={"enabled": False}) if p.id == user_id else p for p in people],
+                current,
+            )
+        except RoleRefused as error:
+            raise _role_refused(error) from None
+        holders = {
+            t.role_id: frozenset(
+                p.id
+                for p in people
+                if f"{CUSTOM_ROLE_PREFIX}{t.role_id}" in p.roles
+                and p.enabled
+                and not p.system_account
+            )
+            for t in await custom_roles.teams(_today())
+        }
+        try:
+            moved, elsewhere = await admin_people.transfer(
+                user_id,
+                (body or DisableInput()).transfers,
+                recipients(people, current, holders),
+                by=principal,
+                audit=audit,
+                admin_unit=principal.org_unit,
+            )
+        except DisableRefused as refused:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": refused.error,
+                    "message": refused.words,
+                    "items": [i.model_dump() for i in refused.items],
+                },
+            ) from None
+        if elsewhere:
+            # Each unit's administrator transfers their own share; the account is disabled once
+            # nothing is left in any unit. The transfers just made stand, audited.
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "other_unit",
+                    "message": f"{len(moved)} transferred, and those stand; not disabled yet: "
+                    + OTHER_UNIT,
+                },
+            )
+        try:
+            person = await identity_admin.set_enabled(user_id, False)
+        except IdentityAdminRefused as error:
+            # Amendment 5 point 8: the transfers are committed and stand; the account is still
+            # enabled.
+            await audit.record(
+                principal=principal,
+                action="disable_person_incomplete",
+                resolved_query={"user_id": user_id, "transferred": len(moved), "why": str(error)},
+                result_cardinality=0,
+            )
+            raise HTTPException(status_code=502, detail={
+                "error": "disable_incomplete",
+                "message": f"every item was transferred ({len(moved)}), and those stand, but "
+                f"the identity provider did not disable the account: {error}. Disable them again; "
+                "there is nothing left to transfer."}) from None  # fmt: skip
     await audit.record(
         principal=principal,
         action="disable_person",
@@ -12220,20 +12290,22 @@ async def remove_person_route(
         raise HTTPException(status_code=409, detail={"error": "cannot_remove_yourself"})
     # ADR-145 Amendment 5: a people manager through a custom role counts too; a team's lead or
     # cover is handed over or ended first, so no team points at a removed account.
-    current = await custom_roles.current_rights()
-    try:
-        leaves_no_people_manager(
-            [p for p in await identity_admin.list_people() if p.id != user_id], current
-        )
-        if led := [t for t in await custom_roles.teams(_today()) if user_id in (t.lead, t.cover)]:
-            raise RoleRefused(
-                "lead_leaves_team",
-                f"they are the lead or cover of {led[0].display_name}: hand the lead over, or end "
-                "the cover, before removing them",
+    async with custom_roles.people_lock():
+        current = await custom_roles.current_rights()
+        try:
+            leaves_no_people_manager(
+                [p for p in await identity_admin.list_people() if p.id != user_id], current
             )
-    except RoleRefused as error:
-        raise _role_refused(error) from None
-    person = await identity_admin.remove_person(user_id, current)
+            teams_now = await custom_roles.teams(_today())
+            if led := [t for t in teams_now if user_id in (t.lead, t.cover)]:
+                raise RoleRefused(
+                    "lead_leaves_team",
+                    f"they are the lead or cover of {led[0].display_name}: hand the lead over, "
+                    "or end the cover, before removing them",
+                )
+        except RoleRefused as error:
+            raise _role_refused(error) from None
+        person = await identity_admin.remove_person(user_id, current)
     await audit.record(principal=principal, action="remove_person",
                        resolved_query={"user_id": user_id, "username": person.username,
                                        "name": person.name, "email": person.email},
@@ -14477,14 +14549,20 @@ async def _unknown_dataset_egress_handler(
 
 
 @app.post("/v1/ws-ticket", response_model=WsTicketResponse)
-async def issue_ws_ticket(principal: PrincipalDep, valkey: ValkeyDep) -> WsTicketResponse:
+async def issue_ws_ticket(
+    request: Request, principal: PrincipalDep, valkey: ValkeyDep
+) -> WsTicketResponse:
     """`06_DECISIONS.md` ADR-050 objection 8. Authenticated the ordinary way — the same bearer
     token every other `/v1` route already requires — this mints a short-lived, single-use ticket
     bound to the calling principal and returns it; the caller opens the delta WebSocket with
     `?ticket=<this>` instead of putting its own bearer token in that URL. See
     `services.api.ws_ticket`'s own module docstring for why a ticket, why Valkey, and why 30
     seconds."""
-    ticket = await mint_ws_ticket(valkey, principal)
+    # ADR-145 Amendment 5: the ticket holds the token's own roles, never a custom role's rights as
+    # they were at minting; the socket reads those afresh (`_authenticate_websocket`, `_admission`).
+    roles = getattr(request.state, "token_roles", None)
+    raw = principal if roles is None else principal.model_copy(update={"roles": list(roles)})
+    ticket = await mint_ws_ticket(valkey, raw)
     return WsTicketResponse(ticket=ticket)
 
 
@@ -14524,6 +14602,27 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     return principal
 
 
+def _admission(
+    app_: Any, raw: Principal, investigation_id: str
+) -> Callable[[], Awaitable[Principal | None]]:
+    """ADR-145 Amendment 5 ("never cached"): an open socket's principal, read afresh at each
+    message: its custom roles' rights as they are now (`with_custom_roles`, the bearer and the
+    ticket alike), and its case level as it is now (a grant or a team's grant taken away). `None`
+    once the reader no longer holds a level, and the socket is closed."""
+
+    async def admitted() -> Principal | None:
+        principal = await with_custom_roles(app_, raw)
+        try:
+            await app_.state.investigations.get_authorized(
+                investigation_id, principal, need=AccessLevel.VIEWER
+            )
+        except (InvestigationNotFoundError, InsufficientAccessError):
+            return None
+        return principal
+
+    return admitted
+
+
 @dataclass
 class _SocketState:
     """What one connected socket remembers, in memory and for as long as it is open (ADR-124
@@ -14541,6 +14640,8 @@ class _SocketState:
     buffering: bool = False
     buffer: list[str] = field(default_factory=list)
     overflowed: bool = False
+    #: ADR-145 Amendment 5: asked before each message is acted on; `None` closes the socket.
+    admitted: Callable[[], Awaitable[Principal | None]] | None = None
 
 
 async def _send_all(
@@ -14595,6 +14696,9 @@ async def _forward_notifications(
     async for message in pubsub.listen():
         if message["type"] != "message":
             continue
+        if state.admitted is not None and await state.admitted() is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
         if state.stuck:
             # The reader was told their view is over the cap and is sent nothing more until a
             # resync with no last sequence (ADR-124 decision 2). During that try-again, and only
@@ -14696,6 +14800,9 @@ async def _handle_resync_requests(
     state = state or _SocketState()
     while True:
         payload = await websocket.receive_json()
+        if state.admitted is not None and await state.admitted() is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
         last_ack = payload.get("last_acknowledged_seq")
         if last_ack is None:
             await _try_again(websocket, working_set, investigation_id, principal, state)
@@ -14719,10 +14826,13 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     handled by a different instance than the one holding this socket
     still reaches the client live — also filtered per-connection."""
     try:
-        principal = await _authenticate_websocket(websocket)
+        raw = await _authenticate_websocket(websocket)
     except PrincipalResolutionError:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+    # One person, one principal: the bearer's and the ticket's alike have their custom roles' rights
+    # read now, as `get_principal` does (ADR-145 Amendment 5).
+    principal = await with_custom_roles(websocket.app, raw)
 
     investigations: InvestigationStore = websocket.app.state.investigations
     audit: AuditWriter = websocket.app.state.audit
@@ -14770,7 +14880,7 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     initial_deltas: list[WorkingSetDeltaSent] = await working_set.sync(
         investigation_id, principal, last_acknowledged_seq=init.get("last_acknowledged_seq")
     )
-    state = _SocketState()
+    state = _SocketState(admitted=_admission(websocket.app, raw, investigation_id))
     await _send_all(websocket, state, initial_deltas)
 
     pubsub = valkey.pubsub()

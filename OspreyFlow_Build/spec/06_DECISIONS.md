@@ -29510,6 +29510,23 @@ this says so.
    administrator's unit that no enabled person is Author of, and is refused once the case has one, so
    it never overrides a case's Authors. It is not the case grant route, which is the Glass's place.
 
+10. **As built after the orchestrator's independent review (round 2).**
+    - *Q3b (a) wherever roles are given:* the giver rule holds for an invitation as well as for the
+      roles route and a role's edit. It covers a built-in role, a single grant and a custom role's
+      current rights (`app._may_give`).
+    - *The lock-out is serialised:* each change that could leave nobody holding `manage_people`
+      reads the people and writes under one Postgres advisory lock (`CustomRoleStore.people_lock`),
+      across replicas. Those changes are a role's edit, a person's roles, a removal and a disable. A
+      disable reads the lock-out fresh, never from the caller's token.
+    - *An open delta socket reads its principal afresh at each message:* its custom roles' rights
+      and its case level, closing when the level is gone (`app._admission`). The ticket keeps the
+      token's own roles. The bearer and the ticket alike have their custom rights read the same way.
+    - *Name an Author holds the named person to the case's unit*, and a case's Author of another
+      unit answers for nothing.
+    - *A case is still the person's to transfer* when its other Authors answer for nothing: a
+      disabled person, another unit's, or a team whose only member is the person.
+    - *No two teams share a display name* (a unique index; 409 `team_name_taken`).
+
 **Tests.** `tests/schemas/test_rights.py` (the Rule author, the preset, the pairs, a custom role's exact
 rights); `tests/services/api/test_custom_roles.py`; `test_admin_roles_routes.py` (each refusal at the
 route, red with its check removed); the store cases under the lease

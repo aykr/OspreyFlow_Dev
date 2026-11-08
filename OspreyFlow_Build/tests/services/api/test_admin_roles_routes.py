@@ -52,9 +52,11 @@ PEOPLE: dict[str, PersonAccount] = {}
 TOKENS: dict[str, Principal] = {}
 
 
-def _person(pid: str, roles: list[str], *, enabled: bool = True, system: bool = False) -> None:
-    PEOPLE[pid] = PersonAccount(id=pid, username=pid, name=f"Name {pid}", enabled=enabled,
-                                roles=list(roles), system_account=system, org_unit="unit-1")  # fmt: skip
+def _person(pid: str, roles: list[str], *, enabled: bool = True, system: bool = False,
+            username: str | None = None) -> None:  # fmt: skip
+    PEOPLE[pid] = PersonAccount(id=pid, username=username or pid, name=f"Name {pid}",
+                                enabled=enabled, roles=list(roles), system_account=system,
+                                org_unit="unit-1")  # fmt: skip
     TOKENS[pid] = Principal(id=pid, clearance="SECRET", org_unit="unit-1", roles=list(roles))
 
 
@@ -69,18 +71,34 @@ class _Directory:
     def __init__(self) -> None:
         self.disabled: list[str] = []
         self.refuse = False
+        self.write_delay = 0.0
+        self.invited: list[str] = []
 
     async def list_people(self) -> list[PersonAccount]:
-        return [p.model_copy() for p in PEOPLE.values()]
+        """As the real one: a client's service account (`service-account-*`) is never listed; an
+        account OspreyFlow itself uses (the verify probes) is listed and marked a system account."""
+        return [p.model_copy() for p in PEOPLE.values()
+                if not p.username.startswith("service-account-")]  # fmt: skip
 
     async def set_roles(self, user_id: str, roles: list[str]) -> PersonAccount:
+        import asyncio
+
+        await asyncio.sleep(self.write_delay)  # the identity provider's round trip
         PEOPLE[user_id] = PEOPLE[user_id].model_copy(update={"roles": roles})
         return PEOPLE[user_id]
+
+    async def invite(self, invite: Any) -> Any:
+        from schemas.admin import SignInDelivery
+
+        self.invited.append(invite.username)
+        made = PersonAccount(id=f"new-{invite.username}", username=invite.username,
+                             name=invite.username, enabled=True, roles=invite.roles)  # fmt: skip
+        return SignInDelivery(person=made, delivery="one_time_code", one_time_code="ABCD-EFGH")
 
     async def list_dashboards(self) -> list[Any]:
         return [SimpleNamespace(account_id="sa-board")]
 
-    async def remove_person(self, user_id: str) -> PersonAccount:
+    async def remove_person(self, user_id: str, custom: Any = None) -> PersonAccount:
         return PEOPLE.pop(user_id)
 
     async def set_enabled(self, user_id: str, enabled: bool) -> PersonAccount:
@@ -94,9 +112,14 @@ class _Directory:
 
 
 class _Roles:
-    """`CustomRoleStore` as it holds roles: versions, a unique name, teams."""
+    """`CustomRoleStore` as it holds roles: versions, a unique name, teams, and the people lock
+    (`people_lock`, one at a time, as the real advisory lock is)."""
 
     def __init__(self) -> None:
+        import asyncio
+
+        self._lock = asyncio.Lock()
+        self.locked_now = 0
         self.roles: dict[str, CustomRole] = {}
         self.versions_of: dict[str, list[CustomRoleVersion]] = {}
         self.teams_of: dict[str, Team] = {}
@@ -109,6 +132,20 @@ class _Roles:
 
     async def current_rights(self, ids: Sequence[str] | None = None) -> dict[str, frozenset[Right]]:
         return {i: frozenset(r.rights) for i, r in self.roles.items() if ids is None or i in ids}
+
+    def people_lock(self) -> Any:
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def held() -> Any:
+            async with self._lock:
+                self.locked_now += 1
+                try:
+                    yield
+                finally:
+                    self.locked_now -= 1
+
+        return held()
 
     async def expand(self, principal: Principal) -> Principal:
         from services.api.custom_roles import custom_role_ids, expand
@@ -140,7 +177,11 @@ class _Roles:
         return self.versions_of.get(role_id, [])
 
     async def make_team(self, role_id: str, team: TeamInput, today: date) -> Team:
-        """As the real store's upsert: a re-save keeps the lead and the cover."""
+        """As the real store's upsert: a re-save keeps the lead and the cover; a name another team
+        holds is refused, as its unique index refuses it."""
+        if any(t.display_name.lower() == team.display_name.strip().lower()
+               for rid, t in self.teams_of.items() if rid != role_id):  # fmt: skip
+            raise RoleRefused("team_name_taken", f"a team called {team.display_name} already exists")
         kept = self.teams_of.get(role_id)
         self.teams_of[role_id] = Team(role_id=role_id, display_name=team.display_name,
                                       mailbox=team.mailbox, lead=kept.lead if kept else None,
@@ -178,7 +219,7 @@ class _AdminPeople:
         #: How many items each person owns in another unit (the real store counts them in SQL).
         self.elsewhere: dict[str, int] = {}
 
-    async def plan(self, person: str, *, admin_unit: str | None) -> DisablePlan:
+    async def plan(self, person: str, *, admin_unit: str | None, people: Any = None) -> DisablePlan:
         return DisablePlan(person=person, items=self.items.get(person, []),
                            not_yet_listed=list(admin_people_module.L38_OWNED_KINDS))  # fmt: skip
 
@@ -243,7 +284,8 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     _person("ana-1", ["analyst", "role:r1"])
     _person("ana-2", ["analyst", "role:r1"])
     _person("eng-1", ["data_engineer"])
-    _person("robot", ["role:r2"], system=True)
+    _person("robot", ["role:r2"], system=True, username="osprey-verify-probe")
+    _person("sa-1", ["reports_viewer"], system=True, username="service-account-osprey-dashboard-x")
     _person("gone", ["analyst"], enabled=False)
     roles, directory, admin_people, audit = _Roles(), _Directory(), _AdminPeople(), _Audit()
     roles.seed("r1", "Intel desk", [Right.INVESTIGATE, Right.READ_REPORTS])
@@ -437,7 +479,7 @@ def test_only_a_member_may_be_lead_and_a_service_account_never(world: SimpleName
     lead = lambda who: world.client.put("/v1/admin/teams/r1/lead", json={"lead": who},  # noqa: E731
                                         headers=_as("adm-1"))  # fmt: skip
     assert lead("eng-1").json()["detail"]["error"] == "not_a_member"
-    _person("robot", ["role:r1"], system=True)
+    _person("robot", ["role:r1"], system=True, username="osprey-verify-probe")
     assert lead("robot").json()["detail"]["error"] == "service_account"
     answer = lead("ana-1")
     assert answer.status_code == 200 and answer.json()["lead"] == "ana-1"
@@ -450,7 +492,7 @@ def test_a_cover_is_a_member_until_a_day_and_never_a_service_account(world: Simp
     until = str(T0.date() + timedelta(days=400))
     cover = lambda who, day=until: world.client.put(  # noqa: E731
         "/v1/admin/teams/r1/cover", json={"cover": who, "until": day}, headers=_as("adm-1"))
-    _person("robot", ["role:r1"], system=True)
+    _person("robot", ["role:r1"], system=True, username="osprey-verify-probe")
     assert cover("robot").json()["detail"]["error"] == "service_account"
     assert cover("eng-1").json()["detail"]["error"] == "not_a_member"
     assert cover("ana-1").json()["detail"]["error"] == "cover_is_lead"
@@ -707,7 +749,7 @@ def test_a_disable_the_identity_provider_refuses_after_the_transfers_says_they_s
     answer = _disable(world, [{"kind": "case_author", "id": "c1", "to": "ana-2"}])
     assert answer.status_code == 502
     detail = answer.json()["detail"]
-    assert detail["error"] == "disable_incomplete" and "those transfers stand" in detail["message"]
+    assert detail["error"] == "disable_incomplete" and "and those stand" in detail["message"]
     assert [e["action"] for e in world.audit.entries][-1] == "disable_person_incomplete"
 
 
@@ -741,3 +783,161 @@ def test_a_teams_lead_or_cover_is_not_removed(world: SimpleNamespace) -> None:
     answer = world.client.delete("/v1/admin/people/ana-1", headers=_as("adm-1"))
     assert answer.status_code == 409 and answer.json()["detail"]["error"] == "lead_leaves_team"
     assert "ana-1" in PEOPLE
+
+
+# --- an open socket reads its principal afresh (round 2's finding 4) ---------------------------------
+
+
+def test_an_open_socket_reads_custom_rights_and_its_level_afresh_at_each_message(
+    world: SimpleNamespace,
+) -> None:
+    """`_admission`, asked before each message the delta socket acts on: a custom role's rights as
+    they are now, and the case level as it is now; `None` closes the socket."""
+    import asyncio
+
+    from services.api.app import _admission
+    from services.api.investigations import InvestigationNotFoundError
+
+    class _Level:
+        revoked = False
+
+        async def get_authorized(self, case_id: str, principal: Principal, *, need: Any) -> Any:
+            if self.revoked:
+                raise InvestigationNotFoundError(case_id)
+            return None
+
+    level = _Level()
+    app_ = SimpleNamespace(state=SimpleNamespace(custom_roles=world.roles, investigations=level))
+    raw = Principal(id="ana-1", clearance="SECRET", org_unit="unit-1", roles=["role:r1"])
+    admitted = _admission(app_, raw, "c1")
+    first = asyncio.run(admitted())
+    assert first is not None and "right:read_reports" in first.roles
+    world.roles.roles["r1"] = world.roles.roles["r1"].model_copy(update={"rights": [Right.INVESTIGATE]})
+    second = asyncio.run(admitted())
+    assert second is not None and "right:read_reports" not in second.roles
+    level.revoked = True
+    assert asyncio.run(admitted()) is None
+
+
+def test_a_clients_service_account_is_never_listed_so_never_given_roles_or_items(
+    world: SimpleNamespace,
+) -> None:
+    """Round 2's finding 7: the directory drops `service-account-*`, so such an account is no
+    person to give roles to (404) nor to transfer to (refused), whatever the checks after."""
+    assert _give(world, "adm-1", "sa-1", ["analyst"]).status_code == 404
+    world.admin_people.items["ana-1"] = ITEMS[:1]
+    answer = _disable(world, [{"kind": "case_author", "id": "c1", "to": "sa-1"}])
+    assert answer.status_code == 409 and "not a person the directory holds" in answer.json()["detail"]["message"]
+
+
+# --- round 2 of the independent review --------------------------------------------------------------
+
+
+@pytest.mark.parametrize("roles", [["osprey-admin"], ["right:administer_system"], ["role:r9"]],
+                         ids=["admin-role", "single-right", "custom-role"])  # fmt: skip
+def test_a_people_manager_alone_cannot_invite_an_administrator(
+    world: SimpleNamespace, roles: list[str]
+) -> None:
+    """Finding 1: an invitation is a giving of roles; `_may_give` holds it as it holds the roles
+    route, before the identity provider is asked."""
+    world.roles.seed("r9", "Admin desk", [Right.ADMINISTER_SYSTEM])
+    invite = {"username": "newcomer", "first_name": "New", "last_name": "Comer",
+              "clearance": "OFFICIAL", "org_unit": "unit-1", "roles": roles}  # fmt: skip
+    answer = world.client.post("/v1/admin/people", json=invite, headers=_as("ppl-1"))
+    assert answer.status_code == 409, answer.text
+    assert answer.json()["detail"]["error"] == "beyond_your_rights"
+    assert world.directory.invited == []
+    fine = world.client.post("/v1/admin/people", json={**invite, "roles": ["analyst"]},
+                             headers=_as("ppl-1"))  # fmt: skip
+    assert fine.status_code == 201, fine.text
+
+
+def test_an_invitation_with_a_custom_role_that_does_not_exist_is_refused(world: SimpleNamespace) -> None:
+    invite = {"username": "newcomer", "first_name": "New", "last_name": "Comer",
+              "clearance": "OFFICIAL", "org_unit": "unit-1", "roles": ["role:nope"]}  # fmt: skip
+    assert world.client.post("/v1/admin/people", json=invite, headers=_as("adm-1")).status_code == 422
+    assert world.directory.invited == []
+
+
+def test_a_people_manager_alone_cannot_add_an_administration_right_to_a_role_even_their_own(
+    world: SimpleNamespace,
+) -> None:
+    """Finding 2: the giver rule at `change_role_route`, for a role the editor holds too."""
+    world.roles.seed("r3", "People desk", [Right.MANAGE_PEOPLE])
+    _person("ppl-2", ["role:r3"])
+    answer = world.client.put("/v1/admin/roles/r3", headers=_as("ppl-2"),
+                              json={"name": "People desk", "rights": ["manage_people", "administer_system"]})  # fmt: skip
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "beyond_your_rights"
+    assert world.roles.roles["r3"].version == 1
+
+
+def test_an_administration_right_through_a_custom_role_needs_its_holder(world: SimpleNamespace) -> None:
+    """Finding 2: at the people route, the right arriving through `role:<id>`."""
+    world.roles.seed("r9", "Admin desk", [Right.ADMINISTER_SYSTEM])
+    answer = _give(world, "ppl-1", "eng-1", ["data_engineer", "role:r9"])
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "beyond_your_rights"
+    assert PEOPLE["eng-1"].roles == ["data_engineer"]
+
+
+def test_two_overlapping_changes_cannot_together_leave_nobody_managing_people(
+    world: SimpleNamespace,
+) -> None:
+    """Finding 3: each change alone keeps a people manager; overlapping, the second must see the
+    first. adm-1 (built-in Admin) and ppl-2 (through role r3) are the only managers: one request
+    takes adm-1's Admin role away, the other takes manage_people out of r3."""
+    import asyncio
+
+    import httpx
+
+    for pid in ("adm-2", "ppl-1"):
+        PEOPLE[pid] = PEOPLE[pid].model_copy(update={"enabled": False})
+    world.roles.seed("r3", "People desk", [Right.MANAGE_PEOPLE])
+    _person("ppl-2", ["role:r3"])
+    world.directory.write_delay = 0.2
+
+    async def both() -> list[int]:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            first = client.put("/v1/admin/people/adm-1/roles", json={"roles": ["analyst"]},
+                               headers=_as("ppl-2"))  # fmt: skip
+            second = client.put("/v1/admin/roles/r3", headers=_as("adm-1"),
+                                json={"name": "People desk", "rights": ["investigate"]})  # fmt: skip
+            answers = await asyncio.gather(first, second)
+        return [a.status_code for a in answers]
+
+    codes = asyncio.run(both())
+    assert sorted(codes) == [200, 409], codes
+    managers = [p for p in PEOPLE.values() if p.enabled and (
+        "osprey-admin" in p.roles or ("role:r3" in p.roles
+                                      and Right.MANAGE_PEOPLE in world.roles.roles["r3"].rights))]  # fmt: skip
+    assert managers, "nobody is left who can manage people"
+
+
+def test_a_disable_reads_the_lock_out_fresh_not_from_the_callers_token(world: SimpleNamespace) -> None:
+    """Finding 3: the caller's token says Admin, but the directory no longer does; disabling the
+    last manager is refused."""
+    for pid in ("adm-1", "adm-2"):
+        PEOPLE[pid] = PEOPLE[pid].model_copy(update={"roles": ["analyst"]})
+    answer = _disable(world, [], who="ppl-1")
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "locks_out_administrators"
+
+
+def test_another_units_person_is_not_named_an_author(world: SimpleNamespace) -> None:
+    """Finding 5: as Disable holds a case's recipient to its unit (V4)."""
+    PEOPLE["ana-2"] = PEOPLE["ana-2"].model_copy(update={"org_unit": "unit-2"})
+    answer = _name(world, "c3", "ana-2")
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "other_unit"
+    assert "ana-2" not in world.cases.grants["c3"]
+
+
+def test_an_author_of_another_unit_does_not_count_as_the_cases_author(world: SimpleNamespace) -> None:
+    """Finding 5: c4's Author moved to another unit answers for nothing, so it may be given one."""
+    PEOPLE["ana-1"] = PEOPLE["ana-1"].model_copy(update={"org_unit": "unit-2"})
+    assert _name(world, "c4", "ana-2").status_code == 204
+
+
+def test_a_team_name_another_team_holds_is_refused(world: SimpleNamespace) -> None:
+    """Finding 8: a team is named by its display name at Make live, so no two teams share one."""
+    world.roles.teams_of["r2"] = Team(role_id="r2", display_name="Intel", mailbox="x@example.org")
+    answer = _team(world)
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "team_name_taken"

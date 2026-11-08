@@ -155,6 +155,15 @@ class _NoCustomRoles:
     async def teams(self, today: Any) -> list[Any]:
         return []
 
+    def people_lock(self) -> Any:
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def held() -> Any:
+            yield
+
+        return held()
+
 
 class _OwnsNothing:
     """L2.5's *Disable…* for a person who owns nothing: no item, so no transfer is asked for."""

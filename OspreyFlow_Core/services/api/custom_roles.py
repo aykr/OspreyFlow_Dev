@@ -27,8 +27,10 @@ from __future__ import annotations
 
 import re
 import secrets
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
+from typing import Any
 
 import asyncpg
 
@@ -71,7 +73,14 @@ CREATE TABLE IF NOT EXISTS teams (
     cover TEXT,
     cover_until DATE
 );
+-- A team is named by its display name in *Make live* and *Change owner…* (`_owners_allowed`), so
+-- two teams never share one, case and spacing aside.
+CREATE UNIQUE INDEX IF NOT EXISTS teams_display_name_key
+    ON teams (lower(regexp_replace(btrim(display_name), '\\s+', ' ', 'g')));
 """
+
+#: The advisory lock every lock-out check holds with its write (`people_lock`); any fixed key.
+PEOPLE_LOCK = 0x05EF_A001
 
 #: The built-in role names a custom role's name may not take, case aside.
 _BUILT_IN_NAMES = frozenset(
@@ -246,6 +255,19 @@ class CustomRoleStore:
     async def close(self) -> None:
         await self._pool.close()
 
+    @asynccontextmanager
+    async def people_lock(self) -> AsyncIterator[None]:
+        """ADR-145 Amendment 5's lock-out, serialised: every change that could leave nobody holding
+        `manage_people` (a role's rights, a person's roles, a removal, a disable) reads the people
+        and writes its change under this one session-level advisory lock, across Conduit replicas,
+        so two changes each fine alone cannot together leave no administrator."""
+        async with self._pool.acquire() as conn:
+            await conn.execute("SELECT pg_advisory_lock($1)", PEOPLE_LOCK)
+            try:
+                yield
+            finally:
+                await conn.execute("SELECT pg_advisory_unlock($1)", PEOPLE_LOCK)
+
     async def current_rights(self, ids: Sequence[str] | None = None) -> dict[str, frozenset[Right]]:
         """Each custom role's current rights (only `ids`, when given): read at every request that
         carries a custom role, never kept between them."""
@@ -373,16 +395,25 @@ class CustomRoleStore:
     # --- teams -------------------------------------------------------------------------------
     async def make_team(self, role_id: str, team: TeamInput, today: date) -> Team:
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "INSERT INTO teams (role_id, display_name, mailbox) VALUES ($1, $2, $3) "
-                "ON CONFLICT (role_id) DO UPDATE SET display_name = EXCLUDED.display_name, "
-                "mailbox = EXCLUDED.mailbox RETURNING *",
-                role_id,
-                team.display_name.strip(),
-                team.mailbox.strip(),
-            )
+            try:
+                row = await self._upsert_team(conn, role_id, team)
+            except asyncpg.UniqueViolationError as error:
+                raise RoleRefused(
+                    "team_name_taken", f"a team called {team.display_name.strip()} already exists"
+                ) from error
         assert row is not None
         return _team(row, today)
+
+    @staticmethod
+    async def _upsert_team(conn: asyncpg.Connection, role_id: str, team: TeamInput) -> Any:
+        return await conn.fetchrow(
+            "INSERT INTO teams (role_id, display_name, mailbox) VALUES ($1, $2, $3) "
+            "ON CONFLICT (role_id) DO UPDATE SET display_name = EXCLUDED.display_name, "
+            "mailbox = EXCLUDED.mailbox RETURNING *",
+            role_id,
+            team.display_name.strip(),
+            team.mailbox.strip(),
+        )
 
     async def team(self, role_id: str, today: date) -> Team | None:
         """A team, as rules' L2.10 reads it: its lead, its cover and who acts today."""
