@@ -28659,8 +28659,10 @@ The L2.8b review's D8 to D10 also came here (`process/lanes/glass/REPORT.md` ite
    18) is never marked. Clones of clones follow the settle's existing path unchanged: the settle
    trusts the graph's `superseded_by`, never the record. Nothing a reader is answered changes: a
    reverted link was already out of every read, and the revert's count of corrected elements
-   leaves out anything reverted (`load_revert.py`); the graph-port suite and the revert tests run
-   green with the marking (point 6's lease).
+   leaves out anything reverted (`load_revert.py`); with the marking, the graph-port suite and the
+   revert tests pass under the rules lease on stack b, but for six withdraw-and-restore cases that
+   fail on main too: the suite defines `_restore` twice and the later shadows the earlier
+   (`process/lanes/rules/l2.8c/conformance-and-revert.txt`).
 2. **Every such writer records before its commit.**
    - **Writers that commit their own transaction** (`alerts.supersede_journalled`, Amendment 10's
      `repointing` with `never_committed` on a refusal): the confirm and retract routes
