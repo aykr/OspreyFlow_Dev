@@ -685,3 +685,17 @@ async def test_change_refuses_a_blank_name_or_an_unknown_pack_before_writing(
 
     read = await store.get_authorized(case.id, AUTHOR, need=AccessLevel.VIEWER)
     assert (read.name, read.domains) == ("Old", ["fibo"])
+
+
+async def test_admin_states_names_open_and_removed_cases_and_nothing_else(
+    store: InvestigationStore,
+) -> None:
+    """Admin › Datasets' linked cases (ADR-143 Amendment 2 decision 2): a case's name and whether
+    it is removed, read without a level, for open and removed cases alike; a case that never
+    existed is left out, never invented."""
+    kept = await store.create(AUTHOR, name="Op Kestrel")
+    gone = await store.create(AUTHOR, name="Op Heron")
+    await store.remove(gone.id, by=AUTHOR)
+    states = await store.admin_states([kept.id, gone.id, "never-made"])
+    assert states == {kept.id: ("Op Kestrel", False), gone.id: ("Op Heron", True)}
+    assert await store.admin_states([]) == {}

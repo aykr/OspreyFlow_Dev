@@ -68,6 +68,7 @@ entity_types:
       - {name: event_id, type: string}            # the analytics event it was made from
       - {name: media_kind, type: enum, values: [text, image, video]}   # ADR-094
       - {name: object_ref, type: string}          # its file in the object store, never the graph
+      - {name: size_bytes, type: integer}         # a picture's file size, written at attach, so Admin › Datasets counts a layer's pictures in the store (ADR-143 Amendment 2 decision 2; the owner's ruling of 8 November 2026)
   - name: Vehicle
     pole_class: object
     channel: jade

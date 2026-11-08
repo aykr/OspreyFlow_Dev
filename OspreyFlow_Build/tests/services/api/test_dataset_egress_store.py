@@ -105,3 +105,21 @@ async def test_a_dataset_made_before_the_column_reads_as_none() -> None:
     finally:
         await conn.execute("DELETE FROM datasets WHERE owning_unit = $1", unit)
         await conn.close()
+
+
+async def test_the_promotion_policy_starts_at_author_promotes_and_a_change_is_kept(store) -> None:  # type: ignore[no-untyped-def]
+    """ADR-145 decision 8 (L2.4 part 2): every dataset, a seeded one included, starts at *Author
+    promotes*; a change returns what it was; a layer or no dataset is refused."""
+    unit = f"unit-{new_id()}"
+    made = await store.create(_analyst(unit), "Made here")
+    assert made.promotion_policy == "author_promotes"
+    before, after = await store.set_promotion_policy(made.id, "second_person_reviews")
+    assert (before, after.promotion_policy, after.egress) == (
+        "author_promotes", "second_person_reviews", "none",
+    )  # fmt: skip
+    listed = {d.id: d.promotion_policy for d in await store.list_all() if d.owning_unit == unit}
+    assert listed == {made.id: "second_person_reviews"}
+    layer = await store.ensure_layer(f"case-{new_id()}", unit=unit, created_by="seed")
+    for refused in (layer, f"nobody-{new_id()}"):
+        with pytest.raises(UnknownDatasetEgressError):
+            await store.set_promotion_policy(refused, "author_promotes")
