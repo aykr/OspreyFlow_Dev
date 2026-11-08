@@ -310,7 +310,8 @@ of three nodes leaves the others listed (ADR-101).
 **AnalyticsPort suite** — identical histogram, geobin and baseline results across adapters,
 including edge cases: empty window, single-event window, window crossing a DST boundary, null
 coordinates; `first_seen` (ADR-087), `list_events` paged with its total (ADR-089), `event_ids`
-(ADR-089 Amendment 1) and a branch's `inherited` events (ADR-084 Amendment 2). `alert_trend` over
+(ADR-089 Amendment 1) and `inherited` events (ADR-084 Amendment 2; since ADR-144 Amendment 1 the
+Conduit always sends none, and the port still honours them). `alert_trend` over
 `load_alert_facts` (ADR-134 decision 3): alerts per week or month, split by rule, typology,
 severity or outcome, counted only for a reader in the alert's audience (its case; its owner, or
 its owner's team when shared), within the reader's datasets, who may view every handling it rests

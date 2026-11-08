@@ -177,15 +177,15 @@ Amendment 12 item 6: the Conduit no longer makes a case a dataset of its own). T
 is made with it (ADR-143 decision 1; `01_DOMAIN_MODEL.md` §2.2a). No case is made from another
 since L3.2; one made so since L3.1, until the upgrade turns it into a view, reads its original's chosen
 dataset and layer, read-only, holding none of its own: a mark or link made in it is 409
-`original_layer_read_only` (ADR-144 Amendment 1 decision 2; the code was `branch_layer_read_only`
-before L3.2). A case opened from an alert reads the
+`original_layer_read_only` (ADR-144 Amendment 1 decision 2; its code before L3.2 named the retired
+kind of case, renamed by Amendment 2). A case opened from an alert reads the
 dataset and gets an empty layer of its own (ADR-143 Amendment 1 item 3). Under a case, what is written joins its source; an entity marked
 by hand and a manual link or split join its layer (ADR-143 Amendment 1). A case reading a composite
 writes nothing but into its layer: every other write is 409 `composite_read_only` ("do this in a
 case that reads that dataset"), and so is any write into a composite's id (ADR-099 Amendments 14
 and 15; the Studio's routes of a composite too). Its monitors keep working, their alerts raised into
 its layer, and its scheduled loads are refused, each slot in words. No case is made from another
-(ADR-144 Amendment 1): what a branch did, a case view does (above). `GET .../access` shows anyone their own level, and shows an Author the
+(ADR-144 Amendment 1): a smaller part of a case is a case view (above). `GET .../access` shows anyone their own level, and shows an Author the
 unit-wide level, every grant and the grantees' display names (`names`, ADR-106: only ids already in
 the grants served). A grantee is named by account id — the token's `sub`, which the Admin area shows
 for a person or a dashboard identity; any other string grants nothing to anyone (ADR-052 P3, as
@@ -347,7 +347,7 @@ pending version changes nothing; one waits at a time (`409 influencer_change_ref
 `first-seen`, `geobins` and `sightings` carry their case in the body (`EventFilter.investigation_scope`)
 and take the same gate as every case route, at Viewer: a case the account holds no level on answers
 404 and reads nothing, and the refusal is audited. A case reads its own events alone (ADR-144
-Amendment 1 ended ADR-084 Amendment 2's widening to the cases a branch came from), and so do the
+Amendment 1 ended ADR-084 Amendment 2's widening to the case another was made from), and so do the
 events behind one link and an email extracted from one. `EventFilter.inherited` is always set by the
 Conduit, to nothing; a value sent by a caller is discarded.
 `geometries` is reference data, not case data, and is unchanged.
@@ -408,7 +408,7 @@ PUT    /v1/investigations/{id}/brief/requirements/{requirement}/status   open or
 POST   /v1/investigations/{id}/brief/requirements/{requirement}/attachments   attach a trend, pattern, assessment or view the Author may read; absent and unreadable are the same 404 `attachment_not_found`
 DELETE /v1/investigations/{id}/brief/requirements/{requirement}/attachments/{kind}/{attachment}   detach
 POST   /v1/investigations/{id}/links/{edge}/change   change a link's type and/or details (`{"reason": "...", "type"?, "properties"?, "interval"?, "occurrences"?}`) by superseding it; 200 with the new link, the `replace_edge` step and the change record; 404 `link_not_found` as for notes; 422 `invalid_link_change` (no reason, over 1,000 characters, or the ontology refuses), `nothing_changed`, `resolution_link` for a same-as or not-the-same link, either way round (ADR-080); `handling`? and `confirm_lower`? (ADR-102): a raise is an Editor's, a lower handling in any part is an Author's with `confirm_lower`, else 403 `lowering_needs_author` or 409 `confirm_lower_handling`; a handling that moves the units, is above the analyst's own, or names a code the scheme lacks is 422 `invalid_link_change`; 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15)
-GET    /v1/investigations/{investigation_id}/link-types   the relationship types a link in the case may take: the ontology's (the OspreyFlow default dataset's), and those analysts proposed in a case reading one of this case's datasets (`proposal_id` set; a proposal made before ADR-099 Amendment 3 keeps ADR-090's case and in-view rule, no longer its branches since L3.2), Viewer (ADR-090, ADR-099 Amendment 3)
+GET    /v1/investigations/{investigation_id}/link-types   the relationship types a link in the case may take: the ontology's (the OspreyFlow default dataset's), and those analysts proposed in a case reading one of this case's datasets (`proposal_id` set; a proposal made before ADR-099 Amendment 3 keeps ADR-090's case and in-view rule, and no case made from another since L3.2), Viewer (ADR-090, ADR-099 Amendment 3)
 POST   /v1/investigations/{investigation_id}/link-types   propose a type when none fits (`{"name", "from_types", "to_types", "directed"?, "label"?, "colour"?, "thickness"?, "reason"}`): usable at once in every case reading this case's first dataset, probabilistic (ADR-099 Amendment 3); 422 `proposal_refused` for a name the ontology has or the case already offers, or one that is not a type name, Editor (ADR-090)
 POST   /v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw   withdraw a pending proposal of a dataset the case reads (`{"reason"}`), its proposer or an Author; 404 `proposal_not_found`, Editor (ADR-090)
 GET    /v1/investigations/{id}/links/{edge}/history  every earlier version of one link and the changes between them, newest first, at most 100 steps (`truncated` says so) — 404 `link_not_found` unless the caller may see the link (ADR-080)
@@ -1125,8 +1125,8 @@ encoding, plus a capped stream of deltas for reconnect. TTL of 24 hours on idle,
 save promoting the set to durable storage in the Vault.
 
 **Caps.** 50,000 nodes, 250,000 edges. On breach the service does not truncate; it returns a
-`limit_exceeded` response naming the three options the Glass offers the analyst (branch, filter,
-promote to batch). Encode this as a typed error, not a generic 400, so the client can render the
+`limit_exceeded` response naming the three options the Glass offers the analyst (`save_as_view`,
+`filter`, `promote_to_batch`; ADR-144 Amendment 2). Encode this as a typed error, not a generic 400, so the client can render the
 right dialogue.
 
 **Projection.** The stored set is source-fidelity. The projection applied on read is: resolution
@@ -1139,7 +1139,7 @@ too.
 **Why the stored set can hold more than one principal's own view, and why the filter must
 therefore run on every read, not once at write time.** An investigation is not single-principal
 for its whole life — §3.1's `owning_unit` authorization is unit-wide, not creator-only, so a
-shared team investigation, or one principal's branch of another's, means a later reader's own
+shared team investigation, or one principal's view shared with another, means a later reader's own
 `Principal` may be different, and less privileged, than whoever's `expand`/`seed` call originally
 populated a given node. `GraphPort`'s own access filtering at the point of fetch is still the only
 thing that ever decides what gets *written* to the store — nothing re-derives or second-guesses
@@ -1148,12 +1148,12 @@ that. What the access check re-applies on every read (`ontology.handling.princip
 the same predicates the adapter's compiled Gremlin is built from) is a *second*, independent check
 for whoever is *reading* the store back: a node one principal was entitled to fetch is not
 disclosed to a different principal who is not. This applies uniformly to the reconnect snapshot,
-replayed missed deltas, a live WebSocket push, and a `branch` copy — you cannot fork what you
-cannot see, either. The stream's principal comes from a ticket minted outside any case, so the
+replayed missed deltas, a live WebSocket push, and a case view opened — a view cannot show what
+its reader cannot see, either. The stream's principal comes from a ticket minted outside any case, so the
 stream scopes it to its own case before the first read.
 
 **Why server-side rather than browser-only.** Three reasons that each independently decide it.
-An investigation must survive a tab crash. A branch operation must be atomic. And the resolution
+An investigation must survive a tab crash. A write to the working set must be atomic. And the resolution
 threshold must re-project against the full source-fidelity set, which the browser does not hold
 — the browser holds the projection.
 
