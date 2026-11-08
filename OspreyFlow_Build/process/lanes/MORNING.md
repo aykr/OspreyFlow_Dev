@@ -28,6 +28,17 @@ its lease; the build plan, runbook, progress table and the five first briefs (ad
 L2.8c, case L3.2, studio L1.3, platform P1); worktrees `admin`, `rules` and `platform` set up. The
 studio, case and glass sessions are retired (each replied "retired"); their worktrees are clean and merged.
 
+**A question for you (platform's P3; the licence register, so yours):** building the local basemap needs Java 21
+(planetiler). The only runtime here is Eclipse Temurin, GPL-2.0 with the Classpath exception, and spec/00 §7 says
+"GPL and AGPL never pass".
+- **(A) Platform's recommendation:** add a Classpath-exception entry to the licence register for a Java runtime
+  in the Conduit image (about 100 MB, jlinked, pinned by digest). The exception keeps our code outside the GPL,
+  as it does for every program on a JVM.
+- (B) Keep Java out of every image we ship: `ospreyflow map build` runs planetiler in its own container on the
+  host, pulled by you, never shipped; the Glass's Build button names that command.
+- (C) No build in the product: building stays a documented manual step on a machine with Java.
+Built meanwhile: Java is out of the image and *Admin › Maps*' Build says so in words; the rest of P3 goes on.
+
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
