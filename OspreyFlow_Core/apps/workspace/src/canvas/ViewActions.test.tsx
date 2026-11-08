@@ -16,7 +16,7 @@ function setup(
 describe("ViewActions", () => {
   it("offers nothing to do to selected nodes: that is the selection bar's (ADR-097 step 1)", () => {
     setup();
-    expect(screen.queryByRole("button", { name: /Remove selected|Branch selected/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Remove selected|Save as a view/ })).toBeNull();
   });
 
 

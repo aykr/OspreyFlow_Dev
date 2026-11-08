@@ -16,14 +16,14 @@ const wouldBe: LimitExceeded = {
   cap_kind: "nodes",
   cap: 50_000,
   would_be: 50_001,
-  options: ["branch", "filter", "promote_to_batch"],
+  options: ["save_as_view", "filter", "promote_to_batch"],
 };
 const snapshot: DeltaSnapshot = { seq: 9, op: "snapshot", nodes: [], edges: [] };
 
 function mount() {
   const { store } = createWorkingSet();
   const requestResync = vi.fn();
-  const onBranchOpened = vi.fn();
+  const onViewOpened = vi.fn();
   render(
     <ViewOverCapGate
       store={store}
@@ -32,10 +32,10 @@ function mount() {
       apiBaseUrl="http://api.invalid"
       bearerToken="token"
       investigationId="c1"
-      onBranchOpened={onBranchOpened}
+      onViewOpened={onViewOpened}
     />,
   );
-  return { store, requestResync, onBranchOpened };
+  return { store, requestResync, onViewOpened };
 }
 
 const DIALOG = { name: "Your view of this case is too large" };

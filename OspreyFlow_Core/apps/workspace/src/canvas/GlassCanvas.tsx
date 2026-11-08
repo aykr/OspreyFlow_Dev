@@ -108,7 +108,8 @@ import {
 } from "./expansionGate";
 import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
-import { branchSelection } from "./branchNodes";
+import { type CaseView, saveView } from "../views/viewsApi";
+import { SaveViewForm } from "../views/SaveViewForm";
 import { fetchFirstSeen } from "../analytics/api";
 import { litNote, litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
 import { LIT_ANSWER_LATE, readLit, selectionChangedSince } from "../crossfilter/selectLit";
@@ -246,12 +247,18 @@ export interface GlassCanvasProps {
    * direct link types, the rarity note), drawn in the legend box. Absent: not shown. */
   strengthLegend?: StrengthLegend | null;
   onSelectionChange?: (nodeIds: string[]) => void;
-  /** A branch of the selected nodes was made (ADR-084): the new case's id and name. The caller
-   * opens it. Absent: this canvas offers no "Branch selected" button. */
-  onBranchCreated?: (id: string, name: string) => void;
-  /** ADR-098 decision 4: the selection was branched to ask the model about its Documents; open
-   * the new case on its questions. Absent: not offered. */
-  onAskAboutDocuments?: (id: string, name: string) => void;
+  /** The selection was saved as a private view of this case (ADR-144 decision 4). Absent: this
+   * canvas offers no *Save as a view*. */
+  onViewSaved?: (view: CaseView) => void;
+  /** ADR-098 decision 4, ADR-144 decision 4: the selection was saved as a private view so the model
+   * can be asked about its Documents in it; the caller opens the questions in that view. Absent:
+   * not offered. */
+  onAskInView?: (view: CaseView) => void;
+  /** The canvas is showing an opened view (the owner's ruling of 8 November 2026, ADR-144
+   * Amendment 2): a read-only lens. Nothing here changes the case's working set: no expand, no
+   * links among, no paths or messages put on, no remove, no manual same-as or split. The selection
+   * can still be saved as a view and asked about. */
+  lens?: boolean;
   /** ADR-115 E6: the case's latest history step and when, for the toolbar's note. */
   lastChange?: string | null;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
@@ -404,6 +411,19 @@ interface PendingRadialMenu {
 // prop, not a hypothetical this time either).
 const EMPTY_DIMMED_SET: ReadonlySet<string> = new Set();
 
+/** What a node's menu offers in a view (the owner's ruling of 8 November 2026, ADR-144 Amendment 2:
+ * an opened view is a read-only lens). Each changes nothing in the case's working set. */
+const LENS_MENU_ITEMS: ReadonlySet<string> = new Set([
+  "read-full-screen",
+  "view-messages",
+  "expand-group",
+  "explain-cluster",
+  "save-selected-as-view",
+]);
+
+/** Said when something that would change the case's working set is asked for in a view. */
+const LENS_NOTICE = "This is a view: nothing in it changes the case. Go back to the case to change it.";
+
 /** The selected link: the brass the lasso already uses. */
 
 export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
@@ -421,8 +441,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       dimmedEdgeIds = EMPTY_DIMMED_SET,
       strengthLegend = null,
       onSelectionChange,
-      onBranchCreated,
-      onAskAboutDocuments,
+      onViewSaved,
+      onAskInView,
+      lens = false,
       lastChange,
       onEdgeSelect,
       onFocusChange,
@@ -623,6 +644,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // A failed `expandNode`/`manualAssertion`/`explainCluster` call — `ActionErrorOverlay`'s own
     // doc comment has the full reasoning for why these three share one generic overlay rather than
     // `pathError`'s own distinct-outcomes shape.
+    // ADR-144 decision 4: the *Save as a view* form, open over the canvas.
+    const [savingView, setSavingView] = useState(false);
     const [actionError, setActionError] = useState<{
       x: number;
       y: number;
@@ -630,7 +653,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       tone?: "error" | "notice";
     } | null>(null);
     // ADR-128 decision 2 (B3): what Select what is lit selected, the window it used, and the
-    // selection it replaced. Kept so that Branch selected can send the window, and so that one undo
+    // selection it replaced. Kept so that a view saved from it is named for the window, and so that one undo
     // can give the previous selection back; both lapse the moment the selection is anything else.
     const [lit, setLit] = useState<{
       window: TimeWindow;
@@ -1461,7 +1484,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       if (!containerRef.current) return;
       // `Sigma`'s own constructor calls `refresh()` synchronously — which,
       // for a graph that already has nodes at mount time (a history
-      // restore, a branch, or this checkpoint's own perf-fixture harness —
+      // restore, an opened view, or this checkpoint's own perf-fixture harness —
       // not the ordinary empty-investigation-then-stream-fills-it path this
       // bug's absence from earlier manual testing traces to), invokes
       // `nodeReducer` *during construction*, before `const sigma = new
@@ -2034,7 +2057,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // one of its `<button role="menuitem">` items bubbles up to this same
       // handler (React's synthetic events follow real DOM bubbling). Found
       // while wiring B11's own keyboard test: without this guard, Tab inside
-      // an open menu was *also* being caught by the ring-cycling branch below,
+      // an open menu was *also* being caught by the ring-cycling case below,
       // which calls `preventDefault()` and fights the browser's native
       // button-to-button focus movement the menu's own real `<button>`
       // elements otherwise get for free. `Escape` still closes the menu
@@ -2042,9 +2065,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // this handler, so it needs no exemption here.
       //
       // Phase 6a Stage 4: `clusterExplain` gets the same exemption, found the same
-      // way — without it, this container's own Tab/arrow branches below fight a keyboard-only
+      // way — without it, this container's own Tab/arrow cases below fight a keyboard-only
       // analyst trying to reach either overlay's own close button, the identical bug class
-      // `radialMenu` was already exempted from. `Escape` needs no branch here: `Popover` (the base
+      // `radialMenu` was already exempted from. `Escape` needs no case here: `Popover` (the base
       // both overlays render through) now closes itself on Escape via its own `document`-level
       // listener, the same self-contained shape `RadialMenu` already had — found necessary, not
       // just tidier, because this container's own handler only runs while the container itself has
@@ -2082,7 +2105,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // the key Tab's release frees up for it.
       // **Walking every node in the working set, adjacency or not** — round 12d, closing a real
       // `CLAUDE.md` rule 13 gap found in 12b: `Explain cluster` and `Find paths to` are both
-      // gated on a *two-node* selection, and until this branch existed there was no keyboard
+      // gated on a *two-node* selection, and until this case existed there was no keyboard
       // route to one for two nodes that share no edge. Arrow-walk follows `graph.neighbors`, so
       // it cannot leave a node's own component; `Ctrl`/`Cmd`+Arrow below cycles *within* the
       // selection, so it cannot reach a node that is not already in it; Space toggles only
@@ -2264,6 +2287,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       y: number,
       depth = 1,
     ): Promise<void> {
+      if (refusedInLens()) return;
       const ask = {
         apiBaseUrl,
         bearerToken,
@@ -2314,6 +2338,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       y: number,
       depth = 1,
     ): Promise<void> {
+      if (refusedInLens()) return;
       let response: Response;
       try {
         response = await fetch(
@@ -2371,6 +2396,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
 
     // ADR-098: the links among the given nodes in the view, or among all of it.
     async function linksAmongOnCanvas(nodeIds: readonly string[] | null, degree = 1): Promise<void> {
+      if (refusedInLens()) return;
       if (!bearerToken || !investigationId) return;
       const box = containerRef.current?.getBoundingClientRect();
       const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
@@ -2458,6 +2484,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       y: number,
       reason?: string,
     ): Promise<void> {
+      if (refusedInLens()) return;
       // Fixed first, ahead of expandNode/explainCluster below (CLAUDE.md's own session priority):
       // this is a write, not a read. A silently-dropped expand/explain misleads an analyst about
       // what the data shows; a silently-dropped manualAssertion leaves them believing a link (or
@@ -2545,6 +2572,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       x: number,
       y: number,
     ): Promise<void> {
+      if (refusedInLens()) return;
       let response: Response;
       try {
         response = await fetch(`${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/paths`, {
@@ -2884,16 +2912,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         });
       }
 
-      // ADR-084 Amendment 1: a node that is part of the selection offers to branch the whole
-      // selection from its own menu, so the analyst need not find the button over the canvas.
+      // ADR-144 decision 4: a node that is part of the selection offers to save the whole selection
+      // as a view from its own menu, so the analyst need not find the button over the canvas.
       // The count is the selection's, Group Nodes included (each stands for its members).
-      if (onBranchCreated && selected.has(nodeId)) {
+      if (onViewSaved && selected.has(nodeId)) {
         items.push({
-          id: "branch-selected",
-          label: `Branch selected (${selected.size}) to a new tab`,
+          id: "save-selected-as-view",
+          label: `Save selected (${selected.size}) as a view…`,
           count: undefined,
           group: "Actions",
-          onSelect: () => void branchSelected().then((made) => made && onBranchCreated?.(made.id, made.name)),
+          onSelect: () => setSavingView(true),
         });
       }
 
@@ -2912,7 +2940,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         onSelect: () => void toggleSuppressionMark(nodeId),
       });
 
-      return items;
+      // In a view (a read-only lens) only what changes nothing in the case's working set is offered:
+      // an allowlist, so an item added later is left out of a view until someone says it belongs.
+      return lens ? items.filter((item) => LENS_MENU_ITEMS.has(item.id)) : items;
     }
 
     // A menu or box that closes leaves keyboard focus on the page body, which would strand someone
@@ -2933,6 +2963,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       y: number,
       noun: "emails" | "messages",
     ): Promise<void> {
+      if (refusedInLens()) return;
       if (!bearerToken || !investigationId) return;
       try {
         const result = await showEmailsAsDocuments(
@@ -3059,6 +3090,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // records a History step. The graph only changes once the server has confirmed: a failure is
     // shown, and the nodes stay where they are.
     async function removeNodeIds(requested: string[]): Promise<void> {
+      if (refusedInLens()) return;
       // A Group Node stands for every node in its group. Removing only the stand-in would take one
       // node out of the group without the analyst having seen it, so unless the whole group is
       // being removed the group is opened instead and the stand-in is left alone.
@@ -3163,10 +3195,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       setLit(null);
     }
 
-    // Sends the selected nodes to a case of their own (ADR-084). A Group Node stands for every
-    // member of its group, so choosing one chooses all of them; the stand-in's own id is not a
-    // real node and is never sent. The view is not changed: the original case stays as it was.
-    function chosenForBranch(): string[] {
+    // The selected nodes, as a view keeps them (ADR-144). A Group Node stands for every member of
+    // its group, so choosing one chooses all of them; the stand-in's own id is not a real node and
+    // is never sent. Nothing on the case changes.
+    function chosenForView(): string[] {
       const chosen = new Set<string>();
       for (const id of selected) {
         const group = foldedViewRef.current?.groups.get(id);
@@ -3180,42 +3212,44 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       return Array.from(chosen);
     }
 
-    async function branchSelected(
-      name?: string,
-      opts: { lit?: boolean } = {},
-    ): Promise<{ id: string; name: string } | null> {
-      const nodeIds = chosenForBranch();
-      // ADR-128 decision 2: right after Select what is lit, with the window still set and the
-      // selection still within what was lit, the window goes with the selection and the server
-      // derives the slice (the lit links and their nodes). Any other branch is as it always was.
+    /** The name a view of the selection is offered under: the window's, right after Select what is
+     * lit, otherwise how many nodes it holds. */
+    function defaultViewName(): string {
       const now = getEventsWindow?.() ?? null;
-      const withWindow =
-        opts.lit !== false &&
-        lit !== null &&
-        now !== null &&
-        now.validFrom === lit.window.validFrom &&
-        now.validTo === lit.window.validTo &&
-        nodeIds.every((id) => lit.nodeIds.has(id))
-          ? lit.window
-          : undefined;
-      const result = await branchSelection(fetch, {
-        apiBaseUrl,
-        bearerToken,
-        investigationId,
-        nodeIds,
-        name: name ?? (withWindow ? litTabName(withWindow) : undefined),
-        window: withWindow,
-      });
-      if (!result.ok) {
-        const rect = containerRef.current?.getBoundingClientRect();
-        setActionError({
-          x: (rect?.left ?? 0) + 40,
-          y: (rect?.top ?? 0) + 40,
-          message: result.message,
-        });
-        return null;
+      if (lit !== null && now !== null && now.validFrom === lit.window.validFrom && now.validTo === lit.window.validTo) {
+        return litTabName(lit.window);
       }
-      return { id: result.id, name: result.name };
+      const n = chosenForView().length;
+      return `Selection of ${n} node${n === 1 ? "" : "s"}`;
+    }
+
+    // Saves the selection as a private view of this case (ADR-144 decisions 1 and 4): the chosen
+    // nodes, where they sit now, and the timeline's window. Its threshold is left unset, so it opens
+    // at the case's. Answers the view, or `null` with the refusal said, as `refusal` or on the canvas.
+    async function saveSelection(name: string): Promise<{ view: CaseView } | { refusal: string }> {
+      const nodeIds = chosenForView();
+      const layout: Record<string, { x: number; y: number }> = {};
+      for (const id of nodeIds) if (graph.hasNode(id)) layout[id] = realPositionOf(id);
+      const result = await saveView(apiBaseUrl, bearerToken, investigationId, {
+        name,
+        nodeIds,
+        layout,
+        window: getEventsWindow?.() ?? null,
+      });
+      return result.ok ? { view: result.view } : { refusal: result.message };
+    }
+
+    /** The view-reading refusal on the canvas, where the action was asked for. */
+    function sayOnCanvas(message: string, tone: "error" | "notice" = "error"): void {
+      const rect = containerRef.current?.getBoundingClientRect();
+      setActionError({ x: (rect?.left ?? 0) + 40, y: (rect?.top ?? 0) + 40, message, tone });
+    }
+
+    /** In a view, an action that would change the case's working set is said, not done. */
+    function refusedInLens(): boolean {
+      if (!lens) return false;
+      sayOnCanvas(LENS_NOTICE, "notice");
+      return true;
     }
 
     // ADR-098 decision 4: the selection's Documents, Group Nodes' members included.
@@ -3238,10 +3272,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
 
     async function askAboutSelected(): Promise<void> {
       const n = selectedDocumentCount;
-      const made = await branchSelected(`Questions on ${n} document${n === 1 ? "" : "s"}`, {
-        lit: false,
-      });
-      if (made) onAskAboutDocuments?.(made.id, made.name);
+      const saved = await saveSelection(`Questions on ${n} document${n === 1 ? "" : "s"}`);
+      if ("refusal" in saved) {
+        sayOnCanvas(saved.refusal);
+        return;
+      }
+      onAskInView?.(saved.view);
     }
 
     return (
@@ -3584,32 +3620,51 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         {/* ADR-097 step 1: the selection's one count, and what can be done to all of it. */}
         <SelectionBar
           count={selected.size}
-          onExpand={() => {
-            const box = containerRef.current?.getBoundingClientRect();
-            const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
-            // One at a time, each through its own preview and the working set's cap (rule 2).
-            void (async () => {
-              for (const id of Array.from(selected)) await requestExpansion(id, null, x, y);
-            })();
-          }}
-          onBranch={
-            onBranchCreated
-              ? () => void branchSelected().then((made) => made && onBranchCreated(made.id, made.name))
-              : undefined
+          onExpand={
+            lens
+              ? undefined
+              : () => {
+                  const box = containerRef.current?.getBoundingClientRect();
+                  const [x, y] = box ? [box.width / 2, box.height / 2] : [0, 0];
+                  // One at a time, each through its own preview and the working set's cap (rule 2).
+                  void (async () => {
+                    for (const id of Array.from(selected)) await requestExpansion(id, null, x, y);
+                  })();
+                }
           }
-          onAsk={onAskAboutDocuments ? () => void askAboutSelected() : undefined}
+          onSaveView={onViewSaved ? () => setSavingView(true) : undefined}
+          onAsk={onAskInView ? () => void askAboutSelected() : undefined}
           documentCount={selectedDocumentCount}
           litNote={
             litStands && lit ? litNote(lit.window) : undefined
           }
           onUndoLit={litStands ? undoSelectLit : undefined}
-          onLinksAmong={(degree) => void linksAmongOnCanvas(Array.from(selected), degree)}
-          onRemove={() => void removeNodeIds(Array.from(selected))}
+          onLinksAmong={lens ? undefined : (degree) => void linksAmongOnCanvas(Array.from(selected), degree)}
+          onRemove={lens ? undefined : () => void removeNodeIds(Array.from(selected))}
           onClear={() => {
             setSelected(new Set());
             onSelectionChange?.([]);
           }}
         />
+        {savingView && selected.size > 0 && (
+          <div className="save-view-anchor">
+            <SaveViewForm
+              count={chosenForView().length}
+              defaultName={defaultViewName()}
+              onCancel={() => {
+                setSavingView(false);
+                containerRef.current?.focus();
+              }}
+              onSave={async (name) => {
+                const saved = await saveSelection(name);
+                if ("refusal" in saved) return saved.refusal;
+                setSavingView(false);
+                onViewSaved?.(saved.view);
+                return null;
+              }}
+            />
+          </div>
+        )}
         {/* ADR-097 step 2: the zoom cluster and the legend, after the view's own controls in Tab order. */}
         {hoverLink &&
           (() => {

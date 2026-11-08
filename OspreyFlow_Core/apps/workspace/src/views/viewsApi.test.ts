@@ -9,7 +9,7 @@ function reply(status: number, body: unknown = {}): Response {
 }
 
 function stub(answer: Response) {
-  const fetcher = vi.fn(async (..._args: unknown[]) => answer);
+  const fetcher = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => answer);
   vi.stubGlobal("fetch", fetcher);
   return fetcher;
 }

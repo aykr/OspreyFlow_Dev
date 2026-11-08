@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "zustand/react";
 import type { StoreApi } from "zustand/vanilla";
 
+import type { CaseViewOpened } from "../views/viewsApi";
 import type { WorkingSetDelta } from "./models";
 import type { WorkingSetStoreState } from "./store";
 import { ViewOverCapDialog } from "./ViewOverCapDialog";
@@ -15,9 +16,8 @@ export interface ViewOverCapGateProps {
   apiBaseUrl: string;
   bearerToken: string;
   investigationId: string;
-  /** A filtered branch was made: open it, as a branch is opened. */
-  onBranchOpened: (id: string, name: string) => void;
-  fetcher?: typeof fetch;
+  /** A filtered view was saved and opened (ADR-144): show it as the lens. */
+  onViewOpened: (opened: CaseViewOpened) => void;
 }
 
 /**
@@ -36,8 +36,7 @@ export function ViewOverCapGate({
   apiBaseUrl,
   bearerToken,
   investigationId,
-  onBranchOpened,
-  fetcher,
+  onViewOpened,
 }: ViewOverCapGateProps) {
   const viewOverCap = useStore(store, (s) => s.viewOverCap);
   const [dismissed, setDismissed] = useState(false);
@@ -68,9 +67,8 @@ export function ViewOverCapGate({
       bearerToken={bearerToken}
       investigationId={investigationId}
       onTryAgain={() => requestResync(null)}
-      onBranchOpened={onBranchOpened}
+      onViewOpened={onViewOpened}
       onClose={() => setDismissed(true)}
-      fetcher={fetcher}
     />
   );
 }

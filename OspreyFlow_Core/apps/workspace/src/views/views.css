@@ -31,3 +31,11 @@
 .view-lens-banner__name { font-weight: 600; }
 .view-lens-banner__note { color: var(--text-secondary); }
 .view-lens-banner__back { margin-left: auto; min-height: var(--h-control-24); }
+
+/* The *Save as a view* form, over the canvas just above the selection bar. */
+.save-view-anchor {
+  position: absolute; left: 50%; bottom: calc(var(--sp-12) + var(--h-control-36) + var(--sp-8)); transform: translateX(-50%);
+  z-index: 13; width: min(360px, calc(100% - var(--sp-32)));
+}
+.save-view-anchor .save-view { padding: var(--sp-12); background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-panel); box-shadow: var(--overlay-shadow); }
+.save-view--govuk { background: var(--surface-raised); }

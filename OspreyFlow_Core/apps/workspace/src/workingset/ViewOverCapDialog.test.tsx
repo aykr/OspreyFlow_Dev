@@ -1,36 +1,61 @@
 // @vitest-environment jsdom
-// ADR-124 decision 2, "a view pushed past the cap" (U6b round 2): the dialog a reader is shown when
-// the server says their own view of the case is past a cap. Two ways out: open a filtered branch
-// (entity types from the ontology and never from the case's contents, a date window, or both), or
-// try again (a resync with no last sequence). The only figure on it is the reader's own.
+// ADR-124 decision 2, "a view pushed past the cap" (U6b round 2), as ADR-144 changed it: the dialog a
+// reader is shown when the server says their own view of the case is past a cap. Two ways out: save
+// a smaller view of the case as a private case view and open it (`save_as_view`: entity types from
+// the ontology and never from the case's contents, a date window, or both), or try again (a resync
+// with no last sequence). The only figure on it is the reader's own.
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { branchByFilter } from "./branchByFilter";
 import type { LimitExceeded } from "./models";
 import { ViewOverCapDialog } from "./ViewOverCapDialog";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const wouldBe: LimitExceeded = {
   error: "limit_exceeded",
   cap_kind: "nodes",
   cap: 50_000,
   would_be: 50_001,
-  options: ["branch", "filter", "promote_to_batch"],
+  options: ["save_as_view", "filter", "promote_to_batch"],
 };
 const ONTOLOGY_TYPES = ["Person", "Vehicle", "Organisation"];
+const VIEW = { id: "v1", case_id: "c1", name: "Smaller view of this case", created_by: "a", created_at: "2026-11-08T10:00:00Z", shared: false, chosen: null };
+const NODE = { id: "n1", type: "Person" };
+const OPENED = { view: VIEW, nodes: [NODE], edges: [], layout: {}, missing: 0 };
 
-function reply(status: number, body: unknown): typeof fetch {
-  return vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+type Call = { url: string; method: string; body: unknown; auth: string | undefined };
+
+/** The Conduit's view routes: saving answers 201 with the view, opening answers `opening`, and a
+ * delete answers 204. Every call is kept. */
+function conduit(opening: { status: number; body: unknown } = { status: 200, body: OPENED }, saving = { status: 201, body: VIEW as unknown }) {
+  const calls: Call[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init: RequestInit = {}) => {
+      const method = init.method ?? "GET";
+      calls.push({
+        url,
+        method,
+        body: init.body ? JSON.parse(init.body as string) : undefined,
+        auth: (init.headers as Record<string, string> | undefined)?.Authorization,
+      });
+      if (method === "POST") return new Response(JSON.stringify(saving.body), { status: saving.status });
+      if (method === "DELETE") return new Response(null, { status: 204 });
+      return new Response(JSON.stringify(opening.body), { status: opening.status });
+    }),
+  );
+  return calls;
 }
 
-function open(
-  fetcher: typeof fetch = reply(201, { id: "branch-1", name: "Branch of Case" }),
-  cap: Partial<LimitExceeded> = {},
-) {
+const saves = (calls: Call[]) => calls.filter((c) => c.method === "POST");
+
+function open(calls: Call[] = conduit(), cap: Partial<LimitExceeded> = {}) {
   const onTryAgain = vi.fn();
-  const onBranchOpened = vi.fn();
+  const onViewOpened = vi.fn();
   const onClose = vi.fn();
   render(
     <ViewOverCapDialog
@@ -40,12 +65,11 @@ function open(
       bearerToken="token"
       investigationId="c1"
       onTryAgain={onTryAgain}
-      onBranchOpened={onBranchOpened}
+      onViewOpened={onViewOpened}
       onClose={onClose}
-      fetcher={fetcher}
     />,
   );
-  return { fetcher, onTryAgain, onBranchOpened, onClose };
+  return { calls, onTryAgain, onViewOpened, onClose };
 }
 
 describe("the dialog", () => {
@@ -57,7 +81,7 @@ describe("the dialog", () => {
       "Too many for the canvas: 50,001 nodes against a limit of 50,000.",
     );
     expect(dialog.textContent?.replace(/50,00[01]/g, "")).not.toMatch(/\d/);
-    expect(within(dialog).getByRole("button", { name: "Open a filtered branch" })).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Save as a view" })).toBeTruthy();
     expect(within(dialog).getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
@@ -71,7 +95,7 @@ describe("the dialog", () => {
         bearerToken="token"
         investigationId="c1"
         onTryAgain={() => {}}
-        onBranchOpened={() => {}}
+        onViewOpened={() => {}}
         onClose={() => {}}
       />,
     );
@@ -109,9 +133,9 @@ describe("the dialog", () => {
   });
 });
 
-describe("opening a filtered branch", () => {
+describe("saving a smaller view", () => {
   function openForm() {
-    fireEvent.click(screen.getByRole("button", { name: "Open a filtered branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save as a view" }));
   }
 
   it("offers the ontology's entity types and nothing else", async () => {
@@ -124,83 +148,85 @@ describe("opening a filtered branch", () => {
     expect(offered).toEqual(ONTOLOGY_TYPES);
   });
 
-  it("sends the chosen types and window, and opens the new case", async () => {
-    const { fetcher, onBranchOpened } = open();
+  it("saves the chosen types and window as a private filtered view, then opens it", async () => {
+    const { calls, onViewOpened } = open();
     openForm();
+    fireEvent.change(screen.getByLabelText("View name"), { target: { value: "People this quarter" } });
     fireEvent.click(screen.getByRole("checkbox", { name: "Person" }));
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01" } });
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-03-31" } });
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
 
-    await waitFor(() => expect(onBranchOpened).toHaveBeenCalledWith("branch-1", "Branch of Case"));
-    const [url, init] = (fetcher as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://api.invalid/v1/investigations/c1/branch-by-filter");
-    expect((init as RequestInit).method).toBe("POST");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
-      entity_types: ["Person"],
-      valid_from: "2026-01-01T00:00:00Z",
-      valid_to: "2026-03-31T23:59:59Z",
+    await waitFor(() => expect(onViewOpened).toHaveBeenCalledWith(OPENED));
+    const [save, opening] = calls;
+    expect(save?.url).toBe("http://api.invalid/v1/investigations/c1/views");
+    expect(save?.method).toBe("POST");
+    expect(save?.body).toEqual({
+      name: "People this quarter",
+      filter: { entity_types: ["Person"], valid_from: "2026-01-01T00:00:00Z", valid_to: "2026-03-31T23:59:59Z" },
     });
-    expect(((init as RequestInit).headers as Record<string, string>).Authorization).toBe("Bearer token");
+    expect(save?.auth).toBe("Bearer token");
+    expect(opening?.url).toBe("http://api.invalid/v1/investigations/c1/views/v1");
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
   });
 
-  it("sends types alone, or a window alone", async () => {
-    const { fetcher } = open();
+  it("sends types alone", async () => {
+    const { calls } = open();
     openForm();
     fireEvent.click(screen.getByRole("checkbox", { name: "Vehicle" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
-    const call = (fetcher as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(call[1].body as string);
-    expect(body).toEqual({ entity_types: ["Vehicle"] });
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
+    await waitFor(() => expect(saves(calls)).toHaveLength(1));
+    expect((saves(calls)[0]?.body as { filter: unknown }).filter).toEqual({ entity_types: ["Vehicle"] });
   });
 
   it("asks for a choice, and sends nothing, when none is made", async () => {
-    const { fetcher } = open();
+    const { calls } = open();
     openForm();
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
     expect(screen.getByRole("alert").textContent).toBe("Choose entity types, a date window, or both.");
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
   });
 
-  it("on limit_exceeded shows the filtered figure and lets the reader narrow again", async () => {
+  it("on limit_exceeded shows the filtered figure, keeps no view, and lets the reader narrow again", async () => {
     const filtered = { ...wouldBe, would_be: 50_020 };
-    const { fetcher, onBranchOpened } = open(reply(409, filtered));
+    const { calls, onViewOpened } = open(conduit({ status: 409, body: filtered }));
     openForm();
     fireEvent.click(screen.getByRole("checkbox", { name: "Person" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe(
-      "Too many for the canvas: 50,020 nodes against a limit of 50,000. Narrow the choice and try again.",
+      "Too many for the canvas: 50,020 nodes against a limit of 50,000. No view was kept. Narrow the choice and try again.",
     );
-    expect(onBranchOpened).not.toHaveBeenCalled();
-    // The form is still there, with the choice kept, and can be sent again.
+    expect(onViewOpened).not.toHaveBeenCalled();
+    expect(calls.some((c) => c.method === "DELETE" && c.url.endsWith("/views/v1"))).toBe(true);
     expect((screen.getByRole("checkbox", { name: "Person" }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("checkbox", { name: "Vehicle" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
+    await waitFor(() => expect(saves(calls)).toHaveLength(2));
   });
 
-  it("on nothing_to_branch says nothing matched", async () => {
-    open(reply(422, { error: "nothing_to_branch" }));
+  it("says nothing matched, and keeps no view, when the view opens empty", async () => {
+    const { calls } = open(conduit({ status: 200, body: { ...OPENED, nodes: [] } }));
     openForm();
     fireEvent.click(screen.getByRole("checkbox", { name: "Organisation" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "Nothing matched that choice. Choose other types or dates.",
+      "Nothing matched that choice, so no view was kept. Choose other types or dates.",
     );
+    expect(calls.some((c) => c.method === "DELETE")).toBe(true);
   });
 
-  it("on any other failure says so and makes no case", async () => {
-    const { onBranchOpened } = open(reply(500, {}));
+  it("on a refused save says so and opens nothing", async () => {
+    const { calls, onViewOpened } = open(conduit(undefined, { status: 500, body: {} }));
     openForm();
     fireEvent.click(screen.getByRole("checkbox", { name: "Person" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
     expect((await screen.findByRole("alert")).textContent).toBe(
-      "Branching failed (500). No case was made. Try again.",
+      "The view could not be saved (500). Nothing was saved; try again.",
     );
-    expect(onBranchOpened).not.toHaveBeenCalled();
+    expect(onViewOpened).not.toHaveBeenCalled();
+    expect(calls.filter((c) => c.method === "GET")).toHaveLength(0);
   });
 });
 
@@ -209,7 +235,7 @@ describe("a date window alone", () => {
     "A date window selects links, not nodes, so on its own it cannot bring a view with too many nodes under the limit. Choose entity types as well.";
 
   function openForm() {
-    fireEvent.click(screen.getByRole("button", { name: "Open a filtered branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save as a view" }));
   }
 
   it("is said plainly when the cap breached is nodes", () => {
@@ -219,54 +245,30 @@ describe("a date window alone", () => {
   });
 
   it("is not sent when the cap breached is nodes: the reader is told why", () => {
-    const { fetcher } = open();
+    const { calls } = open();
     openForm();
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
     expect(screen.getByRole("alert").textContent).toBe(WINDOW_ALONE);
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
   });
 
   it("is a real choice when the cap breached is links, and nothing is said against it", async () => {
-    const { fetcher } = open(undefined, { cap_kind: "edges", cap: 250_000, would_be: 250_004 });
+    const { calls } = open(conduit(), { cap_kind: "edges", cap: 250_000, would_be: 250_004 });
     openForm();
     expect(screen.getByRole("dialog").textContent).not.toContain("cannot bring");
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01" } });
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
+    await waitFor(() => expect(saves(calls)).toHaveLength(1));
   });
 
   it("is sent with types when the cap breached is nodes", async () => {
-    const { fetcher } = open();
+    const { calls } = open();
     openForm();
     fireEvent.click(screen.getByRole("checkbox", { name: "Person" }));
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-03-31" } });
-    fireEvent.click(screen.getByRole("button", { name: "Open branch" }));
-    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
-  });
-});
-
-describe("branchByFilter, the request", () => {
-  it("answers each outcome as a value, never a throw", async () => {
-    const base = { apiBaseUrl: "http://api.invalid", bearerToken: "t", investigationId: "c1", entityTypes: ["Person"] };
-    expect(await branchByFilter(reply(201, { id: "b", name: "n" }), base)).toEqual({ ok: true, id: "b", name: "n" });
-    expect(await branchByFilter(reply(409, { ...wouldBe, would_be: 7 }), base)).toMatchObject({
-      ok: false,
-      kind: "limit_exceeded",
-    });
-    expect(await branchByFilter(reply(422, { error: "nothing_to_branch" }), base)).toEqual({
-      ok: false,
-      kind: "nothing_matched",
-    });
-    expect(await branchByFilter(reply(403, {}), base)).toMatchObject({ ok: false, kind: "failed" });
-    const down = (async () => {
-      throw new Error("offline");
-    }) as unknown as typeof fetch;
-    expect(await branchByFilter(down, base)).toMatchObject({ ok: false, kind: "failed" });
-    expect(await branchByFilter(reply(201, {}), { ...base, entityTypes: undefined })).toEqual({
-      ok: false,
-      kind: "nothing_chosen",
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
+    await waitFor(() => expect(saves(calls)).toHaveLength(1));
   });
 });
 

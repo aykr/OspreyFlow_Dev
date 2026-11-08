@@ -272,7 +272,7 @@ describe("the over-cap state of the open case", () => {
     cap_kind: "nodes" as const,
     cap: 50_000,
     would_be: 50_001,
-    options: ["branch", "filter", "promote_to_batch"] as ["branch", "filter", "promote_to_batch"],
+    options: ["save_as_view", "filter", "promote_to_batch"] as ["save_as_view", "filter", "promote_to_batch"],
   };
 
   it("starts clear, is set with the reader's figure, and leaves the graph and the sequence alone", () => {

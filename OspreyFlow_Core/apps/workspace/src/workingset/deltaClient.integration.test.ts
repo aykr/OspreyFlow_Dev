@@ -232,7 +232,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
   it("requesting a resync after the delta history is gone gets a snapshot, not a patch", async () => {
     // A real, exact `XTRIM ... MAXLEN 0` against Valkey — not a fabricated
     // out-of-range sequence number — so this exercises the same
-    // `deltas_after` "nothing retained" branch
+    // `deltas_after` "nothing retained" path
     // (`services/api/working_set/store.py`) a long-lived investigation's
     // real, approximate trimming would eventually hit on its own; forcing
     // it exactly is what keeps this test fast.
@@ -261,7 +261,7 @@ describe("deltaClient against the real Conduit WebSocket", () => {
               // legitimate a moment ago, now unresolvable purely because
               // the retained history behind it is gone. `since_seq >=
               // current` must be false here, or the server takes the
-              // "already caught up" branch instead of the trimmed-gap one.
+              // "already caught up" path instead of the trimmed-gap one.
               client.requestResync(1);
             } else if (delta.op === "snapshot" && resyncSent) {
               client.close();
