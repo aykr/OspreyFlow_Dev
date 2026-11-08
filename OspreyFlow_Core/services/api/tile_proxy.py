@@ -38,7 +38,33 @@ from services.api.credentials import resolve_env_credential
 from schemas.mapconfig import MapProvider, OgcServiceKind
 
 
-def _build_wmts_kvp_url(provider: MapProvider, z: int, x: int, y: int) -> str:
+class MissingMapKeyError(RuntimeError):
+    """A provider whose tiles need a key, with none held (ADR-147). Fixed words naming the provider
+    and where a key is set, never an address."""
+
+    def __init__(self, provider_id: str) -> None:
+        self.provider_id = provider_id
+        super().__init__(
+            f"The map provider {provider_id!r} needs a key and none is set. Someone who manages "
+            "geospatial settings can set it in Admin › Maps."
+        )
+
+
+def _key_for(provider: MapProvider, key: str | None) -> str | None:
+    """The key a request carries: the one set in *Admin › Maps* (`key`) first, then `osprey.yaml`'s
+    `credential: env:VAR`; refused in words where the provider needs one and neither is held."""
+    if key is not None:
+        return key
+    if provider.credential is not None:
+        return resolve_env_credential(provider.credential)
+    if provider.needs_key:
+        raise MissingMapKeyError(provider.id)
+    return None
+
+
+def _build_wmts_kvp_url(
+    provider: MapProvider, z: int, x: int, y: int, key: str | None = None
+) -> str:
     """A real WMTS KVP `GetTile` request against a bare service `endpoint`
     — see this module's own docstring for why `endpoint` is never a
     template for a WMTS provider. Every one of `layer`/`tile_matrix_set`/
@@ -62,18 +88,17 @@ def _build_wmts_kvp_url(provider: MapProvider, z: int, x: int, y: int) -> str:
             "KVP GetTile request (register_tier4_provider discovers these; copy them into "
             "osprey.yaml the same way layer already is)"
         )
-    if provider.credential is not None:
-        # Resolving *where* a credential belongs in a KVP GetTile request is
-        # a real, separate naming gap, already disclosed for the
-        # template path
-        # (`{credential}`'s own placeholder-naming flag below) — no shipped
-        # or tested provider exercises a credentialed WMTS KVP request yet,
-        # so this raises rather than guessing a query-parameter name.
-        raise NotImplementedError(
-            f"provider {provider.id!r} declares a credential, but no KVP query-parameter name "
-            "for it is defined yet — flagged, not guessed"
-        )
     extra_params = "".join(f"&{quote(k)}={quote(v)}" for k, v in provider.variables.items())
+    secret = _key_for(provider, key)
+    if secret is not None and provider.credential_param is None:
+        raise ValueError(
+            f"provider {provider.id!r} is a WMTS service holding a key but names no "
+            "credential_param for it, so the key has nowhere to go"
+        )
+    if secret is not None:
+        # `credential_param` is required with a WMTS credential (`MapProvider`'s own check), and a
+        # key set in Admin needs it too (`needs_key`), so it is set here.
+        extra_params += f"&{quote(cast(str, provider.credential_param))}={quote(secret, safe='')}"
     # `missing` above already proves each of these four is not None for a `service: wmts`
     # provider that reaches this point — the `cast`s tell mypy what the raise already enforces
     # at runtime, without repeating it as a redundant assertion.
@@ -86,26 +111,29 @@ def _build_wmts_kvp_url(provider: MapProvider, z: int, x: int, y: int) -> str:
     )
 
 
-def build_upstream_url(provider: MapProvider, z: int, x: int, y: int) -> str:
+def build_upstream_url(
+    provider: MapProvider, z: int, x: int, y: int, *, key: str | None = None
+) -> str:
     """A real WMTS KVP `GetTile` URL for `service: wmts` (see
     `_build_wmts_kvp_url`); otherwise substitutes `{z}`/`{x}`/`{y}`, every
     `provider.variables` entry, and — when `provider.credential` is set —
     a `{credential}` placeholder with the resolved value, into
     `provider.endpoint or provider.source` as a template.
 
-    `{credential}` as the placeholder name is this checkpoint's own naming
-    choice: `MapProvider`'s schema has no field naming which template
-    placeholder a credential fills, and the architecture doc doesn't say
-    either — flagged here rather than guessed silently.
+    A key set in *Admin › Maps* (`key`, read from the Conduit's map key file) comes before
+    `osprey.yaml`'s `credential: env:VAR`; a provider that needs a key and holds neither is
+    refused in words (`MissingMapKeyError`). `{credential}` is where a template takes it, and a WMTS
+    request's `credential_param` names its query parameter (ADR-147 decision 4).
     """
     if provider.service is OgcServiceKind.WMTS:
-        return _build_wmts_kvp_url(provider, z, x, y)
+        return _build_wmts_kvp_url(provider, z, x, y, key)
     template = provider.endpoint or provider.source
     if template is None:
         raise ValueError(f"provider {provider.id!r} has no endpoint or source template to proxy")
     values: dict[str, str] = {**provider.variables, "z": str(z), "x": str(x), "y": str(y)}
-    if provider.credential is not None:
-        values["credential"] = resolve_env_credential(provider.credential)
+    secret = _key_for(provider, key)
+    if secret is not None:
+        values["credential"] = secret
     return template.format(**values)
 
 
@@ -116,7 +144,5 @@ async def _http_get(url: str) -> bytes:
         return response.content
 
 
-async def fetch_tile(
-    url: str, *, http_get: Callable[[str], Awaitable[bytes]] = _http_get
-) -> bytes:
+async def fetch_tile(url: str, *, http_get: Callable[[str], Awaitable[bytes]] = _http_get) -> bytes:
     return await http_get(url)

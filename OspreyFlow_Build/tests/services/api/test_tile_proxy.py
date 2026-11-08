@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 from services.api.credentials import MissingCredentialError
-from services.api.tile_proxy import build_upstream_url, fetch_tile
+from services.api.tile_proxy import MissingMapKeyError, build_upstream_url, fetch_tile
 
 from schemas.mapconfig import MapProvider
 
@@ -84,14 +84,61 @@ def test_wmts_raises_naming_a_missing_discovered_field(missing_field: str) -> No
         build_upstream_url(provider, z=0, x=0, y=0)
 
 
-def test_wmts_with_a_credential_is_not_yet_supported() -> None:
-    """Flagged, not guessed — see `_build_wmts_kvp_url`'s own docstring:
-    no shipped or tested provider needs a credentialed WMTS KVP request
-    yet, and there is no declared query-parameter name for one."""
-    provider = _wmts_provider(credential="env:SOME_KEY")
+def test_a_wmts_key_goes_in_its_declared_query_parameter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ADR-147 decision 4: a WMTS KVP request has no template, so `credential_param` names the query
+    parameter its key goes in (settling what `_build_wmts_kvp_url` used to refuse)."""
+    monkeypatch.setenv("SOME_WMTS_KEY", "k-PLANTED-env-9QX")
+    provider = _wmts_provider(credential="env:SOME_WMTS_KEY", credential_param="apikey")
 
-    with pytest.raises(NotImplementedError):
+    url = build_upstream_url(provider, z=0, x=0, y=0)
+
+    assert url.endswith("&apikey=k-PLANTED-env-9QX")
+
+
+def test_a_key_set_in_admin_is_used_before_the_environment_s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SOME_WMTS_KEY", "k-from-env")
+    provider = _wmts_provider(credential="env:SOME_WMTS_KEY", credential_param="key")
+
+    url = build_upstream_url(provider, z=0, x=0, y=0, key="k-PLANTED-admin-7RT")
+
+    assert url.endswith("&key=k-PLANTED-admin-7RT") and "k-from-env" not in url
+
+
+def test_a_key_is_quoted_into_the_query() -> None:
+    provider = _wmts_provider(credential_param="key")
+
+    url = build_upstream_url(provider, z=0, x=0, y=0, key="a&b=c")
+
+    assert url.endswith("&key=a%26b%3Dc")
+
+
+def test_a_provider_that_needs_a_key_and_holds_none_is_refused_in_words() -> None:
+    provider = _wmts_provider(credential_param="key")
+
+    with pytest.raises(MissingMapKeyError, match="Admin › Maps"):
         build_upstream_url(provider, z=0, x=0, y=0)
+
+
+def test_a_wmts_credential_without_its_parameter_is_refused() -> None:
+    with pytest.raises(ValueError, match="credential_param"):
+        _wmts_provider(credential="env:SOME_KEY")
+
+
+def test_credential_param_is_only_for_a_wmts_service() -> None:
+    with pytest.raises(ValueError, match="only for a WMTS"):
+        _template_provider(credential_param="key")
+
+
+def test_a_template_takes_an_admin_key_in_its_credential_placeholder() -> None:
+    provider = _template_provider(
+        source="http://127.0.0.1:9/t/{z}/{x}/{y}?key={credential}", proxy="required"
+    )
+
+    url = build_upstream_url(provider, z=1, x=2, y=3, key="k-admin")
+
+    assert url == "http://127.0.0.1:9/t/1/2/3?key=k-admin"
 
 
 def test_substitutes_z_x_y_and_declared_variables() -> None:

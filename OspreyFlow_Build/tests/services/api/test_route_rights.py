@@ -355,6 +355,21 @@ ROUTE_RIGHTS = {
     "models_admin_set_key_route": "manage_models",
     "models_admin_remove_key_route": "manage_models",
     "models_admin_test_route": "manage_models",
+    # ADR-135 Amendment 3 (P2), missed from this table at P2's merge: added in P3.
+    "models_admin_limits_route": "manage_models",
+    "models_admin_usage_route": "manage_models",
+    # ADR-147 (P3): Admin › Maps.
+    "maps_admin_view_route": "manage_geospatial",
+    "maps_admin_history_route": "manage_geospatial",
+    "maps_admin_add_provider_route": "manage_geospatial",
+    "maps_admin_edit_provider_route": "manage_geospatial",
+    "maps_admin_remove_provider_route": "manage_geospatial",
+    "maps_admin_set_key_route": "manage_geospatial",
+    "maps_admin_remove_key_route": "manage_geospatial",
+    "maps_admin_default_route": "manage_geospatial",
+    "maps_admin_areas_route": "manage_geospatial",
+    "maps_admin_schedule_route": "manage_geospatial",
+    "maps_admin_prefetch_route": "manage_geospatial",
     # ADR-136 decision 2: every dataset's egress, set by an administrator alone, audited.
     "admin_datasets_route": "administer_system",
     # ADR-145 Amendment 4 decision 7: Admin › System's *Dataset owners may be*.

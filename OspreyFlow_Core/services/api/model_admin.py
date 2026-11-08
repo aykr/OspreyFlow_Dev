@@ -540,9 +540,9 @@ class _Exclusive:
     replicas sharing the models file (an advisory lock on a file beside it, `fcntl.flock`), so two
     administrators, two replicas or the command line never write over each other's change."""
 
-    def __init__(self, folder: Path) -> None:
+    def __init__(self, folder: Path, name: str = ".models.lock") -> None:
         self._lock = asyncio.Lock()
-        self._path = folder / ".models.lock"
+        self._path = folder / name
         self._fd: int | None = None
 
     async def __aenter__(self) -> None:
