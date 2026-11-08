@@ -1,0 +1,4 @@
+# red: the worker's resolve job registered without alerts — offline, closed ports, 2026-11-08T12:56:38Z
+E       AssertionError: assert {'supersede_n...y_type': None} == {'supersede_n... 0x10d2e80d0>}
+E         
+E         Omitting 1 identical items, use -vv to show

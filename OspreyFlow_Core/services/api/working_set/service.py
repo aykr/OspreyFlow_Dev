@@ -365,6 +365,13 @@ class WorkingSetService:
         #: was skipped). Never expected to move; each is also logged.
         self.uncountable_views = 0
 
+    @property
+    def publisher(self) -> Valkey | None:
+        """The client a caller publishes `remove_reverted`'s returned removals on
+        (`notify.publish_delta`); `None` where this service was built without one (ADR-109
+        Amendment 11: an alert path's purge is published to connected canvases at once)."""
+        return self._valkey
+
     def _project(
         self,
         nodes: Sequence[Node],

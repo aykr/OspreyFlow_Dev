@@ -32,6 +32,7 @@ obligation independently.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
@@ -44,7 +45,7 @@ import asyncpg
 from conduit_common.identity import new_id, new_node_id
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort, StoredLink
+from ports.graph import GraphPort, LinkCloned, StoredLink
 from schemas.analytics import (
     HOTLISTS_RULE,
     MONITORS_RULE,
@@ -371,6 +372,12 @@ async def _lock_for_repoint(conn: asyncpg.Connection, old: Sequence[str]) -> Non
 #: it for one graph transaction, seconds; one still unsettled after this has lost its writer.
 STALE_REPOINT_AFTER = timedelta(hours=1)
 
+#: How often a record is marked live (`recorded_at` restarted) while its writer is still writing
+#: (`AlertStore._kept_alive`): the stale threshold then measures the time since its writer was last
+#: known alive, never the time since the record was opened, so a write open longer than
+#: `STALE_REPOINT_AFTER` keeps its record (L2.8c review, item 3).
+REPOINT_KEEP_ALIVE = timedelta(minutes=5)
+
 
 class LinkRepoint:
     """One write's record (`AlertStore.repointing`): each superseded link and each superseded
@@ -399,6 +406,11 @@ class LinkRepoint:
         id), so the settle reads that type's successor alone."""
         await self._store._add_to_record(self.id, links=[(old, new, old_type)])
         self.pairs[old] = new
+
+    async def cloned(self, old: str, new: str, old_type: str) -> None:
+        """`GraphPort.supersede_node`'s `on_link_cloned`: each link a node's correction clones,
+        recorded as a link change's is (ADR-109 Amendment 11)."""
+        await self.record(old, new, old_type=old_type)
 
     async def record_node(self, old: str, new: str) -> None:
         await self._store._add_to_record(self.id, alert_nodes=[(old, new)])
@@ -444,6 +456,26 @@ def _pairs(raw: Any) -> list[tuple[str, str]]:
     return [(str(p[0]), str(p[1])) for p in _loaded(raw)]
 
 
+#: The repoint records' advisory locks live in Postgres's two-key space under this first key,
+#: never the one-key space every `pg_advisory_xact_lock(hashtext(...))` elsewhere in the Conduit
+#: shares (`strength_influencers`, `target_models`, `studio_recipes`): a one-key lock and a two-key
+#: lock never conflict, so no record's lock waits on, or is skipped for, another store's lock on
+#: the same text (L2.8c, D10). The value is the ASCII of "ARPR"; `recipe_runs`' two-key locks
+#: (`hashtext(recipe)`, `hashtext(case)`) meet it only should a recipe id hash to it, which makes
+#: one settle skip a record a later read settles, as any collision here does.
+REPOINT_LOCK_SPACE = 0x41525052
+
+#: How long a settle waits for a connection from the lock pool before it refuses, in words
+#: (`RepointLockBusy`), rather than waiting for ever (L2.8c, D10). A settle holds a lock connection
+#: for one record's settle, seconds; one still waiting after this has met a stuck pool.
+REPOINT_LOCK_WAIT = 30.0
+
+
+class RepointLockBusy(Exception):
+    """No connection came free in the repoint records' lock pool within `REPOINT_LOCK_WAIT`: the
+    record is left, unsettled, for a later read (L2.8c, D10)."""
+
+
 class RepointRecordGone(Exception):
     """A pair was to be recorded in a repoint record that is missing or already applied; the write
     it describes must not be committed, since nothing would apply it (ADR-109 Amendment 10, D2)."""
@@ -458,6 +490,11 @@ class AlertStore:
         #: each wait for another, for ever (found when four reads settled at once). A settle waiting
         #: here holds nothing in `_pool`, so the two pools can never wait on each other.
         self._lock_pool = lock_pool
+        #: `REPOINT_LOCK_WAIT`, `STALE_REPOINT_AFTER` and `REPOINT_KEEP_ALIVE`, per store so a test
+        #: can shorten them.
+        self.lock_wait = REPOINT_LOCK_WAIT
+        self.stale_after = STALE_REPOINT_AFTER
+        self.keep_alive_every = REPOINT_KEEP_ALIVE
         #: Where each written alert is kept for alert trends (ADR-134 decision 3): the analytics
         #: store's `load_alert_facts`, attached by `build_run_resources`. `None` keeps nothing.
         self.fact_sink: FactSink | None = None
@@ -734,16 +771,11 @@ class AlertStore:
         settle applies the record while its writer is active (each pair it records keeps it so),
         since one applied part-way would miss the writer's later pairs (L2.8b's D2); a writer gone
         quiet for `STALE_REPOINT_AFTER` is taken to have crashed, and its record settled as any."""
-        record_id = new_id()
-        async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO alert_repoint_records (id, held_open) VALUES ($1, $2)",
-                record_id,
-                held_open,
-            )
+        record_id = await self.open_record(held_open=held_open)
         repoint = LinkRepoint(self, record_id)
         try:
-            yield repoint
+            async with self._kept_alive(record_id):
+                yield repoint
         except Exception:
             try:
                 await self._release_record(record_id)
@@ -755,7 +787,59 @@ class AlertStore:
                 _log.exception("repoint record %s left for a later settle", record_id)
             raise
         await self._release_record(record_id)
-        repoint.remarked_nodes = await self._settle_record(graph, record_id, writer=True) or []
+        try:
+            repoint.remarked_nodes = await self._settle_record(graph, record_id, writer=True) or []
+        except RepointLockBusy:
+            # The write has committed and its record is released: a later read settles it (D10).
+            _log.warning("repoint record %s left for a later settle", record_id, exc_info=True)
+
+    def keep_alive(self, record_id: str) -> asyncio.Task[None]:
+        """A task that marks the record live every `keep_alive_every` until it is applied or
+        closed, or the task is cancelled (`stop_keeping_alive`) as its writer leaves. A writer
+        that dies takes the task with it, so its record goes stale and, its write never
+        committed, is dropped."""
+
+        async def beat() -> None:
+            while True:
+                await asyncio.sleep(self.keep_alive_every.total_seconds())
+                try:
+                    async with self._pool.acquire() as conn:
+                        done = await conn.execute(
+                            "UPDATE alert_repoint_records SET recorded_at = now() "
+                            "WHERE id = $1 AND NOT applied",
+                            record_id,
+                        )
+                except Exception:  # noqa: BLE001 - a missed beat is retried at the next
+                    _log.warning("repoint record %s not marked live", record_id, exc_info=True)
+                    continue
+                if done != "UPDATE 1":
+                    return  # applied or closed: nothing left to keep
+
+        return asyncio.create_task(beat())
+
+    @staticmethod
+    async def stop_keeping_alive(task: asyncio.Task[None]) -> None:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    @asynccontextmanager
+    async def _kept_alive(self, record_id: str) -> AsyncIterator[None]:
+        task = self.keep_alive(record_id)
+        try:
+            yield
+        finally:
+            await self.stop_keeping_alive(task)
+
+    async def open_record(self, *, held_open: bool = False) -> str:
+        """A new, empty repoint record; its id."""
+        record_id = new_id()
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO alert_repoint_records (id, held_open) VALUES ($1, $2)",
+                record_id,
+                held_open,
+            )
+        return record_id
 
     async def settle_pending(self, graph: GraphPort, *, now: datetime | None = None) -> None:
         """Before every read of alerts: every record whose write has committed is applied, so no
@@ -772,7 +856,7 @@ class AlertStore:
                 "SELECT id, links, alert_nodes, recorded_at, held_open FROM alert_repoint_records "
                 "WHERE NOT applied"
             )
-        cutoff = (now or datetime.now(UTC)) - STALE_REPOINT_AFTER
+        cutoff = (now or datetime.now(UTC)) - self.stale_after
         for row in rows:
             if row["held_open"] and row["recorded_at"] >= cutoff:
                 continue  # its writer is still recording (D2)
@@ -793,6 +877,12 @@ class AlertStore:
                 superseded += [s.superseded for s in node_states.values()]
                 if not any(superseded):
                     await self._close_record(row["id"])  # the write never happened
+            except RepointLockBusy:
+                # No lock connection came free: neither will one for the next record. The read
+                # stops settling here, after one wait, rather than one wait per record (D10); every
+                # record left waits for a later read.
+                _log.warning("repoint records left for a later read", exc_info=True)
+                break
             except Exception:  # noqa: BLE001 - one record never breaks a read: it waits
                 # A record this read cannot settle (its links in no graph this deployment reads,
                 # a store refusing for the moment) is left for a later settle or the stale
@@ -810,6 +900,24 @@ class AlertStore:
             moved = await _repoint_cited_links(conn, finals)
         await self.publish_facts(moved)
         return moved
+
+    async def rename_alert_nodes(self, renamed: Mapping[str, str]) -> None:
+        """Every alert naming an old node in `renamed` made to name the node it maps to, in one
+        transaction, under the id-ordered lock `apply_repoints` takes: the rows locked together in
+        id order first, so a rename and a repoint of the same alerts never take them in opposite
+        orders and deadlock (L2.8c, D9)."""
+        if not renamed:
+            return
+        async with self._pool.acquire() as conn, conn.transaction():
+            await conn.execute(
+                "SELECT id FROM alerts WHERE alert_node_id = ANY($1::text[]) "
+                "ORDER BY id FOR UPDATE",
+                sorted(renamed),
+            )
+            for old, newest in renamed.items():
+                await conn.execute(
+                    "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, newest
+                )
 
     async def _add_to_record(
         self,
@@ -901,16 +1009,31 @@ class AlertStore:
         # returned to the pool holding it, and the server frees a session lock when its connection
         # ends, so a crashed settle never holds one for good. `hashtext` can map two ids to one key:
         # harmless, since a collision only makes a reader skip a record, which a later read settles.
-        async with self._lock_pool.acquire() as lock:
-            if not await lock.fetchval("SELECT pg_try_advisory_lock(hashtext($1))", record_id):
+        # The wait for a lock connection is bounded (`REPOINT_LOCK_WAIT`, D10): past it the settle
+        # refuses in words and the record waits for a later read.
+        try:
+            lock = await self._lock_pool.acquire(timeout=self.lock_wait)
+        except TimeoutError as waited:
+            raise RepointLockBusy(
+                f"repoint record {record_id} not settled: no lock connection came free within "
+                f"{self.lock_wait:g} seconds; it is left for a later read"
+            ) from waited
+        try:
+            if not await lock.fetchval(
+                "SELECT pg_try_advisory_lock($1, hashtext($2))", REPOINT_LOCK_SPACE, record_id
+            ):
                 return None
             try:
                 return await self._settle_held(graph, record_id, writer=writer)
             finally:
                 try:
-                    await lock.execute("SELECT pg_advisory_unlock(hashtext($1))", record_id)
+                    await lock.execute(
+                        "SELECT pg_advisory_unlock($1, hashtext($2))", REPOINT_LOCK_SPACE, record_id
+                    )
                 except Exception:  # noqa: BLE001 - the lock must not outlive this settle
                     await lock.close()
+        finally:
+            await self._lock_pool.release(lock)
 
     async def _settle_held(
         self, graph: GraphPort, record_id: str, *, writer: bool
@@ -963,12 +1086,7 @@ class AlertStore:
             else:
                 renamed[old] = newest
         await self.apply_repoints(finals)
-        if renamed:
-            async with self._pool.acquire() as conn, conn.transaction():
-                for old, newest in renamed.items():
-                    await conn.execute(
-                        "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, newest
-                    )
+        await self.rename_alert_nodes(renamed)
         remarked = await self._remark_citing(
             graph,
             record_id,
@@ -1306,8 +1424,10 @@ async def remark_alerts(
     on_supersede: Callable[[str, str], Awaitable[None]] | None = None,
 ) -> RemarkReport:
     """Each alert's `Alert` node raised to the highest marking of what it rests on now, read as the
-    service principal: its entities, the links it cites, the transactions its raiser read (its
-    stored handlings) and its own marking (never lowered). A node below it is superseded by a
+    service principal: its entities, the links it cites and both ends of each (a reader who may
+    not read an end is not given the link, and a node's correction can raise an end above its link:
+    ADR-109 Amendment 11), the transactions its raiser read (its stored handlings) and its own
+    marking (never lowered). A node below it is superseded by a
     revision at that marking, and the alert pointed at the revision only if it still names the old
     one. No single safe marking (referents restricted to different units): listed, not changed.
     The script's run (`scripts.remark_alert_nodes`, the nodes written before `7fac778`) and every
@@ -1327,8 +1447,12 @@ async def remark_alerts(
         report.checked += 1
         referents = await graph.get_nodes(sorted(set(alert.referent_node_ids)), reader)
         links = await graph.get_edges(sorted(set(alert.edge_ids)), reader) if alert.edge_ids else []
-        unread = len(referents) < len(set(alert.referent_node_ids)) or len(links) < len(
-            set(alert.edge_ids)
+        end_ids = sorted({end for e in links for end in (e.source, e.target)})
+        ends = await graph.get_nodes(end_ids, reader) if end_ids else []
+        unread = (
+            len(referents) < len(set(alert.referent_node_ids))
+            or len(links) < len(set(alert.edge_ids))
+            or len(ends) < len(end_ids)
         )
         if unread:
             # Something it rests on cannot be read for its marking (gone, pending in the journal):
@@ -1339,6 +1463,7 @@ async def remark_alerts(
             node.handling,
             *(n.handling for n in referents),
             *(e.handling for e in links),
+            *(n.handling for n in ends),
             *(await alerts.handlings_of(alert.id) or []),
         ]
         required = alert_handling(scheme, rests_on)
@@ -1394,6 +1519,9 @@ class _NoRepoint:
     async def purged(self) -> None:
         return None
 
+    async def cloned(self, old: str, new: str, old_type: str) -> None:
+        return None
+
 
 @asynccontextmanager
 async def repointing_alerts(
@@ -1409,22 +1537,127 @@ async def repointing_alerts(
         yield repoint
 
 
+class OutsideCommitJournal:
+    """The repoint journal for a writer whose graph transaction another commits (ADR-109 Amendment
+    11): the job worker's `supersede_node` and resolution runs (`NOT_SAME_AS`), whose `tx` the
+    worker commits after the handler returns. Each `old → new` is recorded, before that commit, in
+    one record opened at the first pair (a write that replaces no link leaves none). The record is
+    kept live while its writer writes (`AlertStore.keep_alive`, from the first pair until the
+    writer leaves `journal_outside_commit`), so a write open longer than `STALE_REPOINT_AFTER`
+    keeps it; once the writer leaves, its committer commits at once. Its writer never settles it,
+    since the commit is not its own: the next read of alerts settles it once the graph's stored
+    states show the write committed, as any record (`settle_pending`); one whose write never
+    commits is dropped once stale. Called as `on_link_cloned`, or after a `supersede_edge`, with
+    the old link's type."""
+
+    def __init__(self, store: AlertStore) -> None:
+        self._store = store
+        self.record_id: str | None = None
+        self._alive: asyncio.Task[None] | None = None
+
+    async def __call__(self, old: str, new: str, old_type: str) -> None:
+        if self.record_id is None:
+            self.record_id = await self._store.open_record()
+            self._alive = self._store.keep_alive(self.record_id)
+        await self._store._add_to_record(self.record_id, links=[(old, new, old_type)])
+
+    async def _left(self, *, failed: bool) -> None:
+        if self._alive is not None:
+            await self._store.stop_keeping_alive(self._alive)
+        if failed and self.record_id is not None:
+            # The writer raised or was cancelled, so its committer never commits (the worker rolls
+            # back on any handler's exception, and a cancelled worker sends no commit; a caller of
+            # `submit_supersede_node` must roll back too): nothing it recorded lands. A failure to
+            # close is logged, never raised in place of the writer's own: the record then waits
+            # for the stale threshold, its keep-alive stopped.
+            try:
+                await self._store._close_record(self.record_id)
+            except Exception:  # noqa: BLE001
+                _log.exception("repoint record %s left for the stale threshold", self.record_id)
+
+
+@asynccontextmanager
+async def journal_outside_commit(alerts: AlertStore | None) -> AsyncIterator[LinkCloned | None]:
+    """`OutsideCommitJournal` over `alerts`, kept live while the block runs; `None` (nothing
+    recorded) for a writer given no alert store, as `repointing_alerts` answers one. Leaving by
+    an exception or a cancellation closes the record: the transaction's committer never commits
+    it. A failure after the block (the caller's own work before its committer's commit) leaves the
+    record, its keep-alive stopped, to the stale threshold, which drops it as never committed."""
+    if alerts is None:
+        yield None
+        return
+    journal = OutsideCommitJournal(alerts)
+    left = False
+    try:
+        yield journal
+        left = True
+    finally:
+        # `finally`, not `except Exception`: a cancellation (`BaseException`) must stop the
+        # keep-alive too, or a record whose write never commits is marked live for good.
+        await journal._left(failed=not left)
+
+
+async def supersede_journalled[T](
+    alerts: AlertStore | None,
+    graph: GraphPort,
+    write: Callable[[str, LinkCloned], Awaitable[T]],
+    *,
+    working_set: Any = None,
+) -> T:
+    """One graph transaction that supersedes what alerts may cite, through the repoint journal
+    (ADR-109 Amendments 10 and 11), for a writer that commits its own transaction (the confirm and
+    retract routes, the pipeline's enrich stage). `write(tx, on_link_cloned)` does the writing and
+    reports each replaced link through `on_link_cloned` before this commits; a write refused before
+    its commit says so (`never_committed`). The moved alerts' re-marked nodes leave `working_set`,
+    where one is held; else the next working-set read purges them (`purge_remarked_copies`)."""
+    async with repointing_alerts(alerts, graph) as repoint:
+        tx = await graph.begin_transaction()
+        try:
+            result = await write(tx, repoint.cloned)
+        except Exception:
+            # Its commit never sent, nothing recorded can land: the record goes with it.
+            repoint.never_committed()
+            await graph.rollback_transaction(tx)
+            raise
+        await graph.commit_transaction(tx)
+    if working_set is not None and repoint.remarked_nodes:
+        await purge_copies(working_set, repoint.remarked_nodes)
+        await repoint.purged()
+    return result
+
+
+async def purge_copies(working_set: Any, nodes: Sequence[str]) -> None:
+    """`nodes`' copies leave every working set that stored one
+    (`WorkingSetService.remove_reverted`), and each case's stored removal is published on its
+    channel at once (`notify.publish_delta`), so a connected canvas drops the copies now,
+    projected for its reader, rather than at its next resynchronisation (ADR-109 Amendment 11,
+    closing Amendment 10 point 6's second gap). Every store is cleared before anything is
+    published, as the revert's own purge does (`working_set_revert.py`). A service built without
+    a client (a test's) publishes nothing."""
+    from .notify import publish_delta
+
+    removals = await working_set.remove_reverted(nodes, [])
+    publisher = working_set.publisher
+    if publisher is not None:
+        for removal in removals:
+            await publish_delta(publisher, removal.investigation_id, removal.delta)
+
+
 async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:
     """Before a working-set read: the nodes a settle re-marked (on a read path, which holds no
     working sets) leave every working set that stored a copy at the old marking
     (`WorkingSetService.remove_reverted`), and their records are closed (ADR-109 Amendment 10;
     L2.8b's R2). A stored copy is served from the store, not read again from the graph."""
     for record_id, nodes in await alerts.applied_purges():
-        await working_set.remove_reverted(nodes, [])
+        await purge_copies(working_set, nodes)
         await alerts.purged(record_id)
 
 
-async def settle_repoints(store: object, graph: GraphPort) -> None:
-    """`AlertStore.settle_pending`, before a read of alerts. A store with no journal (a test's
-    stand-in for the queue's reads) has nothing to settle."""
-    settle = getattr(store, "settle_pending", None)
-    if settle is not None:
-        await settle(graph)
+async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
+    """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+    the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+    no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+    await store.settle_pending(graph)
 
 
 async def evidence_available(

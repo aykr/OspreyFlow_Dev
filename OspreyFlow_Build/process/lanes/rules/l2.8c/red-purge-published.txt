@@ -1,0 +1,4 @@
+# red: the purge's publish removed (plant in alerts.purge_copies) — lease rules, stack b, 2026-11-08T12:59:52Z
+E           AssertionError: the purge reached no connected canvas
+E           assert None is not None
+1 failed in 21.82s

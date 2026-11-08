@@ -1,0 +1,4 @@
+# red 2(b): the queue's case scope made true for every case (plant in queue_scope) — lease rules, stack b, 2026-11-08T13:54:15Z, at 5910d6d + working tree
+E       AssertionError: a reader of another case is given it
+E       assert '01M6XQ0JY7315CV8AF49S90AW7' not in {'01M6XQ0JY7315CV8AF49S90AW7': Alert(id='01M6XQ0JY7315CV8AF49S90AW7', rule_id='typology:01M6XQ0JY7315CV8AF49S90AW8', o...=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
+E        +  where '01M6XQ0JY7315CV8AF49S90AW7' = Alert(id='01M6XQ0JY7315CV8AF49S90AW7', rule_id='typology:01M6XQ0JY7315CV8AF49S90AW8', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id

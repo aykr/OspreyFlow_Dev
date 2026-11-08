@@ -1,0 +1,2 @@
+# item 7: the six withdraw/restore cases and the link-state cases, with the later _restore renamed _restore_link_state in a scratch copy (not committed; main's fix pending) — lease rules, stack b, 2026-11-08T13:54:40Z, at 5910d6d + working tree (the marking in)
+10 passed, 270 deselected in 26.12s

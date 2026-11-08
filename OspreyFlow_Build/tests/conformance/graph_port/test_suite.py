@@ -3523,6 +3523,130 @@ async def test_the_stored_states_name_each_superseded_elements_successor(
         assert nodes[b].superseded_by is None
 
 
+async def test_supersede_node_names_each_cloned_link_and_its_successor_before_the_commit(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 11 (L2.8c). `supersede_node` clones every link incident to the node under a
+    new id. Each clone is reported to the caller's `on_link_cloned` as `old → new` with the old link's
+    own type, inside the transaction and before its commit (so an alert's repoint journal records it
+    before it can land), and the graph's own stored state of each original names its clone as
+    `superseded_by`, so the alert store's settle follows a node's correction exactly as it follows
+    a link's. Both directions are covered, and a link of another node is not reported. Red with the
+    adapter's marking removed: the stored originals named no successor, and the settle could follow
+    none of them."""
+    async with factory.context() as adapter:
+        (person, contact_a, contact_b, bystander), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="Original"),
+                _node("Person", classification="OFFICIAL", family_name="Contact A"),
+                _node("Person", classification="OFFICIAL", family_name="Contact B"),
+                _node("Person", classification="OFFICIAL", family_name="Bystander"),
+            ],
+            [],
+        )
+        _, (out_link, in_link, other_link) = await _write(
+            adapter,
+            [],
+            [
+                _edge("ASSOCIATE_OF", person, contact_a, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", contact_b, person, classification="OFFICIAL"),
+                _edge("ASSOCIATE_OF", contact_a, bystander, classification="OFFICIAL"),
+            ],
+        )
+        reported: list[tuple[str, str, str]] = []
+        committed: list[bool] = []
+
+        async def on_link_cloned(old: str, new: str, old_type: str) -> None:
+            reported.append((old, new, old_type))
+            committed.append(bool(await adapter.stored_link_states([new])))
+
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Corrected"), tx,
+            on_link_cloned=on_link_cloned,
+        )  # fmt: skip
+        await adapter.commit_transaction(tx)
+
+        assert sorted(old for old, _, _ in reported) == sorted([out_link, in_link])
+        assert {t for _, _, t in reported} == {"ASSOCIATE_OF"}
+        assert committed == [False, False], "each pair is reported before the clone has committed"
+        states = await adapter.stored_link_states([out_link, in_link, other_link])
+        for old, new, _ in reported:
+            assert states[old].superseded and states[old].superseded_by == new
+            assert (await adapter.stored_link_states([new]))[new].superseded_by is None
+        assert states[other_link].superseded_by is None and not states[other_link].superseded
+
+
+async def test_supersede_node_clones_a_self_loop_once_onto_the_new_node_at_both_ends(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 11 (L2.8c review round 2). A self-loop on the corrected node (an account
+    paying itself) is one link: it is cloned once, from the new node to itself, reported once, and
+    its original names that live clone as `superseded_by`, so an alert citing it follows it to a
+    link a reader is given. Red with the in-links read after the out-links were cloned: the
+    self-loop was cloned twice and its clone of a clone, the original's last successor, was
+    reverted with the old node's links, a dead end the settle followed."""
+    async with factory.context() as adapter:
+        (person,), _ = await _write(adapter, [_node("Person", classification="OFFICIAL", family_name="Self")], [])
+        _, (loop,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", person, person, classification="OFFICIAL")])
+        reported: list[tuple[str, str]] = []
+
+        async def on_link_cloned(old: str, new: str, old_type: str) -> None:
+            reported.append((old, new))
+
+        tx = await adapter.begin_transaction()
+        new_node = await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Self corrected"), tx,
+            on_link_cloned=on_link_cloned,
+        )  # fmt: skip
+        await adapter.commit_transaction(tx)
+
+        ((old, clone),) = reported
+        assert old == loop
+        state = (await adapter.stored_link_states([loop]))[loop]
+        assert state.superseded_by == clone
+        (live,) = await adapter.get_edges([clone], CLEARED)
+        assert (live.source, live.target) == (new_node, new_node)
+        assert not (await adapter.stored_link_states([clone]))[clone].reverted
+
+
+async def test_a_rolled_back_supersede_node_leaves_each_link_unmarked_and_no_clone(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 11 (L2.8c review, item 5). A `supersede_node` rolled back after it reported
+    its clones leaves nothing: each original link is live, names no successor and is not reverted,
+    and no clone it reported is stored, so a repoint record of a write that never committed can
+    follow nothing (the settle drops it as never committed). Red with the original's marking made
+    outside the transaction: the rolled-back write's mark survived, naming a clone no store holds."""
+    async with factory.context() as adapter:
+        (person, contact), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="Original"),
+                _node("Person", classification="OFFICIAL", family_name="Contact"),
+            ],
+            [],
+        )
+        _, (link,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", person, contact, classification="OFFICIAL")])
+        reported: list[str] = []
+
+        async def on_link_cloned(old: str, new: str, old_type: str) -> None:
+            reported.append(new)
+
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_node(
+            person, _node("Person", classification="OFFICIAL", family_name="Corrected"), tx,
+            on_link_cloned=on_link_cloned,
+        )  # fmt: skip
+        await adapter.rollback_transaction(tx)
+
+        assert len(reported) == 1
+        state = (await adapter.stored_link_states([link]))[link]
+        assert state.superseded_by is None and not state.superseded and not state.reverted
+        assert await adapter.stored_link_states(reported) == {}
+
+
 async def test_supersede_edge_replaces_it_in_default_reads(
     factory: GraphAdapterFactory,
 ) -> None:

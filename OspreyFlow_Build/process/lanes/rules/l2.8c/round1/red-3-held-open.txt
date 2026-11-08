@@ -1,0 +1,6 @@
+# red 3: a record not kept live while its writer writes (plant in keep_alive), both paths — lease rules, stack b, 2026-11-08T13:53:40Z, at 5910d6d + working tree
+E       AssertionError: the alert citing the replaced link is withheld from its reader
+E       assert '01M6XPZH7Z5X26Q20X3QT9Y32E' in {}
+E        +  where '01M6XPZH7Z5X26Q20X3QT9Y32E' = Alert(id='01M6XPZH7Z5X26Q20X3QT9Y32E', rule_id='typology:01M6XPZH7Z5X26Q20X3QT9Y32F', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+E       AssertionError: the alert citing the replaced link is withheld from its reader
+E       assert '01M6XPZRV1KZBB2H03GZKCSY0E' in {}

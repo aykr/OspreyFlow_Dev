@@ -36,7 +36,13 @@ import argparse
 import asyncio
 import os
 
-from services.api.alerts import AlertStore, RemarkReport, purge_remarked_copies, remark_alerts
+from services.api.alerts import (
+    AlertStore,
+    RemarkReport,
+    purge_copies,
+    purge_remarked_copies,
+    remark_alerts,
+)
 from services.api.config import PostgresConfig, ValkeyConfig
 from services.api.working_set.service import WorkingSetService
 from services.api.working_set.store import ValkeyWorkingSetStore
@@ -75,7 +81,8 @@ async def remark(
             graph, alerts, scheme, rows, on_supersede=repoint.record_remark
         )
     if working_set is not None and repoint.remarked_nodes:
-        await working_set.remove_reverted(repoint.remarked_nodes, [])
+        # Published as well, so a connected canvas drops the copies now (ADR-109 Amendment 11).
+        await purge_copies(working_set, repoint.remarked_nodes)
         await repoint.purged()
         report.cases_purged = len(repoint.remarked_nodes)
     return report
@@ -94,10 +101,10 @@ async def _main(argv: list[str] | None = None) -> int:
     valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
     graph = GraphArcadeDBAdapter(client, scheme)
     try:
+        working_set = WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme, valkey=valkey)
         report = await remark(
-            graph, alerts, scheme, dry_run=args.dry_run,
-            working_set=WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme),
-        )  # fmt: skip
+            graph, alerts, scheme, dry_run=args.dry_run, working_set=working_set
+        )
     finally:
         await client.aclose()
         await alerts.close()

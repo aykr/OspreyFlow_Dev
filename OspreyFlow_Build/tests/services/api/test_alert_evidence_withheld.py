@@ -149,6 +149,10 @@ class Store:
     def __init__(self, alerts: list[Alert]) -> None:
         self.alerts = alerts
 
+    async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
+        """`AlertStore.settle_pending` over a journal holding no record: nothing to settle. Every
+        read of alerts calls it (`settle_repoints` refuses a store without it, L2.8c)."""
+
     async def list_queue(
         self, investigation_id: str, reader: Principal, **_: object
     ) -> list[QueueRow]:
@@ -381,8 +385,6 @@ class TriageStore(Store):
         self.writes.append(f"triage {alert_id}")
         return next(a for a in self.alerts if a.id == alert_id)
 
-    async def settle_pending(self, graph: Any) -> None:
-        """A store with no repoint journal has nothing to settle (`AlertStore.settle_pending`)."""
 
     def __getattr__(self, name: str) -> Any:  # any other write
         if name.startswith("__"):
@@ -604,3 +606,21 @@ def test_a_jump_to_an_alert_over_hidden_evidence_is_refused_as_for_a_missing_one
         app.router.lifespan_context = previous
     assert answers[0] == answers[1], answers
     assert answers[0][0] == 404 and done == []
+
+
+# ---- L2.8c step 3: a store without the journal is refused, never passed over --------------------
+
+
+async def test_a_read_given_a_store_without_the_journal_is_refused_not_answered() -> None:
+    """Violation caught: `settle_repoints` passing over a store with no `settle_pending` (the
+    tolerance L2.8b left for the fakes) and answering the queue from alerts no settle has brought
+    to the newest revision of what they cite. Planted at the queue's own call site: the real
+    store always has the journal, so a store without one is a defect, refused as one."""
+
+    class NoJournal:
+        async def list_queue(self, investigation_id: str, reader: Principal, **_: object) -> list[QueueRow]:
+            raise AssertionError("the queue was read without a settle")
+
+    graph = Graph(Recorder(), set())
+    with pytest.raises(AttributeError, match="settle_pending"):
+        await alert_queue.monitoring_queue(NoJournal(), graph, Analytics(Recorder(), set()), CASE, READER)  # type: ignore[arg-type]

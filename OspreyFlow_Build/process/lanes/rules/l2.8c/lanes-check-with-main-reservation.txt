@@ -1,0 +1,5 @@
+# make lanes-check with main's ADR_RESERVATIONS.md (10cd960's row) in place, not committed, 2026-11-08T13:34:44Z
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 96%]
+============================= 76 passed in 25.69s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.

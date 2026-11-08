@@ -50,6 +50,7 @@ from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass
 from typing import Any
 
+from services.api.alerts import AlertStore, journal_outside_commit
 from services.api.change_stream import ChangeStreamWriter
 from valkey.asyncio import Valkey
 from valkey.asyncio.lock import Lock
@@ -165,6 +166,7 @@ async def run_resolution_for_entity_type(
     scheme: HandlingScheme,
     valkey: Valkey | None = None,
     analyst_layers: Callable[[], Awaitable[Collection[str]]],
+    alerts: AlertStore | None = None,
 ) -> ResolutionRunResult:
     """The actual work, independent of the job-queue/worker plumbing —
     `run_resolve_entity_type_job` below is the thin adapter this presents
@@ -183,7 +185,11 @@ async def run_resolution_for_entity_type(
     `analyst_layers` gives the ids of every case's analyst layer (ADR-143 Amendment 1). Required, so
     no caller can forget it: a manual split only in a layer is that case's own decision, honoured
     in its own projection, and must not stop a `SAME_AS` that every other case reading the source
-    would read."""
+    would read.
+
+    `alerts`: the alerts' repoint journal (ADR-109 Amendment 11). Each split a conflict annotates
+    (a `NOT_SAME_AS` superseded) is recorded before the worker commits `tx`, and the next read of
+    alerts settles it, so an alert citing the split follows it to the annotated revision."""
     entity_type: EntityTypeDef | None = ontology.entity_type(entity_type_name)
     if entity_type is None or entity_type.resolution is None:
         raise ValueError(
@@ -227,13 +233,15 @@ async def run_resolution_for_entity_type(
         scheme=scheme,
     )
     not_same_as_by_id = {e.id: e for e in every_split}
-    conflict_ids = await record_conflicts(
-        graph,
-        [*conflicts, *layer_conflicts],
-        not_same_as_by_id,
-        created_by=SERVICE_PRINCIPAL_ID,
-        tx=tx,
-    )
+    async with journal_outside_commit(alerts) as replaced:
+        conflict_ids = await record_conflicts(
+            graph,
+            [*conflicts, *layer_conflicts],
+            not_same_as_by_id,
+            created_by=SERVICE_PRINCIPAL_ID,
+            tx=tx,
+            on_link_replaced=replaced,
+        )
 
     if valkey is not None and same_as_ids:
         await ChangeStreamWriter(valkey).publish("resolution", edge_ids=same_as_ids)
@@ -255,6 +263,7 @@ async def try_run_resolution_with_overlap_guard(
     scheme: HandlingScheme,
     valkey: Valkey,
     analyst_layers: Callable[[], Awaitable[Collection[str]]],
+    alerts: AlertStore | None = None,
 ) -> ResolutionRunResult:
     """The overlap guard, wrapping `run_resolution_for_entity_type` — both
     the job handler below and the manual "resolve now" route go through
@@ -275,6 +284,7 @@ async def try_run_resolution_with_overlap_guard(
             scheme=scheme,
             valkey=valkey,
             analyst_layers=analyst_layers,
+            alerts=alerts,
         )
     finally:
         try:
@@ -295,6 +305,7 @@ async def run_resolve_entity_type_job(
     scheme: HandlingScheme,
     valkey: Valkey,
     analyst_layers: Callable[[], Awaitable[Collection[str]]],
+    alerts: AlertStore | None,
 ) -> dict[str, Any]:
     """`JobWorker`'s fixed dispatch shape is `(payload, *, graph, tx)` —
     `ontology`/`scheme`/`valkey` are bound at registration time
@@ -314,5 +325,6 @@ async def run_resolve_entity_type_job(
         scheme=scheme,
         valkey=valkey,
         analyst_layers=analyst_layers,
+        alerts=alerts,
     )
     return result.to_dict()

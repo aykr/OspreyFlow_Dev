@@ -1,0 +1,6 @@
+# D8: get_authorized by id, given the graph — lease rules, stack b, 2026-11-08T13:12:56Z, at 6d62834 + working tree; script: d8_timing.py
+pending records in the table before planting: 0
+no pending record: n=200 median=1.85 ms q1=1.64 q3=2.24 max=6.56
+1 pending record(s), write not committed: n=200 median=6.27 ms q1=5.74 q3=7.17 max=13.70
+10 pending record(s), write not committed: n=200 median=82.46 ms q1=67.06 q3=98.23 max=202.51
+ended 13:13:25Z

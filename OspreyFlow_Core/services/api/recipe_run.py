@@ -244,6 +244,8 @@ async def _execute_recipe_run(
             rules=rules,
             sink=sink,
             refresh=refresh,
+            # ADR-109 Amendment 11: the enrich stage's supersedes go through the alerts' journal.
+            alerts=deps.alerts_store,
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(

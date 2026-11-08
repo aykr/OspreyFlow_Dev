@@ -41,7 +41,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
-from ports.graph import BulkGraphLoader, GraphPort
+from ports.graph import BulkGraphLoader, GraphPort, LinkCloned
 from schemas.domain import (
     Edge,
     EdgeWrite,
@@ -486,10 +486,20 @@ class DatasetStampingGraph:
         return list(await read(scope[2]))
 
     # A correction or a revert changes what is counted too; each clears what was kept after it.
-    async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: Any) -> NodeId:
+    async def supersede_node(
+        self,
+        node_id: NodeId,
+        replacement: NodeWrite,
+        tx: Any,
+        *,
+        on_link_cloned: LinkCloned | None = None,
+    ) -> NodeId:
         held = await self._held_for(lambda reader: self._inner.get_nodes([node_id], reader))
         await self._refuse_correcting(held, replacement.datasets)
-        new_id = await self._inner.supersede_node(node_id, replacement, tx)
+        # Each cloned link reported on, so the alerts' repoint journal records it (ADR-109 Am. 11).
+        new_id = await self._inner.supersede_node(
+            node_id, replacement, tx, on_link_cloned=on_link_cloned
+        )
         await self._written()
         return new_id
 

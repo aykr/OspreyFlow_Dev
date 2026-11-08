@@ -1,0 +1,9 @@
+# graph-port suite and revert tests — lease rules, stack b, 12:46:57Z to 13:12:30Z on 8 November 2026, with the marking in the working tree (committed at 6d62834)
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_withdrawn_element_leaves_every_read_for_every_reader_and_its_load_restores_it[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_restore_brings_back_only_what_that_load_withdrew_and_never_a_reverted_element[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_reverting_the_load_that_made_a_withdrawn_element_means_no_restore_brings_it_back[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_a_write_onto_a_withdrawn_node_is_a_fresh_create_and_no_longer_withdrawn[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_restore_leaves_withdrawn_a_link_whose_pair_was_written_again_since[graph_arcadedb[gremlin]]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_withdrawing_nothing_or_an_unknown_id_is_a_safe_no_op[graph_arcadedb[gremlin]]
+6 failed, 412 passed in 1532.19s (0:25:32)
+# the six: two helpers named _restore in test_suite.py (lines 2999 and 6566 here; 2999 and 6511 on main since 6d71df6), the later shadowing the earlier, so each withdraw case passes a load id to the link-state restore

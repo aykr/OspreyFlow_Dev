@@ -6,6 +6,8 @@ graph that withholds sources as the adapter does and refuses what the adapter's 
 
 from __future__ import annotations
 
+from typing import Any
+
 from services.extract.writer import confirm_node, retract_node
 from services.resolve.conflicts import ResolutionConflict
 from services.resolve.same_as_writer import record_conflicts
@@ -44,7 +46,9 @@ class _Graph(FakeGraphPort):
     ) -> Node | None:
         return withhold_sources(self._held, principal) if node_id == self._held.id else None
 
-    async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: TxId) -> NodeId:
+    async def supersede_node(
+        self, node_id: NodeId, replacement: NodeWrite, tx: TxId, *, on_link_cloned: Any = None
+    ) -> NodeId:
         assert not replacement.provenance.sources_withheld, "the write guard refuses this"
         self.node_writes.append(replacement)
         return replacement.id

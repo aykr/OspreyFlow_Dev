@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from datetime import UTC, datetime
 
 import pytest
@@ -83,7 +85,9 @@ class _FakeGraphPort:
             return self.existing
         return None
 
-    async def supersede_node(self, node_id: str, replacement: NodeWrite, tx: str) -> str:
+    async def supersede_node(
+        self, node_id: str, replacement: NodeWrite, tx: str, *, on_link_cloned: Any = None
+    ) -> str:
         self.superseded.append((node_id, replacement))
         return replacement.id
 

@@ -9,7 +9,7 @@ above this port may see it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
@@ -88,6 +88,11 @@ class RestoredElements:
 
     node_ids: tuple[NodeId, ...] = ()
     edge_ids: tuple[EdgeId, ...] = ()
+
+
+#: `supersede_node`'s report of one cloned link: the original's id, its clone's, and the original's
+#: type (two types may hold one id, ADR-110 Amendment 18), awaited before the transaction commits.
+LinkCloned = Callable[[str, str, str], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -228,7 +233,14 @@ class GraphPort(Protocol):
         back is whichever the store answered last: the port does not choose between them."""
         ...
 
-    async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: TxId) -> NodeId:
+    async def supersede_node(
+        self,
+        node_id: NodeId,
+        replacement: NodeWrite,
+        tx: TxId,
+        *,
+        on_link_cloned: LinkCloned | None = None,
+    ) -> NodeId:
         """`01_DOMAIN_MODEL.md` §2.4: "Nodes are versioned, not
         overwritten. A correction writes a new revision and points the old
         one forward." Writes `replacement` as a new node at
@@ -246,7 +258,14 @@ class GraphPort(Protocol):
         every TinkerPop-family store), so a correction does not silently
         disconnect the corrected node from its own network. The
         superseded originals of those edges are excluded from ordinary
-        reads the same way `node_id` itself now is."""
+        reads the same way `node_id` itself now is.
+
+        Each original also names its clone as `superseded_by` (its stored
+        state, `stored_link_states`), and each clone is reported to
+        `on_link_cloned` as `(old, new, old_type)` inside `tx`, before its
+        commit: an alert citing the original follows it to the clone
+        through the alert store's repoint journal, as it follows a
+        `supersede_edge` (`06_DECISIONS.md` ADR-109 Amendment 11)."""
         ...
 
     async def supersede_edge(

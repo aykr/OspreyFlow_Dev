@@ -1,0 +1,6 @@
+# red: step 3, the settle_repoints tolerance restored (plant in services/api/alerts.py settle_repoints)
+                raise AssertionError("the queue was read without a settle")
+>       raise AssertionError("the queue was read without a settle")
+E       AssertionError: the queue was read without a settle
+../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py:622: AssertionError
+1 failed in 0.36s

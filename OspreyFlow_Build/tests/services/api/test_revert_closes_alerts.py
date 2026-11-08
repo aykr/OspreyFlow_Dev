@@ -100,6 +100,10 @@ class Store:
     def __init__(self, *alerts: Alert) -> None:
         self.alerts = {a.id: a for a in alerts}
 
+    async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
+        """`AlertStore.settle_pending` over a journal holding no record: nothing to settle. Every
+        read of alerts calls it (`settle_repoints` refuses a store without it, L2.8c)."""
+
     async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
         return [a for a in self.alerts.values() if a.investigation_id == investigation_id]
 

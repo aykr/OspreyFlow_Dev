@@ -1,0 +1,2 @@
+# the port-guard file with OSPREY_LANE unset (the session's shell sets OSPREY_LANE=rules), closed ports, 2026-11-08T13:24:26Z
+20 passed in 4.37s

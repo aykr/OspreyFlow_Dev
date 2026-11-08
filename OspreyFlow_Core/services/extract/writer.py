@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from conduit_common.identity import new_edge_id, new_node_id, now_utc
 from ontology.handling import sources_in_full
-from ports.graph import GraphPort
+from ports.graph import GraphPort, LinkCloned
 from schemas.domain import (
     Edge,
     EdgeId,
@@ -148,13 +148,19 @@ def _replacement_for(node: Node, principal: Principal, *, new_state: ProvenanceS
 
 
 async def confirm_node(
-    graph: GraphPort, node_id: NodeId, principal: Principal, *, tx: TxId
+    graph: GraphPort,
+    node_id: NodeId,
+    principal: Principal,
+    *,
+    tx: TxId,
+    on_link_cloned: LinkCloned | None = None,
 ) -> NodeId:
     """`01_DOMAIN_MODEL.md` §2.1: "Confirmation is an explicit analyst action that writes
     `confirmed_by` and `last_confirmed` and flips the state to `asserted`." Valid from `inferred`
     or `unresolved`; a no-op attempt against an already-`asserted` node raises rather than silently
     succeeding, since a caller asking to confirm something already confirmed most likely has a
-    stale view of it."""
+    stale view of it. `on_link_cloned` is `GraphPort.supersede_node`'s: each link the confirm
+    clones, for the alerts' repoint journal (ADR-109 Amendment 11)."""
     # In full: the replacement is built from this node's own provenance (ADR-130 Amendment 2).
     with sources_in_full():
         node = await graph.get_node(node_id, principal)
@@ -163,7 +169,7 @@ async def confirm_node(
     if node.provenance.state is ProvenanceState.ASSERTED:
         raise ProvenanceTransitionError(f"{node_id} is already asserted")
     replacement = _replacement_for(node, principal, new_state=ProvenanceState.ASSERTED)
-    return await graph.supersede_node(node_id, replacement, tx)
+    return await graph.supersede_node(node_id, replacement, tx, on_link_cloned=on_link_cloned)
 
 
 async def confirm_edge(graph: GraphPort, edge: Edge, principal: Principal, *, tx: TxId) -> EdgeId:
@@ -186,10 +192,16 @@ async def confirm_edge(graph: GraphPort, edge: Edge, principal: Principal, *, tx
 
 
 async def retract_node(
-    graph: GraphPort, node_id: NodeId, principal: Principal, *, tx: TxId
+    graph: GraphPort,
+    node_id: NodeId,
+    principal: Principal,
+    *,
+    tx: TxId,
+    on_link_cloned: LinkCloned | None = None,
 ) -> NodeId:
     """The mirror of `confirm_node` — valid only from `asserted`, since retracting a node that was
-    never confirmed is the same caller mistake as confirming one that already is."""
+    never confirmed is the same caller mistake as confirming one that already is. `on_link_cloned`
+    as `confirm_node`'s."""
     # In full: the replacement is built from this node's own provenance (ADR-130 Amendment 2).
     with sources_in_full():
         node = await graph.get_node(node_id, principal)
@@ -198,4 +210,4 @@ async def retract_node(
     if node.provenance.state is not ProvenanceState.ASSERTED:
         raise ProvenanceTransitionError(f"{node_id} is not asserted")
     replacement = _replacement_for(node, principal, new_state=ProvenanceState.INFERRED)
-    return await graph.supersede_node(node_id, replacement, tx)
+    return await graph.supersede_node(node_id, replacement, tx, on_link_cloned=on_link_cloned)

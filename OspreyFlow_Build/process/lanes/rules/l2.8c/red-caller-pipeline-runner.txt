@@ -1,0 +1,5 @@
+# red caller: run_published_pipeline without its alerts= to the enrich stage — offline, closed ports, 2026-11-08T12:56:14Z
+E       assert [None] == [<object obje... 0x11a52c290>]
+E         
+E         At index 0 diff: None != <object object at 0x11a52c290>
+E         Use -v to get more diff

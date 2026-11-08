@@ -17,7 +17,7 @@ from collections.abc import Sequence
 
 from conduit_common.identity import new_edge_id, now_utc
 from ontology.handling import HandlingScheme
-from ports.graph import GraphPort
+from ports.graph import GraphPort, LinkCloned
 from schemas.domain import (
     Edge,
     EdgeId,
@@ -111,12 +111,15 @@ async def record_conflicts(
     *,
     created_by: str,
     tx: TxId,
+    on_link_replaced: LinkCloned | None = None,
 ) -> list[EdgeId]:
     """Annotates each conflicting `NOT_SAME_AS` edge via `supersede_edge` — `conflicts.py`'s own
     docstring has the full reasoning for why this is a supersede of the existing split edge rather
     than a new edge or record type. `not_same_as_edges_by_id` is the caller's job to have already
     fetched (the same edges `detect_conflicts` was run against), so this function does no
-    `GraphPort` reads itself, only the one write per conflict."""
+    `GraphPort` reads itself, only the one write per conflict. Each `old → new` is reported to
+    `on_link_replaced`, before `tx` commits, for the alerts' repoint journal (ADR-109 Amendment
+    11): an alert citing a split follows it to its annotated revision."""
     now = now_utc()
     superseded_ids: list[EdgeId] = []
     for conflict in conflicts:
@@ -134,7 +137,8 @@ async def record_conflicts(
             created_by=created_by,
             created_at=now,
         )
-        superseded_ids.append(
-            await graph.supersede_edge(edge.id, replacement, tx, old_type=edge.type)
-        )
+        new = await graph.supersede_edge(edge.id, replacement, tx, old_type=edge.type)
+        if on_link_replaced is not None:
+            await on_link_replaced(edge.id, new, edge.type)
+        superseded_ids.append(new)
     return superseded_ids

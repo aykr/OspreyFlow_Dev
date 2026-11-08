@@ -1,0 +1,4 @@
+# red 2: journal_outside_commit leaving only on an Exception (round 1's exit) — lease rules, stack b, 2026-11-08T14:40:13Z, at 65b993d + working tree
+E       AssertionError: the keep-alive outlived its writer
+E       assert False
+E        +  where False = <built-in method done of _asyncio.Task object at 0x119c60c40>()

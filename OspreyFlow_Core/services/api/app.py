@@ -355,7 +355,13 @@ from .add_by_identifiers import (
     TooManyIdentifiersError,
     resolve_identifiers,
 )
-from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict, purge_remarked_copies
+from .alerts import (
+    AlertNotFoundError,
+    AlertStore,
+    AlertTriageConflict,
+    purge_remarked_copies,
+    supersede_journalled,
+)
 from .assessments import (
     AssumptionListResponse,
     AssumptionNotFoundError,
@@ -1096,7 +1102,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     job_worker = JobWorker(valkey, jobs, graph)
     job_worker.register(
         JOB_TYPE_SUPERSEDE_NODE,
-        functools.partial(run_supersede_node_job, judgement_store=judgements_store),
+        # ADR-109 Amendment 11: each link the supersede clones is recorded in the alerts' journal.
+        functools.partial(
+            run_supersede_node_job, judgement_store=judgements_store, alerts=alerts_store
+        ),
     )
     job_worker.register(
         JOB_TYPE_RESOLVE_ENTITY_TYPE,
@@ -1107,6 +1116,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             valkey=valkey,
             # ADR-143 Amendment 1: a layer's split is its own case's, not the corpus's.
             analyst_layers=datasets_store.layer_ids,
+            # ADR-109 Amendment 11: a split's annotation goes through the alerts' journal.
+            alerts=alerts_store,
         ),
     )
     job_worker.register(
@@ -4278,16 +4289,19 @@ async def confirm_node_route(
     graph: GraphDep,
     audit: AuditDep,
     judgements: JudgementsStoreDep,
+    alerts_store: AlertsStoreDep,
+    working_set: WorkingSetDep,
 ) -> NodeIdResponse:
     # ADR-099 Amendment 15: a composite is read-only (a node the caller cannot read stays 404).
     await refuse_writing_a_node_in_a_composite_case(graph, node_id, principal)
-    tx = await graph.begin_transaction()
-    try:
-        new_node_id = await confirm_node(graph, node_id, principal, tx=tx)
-    except Exception:
-        await graph.rollback_transaction(tx)
-        raise
-    await graph.commit_transaction(tx)
+    # ADR-109 Amendment 11: each link the confirm clones goes through the alerts' repoint journal,
+    # so an alert citing one follows it to its clone.
+    new_node_id = await supersede_journalled(
+        alerts_store,
+        graph,
+        lambda tx, cloned: confirm_node(graph, node_id, principal, tx=tx, on_link_cloned=cloned),
+        working_set=working_set,
+    )
     # `01_DOMAIN_MODEL.md` §5's own review-flag loop: a confirmation is a content change to the
     # node a judgement may cite as `supporting` evidence (`GraphPort.supersede_node`'s own
     # docstring already names this route as one of its two intended callers), so it flags the same
@@ -4387,16 +4401,19 @@ async def retract_node_route(
     graph: GraphDep,
     audit: AuditDep,
     judgements: JudgementsStoreDep,
+    alerts_store: AlertsStoreDep,
+    working_set: WorkingSetDep,
 ) -> NodeIdResponse:
     # ADR-099 Amendment 15: a composite is read-only (a node the caller cannot read stays 404).
     await refuse_writing_a_node_in_a_composite_case(graph, node_id, principal)
-    tx = await graph.begin_transaction()
-    try:
-        new_node_id = await retract_node(graph, node_id, principal, tx=tx)
-    except Exception:
-        await graph.rollback_transaction(tx)
-        raise
-    await graph.commit_transaction(tx)
+    # ADR-109 Amendment 11: each link the retract clones goes through the alerts' repoint journal,
+    # so an alert citing one follows it to its clone.
+    new_node_id = await supersede_journalled(
+        alerts_store,
+        graph,
+        lambda tx, cloned: retract_node(graph, node_id, principal, tx=tx, on_link_cloned=cloned),
+        working_set=working_set,
+    )
     # See `confirm_node_route`'s own comment — the identical review-flag loop, for the case
     # `08_ACCEPTANCE_SCENARIOS.md`'s own "retraction propagates" assertion names directly.
     flagged = await flag_judgements_citing_superseded_node(judgements, node_id)

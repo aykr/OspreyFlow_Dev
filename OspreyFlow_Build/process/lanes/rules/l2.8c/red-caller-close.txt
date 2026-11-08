@@ -1,0 +1,5 @@
+# red caller: the close's confirm without its on_link_cloned — lease rules, stack b, 2026-11-08T12:54:03Z, at 67dbfb3 + working tree
+E       AssertionError: the alert citing the replaced link is withheld from its reader
+E       assert '01M6XKJW9FX6M0SA9933YVBD6H' in {'01M6XKJWA50F7QZH5G6CFAHNXC': Alert(id='01M6XKJWA50F7QZH5G6CFAHNXC', rule_id='typology:01M6XKJWA50F7QZH5G6CFAHNXD', o..., 899572, tzinfo=datetime.timezone.utc), close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
+E        +  where '01M6XKJW9FX6M0SA9933YVBD6H' = Alert(id='01M6XKJW9FX6M0SA9933YVBD6H', rule_id='typology:01M6XKJW9FX6M0SA9933YVBD6J', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+1 failed in 23.44s

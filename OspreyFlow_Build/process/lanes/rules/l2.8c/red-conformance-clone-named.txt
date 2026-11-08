@@ -1,0 +1,4 @@
+# red: conformance, the cloned original left with no superseded_by (plant in the adapter's _name_clone) — lease rules, stack b, 2026-11-08T12:46:43Z
+E               assert (False)
+E                +  where False = StoredLink(reverted=True, superseded=False, superseded_by=None, held_by=1).superseded
+1 failed in 3.99s

@@ -8,6 +8,8 @@ itself.
 
 from __future__ import annotations
 
+from typing import Any
+
 from datetime import UTC, datetime
 
 from services.api.supersede import (
@@ -57,7 +59,9 @@ class _FakeGraph:
     ) -> NeighbourhoodStats:
         return NeighbourhoodStats(node_id=node_id, degree=self.degree)
 
-    async def supersede_node(self, node_id: NodeId, replacement: NodeWrite, tx: TxId) -> NodeId:
+    async def supersede_node(
+        self, node_id: NodeId, replacement: NodeWrite, tx: TxId, *, on_link_cloned: Any = None
+    ) -> NodeId:
         self.supersede_calls.append(node_id)
         return "new-node-id"
 

@@ -51,6 +51,7 @@ from .alerts import (
     AlertTriageConflict,
     QueueRow,
     evidence_node_ids,
+    purge_copies,
     read_evidence,
     settle_repoints,
 )
@@ -489,7 +490,10 @@ async def _close(
                 tx = await graph.begin_transaction()
                 try:
                     if node is not None and node.provenance.state is not ProvenanceState.ASSERTED:
-                        confirmed_node = await confirm_node(graph, node.id, member, tx=tx)
+                        # Each link the confirm clones is recorded too (ADR-109 Amendment 11).
+                        confirmed_node = await confirm_node(
+                            graph, node.id, member, tx=tx, on_link_cloned=repoint.cloned
+                        )
                         # The alert's own node is renamed in the same record, so a triage refused
                         # after the commit cannot leave it naming a superseded node (B6).
                         await repoint.record_node(node.id, confirmed_node)
@@ -507,7 +511,7 @@ async def _close(
             # The moved alerts' re-marked nodes leave every working set that stored a copy at the
             # old marking (ADR-109 Amendment 10).
             if working_set is not None and repoint.remarked_nodes:
-                await working_set.remove_reverted(repoint.remarked_nodes, [])
+                await purge_copies(working_set, repoint.remarked_nodes)
                 await repoint.purged()
     return await store.set_queue_triage(
         alert_id,

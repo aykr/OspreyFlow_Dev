@@ -1,0 +1,8 @@
+# red D9: the rename outside the id-ordered lock — lease rules, stack b, 2026-11-08T12:44:40Z, at b9f960f + working tree
+        one of the two (`DeadlockDetectedError`)."""
+E   asyncpg.exceptions.DeadlockDetectedError: deadlock detected
+E   DETAIL:  Process 79 waits for ShareLock on transaction 779; blocked by process 76.
+E   Process 76 waits for ShareLock on transaction 778; blocked by process 79.
+E   HINT:  See server log for query details.
+asyncpg/protocol/protocol.pyx:197: DeadlockDetectedError
+1 failed in 3.65s

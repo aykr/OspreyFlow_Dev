@@ -1,0 +1,4 @@
+# leased live run at 47435fa (tree ba907b5cbe00c1c7c7838316c10505f1d6963d18), 0 changed files before this file — lease rules, stack b, start 2026-11-08T14:41:25Z
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+1 failed, 150 passed, 200 deselected in 1072.04s (0:17:52)
+end 14:59:18Z

@@ -1562,7 +1562,7 @@ are on the port too, each taking the principal like every other read.
 - **`get_node(..., include_superseded=False)`.** The one way to retrieve a node
   `supersede_node` has replaced; otherwise excluded from every read by default. Lifts only the
   supersession exclusion — classification and `handling_code` still apply underneath.
-- **`supersede_node(node_id, replacement, tx) -> NodeId`.** Writes `replacement` as a new node
+- **`supersede_node(node_id, replacement, tx, *, on_link_cloned=None) -> NodeId`.** Writes `replacement` as a new node
   at `revision = node_id`'s current revision + 1, sets `node_id`'s own `AuditStub.superseded_by`
   to the new id, and returns it. The old node is never deleted; every prior revision and the full
   `superseded_by` chain stays individually retrievable. **Confirmed empirically that ArcadeDB (like
@@ -1570,8 +1570,13 @@ are on the port too, each taking the principal like every other read.
   reports success but leaves `@out`/`@in` unchanged — so every edge incident to `node_id` is
   cloned onto the replacement (provenance, handling, interval, occurrences, basis and datasets preserved
   exactly; the replacement node keeps every dataset of the old one, ADR-099 Amendment 2)
-  and the originals are marked `reverted`, rather than repointed in place. The clone-and-revert is
-  wrapped in the same transaction as the rest of the operation: a failure partway rolls back to
+  and each original is marked `reverted` and `superseded_by` its clone (as `supersede_edge` marks
+  the link it replaces), rather than repointed in place; each `(old, clone, old type)` is reported
+  to `on_link_cloned` inside the transaction, before its commit, so an alert citing the original
+  follows it through the repoint journal (`06_DECISIONS.md` ADR-109 Amendment 11). The
+  clone-and-revert, and the marking, are wrapped in the same transaction as the rest of the
+  operation (a rolled-back correction leaves each original unmarked and no clone, a conformance
+  case): a failure partway rolls back to
   zero trace of the partial write, proven by a conformance case that injects a failure after N
   clones and asserts the pre-operation graph is exactly restored. **Measured, not estimated:**
   superseding a node of degree 5,000 took 41 seconds against a single ArcadeDB instance — a real
