@@ -412,6 +412,7 @@ from .datasets import (
     Dataset,
     DatasetRefusedError,
     DatasetStore,
+    DrawnNotCopied,
     InMemoryDatasetStore,
     UnknownDatasetEgressError,
 )
@@ -2216,9 +2217,7 @@ async def _row_key_run_in_progress_handler(
     request: Request, exc: RowKeyRunInProgress
 ) -> JSONResponse:
     """ADR-127 decision 5: another run of this recipe into this case is still loading."""
-    return JSONResponse(
-        status_code=409, content={"error": "run_in_progress", "message": str(exc)}
-    )
+    return JSONResponse(status_code=409, content={"error": "run_in_progress", "message": str(exc)})
 
 
 @app.exception_handler(NotDocumentsError)
@@ -3432,6 +3431,7 @@ async def branch_investigation(
     # `AuthorizedInvestigationDep` has already checked the branching
     # principal against the *source* investigation's `owning_unit`; the
     # new investigation gets its own, from this principal, not inherited.
+    await refuse_copying_a_drawn_dataset(datasets, case_id=investigation.id)
     node_ids = body.node_ids if body is not None else None
     window = body.window if body is not None else None
     source_name = investigation.name or DEFAULT_CASE_NAME
@@ -3554,6 +3554,7 @@ async def branch_investigation_by_filter(
     answer for a type only hidden material holds as for one that does not exist) or a result still
     past the cap (`limit_exceeded`, with the filtered figures, the reader's own) leaves no case
     behind."""
+    await refuse_copying_a_drawn_dataset(datasets, case_id=investigation.id)
     nodes, edges = await working_set.branch_filtered_contents(investigation.id, principal, body)
     name = f"Branch of {investigation.name or DEFAULT_CASE_NAME}"
     if body.name is not None and body.name.strip():
@@ -6628,6 +6629,12 @@ async def jump_alert_route(
     alert = await jumpable_alert(
         alerts_store, alert_id, principal=principal, graph=graph, analytics=analytics
     )
+    # Before any case is made: an alert whose data is a drawn dataset opens no case reading it.
+    await refuse_copying_a_drawn_dataset(
+        datasets,
+        dataset_id=alert.dataset_id,
+        case_id=None if alert.dataset_id else alert.investigation_id,
+    )
     # ADR-126: the packs are those of the route's own authorised case, never of
     # `alert.investigation_id`, which the jumper is not authorised against and which may be None.
     branch = await investigations.create(
@@ -7143,9 +7150,7 @@ async def _case_event_filter(
     if not ancestors:
         return with_inherited(event_filter, [], [], window=None)
     _nodes, edges = await working_set.current_membership(case.id)
-    return with_inherited(
-        event_filter, ancestors, [e.id for e in edges], window=case.branch_window
-    )
+    return with_inherited(event_filter, ancestors, [e.id for e in edges], window=case.branch_window)
 
 
 class GeometriesRequest(BaseModel):
@@ -7784,6 +7789,35 @@ async def _drawn_not_loaded_handler(request: Request, exc: DrawnNotLoaded) -> JS
     )
 
 
+@app.exception_handler(DrawnNotCopied)
+async def _drawn_not_copied_handler(request: Request, exc: DrawnNotCopied) -> JSONResponse:
+    """In words naming nothing else: the reader may hold no level on the drawing's case."""
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "drawn_not_copied",
+            "detail": "a drawn dataset is read in its own case alone, so no other case is made "
+            "reading it",
+        },
+    )
+
+
+async def refuse_copying_a_drawn_dataset(
+    datasets: DatasetStore, *, case_id: str | None = None, dataset_id: str | None = None
+) -> None:
+    """Before any case is made: a case reading a drawn dataset is not branched, filtered into a
+    new case or opened from an alert (ADR-143 Amendment 2 decision 5). `copy_case` refuses it
+    too, as the last word."""
+    held = []
+    if case_id is not None:
+        held = await datasets.chosen_of_case(case_id)
+    elif dataset_id is not None:
+        found = (await datasets.egress_of([dataset_id])).get(dataset_id)
+        held = [found] if found is not None else []
+    if any(d.kind == DRAWN for d in held):
+        raise DrawnNotCopied
+
+
 NoLoadingAComposite = Depends(refuse_loading_a_composite)
 
 
@@ -7840,9 +7874,7 @@ async def list_ingest_connections(
     return await sources.connections()
 
 
-@app.get(
-    "/v1/admin/connections", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))]
-)
+@app.get("/v1/admin/connections", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
 async def list_admin_connections(sources: SourcesDep) -> list[Connection]:
     return await sources.connections()
 
@@ -13201,7 +13233,10 @@ async def admin_datasets_route(datasets: DatasetsDep) -> list[AdminDataset]:
     what a dataset holds, and no count."""
     return [
         AdminDataset(
-            id=d.id, name=d.name, owning_unit=d.owning_unit, egress=d.egress,
+            id=d.id,
+            name=d.name,
+            owning_unit=d.owning_unit,
+            egress=d.egress,
             highest_marking=d.highest_marking,
         )
         for d in await datasets.list_all()

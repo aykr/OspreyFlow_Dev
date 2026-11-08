@@ -59,7 +59,7 @@ built once no case names two.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol, cast
 
@@ -266,6 +266,18 @@ class DatasetStore(Protocol):
     async def set_egress(
         self, dataset_id: str, egress: DatasetEgress
     ) -> tuple[DatasetEgress, Dataset]: ...
+
+
+class DrawnNotCopied(Exception):
+    """ADR-143 Amendment 2 decision 5: a drawn dataset is read through its home case alone, so no
+    other case is made reading it: not a branch, a filtered branch or a case opened from an
+    alert."""
+
+
+def refuse_copying_drawn(kinds: Iterable[str]) -> None:
+    """Both stores' `copy_case` ask this of the kinds the case reads, before anything is written."""
+    if DRAWN in kinds:
+        raise DrawnNotCopied
 
 
 class HomeCaseHeld(Exception):
@@ -630,6 +642,7 @@ class InMemoryDatasetStore:
         case opened from an alert (`as_a_branch=False`) reads the dataset and has an empty layer of
         its own: its maker may hold no level on the original (ADR-143 Amendment 1 item 3)."""
         chosen = list(self.cases.get(from_investigation_id, []))
+        refuse_copying_drawn([self.datasets[c].kind for c in chosen if c in self.datasets])
         self.cases[to_investigation_id] = chosen
         if as_a_branch:
             original = await self.layer_of_case(from_investigation_id) or self.layer_reads.get(
@@ -1245,6 +1258,12 @@ class PostgresDatasetStore:
         case opened from an alert (`as_a_branch=False`) reads the dataset and has an empty layer of
         its own: its maker may hold no level on the original (ADR-143 Amendment 1 item 3)."""
         async with self._pool.acquire() as conn:
+            kinds = await conn.fetch(
+                "SELECT d.kind FROM investigation_datasets c "
+                "JOIN datasets d ON d.id = c.dataset_id WHERE c.investigation_id = $1",
+                from_investigation_id,
+            )
+            refuse_copying_drawn([k["kind"] for k in kinds])
             await conn.execute(
                 "INSERT INTO investigation_datasets (investigation_id, dataset_id, position) "
                 "SELECT $2, c.dataset_id, c.position FROM investigation_datasets c "

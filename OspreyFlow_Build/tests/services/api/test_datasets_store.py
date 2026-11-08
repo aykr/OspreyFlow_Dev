@@ -209,6 +209,38 @@ async def test_postgres_holds_a_drawn_dataset_for_its_home_case_alone(store) -> 
     assert await store.chosen_of_case(other) == []
 
 
+@pytest.mark.parametrize("planted_out", [False, True], ids=["held", "the-kind-check-removed"])
+async def test_postgres_never_copies_a_drawn_dataset(
+    store, monkeypatch: pytest.MonkeyPatch, planted_out: bool
+) -> None:
+    """The round-1 review's blocker 1: `copy_case` refuses a case reading a drawn dataset before
+    it writes, whether as a branch or as the alert jump's copy; red with the kind check removed,
+    when the copy reads the drawing from a second case."""
+    from services.api import datasets as datasets_module
+    from services.api.datasets import DrawnNotCopied
+
+    if planted_out:
+        monkeypatch.setattr(datasets_module, "refuse_copying_drawn", lambda _kinds: None)
+    home = new_id()
+    drawn = await store.create_drawn(
+        ALICE, f"Drawing {new_id()}", highest_marking="OFFICIAL", home_case=home
+    )
+    for as_a_branch in (True, False):
+        copy = new_id()
+        if planted_out:
+            await store.copy_case(
+                home, copy, case_name="Copy", created_by=ALICE.id, as_a_branch=as_a_branch
+            )
+            assert drawn.id in [d.id for d in await store.chosen_of_case(copy)]
+        else:
+            with pytest.raises(DrawnNotCopied):
+                await store.copy_case(
+                    home, copy, case_name="Copy", created_by=ALICE.id, as_a_branch=as_a_branch
+                )
+            assert await store.chosen_of_case(copy) == []
+            assert await store.layer_of_case(copy) is None
+
+
 async def test_postgres_widens_an_old_kind_check_to_take_drawn(fresh_dsn: str) -> None:
     """A deployment made before drawn datasets has the column's check without `drawn`: `connect`
     widens it once, and a second `connect` changes nothing."""

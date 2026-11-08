@@ -227,3 +227,115 @@ def test_the_rule_refusal_fails_planted_out(world: SimpleNamespace) -> None:  # 
         assert answer.status_code == 422, answer.text  # past the refusal, to the body's check
     finally:
         app_module.app.dependency_overrides.clear()
+
+
+# --- Never copied (the round-1 review's blocker 1, rule 3) ------------------------------------
+
+NOT_COPIED = {
+    "error": "drawn_not_copied",
+    "detail": "a drawn dataset is read in its own case alone, so no other case is made reading it",
+}
+
+
+class _Stopped(Exception):
+    """Raised by every stand-in past the copy: a route that gets this far has copied already."""
+
+
+class _PastTheCopy:
+    async def branch_filtered_contents(self, *_args: Any) -> tuple[list[Any], list[Any]]:
+        return [], []  # what a filtered branch holds is asked before the case is made
+
+    def __getattr__(self, name: str) -> Any:
+        async def stopped(*_args: Any, **_kwargs: Any) -> Any:
+            raise _Stopped(name)
+
+        return stopped
+
+
+def _copying(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:  # noqa: F811
+    """The three routes that make a case reading what another reads, each from the drawing's home
+    case: a branch, a filtered branch, and two alert jumps (an alert naming the drawn dataset, and
+    one naming only the case)."""
+    home = _draw(world).json()["investigation_id"]
+    drawn = _the_drawn(world)
+    for name in ("working_set", "history", "valkey", "analytics", "graph", "alerts_store"):
+        monkeypatch.setattr(app_module.app.state, name, _PastTheCopy(), raising=False)
+    alerts = {
+        "al-drawn": SimpleNamespace(id="al-drawn", dataset_id=drawn.id, investigation_id=home),
+        "al-case": SimpleNamespace(id="al-case", dataset_id=None, investigation_id=home),
+    }
+
+    async def the_alert(_store: Any, alert_id: str, **_kwargs: Any) -> Any:
+        return alerts[alert_id]
+
+    monkeypatch.setattr(app_module, "jumpable_alert", the_alert)
+    return {
+        "branch": (f"/v1/investigations/{home}/branch", None),
+        "branch-by-filter": (
+            f"/v1/investigations/{home}/branch-by-filter", {"entity_types": ["Person"]},
+        ),
+        "jump-to-the-dataset": (f"/v1/investigations/{home}/alerts/al-drawn/jump", None),
+        "jump-to-the-case": (f"/v1/investigations/{home}/alerts/al-case/jump", None),
+    }  # fmt: skip
+
+
+ROUTES = ["branch", "branch-by-filter", "jump-to-the-dataset", "jump-to-the-case"]
+
+
+def _readers(world: SimpleNamespace) -> list[str]:  # noqa: F811
+    drawn = _the_drawn(world)
+    return [c for c, ids in world.datasets.cases.items() if drawn.id in ids]
+
+
+@pytest.mark.parametrize("route", ROUTES)
+def test_no_case_is_made_reading_it(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+) -> None:
+    """Refused before any case is made, in words naming nothing but the rule: no empty case is
+    left, and no second case reads the drawing."""
+    path, body = _copying(world, monkeypatch)[route]
+    made_before = set(world.cases.made)
+    answer = world.client.post(path, json=body, headers=_as("analyst"))
+    assert answer.status_code == 409, answer.text
+    assert answer.json() == NOT_COPIED
+    assert set(world.cases.made) == made_before
+    assert len(_readers(world)) == 1
+
+
+@pytest.mark.parametrize(
+    ("planted_out", "copied"),
+    [(("route",), False), (("store",), False), (("route", "store"), True)],
+    ids=["the-route-alone", "the-store-alone", "both-removed"],
+)
+@pytest.mark.parametrize("route", ["branch", "branch-by-filter", "jump-to-the-case"])
+def test_each_copy_check_holds_alone(
+    world: SimpleNamespace,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+    route: str,
+    planted_out: tuple[str, ...],
+    copied: bool,
+) -> None:
+    """Rule 15, red: the route refuses before the case is made and `copy_case` refuses the copy;
+    each holds alone, and with both planted out, as before this check, a second case reads the
+    drawing. (The jump to the dataset itself has a third guard, `set_for_case`'s choice check,
+    which `test_each_choice_check_holds_alone` shows red.)"""
+    from services.api import datasets as datasets_module
+
+    path, body = _copying(world, monkeypatch)[route]
+
+    async def nothing_refused(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    if "route" in planted_out:
+        monkeypatch.setattr(app_module, "refuse_copying_a_drawn_dataset", nothing_refused)
+    if "store" in planted_out:
+        monkeypatch.setattr(datasets_module, "refuse_copying_drawn", lambda _kinds: None)
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app_module.app, raise_server_exceptions=False)
+    answer = client.post(path, json=body, headers=_as("analyst"))
+    assert (len(_readers(world)) > 1) == copied, answer.text
+    if not copied:
+        assert answer.json() == NOT_COPIED
