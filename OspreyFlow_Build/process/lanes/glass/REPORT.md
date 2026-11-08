@@ -1,13 +1,25 @@
-# glass lane · report · L2.8b, old records under the new check (8 November 2026; round 3)
+# glass lane · report · L2.8b, old records under the new check (8 November 2026; final)
 
-1. **Rule audit (items 1, B2, B7): met.** `rule_fired` records its alert's links and transactions; `readable_rule_audit` checks an entry about an alert by everything it cites now (`cited_by_ids`), one batched read per kind; an old firing keeps its entry, its words withheld; an evaluation's count is withheld from a reader missing any of that rule's firings.
-2. **Held rows (item 2, Q2): met.** A hold gives the rule's name and typology; an old reason shows the rule's name, else "the rule".
-3. **Packs (item 3): met.** Reads and the export gate recheck an alert item by what it cites now.
-4. **Re-marking (item 4, B9): met.** `scripts.remark_alert_nodes` (`--dry-run`) runs `remark_alerts`, listing unsafe what it cannot read; one journal record per run.
-5. **G3 at the route (item 5): met.**
-6–7. **The repoint journal (ADR-109 Amendment 10, rewritten for round 3): met.** One record of ordered pairs per write (`alert_repoint_records`). A settle follows the graph's own `superseded_by` (`StoredLink`/`StoredNode`, `compare=False`; a conformance case; the revert's checks unchanged), never a recorded successor. It renames recorded nodes and re-marks the nodes of alerts moved *or renamed*. It runs under a session advisory lock, released in `finally` (its connection closed if that fails), held on a pool of its own. The close's triage names no node. A writer that rolled back before sending its commit closes its record (`never_committed`), as does one leaving it empty.
-8. **Test shapes (item 8, R1, round 3's item 5): met.** B5 re-planted after the re-mark's graph commit; R2 through the socket's real sync; transactions in the reader's case; fakes model `stored_link_states` with each successor.
-9. **Found in round 3:** the lock drawn from the store's own four-connection pool deadlocked four concurrent settles (my first lock red hung the stack for an hour; tests now time out); a close confirming only its node re-marked nothing; the in-memory link fake named no successor; red 2 as first written could not fail.
-10. **Tests:** each fix red first, under the glass lease (`l2.8b/`, `round2/`, `round3/`). Round 3: run 03:42:59–03:51:53Z void (worktree edited during it; recorded as such); rerun 03:57:43–04:12:39Z at bf28fcd: 11 reds for their reasons, red 2 not; red 2 rewritten and red at 579d8f2 (04:22:18–04:26:44Z). Greens: the live file 34/34; queue files 117/118; scenarios 51; conformance 52; revert 79. Journal rows 0 before and after every run.
-11. **Main's:** `test_kyc_rules`' true-positive test fails on main's own code too (`round3/kyc-on-main.txt`). **L2.8c:** `supersede_node`'s clones, `retract_node`, `pipeline_run`, `same_as_writer`'s `NOT_SAME_AS`, publishing removals. **Recorded, not claimed:** the settle's timing.
-12. **Still to do:** rebase over L1.2d (`old_type=`), make ci, the reviewer, ready-to-merge.
+1. **Items 1–5 (rule audit, held rows, packs, re-marking, G3): met.** The audit and packs check what an alert cites now; holds give the rule's name; `scripts.remark_alert_nodes` has `--dry-run`.
+2. **The repoint journal (ADR-109 Amendment 10): met.** One record per write. The settle follows the graph's own `superseded_by` (`compare=False`, so the revert's checks are unchanged), under a session advisory lock on a pool of its own; a lock drawn from the store's pool deadlocked four settles. The close's triage names no node. Moved and renamed alerts are re-marked.
+3. **The reviewer's D1–D3, D6, D7 and D11–D13 (the orchestrator's (a)): met.**
+   - D3: link pairs carry the old type (`stored_link_states(edge_type=)`, `held_by`, a conformance case), and an id two types hold moves no alert.
+   - D1: the settle's and the script's re-marks go in `remarks`, and one that never landed is re-run.
+   - D2: the script's record is `held_open`, and `RepointRecordGone` refuses a record that is missing or applied.
+   - `never_committed` is said by every writer.
+4. **To L2.8c (ruled):** D8–D10 (the id paths' timing, the rename outside the id-ordered lock, the lock pool's timeout and key space); `supersede_node`'s clones, `retract_node`, `pipeline_run`, `NOT_SAME_AS`, publishing removals.
+5. **Final leased run (06:13:03–06:30:01Z, at 09ab55c, `l2.8b/final/`):**
+   - All 19 reds fail for their stated reasons.
+   - Greens: live 38/38; queue files 117/118 (the one is main's KYC test, shown failing on main's code with its output); scenarios 52; conformance 53; revert 79.
+   - Tree unchanged.
+6. **After the purge refactor (07:37:57–07:42:27Z, at eedb9bc):** the two socket purge tests 2/2, live file 38/38. Earlier rounds are in `l2.8b/`, `round2/` and `round3/`; the void run is kept and marked.
+7. **Leftover records** are counted per test before the cleanup deletes them (`final/records-left.txt`). Ten tests leave one, each by design: nine applied records wait for a socket's purge, and one (the graph-failure case) waits for the stale threshold.
+8. **make ci at eedb9bc:** every gate green except the seven trivy image builds, refused by Docker Hub's pull limit (`toomanyrequests`). It was green as a whole at 09ab55c.
+9. **make test at eedb9bc:** 7,967 passed; 3 failed and 2 errored, none mine:
+   - the committed osprey.yaml against a local value;
+   - the valkey test reading my closed port;
+   - `graphify-out` at the root;
+   - two proxy tests refused by the pull limit.
+10. **Compatibility, case by case:** all 27 fast-tier failures were fakes my signatures broke. Each fake is fixed (eedb9bc, test-only, ratified), with no tolerance added in code. One older tolerance remains from round 1: `settle_repoints` skips a store with no `settle_pending`, which only the queue reads' fakes lack.
+11. **Ratify (D14):** `ports/graph.py`; the ArcadeDB adapter; `held_rows.py`; app.py's two socket purge lines; `test_phase3_working_set.py`; the conformance suite; eedb9bc's six test files.
+12. **Commits since round 3:** c85493c port, 322f97b journal, 09ab55c docs, c7821bd records, 66238ec purge through the store's methods, eedb9bc fakes. **Still running:** nothing. Stack down, lease released; paused as the owner asked.
