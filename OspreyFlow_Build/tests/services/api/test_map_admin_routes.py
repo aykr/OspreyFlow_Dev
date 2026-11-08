@@ -157,8 +157,11 @@ def test_a_holder_of_manage_geospatial_alone_manages_the_maps(world: World) -> N
     added = client.post("/v1/admin/maps/providers", content=json.dumps({"provider": HOSTED}))
     assert added.status_code == 200, added.text
     assert [p["provider"]["id"] for p in added.json()["providers"]] == ["osm-local", "hosted-tiles"]
-    # Build and verify also check the admin role (kept, the orchestrator's settlement).
-    assert client.post("/v1/admin/geospatial/verify").status_code == 403
+    # Build and verify also check the admin role (kept, the orchestrator's settlement): a holder of
+    # the right alone is refused both, by the role, before anything runs.
+    for path, body in (("verify", None), ("build-basemap", {"region": "rutland"})):
+        answer = client.post(f"/v1/admin/geospatial/{path}", json=body)
+        assert answer.status_code == 403 and "osprey-admin" in answer.text, path
 
 
 def test_a_planted_key_is_in_no_response_log_audit_or_maps_file(

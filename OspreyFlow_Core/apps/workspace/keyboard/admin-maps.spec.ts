@@ -52,6 +52,8 @@ test("a provider's key is entered by keyboard, and the field is empty afterwards
   await press(page, "Enter key for Corporate aerial");
   await typeInto(page, /^Key for Corporate aerial/, SYNTHETIC_KEY);
   await page.keyboard.press("Enter");
+  const sent = await page.evaluate(() => (window as unknown as { mapsKeysSent: unknown[] }).mapsKeysSent);
+  expect(sent).toEqual([{ key: SYNTHETIC_KEY }]); // the typed key, and nothing else
   await expect(page.getByRole("status")).toContainText("the key is set");
   expect(await asked(page)).toContain("PUT /v1/admin/maps/providers/corporate/key");
   expect(await page.content()).not.toContain(SYNTHETIC_KEY);

@@ -42,6 +42,10 @@ let schedule: { every_hours: number | null } = { every_hours: 24 };
 const history = [{ at: "2026-11-08T09:00:00Z", by: "admin-1", action: "key_set", provider: "hosted", changes: {}, outcome: "done" }];
 const asked: string[] = [];
 (window as unknown as { mapsAsked: string[] }).mapsAsked = asked;
+// What each key request carried, so the keyboard case proves the typed key was the one sent. The
+// keys here are the spec's synthetic ones (rule 9); nothing else keeps them.
+const keysSent: unknown[] = [];
+(window as unknown as { mapsKeysSent: unknown[] }).mapsKeysSent = keysSent;
 
 const view = () => ({
   default: mapDefault,
@@ -103,6 +107,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (!match || !row) return reply(404, { detail: { detail: "There is no map provider of that name." } });
   if (match[2] === "/key") {
     // The key is never kept here either: only that one was sent.
+    if (method === "PUT") keysSent.push(body);
     if (method === "PUT") Object.assign(row, { key_state: "set", key_set_at: "2026-11-08T10:00:00Z", key_set_by: "admin-1", ready: true, state: "Ready: fetched through the Conduit." });
     else Object.assign(row, { key_state: "none", key_set_at: null, key_set_by: null });
     return reply(200, view());
