@@ -21,7 +21,15 @@ stack a, with its own database and a stand-in provider (ADR-135 Amendment 2, "Me
   offer → 404 "NotFoundError"; after any of those three the entry is **cooled down**, answering
   429 "No deployments available for selected model … cooldown_list=[…]" for about a minute, even
   once a good key is set;
-- restarted with a different encryption key, every stored entry is dropped.
+- `POST /credentials` stores a named key; an entry naming it (`litellm_credential_name`) uses it;
+  `PATCH /credentials/{name}` rotates it for every such entry; `DELETE` removes it (unknown: 404),
+  and an entry naming a missing credential answers as a missing key; **`GET /credentials` returns
+  the key masked to two characters at each end** (`sk****4Z`), which is why the stand-in counts
+  every such read (`credential_reads`);
+- restarted with a different encryption key, every stored entry and credential is dropped.
+
+Not measured, so not modelled as refusals: `POST /credentials` for a name that exists, and `PATCH`
+for one that does not (the Conduit's code does neither: it creates once and patches what it made).
 
 The stand-in is an `httpx.MockTransport`, so the code under test sends real HTTP requests through
 the same `httpx.AsyncClient` it uses against the real gateway. Its own red-then-green proof is
@@ -88,7 +96,10 @@ class StandInGateway:
     log: list[str] = field(default_factory=list)
     #: Every completion asked for, refused or not, by `model_name`.
     asked: list[str] = field(default_factory=list)
+    #: How many times anything read the credentials back (masked, but still part of the key).
+    credential_reads: int = 0
     _db: dict[str, _Stored] = field(default_factory=dict)
+    _creds: dict[str, tuple[str, str]] = field(default_factory=dict)
     _cooled_until: dict[str, float] = field(default_factory=dict)
 
     # --- what a test may inspect --------------------------------------------------------------
@@ -111,7 +122,20 @@ class StandInGateway:
 
     def raw_rows(self) -> list[str]:
         """The database rows as stored (encrypted), for a test that looks for plaintext."""
-        return [json.dumps(s.sealed) for s in self._db.values()]
+        return [json.dumps(s.sealed) for s in self._db.values()] + [
+            sealed for sealed, _ in self._creds.values()
+        ]
+
+    def credential(self, name: str) -> str | None:
+        """A credential's key, decrypted, as the gateway itself reads it."""
+        held = self._creds.get(name)
+        if held is None or held[1] != self.salt_key:
+            return None
+        return _unseal(self.salt_key, held[0])
+
+    def entry_for(self, model_name: str) -> str | None:
+        ids = [i for i in self.stored_ids() if self._db[i].model_name == model_name]
+        return ids[0] if ids else None
 
     def restart(self, *, salt_key: str | None = None) -> None:
         """A restart; with another encryption key, every stored entry it cannot read is dropped,
@@ -122,6 +146,10 @@ class StandInGateway:
             if stored.salt != self.salt_key:
                 self.log.append(f"Error upserting deployment {stored.model_name} (id={model_id})")
                 del self._db[model_id]
+        for name, (_, salt) in list(self._creds.items()):
+            if salt != self.salt_key:
+                self.log.append("Error decrypting value for key: api_key")
+                del self._creds[name]
         self._cooled_until.clear()
 
     # --- the API ------------------------------------------------------------------------------
@@ -161,6 +189,39 @@ class StandInGateway:
             return httpx.Response(200, json={"data": self._info()})
         if method == "POST" and path == "/chat/completions":
             return self._chat(body)
+        if path == "/credentials" and method == "POST":
+            name = str(body.get("credential_name", ""))
+            key = str(dict(body.get("credential_values") or {}).get("api_key", ""))
+            self._creds[name] = (_seal(self.salt_key, key), self.salt_key)
+            return httpx.Response(
+                200, json={"success": True, "message": "Credential created successfully"}
+            )
+        if path == "/credentials" and method == "GET" or path.startswith("/credentials/by_name/"):
+            self.credential_reads += 1
+            masked = [
+                {"credential_name": n, "credential_values": {"api_key": f"{k[:2]}****{k[-2:]}"}}
+                for n in self._creds
+                if (k := self.credential(n)) is not None
+            ]
+            return httpx.Response(200, json={"success": True, "credentials": masked})
+        if path.startswith("/credentials/") and method in ("PATCH", "DELETE"):
+            name = path.removeprefix("/credentials/")
+            if name not in self._creds:
+                return _error(
+                    404,
+                    f"Credential not found. Got credential name: {name}",
+                    "internal_server_error",
+                )
+            if method == "DELETE":
+                del self._creds[name]
+                return httpx.Response(
+                    200, json={"success": True, "message": "Credential deleted successfully"}
+                )
+            key = str(dict(body.get("credential_values") or {}).get("api_key", ""))
+            self._creds[name] = (_seal(self.salt_key, key), self.salt_key)
+            return httpx.Response(
+                200, json={"success": True, "message": "Credential updated successfully"}
+            )
         return _error(404, "Not Found", "not_found_error")
 
     def _model_new(self, body: Mapping[str, Any]) -> httpx.Response:
@@ -260,6 +321,8 @@ class StandInGateway:
         provider_name, _, provider_side = provider_model.partition("/")
         provider = self.providers.get(provider_name)
         key = params.get("api_key")
+        if "litellm_credential_name" in params:
+            key = self.credential(params["litellm_credential_name"])
         group = f". Received Model Group={model_name}\nAvailable Model Group Fallbacks=None"
         if provider is None:
             return _error(

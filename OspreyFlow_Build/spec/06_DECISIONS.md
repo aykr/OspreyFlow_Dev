@@ -28858,6 +28858,15 @@ provider was called):
   then "Invalid model name").
 - Its spend log recorded each call (21) with no prompt or answer text. The database held 86 tables,
   12 MB.
+- **Credentials** (measured the same day, a second lease on stack a): `POST /credentials` stores a
+  named key encrypted (`LiteLLM_CredentialsTable`, no plaintext); a model entry naming it
+  (`litellm_credential_name`) uses it, and `PATCH /credentials/{name}` rotates it for every entry
+  naming it, with no change to the entries; `DELETE /credentials/{name}` removes it (an unknown name:
+  404), after which each entry naming it answers as a missing key (500). An entry naming a credential
+  that does not exist is accepted. **`GET /credentials` and `GET /credentials/by_name/{name}` return
+  the key masked to its first and last two characters (`sk****4Z`).** Under a different encryption
+  key, credentials and entries alike are dropped ("Error decrypting value … Did your master_key/salt
+  key change recently?"). With `LITELLM_LOCAL_MODEL_COST_MAP=True` it made no attempt to reach GitHub.
 
 **Decision.**
 
@@ -28916,8 +28925,15 @@ provider was called):
    - **The Conduit reconciles** the gateway's entries to the models file at start and after each
      change (`/model/new`, `PATCH /model/{id}/update`, `/model/delete`, read back with
      `/v2/model/info`), with the gateway master key it already holds, on the deployment's internal
-     network only. An engine with no key is **not registered** (measured: the gateway accepts it, and
-     every call fails), so it is shown "no key" and not offered to analysts (ADR-135 decision 3).
+     network only.
+   - **Each engine's key is one gateway credential**, `osprey-<provider>` (`POST /credentials`,
+     rotated with `PATCH /credentials/{name}`, removed with `DELETE`), and each of the engine's model
+     entries names it (`litellm_credential_name`) rather than holding a key itself. So a model added
+     to an engine that already has a key needs no key entered again, and a rotation reaches every
+     model at once (measured). Entries are registered whether or not the key is set; an engine whose
+     key record says "no key" is not offered to analysts (ADR-135 decision 3), and a call to it
+     fails as a missing key would. **The Conduit never calls `GET /credentials` or
+     `/credentials/by_name`**, which return two characters at each end of the key (measured).
    - **Existing deployments.** The first `apply` or `start` with this version moves each
      `OSPREY_MODEL_KEY_<NAME>` (and `OSPREY_MODEL_PROVIDER_KEY`) from `deployment.env` into the
      gateway, through the Conduit's key path (8) with the key on standard input, writes the key record,
@@ -28972,9 +28988,14 @@ provider was called):
    the models file is in the configuration. The encryption key is not: the set never holds a secret
    (`05_DEPLOYMENT.md` §6.1). **Restored onto the deployment it came from** (its `deployment.env`
    kept), every key works. **Restored onto another deployment**, the gateway cannot decrypt them and
-   drops every stored engine (measured): the reconcile finds each engine whose record says "key set"
-   missing from the gateway, shows "key lost: enter it again", offers it to no analyst, and `ospreyflow
-   doctor` names each. The administration guide says so beside `restore`.
+   drops every stored engine (measured). **So `ospreyflow restore` refuses, in words and changing
+   nothing,** a set whose gateway database was written under another encryption key, unless it is
+   given `--model-keys-will-be-lost`. It knows without holding the key: the set records a check value,
+   HMAC-SHA256 of the fixed text `ospreyflow-gateway-key-check` under the encryption key (the key is 32
+   random bytes, so the value reveals nothing usable), and restore computes the same under the
+   deployment's own. Restored with the flag, the reconcile finds each engine whose record says "key
+   set" missing from the gateway, shows "key lost: enter it again", offers it to no analyst, and
+   `ospreyflow doctor` names each. The administration guide says so beside `restore`.
 
 10. **Offline.** The gateway is started with `LITELLM_LOCAL_MODEL_COST_MAP=True`, so it no longer
     reaches GitHub at start (ADR-114 Amendment 7: nothing reaches outside unless a configured feature
@@ -29000,15 +29021,18 @@ for the first install, now landing in the gateway by the same path once it start
   provider key (500), a wrong key echoing a fragment (401), a model not offered (404), the cooldown
   (429), and entries dropped under a different encryption key
   (`tests/adapters/model_litellm/test_stand_in_gateway.py`).
-- **The key round trip:** after a write the gateway's database entry for each of the engine's models
-  holds the key (read back through the stand-in's decrypting store), and after a removal no entry
-  does; the reconcile registers no engine without a key.
+- **The key round trip:** after a write the engine's credential holds the key and each of its model
+  entries names it (read back through the stand-in's decrypting store); after a removal there is no
+  credential; a model added to a keyed engine answers with no key entered again; the Conduit never
+  calls `GET /credentials`.
 - **The connection test** reports each refusal in its words, and never a planted key the stand-in
   echoes (`test_connection_check.py`).
 - **The models file** replaces `osprey.yaml`'s providers and defaults whole; `apply` refuses an
   engine beside `local_only: true`; it is `600` after every write.
-- **Restore onto another deployment** shows "key lost" (the stand-in restarted with another
-  encryption key).
+- **Restore onto another deployment** is refused in words without `--model-keys-will-be-lost`, and
+  with it the engines show "key lost" (the stand-in restarted with another encryption key);
+  `ospreyflow backup` writes `litellm.sql` and the check value; the encryption key is blanked in every
+  rendered service but the gateway; `doctor` reports a lost key.
 - **Keyboard (rule 13):** every *Models* action reached and activated by keyboard
   (`apps/workspace/keyboard/admin-models.spec.ts`); **axe** in the dark, light and GOV.UK themes.
 - **The egress warning** (`spec/05` §2.1) reads `providers` (`tests/harness/test_egress_consequence.py`,

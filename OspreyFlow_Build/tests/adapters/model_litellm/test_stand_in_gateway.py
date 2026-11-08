@@ -173,3 +173,67 @@ async def test_a_restart_keeps_entries_only_under_the_same_encryption_key(salt: 
     else:
         assert answer.status_code == 400 and "Invalid model name" in answer.text
         assert "osprey-gemini-a" not in info.text
+
+
+def _by_credential(model_id: str, model: str = "gemini-2.5-flash") -> dict[str, Any]:
+    return {
+        "model_name": f"gemini/{model}",
+        "litellm_params": {"model": f"gemini/{model}", "litellm_credential_name": "osprey-gemini"},
+        "model_info": {"id": model_id},
+    }
+
+
+async def test_a_credential_serves_every_entry_naming_it_and_its_rotation_reaches_them() -> None:
+    gateway = _gateway()
+    gateway.providers = {
+        "gemini": StandInProvider(GOOD, frozenset({"gemini-2.5-flash", "gemini-2.5-pro"}))
+    }
+    async with _client(gateway) as client:
+        await client.post("/model/new", json=_by_credential("a"))
+        missing = await _chat(client, "gemini/gemini-2.5-flash")  # names a credential not yet made
+        gateway.restart()  # clear the cooldown the missing key caused
+        await client.post(
+            "/credentials",
+            json={"credential_name": "osprey-gemini", "credential_values": {"api_key": PLANTED}},
+        )
+        wrong = await _chat(client, "gemini/gemini-2.5-flash")
+        gateway.restart()
+        rotated = await client.patch(
+            "/credentials/osprey-gemini",
+            json={"credential_name": "osprey-gemini", "credential_values": {"api_key": GOOD}},
+        )
+        await client.post("/model/new", json=_by_credential("b", "gemini-2.5-pro"))
+        first = await _chat(client, "gemini/gemini-2.5-flash")
+        second = await _chat(client, "gemini/gemini-2.5-pro")
+        unknown = await client.delete("/credentials/osprey-nope")
+        await client.delete("/credentials/osprey-gemini")
+        gone = await _chat(client, "gemini/gemini-2.5-pro")
+    assert missing.status_code == 500 and "AuthenticationError" in missing.text
+    assert wrong.status_code == 401
+    assert rotated.status_code == 200 and first.status_code == 200 and second.status_code == 200
+    assert unknown.status_code == 404 and "Credential not found" in unknown.text
+    assert gone.status_code == 500 and "AuthenticationError" in gone.text
+    assert all(PLANTED not in row and GOOD not in row for row in gateway.raw_rows())
+
+
+async def test_reading_credentials_back_returns_them_masked_and_is_counted() -> None:
+    gateway = _gateway()
+    async with _client(gateway) as client:
+        await client.post(
+            "/credentials",
+            json={"credential_name": "osprey-gemini", "credential_values": {"api_key": PLANTED}},
+        )
+        listed = await client.get("/credentials")
+    assert "sk****4Z" in listed.text and PLANTED not in listed.text
+    assert gateway.credential_reads == 1
+
+
+async def test_a_different_encryption_key_drops_credentials_too() -> None:
+    gateway = _gateway()
+    async with _client(gateway) as client:
+        await client.post(
+            "/credentials",
+            json={"credential_name": "osprey-gemini", "credential_values": {"api_key": GOOD}},
+        )
+    gateway.restart(salt_key="salt-two")
+    assert gateway.credential("osprey-gemini") is None
