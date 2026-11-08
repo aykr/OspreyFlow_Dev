@@ -1,20 +1,14 @@
-# studio lane · report · L1.2b (Part B, phase 6's exit; ADR-140 Amendment 10), with review round 1, 8 November 2026
-1. **From scratch, guided, keys alone: met.** `keyboard/ingest-studio.spec.ts` builds the whole committed reports map, and the saved map must **equal** the YAML's (a JSON copy held to it by `tests/demo_fixtures/test_reports_map_fixture.py`). That covers 11 elements, 10 links, conditions, content, six handling parts each, the transform, literal and optional bindings, the ignored columns, the row key, and the marking columns on the draft's own settings.
-2. **Expert edit of it: met.** An Extract fed by Map on the canvas; the map isn't saved again; Test, then Deploy.
-3. **Live walk: met.** Lease studio "L1.2b live walk", 06:30:25Z–07:12:44Z, with `stack_lease.sh up`/`down`. It used a fresh Postgres database (dropped after), scratch repository, ingest root and analytics, and a Conduit on 127.0.0.1:18001; osprey-local-lite was untouched.
-4. **The walk's figures** (`live/studio-reports-walk.spec.ts`, run 6, 07:10:13Z):
-   - asserted: the stored map equals the committed one, and the run read 350 and rejected 1;
-   - checked by script afterwards: the deployed YAML matches;
-   - observed only: Test rejected row 17, the teaching row. Timings are indicative, as two offline runs shared the machine.
-5. **Found and fixed:**
-   - live only (B8): the Map editor could make no `MENTIONED_IN` link; it now judges ends as the load does;
-   - ignore controls are named with their column (B2), and link buttons meet WCAG 2.5.3 (B7);
-   - harness fakes that differed from the product (rule 15): B5 and B9.
-6. **Review round 1: items 1–5 fixed.** Amendment 10 separates asserted, checked and observed figures, and names the non-fresh graph and the concurrent runs. `meaning()` forgives only nullable fields (B11). Wildcard mixed-list and system cases added (B10). The guide names the bindings and the pack-pin difference. The heading is as reserved, and your reservations file is reverted.
-7. **Recorded, not resolved:** a new pipeline pins no pack (`{}`), where the seeded draft pins `niem: 3`, because it has no domain-model step; phase 5 settles it.
-8. **Red on record:** B1–B11 and the walk, in `L1.2a_RED_RECORD.md`.
-9. **Green:** `make ci` exit 0 at `51e3e07`. Studio vitest 391/391, keyboard 76/76, axe 76/76, `tsc` clean.
-10. **`make test`:** 8,100 passed and 3 failed, none mine: the machine's `osprey.yaml`, `graphify-out` at the root, and the phone extraction (needs the leased object store on 9000).
-11. **Requests:** land `process/lanes/studio/L1.2b_action_registry.diff` (one id) with the merge, and mark the Amendment 10 reservation written.
-12. **Slips, mine:** the harness's first reports source carried marking columns no person can register; the first JSON copy named the Build folder; I edited your reservations file (reverted).
-13. **Next:** paused at the end of L1.2b, as the owner asked. Nothing is running and no lease is held.
+# studio lane · report · L1.3 (phase 7a: the staging catalogue's engine; ADR-140 Amendment 11), 8 November 2026
+1. **Golden files per step: met.** `tests/ingest/test_staging_golden.py` has all six kinds (seven cases), and `tests/knowledge_adapters/test_derive.py` has Derive's seven operations, each golden file showing its refusals.
+2. **Provenance survives a Join: met.** `test_staged_run.py::test_a_join_s_provenance_survives_to_the_link_it_makes` is red with `source_refs` dropped at the join (P1). It is also read back live from ArcadeDB (`test_staged_provenance_live.py`; L1–L5).
+3. **A screening list round-trips through the catalogue: met.** Kind `screening` survives staged Parquet, its entries are equal, and it serves a Lookup subscribed by id (P3–P5, P8).
+4. **Rule 8: met.** No key, a Derive's typed settings included, can carry an expression (S3, T1–T2). Every key adapter and Derive operation is a Knowledge Adapter with a golden file (P6, W1).
+5. **Phase 7a's exit: met.** The synthetic Visits and contacts pipeline without its expert steps runs: Lookup → Join → Derive → Map. Every ref resolves on the server (raw rows by load, list rows by version), and Test and the load reject the same rows. The fixture's narrowing of the prototype's Map (no visitor or VISITED) is recorded in Amendment 11.
+6. **Live, under named leases:** studio on stack a (13:12:40Z–13:13:37Z) and studio on stack b (15:06:42Z–15:13:53Z), both with `stack_lease.sh up`/`down`. ArcadeDB only; the Parquet went to a temporary directory.
+7. **Settlements (orchestrator, 8 November):** Q1–Q3 (a): schemas as their own commit, refs in `provenance.sources`, Amendment 11 with 09 §4/§9. Row key (a): no row key, raw or hashed, in provenance (rule 7). Schemas on main as `41c1b50` and `b65cc9e`.
+8. **Reviews, each item planted red then green** (`L1.3_RED_RECORD.md`): round 1 (T1–T4, R1–R18, V1–V10), round 2 (W1–W7), and the merge round's own lane-reviewer (M1–M6). M1–M6 cover list rows staged by version, raw and list rows written once and never by a refused run, and Map rejections naming the staged table.
+9. **Slip, mine:** about 10:35, three synthetic Parquet files went to the object store on host 9000 without a lease. Fixed and reported; it is the friction row.
+10. **Gates:** `make -k ci` and `make test` at the rebased commit are in `gates/`, with every failure explained.
+11. **Left for L1.4 (7b):** the drawers and the profiler on staged tables; the run route feeding a pipeline's sources; per-step counts and staging metering on `LoadReport`/`RunMetering` (a schemas change); `RejectionRecord` refs.
+12. **Carried, minor:** `_hash` sits beside `engine.encode_key_parts` (different input, same encoding). Nothing locks the check-then-write of raw files against two concurrent runs naming one source load; the run route (7b) gives each upload its own load.
+13. **At merge (orchestrator):** remove the citation-allowlist line for `tests/knowledge_adapters/test_derive.py`; mark the Amendment 11 reservation written (`spec/ADR_RESERVATIONS.md`); re-run the image scans once Docker Hub allows. **Questions:** none. **Running:** nothing; no lease held.

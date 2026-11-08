@@ -1,0 +1,12 @@
+{
+  "operation": "substring",
+  "cases": [
+    {"values": ["FMR-0042"], "params": {"start": 0, "length": 3}, "expected": "FMR"},
+    {"values": ["FMR-0042"], "params": {"start": 4}, "expected": "0042"},
+    {"values": ["FMR"], "params": {"start": 10, "length": 2}, "expected": null},
+    {"values": ["FMR"], "params": {"start": 1, "length": 10}, "expected": "MR"},
+    {"values": [null], "params": {"start": 0}, "expected": null},
+    {"values": ["FMR"], "params": {"start": -1}, "refused": "start must be 0 or more"},
+    {"values": ["FMR"], "params": {"start": 0, "length": 0}, "refused": "length must be 1 or more"}
+  ]
+}

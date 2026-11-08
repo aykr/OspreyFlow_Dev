@@ -34,7 +34,7 @@ import asyncio
 import functools
 import json
 import time
-from collections.abc import Hashable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -755,14 +755,59 @@ def recipe_handlings(recipe: Recipe, scheme: HandlingScheme | None = None) -> li
 
 
 def _provenance(
-    defaults: Mapping[str, Any], *, source: str, row_index: int, now: datetime
+    defaults: Mapping[str, Any],
+    *,
+    source: str,
+    row_index: int,
+    now: datetime,
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
 ) -> Provenance:
+    """`row_refs` (ADR-140 decision 11): for a staged table, by row position, the source rows the
+    row came from (`staging_catalogue.map_input`); the element records each of them, a Join's row
+    both sides', in place of the one row of `source`."""
     state = defaults.get("state", "asserted")
     return Provenance(
         state=ProvenanceState(state),
-        sources=[SourceRef(document_id=source, locator=f"row {row_index}", excerpt_hash="")],
+        sources=_row_sources(source, row_index, row_refs),
         first_seen=now,
     )
+
+
+def _refuse_staging_without_its_refs(
+    recipe: Recipe,
+    row_refs: Mapping[int, Sequence[SourceRef]] | None,
+    *,
+    stage_raw: bool | Callable[[], object] = True,
+) -> None:
+    """ADR-140 Amendment 11 (lane review round 1, item 4): a recipe with staging steps maps the last
+    step's table, never the raw rows of one source. Run without those rows' refs it would map the
+    wrong rows and record the wrong sources, so it is refused in words; it runs through
+    `staged_run.run_staged_recipe` (Test: `dry_run_staged_recipe`)."""
+    if stage_raw is not True and (not recipe.staging or row_refs is None):
+        # `03_CONDUIT_MIDDLEWARE.md` §5.1: every load stages its raw rows first. Only a staged run,
+        # which has written its sources' raw rows itself, may leave it to that (review round 2).
+        raise RecipeRuleError(
+            [
+                f"Recipe {recipe.id!r} is run without staging its raw rows, which only a staged "
+                "run (one that has staged its sources' rows itself) may do."
+            ]
+        )
+    if recipe.staging and row_refs is None:
+        raise RecipeRuleError(
+            [
+                f"Recipe {recipe.id!r} declares staging steps, so it runs through its staging "
+                "(each source table, then each step, then Map); it cannot be run over one "
+                "source's rows."
+            ]
+        )
+
+
+def _row_sources(
+    source: str, row_index: int, row_refs: Mapping[int, Sequence[SourceRef]] | None
+) -> list[SourceRef]:
+    if row_refs is not None:
+        return [ref.model_copy() for ref in row_refs[row_index]]
+    return [SourceRef(document_id=source, locator=f"row {row_index}", excerpt_hash="")]
 
 
 def preview_handling_and_provenance(
@@ -848,6 +893,8 @@ class _RunState:
     #: the seeders, the basemap builder) means the run does not combine: it flushes each write as it
     #: is held, because without a scheme a restricted code's units cannot be told apart.
     scheme: HandlingScheme | None = None
+    #: ADR-140 decision 11: a staged table's source rows by row position (`_provenance`).
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None
     #: ADR-127 Amendment 19: the links held and not yet written, by `edge_write_key`, in the order
     #: each was first held.
     held_links: dict[tuple[Hashable, ...], _HeldLink] = field(default_factory=dict)
@@ -1502,6 +1549,7 @@ async def _write_entity(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=now,
     )
 
@@ -1654,6 +1702,7 @@ async def _write_held_content(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=now,
     )
     if document_id not in state.documents_written:
@@ -1783,15 +1832,14 @@ async def _write_edge(
         _merge_override(state.recipe.defaults.provenance, edge.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=now,
     )
     # `01_DOMAIN_MODEL.md` §7: duplicate rows collapse to one event, but
     # every source row reference is retained on the survivor — every
     # collapsed duplicate's row index, not just the representative row's.
     for duplicate_index in duplicate_row_indices:
-        provenance.sources.append(
-            SourceRef(document_id=state.source, locator=f"row {duplicate_index}", excerpt_hash="")
-        )
+        provenance.sources.extend(_row_sources(state.source, duplicate_index, state.row_refs))
     interval = edge_interval(resolved.instant, resolved.valid_to, resolved.span)
 
     write = EdgeWrite(
@@ -2057,6 +2105,8 @@ class _DryRunState:
     source: str
     now: datetime
     scheme: HandlingScheme | None = None
+    #: As `_RunState.row_refs`: Test records what the load records.
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None
     nodes: dict[NodeId, Node] = field(default_factory=dict)
     #: Keyed by (edge type, source id, target id, audience) — same-pair edges of one audience merge
     #: within the sample, mirroring `GraphArcadeDBAdapter.upsert_edges`'s real merge (ADR-102
@@ -2115,6 +2165,7 @@ async def _dry_run_entity(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=state.now,
     )
     node_id = new_node_id()
@@ -2192,6 +2243,7 @@ def _dry_run_edge(
         _merge_override(state.recipe.defaults.provenance, edge.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=state.now,
     )
     interval = edge_interval(resolved.instant, resolved.valid_to, resolved.span)
@@ -2221,6 +2273,7 @@ async def dry_run_recipe(
     scheme: HandlingScheme | None = None,
     row_keys: RowKeys | None = None,
     investigation_scope: str | None = None,
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
 ) -> DryRunResult:
     """Verify (`09_INGEST_STUDIO.md` §5): the same `resolve_rows()` output
     Map's own preview machinery is built on, simulated instead of loaded.
@@ -2228,6 +2281,7 @@ async def dry_run_recipe(
     threads it onto `StagedRow`s that this function itself consumes and
     discards."""
     _require_scheme_to_judge_bound_handling(recipe, scheme)
+    _refuse_staging_without_its_refs(recipe, row_refs)
     sample = list(rows)
     # Judged as the run judges (ADR-127 decision 5), by asking the store and writing nothing.
     already = await kept_among(recipe, sample, row_keys, investigation_scope)
@@ -2250,6 +2304,7 @@ async def dry_run_recipe(
         source=source,
         now=datetime.now(UTC),
         scheme=scheme,
+        row_refs=row_refs,
     )
     for staged_row in staged_rows:
         refs: dict[str, NodeId] = {}
@@ -2333,6 +2388,8 @@ async def run_recipe(
     written: list[NodeWrite | EdgeWrite] | None = None,
     scheme: HandlingScheme | None = None,
     row_keys: RowKeys | None = None,
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
+    stage_raw: bool | Callable[[], object] = True,
 ) -> tuple[LoadReport, list[EventRecord]]:
     """`row_keys` (ADR-127 decision 5): the store of loaded rows. A recipe with `deduplicate` skips
     a row whose key the case (`investigation_scope`) already kept, whatever the recipe's version,
@@ -2350,6 +2407,7 @@ async def run_recipe(
         )
     # ADR-120 D10, Amendment 1: the packs it names or writes, at the versions it was published at.
     check_recipe_pins(recipe, ontology)
+    _refuse_staging_without_its_refs(recipe, row_refs, stage_raw=stage_raw)
 
     # ADR-081 step D: refused again at run, before anything is written (Amendment 1 item 7).
     check_recipe_rules(
@@ -2386,9 +2444,15 @@ async def run_recipe(
     # Before anything is staged or written: a run under a changed `deduplicate` is refused whole.
     already = await kept_among(recipe, materialized_rows, row_keys, investigation_scope)
     storage = storage or ObjectStorageConfig.from_env()
-    await asyncio.to_thread(
-        _stage_raw_rows, materialized_rows, storage=storage, load_id=load_id, source=source
-    )
+    # A staged run (`staged_run.run_staged_recipe`) passes its own raw staging (its sources' rows
+    # and the lists it read), run here, after the refusals above, as a plain run's is; the rows
+    # here are the table Map reads, never raw.
+    if stage_raw is True:
+        await asyncio.to_thread(
+            _stage_raw_rows, materialized_rows, storage=storage, load_id=load_id, source=source
+        )
+    elif stage_raw is not False:
+        await asyncio.to_thread(stage_raw)
 
     resolved = await asyncio.to_thread(
         functools.partial(
@@ -2426,6 +2490,7 @@ async def run_recipe(
         investigation_scope=investigation_scope,
         written=written,
         scheme=scheme,
+        row_refs=row_refs,
     )
     events: list[EventRecord] = []
 

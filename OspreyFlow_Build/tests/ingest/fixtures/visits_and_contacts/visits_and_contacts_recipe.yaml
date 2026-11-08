@@ -1,0 +1,106 @@
+# The redesign's phase 7 exit (ADR-140 decision 11): the prototype's "Visits and contacts" pipeline
+# without its two expert steps (the SQL transform and the fuzzy match are phase 8's). Synthetic
+# (rule 9): Ofcom drama numbers, invented names and establishments.
+#   visit_bookings -> Lookup establishment (list 'establishments' on estab_id)
+#                  -> Join owner of contact (number_owners on E.164 of contact_number, left)
+#                  -> Derive the booking's title (concat of establishment and visit time)
+#                  -> Map: one booking -> Document, Endpoint, the owner Person; MENTIONED_IN, USES
+id: visits-and-contacts
+version: 1
+label: "Visits and contacts. One booking: its establishment, the contact number given and who owns it."
+connector:
+  profile: generic-csv
+ontology_version: 17
+pack_versions: {}
+
+defaults:
+  legal_basis: Synthetic demonstration data
+  provenance: {state: asserted}
+  handling:
+    classification: OFFICIAL
+    handling_code: P
+    originator: unit-1
+    owning_unit: unit-1
+
+staging:
+  - id: with_establishment
+    kind: lookup
+    label: "Lookup: establishment"
+    input: visit_bookings
+    list: establishments
+    "on": estab_id
+    add:
+      - {column: name, as: establishment}
+  - id: with_owner
+    kind: join
+    label: "Join: owner of contact"
+    left: with_establishment
+    right: number_owners
+    left_key: contact_number
+    right_key: number
+    normalise: msisdn
+    how: left
+    add:
+      - {column: owner_family_name}
+  - id: titled
+    kind: derive
+    label: "Derive: the booking's title"
+    input: with_owner
+    column: title
+    operation: concat
+    columns: [establishment, visit_at]
+    settings: {separator: " · "}
+
+row_template:
+  entities:
+    - ref: booking
+      pole_class: object
+      type: Document
+      match_on: message_id
+      on_match: reference
+      properties:
+        message_id: {field: booking_id}
+        title: {field: title}
+        sent_at: {field: booked_at}
+        document_kind: {literal: other}
+    - ref: contact
+      pole_class: object
+      type: Endpoint
+      match_on: value_normalised
+      on_match: reference
+      properties:
+        value_raw: {field: contact_number}
+        value_normalised: {field: contact_number, transform: msisdn}
+        endpoint_kind: {literal: msisdn}
+    - ref: owner
+      pole_class: person
+      type: Person
+      match_on: family_name
+      on_match: reference
+      when: {field: owner_family_name, is: not_null}
+      properties:
+        family_name: {field: owner_family_name}
+  edges:
+    - type: MENTIONED_IN
+      from: contact
+      to: booking
+    - type: USES
+      from: owner
+      to: contact
+
+unmapped_fields:
+  - field: estab_id
+    action: ignore
+    note: "Read by the Lookup; its name is in the title."
+  - field: visitor_family_name
+    action: ignore
+    note: "The visitor is matched in phase 8's fuzzy step, not here."
+  - field: visitor_given_names
+    action: ignore
+    note: "As above."
+  - field: establishment
+    action: ignore
+    note: "Added by the Lookup; carried in the title."
+  - field: visit_at
+    action: ignore
+    note: "The booked visit's day and time, carried in the title. Not a link time: the visit has not happened."

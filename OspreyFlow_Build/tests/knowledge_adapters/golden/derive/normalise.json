@@ -1,0 +1,105 @@
+{
+ "operation": "normalise",
+ "cases": [
+  {
+   "values": [
+    "07700 900731"
+   ],
+   "params": {
+    "adapter": "msisdn"
+   },
+   "expected": "+447700900731"
+  },
+  {
+   "values": [
+    "+44 7700 900731"
+   ],
+   "params": {
+    "adapter": "msisdn"
+   },
+   "expected": "+447700900731"
+  },
+  {
+   "values": [
+    "sw1a 1aa"
+   ],
+   "params": {
+    "adapter": "postcode"
+   },
+   "expected": "SW1A 1AA"
+  },
+  {
+   "values": [
+    null
+   ],
+   "params": {
+    "adapter": "msisdn"
+   },
+   "expected": null
+  },
+  {
+   "values": [
+    "not a number"
+   ],
+   "params": {
+    "adapter": "msisdn"
+   },
+   "refused": "msisdn"
+  },
+  {
+   "values": [
+    "a|b"
+   ],
+   "params": {
+    "adapter": "split"
+   },
+   "refused": "one value of text"
+  },
+  {
+   "values": [
+    "1",
+    "2"
+   ],
+   "params": {
+    "adapter": "grid_ref"
+   },
+   "refused": "one value of text"
+  },
+  {
+   "values": [
+    "x"
+   ],
+   "params": {
+    "adapter": "eval"
+   },
+   "refused": "not a Knowledge Adapter"
+  },
+  {
+   "values": [
+    "2026-11-03T09:30:00+00:00"
+   ],
+   "params": {
+    "adapter": "datetime"
+   },
+   "refused": "one value of text"
+  },
+  {
+   "values": [
+    "4111 1111 1111 1111"
+   ],
+   "params": {
+    "adapter": "card"
+   },
+   "refused": "one value of text"
+  },
+  {
+   "values": [
+    "Shona Whitlow"
+   ],
+   "params": {
+    "adapter": "person_name"
+   },
+   "refused": "one value of text"
+  }
+ ]
+}
