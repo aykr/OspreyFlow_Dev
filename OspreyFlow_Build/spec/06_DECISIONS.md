@@ -29410,3 +29410,90 @@ binding), `test_the_deployed_worker_connects_the_judgement_store_and_binds_it` (
 default again), and `test_written_back_reads_in_full_stages.py`'s close recording its link in the shared
 stand-in (red with the close's record removed). Each red under the rules lease on stack a, or
 offline (`process/lanes/rules/l2.8d/`).
+
+### ADR-145, Amendment 5 (8 November 2026) — custom roles, the Super user preset, teams and leads, and Disable as built (L2.5)
+
+Status: written 8 November 2026 by the admin lane (L2.5), under the orchestrator's reservation of the
+same day. **Q1, Q2, Q3 and Q4 are the owner's rulings** of 8 November 2026, each the recommended
+option; **Q3b is pending the owner**; **Q5 is the orchestrator's settlement**, on the owner's review
+list. ADR-145 decisions 6 and 7, Amendment 4, and ADR-112 Amendments 4 and 5 stand except where
+this says so.
+
+1. **Where a custom role is kept (Q1 (a)).** Each version of a custom role is a row in Postgres
+   (`custom_roles`, `custom_role_versions`; `services/api/custom_roles.py`). A person holds it as
+   `role:<id>` in their identity-provider `roles` attribute. The Conduit reads its current rights on
+   every request that carries one and adds them to the principal as single grants
+   (`CustomRoleStore.expand`, in `get_principal` and for a schedule's owner), never caching them, so
+   an edit applies at once. A custom role that no longer exists confers nothing.
+2. **The Super user preset is three roles given together (Q2 (a)):** `analyst`, `data_engineer` and
+   `rule_author` (`schemas.rights.SUPER_USER_PRESET`). It is never one role, so no role holds both
+   rights of a pair in decision 7.
+3. **The guard rails (Q3 (a)), refused at the route in words (409):**
+   - a name already used (case and spacing aside, built-in names included);
+   - no rights;
+   - a right that is not one;
+   - both rights of a `FORBIDDEN_PAIRS` pair (`promote_to_dataset` and `review_promotions`;
+     `propose_types` and `accept_types`);
+   - a right the giver may not give (`giver_may_give`);
+   - **the lock-out:** a change to a role or to a person's roles, or a disable, that would leave no
+     enabled person holding `manage_people`.
+
+   Amendment 4 added `draw_on_boards`, `promote_to_dataset`, `propose_types` and `accept_types` to the
+   Analyst and Data Engineer in L2.5's `packages/schemas` commit, so that the pairs can be refused.
+   Each right's route check comes with its own step.
+4. **Q3b, pending the owner: which rights need their holder.** Built as (a): only the administration
+   rights (`schemas.rights.ADMINISTRATION_RIGHTS`, A1–A9) need a giver who holds them; any other right
+   may be bundled or given by a holder of `manage_people`. This applies whether the right goes into a
+   custom role or is given to a person, singly, in a role or through a custom role. The other two
+   answers, (b) no right needs its holder and (c) every right does, are each one test in
+   `test_custom_roles.py`, marked `xfail(strict=True)`. The question arose because (c), as Q3 (a) was
+   first worded, would bar an administrator, who holds none of the Analyst's rights, from making an
+   analyst-like role. "Nobody can give more than they hold" for clearance and handling codes (ADR-114
+   Amendment 5) is unchanged.
+5. **Teams' members are their role's holders (Q4 (a)).** *Make this role a team* gives a custom role
+   a display name and a mailbox. A team holds a case level as the grant `team:<role id>`
+   (`investigations.grant_subjects`), and a person holds it while their token carries the role. A
+   person's level is the highest they hold, in their own name or through a team. It ends at the
+   person's next token after the role is taken away, which is the identity provider's token
+   lifetime, not at once. Leaving the role is leaving the team. A team may also own a dataset: the
+   grant `team:<id>` as Author of the home case.
+6. **The lead and the cover.** An administrator names a team's lead, or hands the role to another
+   member, and names a cover until a last day (inclusive), after which the lead acts again with no
+   action (`custom_roles.acting_lead`). Only an enabled member may be lead or cover, never a service
+   account, and every change is audited before and after. **The lead's own hand-over and cover, and
+   the four queue tools, are rules' L2.10**, read through `CustomRoleStore.team(role_id, today)` and
+   `acting_lead(team, today)`. L2.5 gives the lead no screen of their own.
+7. **Service accounts and case grants (Q5 (a), reconciling ADR-112 Amendment 5 decision 5 with
+   ADR-111 decision 7).** A dashboard identity (`service-account-osprey-dashboard-*`) may hold Viewer
+   on a case and nothing higher. Any other service account, and a dashboard at Editor or Author, is
+   refused at the case grant route (409 `service_account`). Owners, team members, leads and covers
+   refuse every service account.
+8. ***Disable…* lists what a person owns today** and is refused (409 `untransferred`), in words,
+   while any item has no recipient:
+   - cases where they are the only Author, and home cases;
+   - teams they lead;
+   - their active hotlists, watches and saved patterns;
+   - their active typology rules;
+   - the pipeline and screening-list schedules whose runs act as them.
+
+   A transfer is also refused to the person themselves, to a disabled or unknown account, to a
+   service account, to a non-member as lead, or to someone without the right that the item's runs
+   are checked against. A case gains its new Author and keeps every grant it had; every other item
+   changes its owner. The transfers and their audit entries (`transfer_owned_item`) are one Postgres
+   transaction, committed before the identity provider disables the account. If that last step
+   fails, the transfers stand and the answer says so. **L2.5b's seam** is
+   `admin_people.l38_owned_items` and `L38_OWNED_KINDS`: private views and boards, promotions waiting
+   for review, reviews waiting on the person, and proposed types. The plan names these kinds as not
+   yet listed until the case lane's ownership route (L3.8) is on main.
+9. **The People row (R3) and Author visibility (R1)** are read for the administrator's own unit
+   only: each person's case levels, with *through ‹team›* where a team gives one, and the cases no
+   enabled person is Author of. *Name an Author* is Admin's own route
+   (`PUT /v1/admin/cases/{id}/authors/{account}`, `manage_people`). It works on a case of the
+   administrator's unit that no enabled person is Author of, and is refused once the case has one, so
+   it never overrides a case's Authors. It is not the case grant route, which is the Glass's place.
+
+**Tests.** `tests/schemas/test_rights.py` (the Rule author, the preset, the pairs, a custom role's exact
+rights); `tests/services/api/test_custom_roles.py`; `test_admin_roles_routes.py` (each refusal at the
+route, red with its check removed); the store cases under the lease
+(`test_custom_roles_store.py`, the team level gained and lost with membership). Each is in
+`process/lanes/admin/L2.5_RED_RECORD.md`.
