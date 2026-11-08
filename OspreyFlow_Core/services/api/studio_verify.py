@@ -75,6 +75,14 @@ JudgeChecks = Callable[
 #: samples", not "every rejected row listed".
 _MAX_SAMPLES_PER_REASON = 5
 
+#: What Test of a pipeline with no staging steps says when it withholds the run (rule 3; carried
+#: from L1.4's independent review): the row template's own conditions and bindings could be used
+#: to tell a hidden cell's value through the counts and rejections, so masking values is not enough.
+TEST_WITHHELD = (
+    "The test is withheld: some of the rows it reads are above your clearance or restricted to "
+    "another unit, and the pipeline's own settings could be used to tell their values."
+)
+
 
 class RowTemplateMissingError(Exception):
     """Raised when Verify is invoked before Map has ever saved a row
@@ -237,6 +245,13 @@ async def run_verify(
         result.rejections = [r.model_copy(update={"sample": ""}) for r in result.rejections]
         result.rows_read = sum(len(t.rows) for t in read.tables.values())
     else:
+        # The staged path's two guards, on the path without steps too (rules 3 and 4; carried from
+        # L1.4's independent review): a case not reading the recipe's dataset is given nothing,
+        # and neither is a reader not cleared for every row the sample reads.
+        if draft.dataset_id and draft.dataset_id not in (principal.datasets or []):
+            raise RecipeRuleError([DATASET_WITHHELD])
+        if not sample_markings(draft, scheme, sampled).readable_by(principal, scheme):
+            raise RecipeRuleError([TEST_WITHHELD])
         result = await dry_run_recipe(
             recipe,
             sampled,
