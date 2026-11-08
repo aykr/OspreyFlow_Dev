@@ -413,6 +413,8 @@ class DatasetStampingGraph:
     def __getattr__(self, name: str) -> Any:
         if name == "bulk_load_edges":  # only `BulkDatasetStampingGraph` has it: see `stamping`
             raise AttributeError(name)
+        if name == "restore_link_state":  # a write: declared above, with its guard, or absent
+            raise AttributeError(name)
         return getattr(self._inner, name)
 
     async def _refuse_into_a_read_only_layer(self, datasets: set[str]) -> None:
@@ -523,10 +525,13 @@ class DatasetStampingGraph:
         await self._written()
         return changed
 
-    async def restore_link_state(self, state: LinkPriorState, *, written_by: str, tx: TxId) -> bool:
-        """ADR-110 Amendment 16: a write, so the kept figures are cleared after it. It names no
-        dataset of its own: the link keeps the datasets its prior state holds."""
-        restored = await self._inner.restore_link_state(state, written_by=written_by, tx=tx)
+    async def restore_link_state(self, state: LinkPriorState, tx: TxId) -> bool:
+        """ADR-110 Amendment 16: a load's revert writing, so refused in a case reading a composite
+        (ADR-099 Amendment 15), as the revert's other writes are; and the kept figures are cleared
+        after it. It names no dataset of its own: the link keeps the datasets its prior state
+        holds. Declared here, never passed on by `__getattr__`, which refuses the name."""
+        await self._refuse_loading_here()
+        restored = await self._inner.restore_link_state(state, tx)
         await self._written()
         return restored
 

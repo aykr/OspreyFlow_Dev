@@ -751,17 +751,28 @@ class GraphPort(Protocol):
 
         **Opaque.** The state is the adapter's own stored form: `edge_type` is the store's name for
         the type (an adapter may prefix it), and `stored` is the record as the adapter keeps it.
+        On ArcadeDB that is every stored property of the link (its `id`, ends, flattened and nested
+        handling, `reverted`, `superseded_by` when set, `datasets`, `properties` and their
+        flattened copies, `occurrences`, `weight`, `weight_components`, `provenance`, `basis`,
+        `interval`, `audit`) except the store's own `@` fields and the flattened `valid_from` and
+        `valid_to`, which a restore derives from `interval`. None of these changes unless the link
+        is written: nothing the store keeps for itself (a read time, a counter) is among them, so a
+        link nobody wrote reads back to the same `stored_digest`.
         It means something only to `restore_link_state` on the same adapter, which puts it back
         exactly (the conformance suite's round trip); no caller reads or interprets its parts,
         beyond `handling`, `revision` and `load_id`."""
         ...
 
-    async def restore_link_state(self, state: LinkPriorState, *, written_by: str, tx: TxId) -> bool:
-        """ADR-110 Amendment 16: puts the link back exactly as `state` holds it, only while it is
-        still as `written_by`'s write left it (its stored `load_id` is `written_by`): `False`, and
-        nothing changed, once anything else has written it since. The link keeps `state.handling`,
-        its marking when it was read, never a weaker one. A write: the stamping wrapper's
-        after-write hooks run."""
+    async def restore_link_state(self, state: LinkPriorState, tx: TxId) -> bool:
+        """ADR-110 Amendment 16: puts the link back exactly as `state.stored` holds it, only while
+        the link still reads back to `state.left_digest` (as the load left it, `stored_digest`),
+        checked inside `tx`. `True` once it is back (and, nothing written, when it already reads
+        back to `state.stored`, so a rerun finishes); `False`, nothing changed, for anything else:
+        written since by any writer (a later load, a correction's `superseded_by`, a revert, a
+        re-stamp of its datasets, a provenance strip), absent, or a state with no `left_digest`.
+        The write is to the state's own type alone, never another type holding the same id. The
+        link keeps `state.handling`, never a weaker marking. A write: the stamping wrapper's
+        guards and after-write hooks run."""
         ...
 
     async def strip_provenance_references(self, prefix: str) -> int:

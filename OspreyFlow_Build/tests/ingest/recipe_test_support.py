@@ -34,7 +34,7 @@ from ontology.handling import audience_of, load_uk_le_scheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import StoredLink, StoredNode
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema
-from schemas.ingest import LinkPriorState
+from schemas.ingest import LinkPriorState, stored_digest
 from schemas.merge import aggregate_edge_writes
 from services.ingest import staging
 
@@ -296,6 +296,18 @@ class MergingGraph(ValidatingGraph):
 
     # --- a link's prior state (ADR-110 Amendment 16), as the adapter keeps it -----------------
 
+    def _stored_form(self, link: EdgeWrite) -> dict[str, Any]:
+        """The link as the adapter keeps it, its flags and audit included: a correction
+        (`superseded`), a revert, or any later write changes it, as they change the stored
+        record on ArcadeDB (so its `stored_digest` moves)."""
+        return {
+            "write": link.model_dump(mode="json"),
+            "superseded": link.id in self.superseded,
+            "reverted": link.id in self.reverted,
+            "revision": self._revision.get(link.id, link.writes),
+            "load_id": self._last_load.get(link.id, link.load_id),
+        }
+
     async def read_link_state(self, edge_id: str, tx: object = None) -> LinkPriorState | None:
         found = self._held(edge_id)
         if found is None:
@@ -308,19 +320,21 @@ class MergingGraph(ValidatingGraph):
             revision=self._revision.get(edge_id, link.writes),
             load_id=self._last_load.get(edge_id, link.load_id),
             handling=link.handling,
-            stored={"write": link.model_dump(mode="json")},
+            stored=self._stored_form(link),
         )
 
-    async def restore_link_state(
-        self, state: LinkPriorState, *, written_by: str, tx: object
-    ) -> bool:
-        """As the adapter: only while the link's last writing load is `written_by`; the link put
-        back whole, at the marking the state was read at."""
+    async def restore_link_state(self, state: LinkPriorState, tx: object) -> bool:
+        """As the adapter: only while the link reads back to `state.left_digest`, `True` with
+        nothing written when it is already as `state.stored`; put back whole, at the marking the
+        state was read at."""
         found = self._held(state.edge_id)
-        if found is None:
+        if found is None or state.left_digest is None:
             return False
         held, index = found
-        if self._last_load.get(state.edge_id, held[index].load_id) != written_by:
+        now = stored_digest(self._stored_form(held[index]))
+        if now == stored_digest(state.stored):
+            return True
+        if now != state.left_digest:
             return False
         prior = EdgeWrite.model_validate(state.stored["write"])
         self._replaced.append((held, index, held[index]))

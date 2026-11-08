@@ -35,6 +35,7 @@ from ports.graph import (
     SubgraphTooLarge,
     SuggestOptions,
 )
+from schemas.ingest import LinkPriorState, stored_digest
 from schemas.domain import (
     Edge,
     EdgeWrite,
@@ -6405,30 +6406,70 @@ async def _link_as_read(adapter: GraphPort, a: str, reader: Principal = CLEARED)
     ]  # fmt: skip
 
 
+async def _merged_by(adapter: GraphPort, link: str, write: EdgeWrite) -> LinkPriorState:
+    """As a returning row's load does it: the link read before the write, in the load's own
+    transaction, merged into, and read again after it, its digest kept as the load left it."""
+    tx = await adapter.begin_transaction()
+    prior = await adapter.read_link_state(link, tx)
+    assert prior is not None
+    (merged,) = await adapter.upsert_edges([write], tx)
+    left = await adapter.read_link_state(link, tx)
+    await adapter.commit_transaction(tx)
+    assert merged == link and left is not None
+    return prior.model_copy(update={"left_digest": stored_digest(left.stored)})
+
+
+async def _restore(adapter: GraphPort, state: LinkPriorState) -> bool:
+    tx = await adapter.begin_transaction()
+    restored = await adapter.restore_link_state(state, tx)
+    await adapter.commit_transaction(tx)
+    return restored
+
+
 async def test_read_link_state_gives_a_link_as_stored_whatever_the_reader_may_read(
     factory: GraphAdapterFactory,
 ) -> None:
     """ADR-110 Amendment 16: by id, unfiltered (a SECRET link is read for the revert alone), with its
-    type, revision, last load and marking; an id no link holds is `None`."""
+    revision, last load and marking; an id no link holds is `None`. Its type is the store's own
+    name, which the restore writes back to."""
     async with factory.context() as adapter:
         a, b = await _two_endpoints(adapter)
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1",
-                                                      classification="SECRET")])  # fmt: skip
+                                                         classification="SECRET")])  # fmt: skip
         state = await adapter.read_link_state(link)
         assert state is not None
         assert (state.edge_id, state.revision, state.load_id) == (link, 1, "load-1")
-        # The store's own type, which the restore writes back to (an adapter may prefix its names).
         assert "COMMUNICATED_WITH" in state.edge_type
         assert state.handling.classification == "SECRET"
         assert await adapter.read_link_state(new_edge_id()) is None
+
+
+async def test_a_link_nobody_wrote_reads_back_to_the_same_digest(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-110 Amendment 16: the stored form holds nothing the store changes on its own, and
+    `stored_digest` normalises it the same at every read, so a link untouched since a load reads
+    back to the digest the load kept: a false refusal would show here. Read in and out of a
+    transaction, and after other reads of the link."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=2, load_id="load-1")])
+        tx = await adapter.begin_transaction()
+        inside = await adapter.read_link_state(link, tx)
+        await adapter.commit_transaction(tx)
+        await _link_as_read(adapter, a)
+        await adapter.stored_link_states([link])
+        later = await adapter.read_link_state(link)
+        assert inside is not None and later is not None
+        assert stored_digest(inside.stored) == stored_digest(later.stored)
 
 
 async def test_a_link_state_restored_on_the_adapter_that_read_it_round_trips_exactly(
     factory: GraphAdapterFactory,
 ) -> None:
     """ADR-110 Amendment 16: the state is the adapter's own stored form, meaningful only to
-    `restore_link_state` on the same adapter. Read and put back as it is, by the link's own last
-    load, the link and its state are exactly as they were: nothing in the form is lost or
+    `restore_link_state` on the same adapter. Read and put back as it is (its `left_digest` its
+    own), the link and its state are exactly as they were: nothing in the form is lost or
     re-encoded on the way through, so no caller needs to read it."""
     async with factory.context() as adapter:
         a, b = await _two_endpoints(adapter)
@@ -6437,10 +6478,9 @@ async def test_a_link_state_restored_on_the_adapter_that_read_it_round_trips_exa
         before = await _link_as_read(adapter, a)
         state = await adapter.read_link_state(link)
         assert state is not None
-
-        tx = await adapter.begin_transaction()
-        assert await adapter.restore_link_state(state, written_by="load-1", tx=tx) is True
-        await adapter.commit_transaction(tx)
+        assert await _restore(adapter, state.model_copy(
+            update={"left_digest": stored_digest(state.stored)}
+        )) is True  # fmt: skip
 
         assert await _link_as_read(adapter, a) == before
         assert await adapter.read_link_state(link) == state
@@ -6451,53 +6491,82 @@ async def test_restore_link_state_puts_a_merged_link_back_exactly_as_it_was(
 ) -> None:
     """ADR-110 Amendment 16: read inside the merging load's transaction, before its write; the
     revert of that load restores every part the merge changed (occurrences, span, properties,
-    sources, revision, last load), and reads afterwards exactly as before the merge."""
+    sources, revision, last load), and reads afterwards exactly as before the merge. Put back
+    already, a second restore changes nothing and says so (`True`), so a rerun finishes."""
     async with factory.context() as adapter:
         a, b = await _two_endpoints(adapter)
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
         before = await _link_as_read(adapter, a)
-        tx = await adapter.begin_transaction()
-        prior = await adapter.read_link_state(link, tx)
-        assert prior is not None
-        (merged,) = await adapter.upsert_edges(
-            [_call_on(a, b, day=5, load_id="load-3")], tx
-        )
-        await adapter.commit_transaction(tx)
-        assert merged == link and await _link_as_read(adapter, a) != before
+        prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3"))
+        assert await _link_as_read(adapter, a) != before
 
-        tx = await adapter.begin_transaction()
-        assert (
-            await adapter.restore_link_state(prior, written_by="load-3", tx=tx) is True
-        )
-        await adapter.commit_transaction(tx)
-
+        assert await _restore(adapter, prior) is True
         assert await _link_as_read(adapter, a) == before
-        assert await adapter.read_link_state(link) == prior
+        assert await adapter.read_link_state(link) == prior.model_copy(update={"left_digest": None})
+        assert await _restore(adapter, prior) is True, "already put back"
+        assert await _link_as_read(adapter, a) == before
 
 
-async def test_restore_link_state_refuses_a_link_written_since_and_changes_nothing(
+async def test_restore_link_state_refuses_a_link_written_since_by_anyone(
     factory: GraphAdapterFactory,
 ) -> None:
-    """ADR-110 Amendment 16: a later write (another load merging into the same link) moves its last
-    load, so the merging load's revert can no longer put it back: `False`, and the link as it is."""
-    async with factory.context() as adapter:
+    """ADR-110 Amendment 16: anything written since the load left the link refuses its restore,
+    `False` and nothing changed. A later load merging into it; an analyst's correction
+    (`supersede_edge`, which leaves the old link's audit alone); a provenance strip (no audit
+    touched either); and a re-stamp of its datasets in place, as `scripts/stamp_datasets.py`
+    writes it. None of these moves the link's last load, so only the whole record can tell."""
+
+    async def written_since(adapter: GraphPort, how: str) -> None:
         a, b = await _two_endpoints(adapter)
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
-        tx = await adapter.begin_transaction()
-        prior = await adapter.read_link_state(link, tx)
-        await adapter.upsert_edges([_call_on(a, b, day=5, load_id="load-3")], tx)
-        await adapter.commit_transaction(tx)
-        await _write(adapter, [], [_call_on(a, b, day=7, load_id="load-4")])
-        now = await _link_as_read(adapter, a)
-        assert prior is not None
+        prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3"))
+        if how == "a later load":
+            await _write(adapter, [], [_call_on(a, b, day=7, load_id="load-4")])
+        elif how == "a correction":
+            tx = await adapter.begin_transaction()
+            await adapter.supersede_edge(link, _call_on(a, b, day=5, load_id="load-3"), tx)
+            await adapter.commit_transaction(tx)
+        elif how == "a provenance strip":
+            assert await adapter.strip_provenance_references("doc") >= 1
+        else:  # a re-stamp, in place
+            client = adapter._client  # type: ignore[attr-defined]
+            state = await adapter.read_link_state(link)
+            assert state is not None
+            await client.sql(
+                f"UPDATE `{state.edge_type}` SET datasets = datasets || [:ds] WHERE id = :id",
+                params={"ds": "restamped", "id": link},
+            )
+        now = await adapter.read_link_state(link)
+        assert await _restore(adapter, prior) is False, how
+        assert await adapter.read_link_state(link) == now, f"{how}: nothing changed"
 
-        tx = await adapter.begin_transaction()
-        assert (
-            await adapter.restore_link_state(prior, written_by="load-3", tx=tx) is False
-        )
-        await adapter.commit_transaction(tx)
+    for how in ("a later load", "a correction", "a provenance strip", "a re-stamp"):
+        async with factory.context() as adapter:
+            await written_since(adapter, how)
 
-        assert await _link_as_read(adapter, a) == now
+
+async def test_a_restore_writes_its_own_type_and_never_another_holding_the_same_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-110 Amendment 16: two types may hold one id (`stored_link_states` reads the worst of
+    them). The restore writes the type its state names, alone: the other is left as it is."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        call = _call_on(a, b, day=1, load_id="load-1")
+        other = _edge("ASSOCIATE_OF", a, b, classification="OFFICIAL", load_id="load-1")
+        _, (link,) = await _write(adapter, [], [call])
+        _, (also,) = await _write(adapter, [], [other.model_copy(update={"id": link})])
+        assert also == link, "two types hold the one id"
+        alongside = (await _link_as_read(adapter, a))
+        prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3"))
+        assert "COMMUNICATED_WITH" in prior.edge_type
+
+        assert await _restore(adapter, prior) is True
+
+        edges = (await adapter.expand(ExpandRequest(node_ids=[a], depth=1), CLEARED)).edges
+        associate = [e for e in edges if e.type == "ASSOCIATE_OF"]
+        assert [e.audit.load_id for e in associate] == ["load-1"]
+        assert await _link_as_read(adapter, a) == alongside
 
 
 async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -> None:
@@ -6506,25 +6575,40 @@ async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -
     async with factory.context() as adapter:
         a, b = await _two_endpoints(adapter)
         _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1",
-                                                      classification="SECRET")])  # fmt: skip
-        tx = await adapter.begin_transaction()
-        prior = await adapter.read_link_state(link, tx)
-        await adapter.upsert_edges([_call_on(a, b, day=5, load_id="load-3",
-                                          classification="SECRET")], tx)  # fmt: skip
-        await adapter.commit_transaction(tx)
-        assert prior is not None
-
-        tx = await adapter.begin_transaction()
-        assert (
-            await adapter.restore_link_state(prior, written_by="load-3", tx=tx) is True
-        )
-        await adapter.commit_transaction(tx)
-
+                                                         classification="SECRET")])  # fmt: skip
+        prior = await _merged_by(adapter, link, _call_on(a, b, day=5, load_id="load-3",
+                                                          classification="SECRET"))  # fmt: skip
+        assert await _restore(adapter, prior) is True
         (seen,) = await _link_as_read(adapter, a, CLEARED)
         assert seen[4].classification == "SECRET"
         assert await _link_as_read(adapter, a, OFFICIAL) == []
         restored = await adapter.read_link_state(link)
         assert restored is not None and restored.handling.classification == "SECRET"
+
+
+async def test_a_merge_that_raised_the_links_marking_is_put_back_at_the_marking_before_it(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-110 Amendment 16: a merge within one audience can raise a link's marking where the
+    audience does not look (an action code: `merge_handling` keeps the stricter). The returning
+    load's revert puts back the marking the link had before that load, exactly as read, and never
+    one below it: the raise was the reverted load's own."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        raising = _call_on(a, b, day=5, load_id="load-3")
+        raising = raising.model_copy(
+            update={"handling": raising.handling.model_copy(update={"action_code": "A2"})}
+        )
+        prior = await _merged_by(adapter, link, raising)
+        merged = await adapter.read_link_state(link)
+        assert merged is not None and merged.handling.action_code == "A2", "the merge raised it"
+
+        assert await _restore(adapter, prior) is True
+
+        restored = await adapter.read_link_state(link)
+        assert restored is not None and restored.handling == prior.handling
+        assert restored.handling.action_code is None and restored.handling.classification == "OFFICIAL"
 
 
 async def test_a_revert_by_id_touches_only_the_kind_it_was_given_and_refuses_an_ambiguous_id(

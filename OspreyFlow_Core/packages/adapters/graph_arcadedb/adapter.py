@@ -86,7 +86,7 @@ from schemas.explore import (
     SharedContacts,
     TypeCounts,
 )
-from schemas.ingest import LinkPriorState
+from schemas.ingest import LinkPriorState, stored_digest
 from schemas.merge import merge_datasets, merge_interval, merge_properties, merge_provenance
 from schemas.strength import (
     SHARED_VALUE,
@@ -1933,11 +1933,7 @@ class GraphArcadeDBAdapter:
             )
             if rows:
                 row = rows[0]
-                stored = {
-                    k: v
-                    for k, v in row.items()
-                    if not k.startswith("@") and k not in self._NOT_PRIOR_STATE
-                }
+                stored = self._as_stored(row)
                 audit = AuditStub.model_validate(row["audit"])
                 return LinkPriorState(
                     edge_id=edge_id,
@@ -1949,16 +1945,26 @@ class GraphArcadeDBAdapter:
                 )
         return None
 
-    async def restore_link_state(self, state: LinkPriorState, *, written_by: str, tx: TxId) -> bool:
+    def _as_stored(self, row: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            k: v for k, v in row.items() if not k.startswith("@") and k not in self._NOT_PRIOR_STATE
+        }
+
+    async def restore_link_state(self, state: LinkPriorState, tx: TxId) -> bool:
         type_name = groovy_identifier(state.edge_type)
         rows = await self._client.sql(
             f"SELECT FROM `{type_name}` WHERE id = :id",
             params={"id": state.edge_id},
             session_id=tx,
         )
-        if not rows or AuditStub.model_validate(rows[0]["audit"]).load_id != written_by:
+        if not rows or state.left_digest is None:
             return False
         current = rows[0]
+        held = stored_digest(self._as_stored(current))
+        if held == stored_digest(state.stored):
+            return True  # put back already, by an earlier attempt
+        if held != state.left_digest:
+            return False  # written since, by anyone
         props = {k: v for k, v in state.stored.items() if k != "id"}
         # Rule 3: the marking the state was read at, written back whole, never a weaker one.
         marking = state.handling
@@ -1984,7 +1990,9 @@ class GraphArcadeDBAdapter:
             for key in props
         )
         await self._client.gremlin(
-            f'g.E().has("id",{groovy_string_literal(state.edge_id)}){steps}',
+            # Its own type alone: another type holding the same id is never written (MF11).
+            f"g.E().hasLabel({groovy_string_literal(state.edge_type)})"
+            f'.has("id",{groovy_string_literal(state.edge_id)}){steps}',
             params=bound,
             session_id=tx,
         )
