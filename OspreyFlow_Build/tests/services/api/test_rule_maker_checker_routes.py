@@ -66,7 +66,9 @@ class _World:
         self.maker = who("maker", "analyst", "osprey-admin")
         self.checker = who("checker", "analyst", "osprey-admin")
         self.analyst = who("analyst", "analyst")
-        self.engineer = who("engineer", "data_engineer")
+        # A data engineer who also opens Rules and Monitoring (ADR-146 Amendment 2: one who does not
+        # is refused at the place's gate before any rule check), so the rule's own check is what refuses.
+        self.engineer = who("engineer", "data_engineer", "rule_author")
         self.viewer = who("viewer", "analyst")
         self.outsider = who("outsider", "analyst", "osprey-admin")
         self.as_ = self.maker

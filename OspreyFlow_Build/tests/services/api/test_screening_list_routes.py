@@ -44,8 +44,12 @@ from schemas.domain import Principal
 from .corpus_counts import field_names_reachable
 
 ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-a", roles=["analyst"])
-ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-a", roles=["osprey-admin"])
-ENGINEER = Principal(id="engineer-1", clearance="OFFICIAL", org_unit="unit-a", roles=["data_engineer"])
+# ADR-146 Amendment 2: the lists are Rules and Monitoring's, so their loader also opens the place (an
+# administrator who is also a rule author) until the Studio's list connector (L1.6) takes them over.
+ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-a", roles=["osprey-admin", "rule_author"])
+ENGINEER = Principal(id="engineer-1", clearance="OFFICIAL", org_unit="unit-a", roles=["data_engineer", "rule_author"])
+#: An administrator alone holds `load_screening_lists` but not the place: refused by its gate.
+ADMIN_ALONE = Principal(id="admin-2", clearance="OFFICIAL", org_unit="unit-a", roles=["osprey-admin"])
 NOBODY = Principal(id="nobody-1", clearance="OFFICIAL", org_unit="unit-a", roles=[])
 LIST = {"list_name": "Synthetic list", "source": "opensanctions",
         "location": "lists/synthetic_opensanctions_v1.ftm.json"}  # fmt: skip
@@ -144,6 +148,12 @@ def test_the_lists_are_refused_without_the_right(world: tuple[_World, TestClient
             response = client.request(method, path, json=LIST)
             assert response.status_code == 403, (who.id, path, response.status_code)
             assert response.json()["detail"]["right"] == "load_screening_lists"
+    # ADR-146 Amendment 2 (rule 4): the right without the place is refused by the place's gate.
+    w.as_ = ADMIN_ALONE
+    for method, path in MANAGE:
+        response = client.request(method, path, json=LIST)
+        assert response.status_code == 403, (path, response.status_code)
+        assert response.json()["detail"]["error"] == "place_required", response.text
 
 
 def test_a_list_is_subscribed_refreshed_and_shown(world: tuple[_World, TestClient]) -> None:
@@ -164,7 +174,7 @@ def test_a_list_is_subscribed_refreshed_and_shown(world: tuple[_World, TestClien
     assert shown["updates"][0]["words"].startswith(f"Version {one['version']}: 10 added")
     assert [r["action"] for r in w.audit.records][-3:] == [
         "screening_list_subscribed", "screening_list_refreshed", "list_screening_lists"]
-    # A data engineer holds the same right (ADR-112).
+    # A data engineer holds the same right (ADR-112), and here opens the place too.
     w.as_ = ENGINEER
     assert client.get("/v1/admin/screening-lists").status_code == 200
 
