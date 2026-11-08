@@ -326,6 +326,8 @@ BOARD_ROUTES = [
     ("post", "boards/{board}/matches", {"drawn": "a", "loaded": "b", "same": True}),
     ("post", "boards/{board}/nodes/{node}/picture", {"document_id": "img-1",
                                                      "marking": "OFFICIAL"}),
+    ("put", "boards/{board}/nodes/{node}/picture",
+     {"params": {"name": "x.png", "marking": "OFFICIAL", "source_note": "n"}, "content": b"png"}),
     ("get", "boards/{board}/pictures", None),
     ("get", "boards/{board}/nodes/{node}/picture", None),
     ("get", "drawn-watches", None),
@@ -343,7 +345,11 @@ def test_every_board_route_refuses_a_non_member_as_a_missing_case(
     filled = path.format(board=board, item=item, node=drawn)
 
     def ask(case: str) -> Any:
-        kwargs = {"json": body} if body is not None else {}
+        kwargs: dict[str, Any] = {}
+        if isinstance(body, dict) and "params" in body:
+            kwargs = dict(body)  # an upload: its query and its bytes, as the Glass sends them
+        elif body is not None:
+            kwargs = {"json": body}
         return getattr(_as("carol"), method)(
             f"/v1/investigations/{case}/{filled}", **kwargs
         )
@@ -455,14 +461,57 @@ def test_the_ceiling_check_fails_with_the_ceiling_bypassed(
     async def no_ceiling(self: Boards, case_id: str) -> str:
         return "SECRET"
 
-    monkeypatch.setattr(Boards, "ceiling", no_ceiling)
     board = _board()
+    drawn = _item(board)
+    monkeypatch.setattr(Boards, "ceiling", no_ceiling)
     answer = _as("alice").post(
         f"/v1/investigations/{K}/boards/{board}/items",
         json={"type": "Person", "label": "x", "marking": "SECRET", "grading": GRADE,
               "source_note": "n", "properties": {"family_name": "x"}},
     )  # fmt: skip
     assert answer.status_code == 201
+    # The edit, the upload and the choice read the same ceiling: each goes through with it gone.
+    assert _edit_to_secret(drawn["item_id"]).status_code == 200
+    assert _upload_secret(board, drawn["element_id"]).status_code == 201
+    assert _choose_secret(board, drawn["element_id"]).status_code == 201
+
+
+def _edit_to_secret(item: str) -> Any:
+    return _as("alice").patch(f"/v1/investigations/{K}/board-items/{item}",
+                              json={"marking": "SECRET"})  # fmt: skip
+
+
+def _upload_secret(board: str, node_id: str) -> Any:
+    return _as("alice").put(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{node_id}/picture",
+        params={"name": "x.png", "marking": "SECRET", "source_note": "n"}, content=b"png",
+    )  # fmt: skip
+
+
+def _choose_secret(board: str, node_id: str) -> Any:
+    return _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{node_id}/picture",
+        json={"document_id": "img-1", "marking": "SECRET"},
+    )
+
+
+def test_an_edit_an_upload_and_a_choice_above_the_ceiling_are_refused_in_words(
+    world: SimpleNamespace,
+) -> None:
+    board = _board()
+    drawn = _item(board)
+    files = dict(world.media.files)
+    for answer in (
+        _edit_to_secret(drawn["item_id"]),
+        _upload_secret(board, drawn["element_id"]),
+        _choose_secret(board, drawn["element_id"]),
+    ):
+        assert answer.status_code == 409, answer.text
+        assert answer.json()["error"] == "above_the_ceiling"
+        assert "OFFICIAL-SENSITIVE" in answer.json()["detail"]
+    assert world.graph.node(drawn["element_id"]).handling.classification == "OFFICIAL"
+    assert world.media.files == files
+    assert not [e for e in world.graph.edges() if e.type == "DEPICTS"]
 
 
 # --- Amendment 2 decision 5, Amendment 3 decision 1: a drawing with no case --------------------
@@ -1080,3 +1129,196 @@ def test_a_drawing_is_withdrawn_in_a_case_reading_a_composite(
     )
     assert answer.status_code == 200, answer.text
     assert world.graph.node(made["element_id"]).audit.reverted
+
+
+# --- review round 2 -----------------------------------------------------------------------------
+
+
+def _edge(world: SimpleNamespace, edge_id: str) -> Any:
+    (held,) = [e for e in world.graph.edges() if e.id == edge_id]
+    return held
+
+
+def _bobs_node_with_alices_hidden_link(world: SimpleNamespace) -> tuple[str, str, str]:
+    """Bob (OFFICIAL) draws a person on his own board; Alice puts it on hers by a selection and
+    links her own item to it at OFFICIAL-SENSITIVE, a link Bob may not see. Bob's item, his node,
+    Alice's link."""
+    bobs_board = _board("bob")
+    bobs = _item(bobs_board, "bob")
+    alices_board = _board(start="selection", node_ids=[bobs["element_id"]])
+    mine = _item(alices_board)["element_id"]
+    hidden = _link(alices_board, mine, bobs["element_id"], marking="OFFICIAL-SENSITIVE")
+    assert hidden.status_code == 201, hidden.text
+    return bobs["item_id"], bobs["element_id"], hidden.json()["element_id"]
+
+
+def test_a_withdrawal_tells_nothing_of_a_link_the_withdrawer_may_not_see(
+    world: SimpleNamespace,
+) -> None:
+    """Rule 3: Alice's hidden link goes with Bob's node, and is in the audit, but Bob's answer
+    neither names it nor counts it, not even among the watches ended."""
+    item, node_id, hidden = _bobs_node_with_alices_hidden_link(world)
+    answer = _as("bob").post(f"/v1/investigations/{K}/board-items/{item}/withdraw")
+    assert answer.status_code == 200, answer.text
+    assert answer.json() == {"nodes": [node_id], "links": [], "pictures": [], "watches_ended": 1}
+    assert hidden not in answer.text
+    assert _edge(world, hidden).audit.reverted
+    (row,) = [r for r in world.audit.records if r["action"] == "withdraw_drawn_item"]
+    assert row["resolved_query"]["links"] == [hidden]
+
+
+def test_a_withdrawal_names_its_picture_apart_from_its_links(world: SimpleNamespace) -> None:
+    board = _board()
+    made = _item(board)
+    picture = _as("alice").put(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{made['element_id']}/picture",
+        params={"name": "tall.png", "marking": "OFFICIAL", "source_note": "Gate camera"},
+        content=b"png",
+    )  # fmt: skip
+    assert picture.status_code == 201, picture.text
+    answer = _as("alice").post(f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw")
+    assert answer.json()["links"] == []
+    assert answer.json()["pictures"] == [picture.json()["element_id"]]
+    assert _edge(world, picture.json()["element_id"]).audit.reverted
+    shown = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/pictures").json()
+    assert shown == {"pictures": {}}
+
+
+def test_every_picture_and_withdrawal_is_audited_before_anything_is_written(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-127 Amendment 27's order on each path: the audit row is there when the graph is first
+    written (a row without a write records an attempt; never the reverse)."""
+    seen: list[tuple[str, int]] = []
+    real_depict = Boards._depict
+
+    async def depict(self: Boards, *args: Any, **kwargs: Any) -> Any:
+        seen.append(("depict", len(world.audit.records)))
+        return await real_depict(self, *args, **kwargs)
+
+    monkeypatch.setattr(Boards, "_depict", depict)
+    board = _board()
+    made = _item(board)
+    before = len(world.audit.records)
+    up = _as("alice").put(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{made['element_id']}/picture",
+        params={"name": "tall.png", "marking": "OFFICIAL", "source_note": "Gate camera"},
+        content=b"png",
+    )  # fmt: skip
+    assert up.status_code == 201, up.text
+    chosen = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{made['element_id']}/picture",
+        json={"document_id": "img-1", "marking": "OFFICIAL"},
+    )
+    assert chosen.status_code == 201, chosen.text
+    assert seen == [("depict", before + 1), ("depict", before + 2)]
+    choice = world.audit.records[before + 1]
+    assert choice["action"] == "choose_drawn_picture"
+    assert choice["resolved_query"]["classification"] == "OFFICIAL"
+    real_withdraw = type(world.graph).withdraw_elements
+    at_withdrawal: list[int] = []
+
+    async def withdraw_elements(self: Any, *args: Any, **kwargs: Any) -> Any:
+        at_withdrawal.append(len(world.audit.records))
+        return await real_withdraw(self, *args, **kwargs)
+
+    monkeypatch.setattr(type(world.graph), "withdraw_elements", withdraw_elements)
+    _as("alice").post(f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw")
+    assert at_withdrawal == [before + 3]
+
+
+def _canvas_pictures(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, *ids: str) -> None:
+    """ADR-105's own routes, wired as the Conduit wires them, with `ids` in K's working set."""
+    from services.api.app import get_valkey
+    from services.api.entity_pictures import EntityPictureService
+
+    store = app.state.working_set._store
+    for element in ids:
+        store._n(K)[element] = world.graph.node(element)
+    monkeypatch.setattr(app.state, "entity_pictures", EntityPictureService(
+        app.state.working_set, app.state.graph, world.media, ONTOLOGY, scheme=SCHEME,
+    ), raising=False)  # fmt: skip
+
+    class _Valkey:
+        async def publish(self, *args: Any, **kwargs: Any) -> int:
+            return 0
+
+    app.dependency_overrides[get_valkey] = lambda: _Valkey()
+
+
+def test_a_drawn_nodes_picture_is_neither_set_nor_removed_through_adr_105s_routes(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Spec 03: on the canvas a drawn node's picture is refused, 409 `drawn_on_its_board`, on the
+    real `PUT` and `DELETE …/nodes/{node}/picture`; nothing is kept or superseded."""
+    from services.api.app import get_valkey
+
+    board = _board()
+    drawn = _item(board)["element_id"]
+    given = _as("alice").put(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{drawn}/picture",
+        params={"name": "tall.png", "marking": "OFFICIAL", "source_note": "Gate camera"},
+        content=b"png",
+    )  # fmt: skip
+    assert given.status_code == 201
+    _canvas_pictures(world, monkeypatch, drawn)
+    try:
+        files = dict(world.media.files)
+        put = _as("alice").put(
+            f"/v1/investigations/{K}/nodes/{drawn}/picture",
+            params={"name": "x.png", "classification": "OFFICIAL", "legal_basis": "n"},
+            content=b"png",
+        )  # fmt: skip
+        removed = _as("alice").delete(f"/v1/investigations/{K}/nodes/{drawn}/picture")
+    finally:
+        app.dependency_overrides.pop(get_valkey, None)
+    for answer in (put, removed):
+        assert answer.status_code == 409, answer.text
+        assert answer.json()["error"] == "drawn_on_its_board"
+    assert world.media.files == files
+    live = [e for e in world.graph.edges() if e.type == "DEPICTS" and e.audit.superseded_by is None]
+    assert [e.id for e in live] == [given.json()["element_id"]]
+
+
+def test_a_reader_below_an_items_marking_sees_nothing_of_it_on_the_board(
+    world: SimpleNamespace,
+) -> None:
+    """Rule 3 within the case: Bob (OFFICIAL) opens Alice's shared board and lists the boards; the
+    OFFICIAL-SENSITIVE item and its suggestion are in none of it, only a count naming none."""
+    board = _board(start="selection", node_ids=["p-loaded"])
+    _item(board)
+    hidden = _item(board, label="Mercer", marking="OFFICIAL-SENSITIVE",
+                   properties={"family_name": "Mercer"})["element_id"]  # fmt: skip
+    assert _as("alice").post(f"/v1/investigations/{K}/boards/{board}/share").status_code == 200
+    alices = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/matches").json()
+    assert hidden in str(alices)  # the suggestion is there for one who may see it
+    opened = _as("bob").get(f"/v1/investigations/{K}/boards/{board}")
+    assert opened.status_code == 200 and hidden not in opened.text
+    assert opened.json()["missing"] == 1
+    (listed,) = _as("bob").get(f"/v1/investigations/{K}/boards").json()
+    assert listed["drawn"] == 1
+    matches = _as("bob").get(f"/v1/investigations/{K}/boards/{board}/matches")
+    assert hidden not in matches.text and matches.json()["suggestions"] == []
+
+
+def test_a_board_from_a_view_keeps_only_what_its_maker_may_see_of_a_view_they_may_open(
+    world: SimpleNamespace,
+) -> None:
+    saved = _as("alice").post(f"/v1/investigations/{K}/views",
+                              json={"name": "both", "node_ids": ["p-loaded", "p-secret"]})  # fmt: skip
+    assert saved.status_code == 201, saved.text
+    view = saved.json()["id"]
+    # Alice's private view is not Bob's to start from: answered as no view at all.
+    refused = _as("bob").post(f"/v1/investigations/{K}/boards",
+                              json={"name": "x", "start": "view", "view_id": view})  # fmt: skip
+    missing = _as("bob").post(f"/v1/investigations/{K}/boards",
+                              json={"name": "x", "start": "view", "view_id": "no-such-view"})  # fmt: skip
+    assert refused.status_code == missing.status_code == 404
+    assert refused.json() == missing.json()
+    assert _as("alice").post(f"/v1/investigations/{K}/views/{view}/share").status_code == 200
+    board = _board("bob", start="view", view_id=view)
+    opened = _as("bob").get(f"/v1/investigations/{K}/boards/{board}").json()
+    assert [n["id"] for n in opened["nodes"]] == ["p-loaded"]
+    assert "p-secret" not in str(opened)
+    held = next(v for v in world.views.views.values() if v.id == board)
+    assert held.node_ids == ["p-loaded"]

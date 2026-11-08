@@ -511,8 +511,10 @@ class EntityPictureService:
         self, investigation_id: str, node_id: str, principal: Principal
     ) -> DeltaReplaceEdge:
         """Supersedes the entity's picture with a copy whose `shown` is false; the Document and the
-        old link stay, as evidence and in the link's history."""
-        await self._entity(investigation_id, node_id, principal)
+        old link stay, as evidence and in the link's history. A drawn node's picture is removed
+        on its board, never here (ADR-105 Amendment 3)."""
+        if (await self._entity(investigation_id, node_id, principal)).provenance.drawn is not None:
+            raise DrawnOnItsBoard
         # Read in full: the successor is built from this link's own sources (ADR-130 Amendment 2,
         # "a read that is written back"). Still read for `principal`, so the access filter applies.
         with sources_in_full():

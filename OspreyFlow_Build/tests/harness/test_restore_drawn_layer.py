@@ -123,7 +123,7 @@ async def drawn() -> AsyncIterator[SimpleNamespace]:
     )  # fmt: skip
     datasets.cases[K], datasets.cases[B] = ["src"], ["src"]
     layer_k = await datasets.ensure_layer(K, unit=UNIT, created_by="alice")
-    layer_b = await datasets.ensure_layer(B, unit=UNIT, created_by="carol")
+    await datasets.ensure_layer(B, unit=UNIT, created_by="carol")  # B reads a layer of its own
     async with arcadedb_adapter(ontology, scheme) as adapter:
         graph = stamping(adapter, registry=datasets)
         views = InMemoryCaseViewStore()
@@ -144,13 +144,14 @@ async def drawn() -> AsyncIterator[SimpleNamespace]:
         )  # fmt: skip
         picture = await boards.upload_picture(
             board, made.element_id, scoped, name="tall.png", data=b"\x89PNG tall",
-            marking="OFFICIAL",
+            marking="OFFICIAL", source_note="Wing B camera, 4 Nov",
         )  # fmt: skip
         yield SimpleNamespace(
             adapter=adapter, database=adapter._client.database,
             node=made.element_id, depicts=picture.element_id,
             in_k=scoped,
-            in_b=ALICE.model_copy(update={"datasets": ["src", layer_b]}),
+            # Case B's reader as every route makes one: B's own scope, its layer and the source.
+            in_b=await scope_to_case(ALICE, B, datasets),
             layer_k=layer_k,
         )  # fmt: skip
 

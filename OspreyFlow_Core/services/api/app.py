@@ -4055,10 +4055,13 @@ async def withdraw_drawn_item(
     audit: AuditDep,
 ) -> Withdrawn:
     """The author withdraws their own item: out of every read, never deleted; its watch ends."""
-    withdrawn = await boards.withdraw(investigation.id, item_id, principal)
-    await _audit_board(audit, principal, "withdraw_drawn_item", investigation.id,
-                       item_id=item_id, nodes=withdrawn.nodes, links=withdrawn.links)  # fmt: skip
-    return withdrawn
+
+    async def audited(nodes: list[str], links: list[str]) -> None:
+        # Every element withdrawn, seen by the caller or not: the audit is read under its own right.
+        await _audit_board(audit, principal, "withdraw_drawn_item", investigation.id,
+                           item_id=item_id, nodes=nodes, links=links)  # fmt: skip
+
+    return await boards.withdraw(investigation.id, item_id, principal, before_write=audited)
 
 
 @app.get(
@@ -4162,14 +4165,18 @@ async def choose_drawn_picture(
     boards: BoardsDep,
     audit: AuditDep,
 ) -> DrawnItemMade:
-    """C17 (b): a picture the case already holds, linked in the layer; the image stays put."""
+    """C17 (b): a picture the case already holds, linked in the layer; the image stays put.
+    Audited after every refusal and before the link is written, as the upload is."""
     board = await boards.own_board(investigation.id, board_id, principal.id)
-    made = await boards.choose_picture(board, node_id, body, principal)
-    await _audit_board(
-        audit, principal, "choose_drawn_picture", investigation.id,
-        board_id=board_id, node_id=node_id, document_id=body.document_id,
-    )  # fmt: skip
-    return made
+
+    async def audited(marking: str) -> None:
+        await _audit_board(
+            audit, principal, "choose_drawn_picture", investigation.id,
+            board_id=board_id, node_id=node_id, document_id=body.document_id,
+            classification=marking,
+        )  # fmt: skip
+
+    return await boards.choose_picture(board, node_id, body, principal, before_write=audited)
 
 
 @app.get(

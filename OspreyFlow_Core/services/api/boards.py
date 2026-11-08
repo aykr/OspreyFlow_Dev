@@ -589,8 +589,7 @@ class Boards:
                 f"a drawn item's marking is never lowered, from {element.handling.classification}: "
                 "withdraw it and draw it again",
             )
-        into = await self.into(case_id)
-        self.check_marking(marking, into.ceiling, principal)
+        self.check_marking(marking, await self.ceiling(case_id), principal)
         await self._source_document_check(given.source_document, principal)
         new_drawn = drawn.model_copy(
             update={
@@ -646,9 +645,21 @@ class Boards:
             )  # fmt: skip
         return DrawnItemMade(element_id=element.id, item_id=item.item_id)
 
-    async def withdraw(self, case_id: str, item_id: str, principal: Principal) -> Withdrawn:
+    async def withdraw(
+        self,
+        case_id: str,
+        item_id: str,
+        principal: Principal,
+        *,
+        before_write: Callable[[list[str], list[str]], Awaitable[None]] | None = None,
+    ) -> Withdrawn:
         """Decision 5: the author's own item taken out of every read, never deleted. A drawn link
-        touching a withdrawn node goes with it, as does a picture of it; its watch ends."""
+        touching a withdrawn node goes with it, as does a picture of it; its watch ends.
+
+        Rule 3: what the reader may not see goes too, but is told to them in nothing: not named,
+        not counted among the links, the pictures or the watches ended. `before_write` is given
+        every node and link withdrawn, seen or not, and is called after every refusal and before
+        anything is written, so the audit names all of it (ADR-127 Amendment 23's order)."""
         item, element = await self._own_item(case_id, item_id, principal)
         case_items = [i for i in await self.items.in_case(case_id) if i.withdrawn_at is None]
         nodes: list[str] = []
@@ -669,35 +680,46 @@ class Boards:
         # named to them. Read before the withdrawal, which takes every one out of every read.
         seen_links = await self.graph.get_edges(links, principal) if links else []
         seen = {e.id for e in seen_links}
+        pictures = {i.element_id for i in case_items if i.kind == "picture"}
         # Each link going with the node is wholly drawn data still: one promoted into a dataset
         # (L3.4) is changed only by reverting its promotion, so the withdrawal is refused.
         held_in = {i.element_id: i.dataset_id for i in case_items}
+        # One the reader may not see is not read here (an unfiltered read is confined away from
+        # routes): L3.4 records a promotion in the board's registry, so that its check reads the
+        # registry, never the element, and refuses in the same words for both.
         if any(set(e.datasets) != {held_in.get(e.id, item.dataset_id)} for e in seen_links):
             raise DrawingRefused(
                 "promoted",
                 "a link drawn to this item has been promoted into a dataset: revert that "
                 "promotion before withdrawing the item",
             )
-        # Through the graph's own path for a drawn element (`withdraw_drawn`): it refuses in a case
-        # not yet converted, and clears what was kept from reads after it, as every write does.
-        withdraw_drawn = getattr(self.graph, "withdraw_drawn", None)
+        told = {item.item_id} | {
+            i.item_id for i in case_items if i.element_id in seen and i.item_id in withdrawn_items
+        }
+        watched = {
+            w.item_id for w in await self.items.active_watches(case_id) if w.item_id in told
+        }
+        if before_write is not None:
+            await before_write(nodes, links)
+        # Through the graph's own path for a drawn element (`withdraw_drawn`, on the dataset
+        # stamping graph every route's service holds): it refuses in a case not yet converted, and
+        # clears what was kept from reads after it, as every write does. No other path is taken.
         tx = await self.graph.begin_transaction()
         try:
-            if withdraw_drawn is not None:
-                await withdraw_drawn(nodes, links, f"{WITHDRAWAL_PREFIX}{item.item_id}", tx)
-            else:
-                await self.graph.withdraw_elements(
-                    nodes, links, f"{WITHDRAWAL_PREFIX}{item.item_id}", tx
-                )
+            await self.graph.withdraw_drawn(  # type: ignore[attr-defined]
+                nodes, links, f"{WITHDRAWAL_PREFIX}{item.item_id}", tx
+            )
         except Exception:
             await self.graph.rollback_transaction(tx)
             raise
         await self.graph.commit_transaction(tx)
-        ended = await self.items.withdraw(case_id, withdrawn_items, principal.id, datetime.now(UTC))
+        await self.items.withdraw(case_id, withdrawn_items, principal.id, datetime.now(UTC))
+        named = [link for link in links if link == item.element_id or link in seen]
         return Withdrawn(
             nodes=nodes,
-            links=[link for link in links if link == item.element_id or link in seen],
-            watches_ended=ended,
+            links=[link for link in named if link not in pictures],
+            pictures=[link for link in named if link in pictures],
+            watches_ended=len(watched),
         )
 
     # --- matching -------------------------------------------------------------------------
@@ -722,25 +744,23 @@ class Boards:
                     hits_by_key = await self.graph.search_nodes(value, principal, limit=MATCH_LIMIT)
                     more = more or len(hits_by_key) >= MATCH_LIMIT
                     for hit in hits_by_key:
-                        if hit.type == drawn.type:
+                        # Search also matches other indexed properties: the same key, or no hit.
+                        if hit.type == drawn.type and hit.properties.get(key) == value:
                             candidates[hit.id] = (hit, 1.0, f"the same {key}")
             label = drawn.provenance.drawn.label
             word = _longest_word(label)
             if word is not None:
-                try:
-                    hits = await self.graph.suggest_nodes(
-                        word, principal, limit=MATCH_LIMIT,
-                        options=SuggestOptions(mode="contains", ignore_case=True,
-                                               types=(drawn.type,)),
-                    )  # fmt: skip
-                except ValueError:
-                    hits = None
-                if hits is not None:
-                    more = more or hits.more
-                    for hit in hits.nodes:
-                        score = _alike(label, display_name(hit))
-                        if score >= MATCH_AT and hit.id not in candidates:
-                            candidates[hit.id] = (hit, round(score, 2), "a name alike")
+                # `word` is never empty, the one thing `suggest_nodes` refuses: nothing is caught.
+                hits = await self.graph.suggest_nodes(
+                    word, principal, limit=MATCH_LIMIT,
+                    options=SuggestOptions(mode="contains", ignore_case=True,
+                                           types=(drawn.type,)),
+                )  # fmt: skip
+                more = more or hits.more
+                for hit in hits.nodes:
+                    score = _alike(label, display_name(hit))
+                    if score >= MATCH_AT and hit.id not in candidates:
+                        candidates[hit.id] = (hit, round(score, 2), "a name alike")
             loaded = [
                 c for c in candidates.values()
                 if c[0].provenance.drawn is None and c[0].id != drawn.id
@@ -796,9 +816,14 @@ class Boards:
 
     # --- pictures (C17; ADR-105 Amendment 3) ----------------------------------------------
 
-    async def _picture_subject(self, case_id: str, node_id: str, principal: Principal) -> BoardItem:
-        item = await self.items.by_element(case_id, node_id)
+    async def _picture_subject(
+        self, board: StoredCaseView, node_id: str, principal: Principal
+    ) -> BoardItem:
+        item = await self.items.by_element(board.case_id, node_id)
         if item is None or item.withdrawn_at is not None or item.kind != "node":
+            raise ItemNotFound(node_id)
+        # A node on this board only, drawn here or placed here as a reference, as `decide` asks.
+        if item.board_id != board.id and node_id not in (board.node_ids or []):
             raise ItemNotFound(node_id)
         if not await self.graph.get_nodes([node_id], principal):
             raise ItemNotFound(node_id)
@@ -911,7 +936,7 @@ class Boards:
                 "not_a_picture", f"{name!r} is not a picture (a png, jpeg, webp or gif)",
                 status=422,
             )  # fmt: skip
-        subject = await self._picture_subject(board.case_id, node_id, principal)
+        subject = await self._picture_subject(board, node_id, principal)
         self.check_marking(marking, await self.ceiling(board.case_id), principal)
         into = await self.into(board.case_id)
         ref = reference_for(data, content_type)
@@ -952,11 +977,19 @@ class Boards:
         )
 
     async def choose_picture(
-        self, board: StoredCaseView, node_id: str, given: PictureChoice, principal: Principal
+        self,
+        board: StoredCaseView,
+        node_id: str,
+        given: PictureChoice,
+        principal: Principal,
+        *,
+        before_write: Callable[[str], Awaitable[None]] | None = None,
     ) -> DrawnItemMade:
         """C17 (b): an image the case already holds, linked by a `DEPICTS` written into the layer;
-        the image stays in its dataset. The link is marked at least as the image is."""
-        subject = await self._picture_subject(board.case_id, node_id, principal)
+        the image stays in its dataset. The link is marked at least as the image is.
+        `before_write` is given that marking, after every refusal and before the link is written
+        (ADR-127 Amendment 27: a picture is never left unaudited)."""
+        subject = await self._picture_subject(board, node_id, principal)
         found = await self.graph.get_nodes([given.document_id], principal)
         if (
             not found
@@ -975,6 +1008,8 @@ class Boards:
         ).classification
         self.check_marking(marking, await self.ceiling(board.case_id), principal)
         into = await self.into(board.case_id)
+        if before_write is not None:
+            await before_write(marking)
         return await self._depict(board, subject, given.document_id, marking, principal, into)
 
     async def pictures(self, board: StoredCaseView, principal: Principal) -> dict[str, str]:
