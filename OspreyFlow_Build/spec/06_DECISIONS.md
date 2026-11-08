@@ -29932,8 +29932,13 @@ on Q1 (a, point 5). ADR-146 and ADR-145 Amendment 1 are unchanged except where t
    routes' own rights (`read_alert_queue`, `deploy_rules`, `read_held_rows`, `decide_held_rows`,
    `read_rule_audit`, `load_screening_lists`, `keep_watches`) are held by people the decision does not
    open it to. So every route of the place asks, after its own right, for the place's gate
-   (`services/api/rules_place.py`, `require_rules_place`: any one of the two rights), refused with 403
-   `place_required`. No role loses a right (`schemas/rights.py` is unchanged); what changes is that a
+   (`services/api/rules_place.py`, `require_rules_place`: any one of the two rights, and the queue's
+   read, `read_alert_queue`, that the place's entry needs), refused with 403 `place_required`. The gate
+   is no wider than the offer (point 4): a holder of `triage_alerts` without the queue's read, directly
+   or through a custom role, is refused at every route of the place, as the switcher hides it from them
+   (the orchestrator's independent review; `test_place_routes.py`'s
+   `test_a_gate_right_without_the_queue_read_is_refused_at_the_gate`, red at the eight triage routes
+   with the gate asking for an opening right alone). No role loses a right (`schemas/rights.py` is unchanged); what changes is that a
    right which acts only in the place no longer reaches it without the place.
 2. **What that costs (Q2 (a)).** The **Data Engineer** no longer deploys or retires rules, opens an
    alert's detail, or manages screening lists; the **Administrator** no longer reads the rule audit or

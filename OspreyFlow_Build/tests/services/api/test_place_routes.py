@@ -179,7 +179,10 @@ def _checks(route: APIRoute) -> frozenset[str]:
 
 def _held(roles: list[str]) -> set[str]:
     rights = {str(r) for r in rights_for(roles)}
-    gates = {f"place:{p}" for p, openers in GATES.items() if rights & openers}
+    # A gate is passed by one of its rights and every right of its `needs` (ADR-146 Amendment 2 point 1).
+    gates = {
+        f"place:{p}" for p, openers in GATES.items() if rights & openers and NEEDS[p] <= rights
+    }
     return rights | {f"role:{r}" for r in roles} | gates
 
 
@@ -791,3 +794,66 @@ def test_a_route_of_the_place_outside_its_paths_is_found() -> None:
         return _checks(route) | {"deploy_rules"} if route is victim else _checks(route)
 
     assert _unplaced_rules_routes(planted) == [victim.path]
+
+
+#: The routes a gate right answered without the queue's read, before the gate asked for `needs`
+#: too (the orchestrator's independent review of L2.9, item 3): the Rule author's eight before the
+#: owner's ruling, and any custom role's holding `triage_alerts` alone.
+TRIAGE_ROUTES = (
+    "alert_canvas", "approve_alert_close", "assign_alert", "claim_alert", "dispose_alert",
+    "read_alert_assignees", "release_alert", "send_back_alert_close",
+)  # fmt: skip
+
+
+class _CustomRoles:
+    """The custom-role store as `with_custom_roles` reads it: `role:desk` holds `triage_alerts`."""
+
+    async def expand(self, principal: Principal) -> Principal:
+        from services.api.custom_roles import expand
+
+        return expand(principal, {"desk": frozenset({Right.TRIAGE_ALERTS})})
+
+
+@pytest.mark.parametrize("granted", ["directly", "through_a_custom_role"])
+def test_a_gate_right_without_the_queue_read_is_refused_at_the_gate(granted: str) -> None:
+    """The gate is no wider than the offer (ADR-146 Amendment 2 point 1): a place hidden from a
+    person, as R&M is from a holder of `triage_alerts` without `read_alert_queue` (its `needs`),
+    refuses them at every route by its gate, not only in the switcher. Red with the gate asking for
+    one of its rights alone: each of the eight routes answers past its checks."""
+    from services.api.app import app, get_principal, with_custom_roles
+
+    roles = ["right:triage_alerts"] if granted == "directly" else ["role:desk"]
+    who = Principal(id=f"triage-only-{granted}", clearance="SECRET", org_unit="unit-1", roles=roles)
+    saved = getattr(app.state, "custom_roles", None)
+    app.state.custom_roles = _CustomRoles()
+
+    async def principal() -> Principal:
+        return await with_custom_roles(app, who)
+
+    app.dependency_overrides[get_principal] = principal
+    client = TestClient(app, raise_server_exceptions=False)
+    names = {r.endpoint.__name__: r for r in _routes()}
+    not_by_gate: list[tuple[str, int, str]] = []
+    try:
+        for name in TRIAGE_ROUTES:
+            route = names[name]
+            method = sorted(route.methods or {"GET"})[0]
+            response = client.request(method, _path(route), json={})
+            if response.status_code != 403 or "place_required" not in response.text:
+                not_by_gate.append((name, response.status_code, response.text[:80]))
+    finally:
+        app.dependency_overrides.pop(get_principal, None)
+        app.state.custom_roles = saved
+    assert not_by_gate == []
+    assert "rules" not in offered(roles if granted == "directly" else ["right:triage_alerts"])
+
+
+def test_the_gate_asks_for_the_place_s_needs() -> None:
+    """The gate's own predicate: an opening right and every right of `needs`."""
+    from services.api.rules_place import opens_rules_place
+
+    assert opens_rules_place(["right:triage_alerts", "right:read_alert_queue"])
+    assert opens_rules_place(["right:author_rules", "right:read_alert_queue"])
+    assert not opens_rules_place(["right:triage_alerts"])
+    assert not opens_rules_place(["right:author_rules"])
+    assert not opens_rules_place(["right:read_alert_queue"])

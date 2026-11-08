@@ -553,16 +553,7 @@
     "triage_alerts"
    ],
    "places": [],
-   "answered_hidden": [
-    "alert_canvas",
-    "approve_alert_close",
-    "assign_alert",
-    "claim_alert",
-    "dispose_alert",
-    "read_alert_assignees",
-    "release_alert",
-    "send_back_alert_close"
-   ]
+   "answered_hidden": []
   },
   "right:verify_pipelines": {
    "rights": [
