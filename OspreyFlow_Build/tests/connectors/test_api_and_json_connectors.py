@@ -130,7 +130,7 @@ async def test_a_next_link_off_the_host_is_refused() -> None:
     def elsewhere(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"items": [], "next": "https://evil.example/steal"})
 
-    with pytest.raises(ConnectorRefused, match="another host"):
+    with pytest.raises(ConnectorRefused, match="another address"):
         await _read(linked, ApiRead(path="/v1/n", records_at="items"), handler=elsewhere)
 
 
@@ -163,3 +163,44 @@ def test_a_read_lands_whole_as_the_source_s_one_file(tmp_path: Path) -> None:
     assert [p.name for p in path.parent.iterdir()] == ["visit_bookings.csv"]
     write_snapshot(reads.ReadRows(columns=["a", "b"], rows=[]), path.parent, "visit_bookings")
     assert path.read_text() == "a,b\n"
+
+
+@pytest.mark.parametrize(
+    "link",
+    ["http://telco.example/v1/n?after=2", "https://telco.example:8443/v1/n?after=2"],
+)
+async def test_a_next_link_that_drops_tls_or_changes_port_is_refused(link: str) -> None:
+    """The lane review of L1.6 (item 6): a next link on the same host over plain HTTP was followed,
+    and the bearer secret went with it in clear. The scheme and port must be the base URL's too."""
+    sent: list[httpx.Request] = []
+
+    def downgrade(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"items": NUMBERS[:1], "next": link})
+
+    linked = ApiConnectionSettings(base_url="https://telco.example", auth="bearer", secret="TELCO",
+                                   pagination="next_link", next_at="next")  # fmt: skip
+    with pytest.raises(ConnectorRefused, match="another address"):
+        await _read(linked, ApiRead(path="/v1/n", records_at="items"), handler=downgrade)
+    assert [r.url.scheme for r in sent] == ["https"]
+
+
+def test_an_incremental_read_keeps_the_rows_not_yet_loaded_and_adds_the_new(tmp_path: Path) -> None:
+    """The lane review of L1.6 (item 5): each read replaced the file with only the rows past the
+    cursor, so a read before the last one was loaded lost its rows for ever; an empty read emptied
+    it. Now an incremental read adds to the file, each run's own watermark reading only what it
+    has not loaded, and a read that finds nothing leaves the file as it was."""
+    folder = tmp_path / "uploaded" / "ds-a"
+    first = reads.ReadRows(columns=["id", "v"],
+                           rows=[{"id": "1", "v": "a"}, {"id": "2", "v": None}])  # fmt: skip
+    write_snapshot(first, folder, "bookings", keep_earlier=True)
+    second = reads.ReadRows(columns=["id", "v"], rows=[{"id": "3", "v": "c"}])
+    path = write_snapshot(second, folder, "bookings", keep_earlier=True)
+    assert path.read_text() == "id,v\n1,a\n2,\n3,c\n"
+    before = path.stat().st_mtime_ns
+    nothing = reads.ReadRows(columns=["id", "v"], rows=[])
+    write_snapshot(nothing, folder, "bookings", keep_earlier=True)
+    assert path.read_text() == "id,v\n1,a\n2,\n3,c\n" and path.stat().st_mtime_ns == before
+    with pytest.raises(ConnectorRefused, match="columns"):
+        write_snapshot(reads.ReadRows(columns=["id", "w"], rows=[{"id": "4", "w": "x"}]), folder,
+                       "bookings", keep_earlier=True)  # fmt: skip

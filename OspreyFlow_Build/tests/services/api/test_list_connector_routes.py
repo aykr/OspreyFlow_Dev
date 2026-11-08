@@ -176,7 +176,8 @@ def test_the_deployment_lists_are_for_whoever_may_load_screening_lists(
     assert bad.status_code == 422
     imports = world.client.get(f"/v1/studio/screening-lists/{list_id}/imports",
                                headers=_as("engineer")).json()  # fmt: skip
-    assert [i["outcome"] for i in imports] == ["unchanged", "updated"]
+    assert [i["outcome"] for i in imports["imports"]] == ["unchanged", "updated"]
+    assert imports["more"] is False
     assert {"add_deployment_list", "deployment_list_refreshed", "list_deployment_lists",
             "deployment_list_schedule_set", "list_deployment_list_imports"} <= set(
         world.audit.actions())  # fmt: skip
@@ -275,3 +276,36 @@ def test_a_dataset_s_own_list_is_imported_from_its_own_files(world: SimpleNamesp
         got = world.client.post(url, json=first, headers=_as(person))
         assert got.status_code == expected, person
     assert world.audit.actions().count("import_dataset_own_list") == 2
+
+
+def test_a_source_author_sees_what_a_list_is_never_where_or_whose_it_is(
+    world: SimpleNamespace,
+) -> None:
+    """The lane review of L1.6 (item 8): the subscriptions route gave a source author every list's
+    file location, the person who added it, its real dataset, its mapping and its failure's words,
+    which the deployment lists' own route keeps for whoever may load screening lists."""
+    list_id = _imported(world)
+    body = {"name": "Broken", "template": "blank", "location": "missing.csv",
+            "mapping": __import__("json").loads(MAPPING)}  # fmt: skip
+    broken = world.client.post("/v1/studio/screening-lists", json=body, headers=_as("engineer"))
+    world.client.post(f"/v1/studio/screening-lists/{broken.json()['id']}/refresh",
+                      headers=_as("engineer"))  # fmt: skip
+    seen = world.client.get("/v1/datasets/ds-a/screening-subscriptions", headers=_as("author"))
+    assert seen.status_code == 200
+    rows = {r["id"]: r for r in seen.json()["lists"]}
+    assert set(rows[list_id]) == {"id", "name", "template", "version", "entries", "updated_at",
+                                  "failing", "schedule_words"}  # fmt: skip
+    assert rows[broken.json()["id"]]["failing"] is True
+    for hidden in ("client.csv", "missing.csv", "eng-1", "Client ref", "no file"):
+        assert hidden not in seen.text, hidden
+
+
+def test_a_lists_import_history_says_when_older_imports_are_left_out(
+    world: SimpleNamespace,
+) -> None:
+    list_id = _imported(world)
+    for _ in range(21):
+        world.client.post(f"/v1/studio/screening-lists/{list_id}/refresh", headers=_as("engineer"))
+    got = world.client.get(f"/v1/studio/screening-lists/{list_id}/imports",
+                           headers=_as("engineer")).json()  # fmt: skip
+    assert len(got["imports"]) == 20 and got["more"] is True

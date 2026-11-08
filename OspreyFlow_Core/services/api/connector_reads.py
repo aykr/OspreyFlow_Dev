@@ -145,12 +145,26 @@ async def read_into_file(
     readers: Readers,
     root: Path | None = None,
 ) -> tuple[ReadRows, Path]:
-    """One read, landed whole as the source's file; returns the rows and the file."""
+    """One read, landed as the source's file; returns the rows and the file. An incremental read
+    adds its rows to the rows the file holds (none of which may have been loaded yet) and leaves the
+    file as it was when it finds nothing; any other read is the file, whole (the lane review of
+    L1.6)."""
     root = root if root is not None else ingest_root()
     target = source_file(dataset_id, name, root)
     rows = await read_rows(source, connection, dataset_id=dataset_id, cursor=cursor,
                            readers=readers, root=root)  # fmt: skip
-    return rows, write_snapshot(rows, target.parent, name)
+    return rows, write_snapshot(rows, target.parent, name, keep_earlier=incremental(source))
+
+
+def incremental(source: SourceTable | Any) -> bool:
+    """Whether the source is a SQL table read past a watermark."""
+    refresh = getattr(source, "refresh", None)
+    return (
+        isinstance(getattr(source, "read", None), SqlRead)
+        and refresh is not None
+        and refresh.mode == "incremental"
+        and bool(refresh.watermark_column)
+    )
 
 
 async def check_connection(connection: Connection, readers: Readers) -> ConnectionTest:

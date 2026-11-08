@@ -9,6 +9,15 @@ password, a table that is not there, a write through a read-only transaction. It
 connects through `_no_tls`, which drops TLS and nothing else. That is the fixture's one
 difference from a deployment, and it is named here.
 
+**The exit, end to end.**
+`test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_routes` registers
+`visit_bookings` through `POST /v1/datasets/{id}/sources` and refreshes it through *Refresh now*,
+over the Postgres source store and its cursor.
+`test_a_sql_sources_refreshed_file_loads_only_new_rows` loads the connector's file through the path
+a source refresh takes (`run_published_recipe` with the source's watermark, a real run ledger,
+ArcadeDB). It reads a payments-shaped synthetic table, because that path's only published live
+recipe is the refresh tests' payments recipe; the read and the file are the connector's own.
+
 What a mistake would do, and the case that catches it:
 - a login that can write accepted as read-only — `test_a_login_that_can_write_is_refused`;
 - an incremental refresh reading every row again, or skipping one —
@@ -33,6 +42,8 @@ from services.ingest.connectors.sql_connector import check_sql_connection, read_
 from services.ingest.watermark import read_past
 
 from schemas.sources import SqlConnectionSettings, SqlRead
+from tests.ingest.recipe_test_support import local_staging  # noqa: F401 (the fixture, by name)
+from tests.services.api.test_source_refresh_snapshot_live import runs  # noqa: F401 (by name)
 
 READER, WRITER, PASSWORD = "osprey_fixture_reader", "osprey_fixture_writer", "fixture-only-pw"
 BOOKINGS = [
@@ -52,9 +63,13 @@ async def _no_tls(**kw: Any) -> Any:
 
 
 def _settings(user: str = READER) -> SqlConnectionSettings:
-    return SqlConnectionSettings(host="localhost", port=int(os.environ["POSTGRES_PORT"]),
-                                 database=PostgresConfig.from_env().dsn.rsplit("/", 1)[-1],
-                                 user=user, secret="NOMIS_FIXTURE")  # fmt: skip
+    return SqlConnectionSettings(
+        host="localhost",
+        port=int(os.environ["POSTGRES_PORT"]),
+        database=PostgresConfig.from_env().dsn.rsplit("/", 1)[-1],
+        user=user,
+        secret="NOMIS_FIXTURE",
+    )
 
 
 @pytest.fixture
@@ -64,12 +79,15 @@ async def nomis() -> AsyncIterator[asyncpg.Connection]:
         await _setup(conn)
         yield conn
     finally:
-        await conn.execute(f"""
-            DROP SCHEMA IF EXISTS nomis_replica_fixture CASCADE;
-            DROP OWNED BY {READER}; DROP OWNED BY {WRITER};
-            DROP ROLE IF EXISTS {READER}; DROP ROLE IF EXISTS {WRITER};
-        """)  # fmt: skip
-        await conn.close()
+        # The schema's drop takes the roles' grants with it, so the roles drop whether or not the
+        # setup got as far as making them (the lane review of L1.6, item 18).
+        try:
+            await conn.execute(f"""
+                DROP SCHEMA IF EXISTS nomis_replica_fixture CASCADE;
+                DROP ROLE IF EXISTS {READER}; DROP ROLE IF EXISTS {WRITER};
+            """)
+        finally:
+            await conn.close()
 
 
 async def _setup(conn: asyncpg.Connection) -> None:
@@ -85,7 +103,7 @@ async def _setup(conn: asyncpg.Connection) -> None:
         GRANT USAGE ON SCHEMA nomis_replica_fixture TO {READER}, {WRITER};
         GRANT SELECT ON nomis_replica_fixture.visit_bookings TO {READER};
         GRANT SELECT, INSERT ON nomis_replica_fixture.visit_bookings TO {WRITER};
-    """)  # fmt: skip
+    """)
     await _insert(conn, BOOKINGS)
 
 
@@ -111,32 +129,55 @@ async def test_a_login_that_can_write_is_refused(nomis: asyncpg.Connection) -> N
 async def test_visit_bookings_is_read_incrementally_and_a_refresh_reads_only_new_rows(
     nomis: asyncpg.Connection, tmp_path: Path
 ) -> None:
-    first = await read_sql(_settings(), READ, secret=PASSWORD, watermark="booking_id",
-                           connect=_no_tls)  # fmt: skip
+    first = await read_sql(
+        _settings(), READ, secret=PASSWORD, watermark="booking_id", connect=_no_tls
+    )
     assert [r["booking_id"] for r in first.rows] == ["1", "2", "3"] and first.cursor == "3"
     assert first.columns == ["booking_id", "prisoner", "establishment", "booked_for"]
     folder = tmp_path / "uploaded" / "nomis"
     file_1 = write_snapshot(first, folder, "visit_bookings").read_text()
     await _insert(nomis, LATER)
-    second = await read_sql(_settings(), READ, secret=PASSWORD, watermark="booking_id",
-                            cursor=first.cursor, connect=_no_tls)  # fmt: skip
+    second = await read_sql(
+        _settings(),
+        READ,
+        secret=PASSWORD,
+        watermark="booking_id",
+        cursor=first.cursor,
+        connect=_no_tls,
+    )
     assert [r["booking_id"] for r in second.rows] == ["4", "5"] and second.cursor == "5"
     file_2 = write_snapshot(second, folder, "visit_bookings").read_text()
     assert "SYN-P-0003" in file_1 and "SYN-P-0003" not in file_2
-    nothing = await read_sql(_settings(), READ, secret=PASSWORD, watermark="booking_id",
-                             cursor=second.cursor, connect=_no_tls)  # fmt: skip
+    nothing = await read_sql(
+        _settings(),
+        READ,
+        secret=PASSWORD,
+        watermark="booking_id",
+        cursor=second.cursor,
+        connect=_no_tls,
+    )
     assert nothing.rows == [] and nothing.cursor == "5"
     # And the run's own watermark, kept at 3 after the first load, reads the second file whole
     # and the first file's rows not at all: a refresh loads only new rows, by either guard.
     kept = read_past(first.rows, source_id="src", column="booking_id", kept=None)  # type: ignore[arg-type]
-    again = read_past(first.rows + second.rows, source_id="src", column="booking_id",  # type: ignore[arg-type]
-                      kept=kept.reached)  # fmt: skip
+    again = read_past(
+        first.rows + second.rows,
+        source_id="src",
+        column="booking_id",  # type: ignore[arg-type]
+        kept=kept.reached,
+    )
     assert [r["booking_id"] for r in again.rows] == ["4", "5"] and again.below == 3
 
 
 async def test_a_watermark_on_a_time_reads_past_its_value(nomis: asyncpg.Connection) -> None:
-    got = await read_sql(_settings(), READ, secret=PASSWORD, watermark="booked_for",
-                         cursor="2026-11-01T10:30:00+00:00", connect=_no_tls)  # fmt: skip
+    got = await read_sql(
+        _settings(),
+        READ,
+        secret=PASSWORD,
+        watermark="booked_for",
+        cursor="2026-11-01T10:30:00+00:00",
+        connect=_no_tls,
+    )
     assert [r["booking_id"] for r in got.rows] == ["3"]
 
 
@@ -144,8 +185,12 @@ async def test_refusals_are_refused_in_words(nomis: asyncpg.Connection) -> None:
     with pytest.raises(ConnectorRefused, match="refused the sign-in"):
         await read_sql(_settings(), READ, secret="wrong", connect=_no_tls)
     with pytest.raises(ConnectorRefused, match="refused the read"):
-        await read_sql(_settings(), SqlRead(table="nomis_replica_fixture.no_such"),
-                       secret=PASSWORD, connect=_no_tls)  # fmt: skip
+        await read_sql(
+            _settings(),
+            SqlRead(table="nomis_replica_fixture.no_such"),
+            secret=PASSWORD,
+            connect=_no_tls,
+        )
     with pytest.raises(ConnectorRefused, match="no column"):
         await read_sql(_settings(), READ, secret=PASSWORD, watermark="no_such", connect=_no_tls)
     with pytest.raises(ConnectorRefused, match="secret is not set"):
@@ -157,3 +202,202 @@ async def test_a_server_without_tls_is_refused(nomis: asyncpg.Connection) -> Non
         await read_sql(_settings(), READ, secret=PASSWORD)
     tested = await check_sql_connection(_settings(), secret=PASSWORD)
     assert not tested.ok and "TLS" in tested.words
+
+
+# --- the exit through the routes, and the load (the lane review of L1.6, item 2) -----------------
+
+import csv as _csv  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+import httpx  # noqa: E402
+from services.api.app import app  # noqa: E402
+from services.api.connector_reads import Readers  # noqa: E402
+from services.api.datasets import Dataset, InMemoryDatasetStore  # noqa: E402
+from services.api.sources import PostgresSourceStore  # noqa: E402
+
+from schemas.domain import Principal  # noqa: E402
+
+PEOPLE = {
+    "engineer": Principal(
+        id="eng-1", clearance="SECRET", org_unit="unit-1", roles=["data_engineer"]
+    ),
+    "admin": Principal(id="adm-1", clearance="SECRET", org_unit="unit-1", roles=["osprey-admin"]),
+}
+HANDLING = {
+    "classification": "OFFICIAL",
+    "handling_code": "P",
+    "originator": "unit-1",
+    "owning_unit": "unit-1",
+}
+
+
+class _Resolver:
+    def resolve(self, token: str) -> Principal:
+        return PEOPLE[token]
+
+
+class _Cases:
+    async def list_for(self, principal: Principal) -> list[tuple[object, str]]:
+        return [(SimpleNamespace(id="case-exit"), "editor")] if principal.id == "eng-1" else []
+
+
+class _Recipes:
+    async def using_source(self, dataset_id: str, location: str) -> list[object]:
+        return []
+
+
+class _Audit:
+    async def record(self, **kwargs: object) -> None:
+        return None
+
+
+def _rows_of(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(_csv.DictReader(handle))
+
+
+async def test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_routes(
+    nomis: asyncpg.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "ingest"
+    (root / "uploaded" / "ds-exit").mkdir(parents=True)
+    monkeypatch.setenv("OSPREY_INGEST_ROOT", str(root))
+    monkeypatch.setenv("OSPREY_CONNECTION_SECRET_NOMIS_FIXTURE", PASSWORD)
+    datasets = InMemoryDatasetStore()
+    datasets.add(
+        Dataset(
+            id="ds-exit",
+            name="NOMIS replica (synthetic)",
+            owning_unit="unit-1",
+            created_by="s",
+            created_at=datetime(2026, 1, 1),
+        )
+    )
+    datasets.cases["case-exit"] = ["ds-exit"]
+    sources = await PostgresSourceStore.connect(PostgresConfig.from_env().dsn)
+    state = {
+        "principal_resolver": _Resolver(),
+        "investigations": _Cases(),
+        "datasets": datasets,
+        "sources": sources,
+        "studio_recipes": _Recipes(),
+        "audit": _Audit(),
+        "connector_readers": Readers(sql_connect=_no_tls),
+    }
+    for name, value in state.items():
+        monkeypatch.setattr(app.state, name, value, raising=False)
+    settings = _settings().model_dump()
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://conduit"
+        ) as client:
+            made = await client.post(
+                "/v1/admin/connections",
+                headers={"Authorization": "Bearer admin"},
+                json={"kind": "sql", "name": "NOMIS replica", "settings": settings},
+            )
+            assert made.status_code == 201, made.text
+            body = {
+                "connection_id": made.json()["id"],
+                "name": "Visit bookings",
+                "location": "visit_bookings",
+                "handling": HANDLING,
+                "read": {"kind": "sql", "table": "nomis_replica_fixture.visit_bookings"},
+                "refresh": {
+                    "trigger": "watch",
+                    "pattern": "x",
+                    "mode": "incremental",
+                    "watermark_column": "booking_id",
+                },
+            }
+            registered = await client.post(
+                "/v1/datasets/ds-exit/sources",
+                json=body,
+                headers={"Authorization": "Bearer engineer"},
+            )
+            assert registered.status_code == 201, registered.text
+            source = registered.json()
+            file = root / "uploaded" / "ds-exit" / "visit_bookings.csv"
+            assert source["location"] == str(file)
+            assert source["refresh"]["pattern"] == "visit_bookings.csv"
+            assert [r["booking_id"] for r in _rows_of(file)] == ["1", "2", "3"]
+            assert await sources.cursor(source["id"]) == "3"
+            first_loaded = _rows_of(file)
+
+            await _insert(nomis, LATER)
+            refreshed = await client.post(
+                f"/v1/datasets/ds-exit/sources/{source['id']}/read",
+                headers={"Authorization": "Bearer engineer"},
+            )
+            assert refreshed.status_code == 200 and refreshed.json()["rows"] == 2, refreshed.text
+            assert await sources.cursor(source["id"]) == "5"
+            held = _rows_of(file)
+            assert [r["booking_id"] for r in held] == ["1", "2", "3", "4", "5"]
+            again = await client.post(
+                f"/v1/datasets/ds-exit/sources/{source['id']}/read",
+                headers={"Authorization": "Bearer engineer"},
+            )
+            assert again.json()["rows"] == 0 and "left as it was" in again.json()["words"]
+            assert _rows_of(file) == held
+        kept = read_past(first_loaded, source_id=source["id"], column="booking_id", kept=None)
+        refresh = read_past(held, source_id=source["id"], column="booking_id", kept=kept.reached)
+        assert [r["booking_id"] for r in refresh.rows] == ["4", "5"]
+    finally:
+        conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+        await conn.execute("DELETE FROM ingest_sources WHERE dataset_id = 'ds-exit'")
+        await conn.execute("DELETE FROM ingest_connections WHERE name = 'NOMIS replica'")
+        await conn.close()
+        await sources.close()
+
+
+async def test_a_sql_sources_refreshed_file_loads_only_new_rows(
+    nomis: asyncpg.Connection,
+    tmp_path: Path,
+    runs: object,  # noqa: F811 (the fixture)
+) -> None:
+    from adapters.analytics_duckdb.testing import duckdb_adapter
+    from adapters.graph_arcadedb.testing import arcadedb_adapter
+    from tests.ingest.test_row_keys import ONTOLOGY, SCHEME
+    from tests.services.api.test_source_refresh_incremental_live import READ as PAID_AT
+    from tests.services.api.test_source_refresh_snapshot_live import Refresh
+
+    await nomis.execute(f"""
+        CREATE TABLE nomis_replica_fixture.payments (
+            payer text NOT NULL, payee text NOT NULL, paid_at timestamptz NOT NULL, memo text);
+        GRANT SELECT ON nomis_replica_fixture.payments TO {READER};
+    """)
+    pay = "INSERT INTO nomis_replica_fixture.payments VALUES ($1, $2, $3, NULL)"
+    for payer, payee, day in (("SYN-1", "SYN-2", 1), ("SYN-3", "SYN-4", 2)):
+        await nomis.execute(
+            pay, payer, payee, datetime.fromisoformat(f"2026-03-0{day}T09:00:00+00:00")
+        )
+    read = SqlRead(
+        table="nomis_replica_fixture.payments", columns=["payer", "payee", "paid_at", "memo"]
+    )
+    folder = tmp_path / "uploaded" / "ds-pay"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph, duckdb_adapter([], SCHEME) as analytics:
+        refresh = Refresh(tmp_path, runs, graph, analytics)  # type: ignore[arg-type]
+        got = await read_sql(
+            _settings(), read, secret=PASSWORD, watermark="paid_at", connect=_no_tls
+        )
+        file = write_snapshot(got, folder, "payments", keep_earlier=True)
+        first = await refresh.snapshot(_rows_of(file), PAID_AT)
+        assert first.nodes_created == 4  # type: ignore[attr-defined]
+
+        await nomis.execute(
+            pay, "SYN-5", "SYN-6", datetime.fromisoformat("2026-03-03T09:00:00+00:00")
+        )
+        more = await read_sql(
+            _settings(),
+            read,
+            secret=PASSWORD,
+            watermark="paid_at",
+            cursor=got.cursor,
+            connect=_no_tls,
+        )
+        assert len(more.rows) == 1
+        file = write_snapshot(more, folder, "payments", keep_earlier=True)
+        second = await refresh.snapshot(_rows_of(file), PAID_AT)
+        assert second.rows_read == 1 and second.rows_below_watermark == 2  # type: ignore[attr-defined]
+        assert second.nodes_created == 2  # type: ignore[attr-defined]
+        assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}

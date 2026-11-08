@@ -151,7 +151,8 @@ async def read_api(
     """Every page of the endpoint's records. A refusal, an error or records missing where the read
     says they are is refused in words: never read as no rows."""
     url = settings.base_url.rstrip("/") + read.path
-    host = check_egress(url, allowed_hosts)
+    check_egress(url, allowed_hosts)
+    origin = _origin(url)
     headers = {"Accept": "application/json"}
     if settings.auth == "bearer":
         if not secret:
@@ -178,10 +179,12 @@ async def read_api(
                 if link is None:
                     break
                 next_url = urljoin(next_url, link)
-                if (urlsplit(next_url).hostname or "").lower() != host:
+                if _origin(next_url) != origin:
+                    # Scheme and port as well as host: a next link over plain HTTP would carry the
+                    # bearer secret in clear (the lane review of L1.6).
                     raise ConnectorRefused(
-                        "the API named a next page on another host; it was not followed and "
-                        "nothing was written"
+                        "the API named a next page at another address (host, scheme or port); it "
+                        "was not followed and nothing was written"
                     )
             else:
                 break
@@ -191,6 +194,12 @@ async def read_api(
                 "was written (rule 2)"
             )
     return tabulate(records, "the API's answer")
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    parts = urlsplit(url)
+    port = parts.port or {"https": 443, "http": 80}.get(parts.scheme)
+    return parts.scheme, (parts.hostname or "").lower(), port
 
 
 def _next_link(document: Any, path: str | None) -> str | None:
@@ -227,20 +236,49 @@ async def _get(client: httpx.AsyncClient, url: str, params: dict[str, str] | Non
 # --- where a read lands --------------------------------------------------------------------------
 
 
-def write_snapshot(rows: ReadRows, folder: Path, name: str) -> Path:
-    """The read, whole, as `<folder>/<name>.csv`: written to a temporary file beside it and renamed
-    into place, so a run reading the file sees the last read or this one, never half of either."""
+def _held_rows(target: Path, columns: list[str]) -> list[list[str]]:
+    """The rows the source's file already holds, refused if its columns are not this read's."""
+    with target.open(encoding="utf-8", newline="") as handle:
+        held = list(csv.reader(handle))
+    if not held:
+        return []
+    if held[0] != columns:
+        raise ConnectorRefused(
+            "the table's columns changed since its last read, so new rows cannot be added to its "
+            "file; nothing was written. Read it whole once (a snapshot refresh) to start afresh"
+        )
+    return held[1:]
+
+
+def write_snapshot(rows: ReadRows, folder: Path, name: str, *, keep_earlier: bool = False) -> Path:
+    """The read as `<folder>/<name>.csv`, written to a temporary file beside it and renamed into
+    place, so a run reading the file sees the last read or this one, never half of either.
+
+    `keep_earlier` (an incremental read; the lane review of L1.6): the file keeps every row it held
+    and gains this read's, since an earlier read's rows may not have been loaded yet (a paused
+    watch, a failed run), and each run's own watermark reads only what it has not loaded. A read
+    that finds nothing leaves the file as it was. Otherwise the file is this read, whole."""
     folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"{name}.csv"
+    earlier: list[list[str]] = []
+    if keep_earlier and target.exists():
+        if not rows.rows:
+            return target
+        earlier = _held_rows(target, rows.columns)
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(rows.columns)
+    writer.writerows(earlier)
     for row in rows.rows:
         writer.writerow(["" if row.get(c) is None else row[c] for c in rows.columns])
+    if len(earlier) + len(rows.rows) > MAX_ROWS:
+        raise ConnectorRefused(
+            f"the source's file would hold more than {MAX_ROWS} rows; nothing was written (rule 2)"
+        )
     handle, temporary = tempfile.mkstemp(prefix=".read-", suffix=".tmp", dir=folder)
     try:
         with os.fdopen(handle, "w", encoding="utf-8", newline="") as out:
             out.write(buffer.getvalue())
-        target = folder / f"{name}.csv"
         os.replace(temporary, target)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)

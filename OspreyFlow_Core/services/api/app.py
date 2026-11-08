@@ -309,7 +309,9 @@ from schemas.list_connector import (
     DeploymentList,
     DeploymentListInput,
     ListImport,
+    ListImports,
     OfferedList,
+    SubscribableList,
 )
 from schemas.map_admin import (
     BuildBasemapInput,
@@ -503,7 +505,7 @@ from .compute_routes import (
 )
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
-from .connector_reads import Readers, check_connection, read_into_file
+from .connector_reads import Readers, check_connection, read_into_file, source_file
 from .credentials import MissingCredentialError
 from .custom_roles import (
     CustomRoleStore,
@@ -701,7 +703,6 @@ from .list_connector import (
     ListRows,
     ListStore,
     ParquetListRows,
-    PostgresListStore,
     check_list_location,
     import_list,
     import_own_list,
@@ -1046,8 +1047,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     studio_recipes = await StudioRecipeStore.connect(config.postgres.dsn)
     # ADR-140 Amendment 4: connections and the sources registered on them.
     source_store = await PostgresSourceStore.connect(config.postgres.dsn)
-    # ADR-140 Amendment 13: deployment-wide screening lists, and each dataset's subscriptions.
-    list_store = await PostgresListStore.connect(config.postgres.dsn)
+    # ADR-140 Amendment 13: deployment-wide screening lists and each dataset's subscriptions,
+    # opened with the run's resources, which a staged run reads them through (one pool).
+    list_store = resources.list_store
     # ADR-140 Amendment 12: opened with the run's resources, which a staged run reads it through,
     # so the Conduit holds one pool for it and closes it with them.
     target_model_store = resources.target_models
@@ -1370,7 +1372,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.custom_roles = None
         await history.close()
         await source_store.close()
-        await list_store.close()
+        # Closed with the run's resources; a closed store must not outlive the app.
         app.state.list_store = None
         await case_view_store.close()
         app.state.case_views = None
@@ -8943,8 +8945,10 @@ async def list_ingest_connections(
     principal: SourceAuthorDep, sources: SourcesDep
 ) -> list[Connection]:
     """The connections a source may be registered on (the register wizard's first step). The
-    deployment's, not a dataset's: names and kinds only, nothing read through them."""
-    return await sources.connections()
+    deployment's, not a dataset's: names and kinds only, nothing read through them. A connection's
+    settings (a database's host and login, an API's address, a secret's name) are for whoever
+    administers the deployment (Admin › Connections), never sent here (the lane review of L1.6)."""
+    return [c.model_copy(update={"settings": None}) for c in await sources.connections()]
 
 
 @app.get("/v1/admin/connections", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
@@ -9018,6 +9022,22 @@ async def list_dataset_source_files(
 
 
 # --- the screening-list connector, and a dataset's lists (ADR-140 Amendment 13) -----------------
+
+
+#: The imports a list's history shows; `more` says when there are older ones.
+LIST_IMPORTS_SHOWN = 20
+
+
+def _subscribable(lists: Sequence[DeploymentList]) -> list[SubscribableList]:
+    """The deployment's lists as a source author sees them to subscribe to: never a file's
+    location, who added it, the real dataset it is, its mapping or its failure's words."""
+    return [
+        SubscribableList(
+            id=x.id, name=x.name, template=x.template, version=x.version, entries=x.entries,
+            updated_at=x.updated_at, failing=x.failure is not None, schedule_words=x.schedule_words,
+        )  # fmt: skip
+        for x in lists
+    ]
 
 
 def _list_not_found() -> HTTPException:
@@ -9099,17 +9119,18 @@ async def refresh_deployment_list(
 )
 async def list_deployment_list_imports(
     list_id: str, principal: PrincipalDep, lists: ListStoreDep, audit: AuditDep
-) -> list[ListImport]:
-    """A list's latest imports, newest first: what each did, in words."""
+) -> ListImports:
+    """A list's latest imports, newest first: what each did, in words, and whether older ones were
+    left out (rule 2: never cut short without saying so)."""
     try:
         await lists.get(list_id)
     except ListNotFound as missing:
         raise _list_not_found() from missing
-    found = await lists.imports(list_id)
+    found = await lists.imports(list_id, limit=LIST_IMPORTS_SHOWN + 1)
     await audit.record(principal=principal, action="list_deployment_list_imports",
                        investigation_id=None, resolved_query={"list_id": list_id},
                        result_cardinality=len(found))  # fmt: skip
-    return found
+    return ListImports(imports=found[:LIST_IMPORTS_SHOWN], more=len(found) > LIST_IMPORTS_SHOWN)
 
 
 @app.put(
@@ -9153,7 +9174,7 @@ async def dataset_list_subscriptions(
 ) -> DatasetSubscriptions:
     """The deployment-wide lists, and which this dataset subscribes to, by id."""
     found = DatasetSubscriptions(
-        lists=await lists.lists(), subscribed=await lists.subscribed(dataset_id)
+        lists=_subscribable(await lists.lists()), subscribed=await lists.subscribed(dataset_id)
     )
     await audit.record(principal=principal, action="dataset_list_subscriptions",
                        investigation_id=None, resolved_query={"dataset_id": dataset_id},
@@ -9183,7 +9204,7 @@ async def subscribe_dataset_to_list(
                        resolved_query={"dataset_id": dataset_id, "list_id": list_id},
                        result_cardinality=1)  # fmt: skip
     return DatasetSubscriptions(
-        lists=await lists.lists(), subscribed=await lists.subscribed(dataset_id)
+        lists=_subscribable(await lists.lists()), subscribed=await lists.subscribed(dataset_id)
     )
 
 
@@ -9206,7 +9227,7 @@ async def unsubscribe_dataset_from_list(
                        resolved_query={"dataset_id": dataset_id, "list_id": list_id},
                        result_cardinality=1)  # fmt: skip
     return DatasetSubscriptions(
-        lists=await lists.lists(), subscribed=await lists.subscribed(dataset_id)
+        lists=_subscribable(await lists.lists()), subscribed=await lists.subscribed(dataset_id)
     )
 
 
@@ -9843,9 +9864,16 @@ async def register_dataset_source(
             detail={"error": "unknown_connection", "detail": "There is no such connection."},
         ) from exc
     if connection.kind != "files":
-        body, first_cursor = await _first_connector_read(dataset_id, body, connection, request)
-    else:
-        first_cursor = None
+        made = await _register_through_connection(
+            dataset_id, body, connection, request, principal, sources, studio_recipes
+        )
+        await audit.record(
+            principal=principal,
+            action="register_dataset_source",
+            resolved_query={"dataset_id": dataset_id, "source_id": made.id},
+            result_cardinality=1,
+        )
+        return made
     offered = {f.source_location for f in list_source_files(datasets=[dataset_id]).files}
     if body.location not in offered:
         raise HTTPException(
@@ -9872,8 +9900,6 @@ async def register_dataset_source(
                 "detail": "This dataset already has a source reading that file.",
             },
         ) from exc
-    if first_cursor is not None:
-        await sources.set_cursor(made.id, first_cursor)
     await audit.record(
         principal=principal,
         action="register_dataset_source",
@@ -9897,29 +9923,63 @@ def _connector_refused(refused: ConnectorRefused) -> HTTPException:
     )
 
 
-async def _first_connector_read(
-    dataset_id: str, body: RegisterSourceInput, connection: Connection, request: Request
-) -> tuple[RegisterSourceInput, str | None]:
-    """A non-file source's first read: its rows land as its own file, which it is then registered
-    on, with a folder watch on that file when the policy watches. Refused whole, in words."""
+async def _register_through_connection(
+    dataset_id: str,
+    body: RegisterSourceInput,
+    connection: Connection,
+    request: Request,
+    principal: Principal,
+    sources: SourceStore,
+    studio_recipes: StudioRecipeStore,
+) -> SourceTable:
+    """A non-file source (ADR-140 Amendment 13): every check first, then one read into its own new
+    file in the dataset's folder, then the source registered on that file; if registering is
+    refused, the file goes too. A name whose file is already there is refused, never overwritten
+    (the lane review of L1.6)."""
     if body.read is None or body.read.kind != connection.kind:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"error": "read_needed",
                     "detail": f"A source on a {connection.kind} connection needs its own read."},
         )  # fmt: skip
-    name = body.location
     try:
-        rows, file = await read_into_file(
-            body, connection, dataset_id=dataset_id, name=name, cursor=None,
+        target = source_file(dataset_id, body.location)
+    except ConnectorRefused as refused:
+        raise _connector_refused(refused) from refused
+    registered = {s.location for s in await sources.list_for(dataset_id)}
+    if target.exists() or str(target) in registered:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "source_already_registered",
+                    "detail": f"The dataset already has a file named {target.name}: give the "
+                    "source another name."},
+        )  # fmt: skip
+    refresh = body.refresh
+    if refresh.trigger == "watch":
+        refresh = refresh.model_copy(update={"pattern": target.name})
+    body = body.model_copy(update={"location": str(target), "refresh": refresh})
+    await _refuse_a_keyless_refresh(studio_recipes, dataset_id, body.location, body.refresh)
+    try:
+        rows, _file = await read_into_file(
+            body, connection, dataset_id=dataset_id, name=target.stem, cursor=None,
             readers=get_connector_readers(request),
         )  # fmt: skip
     except ConnectorRefused as refused:
         raise _connector_refused(refused) from refused
-    refresh = body.refresh
-    if refresh.trigger == "watch":
-        refresh = refresh.model_copy(update={"pattern": file.name})
-    return body.model_copy(update={"location": str(file), "refresh": refresh}), rows.cursor
+    try:
+        made = await sources.register(dataset_id, body, principal)
+    except SourceAlreadyRegisteredError as exc:
+        target.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "source_already_registered",
+                    "detail": "This dataset already has a source reading that file."},
+        ) from exc  # fmt: skip
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    await sources.set_cursor(made.id, rows.cursor)
+    return made
 
 
 @app.post(
@@ -9957,7 +10017,7 @@ async def read_connector_source(
     words = (
         f"{len(rows.rows)} rows read into {file.name}"
         if rows.rows
-        else f"nothing new was found; {file.name} now holds no rows"
+        else f"nothing new was found; {file.name} was left as it was"
     )
     await audit.record(
         principal=principal,
@@ -10420,6 +10480,7 @@ async def update_studio_recipe_pipeline(
     body: PipelineGraph,
     models: TargetModelsDep,
     staging_storage: StagingStorageDep,
+    list_store: ListStoreDep,
 ) -> StudioRecipeDraft:
     """ADR-108 phase B: the pipeline's own save. The graph half of the save gate runs here —
     a violation answers 422 `pipeline_invalid` with every problem in words, and nothing is
@@ -10432,7 +10493,9 @@ async def update_studio_recipe_pipeline(
         p
         for p in staging_gate(
             body,
-            references=await dataset_reference_lists(models, recipe.dataset_id, staging_storage),
+            references=await dataset_reference_lists(
+                models, recipe.dataset_id, staging_storage, lists=list_store
+            ),
             dataset_id=recipe.dataset_id,
         )
         if p not in problems
@@ -10672,6 +10735,7 @@ async def preview_studio_recipe_staging(
     models: TargetModelsDep,
     staging_storage: StagingStorageDep,
     body: StagingPreviewInput,
+    list_store: ListStoreDep,
 ) -> StagingPreview:
     """A staging step's drawer's live sample (ADR-140 Amendment 12, Q4 (a)): the steps up to one,
     over the first ten rows of each source, read as Map's sample is read (`edit_pipelines`, the
@@ -10684,7 +10748,9 @@ async def preview_studio_recipe_staging(
         body,
         principal=principal,
         scheme=scheme,
-        references=await dataset_reference_lists(models, recipe.dataset_id, staging_storage),
+        references=await dataset_reference_lists(
+                models, recipe.dataset_id, staging_storage, lists=list_store
+            ),
         storage=staging_storage,
     )
     await audit.record(
@@ -10748,6 +10814,7 @@ async def _studio_dry_run(
     influencers_store: InfluencerStore | None,
     models: TargetModelStore,
     staging_storage: ObjectStorageConfig,
+    list_store: ListStore | None = None,
 ) -> tuple[VerifyReport, list[Any]]:
     """The dry run Test and Preview share (§5; ADR-140 decision 14): the report, and the files it
     read with their hashes. It writes nothing; what Test records afterwards is Test's alone."""
@@ -10788,7 +10855,9 @@ async def _studio_dry_run(
         checks=judge_checks,
         locations=locations,
         staging=StagedTestInputs(
-            references=await dataset_reference_lists(models, recipe.dataset_id, staging_storage),
+            references=await dataset_reference_lists(
+                models, recipe.dataset_id, staging_storage, lists=list_store
+            ),
             storage=staging_storage,
         ),
     )
@@ -10820,6 +10889,7 @@ async def verify_studio_recipe(
     models: TargetModelsDep,
     staging_storage: StagingStorageDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
+    list_store: ListStoreDep = None,  # type: ignore[assignment]
 ) -> VerifyReport:
     """§5: the dry run. No persistent write of any kind happens here — no
     Parquet staging, no `GraphPort` write, no transaction — but an
@@ -10836,7 +10906,7 @@ async def verify_studio_recipe(
         analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
         hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
         repo_root=repo_root, influencers_store=influencers_store, models=models,
-        staging_storage=staging_storage,
+        staging_storage=staging_storage, list_store=list_store,
     )  # fmt: skip
     # §5: "Verify must pass before publish" — recorded here, against a
     # *completed* run (rejections included, per §5's own "a run with
@@ -10879,6 +10949,7 @@ async def preview_studio_recipe_graph(
     models: TargetModelsDep,
     staging_storage: StagingStorageDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
+    list_store: ListStoreDep = None,  # type: ignore[assignment]
 ) -> VerifyReport:
     """Phase 6's *Preview* of a Map or Load step (ADR-140 decision 14; ADR-140 Amendment 8 point 2):
     the same dry run Test runs, under the same right and level and the person's own principal, but
@@ -10892,7 +10963,7 @@ async def preview_studio_recipe_graph(
         analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
         hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
         repo_root=repo_root, influencers_store=influencers_store, models=models,
-        staging_storage=staging_storage,
+        staging_storage=staging_storage, list_store=list_store,
     )  # fmt: skip
     await audit.record(
         principal=principal,
@@ -11009,6 +11080,7 @@ async def publish_studio_recipe(
     sources: SourcesDep,
     models: TargetModelsDep,
     staging_storage: StagingStorageDep,
+    list_store: ListStoreDep,
 ) -> StudioRecipeDraft:
     """§6/§8: draft → published, source-approver only — this same gate is
     what §8's "approve a mapping that changes an existing recipe's
@@ -11027,7 +11099,9 @@ async def publish_studio_recipe(
         # the recipe and committed, never committed unjudged.
         unjudged = staging_gate(
             recipe.pipeline,
-            references=await dataset_reference_lists(models, recipe.dataset_id, staging_storage),
+            references=await dataset_reference_lists(
+                models, recipe.dataset_id, staging_storage, lists=list_store
+            ),
             dataset_id=recipe.dataset_id,
         )
         if unjudged:
@@ -11297,6 +11371,7 @@ async def run_studio_recipe(
     influencers: OptionalStrengthInfluencersDep = None,
     models: TargetModelsDep = None,  # type: ignore[assignment]
     staging_storage: StagingStorageDep = None,  # type: ignore[assignment]
+    list_store: ListStoreDep = None,  # type: ignore[assignment]
 ) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -11383,6 +11458,7 @@ async def run_studio_recipe(
             influencers=influencers,
             target_models=models,
             staging_storage=staging_storage,
+            list_store=list_store,
         ),
         principal=principal,
         recipe=recipe,
@@ -11574,10 +11650,19 @@ def _deployment_list_scheduler(application: FastAPI) -> DeploymentListScheduler:
             return f"the schedule's owner, {owner_id}, no longer holds load_screening_lists"
         return None
 
-    async def run(list_id: str) -> ListImport:
-        return await import_list(
+    async def run(list_id: str, owner_id: str) -> ListImport:
+        done = await import_list(
             list_id, store=state.list_store, rows_kept=state.list_rows, trigger="schedule"
         )
+        # Audited as the person the schedule runs as, as ADR-133's scheduled refresh is.
+        owner = await resolve(owner_id)
+        await state.audit.record(
+            principal=owner, action="deployment_list_refreshed", investigation_id=None,
+            resolved_query={"list_id": list_id, "outcome": done.outcome, "version": done.version,
+                            "trigger": "schedule"},
+            result_cardinality=done.added + done.changed + done.delisted,
+        )  # fmt: skip
+        return done
 
     return DeploymentListScheduler(state.list_store, claim, may_run, run)
 

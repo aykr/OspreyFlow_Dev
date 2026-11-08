@@ -44,11 +44,15 @@ PEOPLE = {
         ("engineer", "eng-1", "unit-1", "data_engineer"),
         ("analyst", "ana-1", "unit-1", "analyst"),
         ("stranger", "str-1", "unit-2", "data_engineer"),
+        ("reader", "read-1", "unit-1", "data_engineer"),
         ("admin", "adm-1", "unit-1", "osprey-admin"),
     )
 }
+#: `read-1`'s one case reads ds-a second: through it a load would go into ds-x, so ds-a's routes are
+#: not theirs (the dataset's own gate; the lane review of L1.6, item 9).
 CASES = {"eng-1": {"case-a": ["ds-a"]}, "ana-1": {"case-y": ["ds-a"]},
-         "str-1": {"case-s": ["ds-s"]}, "adm-1": {}}  # fmt: skip
+         "str-1": {"case-s": ["ds-s"]}, "read-1": {"case-r": ["ds-x", "ds-a"]},
+         "adm-1": {}}  # fmt: skip
 NUMBERS = [{"number": "07700900001", "network": "Synthetic Mobile"},
            {"number": "07700900002", "network": "Fictional Telecom"}]  # fmt: skip
 
@@ -95,7 +99,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNam
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(root))
     monkeypatch.setenv("OSPREY_CONNECTION_SECRET_TELCO", TOKEN)
     datasets = InMemoryDatasetStore()
-    for d, unit in (("ds-a", "unit-1"), ("ds-s", "unit-2")):
+    for d, unit in (("ds-a", "unit-1"), ("ds-s", "unit-2"), ("ds-x", "unit-1")):
         datasets.add(Dataset(id=d, name=d, owning_unit=unit, created_by="s",
                              created_at=datetime(2026, 1, 1, tzinfo=UTC)))  # fmt: skip
     for person in CASES.values():
@@ -167,7 +171,9 @@ def test_a_secret_is_named_and_its_value_never_leaves_the_deployment(
                                   headers=_as("engineer"))  # fmt: skip
     answers = [listed.text, studio.text, registered.text, refreshed.text]
     assert all(TOKEN not in a for a in answers)
-    assert "TELCO" in listed.text  # the name, never the value
+    assert "TELCO" in listed.text  # the name, never the value, and only to an administrator
+    for setting in ("TELCO", "telco.example", "base_url"):
+        assert setting not in studio.text, setting  # a source author sees names and kinds only
     assert TOKEN not in json.dumps(world.audit.entries, default=str)
     with_value = {**API, "settings": {**API["settings"], "password": TOKEN}}  # type: ignore[dict-item]
     assert world.client.post("/v1/admin/connections", json=with_value,
@@ -228,9 +234,62 @@ def test_refresh_now_is_reached_only_through_the_dataset_s_own_gate(world: Simpl
                                             "records_at": "data"})  # fmt: skip
     url = f"/v1/datasets/ds-a/sources/{made.json()['id']}/read"
     assert world.client.post(url, headers=_as("stranger")).status_code == 404
+    assert world.client.post(url, headers=_as("reader")).status_code == 404
+    assert _register(world, connection_id, {"kind": "api", "path": "/v1/numbers"},
+                     name="theirs", person="reader").status_code == 404  # fmt: skip
     assert world.client.post(url, headers=_as("analyst")).status_code == 403
     other = world.client.post(f"/v1/datasets/ds-s/sources/{made.json()['id']}/read",
                               headers=_as("stranger"))  # fmt: skip
     assert other.status_code == 404
     assert _register(world, connection_id, {"kind": "api", "path": "/v1/numbers"},
                      name="other", person="analyst").status_code == 403  # fmt: skip
+
+
+def test_a_registration_never_overwrites_a_file_and_leaves_none_when_refused(
+    world: SimpleNamespace,
+) -> None:
+    """The lane review of L1.6 (item 4): the first read wrote `<name>.csv` before anything was
+    checked, so a source named after a file already there overwrote it and was then refused."""
+    connection_id = _connection(world)
+    uploaded = world.root / "uploaded" / "ds-a" / "estabs.csv"
+    uploaded.write_text("estab_id,name\nE1,HMP Synthetic One\n")
+    read = {"kind": "api", "path": "/v1/numbers", "records_at": "data"}
+    clash = _register(world, connection_id, read, name="estabs")
+    assert clash.status_code == 409 and "another name" in clash.text
+    assert uploaded.read_text() == "estab_id,name\nE1,HMP Synthetic One\n"
+    first = _register(world, connection_id, read)
+    assert first.status_code == 201
+    file = world.root / "uploaded" / "ds-a" / "telco_numbers.csv"
+    held = file.read_text()
+    again = _register(world, connection_id, read)
+    assert again.status_code == 409 and file.read_text() == held
+
+    class _Refusing:
+        async def using_source(self, dataset_id: str, location: str) -> list[Any]:
+            return [SimpleNamespace(label="Keyless", status="published", deduplicate=None)]
+
+    world.client.app.state.studio_recipes = _Refusing()
+    watch = {"trigger": "watch", "pattern": "x"}
+    body = {"connection_id": connection_id, "name": "Watched", "location": "watched",
+            "handling": HANDLING, "read": read, "refresh": watch}  # fmt: skip
+    refused = world.client.post("/v1/datasets/ds-a/sources", json=body, headers=_as("engineer"))
+    assert refused.status_code == 422 and "Keyless" in refused.text, refused.text
+    assert not (world.root / "uploaded" / "ds-a" / "watched.csv").exists()
+
+
+def test_a_registration_the_store_fails_takes_its_file_back(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection_id = _connection(world)
+
+    async def broken(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("the store went away")
+
+    monkeypatch.setattr(world.sources, "register", broken)
+    client = TestClient(app, raise_server_exceptions=False)
+    body = {"connection_id": connection_id, "name": "Telco numbers", "location": "telco_numbers",
+            "handling": HANDLING,
+            "read": {"kind": "api", "path": "/v1/numbers", "records_at": "data"}}  # fmt: skip
+    failed = client.post("/v1/datasets/ds-a/sources", json=body, headers=_as("engineer"))
+    assert failed.status_code == 500
+    assert not (world.root / "uploaded" / "ds-a" / "telco_numbers.csv").exists()
