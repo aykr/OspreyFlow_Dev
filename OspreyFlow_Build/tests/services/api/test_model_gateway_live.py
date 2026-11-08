@@ -13,6 +13,7 @@ test-stack lease; `process/lanes/platform/P1_RED_RECORD.md` has the commands and
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 
 import httpx
@@ -85,6 +86,17 @@ def _rows(dump: str, table: str) -> list[str]:
     return rows
 
 
+#: Measured 8 November 2026 (P3, the platform lease on stack a): after calls made with an engine's
+#: key, its SHA-256 is in these four tables' `api_key` columns, and in the key table (left out).
+SPEND_TABLES_WITH_KEY_HASH = frozenset({
+    "LiteLLM_SpendLogs", "LiteLLM_DailyTagSpend", "LiteLLM_DailyUserSpend", "LiteLLM_DailyTeamSpend",
+})  # fmt: skip
+
+
+def _tables(dump: str) -> list[str]:
+    return [line.split('"')[1] for line in dump.splitlines() if line.startswith('COPY public."')]
+
+
 @pytest.mark.skipif(not (PG_CONTAINER and GATEWAY_DB), reason="live: the gateway's Postgres")
 async def test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway() -> None:
     """`05_DEPLOYMENT.md` §6.1 against the real thing: with the backup's own flags
@@ -107,7 +119,20 @@ async def test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway(
         if entry_id("openai", "known-model") not in await gateway.stored_entries():
             await gateway.add_entry(provider, "known-model")
         # ADR-135 Amendment 3: the engine's own key, a row of the gateway's key table.
-        await gateway.put_engine_key("openai", EngineLimits(requests_per_minute=100))
+        await gateway.put_engine_key(provider, EngineLimits(requests_per_minute=100))
+        # P3 (Amendment 3, "As built in P3"): a call made with the engine's key, so the gateway's
+        # spend tables carry the key's SHA-256, then searched for in the kept dump.
+        from adapters.model_litellm.usage import engine_key
+
+        key = engine_key(MASTER, "openai")
+        key_hash = hashlib.sha256(key.encode()).hexdigest()
+        async with httpx.AsyncClient(base_url=URL,
+                                     headers={"Authorization": f"Bearer {key}"}) as engine:
+            for _ in range(2):
+                await engine.post("/chat/completions", json={
+                    "model": "openai/known-model", "messages": [{"role": "user", "content": "hi"}],
+                    "metadata": {"tags": ["osprey:openai/extraction"]}}, timeout=60.0)  # fmt: skip
+        await asyncio.sleep(75)  # the gateway writes its spend tables about once a minute
 
         def dump(*flags: str) -> str:
             argv = ["docker", "exec", PG_CONTAINER, "pg_dump", *flags, "-U", "osprey", GATEWAY_DB]
@@ -122,8 +147,14 @@ async def test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway(
         for table in ("LiteLLM_CredentialsTable", "LiteLLM_ProxyModelTable", "LiteLLM_Config",
                       "LiteLLM_VerificationToken"):  # fmt: skip
             assert _rows(kept, table) == [], table
-        assert GOOD not in kept
+        assert GOOD not in kept and key not in kept
         assert 'CREATE TABLE public."LiteLLM_CredentialsTable"' in kept
+        # The key's hash is kept only in the spend tables' `api_key` columns, which the usage is
+        # read from (decided in P3: kept, so a restore keeps its usage; a hash names the key and
+        # opens nothing). Anywhere else, the check fails.
+        holding = {table for table in _tables(kept) if any(key_hash in r for r in _rows(kept, table))}
+        assert holding, "the plant: a call made with the key leaves its hash in the spend tables"
+        assert holding <= SPEND_TABLES_WITH_KEY_HASH, holding - SPEND_TABLES_WITH_KEY_HASH
     finally:
         await gateway.delete_engine_key("openai")
         await gateway.delete_credential("openai")
@@ -136,18 +167,17 @@ async def test_usage_a_request_rate_and_a_token_budget_against_the_real_gateway(
     priced a unit a token (and read back as priced), the engine's own key holding its limits, a
     call tagged by the client inside `calling`, a rate and then a budget each stopping the next
     call in fixed words, and the gateway's daily records read back as counts with no text."""
+    # Measured: the gateway keeps a key's minute of requests and its spend by the key's hash, in
+    # its own memory, so a key deleted and made again with the same value carries them over until
+    # the gateway restarts. Each run derives its engine keys from a secret of its own, so no run
+    # starts inside another's minute or budget; the admin calls still use the master key.
+    import secrets
     from datetime import UTC, datetime
 
     from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
     from adapters.model_litellm.errors import ModelLimitReached
     from adapters.model_litellm.usage import calling, engine_key, read_usage
     from schemas.model_admin import EngineLimits
-
-    # Measured: the gateway keeps a key's minute of requests and its spend by the key's hash, in
-    # its own memory, so a key deleted and made again with the same value carries them over until
-    # the gateway restarts. Each run derives its engine keys from a secret of its own, so no run
-    # starts inside another's minute or budget; the admin calls still use the master key.
-    import secrets
 
     derived_from = f"{MASTER}-{secrets.token_hex(4)}"
     http = httpx.AsyncClient(base_url=URL, headers={"Authorization": f"Bearer {MASTER}"})
@@ -181,7 +211,7 @@ async def test_usage_a_request_rate_and_a_token_budget_against_the_real_gateway(
         await gateway.delete_entry(model_id)
         await gateway.add_entry(provider, "known-model")
         assert (await gateway.entries())[model_id] is True  # priced a unit a token
-        await gateway.put_engine_key("openai", EngineLimits(requests_per_minute=2))
+        await gateway.put_engine_key(provider, EngineLimits(requests_per_minute=2))
         await ask()
         await ask()
         with pytest.raises(ModelLimitReached) as rate:
@@ -192,7 +222,7 @@ async def test_usage_a_request_rate_and_a_token_budget_against_the_real_gateway(
 
         # The rate cleared, a budget set: 50 tokens a day, 22 a call; 44 spent already.
         await gateway.put_engine_key(
-            "openai", EngineLimits(budget_tokens=50, budget_period="day")
+            provider, EngineLimits(budget_tokens=50, budget_period="day")
         )
         # No wait: the spend counts at once (measured; ADR-135 Amendment 3).
         await ask()  # 44 < 50: answered, and crosses it

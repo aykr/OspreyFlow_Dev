@@ -87,7 +87,10 @@ def parse_tag(tag: str) -> Call | None:
 
 def engine_key(master: str, engine: str) -> str:
     """An engine's gateway key: an HMAC of its name under the master key. Never stored anywhere;
-    each Conduit derives the same one."""
+    each Conduit derives the same one. Refused from an empty master key, from which anyone could
+    derive it."""
+    if not master.strip():
+        raise ValueError("no master key: an engine's key is never derived from an empty one")
     digest = hmac.new(master.encode(), f"osprey-engine:{engine}".encode(), hashlib.sha256)
     return "sk-osprey-" + digest.hexdigest()[:48]
 

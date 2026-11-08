@@ -121,6 +121,7 @@ async def _run(argv: Sequence[str]) -> int:
         print(refused.words, file=sys.stderr)
         return 1
     finally:
+        await admin.close()  # its retry, if the gateway was not answering, stops here
         await http.aclose()
         await audit.close()
 

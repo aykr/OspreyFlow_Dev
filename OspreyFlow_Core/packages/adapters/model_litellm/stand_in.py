@@ -54,6 +54,12 @@ stack a, against the same image (litellm 1.101.0):
 - `GET /key/info?key=` (404 "Key not found in database"), `POST /key/update` (404 "Key not
   found."; its answer **carries the key**) and `POST /key/delete` (404 "No keys found"); a call
   with a deleted key is 401, echoing its last four characters and its hash.
+- measured again in P3 (8 November 2026, the platform lease on stack a): a key made or updated with
+  `models` is refused any other model, even one not held, 403 `key_model_access_denied` naming the
+  models it may use (never the key); `GET /key/list` answers each key's SHA-256, newest first, and
+  with `return_full_object=true` its `token` (the hash), `key_name` (`sk-...` and its last four)
+  and `metadata`, `size` at most 100 (422 above), with `total_count`, `current_page` and
+  `total_pages`; `POST /key/delete` takes a key's hash as well as the key itself.
 
 Not measured, so not modelled as refusals and never relied on: whether a request refused by a
 rate limit is recorded as a failure (the stand-in records it nowhere, and no test reads it);
@@ -135,6 +141,9 @@ class _VirtualKey:
     window_tokens: int = 0
     #: Spend not yet written: (when it is, the cost).
     pending: list[tuple[float, float]] = field(default_factory=list)
+    #: The models it may call; empty, any (measured).
+    models: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 _FIGURES = ("api_requests", "successful_requests", "failed_requests", "prompt_tokens",
@@ -454,6 +463,16 @@ class StandInGateway:
     ) -> httpx.Response:
         self.received.append((virtual or "master", dict(body)))
         tags = _tags(body, request)
+        model = str(body.get("model", ""))
+        if virtual is not None and self._keys[virtual].models and model not in (
+            allowed := self._keys[virtual].models
+        ):
+            return _error(
+                403,
+                f"key not allowed to access model. This key can only access models={allowed}. "
+                f"Tried to access {model}",
+                "key_model_access_denied",
+            )
         refused = self._limited(virtual, tags)
         if refused is not None:
             return refused
@@ -580,7 +599,8 @@ class StandInGateway:
                     "bad_request_error",
                 )
             key = str(body.get("key") or f"sk-{secrets.token_urlsafe(16)}")
-            self._keys[key] = _VirtualKey(alias=alias)
+            self._keys[key] = _VirtualKey(alias=alias, models=list(body.get("models") or []),
+                                          metadata=dict(body.get("metadata") or {}))  # fmt: skip
             for f in _KEY_FIELDS:
                 setattr(self._keys[key], f, body.get(f))
             return httpx.Response(200, json={"key": key, "key_alias": alias, "spend": 0.0})
@@ -592,17 +612,45 @@ class StandInGateway:
             for f in _KEY_FIELDS:
                 if f in body:
                     setattr(held, f, body[f])
+            if "models" in body:
+                held.models = list(body["models"] or [])
             return httpx.Response(200, json={"key": key, "token": _hash(key), "spend": held.spend})
+        if method == "GET" and path == "/key/list":
+            return self._key_list(query)
         if method == "POST" and path == "/key/delete" and self.refuse_key_delete:
             return _error(self.refuse_key_delete, "Internal Server Error", "internal_server_error")
         if method == "POST" and path == "/key/delete":
+            by_hash = {_hash(k): k for k in self._keys}
             keys = [str(k) for k in body.get("keys") or []]
-            if not keys or any(k not in self._keys for k in keys):
+            held_keys = [k if k in self._keys else by_hash.get(k) for k in keys]
+            if not keys or any(k is None for k in held_keys):
                 return _error(404, "{'error': 'No keys found'}", "internal_server_error")
-            for k in keys:
+            for k in held_keys:
+                assert k is not None
                 del self._keys[k]
             return httpx.Response(200, json={"deleted_keys": keys})
         return _error(404, "Not Found", "not_found_error")
+
+    def _key_list(self, query: Mapping[str, list[str]]) -> httpx.Response:
+        """Measured: newest first, at most 100 a page, hashes only."""
+        size = int((query.get("size") or ["10"])[0])
+        page = int((query.get("page") or ["1"])[0])
+        if size > 100:
+            return httpx.Response(422, json={"detail": [{
+                "type": "less_than_equal", "loc": ["query", "size"],
+                "msg": "Input should be less than or equal to 100"}]})  # fmt: skip
+        full = (query.get("return_full_object") or ["false"])[0] == "true"
+        newest = list(reversed(self._keys))
+        pages = max(1, -(-len(newest) // size))
+        chosen = newest[(page - 1) * size : page * size]
+        keys: list[Any] = [
+            {"token": _hash(k), "key_name": f"sk-...{k[-4:]}", "key_alias": self._keys[k].alias,
+             "models": list(self._keys[k].models), "metadata": dict(self._keys[k].metadata)}
+            if full else _hash(k)
+            for k in chosen
+        ]  # fmt: skip
+        return httpx.Response(200, json={"keys": keys, "total_count": len(newest),
+                                         "current_page": page, "total_pages": pages})  # fmt: skip
 
     def _answer(self, body: Mapping[str, Any]) -> httpx.Response:
         model_name = str(body.get("model", ""))
