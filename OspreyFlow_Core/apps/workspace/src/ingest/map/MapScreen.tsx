@@ -35,6 +35,8 @@ import { useEffect, useState } from "react";
 
 import type {
   ColumnProfile,
+  SourceProfile,
+  StagingPreview,
   MapSampleRow,
   OntologySchema,
   RecipeEdge,
@@ -52,6 +54,7 @@ import {
   fetchHandlingScheme,
   fetchOntologySchema,
   fetchProfile,
+  previewStaging,
   fetchSampleRow,
   fetchTransforms,
   previewHandling,
@@ -64,6 +67,7 @@ import { LinkList } from "./LinkList";
 import { MapCanvas, type MapSelection } from "./MapCanvas";
 import { listSources } from "../sources/api";
 import { SourceFieldsPanel } from "./SourceFieldsPanel";
+import { lastStagingStep } from "../dag/stagingSteps";
 import { ChosenColumnContext } from "./chosenColumn";
 import { edgeTypesForEndpoints, entityTypesForPole, findEdge, findEntity, nextEntityRef, unmappedFieldNames, updateEntityByRef, boundFieldNames as boundFieldNamesOf } from "./rowTemplate";
 
@@ -103,6 +107,15 @@ function friendlyError(err: unknown): string {
 
 const EMPTY_TEMPLATE: RowTemplate = { entities: [], edges: [] };
 
+/** A staged table's columns as the columns pane reads a source's: its profile's, or each name with
+ * nothing yet known of it when the table has no rows to profile. */
+function stagedColumns(preview: StagingPreview): ColumnProfile[] {
+  if (preview.profile) return preview.profile.columns;
+  return (preview.columns ?? []).map((name) => ({
+    name, sample_size: 0, null_count: 0, distinct_count: 0, inferred_type: "string", type_confidence: 0,
+  }) as ColumnProfile);  // prettier-ignore
+}
+
 export function MapScreen({
   apiBaseUrl,
   investigationId,
@@ -135,6 +148,7 @@ export function MapScreen({
   // Spec 09 §4's keyboard bind (ADR-140 Amendment 8): a column chosen to bind.
   const [chosenColumn, setChosenColumn] = useState<string | null>(null);
   const [sampleRow, setSampleRow] = useState<MapSampleRow | null>(null);
+  const [stagedTable, setStagedTable] = useState<StagingPreview | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,16 +156,29 @@ export function MapScreen({
     setError(null);
     Promise.all([
       fetchDraft(apiBaseUrl, bearerToken, investigationId, recipeId),
-      fetchProfile(apiBaseUrl, bearerToken, investigationId, recipeId),
+      // A staged pipeline's columns are its last step's table's, so its source's own profile is
+      // not needed: a failure to read it is only a failure for an unstaged one.
+      fetchProfile(apiBaseUrl, bearerToken, investigationId, recipeId).catch((err: unknown) => err),
       fetchOntologySchema(apiBaseUrl, bearerToken),
       fetchTransforms(apiBaseUrl, bearerToken),
       fetchHandlingScheme(apiBaseUrl, bearerToken),
     ])
-      .then(([draftResult, profileResult, ontologyResult, transformsResult, schemeResult]) => {
+      .then(async ([draftResult, profileResult, ontologyResult, transformsResult, schemeResult]) => {
         if (cancelled) return;
+        // ADR-140 Amendment 12: a pipeline with staging steps maps the last step's table, so the
+        // columns pane is that table's profile and its rows the sample, the profiler run on the
+        // staged table over the first ten rows of each source, at the reader's own clearance.
+        const last = draftResult.pipeline ? lastStagingStep(draftResult.pipeline) : null;
+        const staged =
+          last && draftResult.pipeline
+            ? await previewStaging(apiBaseUrl, bearerToken, investigationId, recipeId, draftResult.pipeline, last)
+            : null;
+        if (cancelled) return;
+        setStagedTable(staged);
         setDraft(draftResult);
         onDraftChange?.(draftResult);
-        setColumns(profileResult.columns);
+        if (!staged && profileResult instanceof Error) throw profileResult;
+        setColumns(staged ? stagedColumns(staged) : (profileResult as SourceProfile).columns);
         setOntology(ontologyResult);
         setTransforms(transformsResult);
         setScheme(schemeResult);
@@ -173,6 +200,15 @@ export function MapScreen({
   const location = draft?.source_location ?? null;
   useEffect(() => {
     setReadsFrom(null);
+    if (stagedTable) {
+      // Decision 8's words, and beside them anything the save gate refuses or the sample withholds
+      // (the sample runs beside refusals of steps it does not need: the review of L1.4).
+      const said = (stagedTable.problems ?? []).join(" ");
+      setReadsFrom(
+        `From the staged table ${stagedTable.step}: the steps over the first ten rows of each source.${said ? ` ${said}` : ""}`,
+      );
+      return;
+    }
     if (!datasetId) return;
     let cancelled = false;
     listSources({ apiBaseUrl, bearerToken }, datasetId)
@@ -189,10 +225,20 @@ export function MapScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, datasetId, location]);
+  }, [apiBaseUrl, bearerToken, datasetId, location, stagedTable]);
 
   useEffect(() => {
     if (loading || error) return;
+    if (stagedTable) {
+      const rows = stagedTable.rows ?? [];
+      setSampleRow(
+        rows.length
+          ? { row_index: Math.min(rowIndex, rows.length - 1), values: rows[Math.min(rowIndex, rows.length - 1)]!,
+              values_masked: Boolean(stagedTable.values_masked), is_last_row: rowIndex >= rows.length - 1 }  // prettier-ignore
+          : null,
+      );
+      return;
+    }
     let cancelled = false;
     fetchSampleRow(apiBaseUrl, bearerToken, investigationId, recipeId, rowIndex)
       .then((row) => {
@@ -205,7 +251,7 @@ export function MapScreen({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, bearerToken, recipeId, rowIndex, loading, error, investigationId]);
+  }, [apiBaseUrl, bearerToken, recipeId, rowIndex, loading, error, investigationId, stagedTable]);
 
   if (loading) return <p style={{ padding: "var(--sp-16)", color: "var(--text-secondary)" }}>Loading…</p>;
   if (error || !draft || !columns || !ontology) {

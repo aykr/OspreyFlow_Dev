@@ -1,0 +1,7 @@
+{
+  "_about": "Rule 9: the only files services.ingest.reference_list_import keeps as a list's rows, by the SHA-256 of their bytes. Each is a synthetic fixture: invented names, no real data. Add a file only with its own synthetic provenance.",
+  "digests": {
+    "cfd0d73a77be3ca680f087a0bc6bf163cc5c520b85c5a630c27aefb241a57d42": "establishments.csv: the Visits and contacts exit fixture's two invented prisons (ADR-140 Amendments 11 and 12)",
+    "1c398b42e85f8de66a26d2b3b35474d6eb57d5566ce8aaa4664523d15306f309": "number_owners.csv: the same fixture's invented owners of Ofcom drama numbers"
+  }
+}

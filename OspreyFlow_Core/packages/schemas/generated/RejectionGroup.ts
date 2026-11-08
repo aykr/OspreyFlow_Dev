@@ -5,6 +5,11 @@ export type Count = number;
 export type RowIndex = number;
 export type Reason1 = string;
 export type Sample = string;
+export type Table = string;
+export type RowIndex1 = number;
+export type LoadId = string | null;
+export type Side = ("left" | "right") | null;
+export type Refs = RejectionRef[];
 export type Classification = string;
 export type HandlingCode = string;
 export type ActionCode = string | null;
@@ -36,9 +41,23 @@ export interface RejectionRecord {
   row_index: RowIndex;
   reason: Reason1;
   sample: Sample;
+  refs?: Refs;
   marking?: Handling | null;
   sample_unreadable?: SampleUnreadable;
   [k: string]: unknown;
+}
+/**
+ * ADR-140 Amendment 12: a row a rejection came from, in a staged run. The table it is a row of
+ * (a source's name, `reference_list:<name>@v<n>`, or a staged step's table), its row number, the
+ * load that read it (a source row's; `None` for a list row or a staged table's row) and, for a
+ * Join, the side. **No row key, raw or hashed** (rule 7;
+ * `tests/schemas/test_staging_report_schemas.py`).
+ */
+export interface RejectionRef {
+  table: Table;
+  row_index: RowIndex1;
+  load_id?: LoadId;
+  side?: Side;
 }
 export interface Handling {
   classification: Classification;

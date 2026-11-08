@@ -84,8 +84,9 @@ export interface ScheduleRunView {
 /**
  * What a run cost (ADR-110 Amendment 6 point 9, ADR-141 decision 2;
  * `services/ingest/metering.py` has how each is counted). `None` is *not measured*, never 0:
- * rows staged and bytes written to Parquet wait for phase 7's staging. Counts of the run's own
- * rows and writes: a route withholds them as it withholds every count (rule 3).
+ * rows staged and bytes written to Parquet are a staged run's (ADR-140 Amendment 12), `None` for
+ * any other. Counts of the run's own rows and writes: a route withholds them as it withholds
+ * every count (rule 3).
  */
 export interface RunMetering {
   wall_ms: WallMs;

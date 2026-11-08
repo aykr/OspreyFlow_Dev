@@ -23,7 +23,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from services.ingest.metering import CountingMedia, metering_of
+from services.ingest.metering import CountingMedia, StagingMeter, metering_of
+from services.ingest.staging import ObjectStorageConfig
 from services.ingest.watermark import RefreshRead
 from valkey.asyncio import Valkey
 
@@ -58,6 +59,7 @@ from .screening import ScreeningListStore
 from .strength_influencers import InfluencerStore
 from .studio_map import resolve_source_handling
 from .studio_publish import LoadSink, run_published_recipe
+from .target_models import TargetModelStore
 from .typology_rules import TypologyRuleStore
 
 
@@ -92,6 +94,11 @@ class RecipeRunDeps:
     #: ADR-139: the installation's and each case's link-strength influencers, which a sentence's
     #: strength condition judges by. None: the weights file's defaults alone.
     influencers: InfluencerStore | None = None
+    #: ADR-140 Amendment 12: the datasets' models, whose reference lists a staged pipeline's
+    #: Lookups read, and the store their rows and the staged Parquet are kept in. None: no list
+    #: (a Lookup is refused in words) and the store the environment names.
+    target_models: TargetModelStore | None = None
+    staging_storage: ObjectStorageConfig | None = None
 
     @classmethod
     def from_state(cls, state: Any) -> RecipeRunDeps:
@@ -155,6 +162,8 @@ async def run_recipe_as(
     )
     # ADR-110 Amendment 6 point 9: the run is timed, and what it puts to the object store counted.
     media = CountingMedia(deps.media)
+    # ADR-140 Amendment 12: what a staged pipeline's steps staged, and their Parquet's bytes.
+    staging = StagingMeter()
     clock = time.perf_counter()
     try:
         report = await _execute_recipe_run(
@@ -167,6 +176,7 @@ async def run_recipe_as(
             sink=sink,
             refresh=refresh,
             media=media,
+            staging=staging,
         )
     except Exception as error:
         await deps.recipe_runs.fail(
@@ -177,7 +187,10 @@ async def run_recipe_as(
         )
         raise
     report.metering = metering_of(
-        report, wall_seconds=time.perf_counter() - clock, object_store_bytes=media.bytes_written
+        report,
+        wall_seconds=time.perf_counter() - clock,
+        object_store_bytes=media.bytes_written,
+        staging=staging,
     )
     await deps.recipe_runs.finish(run_id, report=report, now=datetime.now(UTC))
     return report
@@ -194,8 +207,10 @@ async def _execute_recipe_run(
     sink: LoadSink,
     refresh: RefreshRead | None = None,
     media: MediaStore | None = None,
+    staging: StagingMeter | None = None,
 ) -> LoadReport | PipelineRunReport:
     """`media`: the store the run puts to, counted for its metering; `deps.media` when not given.
+    `staging`: told what a staged pipeline's steps wrote (ADR-140 Amendment 12).
 
     The load itself, `run_studio_recipe`'s docstring has what each step is for."""
     load_id = new_id()
@@ -246,6 +261,9 @@ async def _execute_recipe_run(
             refresh=refresh,
             # ADR-109 Amendment 11: the enrich stage's supersedes go through the alerts' journal.
             alerts=deps.alerts_store,
+            target_models=deps.target_models,
+            staging_storage=deps.staging_storage,
+            staging_meter=staging,
         )
         for branch in report.branches:
             await resolution_trigger_module.submit_post_ingest_resolution_jobs(

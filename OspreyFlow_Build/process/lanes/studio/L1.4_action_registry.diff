@@ -1,0 +1,26 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index ea01d5e..bc65714 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -858,6 +858,21 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
+   "go-back-to-a-steps-settings-from-preview-by-keyboard",
+   // The second review: guided mode may not remove the step that feeds an expert step.
+   "the-step-feeding-an-expert-step-cannot-be-removed-in-guided-mode-by-keyboard",
++  // ADR-140 Amendment 12 (redesign phase 7b): a drawer per staging step, its live sample, the save
++  // gate's refusals in its words, and phase 7's exit built by keys.
++  "add-a-staging-step-by-keyboard",
++  "set-a-lookup-in-its-drawer-by-keyboard",
++  "set-a-join-in-its-drawer-by-keyboard",
++  "set-a-filter-in-its-drawer-by-keyboard",
++  "set-a-derive-in-its-drawer-by-keyboard",
++  "set-a-union-in-its-drawer-by-keyboard",
++  "set-a-dedupe-in-its-drawer-by-keyboard",
++  "add-and-remove-a-row-in-a-steps-drawer-by-keyboard",
++  "read-a-steps-sample-again-by-keyboard",
++  "preview-a-staging-step-by-keyboard",
++  "a-drawer-refuses-what-the-save-gate-refuses-by-keyboard",
++  "remove-a-staging-step-by-keyboard",
++  "build-visits-and-contacts-by-keys-for-phase-7s-exit",
+ ] as const);
+ 
+ // ADR-114 Amendment 5 point 9: Start, where a person goes after signing in, and the mark back to it.

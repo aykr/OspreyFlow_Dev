@@ -41,7 +41,7 @@ from schemas.ingest import (
 )
 from schemas.profile import SourceProfile
 
-from .ingest_sources import ingest_root, is_inside
+from .ingest_sources import UPLOAD_SUBDIR, ingest_root, is_inside, plain_dataset_id
 
 
 #: **Derived from the profile files, not a literal** (round 13bf). This used to be a second,
@@ -70,21 +70,56 @@ class SourceUnreadableError(Exception):
     connector expects — missing file, permissions, or a decoding failure."""
 
 
-def _confined(location: str) -> str:
-    """The source file, only if it is inside the ingest folder (`ingest_sources.ingest_root`) —
-    the one place the picker, an upload and the folder watch put a file. Resolved first, so a `..`
-    walk or a link inside the folder to a file outside it is judged by where it really leads.
-    Refused before anything is opened or stat'd, in words that do not depend on whether the path
-    exists or name it, so the refusal cannot be used to learn which files are on the server (the
-    security review, 18 October 2026). Every read of a recipe's source passes through here:
-    Profile, Map, Verify, a run and a publish all read with `_read_rows`."""
+#: The refusal of a file in the ingest folder that is not one of the recipe's dataset's own, in
+#: the words `register_dataset_source` refuses one in.
+NOT_THIS_DATASETS = (
+    "That file is not one of this dataset's files in the ingest folder. "
+    "Choose it from the dataset's files, or upload it."
+)
+
+
+def _dataset_folders(root: Path, dataset_id: str | None) -> set[Path]:
+    """The folders a file of `dataset_id` lies directly in, resolved: the root and its `uploaded/`
+    folder (files placed before ADR-099 Amendment 3, offered to every case), and the dataset's own
+    folder under each — exactly the folders `ingest_sources.list_source_files` lists for it."""
+    folders = [root, root / UPLOAD_SUBDIR]
+    if dataset_id and plain_dataset_id(dataset_id):
+        folders += [root / dataset_id, root / UPLOAD_SUBDIR / dataset_id]
+    return {folder.resolve() for folder in folders}
+
+
+def _confined(location: str, dataset_id: str | None) -> str:
+    """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+    (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+    file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+    `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+    it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+    whether the path exists or name it, so the refusal cannot be used to learn which files are on
+    the server (the security review, 18 October 2026). Every read of a recipe's source passes
+    through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+    `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+    recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+    uploaded file was read into this case)."""
     root = ingest_root()
-    if not is_inside(root, Path(location).resolve()):
+    resolved = Path(location).resolve()
+    if not is_inside(root, resolved):
         raise SourceUnreadableError(
             "That file is not in the ingest folder. "
             "Choose it from the folder's files, or upload it."
         )
+    if resolved.parent not in _dataset_folders(root, dataset_id):
+        raise SourceUnreadableError(NOT_THIS_DATASETS)
     return location
+
+
+def offered_to(location: str, dataset_id: str | None) -> bool:
+    """Whether `_confined` would read `location` for a recipe of `dataset_id`: the save gate's and
+    Connect's question, asked before anything is stored."""
+    try:
+        _confined(location, dataset_id)
+    except SourceUnreadableError:
+        return False
+    return True
 
 
 class SourceHandlingIncompleteError(Exception):
@@ -153,7 +188,7 @@ def _read_rows(recipe: StudioRecipeDraft) -> list[dict[str, str]]:
     # `source_location` is set — `schemas.ingest.
     # StudioRecipeDraft._compute_ready_for_profile`.
     assert recipe.source_location is not None
-    source = _confined(recipe.source_location)
+    source = _confined(recipe.source_location, recipe.dataset_id)
     try:
         # The profile's own delimiter/encoding, not the reader's defaults: a layout that declares
         # a semicolon separator was being read as one column before this, and profiled as such.

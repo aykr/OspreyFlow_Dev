@@ -214,6 +214,7 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/held-rows/reject"): A,
     ("POST", P + "/ingest/recipes/{recipe_id}/held-rows/release"): A,
     ("GET", P + "/ingest/recipes/{recipe_id}/map/sample-rows/{row_index}"): V,
+    ("POST", P + "/ingest/recipes/{recipe_id}/staging-preview"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/map/handling-preview"): V,
     ("POST", P + "/ingest/recipes/{recipe_id}/verify"): E,
     # Phase 6 (ADR-140 Amendment 8): the graph Preview, Test's dry run marking nothing.

@@ -41,6 +41,7 @@ PIPELINE_FILES: Mapping[str, str] = {
     "services/api/recipe_run.py": "a pipeline run's report, per source branch",
     "services/api/recipe_runs.py": "the run ledger, one record per pipeline branch",
     "services/api/run_source.py": "the file one source branch of a pipeline reads",
+    "services/api/studio_staging.py": "a staged pipeline's sources, each as its branch reads it",
     "apps/workspace/src/ingest/dag/pipelineGraphEdit.ts": "adds a source branch to the DAG",
     "apps/workspace/src/ingest/dag/pipelineGraphEdit.test.ts": "its tests",
     "apps/workspace/src/ingest/dag/PipelineCanvas.test.tsx": "the DAG canvas's tests",

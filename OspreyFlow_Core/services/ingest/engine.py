@@ -197,6 +197,15 @@ def encode_key_parts(parts: Sequence[str | None]) -> str | None:
     does. Only a part with nothing in it is empty: a space is a part."""
     if any(part is None or part == "" for part in parts):
         return None
+    return hash_parts(parts)
+
+
+def hash_parts(parts: Sequence[str | None]) -> str:
+    """The one encoding of a row's identity: the SHA-256 of a JSON list of its parts, in order,
+    with fixed separators and no ASCII escaping. `encode_key_parts` gives it for a row with a key;
+    the staging catalogue (`staging_catalogue.source_table`) for every row, a row with no key
+    by all its cells, so a staged row's identity and a kept row's key never disagree for the same
+    parts."""
     encoded = json.dumps(list(parts), ensure_ascii=False, separators=(",", ":"))
     return sha256(encoded.encode("utf-8")).hexdigest()
 

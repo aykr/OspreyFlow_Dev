@@ -67,6 +67,8 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "kyc_expiries": given["kyc_expiries"],
         "recipe_runs": given["recipe_runs"],
         "influencers": given["influencers"],
+        # ADR-140 Amendment 12: a staged pipeline's lists and the store their rows are kept in.
+        "models": given["target_models"], "staging_storage": given["staging_storage"],
         # Build order step 30: the run is held to the files Verify recorded; none here.
         "studio_recipes": _NothingVerified(),
     }

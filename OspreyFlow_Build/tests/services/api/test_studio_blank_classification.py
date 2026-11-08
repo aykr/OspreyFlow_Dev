@@ -9,6 +9,7 @@ the owner's ruling says, and an OFFICIAL reader still sees it."""
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -107,7 +108,7 @@ def test_editing_a_draft_also_fills_a_blank_classification(
 
 
 def test_a_draft_with_every_other_answer_and_no_classification_is_ready_for_profile(
-    client_and_store: tuple[TestClient, _FakeStudioRecipes],
+    client_and_store: tuple[TestClient, _FakeStudioRecipes], tmp_path: Path
 ) -> None:
     client, _store = client_and_store
     response = client.post(
@@ -115,7 +116,8 @@ def test_a_draft_with_every_other_answer_and_no_classification_is_ready_for_prof
         json={
             "label": "Carrier A",
             "connector_profile": "generic-csv",
-            "source_location": "/var/lib/osprey/ingest/uploaded/carrier.csv",
+            # In the test's ingest folder (`tests/conftest.py`): Connect refuses any other file.
+            "source_location": str(tmp_path / "uploaded" / "carrier.csv"),
             "handling": {"handling_code": "P", "originator": "unit-1", "owning_unit": "unit-1"},
             "legal_basis": "RIPA s22",
         },

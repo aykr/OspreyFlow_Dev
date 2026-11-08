@@ -32,7 +32,6 @@ round-trips through the catalogue as one.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -64,6 +63,7 @@ from schemas.staging import (
 )
 
 from . import staging as _staging
+from .engine import hash_parts
 from .staging import ObjectStorageConfig
 
 Cell = str | None
@@ -196,10 +196,8 @@ def _text(value: object) -> Cell:
     return text if text.strip() else None
 
 
-def _hash(parts: Sequence[Cell]) -> str:
-    return hashlib.sha256(
-        json.dumps(list(parts), ensure_ascii=False, separators=(",", ":")).encode()
-    ).hexdigest()
+#: A row's identity, in the engine's one encoding (`engine.hash_parts`; L1.3's carried item).
+_hash = hash_parts
 
 
 def source_table(

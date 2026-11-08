@@ -12,6 +12,11 @@ export type EdgesCreated = number;
 export type RowIndex = number;
 export type Reason = string;
 export type Sample = string;
+export type Table = string;
+export type RowIndex1 = number;
+export type LoadId1 = string | null;
+export type Side = ("left" | "right") | null;
+export type Refs = RejectionRef[];
 export type Classification = string;
 export type HandlingCode = string;
 export type ActionCode = string | null;
@@ -59,6 +64,17 @@ export type RowsStaged = number | null;
 export type ParquetBytes = number | null;
 export type ObjectStoreBytes = number | null;
 export type GraphWrites = number;
+export type Step = string;
+export type Kind1 = string;
+export type RowsIn = number;
+export type RowsOut = number;
+export type Unmatched = number;
+export type FilteredOut = number;
+export type RepeatsFolded = number;
+export type Rejected = number;
+export type RightRowsIn = number;
+export type RightUnmatched = number;
+export type StagingSteps = StagingStepCount[];
 
 export interface LoadReport {
   load_id: LoadId;
@@ -97,6 +113,7 @@ export interface LoadReport {
   rule_notes?: RuleNotes;
   markings?: Markings;
   metering?: RunMetering | null;
+  staging_steps?: StagingSteps;
   [k: string]: unknown;
 }
 /**
@@ -107,9 +124,23 @@ export interface RejectionRecord {
   row_index: RowIndex;
   reason: Reason;
   sample: Sample;
+  refs?: Refs;
   marking?: Handling | null;
   sample_unreadable?: SampleUnreadable;
   [k: string]: unknown;
+}
+/**
+ * ADR-140 Amendment 12: a row a rejection came from, in a staged run. The table it is a row of
+ * (a source's name, `reference_list:<name>@v<n>`, or a staged step's table), its row number, the
+ * load that read it (a source row's; `None` for a list row or a staged table's row) and, for a
+ * Join, the side. **No row key, raw or hashed** (rule 7;
+ * `tests/schemas/test_staging_report_schemas.py`).
+ */
+export interface RejectionRef {
+  table: Table;
+  row_index: RowIndex1;
+  load_id?: LoadId1;
+  side?: Side;
 }
 export interface Handling {
   classification: Classification;
@@ -158,8 +189,9 @@ export interface SourceWatermark {
 /**
  * What a run cost (ADR-110 Amendment 6 point 9, ADR-141 decision 2;
  * `services/ingest/metering.py` has how each is counted). `None` is *not measured*, never 0:
- * rows staged and bytes written to Parquet wait for phase 7's staging. Counts of the run's own
- * rows and writes: a route withholds them as it withholds every count (rule 3).
+ * rows staged and bytes written to Parquet are a staged run's (ADR-140 Amendment 12), `None` for
+ * any other. Counts of the run's own rows and writes: a route withholds them as it withholds
+ * every count (rule 3).
  */
 export interface RunMetering {
   wall_ms: WallMs;
@@ -169,4 +201,21 @@ export interface RunMetering {
   object_store_bytes?: ObjectStoreBytes;
   graph_writes: GraphWrites;
   [k: string]: unknown;
+}
+/**
+ * ADR-140 Amendment 12: what one staging step did in a run, as counts: the rows it read and
+ * gave, and every row it did not pass on, by why (rule 2: nothing dropped silently). Counts of
+ * the loader's own rows: a route withholds them as it withholds every count (rule 3).
+ */
+export interface StagingStepCount {
+  step: Step;
+  kind: Kind1;
+  rows_in: RowsIn;
+  rows_out: RowsOut;
+  unmatched?: Unmatched;
+  filtered_out?: FilteredOut;
+  repeats_folded?: RepeatsFolded;
+  rejected?: Rejected;
+  right_rows_in?: RightRowsIn;
+  right_unmatched?: RightUnmatched;
 }

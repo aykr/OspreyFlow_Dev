@@ -437,12 +437,13 @@ async def test_a_recipe_with_staging_is_never_run_over_one_source_s_rows() -> No
     assert graph.open_nodes == [] and graph.open_edges == []
 
 
-async def test_a_recipe_with_staging_is_not_published_unjudged(tmp_path: Path) -> None:
-    """Review round 1, item 4: no route gives the save gate a dataset's sources and lists yet
-    (phase 7b), so publishing a recipe with steps is refused in words and commits nothing."""
-    with pytest.raises(RecipeRuleError, match="declares staging steps"):
-        await write_and_commit_recipe(RECIPE, repo_root=tmp_path)
-    assert not (tmp_path / "recipes").exists()
+async def test_a_recipe_with_staging_commits_its_steps_as_they_are(tmp_path: Path) -> None:
+    """Phase 7b (ADR-140 Amendment 12): the publish route judges the steps by the save gate before
+    it builds the recipe (`tests/services/api/test_studio_staging_routes.py`), so the commit writes
+    them, and the committed file reads back with the same steps."""
+    path = await write_and_commit_recipe(RECIPE, repo_root=tmp_path)
+    committed = load_recipe(tmp_path / path)
+    assert committed.staging == RECIPE.staging
 
 
 async def test_test_and_the_load_reject_the_same_rows() -> None:

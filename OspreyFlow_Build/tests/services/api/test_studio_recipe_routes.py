@@ -285,7 +285,7 @@ def test_get_draft_returns_404_for_a_recipe_in_a_different_unit(client: TestClie
 
 
 def test_patch_draft_updates_and_reports_ready_for_profile_once_complete(
-    client: TestClient,
+    client: TestClient, tmp_path: Path
 ) -> None:
     client.studio_recipes.draft = _draft()  # type: ignore[attr-defined]
 
@@ -294,7 +294,8 @@ def test_patch_draft_updates_and_reports_ready_for_profile_once_complete(
         json={
             "label": "Carrier A — CDR",
             "connector_profile": "generic-csv",
-            "source_location": "s3://bucket/carrier-a.csv",
+            # In the test's ingest folder (`tests/conftest.py`): Connect refuses any other file.
+            "source_location": str(tmp_path / "carrier-a.csv"),
             "handling": {
                 "classification": "OFFICIAL",
                 "handling_code": "P",

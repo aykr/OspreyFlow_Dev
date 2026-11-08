@@ -213,6 +213,7 @@ ROUTE_RIGHTS = {
     "list_transforms": None,
     "update_studio_recipe_row_template": "edit_pipelines",
     "get_studio_recipe_sample_row": "edit_pipelines",
+    "preview_studio_recipe_staging": "edit_pipelines",
     "preview_studio_recipe_element_handling": "edit_pipelines",
     "verify_studio_recipe": "verify_pipelines",
     "preview_studio_recipe_graph": "verify_pipelines",

@@ -1,14 +1,17 @@
-# studio lane · report · L1.3 (phase 7a: the staging catalogue's engine; ADR-140 Amendment 11), 8 November 2026
-1. **Golden files per step: met.** `tests/ingest/test_staging_golden.py` has all six kinds (seven cases), and `tests/knowledge_adapters/test_derive.py` has Derive's seven operations, each golden file showing its refusals.
-2. **Provenance survives a Join: met.** `test_staged_run.py::test_a_join_s_provenance_survives_to_the_link_it_makes` is red with `source_refs` dropped at the join (P1). It is also read back live from ArcadeDB (`test_staged_provenance_live.py`; L1–L5).
-3. **A screening list round-trips through the catalogue: met.** Kind `screening` survives staged Parquet, its entries are equal, and it serves a Lookup subscribed by id (P3–P5, P8).
-4. **Rule 8: met.** No key, a Derive's typed settings included, can carry an expression (S3, T1–T2). Every key adapter and Derive operation is a Knowledge Adapter with a golden file (P6, W1).
-5. **Phase 7a's exit: met.** The synthetic Visits and contacts pipeline without its expert steps runs: Lookup → Join → Derive → Map. Every ref resolves on the server (raw rows by load, list rows by version), and Test and the load reject the same rows. The fixture's narrowing of the prototype's Map (no visitor or VISITED) is recorded in Amendment 11.
-6. **Live, under named leases:** studio on stack a (13:12:40Z–13:13:37Z) and studio on stack b (15:06:42Z–15:13:53Z), both with `stack_lease.sh up`/`down`. ArcadeDB only; the Parquet went to a temporary directory.
-7. **Settlements (orchestrator, 8 November):** Q1–Q3 (a): schemas as their own commit, refs in `provenance.sources`, Amendment 11 with 09 §4/§9. Row key (a): no row key, raw or hashed, in provenance (rule 7). Schemas on main as `41c1b50` and `b65cc9e`.
-8. **Reviews, each item planted red then green** (`L1.3_RED_RECORD.md`): round 1 (T1–T4, R1–R18, V1–V10), round 2 (W1–W7), and the merge round's own lane-reviewer (M1–M6). M1–M6 cover list rows staged by version, raw and list rows written once and never by a refused run, and Map rejections naming the staged table.
-9. **Slip, mine:** about 10:35, three synthetic Parquet files went to the object store on host 9000 without a lease. Fixed and reported; it is the friction row.
-10. **Gates:** `make -k ci` and `make test` at the rebased commit are in `gates/`, with every failure explained.
-11. **Left for L1.4 (7b):** the drawers and the profiler on staged tables; the run route feeding a pipeline's sources; per-step counts and staging metering on `LoadReport`/`RunMetering` (a schemas change); `RejectionRecord` refs.
-12. **Carried, minor:** `_hash` sits beside `engine.encode_key_parts` (different input, same encoding). Nothing locks the check-then-write of raw files against two concurrent runs naming one source load; the run route (7b) gives each upload its own load.
-13. **At merge (orchestrator):** remove the citation-allowlist line for `tests/knowledge_adapters/test_derive.py`; mark the Amendment 11 reservation written (`spec/ADR_RESERVATIONS.md`); re-run the image scans once Docker Hub allows. **Questions:** none. **Running:** nothing; no lease held.
+# studio lane · report · L1.4 (phase 7b, staging drawers; ADR-140 Amendment 12), 8 November 2026
+1. **Drawer per step: met.** Six drawers, typed fields only (rule 8), each with a live sample; `ingest-studio.spec.ts` covers 13 new ids (K1–K8), 46/46; axe 7 states × 3 themes + label checks, 28 green.
+2. **Same words as the save gate: met.** Sample and save both call `staging_gate`, a later step's refusal included (`test_studio_staging_routes.py`; R1c, R2).
+3. **Profiler on staged tables: met.** A staged pipeline's Map editor maps the last step's table, profiled (K7).
+4. **Run route feeds the sources: met.** Each source is read by its own `<run>:<node>` load, so no two runs share a raw file (`test_staged_pipeline_run.py`, P1).
+5. **Counts, metering, refs: met.** In the schemas commit at the branch's head: step counts on the report and view (withheld with the other counts); `RejectionRef`, no row key; `rows_staged` and `parquet_bytes` set (S1–S5, C1–C8, P2, P4).
+6. **Phase 7's exit: met.** Visits and contacts built by keys, mapped over the staged table, tested and deployed (keyboard). Run with every element traced to its rows (`test_phase7_exit.py`). Live under lease studio, stack a, 19:03–19:05Z.
+7. **Carried: met.** One encoding: `engine.hash_parts`.
+8. **Settled:** Q1–Q4 (a) by the orchestrator. **Decisions taken:** list records from their rows' files, read when the live model names them; list rows admitted by synthetic SHA-256 (rule 9); plain gate words.
+9. **Reviews:** my lane-reviewer, two rounds, all fixed, each planted red (`L1.4_RED_RECORD.md`). Round 1: preview oracle on masked rows, preview reading any file (rule 3), a source silently dropped (rule 2). Round 2: list rows withheld from a case not reading the dataset (rule 4). The orchestrator's review (A, B): a source read only if it is one of the recipe's dataset's files, refused at save and Connect; Test and Preview of a staged pipeline with the drawer's two guards; the test root each test's own folder (A1–A4, B1–B2).
+10. **Slip (rule 14), mine:** an offline run wrote one synthetic bucket to stack a's store. Reported, removed under my lease; the live file now skips without one (friction row).
+11. **Gates:** in `gates/<sha>.*` at the rebased head, every failure explained, none mine.
+12. **Left:** step counts not yet drawn on the Glass's run report.
+13. **Commits:** 19 on lane/studio above main, the schemas commit first.
+14. **Requests (a–b):** (a) your shared commit of `actionRegistry.ts` and `every-harness.spec.ts` (`L1.4_*.diff`); (b) ratify outside my map: spec/03's route line, `tools/no_branches_check.py`'s entry, `run_resources.py` and the lifespan's one target-model pool, five route tests, `reportsMap.ts`.
+15. **Requests (c–e):** (c) mark Amendment 12 written; (d) and (e) fixed on your review (item 9); left recorded: Test of a pipeline with no steps still counts over masked rows, as before phase 7.
+16. **Questions:** none. **Running:** nothing; no lease held.

@@ -68,7 +68,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-109 Amendment 12 | A corrected node an alert names is renamed in its referents through the repoint journal; L2.8c's carries | rules | 2026-11-08 | written |
 | ADR-145 Amendment 5 | Custom roles, the Super user preset, teams and leads, and Disable as built (L2.5) | admin | 2026-11-08 | written |
 | ADR-144 Amendment 2 | Case views as built: the refusal's name, no origin link on an alert's case (B14's link withdrawn), who applies a view's window and threshold, and an opened view is a read-only lens | case | 2026-11-08 | written |
-| ADR-140 Amendment 12 | Phase 7b as built: staging steps as pipeline nodes, the drawers and their live sample, per-step counts and metering, a dataset's own reference list rows from its version file (L1.4) | studio | 2026-11-08 | reserved |
+| ADR-140 Amendment 12 | Phase 7b as built: staging steps as pipeline nodes, a drawer per step with its live sample, the run route feeding a pipeline's sources, per-step counts and staging metering, and a dataset's reference list rows from its version's file | studio | 2026-11-08 | written |
 | ADR-135 Amendment 3 | Model usage and limits: calls and tokens per engine and job from the gateway's own records, limits per engine applied by the gateway on the engine's own key, a budget in tokens, no person in usage | platform | 2026-11-08 | written |
 | ADR-146 Amendment 2 | Rules and Monitoring as built: the place gate and its two shared reads, the alert's address route, the router, the jump replaced, the Rule author question open (L2.9) | rules | 2026-11-08 | reserved |
 | ADR-145 Amendment 6 | Audit and Operations' ageing as built (L2.6) | admin | 2026-11-08 | reserved |

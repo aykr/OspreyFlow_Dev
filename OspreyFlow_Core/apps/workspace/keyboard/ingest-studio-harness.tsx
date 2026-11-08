@@ -12,6 +12,7 @@ import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { IngestStudio } from "../src/ingest/IngestStudio";
 import REPORTS_MAP from "./fixtures/pid_intel_reports_map.json";
+import { CONTACTS_BUILT, CONTACTS_DRAFT, CONTACTS_PROFILE, CONTACTS_SAMPLE_ROWS, stagingPreview, stagingRefusals } from "./stagingHarness";
 
 await applyHarnessBrand();
 
@@ -146,6 +147,8 @@ const ONTOLOGY = { version: 1, entity_types: [
   // As `packages/ontology/default.yaml` declares it: from any type (`*`), to a Document. The harness
   // once listed the three types the map uses, which hid that the Map editor read `*` as a type name.
   { name: "MENTIONED_IN", from: ["*"], to: ["Document"], properties: [] },
+  // Phase 7's exit (ADR-140 Amendment 12): the number's owner uses it.
+  { name: "USES", from: ["Person"], to: ["Endpoint"], properties: [] },
 ] };  // prettier-ignore
 const TRANSFORMS = [{ name: "msisdn", arity: 1 }];
 const VERIFY = { rows_read: 3, sample_is_whole_source: true, values_masked: false, rows_deduplicated: 0,
@@ -158,6 +161,13 @@ const asked: { method: string; path: string; body?: string }[] = [];
 // Phase 3's exit (ADR-140 Amendment 6): a pipeline named on the canvas, created here, then given a
 // registered source. Absent until created, so every other case sees the registry it always saw.
 let created: Record<string, unknown> | null = null;
+// Phase 7's exit (ADR-140 Amendment 12): `?contacts=1` adds the "Visits and contacts" draft, its two
+// sources and Map with no step yet, for the steps to be built in its drawers by keys.
+// `?contacts=built` starts it with the exit's three steps already set (`fixtures/
+// visits_and_contacts_pipeline.json`), for the axe scan of each step's drawer and of the Map editor
+// over the staged table.
+let contacts: Record<string, unknown> | null = startParams.get("contacts") ? CONTACTS_DRAFT(base, day(0)) : null;
+if (contacts && startParams.get("contacts") === "built") contacts = { ...contacts, pipeline: CONTACTS_BUILT };
 // Phase 6's exit (ADR-140 Amendment 10): `?pipeline=reports-map` opens chapter 4's reports pipeline
 // already holding the whole committed map, for the axe scan of the Map editor at its fullest.
 if (startParams.get("pipeline") === "reports-map")
@@ -182,12 +192,11 @@ const RIGHTS = new Set(["edit_pipelines", "verify_pipelines", "publish_pipelines
 if (startParams.get("rights") === "no-test") RIGHTS.delete("verify_pipelines");
 const STUDIO_ROLES = new Set(["source_author", "source_approver", "loader"]);
 if (startParams.get("rights") === "no-approve") STUDIO_ROLES.delete("source_approver");
-const KNOWN_KINDS = new Set(["domain_model", "source", "profile", "map", "extract", "enrich", "load"]);
-/** The save gate's refusals, in its own words (`services/ingest/pipeline.py`). */
-const pipelineRefusal = (body: string | undefined): Response | null => {
-  const graph = JSON.parse(String(body)) as { nodes: { id: string; kind: string; label: string }[]; edges: { source: string; target: string }[] };
-  if (graph.nodes.some((n) => !KNOWN_KINDS.has(n.kind)))
-    return new Response(JSON.stringify({ detail: [{ type: "literal_error", loc: ["body", "nodes", "kind"] }] }), { status: 422 });
+const KNOWN_KINDS = new Set(["domain_model", "source", "profile", "map", "extract", "enrich", "load",
+  "lookup", "join", "filter", "derive", "union", "dedupe"]);  // prettier-ignore
+/** The save gate's refusals, in its own words (`services/ingest/pipeline.py`), its staging steps'
+ * included (`studio_staging.staging_gate`, modelled in `stagingHarness.ts`). */
+const pipelineProblems = (graph: { nodes: { id: string; kind: string; label: string }[]; edges: { source: string; target: string }[] }): string[] => {
   const next = (id: string) => graph.edges.filter((e) => e.source === id).map((e) => e.target);
   const reaches = (id: string, kind: string, seen = new Set<string>()): boolean =>
     next(id).some((t) => !seen.has(t) && (seen.add(t), graph.nodes.find((n) => n.id === t)?.kind === kind || reaches(t, kind, seen)));
@@ -196,6 +205,13 @@ const pipelineRefusal = (body: string | undefined): Response | null => {
     ...graph.nodes.filter((n) => n.kind === "extract" && !graph.edges.some((e) => e.target === n.id && graph.nodes.find((m) => m.id === e.source)?.kind === "map"))
       .map((n) => `extract '${n.label}' is not fed by a map; an extract works on what a map bound, never on raw bytes`),
   ];
+  return [...problems, ...stagingRefusals(graph).filter((p) => !problems.includes(p))];
+};
+const pipelineRefusal = (body: string | undefined): Response | null => {
+  const graph = JSON.parse(String(body)) as { nodes: { id: string; kind: string; label: string }[]; edges: { source: string; target: string }[] };
+  if (graph.nodes.some((n) => !KNOWN_KINDS.has(n.kind)))
+    return new Response(JSON.stringify({ detail: [{ type: "literal_error", loc: ["body", "nodes", "kind"] }] }), { status: 422 });
+  const problems = pipelineProblems(graph);
   return problems.length ? new Response(JSON.stringify({ error: "pipeline_invalid", problems }), { status: 422 }) : null;
 };
 const LEVELS: Record<string, string> = { "inv-1": "author", "inv-2": "editor" };
@@ -246,6 +262,54 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const edited = { ...SOURCES[0], ...body, version: 2 };
     SOURCES = [edited, ...SOURCES.slice(1)];
     return reply({ source: edited, needs_attention: ["Wing phone calls"] });
+  }
+  // Phase 7 (ADR-140 Amendment 12): the staged draft's own routes, refusing as the Conduit does.
+  if (contacts && path.includes("/ingest/recipes/r-contacts")) {
+    if (path.endsWith("/r-contacts") && method === "GET") return reply(contacts);
+    if (path.endsWith("/r-contacts/pipeline") && method === "PUT") {
+      const refused = pipelineRefusal(init?.body as string | undefined);
+      if (refused) return refused;
+      contacts = { ...contacts, pipeline: JSON.parse(String(init?.body)), verified_at: null };
+      return reply(contacts);
+    }
+    if (path.endsWith("/staging-preview") && method === "POST") {
+      const refused = refusal(path, "edit_pipelines", "viewer");
+      if (refused) return refused;
+      const body = JSON.parse(String(init?.body)) as { pipeline: Parameters<typeof pipelineProblems>[0]; step: string };
+      return reply(stagingPreview(body.pipeline as never, body.step, pipelineProblems(body.pipeline)));
+    }
+    if (path.endsWith("/profile")) return reply(CONTACTS_PROFILE);
+    const sampled = path.match(/\/map\/sample-rows\/(\d+)$/);
+    if (sampled) {
+      const index = Number(sampled[1]);
+      if (index >= CONTACTS_SAMPLE_ROWS.length) return reply({ error: "row_out_of_range" }, 404);
+      return reply({ row_index: index, values: CONTACTS_SAMPLE_ROWS[index], values_masked: false, is_last_row: index === CONTACTS_SAMPLE_ROWS.length - 1 });
+    }
+    if ((path.endsWith("/verify") || path.endsWith("/preview-graph")) && method === "POST") {
+      const refused = refusal(path, "verify_pipelines", "editor");
+      if (refused) return refused;
+      if (path.endsWith("/verify")) contacts = { ...contacts, verified_at: day(0, 10) };
+      return reply({ ...VERIFY, rows_read: 10, entities_by_type: { Document: { created: 5, referenced: 0 }, Endpoint: { created: 4, referenced: 0 },
+        Person: { created: 2, referenced: 0 } }, edges_by_type: { MENTIONED_IN: { created: 5 }, USES: { created: 2 } },
+        rejections: [{ reason: "staging step with_owner (right side, number_owners row 3): number: a phone number has no letters in it", count: 1, sample_row_indices: [3] }] });  // prettier-ignore
+    }
+    if (path.endsWith("/row-template") && method === "PUT") {
+      contacts = { ...contacts, ...(JSON.parse(String(init?.body)) as object), verified_at: null };
+      return reply(contacts);
+    }
+    if (path.endsWith("/r-contacts") && method === "PATCH") {
+      contacts = { ...contacts, ...(JSON.parse(String(init?.body)) as object), verified_at: null };
+      return reply(contacts);
+    }
+    if (path.endsWith("/publish") && method === "POST") {
+      const refused = refusal(path, "publish_pipelines", "editor");
+      if (refused) return refused;
+      const problems = pipelineProblems(contacts.pipeline as Parameters<typeof pipelineProblems>[0]);
+      if (problems.length) return reply({ error: "pipeline_invalid", problems }, 422);
+      if (!contacts.verified_at) return reply({ error: "studio_recipe_not_verified" }, 409);
+      contacts = { ...contacts, status: "published", git_path: "recipes/r-contacts.yaml" };
+      return reply(contacts);
+    }
   }
   // Phase 6: what the drawer's Preview, Test and the Map editor read, for either draft.
   const recipe = path.match(/\/ingest\/recipes\/(r-visits|r-new)\//)?.[1];
@@ -331,8 +395,9 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (created && path.endsWith("/ingest/recipes/r-new")) return reply(created);
   // The draft list Connect reads to find the draft it opens (`listDrafts`).
-  if (path.endsWith("/ingest/recipes") && method === "GET") return reply(created ? [draft, created] : [draft]);
-  if (path.endsWith("/ingest/recipe-registry")) return reply(created ? [deployed, draft, created] : [deployed, draft]);
+  const drafts = [draft, ...(created ? [created] : []), ...(contacts ? [contacts] : [])];
+  if (path.endsWith("/ingest/recipes") && method === "GET") return reply(drafts);
+  if (path.endsWith("/ingest/recipe-registry")) return reply([deployed, ...drafts]);
   if (path.endsWith("/ingest/recipes/r-calls/runs")) return reply(RUNS);
   if (path.endsWith("/ingest/recipes/r-calls/run") && method === "POST")
     return reply({ load_id: "SYN-LOAD-4", recipe_id: "r-calls", recipe_version: 2, rows_read: 120, rows_deduplicated: 0,
@@ -382,7 +447,8 @@ createRoot(document.getElementById("root")!).render(<Host />);
 // Optional states for the axe scan: a place, a day's report, its held rows.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 const press = (match: (b: HTMLButtonElement) => boolean) => {
-  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(match);
+  // An enabled one only: a button disabled while a save is answered is pressed once it is free.
+  const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => !b.disabled && match(b));
   button?.click();
   return Boolean(button);
 };
@@ -476,3 +542,48 @@ if (pipelineState === "reports-map") {
   for (let i = 0; i < 20; i++) await settle();
 }
 
+// Phase 7b's states (ADR-140 Amendment 12): each staging step's drawer with its live sample, a step's
+// Preview, a Filter half set with the save gate's refusals in its words, and the Map editor over the
+// last step's table.
+const staged = params.get("staged");
+if (contacts && staged) {
+  await pressNamed("Open Visits and contacts");
+  const chooseNamed = async (label: string, value: string) => {
+    for (let i = 0; i < 40; i++) {
+      const select = document.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
+      if (select) {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value);
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
+      }
+      await settle();
+    }
+  };
+  if (staged === "lookup") await pressNamed("Lookup: Lookup: establishment");
+  if (staged === "join") await pressNamed("Join: Join: owner of contact");
+  if (staged === "derive-preview") {
+    await pressNamed("Derive: Derive: the booking's title");
+    await pressNamed("Preview");
+  }
+  if (staged === "filter") {
+    await pressNamed("Source: Visit bookings");
+    await chooseNamed("Staging step to add", "filter");
+    await pressNamed("+ Step");
+    await pressNamed("+ Condition");
+  }
+  if (staged === "union" || staged === "dedupe") {
+    await pressNamed("Source: Visit bookings");
+    await chooseNamed("Staging step to add", "dedupe");
+    await pressNamed("+ Step");
+    if (staged === "dedupe") await pressNamed("+ Same row when this column matches");
+    if (staged === "union") {
+      await chooseNamed("Staging step to add", "union");
+      await pressNamed("+ Step");
+    }
+  }
+  if (staged === "map") {
+    await pressNamed("Map: Map");
+    await pressNamed("Open map editor");
+  }
+  for (let i = 0; i < 20; i++) await settle();
+}

@@ -15,6 +15,13 @@ export const KIND_NAMES: Record<string, string> = {
   extract: "Extract",
   enrich: "Enrich",
   load: "Load",
+  // The staging catalogue (ADR-140 decision 9, Amendment 12): guided mode's own steps.
+  lookup: "Lookup",
+  join: "Join",
+  filter: "Filter",
+  derive: "Derive",
+  union: "Union",
+  dedupe: "Dedupe",
   // The expert steps (ADR-140 decisions 12 and 13), named here so guided mode can label one it
   // reads; their editors are phase 8's.
   sql_transform: "SQL transform",

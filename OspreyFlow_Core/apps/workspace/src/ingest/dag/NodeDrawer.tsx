@@ -6,6 +6,8 @@
 // "Back to the pipeline" (there is nothing to go back to). The one exception is Map: its editor
 // needs the width, so it collapses the pipeline to a strip across the top (`MapEditor`, brief §6.5)
 // rather than replacing it.
+import { useState } from "react";
+
 import type {
   PipelineGraph,
   PipelineNode,
@@ -23,6 +25,8 @@ import { NodePreview } from "./NodePreview";
 import { KIND_NAMES } from "./PipelineCanvas";
 import { withNodeConfig } from "./pipelineGraphEdit";
 import { DomainPanel, EnrichPanel, ExtractPanel, SourcePanel, StagePanel } from "./stagePanels";
+import { StagingSample, StagingSettings } from "./StagingDrawer";
+import { isStagingStep, withStepRecord } from "./stagingSteps";
 import type { StudioMode } from "./studioMode";
 
 /** What the drawer holds: a node (its settings or preview), or one of the pipeline's own screens. */
@@ -103,7 +107,9 @@ export function NodeDrawer(props: NodeDrawerProps) {
               Preview
             </Button>
           </div>
-          {pane.view === "preview" ? (
+          {isStagingStep(node) && !isExpertStep(node) ? (
+            <StagingStepPane {...props} node={node} />
+          ) : pane.view === "preview" ? (
             <NodePreview
               key={node.id}
               apiBaseUrl={props.apiBaseUrl}
@@ -150,6 +156,38 @@ export function NodeDrawer(props: NodeDrawerProps) {
         />
       )}
     </aside>
+  );
+}
+
+/** A staging step (ADR-140 Amendment 12): its settings with a live sample beneath, or the sample
+ * alone on *Preview*. The sample reads the pipeline as the drawer holds it, saved or not. */
+function StagingStepPane(props: NodeDrawerProps & { node: PipelineNode }) {
+  const { node, pane, pipeline, busy, onChange } = props;
+  const [columns, setColumns] = useState<string[]>([]);
+  const sample = (
+    <StagingSample
+      apiBaseUrl={props.apiBaseUrl}
+      bearerToken={props.bearerToken}
+      investigationId={props.investigationId}
+      recipeId={props.recipeId}
+      pipeline={pipeline}
+      step={node.id}
+      onColumns={setColumns}
+    />
+  );
+  if (pane.at === "node" && pane.view === "preview") return sample;
+  return (
+    <>
+      <StagingSettings
+        key={node.id}
+        node={node}
+        pipeline={pipeline}
+        busy={busy}
+        columns={columns}
+        onApply={(config, label) => onChange(withStepRecord(pipeline, node.id, config, label))}
+      />
+      {sample}
+    </>
   );
 }
 

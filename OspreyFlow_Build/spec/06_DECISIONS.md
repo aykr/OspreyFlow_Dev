@@ -28900,6 +28900,138 @@ the staged table, while a staging rejection's is its first source row's. Each re
 table, staged or source (decision 5). `RejectionRecord` would need refs to say more, which is a
 schemas change for 7b.
 
+### ADR-140, Amendment 12 (8 November 2026) — Phase 7b as built: staging steps as pipeline nodes, a drawer per step with its live sample, the run route feeding a pipeline's sources, per-step counts and staging metering, and a dataset's reference list rows from its version's file
+
+Status: accepted, built in Lane 1 step L1.4 (redesign phase 7b). Amendment 11 is unchanged except
+where this says so. The orchestrator settled the lane's four questions on 8 November 2026, each by its
+recommended option (a), on the owner's review list:
+
+- **Q1:** staging steps are `PipelineNodeKind`s; the recipe's `staging:` is built from the graph in run
+  order at save and publish.
+- **Q2:** the schemas change as described in decision 4; step counts on `LoadReportView` too, withheld
+  with the other counts.
+- **Q3:** a dataset's own list's rows come from the list's version file; the import module stays
+  synthetic-only (rule 9); a run whose list has no file is refused in words.
+- **Q4:** a step's preview runs the steps up to it over the first ten rows of each source with the
+  person's own token, writes nothing, and returns the save gate's refusals in its words.
+
+**Decision.**
+
+1. **Steps are nodes of the pipeline (Q1).** `PipelineNodeKind` gains `lookup`, `join`, `filter`,
+   `derive`, `union` and `dedupe`. A step node's `id` is the step's id and its `config` is the step's
+   record (`schemas/staging.py`) less its `id` and `kind`. `pipeline.staging_from_pipeline` builds
+   the recipe's `staging:` from the step nodes in run order, and `pipeline_with_staging` is its
+   inverse; a draft round-trips into the identical list. The graph's lines follow what the steps
+   read: a line from each table a step reads, and from the last step to Map, which no source then
+   feeds directly. The graph's own rules (`staging_graph_violations`, part of
+   `pipeline_rule_violations`) refuse a config that is not its kind's record, a table read with no
+   line, and a last step that feeds no Map; and, since Map reads only the last step's table, a
+   source no step reads and any line into Map but the last step's (rule 2: such a source's rows
+   would be read and counted but mapped nowhere; the lane review). A half-set step is refused in
+   plain words ("needs 'list'", "needs at least 1 in 'add'"), never a validator's phrasing.
+2. **The save gate runs on save, Test, preview and publish** (`studio_staging.staging_gate`): the
+   graph's rules, then `staging_rule_violations` against the pipeline's source nodes (a source table
+   is named by its node's id) and the dataset's lists. `PUT …/pipeline` refuses with
+   `pipeline_invalid`; publish refuses the same way before building the recipe, which replaces
+   Amendment 11 decision 6's interim refusal of any recipe with steps. A drawer's sample shows the
+   refusals in the same words.
+3. **A drawer per step** (`ingest/dag/StagingDrawer.tsx`) opens beside the pipeline as Amendment 8's
+   drawers do: its record's own typed fields (a table chosen from those it may read, a column, a
+   list, a Knowledge Adapter's name, a closed choice, or a literal), applied with *Apply step
+   settings*; a Derive names an operation from its catalogue, each with its own settings. **No field
+   holds an expression** (rule 8). *+ Step* on the pipeline's toolbar adds a step of the chosen kind
+   reading the step or source chosen. Beneath the settings, and alone on *Preview*, the **live
+   sample**: `POST …/staging-preview` (`edit_pipelines`, the viewer's level, as Map's sample) runs
+   the steps the chosen one needs over the first ten rows of each source **of the saved pipeline**
+   (a source the request names that is not the saved draft's own is refused in words and never
+   read), and answers each step's counts and the rejections by their refs, with the gate's
+   refusals for the pipeline the drawer holds beside them; a step record the schema refuses runs
+   nothing. **Rule 3:** the reader writes the steps that run over the rows, so a Filter, a Derive
+   or a Join could be made to tell a value a mask hides; so if the reader may not view every row
+   the sample reads, **nothing of the run is returned** (no rows, counts, rejections or profile),
+   only the words that it is withheld (the lane review). **Rule 4:** a list's rows carry no marking
+   of their own; they are the dataset's, read as its elements are, so a sample a Lookup is in is
+   withheld from a case that does not read the recipe's dataset (the review's second round). It
+   writes nothing: no staged Parquet, no raw rows, no draft (Q4).
+4. **The schemas change (Q2)**, the branch's first commit: `StagingStepCount` on
+   `LoadReport.staging_steps` and `LoadReportView.staging_steps`, withheld with the other counts;
+   `RejectionRef` (table, row, load, side) on `RejectionRecord.refs`; `StagingPreviewInput` and
+   `StagingPreview`. **No row key, raw or hashed, is on any of them** (rule 7). `RunMetering`'s
+   `rows_staged` and `parquet_bytes` are now set for a staged run (`metering.StagingMeter`), and
+   stay *not measured* (`None`) for any other.
+5. **The run route feeds a pipeline's sources** (`pipeline_run._run_staged_branch`): each source
+   node's whole file is read, as every source read is (the reader and the ingest folder's
+   confinement), into a table named by its node's id, **by a load of its own,
+   `<the run's load>:<the node's id>`**. The run's load id is new for every run, so no two runs ever
+   share a raw file: Amendment 11's item 12, the check-then-write race on one source's raw rows, is
+   closed by construction. The steps run, Map runs over the last table through `load_with_rules` (the
+   same rule gate, ledger and lock as any load), and what every committed load does next
+   (`studio_publish.after_the_load`: events, places, post-commit rules) follows. A staged pipeline is
+   one branch of its run report. A refresh that withdraws or reads incrementally is refused in words.
+   Test runs the steps over the first rows of each source (`studio_verify.run_verify`), so Test and
+   the load reject the same rows; a staged Test's rejections carry no sample, only their refs.
+6. **A rejection's refs.** A staging rejection names each row it came from, by table, row, load and
+   a Join's side; a Map rejection names its row of the staged table, then each source row behind it.
+7. **A dataset's reference lists (Q3).** No store of list records existed: `TargetModel.
+   reference_lists` names lists by id only. So a list's record is the one its rows' own file carries
+   (Amendment 11 decision 5 puts it in the file's metadata), and **the lists a Lookup may read are
+   those kept for the dataset under `<bucket>/reference_lists/<dataset>/` whose ids the dataset's live
+   domain model names, each at the highest version kept** (`studio_staging.dataset_reference_lists`;
+   ADR-140 decision 4). A run's Lookup reads its list's rows from that file
+   (`reference_list_import.lists_for_run`); no file, or a file holding another list, is refused in
+   words, never read as an empty list (rule 2). Rows reach the file through
+   `python -m services.ingest.reference_list_import`, only a file whose bytes are a synthetic list
+   the repository names by SHA-256 in `services/ingest/synthetic_lists.json` (rule 9, judged by
+   content as `screening_refresh` judges a synthetic screening list), until L1.6 builds import. No dataset can subscribe to a deployment-wide
+   screening list until L1.6, so a run reads only the dataset's own lists for now.
+8. **The profiler on staged tables.** The Map editor of a staged pipeline maps the last step's table:
+   its columns pane is the profile of that table over the preview's sample, its rows the sample, its
+   heading "From the staged table ‹step›", with any refusal of the gate beside it.
+9. **Carried from L1.3:** a staged row's identity is the engine's one encoding (`engine.hash_parts`,
+   which `encode_key_parts` also uses).
+
+**Tests (each shown red first; `process/lanes/studio/L1.4_RED_RECORD.md`).**
+
+| Test | What it proves |
+| --- | --- |
+| `tests/schemas/test_staging_report_schemas.py` | the step kinds are the catalogue's; no row key on a rejection's refs or the preview; step counts withheld with the other counts, and given to a reader who may see them |
+| `tests/ingest/test_staging_pipeline_nodes.py` | a staging list round-trips through the pipeline identically, in run order; a bad record, a line missing, a last step feeding no Map, refused in plain words |
+| `tests/ingest/test_staged_counts.py` | per-step counts equal the staged tables'; a rejection's refs; one encoding |
+| `tests/ingest/test_reference_list_rows.py` | a list's rows imported and read back; no file refused in words; another list's file refused; never replaced; synthetic fixtures only; only lists the dataset may read |
+| `tests/services/api/test_studio_staging_routes.py` | a drawer refuses what the save gate refuses, in the same words, a later step's refusal included; save and publish judge the steps; the preview writes nothing, needs `edit_pipelines`, hides another unit's recipe, reads only the saved pipeline's sources, and gives a reader not cleared for every sampled row nothing of the run (rules 3 and 4); Test runs the steps; a list the live model does not name is not read; another dataset's file refused at Connect and save and never read by a preview, Test, Preview or run, the dataset's own read; no step's sample, Test or Preview reaches a case not reading the dataset; Test and Preview give nothing to a reader not cleared for every row, one hidden row among ten by its own column included |
+| `tests/ingest/test_staged_pipeline_run.py` | two concurrent runs of one source never share a raw file; staging metered; a withdrawing refresh refused |
+| `tests/ingest/test_phase7_exit.py` | **the phase's exit**: the pipeline the keys build, published through `build_recipe` and run on the synthetic data, every element naming rows of files that exist |
+| `apps/workspace/src/ingest/dag/stagingSteps.test.ts` with `tests/ingest/test_visits_pipeline_fixture.py` | the Glass's own step edits build the pipeline the server builds |
+| `keyboard/ingest-studio.spec.ts` | each drawer's actions by keyboard (rule 13), and phase 7's exit built by keys: the three steps in their drawers, the Map over the staged table into exactly the exit recipe's map, Test and Deploy |
+| `a11y/every-harness.spec.ts` | five new states, each in the dark, light and GOV.UK themes |
+
+**Phase 7's exit is met:** "Visits and contacts" without its two expert steps is built in the Studio by
+keys (the keyboard walk) and runs on the synthetic data with every created element traceable to its
+source rows (`test_phase7_exit.py`, and the live walk under the lease named in the lane's report).
+
+**Not built.** The run's raw files are not taken back by a revert (as before: raw rows are a record of
+what was read). A staged pipeline's places would go on the map as any load's do, but the exit's map has
+none. Subscribing a dataset to a deployment-wide screening list, and importing a list's rows from a
+screen, are L1.6's. A step's sample reads each source's first ten rows, so a Join's sample can meet
+fewer matches than the whole source holds; Test reads the first rows Test reads. A staged pipeline's
+per-step counts are on the run's report and its view, not yet drawn on the Glass's run report. The
+run's resources (`run_resources`) open the target-model store and the staging store, which the
+Conduit's lifespan then holds, so the scheduler's and the seed's runs read a staged pipeline's lists
+as the route's run does. **Fixed on the orchestrator's review (rules 3 and 4).** A source node's
+file is confined to the recipe's dataset's own files (`studio_profile._confined(location,
+dataset_id)`, the one check every read passes: Profile, Map, a step's sample, Test, Preview, a run
+and `run_source.identify`), and another dataset's file is refused in words at the pipeline's save
+(`studio_staging.sources_not_offered`, shown in the drawer in the same words) and at Connect (the
+words `register_dataset_source` uses); 09 §2 has the rule. Test of a staged pipeline, and the Map and
+Load Preview that run it, now have the drawer's two guards: nothing of the run for a reader not
+cleared for every row Test reads, and nothing for a case not reading the recipe's dataset, refused in
+the drawer's words (422); a step's sample is withheld from such a case whatever its steps, not only
+behind a Lookup. The tests' ingest root is each test's own folder (`tests/conftest.py`), not the
+whole filesystem, so the rule is the one the tests run under. **Recorded, unchanged:** Test of a
+pipeline with no staging steps still shows counts over a sample whose values it masks from a reader
+not cleared for them; that predates phase 7 and is Test's settled behaviour, at the editor's level
+with `verify_pipelines`.
+
 ### ADR-112, Amendment 7 (8 November 2026) — a right to manage model engines, each job's model and their keys, manage_models, held by the administrator and grantable alone
 
 Status: accepted; the owner's ruling of 8 November 2026 (P1, question 4, option A, from options), written
