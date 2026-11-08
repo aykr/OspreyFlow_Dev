@@ -197,7 +197,7 @@ class ComponentsConfig(BaseModel):
             "Default: none — the owned services (workspace, api, ingest) are PULLED, by the "
             "digest recorded in versions.lock, from the registry reference harness/render.py's "
             "own service_images names. This is the operator path: the harness image itself "
-            "carries no services/ or apps/workspace source, and round 05's own finding was that "
+            "carries no services/ or apps/workspace source, and a review found that "
             "the documented one-command bootstrap could not Launch without it — a clean laptop "
             "has no checkout. Set to a checkout root containing services/api/Dockerfile, "
             "services/ingest/Dockerfile and apps/workspace/Dockerfile (this repository's own "
