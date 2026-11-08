@@ -1,4 +1,4 @@
-# red: route-never-committed — offline, at 6459633 + working tree, 2026-11-08T16:45:16Z
+# red: route-never-committed — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:35Z
 # plant in services/api/alerts.py:
 # - '            # Its commit never sent, nothing recorded can land: the record goes with it.\n            repoint.never_committed()'
 # + '            pass'

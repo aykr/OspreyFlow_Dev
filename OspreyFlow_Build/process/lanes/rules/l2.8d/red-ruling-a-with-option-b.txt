@@ -1,0 +1,90 @@
+# red: ruling-a-with-option-b — lease rules, stack b, at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:44:45Z
+# plant in services/api/alerts.py:
+# - '    list(handlings or [])` here."""\n    return []\n'
+# + '    list(handlings or [])` here."""\n    return [] if alert.alert_node_id is not None else list(handlings or [])\n'
+# exit 1
+
+kip
+            await service.change(case, link, SECRET_LOADER, LinkChangeRequest(reason="lowered", handling=OFFICIAL, confirm_lower=True),
+                                 is_author=True)  # lowering needs Author access
+            row = (await _listed(stores, graph, analytics, case, READER))[alert.id]
+            assert row.edge_ids != [link]
+>           assert alert.id in await _listed(stores, graph, analytics, case, LOW), "the lower reader was refused"
+E           AssertionError: the lower reader was refused
+E           assert '01M6Y4674QNNRMZFF4HE8ZPXX3' in {'01M6Y46704MAGDT9ADPM92V00Y': Alert(id='01M6Y46704MAGDT9ADPM92V00Y', rule_id='typology:01M6Y46704MAGDT9ADPM92V00Z', o...=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
+E            +  where '01M6Y4674QNNRMZFF4HE8ZPXX3' = Alert(id='01M6Y4674QNNRMZFF4HE8ZPXX3', rule_id='typology:01M6Y4674ENSZB9F1RAXFXAS45', owner_id='loader-secret', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).id
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1077: AssertionError
+__ test_the_queue_the_audit_and_a_pack_item_agree_on_a_lowered_no_node_alert ___
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x10671bda0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11640cfb0>, 'audit': <services.api.audit.AuditWriter object at 0x11540be60>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1155a0a70>
+
+    async def test_the_queue_the_audit_and_a_pack_item_agree_on_a_lowered_no_node_alert(
+        stores: dict[str, Any], analytics: Any
+    ) -> None:
+        """The owner's ruling (a), the orchestrator's one test for it: after a lowering correction, every
+        path that tells an alert's words tells them to the same readers. The case's OFFICIAL reader is
+        listed the alert, may explain it, is given its firing entry in the rule audit with its words,
+        and may read a pack item made of it; so is the SECRET reader. Red with the interim ruling (b)
+        in `raiser_floor`: every path refused the OFFICIAL reader together, which is what agreeing
+        means."""
+        from services.api import alert_queue
+        from services.api.alerts import raiser_floor
+        from services.api.packs import alert_item, item_visible
+        from services.api.rule_holds import readable_rule_audit
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            _, alert = await _lowered_named_node(stores, graph, analytics, case)
+            store = stores["alerts"]
+            for reader in (READER, LOW):
+                listed = alert.id in await _listed(stores, graph, analytics, case, reader)
+>               explained, events = await alert_queue.explain_with_evidence(store, graph, analytics, case,
+                                                                            alert.id, reader)  # fmt: skip
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1035: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/api/alert_queue.py:232: in explain_with_evidence
+    row, nodes = await _visible_row(store, graph, analytics, alert_id, investigation_id, reader)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+store = <services.api.alerts.AlertStore object at 0x11640cfb0>
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x1155cc560>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1155a0a70>
+alert_id = '01M6Y46E4DPV5QWCY85XH6BCJW'
+investigation_id = 'case-01M6Y4684TX1DCGSXYGK30A0JN'
+reader = Principal(id='reader-l28c-official', clearance='OFFICIAL', org_unit='verify', receivable_handling_codes=[], roles=[], datasets=None)
+
+    async def _visible_row(
+        store: AlertStore,
+        graph: GraphPort,
+        analytics: AnalyticsPort,
+        alert_id: str,
+        investigation_id: str,
+        reader: Principal,
+    ) -> tuple[QueueRow, dict[str, Node]]:
+        """One alert of the reader's queue, and every node it names as they read it — or not found, the
+        same answer as for an alert that does not exist, when any node, link or transaction it cites is
+        hidden from them (ADR-146 decision 10: the queue's own check, `alerts.read_evidence`, so every
+        path that acts on or draws an alert refuses exactly what the queue withholds; until it, this
+        read nodes alone, and a triage path acted on, and returned the words of, an alert the reader
+        could not wholly see)."""
+        await settle_repoints(store, graph)
+        row = await store.get_queue_alert(alert_id, investigation_id, reader)
+        readable = await read_evidence(
+            [row.alert], reader, graph, analytics, scope=lambda _: investigation_id
+        )
+        if not readable.whole(row.alert) or not await raiser_reads_admitting(
+            store, [row.alert], reader
+        ):
+>           raise AlertNotFoundError(alert_id)
+E           services.api.alerts.AlertNotFoundError: 01M6Y46E4DPV5QWCY85XH6BCJW
+
+services/api/alert_queue.py:192: AlertNotFoundError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_correction_lowering_a_named_node_admits_the_lower_reader_to_an_alert_with_no_node
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_change_lowering_a_cited_link_admits_the_lower_reader_to_an_alert_with_no_node
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_the_queue_the_audit_and_a_pack_item_agree_on_a_lowered_no_node_alert
+3 failed in 22.56s

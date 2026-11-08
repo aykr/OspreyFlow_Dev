@@ -1,4 +1,4 @@
-# red: caller-enrich — lease rules, stack a, re-taken after the 15:54-16:00Z contention, at ea0a129 + working tree, 2026-11-08T16:25:00Z
+# red: caller-enrich — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:45:57Z
 # plant in services/api/pipeline_run.py:
 # - '        await on_link_cloned.superseded(mention.id, new)'
 # + '        pass'
@@ -8,8 +8,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _ test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed _
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x150a60fe0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x151753a10>, 'audit': <services.api.audit.AuditWriter object at 0x151769b50>, ...}
-analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1505037a0>
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11f1b4920>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11f2ed4f0>, 'audit': <services.api.audit.AuditWriter object at 0x11f74ec90>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x11f7ccbc0>
 
     async def test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed(
         stores: dict[str, Any], analytics: Any
@@ -34,15 +34,15 @@ analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 
             assert stage.matched_online == 1, stage
 >           await _still_named(stores, graph, analytics, case, alert, p)
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:736: 
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:740: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x150a60fe0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x151753a10>, 'audit': <services.api.audit.AuditWriter object at 0x151769b50>, ...}
-graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x1518e7620>
-analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1505037a0>
-case = 'case-01M6XZM5FTFA8SJ6EZ2QHFQGQY'
-alert = Alert(id='01M6XZMDBDZRAT8GRTAE459PFA', rule_id='typology:01M6XZMDBDZRAT8GRTAE459PFB', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)
-node = '01M6XZMD8QHNS4B5XVV1NPDCYM'
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11f1b4920>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11f2ed4f0>, 'audit': <services.api.audit.AuditWriter object at 0x11f74ec90>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x11f7bc380>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x11f7ccbc0>
+case = 'case-01M6Y48F25BQH81HQ7ZF5NM1Q0'
+alert = Alert(id='01M6Y48MSA4NQD8TFM5S76G9WH', rule_id='typology:01M6Y48MSA4NQD8TFM5S76G9WJ', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)
+node = '01M6Y48MQKGSE7DSQBSBW89598'
 
     async def _still_named(stores: dict[str, Any], graph: Any, analytics: Any, case: str, alert: Alert,
                            node: str) -> None:  # fmt: skip
@@ -57,10 +57,10 @@ node = '01M6XZMD8QHNS4B5XVV1NPDCYM'
         listed = await listed_for(READER, case)
 >       assert alert.id in listed, "the alert naming the corrected node is withheld from its reader"
 E       AssertionError: the alert naming the corrected node is withheld from its reader
-E       assert '01M6XZMDBDZRAT8GRTAE459PFA' in {}
-E        +  where '01M6XZMDBDZRAT8GRTAE459PFA' = Alert(id='01M6XZMDBDZRAT8GRTAE459PFA', rule_id='typology:01M6XZMDBDZRAT8GRTAE459PFB', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+E       assert '01M6Y48MSA4NQD8TFM5S76G9WH' in {}
+E        +  where '01M6Y48MSA4NQD8TFM5S76G9WH' = Alert(id='01M6Y48MSA4NQD8TFM5S76G9WH', rule_id='typology:01M6Y48MSA4NQD8TFM5S76G9WJ', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:631: AssertionError
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:635: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed
-1 failed in 9.71s
+1 failed in 7.37s

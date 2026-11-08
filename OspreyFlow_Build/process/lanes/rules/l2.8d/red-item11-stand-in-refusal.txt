@@ -1,4 +1,4 @@
-# red: item11-stand-in-refusal — offline, at 6459633 + working tree, 2026-11-08T16:45:14Z
+# red: item11-stand-in-refusal — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:27Z
 # plant in ../OspreyFlow_Build/tests/services/api/repoint_journal_fakes.py:
 # - '        if self.applied:\n            raise RepointRecordGone(self.id)'
 # + '        pass'
@@ -26,4 +26,4 @@ E       Failed: DID NOT RAISE RepointRecordGone
 ../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py:46: Failed
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py::test_a_pair_recorded_after_its_write_left_is_refused_by_the_stand_in
-1 failed in 0.38s
+1 failed in 0.36s

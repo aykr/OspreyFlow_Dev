@@ -1,4 +1,4 @@
-# red: rename-alert-nodes-not-referents — lease rules, stack a, re-taken after the 15:54-16:00Z contention, at ea0a129 + working tree, 2026-11-08T16:24:04Z
+# red: rename-alert-nodes-not-referents — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:47:57Z
 # plant in services/api/alerts.py:
 # - '        named = {**renamed, **(referents or {})}'
 # + '        named = dict(referents or {})'
@@ -8,8 +8,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _________ test_an_alert_naming_the_node_a_close_confirms_stays_listed __________
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x128080830>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x128dc3440>, 'audit': <services.api.audit.AuditWriter object at 0x128d9dd60>, ...}
-analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x128d8f5f0>
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11c8513d0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1280d96d0>, 'audit': <services.api.audit.AuditWriter object at 0x11fdde060>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1280d9490>
 
     async def test_an_alert_naming_the_node_a_close_confirms_stays_listed(
         stores: dict[str, Any], analytics: Any
@@ -32,15 +32,15 @@ analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 
                                       disposition="true_positive", reason="checked")  # fmt: skip
 >           await _still_named(stores, graph, analytics, case, naming, p)
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:676: 
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:680: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x128080830>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x128dc3440>, 'audit': <services.api.audit.AuditWriter object at 0x128d9dd60>, ...}
-graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x128dd2ea0>
-analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x128d8f5f0>
-case = 'case-01M6XZJHQVJ1E4KRNT52CWGNR6'
-alert = Alert(id='01M6XZJPKW4T8GGS6FV3ZRGD5X', rule_id='typology:01M6XZJPKW4T8GGS6FV3ZRGD5Y', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)
-node = '01M6XZJPJ9AY4J51TZQECAARB6'
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11c8513d0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1280d96d0>, 'audit': <services.api.audit.AuditWriter object at 0x11fdde060>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x11cf1b350>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1280d9490>
+case = 'case-01M6Y4C63NY5BG6WAF0TTMTZ9X'
+alert = Alert(id='01M6Y4CA3FDNNBCY0P0B78E0JY', rule_id='typology:01M6Y4CA3FDNNBCY0P0B78E0JZ', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)
+node = '01M6Y4CA2CJ92W4JX5F8KK3RQQ'
 
     async def _still_named(stores: dict[str, Any], graph: Any, analytics: Any, case: str, alert: Alert,
                            node: str) -> None:  # fmt: skip
@@ -55,10 +55,10 @@ node = '01M6XZJPJ9AY4J51TZQECAARB6'
         listed = await listed_for(READER, case)
 >       assert alert.id in listed, "the alert naming the corrected node is withheld from its reader"
 E       AssertionError: the alert naming the corrected node is withheld from its reader
-E       assert '01M6XZJPKW4T8GGS6FV3ZRGD5X' in {}
-E        +  where '01M6XZJPKW4T8GGS6FV3ZRGD5X' = Alert(id='01M6XZJPKW4T8GGS6FV3ZRGD5X', rule_id='typology:01M6XZJPKW4T8GGS6FV3ZRGD5Y', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+E       assert '01M6Y4CA3FDNNBCY0P0B78E0JY' in {}
+E        +  where '01M6Y4CA3FDNNBCY0P0B78E0JY' = Alert(id='01M6Y4CA3FDNNBCY0P0B78E0JY', rule_id='typology:01M6Y4CA3FDNNBCY0P0B78E0JZ', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:631: AssertionError
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:635: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_the_node_a_close_confirms_stays_listed
-1 failed in 6.72s
+1 failed in 5.53s

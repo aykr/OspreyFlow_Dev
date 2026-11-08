@@ -1,10 +1,10 @@
-# red: d-stages-close-record — offline, at 6459633 + working tree, 2026-11-08T16:45:24Z
+# red: d-stages-close-record — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:27Z
 # plant in services/api/alert_queue.py:
 # - '                        await repoint.record(\n                            e.id, await confirm_edge(graph, e, member, tx=tx), old_type=e.type\n                        )'
 # + '                        await confirm_edge(graph, e, member, tx=tx)'
 # exit 1
 
-.F                                                                       [100%]
+F                                                                        [100%]
 =================================== FAILURES ===================================
 _ test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored_sources _
 
@@ -33,7 +33,7 @@ _ test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored_sources
             edge_ids=["sa1"],
         )
     
-        class _Store:
+        class _Store(RaiserReads):
             """`AlertStore`'s one-queue reads (ADR-133 decision 5), as `dispose` calls them: an alert
             other than this one is not found, and a triage of a closed one is refused, as the real
             store's scoped `SELECT` and `UPDATE ... AND status = ANY(...)` refuse them."""
@@ -47,14 +47,8 @@ _ test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored_sources
                 """A journal holding no alert: nothing to settle before the close's read."""
                 await self.journal.settle_pending(graph, now=now)
     
-            #: What each alert's raiser read (`AlertStore.save(handlings=)`), none recorded unless a test
-            #: says so; read by the queue's `raiser_reads_admitting` as the real store answers it.
-            recorded_handlings: dict[str, Any] = {}
-            scheme = load_uk_le_scheme()
-    
-            async def handlings_by_id(self, alert_ids: Any) -> dict[str, Any]:
-                """`AlertStore.handlings_by_id`: `None` for an alert whose handlings were not recorded."""
-                return {i: self.recorded_handlings.get(i) for i in alert_ids}
+            def held_alert_ids(self) -> set[str]:
+                return {alert.id}
     
             #: The shared stand-in (`repoint_journal_fakes.Journal`, L2.8c's carry (d)): what the close
             #: confirmed is recorded, and it refuses what the real journal refuses.
@@ -93,7 +87,7 @@ E
 E         Right contains one more item: ('sa1', 'SAME_AS')
 E         Use -v to get more diff
 
-../OspreyFlow_Build/tests/services/api/test_written_back_reads_in_full_stages.py:184: AssertionError
+../OspreyFlow_Build/tests/services/api/test_written_back_reads_in_full_stages.py:178: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_written_back_reads_in_full_stages.py::test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored_sources
-1 failed, 1 passed in 0.91s
+1 failed in 1.35s

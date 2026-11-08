@@ -1,4 +1,4 @@
-# red: f-record-opened-before-write — lease rules, stack a, re-taken after the 15:54-16:00Z contention, at ea0a129 + working tree, 2026-11-08T16:28:17Z
+# red: f-record-opened-before-write — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:46:27Z
 # plant in services/api/alerts.py:
 # - '        repoint = LinkRepoint(self, held_open=held_open)\n'
 # + '        repoint = LinkRepoint(self, held_open=held_open)\n        await repoint._record_id()\n'
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 __________ test_an_enrich_stage_that_writes_no_point_opens_no_record ___________
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11ea7ea20>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11eada810>, 'audit': <services.api.audit.AuditWriter object at 0x148a9bb90>, ...}
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11ea3f5c0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11edffaa0>, 'audit': <services.api.audit.AuditWriter object at 0x11ed158e0>, ...}
 
     async def test_an_enrich_stage_that_writes_no_point_opens_no_record(stores: dict[str, Any]) -> None:
         """Carry (f). The enrich stage runs inside the journal, but its geocoder finds no point, so it
@@ -39,7 +39,7 @@ E
 E             At index 0 diff: 1 != 0
 E             Use -v to get more diff
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:818: AssertionError
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:822: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_enrich_stage_that_writes_no_point_opens_no_record
-1 failed in 10.59s
+1 failed in 7.11s

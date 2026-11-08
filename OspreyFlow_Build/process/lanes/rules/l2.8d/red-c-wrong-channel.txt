@@ -1,4 +1,4 @@
-# red: c-wrong-channel — offline, at 6459633 + working tree, 2026-11-08T16:45:13Z
+# red: c-wrong-channel — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:25Z
 # plant in services/api/working_set_revert.py:
 # - '            await publish_delta(publisher, removal.investigation_id, removal.delta)\n    return list(removals)'
 # + '            await publish_delta(publisher, removals[0].investigation_id, removal.delta)\n    return list(removals)'
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 __ test_each_cases_removal_is_published_on_its_own_channel_after_the_removal ___
 
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10da40410>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x111a82810>
 
     async def test_each_cases_removal_is_published_on_its_own_channel_after_the_removal(
         monkeypatch: pytest.MonkeyPatch,
@@ -33,4 +33,4 @@ E         Use -v to get more diff
 ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py:47: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py::test_each_cases_removal_is_published_on_its_own_channel_after_the_removal
-1 failed in 0.50s
+1 failed in 0.37s

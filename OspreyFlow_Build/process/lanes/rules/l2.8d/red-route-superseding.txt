@@ -1,4 +1,4 @@
-# red: route-superseding — offline, at 6459633 + working tree, 2026-11-08T16:45:15Z
+# red: route-superseding — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:35Z
 # plant in services/api/alerts.py:
 # - '                await repoint.superseded(superseding, str(result))'
 # + '                pass'

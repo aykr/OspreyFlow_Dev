@@ -1,4 +1,4 @@
-# red: review12-record-opened-before-write — lease rules, stack a, at 6459633 + working tree, 2026-11-08T16:44:41Z
+# red: review12-record-opened-before-write — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:48:12Z
 # plant in services/api/alerts.py:
 # - '        repoint = LinkRepoint(self, held_open=held_open)\n'
 # + '        repoint = LinkRepoint(self, held_open=held_open)\n        await repoint._record_id()\n'
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 ___________ test_a_writer_that_has_recorded_nothing_holds_no_record ____________
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x13a437a70>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x13a59c080>, 'audit': <services.api.audit.AuditWriter object at 0x13a59e6c0>, ...}
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11e6e62a0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11f4c5e80>, 'audit': <services.api.audit.AuditWriter object at 0x11f2d9430>, ...}
 
     async def test_a_writer_that_has_recorded_nothing_holds_no_record(stores: dict[str, Any]) -> None:
         """The review's item 12, Amendment 12 point 3: inside `repointing`, before its first pair, a
@@ -27,10 +27,10 @@ stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x13
                 async with alerts.repointing(graph) as repoint:
                     seen.append(await count())
 >                   assert repoint.id is None
-E                   AssertionError: assert '01M6Y0RFCDRAYZ00BGZSRQ5Y6A' is None
-E                    +  where '01M6Y0RFCDRAYZ00BGZSRQ5Y6A' = <services.api.alerts.LinkRepoint object at 0x13adfd3a0>.id
+E                   AssertionError: assert '01M6Y4CS74NDKTYVC71ZZF1ER8' is None
+E                    +  where '01M6Y4CS74NDKTYVC71ZZF1ER8' = <services.api.alerts.LinkRepoint object at 0x11e67c320>.id
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1063: AssertionError
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1124: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_writer_that_has_recorded_nothing_holds_no_record
-1 failed in 10.43s
+1 failed in 6.27s

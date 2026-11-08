@@ -1,4 +1,4 @@
-# red: review4-remark-lowers-node — lease rules, stack a, at 6459633 + working tree, 2026-11-08T16:44:11Z
+# red: review4-remark-lowers-node — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:48:27Z
 # plant in services/api/alerts.py:
 # - '        rests_on = [\n            node.handling,\n'
 # + '        rests_on = [\n'
@@ -8,8 +8,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _ test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node _
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x1188625a0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x118863b90>, 'audit': <services.api.audit.AuditWriter object at 0x11889e0f0>, ...}
-analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x10f2a7b90>
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11cd7a1e0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11b436570>, 'audit': <services.api.audit.AuditWriter object at 0x11cfc7f20>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x11cffbf80>
 
     async def test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node(
         stores: dict[str, Any], analytics: Any
@@ -37,10 +37,10 @@ analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 
             assert row.referent_node_ids != [p]
 >           assert alert.id not in await _listed(stores, graph, analytics, case, LOW), "the lowered correction lowered the alert"
 E           AssertionError: the lowered correction lowered the alert
-E           assert '01M6Y0QGY9Z65R43E4F5VGSVEC' not in {'01M6Y0QGY9Z65R43E4F5VGSVEC': Alert(id='01M6Y0QGY9Z65R43E4F5VGSVEC', rule_id='typology:01M6Y0QGY9Z65R43E4F5VGSVED', o...=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
-E            +  where '01M6Y0QGY9Z65R43E4F5VGSVEC' = Alert(id='01M6Y0QGY9Z65R43E4F5VGSVEC', rule_id='typology:01M6Y0QGY9Z65R43E4F5VGSVED', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+E           assert '01M6Y4D7R338HAASNSHNMTH7G5' not in {'01M6Y4D7R338HAASNSHNMTH7G5': Alert(id='01M6Y4D7R338HAASNSHNMTH7G5', rule_id='typology:01M6Y4D7R338HAASNSHNMTH7G6', o...=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
+E            +  where '01M6Y4D7R338HAASNSHNMTH7G5' = Alert(id='01M6Y4D7R338HAASNSHNMTH7G5', rule_id='typology:01M6Y4D7R338HAASNSHNMTH7G6', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
 
 ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:956: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node
-1 failed in 8.19s
+1 failed in 6.97s

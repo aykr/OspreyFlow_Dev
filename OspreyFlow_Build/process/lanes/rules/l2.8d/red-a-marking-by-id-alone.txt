@@ -1,4 +1,4 @@
-# red: a-marking-by-id-alone — lease rules, stack a, at ea0a129 + working tree, 2026-11-08T16:02:13Z
+# red: a-marking-by-id-alone — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:45:22Z
 # plant in packages/adapters/graph_arcadedb/adapter.py:
 # - '            f\'g.V().has("id",{old_node_lit}).bothE({label_lit}).has("reverted",false)\'\n            f\'.has("id",{groovy_string_literal(edge_record["id"])})\''
 # + '            \'g.E()\'\n            f\'.has("id",{groovy_string_literal(edge_record["id"])})\''
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _ test_supersede_node_never_marks_another_types_link_holding_a_cloned_links_id[graph_arcadedb[gremlin]] _
 
-factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x10b01ab60>)
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x1093e7600>)
 
     async def test_supersede_node_never_marks_another_types_link_holding_a_cloned_links_id(
         factory: GraphAdapterFactory,
@@ -52,7 +52,7 @@ factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context
             paid = (await adapter.stored_link_states([link], edge_type="TRANSACTED"))[link]
 >           assert (paid.superseded, paid.superseded_by) == (False, None), "the other type is unmarked"
 E           AssertionError: the other type is unmarked
-E           assert (True, '01M6X...060G972B07HE') == (False, None)
+E           assert (True, '01M6Y...7HS75ZSAQRA9') == (False, None)
 E             
 E             At index 0 diff: True != False
 E             Use -v to get more diff
@@ -60,4 +60,4 @@ E             Use -v to get more diff
 ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:6939: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_never_marks_another_types_link_holding_a_cloned_links_id[graph_arcadedb[gremlin]]
-1 failed in 4.60s
+1 failed in 3.30s

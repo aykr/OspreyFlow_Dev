@@ -1,4 +1,4 @@
-# red: review12-stale-without-referents — lease rules, stack a, at 6459633 + working tree, 2026-11-08T16:44:51Z
+# red: review12-stale-without-referents — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:48:20Z
 # plant in services/api/alerts.py:
 # - '                nodes = [*_pairs(row["alert_nodes"]), *_pairs(row["referents"])]'
 # + '                nodes = _pairs(row["alert_nodes"])'
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 ______________ test_a_stale_record_whose_referent_landed_is_kept _______________
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11a205580>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11a40d9d0>, 'audit': <services.api.audit.AuditWriter object at 0x11a402180>, ...}
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x1720c7d10>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1717bdfd0>, 'audit': <services.api.audit.AuditWriter object at 0x172100710>, ...}
 
     async def test_a_stale_record_whose_referent_landed_is_kept(stores: dict[str, Any]) -> None:
         """The review's item 12, Amendment 12 point 2: the stale check counts a record's referent
@@ -34,7 +34,7 @@ stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11
 E       AssertionError: a record whose referent's write committed was dropped as stale
 E       assert 0 == 1
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1088: AssertionError
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1149: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_stale_record_whose_referent_landed_is_kept
-1 failed in 9.04s
+1 failed in 6.99s

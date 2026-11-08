@@ -1,4 +1,4 @@
-# red: item13-app-by-hand — offline, at 6459633 + working tree, 2026-11-08T16:45:23Z
+# red: item13-app-by-hand — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:33Z
 # plant in services/api/app.py:
 # - '    job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)'
 # + '    job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)\n    job_worker.register(JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job)'
@@ -21,12 +21,12 @@ _ test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_a
         alls, own = _conduit_registrations()
 >       assert own == [], "app.py registers a job register_all owns by hand"
 E       AssertionError: app.py registers a job register_all owns by hand
-E       assert [<ast.Call ob... 0x12b62d610>] == []
+E       assert [<ast.Call ob... 0x12bf9e110>] == []
 E         
-E         Left contains one more item: <ast.Call object at 0x12b62d610>
+E         Left contains one more item: <ast.Call object at 0x12bf9e110>
 E         Use -v to get more diff
 
-../OspreyFlow_Build/tests/services/api/test_worker_registration.py:184: AssertionError
+../OspreyFlow_Build/tests/services/api/test_worker_registration.py:187: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_worker_registration.py::test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store
-1 failed in 1.58s
+1 failed in 1.73s

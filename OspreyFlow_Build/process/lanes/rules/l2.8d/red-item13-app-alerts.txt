@@ -1,4 +1,4 @@
-# red: item13-app-alerts — offline, at 6459633 + working tree, 2026-11-08T16:45:20Z
+# red: item13-app-alerts — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:30Z
 # plant in services/api/app.py:
 # - '        alerts=alerts_store,\n        judgement_store=judgements_store,\n    )'
 # + '        judgement_store=judgements_store,\n    )'
@@ -30,7 +30,7 @@ E           assert (False)
 E            +  where False = isinstance(None, <class 'ast.Name'>)
 E            +    where <class 'ast.Name'> = <module 'ast' from '/Users/ayankar/miniconda3/lib/python3.12/ast.py'>.Name
 
-../OspreyFlow_Build/tests/services/api/test_worker_registration.py:189: AssertionError
+../OspreyFlow_Build/tests/services/api/test_worker_registration.py:192: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_worker_registration.py::test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store
-1 failed in 1.78s
+1 failed in 1.89s

@@ -1,14 +1,14 @@
-# red: e-ddl-without-lock — lease rules, stack a, re-taken after the 15:54-16:00Z contention, at ea0a129 + working tree, 2026-11-08T16:28:20Z
+# red: e-ddl-without-lock — lease rules, stack b, at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:44:51Z
 # plant in services/api/alerts.py:
-# - '            await conn.execute(\n                "SELECT pg_advisory_xact_lock($1, $2)", REPOINT_LOCK_SPACE, _BOOTSTRAP_LOCK_KEY\n            )\n'
-# + ''
+# - '                async with conn.transaction():\n                    await take_bootstrap_lock(conn)\n                    await conn.execute(ddl)'
+# + '                async with conn.transaction():\n                    await conn.execute(ddl)'
 # exit 1
 
-F                                                                        [100%]
+FF                                                                       [100%]
 =================================== FAILURES ===================================
 ____ test_stores_starting_together_create_the_alert_tables_without_failing _____
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x12757cd40>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x127774b60>, 'audit': <services.api.audit.AuditWriter object at 0x1683fecc0>, ...}
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x119a25040>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11f51ac00>, 'audit': <services.api.audit.AuditWriter object at 0x11f51b620>, ...}
 
     async def test_stores_starting_together_create_the_alert_tables_without_failing(stores: dict[str, Any]) -> None:
         """Carry (e). Every Conduit and worker replica runs the alert store's start-up DDL as it
@@ -37,7 +37,42 @@ E
 E             Left contains 7 more items, first extra item: UniqueViolationError('duplicate key value violates unique constraint "pg_type_typname_nsp_index"')
 E             Use -v to get more diff
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:873: AssertionError
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:877: AssertionError
+_ test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11f51b5f0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11f5539e0>, 'audit': <services.api.audit.AuditWriter object at 0x1195c35c0>, ...}
+
+    async def test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing(
+        stores: dict[str, Any],
+    ) -> None:
+        """The review's item 3. A Conduit replica connects its hotlist store just before its alert
+        store, and both run the hotlists' start-up DDL; four of each connect at once to an empty
+        schema, and none fails. Red with the hotlist store's DDL outside the shared lock: a store
+        failed on the catalogue's unique index."""
+        from services.api.alerts import AlertStore
+        from services.api.hotlists import HotlistStore
+    
+        dsn = PostgresConfig.from_env().dsn
+        schema = f"l28d_{new_id().replace('-', '')[:12].lower()}"
+        admin = await asyncpg.connect(dsn)
+        try:
+            await admin.execute(f'CREATE SCHEMA "{schema}"')
+            scoped = f"{dsn}{'&' if '?' in dsn else '?'}search_path={schema}"
+            connects = [HotlistStore.connect(scoped) if i % 2 else AlertStore.connect(scoped) for i in range(8)]
+            results = await asyncio.wait_for(asyncio.gather(*connects, return_exceptions=True), BOUND)
+            failed = [r for r in results if isinstance(r, BaseException)]
+            for store in results:
+                if not isinstance(store, BaseException):
+                    await store.close()
+>           assert failed == [], failed
+E           AssertionError: [UniqueViolationError('duplicate key value violates unique constraint "pg_type_typname_nsp_index"'), UniqueViolationEr...pname_nsp_index"'), UniqueViolationError('duplicate key value violates unique constraint "pg_type_typname_nsp_index"')]
+E           assert [UniqueViolat..._nsp_index"')] == []
+E             
+E             Left contains 4 more items, first extra item: UniqueViolationError('duplicate key value violates unique constraint "pg_type_typname_nsp_index"')
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1102: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_stores_starting_together_create_the_alert_tables_without_failing
-1 failed in 2.27s
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing
+2 failed in 1.37s

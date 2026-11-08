@@ -1,6 +1,6 @@
-# red: remark-without-referents — lease rules, stack a, re-taken after the 15:54-16:00Z contention, at ea0a129 + working tree, 2026-11-08T16:28:06Z
+# red: remark-without-referents — lease rules, stack b, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:16Z
 # plant in services/api/alerts.py:
-# - '                f"OR {_NAMES_ANY_SQL} ORDER BY id",'
+# - '                f"OR {_names_any_sql(2)} ORDER BY id",'
 # + '                "AND $2::text[] IS NOT NULL ORDER BY id",'
 # exit 1
 
@@ -8,8 +8,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _ test_a_correction_raising_a_named_node_withholds_the_alert_below_and_re_marks_its_node _
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x1199daba0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11e6660c0>, 'audit': <services.api.audit.AuditWriter object at 0x11e6661e0>, ...}
-analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x11e667590>
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x11ca63dd0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x11a3b2540>, 'audit': <services.api.audit.AuditWriter object at 0x11cd72990>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x11cdabb90>
 
     async def test_a_correction_raising_a_named_node_withholds_the_alert_below_and_re_marks_its_node(
         stores: dict[str, Any], analytics: Any
@@ -44,10 +44,10 @@ analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 
             assert alert.id not in await listed(LOW)
 >           assert row.alert_node_id != node, "the alert's node was re-marked into a revision"
 E           AssertionError: the alert's node was re-marked into a revision
-E           assert '01M6XZT2YKADMMVZH3GGRMKYQV' != '01M6XZT2YKADMMVZH3GGRMKYQV'
-E            +  where '01M6XZT2YKADMMVZH3GGRMKYQV' = Alert(id='01M6XZT31ED8GRPWCP0WX36T16', rule_id='typology:01M6XZT31ED8GRPWCP0WX36T17', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).alert_node_id
+E           assert '01M6Y4EPT5ADWNS199JMHRVD6D' != '01M6Y4EPT5ADWNS199JMHRVD6D'
+E            +  where '01M6Y4EPT5ADWNS199JMHRVD6D' = Alert(id='01M6Y4EPVXSYQHV3F7HKRGQ4CS', rule_id='typology:01M6Y4EPVXSYQHV3F7HKRGQ4CT', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).alert_node_id
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:770: AssertionError
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:774: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_correction_raising_a_named_node_withholds_the_alert_below_and_re_marks_its_node
-1 failed in 7.24s
+1 failed in 6.05s

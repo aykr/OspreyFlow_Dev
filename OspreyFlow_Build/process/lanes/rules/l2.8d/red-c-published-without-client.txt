@@ -1,4 +1,4 @@
-# red: c-published-without-client — offline, at 6459633 + working tree, 2026-11-08T16:45:14Z
+# red: c-published-without-client — offline, re-taken at 2ecc602 (rebased on main 7e2e325), 2026-11-08T17:49:23Z
 # plant in services/api/working_set_revert.py:
 # - '    if publisher is not None:\n        for removal in removals:'
 # + '    if True:\n        for removal in removals:'
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 ___________ test_a_service_built_without_a_client_publishes_nothing ____________
 
-monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x111c0bec0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11397eba0>
 
     async def test_a_service_built_without_a_client_publishes_nothing(
         monkeypatch: pytest.MonkeyPatch,
@@ -31,4 +31,4 @@ E         Use -v to get more diff
 ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py:63: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py::test_a_service_built_without_a_client_publishes_nothing
-1 failed in 0.38s
+1 failed in 0.40s

@@ -1,4 +1,4 @@
-# red: review3-hotlist-ddl-unlocked — lease rules, stack a, at 6459633 + working tree, 2026-11-08T16:44:30Z
+# red: review3-hotlist-ddl-unlocked — lease rules, stack b, at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:44:53Z
 # plant in services/api/hotlists.py:
 # - '                await take_bootstrap_lock(conn)\n'
 # + ''
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _ test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing _
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x127c5f3b0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x12504faa0>, 'audit': <services.api.audit.AuditWriter object at 0x127c7c9e0>, ...}
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x12558a0c0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1255886b0>, 'audit': <services.api.audit.AuditWriter object at 0x12558a3f0>, ...}
 
     async def test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing(
         stores: dict[str, Any],
@@ -39,7 +39,7 @@ E
 E             Left contains 4 more items, first extra item: UniqueViolationError('duplicate key value violates unique constraint "pg_type_typname_nsp_index"')
 E             Use -v to get more diff
 
-../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1041: AssertionError
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:1102: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing
-1 failed in 1.52s
+1 failed in 1.19s

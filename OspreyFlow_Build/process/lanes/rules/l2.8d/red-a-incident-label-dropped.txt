@@ -1,4 +1,4 @@
-# red: a-incident-label-dropped — lease rules, stack a, at 6459633 + working tree, 2026-11-08T16:43:37Z
+# red: a-incident-label-dropped — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:45:18Z
 # plant in packages/adapters/graph_arcadedb/adapter.py:
 # - '            f\'g.V().has("id",{old_node_lit}).bothE({label_lit}).has("reverted",false)\''
 # + '            f\'g.V().has("id",{old_node_lit}).bothE().has("reverted",false)\''
@@ -8,7 +8,7 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _ test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone[graph_arcadedb[gremlin]] _
 
-factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x109d16ca0>)
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x126400720>)
 
     async def test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone(
         factory: GraphAdapterFactory,
@@ -44,12 +44,12 @@ factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context
                 state = (await adapter.stored_link_states([link], edge_type=edge_type))[link]
 >               assert (state.superseded, state.superseded_by) == (True, clone), edge_type
 E               AssertionError: TRANSACTED
-E               assert (True, '01M6Y...MHCQCBM7NF9P') == (True, '01M6Y...5CQEF7AAB121')
+E               assert (True, '01M6Y...7711RCRK6SX4') == (True, '01M6Y...45Z85HQ0MR9G')
 E                 
-E                 At index 1 diff: '01M6Y0PH0VJWQMMHCQCBM7NF9P' != '01M6Y0PH0KF2JR5CQEF7AAB121'
+E                 At index 1 diff: '01M6Y47EW5APJ27711RCRK6SX4' != '01M6Y47EVPNHS445Z85HQ0MR9G'
 E                 Use -v to get more diff
 
 ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py:6978: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_node_marks_each_of_two_types_holding_one_id_at_the_node_by_its_own_clone[graph_arcadedb[gremlin]]
-1 failed in 3.08s
+1 failed in 3.94s

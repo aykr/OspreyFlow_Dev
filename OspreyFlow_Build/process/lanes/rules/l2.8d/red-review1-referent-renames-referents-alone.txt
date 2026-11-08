@@ -1,4 +1,4 @@
-# red: review1-referent-renames-referents-alone — lease rules, stack a, at 6459633 + working tree, 2026-11-08T16:44:02Z
+# red: review1-referent-renames-referents-alone — lease rules, stack b, re-taken at 2ecc602 (rebased on main 9da4081), 2026-11-08T17:48:06Z
 # plant in services/api/alerts.py:
 # - '            for old, newest in named.items():\n                done = await conn.execute('
 # + '            for old, newest in renamed.items():\n                done = await conn.execute('
@@ -8,8 +8,8 @@ F                                                                        [100%]
 =================================== FAILURES ===================================
 _ test_an_alert_whose_own_node_a_route_confirms_stays_listed_and_its_old_copy_leaves _
 
-stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x122353320>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x127eb87a0>, 'audit': <services.api.audit.AuditWriter object at 0x127eb9c40>, ...}
-analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x127fb08c0>
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x126710d40>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x125f66600>, 'audit': <services.api.audit.AuditWriter object at 0x1275d5f40>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1275c6660>
 
     async def test_an_alert_whose_own_node_a_route_confirms_stays_listed_and_its_old_copy_leaves(
         stores: dict[str, Any], analytics: Any
@@ -42,10 +42,10 @@ analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 
             rows = await listed(READER)
 >           assert alert.id in rows, "the alert whose own node was confirmed is withheld from its reader"
 E           AssertionError: the alert whose own node was confirmed is withheld from its reader
-E           assert '01M6Y0Q8BF7VM5FD9EF2Z0JYQA' in {}
-E            +  where '01M6Y0Q8BF7VM5FD9EF2Z0JYQA' = Alert(id='01M6Y0Q8BF7VM5FD9EF2Z0JYQA', rule_id='typology:01M6Y0Q8BF7VM5FD9EF2Z0JYQB', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+E           assert '01M6Y4CJ7DV3SERCYAFHXK946H' in {}
+E            +  where '01M6Y4CJ7DV3SERCYAFHXK946H' = Alert(id='01M6Y4CJ7DV3SERCYAFHXK946H', rule_id='typology:01M6Y4CJ7DV3SERCYAFHXK946J', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
 
 ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:918: AssertionError
 =========================== short test summary info ============================
 FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_whose_own_node_a_route_confirms_stays_listed_and_its_old_copy_leaves
-1 failed in 8.93s
+1 failed in 7.99s
