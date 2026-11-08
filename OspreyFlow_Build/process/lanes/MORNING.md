@@ -270,6 +270,11 @@ New ones are added at the bottom as they happen.
     already pushed to `origin` (`e89d44a`'s `_confined` checks only the ingest root); no deployment runs it,
     and the fix goes out with the run's single push.
 
+60. **For L3.4, settled now (case's question):** withdrawing a drawn item leaves in place a promoted link the
+    withdrawer may not see (the drawn node goes, the promoted link stays), so the withdrawer learns nothing of
+    it (rule 3) and no promotion is undone silently; refusing would reveal the link, and withdrawing it would
+    undo a promotion without a word.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
