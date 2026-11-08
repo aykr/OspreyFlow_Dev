@@ -4,9 +4,9 @@ roles, and dashboard identities (ADR-111 decision 7).
 **Through the Conduit's own service account,** bearing the ADR-043 client-credentials token, so
 every change passes the Conduit's right check and audit; the account needs `manage-users` and
 `manage-clients`. **Narrowed here, before any call:** a person's `roles` attribute may hold only the
-four roles of ADR-112, single `right:<name>` grants and the old role names — nothing else, so this
-can never hand out realm administration — and only a client named `osprey-dashboard-*` is ever
-created or removed.
+built-in roles, custom roles (`role:<id>`, ADR-145 Amendment 5), single `right:<name>` grants
+and the old role names — nothing else, so this can never hand out realm administration — and only
+a client named `osprey-dashboard-*` is ever created or removed.
 
 **A dashboard identity** is a confidential client with a service account and no browser flow: its
 token carries the principal claims (clearance, unit, roles — `reports_viewer` — handling codes) from
@@ -38,6 +38,7 @@ from schemas.admin import (
     SignInDelivery,
 )
 from schemas.rights import (
+    CUSTOM_ROLE_PREFIX,
     LEGACY_ROLE_RIGHTS,
     ROLE_RIGHTS,
     SINGLE_RIGHT_PREFIX,
@@ -127,8 +128,15 @@ def one_time_code() -> str:
     return "-".join(letters[i : i + 4] for i in range(0, 16, 4))
 
 
+#: A custom role's id (`custom_roles.py`, `secrets.token_hex(6)`): whether it exists is the
+#: route's to check, against the store.
+_CUSTOM_ROLE = re.compile(rf"^{re.escape(CUSTOM_ROLE_PREFIX)}[a-z0-9]{{1,32}}$")
+
+
 def allowed_role(role: str) -> bool:
     if role in ROLE_RIGHTS or role in LEGACY_ROLE_RIGHTS:
+        return True
+    if _CUSTOM_ROLE.match(role):
         return True
     return (
         role.startswith(SINGLE_RIGHT_PREFIX) and role[len(SINGLE_RIGHT_PREFIX) :] in _RIGHT_VALUES

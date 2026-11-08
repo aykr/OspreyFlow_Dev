@@ -115,9 +115,14 @@ from schemas.admin import (
     AdminDatasetAuthors,
     AdminDatasetCases,
     AdminLinkedCase,
+    AdminPeopleRows,
     AdminSchedule,
+    BuiltInRole,
     ChangeScheduleInput,
     ComponentHealth,
+    CustomRole,
+    CustomRoleInput,
+    CustomRoleVersion,
     DashboardGuestToken,
     DashboardIdentity,
     DashboardInput,
@@ -126,6 +131,8 @@ from schemas.admin import (
     DatasetEgressInput,
     DatasetPromotionPolicyInput,
     DemoPackStatus,
+    DisableInput,
+    DisablePlan,
     EmbeddedDashboard,
     InviteInput,
     LayerAction,
@@ -135,10 +142,16 @@ from schemas.admin import (
     PauseScheduleInput,
     PersonAccount,
     RegisteredDashboard,
+    RolesCatalogue,
     RolesInput,
     ScheduleRunView,
     SignInDelivery,
     SystemStatus,
+    Team,
+    TeamCoverInput,
+    TeamInput,
+    TeamLeadInput,
+    TeamMember,
 )
 from schemas.analytics import (
     CaseEventHolder,
@@ -294,7 +307,14 @@ from schemas.packs import (
     ReportPack,
 )
 from schemas.profile import SourceProfile
-from schemas.rights import Right, RightsResponse, rights_for
+from schemas.rights import (
+    CUSTOM_ROLE_PREFIX,
+    ROLE_RIGHTS,
+    SUPER_USER_PRESET,
+    Right,
+    RightsResponse,
+    rights_for,
+)
 from schemas.screening import (
     ScreeningLists,
     ScreeningListsOverview,
@@ -362,6 +382,7 @@ from .add_by_identifiers import (
     TooManyIdentifiersError,
     resolve_identifiers,
 )
+from .admin_people import AdminPeopleStore, DisableRefused, recipients
 from .alerts import (
     AlertNotFoundError,
     AlertStore,
@@ -421,6 +442,14 @@ from .compute_routes import (
 )
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
+from .custom_roles import (
+    CustomRoleStore,
+    RoleRefused,
+    custom_role_ids,
+    giver_may_give,
+    leaves_no_people_manager,
+    role_refusal,
+)
 from .dataset_scope import (
     CompositeReadOnlyError,
     NoAnalystLayerError,
@@ -527,6 +556,7 @@ from .identity_admin import (
     PersonActionRefused,
     PersonExistsError,
     UnknownRoleError,
+    allowed_role,
 )
 from .ingest_sources import (
     IngestSourceFile,
@@ -539,6 +569,7 @@ from .ingest_sources import (
     validate_upload_name,
 )
 from .investigations import (
+    TEAM_GRANT_PREFIX,
     AccessHistoryEntry,
     AccessLevel,
     InsufficientAccessError,
@@ -898,6 +929,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     jobs = resources.jobs
     yardstick = load_phia_yardstick()
     investigations = await InvestigationStore.connect(config.postgres.dsn)
+    # ADR-145 Amendment 5: custom roles and teams, and Admin › People's reads and Disable….
+    custom_roles = await CustomRoleStore.connect(config.postgres.dsn)
+    admin_people = await AdminPeopleStore.connect(config.postgres.dsn)
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
@@ -974,6 +1008,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.audit = audit
     app.state.investigations = investigations
+    app.state.custom_roles = custom_roles
+    app.state.admin_people = admin_people
     app.state.history = history
     app.state.sites = sites
     app.state.patterns_store = patterns_store
@@ -1213,6 +1249,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         schedule_task.cancel()
         monitoring_task.cancel()
         await investigations.close()
+        await custom_roles.close()
+        await admin_people.close()
+        # A closed store must not outlive the app: a request's custom roles are read through it.
+        app.state.custom_roles = None
         await history.close()
         await source_store.close()
         await target_model_store.close()
@@ -1554,6 +1594,7 @@ async def get_principal(
         identity = resolver.resolve(credentials.credentials)
     except PrincipalResolutionError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    identity = await with_custom_roles(request.app, identity)
     investigation_id = request.path_params.get("investigation_id")
     dataset_id = request.path_params.get("dataset_id")
     if (
@@ -1576,6 +1617,25 @@ async def get_principal(
         get_datasets(request),
         holds_a_level=holds_a_level_in(lambda: get_investigations(request)),
     )
+
+
+async def with_custom_roles(app_: Any, principal: Principal) -> Principal:
+    """ADR-145 Amendment 5 (Q1 (a)): a custom role's current rights, read now from the store and
+    added as single grants, so every right check reads them; never kept between requests. Without
+    the store (an app with no lifespan, as some tests run it) a custom role confers nothing."""
+    store = getattr(app_.state, "custom_roles", None)
+    if store is None or not custom_role_ids(principal.roles):
+        return principal
+    return cast("Principal", await store.expand(principal))
+
+
+def _owner_with_custom_roles(app_: Any, resolve: Callable[[str], Awaitable[Principal]]) -> Any:
+    """A schedule's owner as a request's principal is: with their custom roles' rights."""
+
+    async def resolved(owner_id: str) -> Principal:
+        return await with_custom_roles(app_, await resolve(owner_id))
+
+    return resolved
 
 
 def holds_a_level_in(
@@ -1648,6 +1708,18 @@ RecipeRunsDep = Annotated[RecipeRunStore, Depends(get_recipe_runs)]
 JudgementsStoreDep = Annotated[JudgementStore, Depends(get_judgements_store)]
 PrincipalNamesDep = Annotated[PrincipalNameDirectory, Depends(get_principal_names)]
 IdentityAdminDep = Annotated[IdentityAdmin, Depends(get_identity_admin)]
+
+
+def get_custom_roles(request: Request) -> CustomRoleStore:
+    return request.app.state.custom_roles  # type: ignore[no-any-return]
+
+
+def get_admin_people(request: Request) -> AdminPeopleStore:
+    return request.app.state.admin_people  # type: ignore[no-any-return]
+
+
+CustomRolesDep = Annotated[CustomRoleStore, Depends(get_custom_roles)]
+AdminPeopleDep = Annotated[AdminPeopleStore, Depends(get_admin_people)]
 
 
 def get_superset_embedder(request: Request) -> SupersetEmbedder | None:
@@ -3402,12 +3474,48 @@ def _grantee(account_id: str) -> str:
     return name
 
 
+async def _may_hold_a_level(request: Request, grantee: str, level: AccessLevel) -> None:
+    """Who may hold a level in a case (ADR-112 Amendment 5 decisions 3 and 5, reconciled with
+    ADR-111 decision 7 by ADR-145 Amendment 5 point 7): a team that exists (`team:<role id>`); an
+    enabled person; a dashboard identity as Viewer and no higher. Any other account the directory
+    holds that is no person (a service account, or a disabled account), and a dashboard above
+    Viewer, is refused in words (409 `service_account`). A deployment with no directory cannot
+    tell, and a name it does not hold grants nothing to anyone, as before."""
+    if grantee.startswith(TEAM_GRANT_PREFIX):
+        store = getattr(request.app.state, "custom_roles", None)
+        role_id = grantee[len(TEAM_GRANT_PREFIX) :]
+        if store is None or await store.team(role_id, _today()) is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "no_such_team",
+                    "message": f"there is no team {role_id} to give a level to",
+                },
+            )
+        return
+    people = await get_principal_names(request).people([grantee])
+    if people is None or grantee in people:
+        return
+    dashboards = {d.account_id for d in await get_identity_admin(request).list_dashboards()}
+    if grantee in dashboards and level is AccessLevel.VIEWER:
+        return
+    words = (
+        f"a dashboard identity may be a Viewer of a case and nothing more; {grantee} was asked "
+        f"to be {level.value}"
+        if grantee in dashboards
+        else f"{grantee} is not an enabled person: a service account owns nothing and is never a "
+        "case member, and a disabled account holds no level"
+    )
+    raise HTTPException(status_code=409, detail={"error": "service_account", "message": words})
+
+
 @app.put(
     "/v1/investigations/{investigation_id}/access/grants/{account_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_right(Right.SHARE_CASE))],
 )
 async def set_investigation_grant(
+    request: Request,
     investigation: InvestigationAccessManagerDep,
     account_id: str,
     body: GrantInput,
@@ -3416,6 +3524,7 @@ async def set_investigation_grant(
     audit: AuditDep,
 ) -> None:
     grantee = _grantee(account_id)
+    await _may_hold_a_level(request, grantee, body.level)
     await investigations.set_grant(investigation.id, grantee, body.level, by=principal)
     await audit.record(
         principal=principal,
@@ -8222,18 +8331,28 @@ async def _owners_allowed(
     teams are built, never a service account, and only an account the directory says is a
     person. The refusals are in words (`OwnerNeeded`)."""
     allowed = await datasets.owner_setting()
+    team: list[str] = []
     if owners.team is not None:
         if allowed == "people_only":
             raise OwnerNeeded("Admin › System allows people only as a dataset's owners")
-        raise OwnerNeeded(
-            "a team cannot own a dataset until teams are built (ADR-112 Amendment 5): name people"
-        )
+        # ADR-145 Amendment 5 point 5: a team, by its role's id or name, owns as `team:<id>`.
+        store = getattr(request.app.state, "custom_roles", None)
+        found = None if store is None else next(
+            (t for t in await store.teams(_today())
+             if owners.team in (t.role_id, t.display_name)), None)  # fmt: skip
+        if found is None:
+            raise OwnerNeeded(
+                f"there is no team {owners.team}: make a role a team in Admin › Roles"
+            )
+        team = [f"{TEAM_GRANT_PREFIX}{found.role_id}"]
     if allowed == "teams_only":
-        raise OwnerNeeded(
-            "Admin › System allows teams only as a dataset's owners, and teams are not built "
-            "yet (ADR-112 Amendment 5)"
-        )
+        if not team or owners.people:
+            raise OwnerNeeded("Admin › System allows teams only as a dataset's owners: name a team "
+                              "and no people")  # fmt: skip
+        return team
     named = sorted(set(owners.people))
+    if not named:
+        return team
     people = await get_principal_names(request).people(named)
     if people is None:
         raise OwnerNeeded(
@@ -8246,7 +8365,7 @@ async def _owners_allowed(
             + ", ".join(refused)
             + (" is not one" if len(refused) == 1 else " are not")
         )
-    return named
+    return named + team
 
 
 async def _make_the_home_case(
@@ -9753,7 +9872,9 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
         runs=state.recipe_runs,
         valkey=state.valkey,
         scheme=state.handling_scheme,
-        resolve_owner=state.principal_resolver.resolve_for_owner_detailed,
+        resolve_owner=_owner_with_custom_roles(
+            application, state.principal_resolver.resolve_for_owner_detailed
+        ),
         check_case=check_case,
         run=run,
         notify=notify,
@@ -9803,7 +9924,9 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
     return RuleScheduleExecutor(
         rules=state.typology_rules,
         valkey=state.valkey,
-        resolve_owner=state.principal_resolver.resolve_for_owner_detailed,
+        resolve_owner=_owner_with_custom_roles(
+            application, state.principal_resolver.resolve_for_owner_detailed
+        ),
         check_case=check_case,
         judge=judge,
     )
@@ -9836,7 +9959,9 @@ def _list_schedule_executor(application: FastAPI) -> ListRefreshExecutor:
     return ListRefreshExecutor(
         lists=state.screening_lists,
         valkey=state.valkey,
-        resolve_owner=state.principal_resolver.resolve_for_owner_detailed,
+        resolve_owner=_owner_with_custom_roles(
+            application, state.principal_resolver.resolve_for_owner_detailed
+        ),
         refresh=refresh,
     )
 
@@ -11458,15 +11583,339 @@ async def set_person_roles_route(
     body: RolesInput,
     principal: PrincipalDep,
     identity_admin: IdentityAdminDep,
+    custom_roles: CustomRolesDep,
     audit: AuditDep,
 ) -> PersonAccount:
-    """A person's roles, set whole — the four roles, `right:<name>` grants and the old role names;
-    anything else is refused before the identity provider is asked (ADR-112 Amendment 1)."""
+    """A person's roles, set whole — the built-in roles, `right:<name>` grants, custom roles
+    (`role:<id>`) and the old role names; anything else is refused before the identity provider is
+    asked (ADR-112 Amendment 1). ADR-145 Amendment 5: a custom role that does not exist is 422; a
+    right newly given that the giver may not give (`giver_may_give`), a team's role given to a
+    service account, or a change leaving no enabled person holding `manage_people`, is 409."""
+    if refused := [r for r in body.roles if not allowed_role(r)]:
+        raise UnknownRoleError(f"not a role or right this deployment grants: {', '.join(refused)}")
+    current = await custom_roles.current_rights()
+    if missing := [r for r in custom_role_ids(body.roles) if r not in current]:
+        raise HTTPException(status_code=422, detail=f"no such custom role: {', '.join(missing)}")
+    people = await identity_admin.list_people()
+    before = next((p for p in people if p.id == user_id), None)
+    if before is None:
+        raise HTTPException(status_code=404, detail={"error": "no_such_person"})
+    try:
+        given = rights_for(body.roles, current) - rights_for(before.roles, current)
+        held = rights_for(principal.roles)
+        if beyond := sorted(r.value for r in given if not giver_may_give(r, held)):
+            raise RoleRefused("beyond_your_rights",
+                              f"you cannot give a right you do not hold: {', '.join(beyond)}",
+                              rights=beyond)  # fmt: skip
+        teams = {t.role_id for t in await custom_roles.teams(_today())}
+        if before.system_account and teams & set(custom_role_ids(body.roles)):
+            raise RoleRefused("service_account", "a service account is never a team member")
+        after = [p.model_copy(update={"roles": list(body.roles)}) if p.id == user_id else p
+                 for p in people]  # fmt: skip
+        leaves_no_people_manager(after, current)
+    except RoleRefused as error:
+        raise _role_refused(error) from None
     person = await identity_admin.set_roles(user_id, body.roles)
     await audit.record(principal=principal, action="set_person_roles",
                        resolved_query={"user_id": user_id, "roles": person.roles},
                        result_cardinality=1)  # fmt: skip
     return person
+
+
+# --- Roles, teams and Disable (ADR-145 decisions 6-7 and Amendment 5; ADR-112 Amendments 4-5) -----
+
+
+def _role_refused(error: RoleRefused) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={"error": error.error, "message": error.words, **error.detail},
+    )
+
+
+def _today() -> date:
+    return datetime.now(UTC).date()
+
+
+def _built_in_roles() -> list[BuiltInRole]:
+    labels = {
+        "analyst": "Analyst",
+        "data_engineer": "Data Engineer",
+        "osprey-admin": "Admin",
+        "reports_viewer": "Reports Viewer",
+        "rule_author": "Rule author",
+    }
+    roles = [
+        BuiltInRole(id=i, label=labels[i], rights=sorted(r, key=lambda x: x.value))
+        for i, r in ROLE_RIGHTS.items()
+    ]
+    roles.append(
+        BuiltInRole(
+            id="super_user",
+            label="Super user",
+            rights=sorted(rights_for(SUPER_USER_PRESET), key=lambda x: x.value),
+            gives=list(SUPER_USER_PRESET),
+        )
+    )
+    return roles
+
+
+async def _holders(people: Sequence[PersonAccount], role_id: str) -> list[PersonAccount]:
+    return [p for p in people if f"{CUSTOM_ROLE_PREFIX}{role_id}" in p.roles]
+
+
+@app.get("/v1/admin/roles", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
+async def list_roles_route(
+    custom_roles: CustomRolesDep, identity_admin: IdentityAdminDep
+) -> RolesCatalogue:
+    """The built-in roles and the *Super user* preset, never editable, and every custom role with
+    its current version, how many hold it and its team (ADR-145 decision 7)."""
+    people = await identity_admin.list_people()
+    custom = await custom_roles.all(_today())
+    listed = []
+    for role in custom:
+        holders = await _holders(people, role.id)
+        team = role.team
+        if team is not None:
+            team = team.model_copy(
+                update={"members": [TeamMember(id=p.id, name=p.name) for p in holders]}
+            )
+        listed.append(role.model_copy(update={"holders": len(holders), "team": team}))
+    return RolesCatalogue(built_in=_built_in_roles(), custom=listed)
+
+
+@app.post(
+    "/v1/admin/roles",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def create_role_route(
+    body: CustomRoleInput, principal: PrincipalDep, custom_roles: CustomRolesDep, audit: AuditDep
+) -> CustomRole:
+    """A custom role, v1: refused in words (409) for a name already used, no rights, a right that is
+    not one, a forbidden pair, or a right the giver may not give (`role_refusal`)."""
+    try:
+        rights = role_refusal(
+            body.name,
+            body.rights,
+            giver_rights=rights_for(principal.roles),
+            names_taken=await custom_roles.names(),
+        )
+        role = await custom_roles.create(body.name, rights, by=principal.id)
+    except RoleRefused as error:
+        raise _role_refused(error) from None
+    await audit.record(
+        principal=principal,
+        action="create_custom_role",
+        result_cardinality=1,
+        resolved_query={
+            "role_id": role.id,
+            "name": role.name,
+            "version": 1,
+            "rights": [r.value for r in role.rights],
+        },
+    )
+    return role
+
+
+@app.put("/v1/admin/roles/{role_id}", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
+async def change_role_route(
+    role_id: str,
+    body: CustomRoleInput,
+    principal: PrincipalDep,
+    custom_roles: CustomRolesDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
+) -> CustomRole:
+    """A custom role's next version, with the same refusals as making one, and refused when it
+    would leave no enabled person holding `manage_people` (ADR-145 Amendment 5)."""
+    if await custom_roles.get(role_id, _today()) is None:
+        raise HTTPException(status_code=404, detail={"error": "no_such_role"})
+    try:
+        rights = role_refusal(
+            body.name,
+            body.rights,
+            giver_rights=rights_for(principal.roles),
+            names_taken=await custom_roles.names(except_id=role_id),
+        )
+        current = await custom_roles.current_rights()
+        leaves_no_people_manager(
+            await identity_admin.list_people(), {**current, role_id: frozenset(rights)}
+        )
+        before, after = await custom_roles.update(role_id, body.name, rights, by=principal.id)
+    except RoleRefused as error:
+        raise _role_refused(error) from None
+    await audit.record(
+        principal=principal,
+        action="change_custom_role",
+        result_cardinality=1,
+        resolved_query={
+            "role_id": role_id,
+            "version": after.version,
+            "before": {"name": before.name, "rights": [r.value for r in before.rights]},
+            "after": {"name": after.name, "rights": [r.value for r in after.rights]},
+        },
+    )
+    return after
+
+
+@app.get(
+    "/v1/admin/roles/{role_id}/versions",
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def role_versions_route(
+    role_id: str, custom_roles: CustomRolesDep
+) -> list[CustomRoleVersion]:
+    versions = await custom_roles.versions(role_id)
+    if not versions:
+        raise HTTPException(status_code=404, detail={"error": "no_such_role"})
+    return versions
+
+
+@app.put(
+    "/v1/admin/roles/{role_id}/team", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def make_team_route(
+    role_id: str,
+    body: TeamInput,
+    principal: PrincipalDep,
+    custom_roles: CustomRolesDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
+) -> Team:
+    """*Make this role a team* (ADR-112 Amendment 5 decision 3), or its name and mailbox changed.
+    Refused while a service account holds the role: a service account is never a team member."""
+    if await custom_roles.get(role_id, _today()) is None:
+        raise HTTPException(status_code=404, detail={"error": "no_such_role"})
+    holders = await _holders(await identity_admin.list_people(), role_id)
+    if robots := [p.username for p in holders if p.system_account]:
+        raise _role_refused(
+            RoleRefused(
+                "service_account",
+                "a service account is never a team member, and "
+                + ", ".join(robots)
+                + " holds this role: take it away first",
+            )
+        )
+    team = await custom_roles.make_team(role_id, body, _today())
+    await audit.record(
+        principal=principal,
+        action="make_team",
+        result_cardinality=1,
+        resolved_query={
+            "role_id": role_id,
+            "display_name": team.display_name,
+            "mailbox": team.mailbox,
+        },
+    )
+    return team.model_copy(update={"members": [TeamMember(id=p.id, name=p.name) for p in holders]})
+
+
+async def _member_of(identity_admin: IdentityAdmin, role_id: str, account: str) -> PersonAccount:
+    """`account` as one of the team's members, or a refusal in words: only a member, never a
+    service account, may be lead or cover (ADR-112 Amendment 5 decisions 4 and 5)."""
+    people = {p.id: p for p in await identity_admin.list_people()}
+    person = people.get(account)
+    if person is not None and person.system_account:
+        raise _role_refused(
+            RoleRefused(
+                "service_account", "a service account owns nothing and is never a lead or cover"
+            )
+        )
+    if person is None or f"{CUSTOM_ROLE_PREFIX}{role_id}" not in person.roles:
+        raise _role_refused(
+            RoleRefused("not_a_member", "only a member of the team may be its lead or cover")
+        )
+    if not person.enabled:
+        raise _role_refused(RoleRefused("disabled", f"{person.name} is disabled"))
+    return person
+
+
+@app.put(
+    "/v1/admin/teams/{role_id}/lead", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def set_team_lead_route(
+    role_id: str,
+    body: TeamLeadInput,
+    principal: PrincipalDep,
+    custom_roles: CustomRolesDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
+) -> Team:
+    """An administrator names a team's lead, or hands the role to another member (ADR-112
+    Amendment 5 decision 4); a cover who becomes lead stops covering. Audited before and after."""
+    if await custom_roles.team(role_id, _today()) is None:
+        raise HTTPException(status_code=404, detail={"error": "no_such_team"})
+    await _member_of(identity_admin, role_id, body.lead)
+    before, after = await custom_roles.set_lead(role_id, body.lead, _today())
+    await audit.record(
+        principal=principal,
+        action="set_team_lead",
+        result_cardinality=1,
+        resolved_query={"role_id": role_id, "before": before.lead, "after": after.lead},
+    )
+    return after
+
+
+@app.put(
+    "/v1/admin/teams/{role_id}/cover", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
+)
+async def set_team_cover_route(
+    role_id: str,
+    body: TeamCoverInput,
+    principal: PrincipalDep,
+    custom_roles: CustomRolesDep,
+    identity_admin: IdentityAdminDep,
+    audit: AuditDep,
+) -> Team:
+    """A cover until a date (inclusive), another member than the lead; after it the lead acts again
+    with no action. `cover: null` ends it now. Audited before and after."""
+    team = await custom_roles.team(role_id, _today())
+    if team is None:
+        raise HTTPException(status_code=404, detail={"error": "no_such_team"})
+    if body.cover is not None:
+        if body.until is None or body.until < _today():
+            raise _role_refused(
+                RoleRefused("cover_date", "a cover needs a last day, today or later")
+            )
+        if body.cover == team.lead:
+            raise _role_refused(
+                RoleRefused("cover_is_lead", "the lead cannot cover for themselves")
+            )
+        await _member_of(identity_admin, role_id, body.cover)
+    before, after = await custom_roles.set_cover(role_id, body.cover, body.until, _today())
+    await audit.record(
+        principal=principal,
+        action="set_team_cover",
+        result_cardinality=1,
+        resolved_query={
+            "role_id": role_id,
+            "before": [before.cover, str(before.cover_until or "")],
+            "after": [after.cover, str(after.cover_until or "")],
+        },
+    )
+    return after
+
+
+@app.get("/v1/admin/people/rows", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
+async def people_rows_route(
+    principal: PrincipalDep, admin_people: AdminPeopleDep, identity_admin: IdentityAdminDep
+) -> AdminPeopleRows:
+    """Each person's case levels (R3), their own and through a team, and the cases with no Author
+    (R1), of the administrator's own unit only (ADR-052): the safety net's reach, never wider."""
+    people = await identity_admin.list_people()
+    return await admin_people.rows(people, unit=principal.org_unit)
+
+
+@app.get(
+    "/v1/admin/people/{user_id}/disable-plan",
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def disable_plan_route(
+    user_id: str, principal: PrincipalDep, admin_people: AdminPeopleDep
+) -> DisablePlan:
+    """*Disable…*: everything the person owns today, each needing *Transfer to…*, and the kinds not
+    yet listed (L2.5b's seam, `admin_people.L38_OWNED_KINDS`)."""
+    return await admin_people.plan(user_id, admin_unit=principal.org_unit)
 
 
 def _within_your_reach(
@@ -11548,15 +11997,57 @@ async def set_person_access_route(
     dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
 )
 async def disable_person_route(
-    user_id: str, principal: PrincipalDep, identity_admin: IdentityAdminDep, audit: AuditDep
+    user_id: str,
+    principal: PrincipalDep,
+    identity_admin: IdentityAdminDep,
+    custom_roles: CustomRolesDep,
+    admin_people: AdminPeopleDep,
+    audit: AuditDep,
+    body: DisableInput | None = None,
 ) -> PersonAccount:
-    """Disabled at once: open sessions end too. Never one's own account — an administrator who did
-    that by mistake would have no way back in."""
+    """*Transfer and disable* (ADR-145 decision 6, A4): every item the person owns
+    (`disable-plan`) given to its recipient, in one transaction with an audit entry each, then the
+    account disabled and its sessions ended. Refused in words, nothing changed, while any item has
+    no recipient (409 `untransferred`) or one who cannot take it (409 `recipient_refused`). Never
+    one's own account — an
+    administrator who did that by mistake would have no way back in."""
     if user_id == principal.id:
         raise HTTPException(status_code=409, detail={"error": "cannot_disable_yourself"})
+    people = await identity_admin.list_people()
+    current = await custom_roles.current_rights()
+    holders = {
+        t.role_id: frozenset(
+            p.id
+            for p in people
+            if f"{CUSTOM_ROLE_PREFIX}{t.role_id}" in p.roles and p.enabled and not p.system_account
+        )
+        for t in await custom_roles.teams(_today())
+    }
+    try:
+        moved = await admin_people.transfer(
+            user_id,
+            (body or DisableInput()).transfers,
+            recipients(people, current, holders),
+            by=principal,
+            audit=audit,
+            admin_unit=principal.org_unit,
+        )
+    except DisableRefused as refused:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": refused.error,
+                "message": refused.words,
+                "items": [i.model_dump() for i in refused.items],
+            },
+        ) from None
     person = await identity_admin.set_enabled(user_id, False)
-    await audit.record(principal=principal, action="disable_person",
-                       resolved_query={"user_id": user_id}, result_cardinality=1)  # fmt: skip
+    await audit.record(
+        principal=principal,
+        action="disable_person",
+        resolved_query={"user_id": user_id, "transferred": len(moved)},
+        result_cardinality=1,
+    )
     return person
 
 
@@ -13589,7 +14080,10 @@ async def admin_dataset_authors_route(
     home = await datasets.home_case_of(dataset_id)
     if home is None:
         return AdminDatasetAuthors(dataset_id=dataset_id, has_home_case=False)
-    authors = await _authors_of(investigations, home.investigation_id)
+    held = await _authors_of(investigations, home.investigation_id)
+    # ADR-145 Amendment 5 point 5: a team's grant is the team, named apart from the people.
+    teams = [a[len(TEAM_GRANT_PREFIX) :] for a in held if a.startswith(TEAM_GRANT_PREFIX)]
+    authors = [a for a in held if not a.startswith(TEAM_GRANT_PREFIX)]
     names = await get_principal_names(request).display_names(authors) if authors else {}
     roles_of = {p.id: p.roles for p in await get_identity_admin(request).list_people()}
     approves = set(approver_ids(authors, roles_of))
@@ -13597,6 +14091,7 @@ async def admin_dataset_authors_route(
         dataset_id=dataset_id,
         has_home_case=True,
         people=[DatasetAuthor(id=a, name=names.get(a), approves=a in approves) for a in authors],
+        team=teams[0] if teams else None,
     )
 
 
@@ -13614,8 +14109,8 @@ async def change_dataset_owners_route(
     audit: AuditDep,
 ) -> AdminDatasetAuthors:
     """*Change owner…* (ADR-145 Amendment 4 decision 6): the same choice *Make live* offers, under
-    the same refusals (`_owners_allowed`: Admin › System's setting, people only until teams are
-    built, never a service account), audited. The named people become the home case's Authors and
+    the same refusals (`_owners_allowed`: Admin › System's setting, a team that exists, never a
+    service account), audited. The named people become the home case's Authors and
     every other Author's grant ends. A dataset not yet live has no home case, so its owners are
     named at its first *Make live*, not here."""
     await _admin_dataset_of(datasets, dataset_id)

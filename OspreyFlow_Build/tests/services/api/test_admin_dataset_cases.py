@@ -366,7 +366,7 @@ def test_a_dataset_not_yet_live_has_no_authors(world: SimpleNamespace) -> None:
     [
         ("people_and_teams", {"people": [ROBOT]}, "never a service account"),
         ("people_and_teams", {"people": ["per-2", "no-such-account"]}, "never a service account"),
-        ("people_and_teams", {"team": "Prison intel data team"}, "until teams are built"),
+        ("people_and_teams", {"team": "Prison intel data team"}, "there is no team Prison intel"),
         ("people_only", {"team": "Prison intel data team"}, "allows people only"),
         ("teams_only", {"people": ["per-2"]}, "allows teams only"),
     ],

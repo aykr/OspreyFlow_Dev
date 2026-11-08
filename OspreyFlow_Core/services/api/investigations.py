@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from conduit_common.identity import new_id
 from schemas.domain import DomainPack, Principal
+from schemas.rights import CUSTOM_ROLE_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -93,13 +94,28 @@ INSERT INTO investigation_grants (investigation_id, account_id, level)
     SELECT id, created_by, 'author' FROM investigations ON CONFLICT DO NOTHING;
 """
 
+#: ADR-112 Amendment 5 decision 3 (L2.5): a team holds a case level as `team:<its role's id>`, and
+#: a person holds it through each team whose role (`role:<id>`) their token carries on this
+#: request: read from the principal every time, never kept, so it ends when they leave the team.
+#: A person's level is the highest they hold, in their own name or through a team.
+TEAM_GRANT_PREFIX = "team:"
+
+
+def grant_subjects(principal: Principal) -> list[str]:
+    """Whom a case's grants may name for this principal: the account, and each team it is in."""
+    teams = [
+        r[len(CUSTOM_ROLE_PREFIX) :] for r in principal.roles if r.startswith(CUSTOM_ROLE_PREFIX)
+    ]
+    return [principal.id, *(f"{TEAM_GRANT_PREFIX}{t}" for t in teams)]
+
+
 _LEVEL_SQL = (
     "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
     "i.domains, "
-    "g.level AS grant_level, i.unit_level "
-    "FROM investigations i "
-    "LEFT JOIN investigation_grants g "
-    "ON g.investigation_id = i.id AND g.account_id = $3 "
+    "(SELECT g.level FROM investigation_grants g "
+    "WHERE g.investigation_id = i.id AND g.account_id = ANY($3::text[]) "
+    "ORDER BY CASE g.level WHEN 'author' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC "
+    "LIMIT 1) AS grant_level, i.unit_level FROM investigations i "
     "WHERE i.id = $1 AND i.owning_unit = $2 AND i.removed_at IS NULL"
 )
 
@@ -324,7 +340,7 @@ class InvestigationStore:
     ) -> tuple[Investigation, AccessLevel | None] | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                _LEVEL_SQL, investigation_id, principal.org_unit, principal.id
+                _LEVEL_SQL, investigation_id, principal.org_unit, grant_subjects(principal)
             )
         return self._parse_level_row(row)
 
@@ -344,14 +360,14 @@ class InvestigationStore:
             row = await conn.fetchrow(
                 "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
                 "i.domains, "
-                "g.level AS grant_level, i.unit_level "
-                "FROM investigations i "
-                "LEFT JOIN investigation_grants g "
-                "ON g.investigation_id = i.id AND g.account_id = $3 "
+                "(SELECT g.level FROM investigation_grants g "
+                "WHERE g.investigation_id = i.id AND g.account_id = ANY($3::text[]) "
+                "ORDER BY CASE g.level WHEN 'author' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC "
+                "LIMIT 1) AS grant_level, i.unit_level FROM investigations i "
                 "WHERE i.id = $1 AND i.owning_unit = $2 AND i.removed_at IS NULL",
                 investigation_id,
                 principal.org_unit,
-                principal.id,
+                grant_subjects(principal),
             )
         found = self._parse_level_row(row)
         if found is None:
@@ -444,15 +460,16 @@ class InvestigationStore:
             rows = await conn.fetch(
                 "SELECT i.id, i.name, i.created_at, i.created_by, i.owning_unit, "
                 "i.domains, "
-                "g.level AS grant_level, i.unit_level "
-                "FROM investigations i "
-                "LEFT JOIN investigation_grants g "
-                "ON g.investigation_id = i.id AND g.account_id = $2 "
+                "(SELECT g.level FROM investigation_grants g "
+                "WHERE g.investigation_id = i.id AND g.account_id = ANY($2::text[]) "
+                "ORDER BY CASE g.level WHEN 'author' THEN 3 WHEN 'editor' THEN 2 ELSE 1 END DESC "
+                "LIMIT 1) AS grant_level, i.unit_level FROM investigations i "
                 "WHERE i.owning_unit = $1 AND i.removed_at IS NULL "
-                "AND (g.level IS NOT NULL OR i.unit_level IS NOT NULL) "
+                "AND (i.unit_level IS NOT NULL OR EXISTS (SELECT 1 FROM investigation_grants o "
+                "WHERE o.investigation_id = i.id AND o.account_id = ANY($2::text[]))) "
                 "ORDER BY i.created_at DESC, i.id DESC",
                 principal.org_unit,
-                principal.id,
+                grant_subjects(principal),
             )
         listed: list[tuple[Investigation, AccessLevel]] = []
         for row in rows:
