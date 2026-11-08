@@ -81,6 +81,9 @@ from harness.render import (
     BUILD_CONTEXT_FROM_OUTPUT_DIR,
     DEFAULT_CONFIG_PATH,
     DEFAULT_OUT_ROOT,
+    GATEWAY_DB_PASSWORD,
+    GATEWAY_MASTER,
+    GATEWAY_SALT,
     REPO_ROOT,
     SECRETS_FILE,
     build_context_for,
@@ -140,6 +143,79 @@ def analytics_secret_lines(config: OspreyConfig) -> str:
     return f"OSPREY_CLICKHOUSE_PASSWORD={password}\nCLICKHOUSE_PASSWORD={password}\n"
 
 
+#: Written once the keys `deployment.env` held have been moved into the gateway (ADR-135 Amendment
+#: 2 decision 3); from then on an enabled provider's key lives there, not in this file.
+KEYS_IN_GATEWAY = "OSPREY_MODEL_KEYS_IN_GATEWAY"
+
+
+def gateway_secret_lines() -> str:
+    """The gateway's master key, encryption key and database password (ADR-135 Amendment 2 decision
+    3), minted here on every render and then replaced by the values the deployment already holds
+    (`keep_existing_secrets`), so each is minted once: a different encryption key would silently
+    drop every key the gateway holds (measured)."""
+    return (
+        f"{GATEWAY_MASTER}=sk-{generate_client_secret()}\n"
+        f"{GATEWAY_SALT}={generate_client_secret()}\n"
+        f"{GATEWAY_DB_PASSWORD}={generate_client_secret()}\n"
+    )
+
+
+def model_keys_to_move(env_text: str) -> dict[str, str]:
+    """Each provider key `deployment.env` still holds, by provider name: `OSPREY_MODEL_KEY_<NAME>`,
+    and the single provider's `OSPREY_MODEL_PROVIDER_KEY` under the name `OSPREY_MODEL_ENGINES`
+    gives it."""
+    pairs = _env_pairs(env_text)
+    found: dict[str, str] = {}
+    for name, value in pairs.items():
+        if name.startswith("OSPREY_MODEL_KEY_") and value:
+            found[name.removeprefix("OSPREY_MODEL_KEY_").lower()] = value
+    single = pairs.get("OSPREY_MODEL_PROVIDER_KEY", "")
+    if single:
+        engines = json.loads(pairs.get("OSPREY_MODEL_ENGINES", "") or "[]")
+        if len(engines) == 1:
+            found[str(engines[0]["name"])] = single
+    return found
+
+
+def move_model_keys_into_gateway(compose_file: Path) -> str:
+    """ADR-135 Amendment 2 decision 3, existing deployments and every install: each key
+    `deployment.env` holds is handed, on standard input, to the Conduit's own key path inside its
+    container, which puts it in the gateway; only then is its line removed (and the marker that
+    says keys now live in the gateway written). Through `_run`, as every command here, so a test's
+    stand-in for Compose answers it. A failure changes nothing and says so in words; the key stays
+    where it was. Never prints a key: a failure's words are the Conduit's fixed ones."""
+    env_path = compose_file.parent / "deployment.env"
+    text = env_path.read_text(encoding="utf-8")
+    keys = model_keys_to_move(text)
+    if not keys:
+        return "no model key to move"
+    command = ["exec", "-T", "api", "python", "-m", "services.api.model_keys", "move"]
+    try:
+        _run(
+            _compose(compose_file) + [*command, "--by", "apply"],
+            stage="model keys",
+            input="".join(f"{name}={key}\n" for name, key in keys.items()),
+        )
+    except ApplyFailed as failed:
+        words = failed.detail.splitlines()[-1] if failed.detail else ""
+        for key in keys.values():
+            words = words.replace(key, "…")
+        return (
+            "the model keys were not moved into the gateway; they stay in deployment.env and the "
+            "next apply tries again: " + words[:300]
+        )
+    kept = [
+        line
+        for line in text.splitlines()
+        if not (
+            line.startswith("OSPREY_MODEL_KEY_") or line.startswith("OSPREY_MODEL_PROVIDER_KEY=")
+        )
+        and not line.startswith(f"{KEYS_IN_GATEWAY}=")
+    ]
+    write_private(env_path, "\n".join([*kept, f"{KEYS_IN_GATEWAY}=yes"]) + "\n")
+    return f"moved into the gateway: {', '.join(sorted(keys))}"
+
+
 def provider_secret_lines(
     config: OspreyConfig, environ: Mapping[str, str], *, previous: str = ""
 ) -> str:
@@ -153,10 +229,14 @@ def provider_secret_lines(
     models key` is how one is changed). An enabled provider with neither stops the install here, in
     words naming the variable."""
     held = _env_pairs(previous)
-    lines: list[str] = []
+    in_gateway = held.get(KEYS_IN_GATEWAY) == "yes"
+    lines: list[str] = [f"{KEYS_IN_GATEWAY}=yes\n"] if in_gateway else []
     for provider in config.models.enabled_providers:
         variable = config.models.key_variable(provider.name)
         key = environ.get(variable, "") or held.get(variable, "")
+        if not key and in_gateway:
+            # ADR-135 Amendment 2: the gateway holds it (or Admin › Models says "no key").
+            continue
         if not key:
             raise ApplyFailed(
                 "render",
@@ -258,9 +338,18 @@ def _compose(compose_file: Path) -> list[str]:
     ]
 
 
-def _run(args: list[str], *, stage: str, cwd: Path | None = None, timeout: int = 1800) -> str:
+def _run(
+    args: list[str],
+    *,
+    stage: str,
+    cwd: Path | None = None,
+    timeout: int = 1800,
+    input: str | None = None,
+) -> str:
+    """One command; `input` is its standard input (a model key's only way in, ADR-135 Amendment 2:
+    never an argument, which `ps` shows)."""
     result = subprocess.run(
-        args, capture_output=True, text=True, cwd=cwd, timeout=timeout, check=False
+        args, capture_output=True, text=True, cwd=cwd, timeout=timeout, check=False, input=input
     )
     if result.returncode != 0:
         raise ApplyFailed(stage, f"{' '.join(args)} exited {result.returncode}\n{result.stderr}")
@@ -865,13 +954,16 @@ def _keys_for_new_providers(
     terminal, else a hidden prompt — never a visible one, and never asked for a key the deployment
     already holds (`ospreyflow models key` changes one). Returned by the variable it is kept in."""
     found: dict[str, str] = {}
+    # ADR-135 Amendment 2: once keys live in the gateway, one is set in Admin › Models or with
+    # `ospreyflow models key`; apply takes one only from the terminal, and never asks.
+    in_gateway = held.get(KEYS_IN_GATEWAY) == "yes"
     for provider in config.models.enabled_providers:
         variable = config.models.key_variable(provider.name)
         terminal = f"OSPREY_MODEL_KEY_{provider.name.upper()}"
         if held.get(variable):
             continue
         key = (environ.get(terminal) or environ.get(variable) or "").strip()
-        if not key and ask_secret is not None:
+        if not key and ask_secret is not None and not in_gateway:
             label = provider.label or provider.name
             key = ask_secret(f"Key for {label} ({terminal}; not shown): ").strip()
         if key and any(ch.isspace() for ch in key):
@@ -1067,6 +1159,8 @@ def reapply(
         )
     if moved.services:
         _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
+    # ADR-135 Amendment 2 decision 3: keys still in deployment.env go into the gateway.
+    print(move_model_keys_into_gateway(compose_file))
     wanted = organisation_provider(config)
     if wanted is not None and wanted != signed_in_through:
         # ADR-114 Amendment 33, "Step 33": a changed organisation sign-in (joining by email turned
@@ -1246,6 +1340,7 @@ def stage_deployment(
         + mail_secret_lines(config, environ)
         + organisation_secret_lines(config, environ)
         + provider_secret_lines(config, environ, previous=previous_env)
+        + gateway_secret_lines()
         + "ARCADEDB_HOST=arcadedb\nVALKEY_HOST=valkey\n"
         # Postgres and the object stores: the deployment's own, or the cloud's (05 §3a).
         + managed_service_lines(
@@ -1463,6 +1558,8 @@ def main(
         _run(_compose(compose_file) + ["up", "-d", "--wait"], stage="up")
         health = wait_for_health(compose_file, timeout_seconds=args.health_timeout)
         result.record("up", f"{len(health)} service(s) healthy")
+        # ADR-135 Amendment 2 decision 3: the installer's model keys go into the gateway.
+        result.record("model keys", move_model_keys_into_gateway(compose_file))
 
         # 4a. The deployment's extraction model downloaded before the install says it is ready
         # (build order step 25 (a), found on the first server: a fresh Small reported ready while

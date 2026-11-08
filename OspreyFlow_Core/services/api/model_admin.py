@@ -90,6 +90,14 @@ class ModelSettingsFile:
     def from_env(cls, environ: Mapping[str, str] = os.environ) -> ModelSettingsFile:
         return cls(Path(environ.get("OSPREY_MODEL_SETTINGS_DIR", DEFAULT_SETTINGS_DIR)))
 
+    def stamp(self) -> float | None:
+        """When the file last changed, or None where there is none: a Conduit replica reads it again
+        when this moves, so a change made through another replica reaches it."""
+        try:
+            return self.path.stat().st_mtime_ns / 1e9
+        except FileNotFoundError:
+            return None
+
     def load(self) -> ModelSettings | None:
         if not self.path.is_file():
             return None
@@ -370,13 +378,21 @@ class ModelAdmin:
         self._on_change = on_change
         self._now = now
         self._settings = settings_file.load()
+        self._stamp = settings_file.stamp()
         #: Engines whose record says "key set" but the gateway no longer holds (decision 9).
         self.lost: set[str] = set()
 
     # --- reading --------------------------------------------------------------------------
 
+    def _fresh(self) -> None:
+        stamp = self._file.stamp()
+        if stamp != self._stamp:
+            self._settings = self._file.load()
+            self._stamp = stamp
+
     @property
     def settings(self) -> ModelSettings:
+        self._fresh()
         if self._settings is not None:
             return self._settings
         return ModelSettings(
@@ -385,6 +401,7 @@ class ModelAdmin:
         )
 
     def key_state(self, name: str) -> KeyState:
+        self._fresh()
         if self._settings is None:
             return "set" if self._installed.key_present.get(name) else "none"
         if name in self.lost:
@@ -492,6 +509,7 @@ class ModelAdmin:
     async def _commit(self, settings: ModelSettings) -> None:
         self._file.save(settings)
         self._settings = settings
+        self._stamp = self._file.stamp()
         self._on_change(self.routes())
 
     async def _audited(
@@ -599,13 +617,18 @@ class ModelAdmin:
         }
         await self._audited(by, "default_changed", None, changes)
 
-    async def set_key(self, by: str, name: str, key: SecretStr) -> None:
-        action: ModelAdminAction = "key_set"
+    async def set_key(
+        self, by: str, name: str, key: SecretStr, *, action: ModelAdminAction | None = None
+    ) -> None:
+        """Set or rotate `name`'s key. `action` names it otherwise in the audit (`key_moved`, from
+        `deployment.env`, ADR-135 Amendment 2 decision 3)."""
+        named = action
+        action = named or "key_set"
         try:
             self._provider(name)
             current = self.settings
             had = name in current.keys and name not in self.lost
-            action = "key_rotated" if had else "key_set"
+            action = named or ("key_rotated" if had else "key_set")
             await self._gateway.set_credential(name, key, exists=name in current.keys)
             keys = {**current.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
             await self._commit(current.model_copy(update={"keys": keys}, deep=True))

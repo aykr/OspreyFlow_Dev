@@ -156,12 +156,13 @@ def _compose(compose_file: Path) -> list[str]:
     ]
 
 
-def _run(command: list[str], *, item: str, capture: bool = True) -> str:
+def _run(command: list[str], *, item: str, capture: bool = True, input: str | None = None) -> str:
     completed = subprocess.run(  # noqa: S603 - a fixed argv, never a shell string
         command,
         capture_output=capture,
         text=True,
         check=False,
+        input=input,
     )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()[:800]
@@ -689,6 +690,52 @@ def _set_aside(target: Path) -> str:
     )
 
 
+#: ADR-135 Amendment 2 decision 9: the fixed text whose HMAC under the gateway's encryption key the
+#: set records, so a restore can tell whether the keys in `litellm.sql` can be read here without
+#: either the set or this check ever holding the encryption key itself (32 random bytes, so the
+#: value reveals nothing usable about it).
+GATEWAY_KEY_CHECK_TEXT = b"ospreyflow-gateway-key-check"
+MODELS_FILE_IN_CONDUIT = "/run/osprey/model-settings/models.yaml"
+
+
+def gateway_key_check(env_path: Path) -> str | None:
+    """The check value for the deployment's gateway encryption key, or None where it has none."""
+    import hashlib
+    import hmac
+
+    from harness.render import GATEWAY_SALT
+
+    salt = _env_value_or(env_path, GATEWAY_SALT, "") if env_path.is_file() else ""
+    if not salt:
+        return None
+    return hmac.new(salt.encode(), GATEWAY_KEY_CHECK_TEXT, hashlib.sha256).hexdigest()
+
+
+def backup_models_file(compose_file: Path, destination: Path) -> Path | None:
+    """The models file (ADR-135 Amendment 2 decision 2), from the Conduit's own volume: engines,
+    defaults and each key's record, never a key. None where *Models* has changed nothing yet."""
+    try:
+        text = _run(
+            _compose(compose_file)
+            + [
+                "exec",
+                "-T",
+                "api",
+                "sh",
+                "-c",
+                f"cat {MODELS_FILE_IN_CONDUIT} 2>/dev/null || true",
+            ],
+            item="models",
+        )
+    except BackupFailed:
+        return None
+    if not text.strip():
+        return None
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(text, encoding="utf-8")
+    return destination
+
+
 def _take_set(
     compose_file: Path,
     target: Path,
@@ -736,6 +783,9 @@ def _take_set(
     else:
         empty.append("recipes")
     written.extend(backup_configuration(compose_file, target))
+    models_file = backup_models_file(compose_file, target / "config" / "models.yaml")
+    if models_file is not None:
+        written.append(("models", models_file))
 
     entries = []
     for item, path in written:
@@ -752,6 +802,9 @@ def _take_set(
         "quiesced": quiesced,
         "schema_versions": schema_versions(),
         "audit_disposition": AUDIT_DISPOSITION,
+        # ADR-135 Amendment 2 decision 9: which encryption key `litellm.sql`'s keys are sealed
+        # under, as a check value, never the key.
+        "gateway_key_check": gateway_key_check(compose_file.parent / "deployment.env"),
         "files": [entry.__dict__ for entry in sorted(entries, key=lambda e: e.path)],
         # Items the deployment did not have yet, so the set holds nothing for them: a restore
         # leaves them as the fresh deployment has them, and says so.

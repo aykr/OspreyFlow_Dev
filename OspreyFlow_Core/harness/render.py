@@ -201,6 +201,20 @@ _OLLAMA_HEALTHCHECK = [
 #: _key` is what fails if the three drift apart again.
 LITELLM_KEY = "sk-ospreyflow-dev"
 
+#: ADR-135 Amendment 2 decision 3: the gateway keeps engines and keys in its own database, so its
+#: master key is no longer a fixed development value but minted per deployment, like the database's
+#: password and the encryption key ("salt") the stored keys are sealed with. Each name ends in
+#: SECRET or PASSWORD so `harness.apply.keep_existing_secrets` keeps it across every `apply`: a
+#: different salt silently drops every stored engine (measured), so it is minted once and never
+#: again. `LITELLM_KEY` above stays for the developer stack (`deploy/compose/dev.yaml`).
+GATEWAY_MASTER = "OSPREY_LITELLM_MASTER_SECRET"
+GATEWAY_SALT = "OSPREY_LITELLM_SALT_SECRET"
+GATEWAY_DB_PASSWORD = "OSPREY_LITELLM_DB_PASSWORD"
+#: Where the Conduit keeps the models file (decision 2): a named volume, which takes the image's own
+#: folder (made by `services/api/Dockerfile`, owned by its user) on first mount, so it is writable
+#: by the Conduit's user on any host.
+MODEL_SETTINGS_PATH = "/run/osprey/model-settings"
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 DEFAULT_CONFIG_PATH = REPO_ROOT / "osprey.yaml"
@@ -264,15 +278,19 @@ def render_litellm_config(config: OspreyConfig) -> str:
     """
     extraction = config.extraction_model
     table = yaml.safe_load(_local_model_table(config, extraction))
-    table["model_list"] += provider_model_entries(config)
+    # ADR-135 Amendment 2 decision 3: hosted engines live only in the gateway's database, made
+    # there by the Conduit, so no `model_name` is both rendered and stored.
     return yaml.safe_dump(table, sort_keys=False)
 
 
 def provider_model_entries(config: OspreyConfig) -> list[dict[str, object]]:
-    """ADR-114 Amendment 6 point 4, ADR-135 decision 2: each enabled provider's models, routed
-    through the gateway as `provider/model`, each reading its own provider's key from the gateway's
-    own environment (`os.environ/OSPREY_MODEL_KEY_<NAME>`, or `OSPREY_MODEL_PROVIDER_KEY` for the
-    single `models.provider`) — never written into this file."""
+    """**No longer rendered** (ADR-135 Amendment 2 decision 3: the gateway's database holds each
+    engine's entries, made by the Conduit). Kept as the description the routing tests' stand-in
+    gateway builds its table from. ADR-114 Amendment 6 point 4, ADR-135 decision 2: each enabled
+    provider's models, routed through the gateway as `provider/model`, each reading its own
+    provider's key from the gateway's own environment (`os.environ/OSPREY_MODEL_KEY_<NAME>`, or
+    `OSPREY_MODEL_PROVIDER_KEY` for the single `models.provider`) — never written into this
+    file."""
     entries: list[dict[str, object]] = []
     for provider in config.models.enabled_providers:
         key = config.models.key_variable(provider.name)
@@ -308,6 +326,8 @@ def model_engines_env(config: OspreyConfig) -> list[str]:
             # ADR-136 decision 1: the contract mark and its reference (words, never a secret).
             "privacy_contract": p.privacy_contract,
             "contract_reference": p.contract_reference,
+            # ADR-135 Amendment 2: the Conduit makes the gateway's entries, so it needs the base.
+            "api_base": p.api_base,
         }
         for p in models.enabled_providers
     ]
@@ -393,7 +413,10 @@ def _local_model_table(config: OspreyConfig, extraction: str) -> str:
                     },
                 },
             ],
-            "general_settings": {"master_key": LITELLM_KEY},
+            "general_settings": {
+                "master_key": "os.environ/LITELLM_MASTER_KEY",
+                "store_model_in_db": True,
+            },
         },
         sort_keys=False,
     )
@@ -477,9 +500,7 @@ class UnpinnedImagesError(RuntimeError):
 OWNED_IMAGE_REGISTRY = "ghcr.io/ospreyflow"
 
 
-def service_images(
-    config: OspreyConfig, *, build_context: str = "../../.."
-) -> list[ServiceImage]:
+def service_images(config: OspreyConfig, *, build_context: str = "../../..") -> list[ServiceImage]:
     """Every container the rendered stack runs, in a deterministic order.
 
     `05_DEPLOYMENT.md` §3's own `local-lite` list is the reference: "the workspace, one Conduit,
@@ -608,6 +629,7 @@ def build_context_for(out_dir: Path, source_path: str | None) -> str:
         return BUILD_CONTEXT_FROM_OUTPUT_DIR
     return str(source)
 
+
 #: Published host ports, as `service -> (env var, default)`. Every one is overridable, because
 #: Preflight found 8000 already held by an unrelated container on a real machine and a deployment
 #: that cannot move its own ports is one an operator has to fight. The defaults are the
@@ -625,6 +647,7 @@ PORT_OVERRIDES: dict[str, tuple[str, int]] = {
     # run on the host and need the database (owner's ruling of 29 September 2026).
     "arcadedb": ("OSPREY_ARCADEDB_PORT", 2480),
 }
+
 
 def _published_port(config: OspreyConfig, service: str, default: int) -> int:
     """The host port a service is published at: ArcadeDB's is `deployment.graph_port` when set
@@ -667,8 +690,13 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
     # the services read are kept (`harness/apply.py`'s `object_store_lines`).
     "objectstore": {
         "command": [
-            "server", "-s3", "-dir=/data", "-s3.port=8333", "-volume.max=1000",
-            "-master.volumeSizeLimitMB=1024", "-master.volumePreallocate=false",
+            "server",
+            "-s3",
+            "-dir=/data",
+            "-s3.port=8333",
+            "-volume.max=1000",
+            "-master.volumeSizeLimitMB=1024",
+            "-master.volumePreallocate=false",
         ],
         "environment": {
             "AWS_ACCESS_KEY_ID": "${OSPREY_MINIO_USER:-ospreyflow}",
@@ -797,7 +825,13 @@ _SERVICE_EXTRAS: dict[str, dict[str, object]] = {
     "litellm": {
         "command": ["--config", "/app/config.yaml", "--port", "4000"],
         "volumes": ["./litellm.yaml:/app/config.yaml:ro"],
-        "environment": {"LITELLM_MASTER_KEY": LITELLM_KEY},
+        "environment": {
+            "LITELLM_MASTER_KEY": "${" + GATEWAY_MASTER + ":?set in the deployment env file}",
+            "LITELLM_SALT_KEY": "${" + GATEWAY_SALT + ":?set in the deployment env file}",
+            # ADR-114 Amendment 7: the price list is read from the image, not GitHub (measured: it
+            # tried at every start).
+            "LITELLM_LOCAL_MODEL_COST_MAP": "True",
+        },
         # **`service_started`, not `service_healthy`** — `ollama` has no healthcheck by design
         # (see its own comment: waiting for the model pull cost Floor A ten times its runtime).
         # The proxy only needs the server process reachable; a request for a model still being
@@ -955,7 +989,9 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # rendered either, `09_INGEST_STUDIO.md` §4's whole review queue was unreachable.
             api_environment["LITELLM_HOST"] = "litellm"
             api_environment["LITELLM_PORT"] = "4000"
-            api_environment["LITELLM_API_KEY"] = LITELLM_KEY
+            api_environment["LITELLM_API_KEY"] = "${" + GATEWAY_MASTER + ":?set in the env file}"
+            # ADR-135 Amendment 2 decision 2: the models file, on its own volume.
+            api_environment["OSPREY_MODEL_SETTINGS_DIR"] = MODEL_SETTINGS_PATH
             # ADR-095 Amendment 2: where to ask whether the models have arrived (`/v1/readiness`).
             api_environment["OSPREY_OLLAMA_URL"] = "http://ollama:11434"
             # ADR-098 decision 2: the fast recogniser. Not in `depends_on` below: without it the
@@ -1134,6 +1170,7 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
         )
     )
     _keys_for_the_gateway_alone(config, services)
+    _gateway_database(config, services)
     if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
         services["keycloak-db"] = _keycloak_database_step(config)
     if config.external.postgres is not None:
@@ -1156,6 +1193,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             # Round 13cda: without this the ~2.2GB model pull repeats on every `up`.
             "ollama-models": {"driver": "local"},
             **({"whisper-models": {"driver": "local"}} if "whisper" in services else {}),
+            # ADR-135 Amendment 2 decision 2: the models file, the Conduit's alone.
+            **({"model-settings": {"driver": "local"}} if "litellm-db" in services else {}),
             **({"objectstore-data": {"driver": "local"}} if "objectstore" in services else {}),
             # ADR-114 Amendment 33 decision 3: with the organisation's certificate nothing is
             # obtained, so there is nothing for Caddy to keep.
@@ -1309,6 +1348,79 @@ def _keycloak_database_step(config: OspreyConfig) -> dict[str, object]:
         "depends_on": {"postgres": {"condition": "service_healthy"}},
     }
     return step
+
+
+#: The gateway's role and database (ADR-135 Amendment 2 decision 3), made as Keycloak's are: its
+#: own, so its start-up schema diff (measured) can touch nothing of the Conduit's, and the
+#: Conduit's login cannot read the sealed keys.
+_GATEWAY_DATABASE_SQL = (
+    "SELECT 'CREATE ROLE litellm LOGIN' "
+    "WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'litellm')\\gexec\n"
+    "ALTER ROLE litellm WITH LOGIN PASSWORD :'pw';\n"
+    "SELECT 'CREATE DATABASE litellm OWNER litellm' "
+    "WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'litellm')\\gexec\n"
+)
+
+
+def _gateway_database(config: OspreyConfig, services: dict[str, Any]) -> None:
+    """The gateway's database, its encryption key and master key (ADR-135 Amendment 2 decision 3),
+    each secret blanked in every other service that reads the env file whole; the master key
+    reaches the Conduit alone besides, which calls the admin API with it."""
+    if "litellm" not in services or (
+        "postgres" not in services and config.external.postgres is None
+    ):
+        return
+    managed = config.external.postgres
+    host, port = (managed.host, managed.port) if managed is not None else ("postgres", 5432)
+    query = f"?sslmode={managed.sslmode}" if managed is not None else ""
+    gateway = services["litellm"]
+    gateway["environment"] = {
+        **dict(gateway.get("environment") or {}),
+        "DATABASE_URL": (
+            "postgresql://litellm:${" + GATEWAY_DB_PASSWORD + ":?set in the deployment env file}"
+            f"@{host}:{port}/litellm{query}"
+        ),
+        "STORE_MODEL_IN_DB": "True",
+    }
+    gateway["depends_on"] = {
+        **dict(gateway.get("depends_on") or {}),
+        "litellm-db": {"condition": "service_completed_successfully"},
+    }
+    script = (
+        f'psql -h {host} -p {port} -U "$$OSPREY_POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 '
+        + '-v pw="$$'
+        + GATEWAY_DB_PASSWORD
+        + '" <<'
+        + "'SQL'\n"
+        + _GATEWAY_DATABASE_SQL
+        + "SQL\n"
+    )
+    services["litellm-db"] = {
+        "restart": "no",
+        "image": POSTGRES_IMAGE,
+        "entrypoint": ["sh", "-c"],
+        "command": [script],
+        "environment": {
+            "OSPREY_POSTGRES_USER": "${OSPREY_POSTGRES_USER:-osprey}",
+            "PGPASSWORD": "${OSPREY_POSTGRES_PASSWORD:?set in the deployment env file}",
+            GATEWAY_DB_PASSWORD: "${" + GATEWAY_DB_PASSWORD + ":?set in the env file}",
+            **({"PGSSLMODE": managed.sslmode} if managed is not None else {}),
+        },
+        "depends_on": {"postgres": {"condition": "service_healthy"}},
+    }
+    if "api" in services:
+        api = services["api"]
+        api["volumes"] = [*api.get("volumes", []), f"model-settings:{MODEL_SETTINGS_PATH}"]
+    if config.profile.value == "cluster":
+        return  # the chart blanks them for every workload, its own workers too (`harness.cluster`)
+    for name, service in services.items():
+        if name in ("litellm", "litellm-db") or "env_file" not in service:
+            continue
+        environment = dict(service.get("environment") or {})
+        environment.update({GATEWAY_SALT: "", GATEWAY_DB_PASSWORD: ""})
+        if name != "api":
+            environment[GATEWAY_MASTER] = ""
+        service["environment"] = environment
 
 
 def _keycloak_jdbc_url(config: OspreyConfig) -> str:

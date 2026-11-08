@@ -63,7 +63,10 @@ def test_a_cluster_renders_the_charts_values_and_its_lock() -> None:
     assert set(result.artefacts) == {"values.yaml", "versions.lock"}
     lock = yaml.safe_load(result.artefacts["versions.lock"])["images"]
     values = values_for(cluster_config())
-    ran = {c["name"] for c in [*values["workloads"], *values["jobs"]]} | {"keycloak-db"}
+    ran = {c["name"] for c in [*values["workloads"], *values["jobs"]]} | {
+        "keycloak-db",
+        "litellm-db",  # ADR-135 Amendment 2: the gateway's database, made before it starts
+    }
     assert {entry["service"] for entry in lock} == ran
 
 
@@ -135,7 +138,9 @@ def test_no_secret_is_in_the_values() -> None:
     for container in _containers(values):
         for entry in container.get("env", []):
             if re.search("(PASSWORD|SECRET|_TOKEN)$", entry["name"]):
-                assert "value" not in entry or "$(" in entry["value"], entry
+                # An empty value is the blank that keeps a secret from a workload reading the
+                # whole Secret (ADR-135 decision 2, Amendment 2 decision 3), never a secret.
+                assert "value" not in entry or entry["value"] == "" or "$(" in entry["value"], entry
 
 
 def test_the_stores_are_clustered() -> None:
@@ -263,10 +268,29 @@ def test_the_workspace_names_the_conduit_by_its_full_service_name() -> None:
     """nginx's resolver applies no search domain, so `api` alone resolves nowhere on a cluster
     (`test_workspace_proxy.py`); the namespace is the pod's own."""
     workspace = _workloads(values_for(cluster_config()))["workspace"]
-    assert workspace["env"] == [
+    # Beside the gateway's secrets, blanked (ADR-135 Amendment 2 decision 3).
+    assert [e for e in workspace["env"] if e.get("value") != ""] == [
         {"name": "POD_NAMESPACE", "field": "metadata.namespace"},
         {"name": "OSPREY_CONDUIT_HOST", "value": "api.$(POD_NAMESPACE).svc.cluster.local"},
     ]
+
+
+def test_no_workload_but_the_gateway_reads_its_encryption_key_or_database_password() -> None:
+    """ADR-135 Amendment 2 decision 3: every workload reading the whole Secret has the gateway's
+    encryption key and database password blanked above it; the master key reaches the Conduit too,
+    which calls the admin API with it."""
+    values = values_for(cluster_config())
+    for container in _containers(values):
+        if not container.get("envFrom") or container["name"] == "litellm":
+            continue
+        env = {e["name"]: e for e in container.get("env", [])}
+        for secret in ("OSPREY_LITELLM_SALT_SECRET", "OSPREY_LITELLM_DB_PASSWORD"):
+            assert env.get(secret) == {"name": secret, "value": ""}, (container["name"], secret)
+        master = env.get("OSPREY_LITELLM_MASTER_SECRET")
+        if container["name"] != "api":
+            assert master == {"name": "OSPREY_LITELLM_MASTER_SECRET", "value": ""}, container[
+                "name"
+            ]
 
 
 def test_the_storage_classes_are_the_clusters_own() -> None:
@@ -307,7 +331,8 @@ def test_a_cluster_gives_no_workload_but_the_gateway_a_model_key() -> None:
     workloads = _workloads(values)
     api = {e["name"]: e for e in workloads["api"]["env"]}
     assert api["OSPREY_MODEL_KEY_PRESENT_GEMINI"] == {
-        "name": "OSPREY_MODEL_KEY_PRESENT_GEMINI", "value": "yes"
+        "name": "OSPREY_MODEL_KEY_PRESENT_GEMINI",
+        "value": "yes",
     }
     assert api["OSPREY_MODEL_KEY_GEMINI"] == {"name": "OSPREY_MODEL_KEY_GEMINI", "value": ""}
     for container in _containers(values):

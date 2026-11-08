@@ -613,6 +613,54 @@ def check_schema_compatibility(manifest: dict[str, Any]) -> None:
         )
 
 
+def engines_with_keys(directory: Path) -> list[str]:
+    """The engines whose key the set's models file records as set (ADR-135 Amendment 2)."""
+    path = directory / "config" / "models.yaml"
+    if not path.is_file():
+        return []
+    import yaml
+
+    recorded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return sorted(dict(recorded.get("keys") or {}))
+
+
+def check_gateway_key(
+    directory: Path, manifest: dict[str, Any], env_path: Path, *, keys_will_be_lost: bool
+) -> None:
+    """ADR-135 Amendment 2 decision 9: a set whose gateway database was written under another
+    encryption key would restore every engine with its key unreadable, which the gateway shows only
+    as engines silently gone (measured). Refused in words, naming each engine's key that would be
+    lost, unless the operator says they will enter them again."""
+    from harness.backup import gateway_key_check
+
+    recorded = manifest.get("gateway_key_check")
+    if not recorded or keys_will_be_lost:
+        return
+    lost = engines_with_keys(directory)
+    if not lost:
+        return
+    if gateway_key_check(env_path) == recorded:
+        return
+    raise RestoreRefused(
+        "this set's model keys were sealed under another deployment's gateway encryption key, so "
+        f"restored here the gateway could not read them: the keys of {', '.join(lost)} would be "
+        "lost (the engines, their models and each job's default are kept)",
+        "restore onto the deployment this set was taken from, or run the restore again with "
+        "--model-keys-will-be-lost and then enter each of those keys again in Admin › Models or "
+        "with `ospreyflow models key <name>`",
+    )
+
+
+def restore_models_file(compose_file: Path, models_file: Path) -> None:
+    """The models file back into the Conduit's own volume (ADR-135 Amendment 2 decision 9)."""
+    _run(
+        _compose(compose_file)
+        + ["exec", "-T", "api", "sh", "-c", "cat > /run/osprey/model-settings/models.yaml"],
+        item="models",
+        input=models_file.read_text(encoding="utf-8"),
+    )
+
+
 def run_restore(
     *,
     directory: Path,
@@ -620,10 +668,17 @@ def run_restore(
     database: str,
     analytics_container_path: str,
     acknowledged: bool,
+    keys_will_be_lost: bool = False,
 ) -> DryRun:
     manifest = load_manifest(directory)
     verify_checksums(directory, manifest)
     check_schema_compatibility(manifest)
+    check_gateway_key(
+        directory,
+        manifest,
+        compose_file.parent / "deployment.env",
+        keys_will_be_lost=keys_will_be_lost,
+    )
     plan = dry_run_for(directory, manifest)
     if not acknowledged:
         return plan
@@ -661,6 +716,8 @@ def run_restore(
         )
     for held in by_item.get("identity", []):
         restore_identity(compose_file, held)
+    for models_file in by_item.get("models", []):
+        restore_models_file(compose_file, models_file)
     return plan
 
 
@@ -673,6 +730,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument("directory", type=Path)
+    parser.add_argument(
+        "--model-keys-will-be-lost",
+        action="store_true",
+        help="restore a set taken on another deployment, knowing each model engine's key must be "
+        "entered again afterwards (ADR-135 Amendment 2)",
+    )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--profile", default=None)
     parser.add_argument("--generated-root", type=Path, default=DEFAULT_OUT_ROOT)
@@ -707,6 +770,7 @@ def main(argv: list[str] | None = None) -> int:
             database=args.database,
             analytics_container_path=f"{config.components.storage.data}/analytics.duckdb",
             acknowledged=args.yes,
+            keys_will_be_lost=args.model_keys_will_be_lost,
         )
     except RestoreRefused as refusal:
         print(f"restore: REFUSED\n  {refusal.reason}\n  {refusal.remedy}", file=sys.stderr)

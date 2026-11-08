@@ -37,9 +37,7 @@ GEMINI_KEY = "AIza-gemini-THIS-MUST-NEVER-APPEAR"
 OPENAI_KEY = "sk-openai-THIS-MUST-NEVER-APPEAR"
 
 GEMINI = ModelProviderConfig(name="gemini", roles={"extraction": "gemini-2.5-flash"})
-OPENAI = ModelProviderConfig(
-    name="openai", roles={"extraction": "gpt-4o-mini", "vision": "gpt-4o"}
-)
+OPENAI = ModelProviderConfig(name="openai", roles={"extraction": "gpt-4o-mini", "vision": "gpt-4o"})
 TWO = ModelsConfig(
     local_only=False,
     providers=[GEMINI, OPENAI],
@@ -134,19 +132,33 @@ def test_the_single_provider_reads_as_a_one_entry_list_and_round_trips() -> None
 # --- the model table and the compose file --------------------------------------------------------
 
 
-def test_two_providers_render_two_entries_each_reading_its_own_key(tmp_path: Path) -> None:
+def test_hosted_engines_are_not_rendered_but_held_in_the_gateway_s_database(
+    tmp_path: Path,
+) -> None:
+    """ADR-135 Amendment 2 decision 3 (superseding ADR-135's rendered entries): the rendered table
+    keeps the local models alone, the gateway stores models in its own database, and its master key
+    is read from its environment, minted per deployment."""
     table = yaml.safe_load(render_litellm_config(_config(tmp_path, TWO)))
-    routed = {m["model_name"]: m["litellm_params"] for m in table["model_list"]}
-    assert routed["gemini/gemini-2.5-flash"]["api_key"] == "os.environ/OSPREY_MODEL_KEY_GEMINI"
-    assert routed["openai/gpt-4o-mini"]["api_key"] == "os.environ/OSPREY_MODEL_KEY_OPENAI"
-    assert routed["openai/gpt-4o"]["api_key"] == "os.environ/OSPREY_MODEL_KEY_OPENAI"
+    routed = {m["model_name"] for m in table["model_list"]}
     assert "qwen2.5:7b-instruct" in routed  # the local engine stays
-
+    assert not any(name.startswith(("gemini/", "openai/")) for name in routed)
+    assert table["general_settings"] == {
+        "master_key": "os.environ/LITELLM_MASTER_KEY",
+        "store_model_in_db": True,
+    }
     compose = yaml.safe_load(render(_config(tmp_path, TWO), resolver=_fake_resolver)
                              .artefacts["compose.yaml"])  # fmt: skip
     gateway = compose["services"]["litellm"]["environment"]
-    assert gateway["OSPREY_MODEL_KEY_GEMINI"] == "${OSPREY_MODEL_KEY_GEMINI:-}"
-    assert gateway["OSPREY_MODEL_KEY_OPENAI"] == "${OSPREY_MODEL_KEY_OPENAI:-}"
+    assert (
+        gateway["LITELLM_SALT_KEY"]
+        == "${OSPREY_LITELLM_SALT_SECRET:?set in the deployment env file}"
+    )
+    assert gateway["DATABASE_URL"].startswith("postgresql://litellm:${OSPREY_LITELLM_DB_PASSWORD:")
+    assert gateway["DATABASE_URL"].endswith("@postgres:5432/litellm")
+    assert gateway["LITELLM_LOCAL_MODEL_COST_MAP"] == "True"
+    assert compose["services"]["litellm"]["depends_on"]["litellm-db"] == {
+        "condition": "service_completed_successfully"
+    }
 
 
 def test_no_service_but_the_gateway_is_given_a_key(tmp_path: Path) -> None:
@@ -175,20 +187,25 @@ def test_the_conduit_is_told_the_engines_the_defaults_and_key_presence_never_a_k
     rendered = render(_config(tmp_path, TWO), resolver=_fake_resolver)
     env = _env_lines(rendered.artefacts["deployment.env"])
     engines = json.loads(env["OSPREY_MODEL_ENGINES"])
-    # ADR-136: each with its contract mark (none here) and no reference.
+    # ADR-136: each with its contract mark (none here) and no reference; ADR-135 Amendment 2: and
+    # its base, since the Conduit makes the gateway's entries.
     assert engines == [
         {"name": "gemini", "label": "Gemini", "roles": {"extraction": "gemini/gemini-2.5-flash"},
-         "privacy_contract": False, "contract_reference": None},
+         "privacy_contract": False, "contract_reference": None, "api_base": None},
         {"name": "openai", "label": "OpenAI",
          "roles": {"extraction": "openai/gpt-4o-mini", "vision": "openai/gpt-4o"},
-         "privacy_contract": False, "contract_reference": None},
+         "privacy_contract": False, "contract_reference": None, "api_base": None},
     ]  # fmt: skip
     assert json.loads(env["OSPREY_MODEL_DEFAULTS"]) == {"extraction": "gemini"}
     assert env["OSPREY_SENDABLE_HANDLING_CODES"] == "P"
-    api = yaml.safe_load(rendered.artefacts["compose.yaml"])["services"]["api"]["environment"]
-    # Whether each key is present, resolved by Compose from the env file: "yes" or empty.
-    assert api["OSPREY_MODEL_KEY_PRESENT_GEMINI"] == "${OSPREY_MODEL_KEY_GEMINI:+yes}"
-    assert api["OSPREY_MODEL_KEY_PRESENT_OPENAI"] == "${OSPREY_MODEL_KEY_OPENAI:+yes}"
+    api = yaml.safe_load(rendered.artefacts["compose.yaml"])["services"]["api"]
+    environment = api["environment"]
+    # Whether each key is present, resolved by Compose from the env file: "yes" or empty — read only
+    # until the keys are moved into the gateway, after which the models file says.
+    assert environment["OSPREY_MODEL_KEY_PRESENT_GEMINI"] == "${OSPREY_MODEL_KEY_GEMINI:+yes}"
+    assert environment["OSPREY_MODEL_SETTINGS_DIR"] == "/run/osprey/model-settings"
+    assert "model-settings:/run/osprey/model-settings" in api["volumes"]
+    assert environment["LITELLM_API_KEY"].startswith("${OSPREY_LITELLM_MASTER_SECRET:?")
 
 
 def test_no_generated_file_holds_any_providers_key(
@@ -204,20 +221,15 @@ def test_no_generated_file_holds_any_providers_key(
 
 
 def test_the_single_provider_is_still_read_with_its_old_key_name(tmp_path: Path) -> None:
+    """The single provider's `OSPREY_MODEL_PROVIDER_KEY` is moved into the gateway under its name
+    (ADR-135 Amendment 2 decision 3)."""
+    from harness.apply import model_keys_to_move
+
     legacy = ModelsConfig(local_only=False, provider=OPENAI, sendable_handling_codes=["P"])
-    config = _config(tmp_path, legacy)
-    table = yaml.safe_load(render_litellm_config(config))
-    routed = {m["model_name"]: m["litellm_params"] for m in table["model_list"]}
-    assert routed["openai/gpt-4o-mini"]["api_key"] == "os.environ/OSPREY_MODEL_PROVIDER_KEY"
-    compose = yaml.safe_load(render(config, resolver=_fake_resolver).artefacts["compose.yaml"])
-    assert "OSPREY_MODEL_PROVIDER_KEY" in compose["services"]["litellm"]["environment"]
-    assert compose["services"]["api"]["environment"]["OSPREY_MODEL_PROVIDER_KEY"] == ""
-    assert provider_secret_lines(config, {"OSPREY_MODEL_PROVIDER_KEY": OPENAI_KEY}) == (
-        f"OSPREY_MODEL_PROVIDER_KEY={OPENAI_KEY}\n"
-    )
-
-
-# --- install -------------------------------------------------------------------------------------
+    env = render(_config(tmp_path, legacy), resolver=_fake_resolver).artefacts["deployment.env"]
+    assert model_keys_to_move(env + f"OSPREY_MODEL_PROVIDER_KEY={OPENAI_KEY}\n") == {
+        "openai": OPENAI_KEY
+    }
 
 
 def test_an_enabled_provider_without_its_key_stops_the_install_in_words(tmp_path: Path) -> None:
@@ -244,3 +256,34 @@ def test_a_second_apply_keeps_both_keys(tmp_path: Path) -> None:
     # A key only the earlier file held (written by `ospreyflow models key`) is carried over too.
     carried = _env_lines(keep_existing_secrets("X=1\n", previous))
     assert carried["OSPREY_MODEL_KEY_GEMINI"] == GEMINI_KEY
+
+
+def test_no_service_but_the_gateway_reads_its_encryption_key_or_database_password(
+    tmp_path: Path,
+) -> None:
+    """ADR-135 Amendment 2 decision 3: every service reading `deployment.env` whole has the
+    gateway's encryption key and database password blanked; the master key reaches the Conduit
+    too."""
+    compose = yaml.safe_load(render(_config(tmp_path, TWO), resolver=_fake_resolver)
+                             .artefacts["compose.yaml"])  # fmt: skip
+    readers = [n for n, s in compose["services"].items() if "env_file" in s]
+    assert "api" in readers and "litellm" not in readers
+    for name in readers:
+        environment = compose["services"][name].get("environment") or {}
+        assert environment.get("OSPREY_LITELLM_SALT_SECRET") == "", name
+        assert environment.get("OSPREY_LITELLM_DB_PASSWORD") == "", name
+        if name != "api":
+            assert environment.get("OSPREY_LITELLM_MASTER_SECRET") == "", name
+
+
+def test_the_gateway_s_secrets_are_minted_once_and_kept_by_every_apply() -> None:
+    """A different encryption key silently drops every key the gateway holds (measured), so the
+    one minted at install must survive every later render: `keep_existing_secrets` keeps it."""
+    from harness.apply import _env_pairs, gateway_secret_lines, keep_existing_secrets
+
+    first = keep_existing_secrets(gateway_secret_lines(), "")
+    second = keep_existing_secrets(gateway_secret_lines(), first)
+    for name in ("OSPREY_LITELLM_SALT_SECRET", "OSPREY_LITELLM_MASTER_SECRET",
+                 "OSPREY_LITELLM_DB_PASSWORD"):  # fmt: skip
+        assert _env_pairs(second)[name] == _env_pairs(first)[name], name
+        assert _env_pairs(first)[name]

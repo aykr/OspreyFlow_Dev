@@ -334,3 +334,37 @@ async def test_a_key_the_gateway_lost_is_shown_lost_and_not_offered(tmp_path: Pa
     await again.start()
     assert again.key_state("gemini") == "lost"
     assert not again.routes().engines["gemini"].key_present
+
+
+async def test_moving_keys_from_deployment_env_puts_each_in_the_gateway(tmp_path: Path) -> None:
+    from services.api.model_admin import ModelAdminRefused
+    from services.api.model_keys import move_keys
+
+    w = World(tmp_path, providers=[ModelProviderConfig.model_validate(GEMINI)])
+    with pytest.raises(ModelAdminRefused, match="not an enabled engine: openai"):
+        await move_keys(w.admin, [f"GEMINI={GOOD}", "OPENAI=sk-x"], "cli:ayan")
+    assert w.gateway.credential("osprey-gemini") is None  # nothing moved
+    assert await move_keys(w.admin, [f"GEMINI={GOOD}"], "cli:ayan") == ["gemini"]
+    assert w.gateway.credential("osprey-gemini") == GOOD
+    assert w.admin.key_state("gemini") == "set"
+    assert [e.action for e in w.audit.entries][-1] == "key_moved"
+    assert GOOD not in (w.folder / "models.yaml").read_text()
+
+
+async def test_a_second_conduit_replica_follows_a_change_made_through_the_first(
+    tmp_path: Path,
+) -> None:
+    """Enterprise runs several Conduit replicas on one shared models file (`harness/cluster.py`):
+    each reads it again when it changes, so routing agrees whichever replica the analyst reaches."""
+    import os
+
+    from pydantic import SecretStr
+
+    w = World(tmp_path)
+    other = w.make_admin()
+    await w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    await w.admin.set_key("admin-1", "gemini", SecretStr(GOOD))
+    path = w.folder / "models.yaml"
+    os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000))
+    assert other.key_state("gemini") == "set"
+    assert other.routes().engines["gemini"].key_present

@@ -1109,6 +1109,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         on_change=routed.set_routes if routed is not None else (lambda _routes: None),
     )
     await model_admin.start()
+    if routed is not None:
+        routed.follow(model_admin.routes)
     app.state.model_admin = model_admin
     app.state.recipes_repo_root = resources.recipe_repo_root
     app.state.handling_scheme = handling_scheme

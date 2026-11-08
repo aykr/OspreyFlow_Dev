@@ -893,18 +893,13 @@ def test_the_model_proxy_and_the_conduit_agree_on_one_key(
 ) -> None:
     """**Three places must carry the same key or the Conduit 401s against its own proxy.**
 
-    Round 13cda, found by measurement: the first version wrote
-    `${OSPREY_LITELLM_KEY:-sk-ospreyflow-dev}` into all three. Compose expands that in a *service
-    environment*; it does **not** expand it inside a config file it merely mounts. So litellm's
-    own `master_key` became that literal `${...}` string — read back from inside the container to
-    be sure — while the Conduit sent the default, and extraction failed with
-    `401 Unauthorized for url http://litellm:4000/chat/completions`.
-
-    The check is that the three *agree*, not that they equal any particular value, so changing
-    the credential stays a one-line edit.
-
-    It also asserts no `${` survives into the rendered config: a substitution that reaches a file
-    nothing expands is silent, and this is the shape it takes.
+    Round 13cda, found by measurement: Compose expands `${…}` in a *service environment*, never
+    inside a config file it merely mounts, so a `${…}` written into `litellm.yaml` reached litellm
+    as that literal string. Since ADR-135 Amendment 2 the key is minted per deployment
+    (`OSPREY_LITELLM_MASTER_SECRET`, the gateway now holding engines and keys): the proxy's
+    environment and the Conduit's both read that one variable, and the config file names the
+    proxy's own environment variable (`os.environ/LITELLM_MASTER_KEY`), which LiteLLM reads itself
+    — measured on the pinned image, 8 November 2026. No `${` may survive into the file.
     """
     document = yaml.safe_load(rendered.artefacts["compose.yaml"])
     routing_text = render_litellm_config(config)
@@ -914,15 +909,11 @@ def test_the_model_proxy_and_the_conduit_agree_on_one_key(
     file_key = routing["general_settings"]["master_key"]
     conduit_key = document["services"]["api"]["environment"]["LITELLM_API_KEY"]
 
-    assert proxy_key == file_key == conduit_key, (
-        "the model proxy's key, its config file's key and the Conduit's key disagree, so every "
-        f"extraction 401s: proxy={proxy_key!r} file={file_key!r} conduit={conduit_key!r}"
-    )
-
-    assert "${" not in routing_text, (
-        "a compose-style substitution reached the rendered config file, which nothing expands — "
-        f"it would be used as a literal string: {routing_text}"
-    )
+    variable = "OSPREY_LITELLM_MASTER_SECRET"
+    assert proxy_key.startswith("${" + variable + ":?"), proxy_key
+    assert conduit_key.startswith("${" + variable + ":?"), conduit_key
+    assert file_key == "os.environ/LITELLM_MASTER_KEY"
+    assert "${" not in routing_text
 
 
 def test_no_service_probes_itself_with_another_services_command(

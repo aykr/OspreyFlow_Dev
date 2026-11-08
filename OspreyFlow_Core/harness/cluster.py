@@ -97,6 +97,9 @@ SHARED_VOLUMES: dict[str, str] = {
     "ollama-models": "models/ollama",
     "whisper-models": "models/whisper",
     "proxy-data": "proxy",
+    # ADR-135 Amendment 2 decision 2: the models file, shared by every Conduit replica, each of
+    # which reads it again when it changes (`services/api/model_admin.py`).
+    "model-settings": "model-settings",
 }
 
 #: The release's own images for the job workers (ADR-114 Amendment 10 point 6).
@@ -435,6 +438,9 @@ def render_cluster(
 ) -> dict[str, str]:
     """`values.yaml` for the chart, and the `versions.lock` of every image it runs."""
     from harness.render import (
+        GATEWAY_DB_PASSWORD,
+        GATEWAY_MASTER,
+        GATEWAY_SALT,
         UnpinnedImagesError,
         _render_versions_lock,
         compose_services,
@@ -497,9 +503,10 @@ def render_cluster(
             uid, _, gid = str(user).partition(":")
             workload["runAs"] = {"user": int(uid), "group": int(gid or uid)}
         workload.update(_volumes(name, list(service.get("volumes", [])), config, sorted(theme)))
-        if one_shot and name == "keycloak-db":
-            # Run before Keycloak at every start, as compose runs it at every `up`.
-            waits.setdefault("keycloak", []).append(workload)
+        if one_shot and name in ("keycloak-db", "litellm-db"):
+            # Run before Keycloak (and the gateway, ADR-135 Amendment 2) at every start, as compose
+            # runs it at every `up`.
+            waits.setdefault(name.removesuffix("-db"), []).append(workload)
             continue
         if one_shot:
             jobs.append(_job(workload, services, name, waits))
@@ -531,11 +538,24 @@ def render_cluster(
     # ADR-135 decision 2: a workload that reads the whole Secret (`envFrom`) has every model key
     # blanked above it; only the gateway reads one, by name.
     blanks = [{"name": key, "value": ""} for key in model_key_variables(config).values()]
+    # ADR-135 Amendment 2 decision 3: and the gateway's encryption key and database password; its
+    # master key reaches the Conduit too, which calls the admin API with it.
+    gateway_blanks = [
+        {"name": GATEWAY_SALT, "value": ""},
+        {"name": GATEWAY_DB_PASSWORD, "value": ""},
+    ]
+    master_blank = {"name": GATEWAY_MASTER, "value": ""}
     for workload in [*workloads, *jobs]:
         if workload.get("envFrom") and workload["name"] != "litellm":
             given = {e["name"] for e in workload.get("env", [])}
+            hidden = [
+                *blanks,
+                *gateway_blanks,
+                *([master_blank] if workload["name"] != "api" else []),
+            ]
             workload["env"] = [
-                *workload.get("env", []), *(b for b in blanks if b["name"] not in given)
+                *workload.get("env", []),
+                *(b for b in hidden if b["name"] not in given),
             ]
     for workload in workloads:
         _cluster_changes(workload)
