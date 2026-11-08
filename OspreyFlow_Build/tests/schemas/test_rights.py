@@ -32,11 +32,13 @@ TABLE: dict[str, set[str]] = {
     "administer_system": {M}, "manage_people": {M}, "manage_dashboards": {M},
     "operate_schedules": {D, M}, "manage_ontology": {M}, "manage_geospatial": {M},
     "read_audit": {M}, "read_export_ledger": {M},
+    # ADR-112 Amendment 7 (A9): model engines, each job's model and their keys.
+    "manage_models": {M},
 }  # fmt: skip
 
 
-def test_there_are_forty_five_rights_and_the_table_names_each_once() -> None:
-    assert len(Right) == 45
+def test_there_are_forty_six_rights_and_the_table_names_each_once() -> None:
+    assert len(Right) == 46
     assert set(TABLE) == {r.value for r in Right}
 
 

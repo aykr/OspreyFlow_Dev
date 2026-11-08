@@ -389,9 +389,10 @@ def test_every_right_guards_at_least_one_route() -> None:
     area (ADR-110 Amendment 1, ADR-112); reverting a load has no route (spec 09 §6). Screening
     lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b. A
     promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
-    dataset's approvers in Admin › Datasets; its review route arrives with the promotion (L3.4)."""
+    dataset's approvers in Admin › Datasets; its review route arrives with the promotion (L3.4).
+    `manage_models` (ADR-112 Amendment 7) gains its routes in platform's P1."""
     not_yet = {"revert_loads", "read_audit",
-               "export_override", "review_promotions"}  # fmt: skip
+               "export_override", "review_promotions", "manage_models"}  # fmt: skip
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
     assert {r.value for r in Right} - guarded == not_yet
 

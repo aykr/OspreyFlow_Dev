@@ -45,7 +45,8 @@ export type Right =
   | "manage_ontology"
   | "manage_geospatial"
   | "read_audit"
-  | "read_export_ledger";
+  | "read_export_ledger"
+  | "manage_models";
 export type Rights = Right[];
 
 /**
