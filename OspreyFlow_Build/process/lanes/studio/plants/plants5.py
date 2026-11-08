@@ -52,6 +52,14 @@ PLANTS = {
     "O10": ("nobody told the put-back links changed", REVERT, [
         ("        if put_back and deps.links_changed is not None:\n", "        if False:\n"),
     ], [UNIT]),
+    "D4": ("L1.2d: the load not catching an ambiguous own link id", PUB, [
+        ("            except AmbiguousLinkId:\n                # ADR-110 Amendment 18: two types hold the id, so which to put back is not\n",
+         "            except KeyError:\n                # ADR-110 Amendment 18: two types hold the id, so which to put back is not\n"),
+    ], [UNIT, "-k", "not_captured_and_its_load_stays_refused"]),
+    "D5": ("L1.2d: the revert not catching an ambiguous own link id", REVERT, [
+        ("            except AmbiguousLinkId:\n                ambiguous += 1\n",
+         "            except KeyError:\n                ambiguous += 1\n"),
+    ], [UNIT, "-k", "ambiguous"]),
 }
 ADAPTER = f"{CORE}/packages/adapters/graph_arcadedb/adapter.py"
 CONF = "tests/conformance/graph_port/test_suite.py"
@@ -85,6 +93,19 @@ LIVE_PLANTS = {
          "                own_links = None\n"),
         ("                    row_keys=own_links,\n", "                    row_keys=sink,\n"),
     ], ["tests/services/api/test_pin_calls_refresh_live.py"]),
+    "D1": ("L1.2d: the merge's write untyped", ADAPTER, [
+        ('                    f"g.E().hasLabel({groovy_string_literal(type_name)})"\n                    f\'.has("id",{edge_lit}){property_steps}\'\n',
+         '                    f\'g.E().has("id",{edge_lit}){property_steps}\'\n'),
+    ], [CONF, "-k", "merge_writes_its_own_type"]),
+    "D2": ("L1.2d: read_link_state taking the first type found", ADAPTER, [
+        ("        if len(held) > 1:\n            raise AmbiguousLinkId(edge_id, [t for t, _ in held])\n        ((type_name, row),) = held\n",
+         "        (type_name, row) = held[0]\n"),
+    ], [CONF, "-k", "refuses_an_id_two_types_hold"]),
+    "D3": ("L1.2d: supersede_edge taking the first type and marking by id alone", ADAPTER, [
+        ("        if len(holding) > 1:\n            raise AmbiguousLinkId(edge_id, [t for t, _ in holding])\n", ""),
+        ('            f\'g.E().hasLabel({old_label}).has("id",{edge_lit})\'\n            f\'.property("superseded_by", {new_id_lit})\',\n',
+         '            f\'g.E().has("id",{edge_lit}).property("superseded_by", {new_id_lit})\',\n'),
+    ], [CONF, "-k", "correction_marks_only_its_own"]),
     "L4": ("the restore altering one stored property (occurrences + 1)", ADAPTER, [
         ('        props = {k: v for k, v in state.stored.items() if k != "id"}\n',
          '        props = {k: v for k, v in state.stored.items() if k != "id"}\n'
