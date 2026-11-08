@@ -103,9 +103,9 @@ def _number(values: Cells, text: str) -> Decimal:
     try:
         number = Decimal(text)
     except InvalidOperation as exc:
-        raise _refuse("arithmetic", values, f"{text!r} is not a number") from exc
+        raise _refuse("arithmetic", values, "a cell is not a number") from exc
     if not number.is_finite():
-        raise _refuse("arithmetic", values, f"{text!r} is not a number")
+        raise _refuse("arithmetic", values, "a cell is not a number")
     return number
 
 
