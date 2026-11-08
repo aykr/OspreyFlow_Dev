@@ -1,0 +1,33 @@
+# red: route-never-committed
+# plant in services/api/alerts.py:
+# - '            # Its commit never sent, nothing recorded can land: the record goes with it.\n            repoint.never_committed()'
+# + '            pass'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_a_correction_the_graph_refuses_before_its_commit_records_nothing _____
+
+    async def test_a_correction_the_graph_refuses_before_its_commit_records_nothing() -> None:
+        """The record's other side: a write refused before its commit says `never_committed`, so the
+        corrected node it named is not kept (nothing it recorded can land), and the transaction is
+        rolled back, never committed. Red with the write's refusal not said: the stand-in kept a
+        referent for a correction that never happened."""
+        journal, graph = Journal(), _Graph()
+    
+        async def write(tx: str, recorder: Any) -> str:
+            await recorder.superseded("node-1", "node-2")
+            raise RuntimeError("the graph refused the correction")
+    
+        with pytest.raises(RuntimeError, match="refused"):
+            await supersede_journalled(journal, graph, write)  # type: ignore[arg-type]
+>       assert journal.referents == [] and graph.rolled_back == ["tx-1"] and graph.committed == []
+E       AssertionError: assert ([('node-1', 'node-2')] == []
+E         
+E         Left contains one more item: ('node-1', 'node-2')
+E         Use -v to get more diff)
+
+../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py:89: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py::test_a_correction_the_graph_refuses_before_its_commit_records_nothing
+1 failed in 0.58s

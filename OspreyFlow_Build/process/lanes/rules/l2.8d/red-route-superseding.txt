@@ -1,0 +1,35 @@
+# red: route-superseding
+# plant in services/api/alerts.py:
+# - '                await repoint.superseded(superseding, str(result))'
+# + '                pass'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____ test_a_routes_correction_records_the_corrected_node_and_its_revision _____
+
+    async def test_a_routes_correction_records_the_corrected_node_and_its_revision() -> None:
+        """ADR-109 Amendment 12. `supersede_journalled(..., superseding=)` (the confirm and retract
+        routes) records the node it corrects and the revision its write returns, before the commit, so
+        an alert naming the node among its referents follows it. Red with `superseding` not recorded:
+        the journal held no referent and the alert would keep naming a node no read returns."""
+        journal, graph = Journal(), _Graph()
+        order: list[str] = []
+    
+        async def write(tx: str, recorder: Any) -> str:
+            await recorder("edge-1", "edge-2", "ASSOCIATE_OF")
+            order.append("written")
+            return "node-2"
+    
+        new = await supersede_journalled(journal, graph, write, superseding="node-1")  # type: ignore[arg-type]
+        assert new == "node-2"
+>       assert journal.referents == [("node-1", "node-2")]
+E       AssertionError: assert [] == [('node-1', 'node-2')]
+E         
+E         Right contains one more item: ('node-1', 'node-2')
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py:71: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py::test_a_routes_correction_records_the_corrected_node_and_its_revision
+1 failed in 0.52s

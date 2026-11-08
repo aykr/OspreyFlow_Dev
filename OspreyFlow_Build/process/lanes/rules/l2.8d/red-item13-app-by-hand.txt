@@ -1,0 +1,32 @@
+# red: item13-app-by-hand
+# plant in services/api/app.py:
+# - '    job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)'
+# + '    job_worker.register(JOB_TYPE_PATTERN_MATCH, run_pattern_match_job)\n    job_worker.register(JOB_TYPE_SUPERSEDE_NODE, run_supersede_node_job)'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store _
+
+    def test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store() -> None:
+        """The L2.8c review's item 13. The Conduit's lifespan (`app.py`) runs the supersede and the
+        resolution jobs as the standalone worker does, so it registers them through the one function
+        the cases above prove (`worker_main.register_all`), never by a second, untested copy of the
+        bindings, and it gives that function its own alert store and judgement store. Red with
+        `alerts=alerts_store` removed from `app.py`'s call (`alerts` is then missing, and the
+        lifespan would fail at start-up rather than register a job that records nothing), and red with
+        the supersede job registered by hand again (a copy whose bindings no test runs)."""
+        import ast
+    
+        alls, own = _conduit_registrations()
+>       assert own == [], "app.py registers a job register_all owns by hand"
+E       AssertionError: app.py registers a job register_all owns by hand
+E       assert [<ast.Call ob... 0x1343eea50>] == []
+E         
+E         Left contains one more item: <ast.Call object at 0x1343eea50>
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_worker_registration.py:184: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_worker_registration.py::test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store
+1 failed in 2.08s

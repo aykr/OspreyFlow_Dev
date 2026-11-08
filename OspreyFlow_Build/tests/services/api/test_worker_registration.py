@@ -120,3 +120,70 @@ async def test_a_supersede_job_registered_without_the_alert_store_is_refused_at_
     worker.register("supersede_node", run_supersede_node_job)
     with pytest.raises(TypeError, match="alerts"):
         await worker._handlers["supersede_node"]({"node_id": "n", "replacement": {}}, graph=object(), tx="tx")  # noqa: SLF001
+
+
+async def test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Conduit registers its jobs through `register_all` (the L2.8c review's item 13), and its
+    supersede job flags the judgements citing a corrected node, so `register_all` binds the
+    judgement store it is given. Red with the binding left out: the job ran with none."""
+    from services.api import supersede
+
+    seen: dict[str, Any] = {}
+
+    async def supersede_job(payload: Any, **kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(supersede, "run_supersede_node_job", supersede_job)
+    judgements, alerts, valkey = object(), object(), object()
+    worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
+    worker_main.register_all(worker, ontology=load_default_ontology(), scheme=load_uk_le_scheme(), valkey=valkey,
+                             analyst_layers=_layers, alerts=alerts, judgement_store=judgements)  # type: ignore[arg-type]  # fmt: skip
+    await worker._handlers["supersede_node"]({}, graph=object(), tx="tx")  # noqa: SLF001
+    assert (seen["judgement_store"], seen["alerts"]) == (judgements, alerts)
+
+
+def _conduit_registrations() -> tuple[list[Any], list[Any]]:
+    """The Conduit's `app.py`, parsed: every call to `register_all`, and every `job_worker.register`
+    of a job `register_all` owns (by its constant or its name)."""
+    import ast
+    from pathlib import Path
+
+    from services.api import app as conduit
+
+    tree = ast.parse(Path(conduit.__file__).read_text(encoding="utf-8"))
+    owned = {"JOB_TYPE_SUPERSEDE_NODE", "JOB_TYPE_RESOLVE_ENTITY_TYPE", *worker_main.registered_job_types()}
+    alls, own = [], []
+    for call in ast.walk(tree):
+        if not isinstance(call, ast.Call):
+            continue
+        name = call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, "id", None)
+        if name == "register_all":
+            alls.append(call)
+        elif name == "register" and call.args:
+            first = call.args[0]
+            label = first.id if isinstance(first, ast.Name) else getattr(first, "value", None)
+            if label in owned:
+                own.append(call)
+    return alls, own
+
+
+def test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store() -> None:
+    """The L2.8c review's item 13. The Conduit's lifespan (`app.py`) runs the supersede and the
+    resolution jobs as the standalone worker does, so it registers them through the one function
+    the cases above prove (`worker_main.register_all`), never by a second, untested copy of the
+    bindings, and it gives that function its own alert store and judgement store. Red with
+    `alerts=alerts_store` removed from `app.py`'s call (`alerts` is then missing, and the
+    lifespan would fail at start-up rather than register a job that records nothing), and red with
+    the supersede job registered by hand again (a copy whose bindings no test runs)."""
+    import ast
+
+    alls, own = _conduit_registrations()
+    assert own == [], "app.py registers a job register_all owns by hand"
+    assert len(alls) == 1, "app.py registers its jobs through register_all exactly once"
+    given = {k.arg: k.value for k in alls[0].keywords}
+    for keyword, name in (("alerts", "alerts_store"), ("judgement_store", "judgements_store")):
+        value = given.get(keyword)
+        assert isinstance(value, ast.Name) and value.id == name, f"{keyword}= is not the Conduit's {name}"

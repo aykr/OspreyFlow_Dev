@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # the import is deferred at runtime — see `main()`'s own comment.
     from .alerts import AlertStore
+    from .assessments import JudgementStore
     from .worker import JobWorker
 
 logger = logging.getLogger(__name__)
@@ -80,17 +81,20 @@ def register_all(
     valkey: Any,
     analyst_layers: Callable[[], Awaitable[Collection[str]]],
     alerts: AlertStore | None,
+    judgement_store: JudgementStore | None = None,
 ) -> None:
     """Every handler in `registered_job_types` on `worker`, with what each needs bound, as the
     Conduit's own lifespan binds them (`app.py`): the resolution job its ontology, handling scheme,
     Valkey client and the case layers it must not honour a split from (ADR-025 Amendment 1, ADR-143
     Amendment 1); and both the alerts' repoint journal (`alerts`, ADR-109 Amendment 11), so a link
-    either replaces is followed by the alerts citing it. `main` calls this;
-    `test_worker_registration.py` proves it."""
+    either replaces is followed by the alerts citing it. `judgement_store`, the supersede job's
+    review-flag hook, where one is held (the Conduit's). `main` calls this, and so does the
+    Conduit's lifespan (`app.py`), so the two registrations are one (the L2.8c review's item 13);
+    `test_worker_registration.py` proves both."""
     from importlib import import_module
 
     bound: dict[str, dict[str, Any]] = {
-        "supersede_node": {"alerts": alerts},
+        "supersede_node": {"alerts": alerts, "judgement_store": judgement_store},
         "resolve_entity_type": {
             "ontology": ontology,
             "scheme": scheme,

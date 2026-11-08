@@ -22,6 +22,8 @@ class _Record:
         self.abandoned = False
         self.links: list[tuple[str, str, str]] = []
         self.nodes: list[tuple[str, str]] = []
+        #: Each corrected node an alert may name, and its new revision (ADR-109 Amendment 12).
+        self.referents: list[tuple[str, str]] = []
         #: Nothing is re-marked here: no alert is held.
         self.remarked_nodes: list[str] = []
 
@@ -35,6 +37,13 @@ class _Record:
 
     async def cloned(self, old: str, new: str, old_type: str) -> None:
         await self.record(old, new, old_type=old_type)
+
+    async def __call__(self, old: str, new: str, old_type: str) -> None:
+        await self.cloned(old, new, old_type)
+
+    async def superseded(self, old: str, new: str) -> None:
+        self._open()
+        self.referents.append((old, new))
 
     async def record_node(self, old: str, new: str) -> None:
         self._open()
@@ -60,7 +69,7 @@ class Journal:
             yield record
         finally:
             record.applied = True
-            if not record.abandoned and (record.links or record.nodes):
+            if not record.abandoned and (record.links or record.nodes or record.referents):
                 self.records.append(record)
 
     async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
@@ -70,6 +79,11 @@ class Journal:
     def links(self) -> list[tuple[str, str, str]]:
         """Every link pair recorded by a write that reached its commit."""
         return [pair for record in self.records for pair in record.links]
+
+    @property
+    def referents(self) -> list[tuple[str, str]]:
+        """Every corrected node recorded by a write that reached its commit."""
+        return [pair for record in self.records for pair in record.referents]
 
 
 class WorkingSets:
