@@ -28182,11 +28182,25 @@ fixed id, written twice). Three places reached a link by id alone:
    "N link(s) a returning row of it merged into share their id with a link of another type, so
    which to put back is not certain". The words name no type or other link (rule 3).
 
+4. **Who meets the refusal, and how.**
+   - **A route** answers it as `409 link_id_ambiguous`, "this link shares its id with a link of
+     another type, so it cannot be changed here; nothing was written" (one handler in the app: a
+     link change, a picture's change). The words name no type or other link.
+   - **A true-positive close** confirms each cited `SAME_AS` link in one transaction for the person
+     closing. It is refused whole, rolled back, and not closed: a close half confirmed would be
+     worse than none (the orchestrator's ruling).
+   - **A resolution run** recording conflicts skips that one split link and records the rest; the
+     skip is in the run's own result (`ResolutionRunResult.links_skipped`, by id). One bad link
+     never silences the whole run.
+
 **Tests.**
 - Conformance: a merge leaves the other type's link as it was; a state read refuses an id two
   types hold; a correction refuses one and marks a single type's link alone.
 - `tests/ingest/test_snapshot_withdrawal.py`: an ambiguous own link is not captured and its load
   stays refused; a revert whose own link's id became ambiguous is refused.
+- `tests/services/api/test_ambiguous_link_id_refused.py` (the route's 409, nothing written),
+  `test_ambiguous_link_id_close_refused.py` (the close refused whole), and
+  `tests/resolve/test_ambiguous_link_skipped.py` (the run skips one and records the rest).
 - Each is shown red in `process/lanes/studio/L1.2a_RED_RECORD.md`.
 
 ### ADR-143, Amendment 3 (7 November 2026) — where a fresh drawing's items live, and who merges a drawn dataset
