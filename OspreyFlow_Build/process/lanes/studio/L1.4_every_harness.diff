@@ -1,0 +1,17 @@
+diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+index bf4a652..21e8802 100644
+--- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
+@@ -100,6 +100,12 @@ const EXTRA_STATES: Record<string, string[]> = {
+     "pipeline=test", "pipeline=deploy", "pipeline=expert-step&expert=1", "pipeline=map",
+     // Phase 6's exit (ADR-140 Amendment 10): the Map editor holding chapter 4's whole reports map.
+     "pipeline=reports-map",
++    // Phase 7b (ADR-140 Amendment 12): a Lookup's and a Join's drawer with their live samples, a
++    // Derive's Preview, a Filter half set with the save gate's refusals, the Map editor over the
++    // last step's table, and a Union's and a Dedupe's drawer.
++    "contacts=built&staged=lookup", "contacts=built&staged=join", "contacts=built&staged=derive-preview",
++    "contacts=1&staged=filter", "contacts=built&staged=map", "contacts=1&staged=union",
++    "contacts=1&staged=dedupe",
+   ],
+   // ADR-140 Amendment 4: the Connections section, served by the page itself. ADR-145 decision 5:
+   // every section in the side list, a coming placeholder open.
