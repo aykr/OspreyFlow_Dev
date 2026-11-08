@@ -1,0 +1,12 @@
+{
+  "operation": "concat",
+  "cases": [
+    {"values": ["Shona", "Whitlow"], "params": {}, "expected": "Shona Whitlow"},
+    {"values": ["HMP", "Fenwick Moor"], "params": {"separator": " · "}, "expected": "HMP · Fenwick Moor"},
+    {"values": [" Shona ", "Whitlow "], "params": {}, "expected": "Shona Whitlow"},
+    {"values": ["Shona", null, "Whitlow"], "params": {}, "expected": "Shona Whitlow"},
+    {"values": ["Shona", "", "Whitlow"], "params": {"separator": "-"}, "expected": "Shona-Whitlow"},
+    {"values": [null, "  "], "params": {}, "expected": null},
+    {"values": ["a"], "params": {}, "refused": "concat takes at least two columns"}
+  ]
+}

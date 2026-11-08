@@ -1,0 +1,13 @@
+{
+  "operation": "case_when",
+  "cases": [
+    {"values": ["V"], "params": {"cases": [{"equals": "V", "then": "video"}, {"equals": "P", "then": "in person"}]}, "expected": "video"},
+    {"values": [" P "], "params": {"cases": [{"equals": "V", "then": "video"}, {"equals": "P", "then": "in person"}]}, "expected": "in person"},
+    {"values": ["X"], "params": {"cases": [{"equals": "V", "then": "video"}], "otherwise": "unknown"}, "expected": "unknown"},
+    {"values": ["X"], "params": {"cases": [{"equals": "V", "then": "video"}]}, "expected": null},
+    {"values": [null], "params": {"cases": [{"equals": "V", "then": "video"}], "otherwise": "unknown"}, "expected": "unknown"},
+    {"values": ["v"], "params": {"cases": [{"equals": "V", "then": "video"}]}, "expected": null},
+    {"values": ["V"], "params": {"cases": []}, "refused": "at least one case"},
+    {"values": ["V"], "params": {"cases": [{"equals": "V", "then": "a"}, {"equals": "V", "then": "b"}]}, "refused": "names V twice"}
+  ]
+}

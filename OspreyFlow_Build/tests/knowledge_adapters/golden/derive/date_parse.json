@@ -1,0 +1,12 @@
+{
+  "operation": "date_parse",
+  "cases": [
+    {"values": ["2026-11-03T09:30:00+00:00"], "params": {}, "expected": "2026-11-03T09:30:00+00:00"},
+    {"values": ["2026-07-03T10:30:00+01:00"], "params": {}, "expected": "2026-07-03T09:30:00+00:00"},
+    {"values": ["03/11/2026 09:30"], "params": {"date_order": "dmy", "tz": "Europe/London"}, "expected": "2026-11-03T09:30:00+00:00"},
+    {"values": ["03/07/2026 10:30"], "params": {"date_order": "dmy", "tz": "Europe/London"}, "expected": "2026-07-03T09:30:00+00:00"},
+    {"values": [null], "params": {}, "expected": null},
+    {"values": ["03/11/2026 09:30"], "params": {"tz": "Europe/London"}, "refused": "ambiguous date order"},
+    {"values": ["not a date"], "params": {"date_order": "dmy", "tz": "Europe/London"}, "refused": "unrecognised datetime format"}
+  ]
+}
