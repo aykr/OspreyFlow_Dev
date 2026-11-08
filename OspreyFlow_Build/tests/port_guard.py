@@ -202,6 +202,34 @@ def live_settings(environ: Mapping[str, str]) -> list[str]:
     return found
 
 
+def leased_without_the_lease(environ: Mapping[str, str]) -> str | None:
+    """The refusal, in words, for a run that names a lane (OSPREY_LANE) and pins a leased port while that
+    lane does not hold the lease; None otherwise. Found 8 November 2026: a lane's offline run, typed with
+    its lane and the leased ports out of habit, would have gone on with its connections refused one at a
+    time, and reached the stack through anything outside the guard once another lane brought it up."""
+    lane = environ.get("OSPREY_LANE") or None
+    if lane is None:
+        return None
+    pinned = []
+    for name in PORT_SETTINGS:
+        raw = environ.get(name, "")
+        if raw.isdigit() and int(raw) in LEASED_PORTS and _is_this_machine(environ.get(_HOST_OF[name])):
+            pinned.append(f"{name}={raw}")
+    holder = lease_holder(environ)
+    if not pinned or holder == lane:
+        return None
+    return (
+        f"Refused: OSPREY_LANE={lane} with the leased stack's ports pinned ({', '.join(pinned)}), but the "
+        f"lease is held by {holder or 'nobody'}.\n"
+        "Nothing was collected and no connection was made. For a stack-free run, unset OSPREY_LANE and pin "
+        "the closed ports:\n"
+        "  unset OSPREY_LANE; export ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 "
+        "CLICKHOUSE_HTTP_PORT=59994\n"
+        "For a live run, take the lease first (OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "
+        '"<purpose>").'
+    )
+
+
 def refusal(found: list[str]) -> str:
     return (
         "Refused: this test run would reach a live deployment on this machine.\n"
@@ -272,6 +300,9 @@ def pytest_configure(config: pytest.Config) -> None:
     found = live_settings(os.environ)
     if found:
         raise pytest.UsageError(refusal(found))
+    unleased = leased_without_the_lease(os.environ)
+    if unleased:
+        raise pytest.UsageError(unleased)
     restore = guard_socket()
     config.add_cleanup(restore)
     neutralise_uvloop()

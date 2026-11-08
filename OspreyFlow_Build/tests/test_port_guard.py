@@ -77,6 +77,7 @@ def test_the_glass_on_8080():
 
 
 def _run(tmp_path: Path, test_source: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "conftest.py").write_text(TRIPWIRE, encoding="utf-8")
     (tmp_path / "test_planted.py").write_text(test_source, encoding="utf-8")
     (tmp_path / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
@@ -293,3 +294,30 @@ def test_a_process_a_test_starts_is_refused_the_leased_stack_too(tmp_path: Path,
         srv.close()
     assert "REFUSED LeaseNotHeld" in out.stdout, out.stdout + out.stderr
     assert not arrived
+
+
+_LEASED_PINS = {"ARCADEDB_HTTP_PORT": "2491", "POSTGRES_PORT": "55433", "VALKEY_PORT": "6379",
+                "CLICKHOUSE_HTTP_PORT": "18123", "POSTGRES_PASSWORD": "throwaway"}
+
+
+@pytest.mark.parametrize(("holder", "refused"), [(None, True), ("case", True), ("studio", False)])
+def test_a_run_naming_a_lane_and_the_leased_ports_without_the_lease_stops_at_start_up(
+    tmp_path: Path, holder: str | None, refused: bool
+) -> None:
+    """Found 8 November 2026, 00:15, the fifth time in two days: a lane exported OSPREY_LANE and the
+    leased ports for an offline run without the lease. Each connection was refused one at a time, so
+    the run went on, filled with refusals, and anything outside the guard could reach the stack once
+    another lane brought it up. Such a run now stops before a test is collected, as an unpinned run does;
+    the same run under its own lane's lease goes ahead."""
+    lease = tmp_path / "lease"
+    if holder is not None:
+        _hold_lease(lease, holder)
+    run = _run(tmp_path / "run", "def test_nothing():\n    pass\n",
+               {**_LEASED_PINS, "OSPREY_LANE": "studio", "OSPREY_LEASE_DIR": str(lease)})
+    said = run.stdout + run.stderr
+    if refused:
+        assert run.returncode == 4, f"expected a usage error (4), got {run.returncode}:\n{said}"
+        assert "OSPREY_LANE=studio" in said and "lease" in said
+        assert "59991" in said, "the refusal says how to run stack-free"
+    else:
+        assert run.returncode == 0, said
