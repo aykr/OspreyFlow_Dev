@@ -20,6 +20,17 @@ const SCHEDULE = {
               load_id: "l1", failure: null },
 };  // prettier-ignore
 
+// L2.4 part 2: a dataset with its Authors and linked cases, two of them removed. Synthetic (rule 9).
+const DATASET = { id: "enron", name: "Enron corpus", owning_unit: "verify", egress: "none", kind: "source",
+                  highest_marking: null, promotion_policy: "author_promotes" };  // prettier-ignore
+const AUTHORS = { dataset_id: "enron", has_home_case: true, team: null,
+                  people: [{ id: "eng-1", name: "D. Engineer", approves: true }] };  // prettier-ignore
+const LINKED = { dataset_id: "enron", cases: [
+  { investigation_id: "open-1", name: "Op Kestrel", state: "open", home_case: false, through: null, items: 3, links: 2, size_bytes: 700 },
+  { investigation_id: "gone-1", name: "Op Heron", state: "removed", home_case: false, through: null, items: 5, links: 4, size_bytes: 50000 },
+  { investigation_id: "gone-2", name: "Op Wren", state: "removed", home_case: false, through: null, items: 1, links: 0, size_bytes: 90 },
+] };  // prettier-ignore
+
 async function serve(page: Page): Promise<string[]> {
   const asked: string[] = [];
   let dashboards = [{ client_id: "osprey-dashboard-old", account_id: "sa-0", clearance: "OFFICIAL", org_unit: "verify" }];
@@ -61,9 +72,29 @@ async function serve(page: Page): Promise<string[]> {
                           command: "ospreyflow demo add hmp", source_page: null, size_bytes: null }]);  // prettier-ignore
     if (path === "system") return json(200, { components: [{ name: "Graph store", ok: true, millis: 12 }] });
     // ADR-136 decision 2: the Datasets tab.
-    if (path === "datasets") return json(200, [{ id: "enron", name: "Enron corpus", owning_unit: "verify", egress: "none" }]);
+    if (path === "datasets") return json(200, [DATASET]);
     if (path === "datasets/enron/egress" && request.method() === "PUT")
-      return json(200, { id: "enron", name: "Enron corpus", owning_unit: "verify", ...(request.postDataJSON() as object) });
+      return json(200, { ...DATASET, ...(request.postDataJSON() as object) });
+    // ADR-145 decision 8 and Amendment 4 decisions 6 and 7; ADR-143 Amendment 2 decisions 1 and 2.
+    if (path === "datasets/enron/promotion-policy" && request.method() === "PUT")
+      return json(200, { ...DATASET, ...(request.postDataJSON() as object) });
+    if (path === "datasets/enron/authors") return json(200, AUTHORS);
+    if (path === "datasets/enron/owners" && request.method() === "PUT") {
+      const people = (request.postDataJSON() as { people: string[] }).people;
+      return json(200, { ...AUTHORS, people: people.map((id) => ({ id, name: null, approves: false })) });
+    }
+    if (path === "datasets/enron/cases") return json(200, LINKED);
+    if (path === "datasets/enron/cases/gone-1/merge/dry-run" && request.method() === "POST")
+      return json(200, { investigation_id: "gone-1", action: "merge", items: 5, links: 4, size_bytes: 50000,
+                         would: "Would merge 5 items and 4 links (48.8 kB) from Op Heron's layer into Enron corpus. Nothing has been written." });  // prettier-ignore
+    if (path === "datasets/enron/cases/gone-1/delete/dry-run" && request.method() === "POST")
+      return json(200, { investigation_id: "gone-1", action: "delete", items: 5, links: 4, size_bytes: 50000,
+                         would: "Would delete 5 items and 4 links (48.8 kB) from Op Heron's layer. Promoted items are never touched. Nothing has been written." });  // prettier-ignore
+    if (path === "datasets/enron/cases/gone-2/merge/dry-run" && request.method() === "POST")
+      return json(403, { error: "not_an_author",
+                         detail: "Only one of the dataset's Authors may merge a removed case's layer into it. Its Authors: eng-1." });  // prettier-ignore
+    if (path === "settings/dataset-owners" && request.method() === "PUT") return json(200, request.postDataJSON());
+    if (path === "settings/dataset-owners") return json(200, { owners_may_be: "people_and_teams" });
     // ADR-140 Amendment 4: the Connections tab.
     if (path === "connections" && request.method() === "POST")
       return json(201, { id: "c2", kind: "files", name: "Second folder", created_by: "admin-1", created_at: "" });
@@ -142,6 +173,102 @@ test("a dataset's egress is set by keyboard", async ({ page }) => {
   expect(asked).toContain("PUT datasets/enron/egress");
   expect(sent).toEqual([{ egress: "any" }]);
   registerCovered(REGISTRY, "set-a-datasets-egress-by-keyboard");
+});
+
+/** Opens Datasets and a dataset's details by keyboard; its linked cases are read. */
+async function details(page: Page) {
+  await open(page, "Datasets");
+  await press(page, "Details for Enron corpus");
+  await expect(page.getByRole("table", { name: "Cases linked to Enron corpus" })).toBeVisible();
+}
+
+/** What the page sent to a route, by method and path end. */
+function sentTo(page: Page, method: string, end: string): unknown[] {
+  const sent: unknown[] = [];
+  page.on("request", (request) => {
+    if (request.method() === method && request.url().endsWith(end)) sent.push(request.postDataJSON());
+  });
+  return sent;
+}
+
+// ADR-145 Amendment 4 decision 6 (rule 13): Change owner… opened, the people named and saved, by keyboard.
+test("a dataset's owners are changed by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent = sentTo(page, "PUT", "/datasets/enron/owners");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await details(page);
+  await press(page, "Change owner of Enron corpus");
+  const owners = page.getByLabel("New owners of Enron corpus");
+  await expect(owners).toHaveValue("eng-1");
+  await owners.focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type("eng-1, per-2");
+  await press(page, "Save owners of Enron corpus");
+  await expect(page.getByText("Enron corpus's Authors are now eng-1, per-2.")).toBeVisible();
+  expect(asked).toContain("PUT datasets/enron/owners");
+  expect(sent).toEqual([{ people: ["eng-1", "per-2"] }]);
+  registerCovered(REGISTRY, "change-a-datasets-owner-by-keyboard");
+});
+
+// ADR-145 decision 8: the promotion policy chosen and saved by keyboard; the warning below two shows.
+test("a dataset's promotion policy is set by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent = sentTo(page, "PUT", "/datasets/enron/promotion-policy");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await details(page);
+  const policy = page.getByLabel("Promotion policy for Enron corpus", { exact: true });
+  await policy.focus();
+  await page.keyboard.type("Second");
+  await expect(policy).toHaveValue("second_person_reviews");
+  await press(page, "Save promotion policy for Enron corpus");
+  await expect(page.getByText("Enron corpus: Second person reviews.")).toBeVisible();
+  await expect(page.getByRole("note")).toContainText("Fewer than two people can approve");
+  expect(asked).toContain("PUT datasets/enron/promotion-policy");
+  expect(sent).toEqual([{ promotion_policy: "second_person_reviews" }]);
+  registerCovered(REGISTRY, "set-a-datasets-promotion-policy-by-keyboard");
+});
+
+// ADR-143 Amendment 2 decision 1 (rule 13): each removed case's entry, run dry by keyboard; an open
+// case offers none, and a refusal is said in the Conduit's words.
+test("a removed case's layer is merged, as a dry run, by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await details(page);
+  await expect(page.getByRole("button", { name: "Merge Op Kestrel into the dataset (dry run)" })).toHaveCount(0);
+  await press(page, "Merge Op Heron into the dataset (dry run)");
+  await expect(page.getByRole("status")).toContainText("Would merge 5 items and 4 links (48.8 kB)");
+  expect(asked).toContain("POST datasets/enron/cases/gone-1/merge/dry-run");
+  await press(page, "Merge Op Wren into the dataset (dry run)");
+  await expect(page.getByRole("alert")).toContainText("Only one of the dataset's Authors may merge");
+  registerCovered(REGISTRY, "dry-run-a-removed-cases-merge-by-keyboard");
+});
+
+test("a removed case's layer is deleted, as a dry run, by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await details(page);
+  await expect(page.getByRole("button", { name: "Delete Op Kestrel's layer (dry run)" })).toHaveCount(0);
+  await press(page, "Delete Op Heron's layer (dry run)");
+  await expect(page.getByRole("status")).toContainText("Promoted items are never touched.");
+  expect(asked).toContain("POST datasets/enron/cases/gone-1/delete/dry-run");
+  registerCovered(REGISTRY, "dry-run-a-removed-cases-delete-by-keyboard");
+});
+
+// ADR-145 Amendment 4 decision 7: Admin › System's Dataset owners may be, chosen and saved by keyboard.
+test("who may own a dataset is set in System by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent = sentTo(page, "PUT", "/settings/dataset-owners");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "System");
+  const setting = page.getByLabel("Dataset owners may be", { exact: true });
+  await setting.focus();
+  await page.keyboard.type("Teams");
+  await expect(setting).toHaveValue("teams_only");
+  await press(page, "Save who dataset owners may be");
+  await expect(page.getByText("Dataset owners may now be: teams only.")).toBeVisible();
+  expect(asked).toContain("PUT settings/dataset-owners");
+  expect(sent).toEqual([{ owners_may_be: "teams_only" }]);
+  registerCovered(REGISTRY, "set-who-may-own-a-dataset-by-keyboard");
 });
 
 test("the system is asked again by keyboard", async ({ page }) => {

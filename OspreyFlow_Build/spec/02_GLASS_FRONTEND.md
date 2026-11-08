@@ -1274,9 +1274,36 @@ Amendment 5, each person's state — disabled, or invited and yet to set a passw
 one-time code shown once with what to do with it), *Dashboard identities*
 (register a dashboard identity — its secret shown once — and remove one; its account id is what a
 case's Author grants Viewer to), *System* (each component asked as the section opens, with *Ask again*;
-each model engine with its privacy-contract mark, ADR-136), *Datasets* (ADR-136 decision 2: every
-dataset, its unit and its egress — none, contracted or any — each changed and saved on its own row,
-audited by the Conduit), *Demo packs* (ADR-114 Amendment 5: each pack, its licence and credit, "Loaded, in …" only for a case
+each model engine with its privacy-contract mark, ADR-136; and, ADR-145 Amendment 4 decision 7,
+*Dataset owners may be*: people and teams, the default, people only or teams only, saved on its own
+and audited, governing *Make live*'s owner step and *Change owner…*), *Datasets* (ADR-136 decision 2:
+every dataset, its unit and its egress — none, contracted or any — each changed and saved on its own
+row, audited by the Conduit; and, L2.4 part 2, its kind — *Source*, *Composite* or *Drawn*, never a
+layer — and highest marking, with *Details for …* opening three parts. **Promotion of drawn items**
+(ADR-145 decision 8): *Author promotes*, the default, or *Second person reviews*, saved and audited,
+with who can approve — the dataset's Authors holding `review_promotions`, people only until teams —
+and a warning when fewer than two can. **Authors** (Amendment 4 decision 3): the home case's Authors,
+each marked when they can approve, and *Change owner…*, which takes people's account ids (people only
+until teams, and it says so) and is refused in the Conduit's words exactly as *Make live*'s owner
+step is: the System setting, a team before teams exist, a service account or an account the
+directory does not hold as a person; a dataset not yet live says its owners are asked at its first
+*Make live*. **Linked cases** (ADR-143 Amendment 2 decision 2): every case reading the dataset,
+member or not, open or removed, the home case and a case reading it through a composite marked, its
+layer as items, links and size — its stored properties' length as the store renders them and its
+pictures' file sizes (the owner's rulings of 8 November 2026), counted by the graph store under the
+administrator's own handling, so what they may not read is in no count or size, and a picture
+attached before its size was stored counts nothing; the screen says both — and never a layer's
+item, label or property:
+`test_admin_dataset_cases.py` holds every Datasets route to it, red with one label planted. A
+removed case read directly (not through a composite) offers *Merge … into the dataset (dry run)* and
+*Delete …'s layer (dry run)*: each says what it would touch and writes nothing but its audit entry;
+the merge is refused, in words naming them, to anyone not one of the dataset's Authors, and into a
+composite, which is offered no *Merge* and no promotion policy. **A composite case's layer is never
+merged** (Q5 (a), the orchestrator's settlement of 8 November 2026, on the owner's review list): it
+is deleted or left, from the composite's row, and a member's row says it is read through the
+composite, deleted there and never merged; an open point for L3.4, "composite layers: delete only,
+unless the owner chooses a member merge"; *Change owner…*'s grants and its
+audit entry are one transaction; the actions themselves are the promotion's, L3.4), *Demo packs* (ADR-114 Amendment 5: each pack, its licence and credit, "Loaded, in …" only for a case
 the administrator can open, and its `ospreyflow demo add` command with *Copy* — the page runs nothing).
 Every action has its case in `keyboard/admin.spec.ts` (`ADMIN_ACTIONS`).
 

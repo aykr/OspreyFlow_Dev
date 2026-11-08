@@ -38,6 +38,7 @@ from ports.graph import (
     RARITY_PAIR_CAP,
     AmbiguousElementId,
     BulkEdgeResult,
+    DatasetFootprint,
     FindLimitExceeded,
     NodeSuggestions,
     RarityTooLarge,
@@ -1124,6 +1125,41 @@ class GraphArcadeDBAdapter:
             degree=sum(degree_by_type.values()),
             degree_by_type=degree_by_type,
         )
+
+    async def dataset_footprints(
+        self, dataset_ids: Sequence[str], principal: Principal
+    ) -> dict[str, DatasetFootprint]:
+        """`GraphPort.dataset_footprints`: per dataset, one query for its nodes and one for its
+        links, each the access step (`gremlin_has_step`) with the dataset asked as the reader's
+        datasets, a link's ends held to the handling axes alone, so a link from a loaded node
+        counts. The counts and sums are the store's (`asString().length()`,
+        `select("size_bytes")`)."""
+        asked = sorted(set(dataset_ids))
+        ends = self._access.gremlin_has_step(principal.model_copy(update={"datasets": None}))
+        size = 'coalesce(unfold().values("properties").asString().length().sum(),constant(0))'
+        pictures = (
+            'coalesce(unfold().filter(values("properties").select("media_kind").is("image"))'
+            '.values("properties").select("size_bytes").sum(),constant(0))'
+        )
+
+        async def one(dataset: str) -> DatasetFootprint:
+            reader = principal.model_copy(update={"datasets": [dataset]})
+            has = self._access.gremlin_has_step(reader)
+            (nodes,) = await self._client.gremlin(
+                f'g.V().{has}.fold().project("n","b","p")'
+                f".by(count(local)).by({size}).by({pictures})"
+            )
+            (edges,) = await self._client.gremlin(
+                f"g.E().{has}.where(outV().{ends}).where(inV().{ends})"
+                f'.fold().project("n","b").by(count(local)).by({size})'
+            )
+            return DatasetFootprint(
+                nodes=int(nodes["n"]), edges=int(edges["n"]),
+                properties_bytes=int(nodes["b"]) + int(edges["b"]), picture_bytes=int(nodes["p"]),
+            )  # fmt: skip
+
+        found = await asyncio.gather(*(one(d) for d in asked))
+        return dict(zip(asked, found, strict=True))
 
     async def type_counts(self, principal: Principal) -> TypeCounts:
         nodes_query, edges_query = render_type_counts_gremlin(self._access, principal)

@@ -657,6 +657,15 @@ Later reads, each with the access step on the element and on both ends of every 
 Explore panel's counts and degree ranking, ADR-100 Amendment 1), and `get_nodes` and `get_edges`
 (the given ids alone, ADR-124 decision 6). `expand_candidate_count` was withdrawn (ADR-124
 decision 10): no `GraphPort` read returns a figure about what the principal may not see.
+`dataset_footprints(dataset_ids, principal)` is Admin › Datasets' read of each case's analyst layer as counts, for cases the
+administrator is no member of (ADR-143 Amendment 2 decision 2, which lifts case membership and
+nothing else): the dataset asked stands in for the principal's own, and every other part of the
+access step applies (classification, handling code and unit, reverted and superseded, on the link
+itself; a link counts only with both ends readable by those same checks, its ends in whichever
+dataset, so a link drawn from a loaded node counts), so a hidden item is in no count and no size. It is counted in the
+store's own query (`count`, `asString().length()` over the properties, the image Documents'
+`size_bytes`): no element, id, label, property or object ref leaves it, and every id asked is
+answered (`tests/conformance/graph_port/test_dataset_footprints.py`).
 
 Supported adapters: `arcadedb`, `janusgraph`. Candidate: `hugegraph`.
 

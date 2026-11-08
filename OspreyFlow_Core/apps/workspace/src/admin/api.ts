@@ -4,10 +4,14 @@
 import type {
   AccessInput,
   AdminDataset,
+  AdminDatasetAuthors,
+  AdminDatasetCases,
   AdminSchedule,
   DashboardIdentity,
+  DatasetOwnerSetting,
   DemoPackStatus,
   InviteInput,
+  LayerDryRun,
   OrganisationArrival,
   PersonAccount,
   RegisteredDashboard,
@@ -49,6 +53,13 @@ async function failure(response: Response): Promise<Error> {
   if (body.error === "not_allowed" && typeof detail === "string") return new Error(detail);
   if (body.error === "identity_provider_refused" && typeof detail === "string") return new Error(detail);
   if (body.error === "dataset_not_found") return new Error("That dataset is no longer there.");
+  // ADR-143 Amendment 2 decision 1, ADR-145 Amendment 4: a dry run or a change of owner, refused in
+  // the Conduit's words, which say why and who can.
+  if (
+    typeof detail === "string" &&
+    ["not_an_author", "case_open", "case_not_linked", "composite_read_only", "owner_needed"].includes(body.error ?? "")
+  )
+    return new Error(detail);
   if (response.status === 409 && typeof body.error === "string" && typeof detail === "string") return new Error(detail);
   if (response.status === 403) return new Error("Your account does not hold the right for this.");
   return new Error(`The Admin area could not complete that (${response.status}).`);
@@ -101,6 +112,30 @@ export const setDatasetEgress = (api: AdminApi, datasetId: string, egress: Admin
   call<AdminDataset>(api, `datasets/${encodeURIComponent(datasetId)}/egress`, {
     method: "PUT",
     body: JSON.stringify({ egress }),
+  });
+// ADR-145 decision 8 and Amendment 4 decision 6: Admin › Datasets' policy, Authors, linked cases and
+// a removed case's dry runs; decision 7: Admin › System's *Dataset owners may be*.
+const dataset = (datasetId: string, what: string) => `datasets/${encodeURIComponent(datasetId)}/${what}`;
+export const setPromotionPolicy = (api: AdminApi, datasetId: string, policy: AdminDataset["promotion_policy"]) =>
+  call<AdminDataset>(api, dataset(datasetId, "promotion-policy"), {
+    method: "PUT",
+    body: JSON.stringify({ promotion_policy: policy }),
+  });
+export const datasetAuthors = (api: AdminApi, datasetId: string) =>
+  call<AdminDatasetAuthors>(api, dataset(datasetId, "authors"));
+export const changeDatasetOwners = (api: AdminApi, datasetId: string, people: string[]) =>
+  call<AdminDatasetAuthors>(api, dataset(datasetId, "owners"), { method: "PUT", body: JSON.stringify({ people }) });
+export const datasetCases = (api: AdminApi, datasetId: string) =>
+  call<AdminDatasetCases>(api, dataset(datasetId, "cases"));
+export const layerDryRun = (api: AdminApi, datasetId: string, caseId: string, action: LayerDryRun["action"]) =>
+  call<LayerDryRun>(api, `datasets/${encodeURIComponent(datasetId)}/cases/${encodeURIComponent(caseId)}/${action}/dry-run`, {
+    method: "POST",
+  });
+export const datasetOwnerSetting = (api: AdminApi) => call<DatasetOwnerSetting>(api, "settings/dataset-owners");
+export const setDatasetOwnerSetting = (api: AdminApi, value: DatasetOwnerSetting["owners_may_be"]) =>
+  call<DatasetOwnerSetting>(api, "settings/dataset-owners", {
+    method: "PUT",
+    body: JSON.stringify({ owners_may_be: value }),
   });
 // ADR-110 decision 8: Schedules and runs.
 const schedule = (recipeId: string, what: string) => `schedules/${encodeURIComponent(recipeId)}/${what}`;

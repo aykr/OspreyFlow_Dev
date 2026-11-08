@@ -91,6 +91,20 @@ class RestoredElements:
 
 
 @dataclass(frozen=True)
+class DatasetFootprint:
+    """What `GraphPort.dataset_footprints` says of one dataset, for one reader: how many live nodes
+    and links of it the reader may read, the size of their stored properties (the length of the
+    properties as the store renders them, counted in the store) and the file sizes of its pictures
+    (image Documents' `size_bytes`). Numbers only."""
+
+    nodes: int = 0
+    edges: int = 0
+    properties_bytes: int = 0
+    #: A picture attached before `size_bytes` was written counts 0.
+    picture_bytes: int = 0
+
+
+@dataclass(frozen=True)
 class StoredLink:
     """What `GraphPort.stored_link_states` says of one link: whether it is reverted, and whether it
     is superseded (an analyst's link change replaced it; the replacement is a link of its own)."""
@@ -440,6 +454,21 @@ class GraphPort(Protocol):
     async def neighbourhood_stats(
         self, node_id: NodeId, principal: Principal
     ) -> NeighbourhoodStats: ...
+
+    async def dataset_footprints(
+        self, dataset_ids: Sequence[str], principal: Principal
+    ) -> dict[str, DatasetFootprint]:
+        """ADR-143 Amendment 2 decision 2: for each dataset asked, what `principal` may read of it,
+        as counts: its live nodes and links, their properties' size and its pictures' file sizes.
+        Admin › Datasets reads each case's analyst layer this way, for cases the administrator is
+        no member of: the dataset is the one asked, in place of the principal's own, and
+        **everything else is the access step every read uses** (classification, handling code and
+        unit, reverted and superseded; a link counts only with both ends readable by those, its
+        ends in whichever dataset, so a link drawn from a loaded node counts), so a hidden
+        item is in no count and no size (rule 3; ADR-124 decision 10). Counted in the store's own
+        query: no element, id, label, property or object ref leaves it. Every id asked is answered,
+        zeros for one with nothing readable, so the answer says nothing of which exist."""
+        ...
 
     async def type_counts(self, principal: Principal) -> TypeCounts:
         """`06_DECISIONS.md` ADR-100: how many nodes of each entity type and links of each link

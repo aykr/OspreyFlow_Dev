@@ -1,11 +1,16 @@
 // Admin › Running › System (ADR-110 Amendment 1, ADR-135, ADR-136, ADR-114 decision 13; ADR-145
-// decision 5): each component asked as the section opens, the models and engines, the version.
-// Behind `administer_system`.
+// decision 5 and Amendment 4 decision 7): each component asked as the section opens, the models and
+// engines, the version, and *Dataset owners may be*. Behind `administer_system`.
 import { useEffect, useState } from "react";
 
-import type { EngineStatus, SystemStatus, UpdateNotice } from "../../../../../packages/schemas/generated";
-import { Button } from "../../design/primitives";
-import { systemStatus, type AdminApi } from "../api";
+import type {
+  DatasetOwnerSetting,
+  EngineStatus,
+  SystemStatus,
+  UpdateNotice,
+} from "../../../../../packages/schemas/generated";
+import { Button, Select } from "../../design/primitives";
+import { datasetOwnerSetting, setDatasetOwnerSetting, systemStatus, type AdminApi } from "../api";
 import { updateWords } from "../updateNotice";
 
 export function System({ api }: { api: AdminApi }) {
@@ -67,7 +72,72 @@ export function System({ api }: { api: AdminApi }) {
       {status?.engines && status.engines.length > 0 && <EnginesTable engines={status.engines} />}
       {status && <VersionSection version={status.version} update={status.update} />}
       <Button onClick={ask}>Ask again</Button>
+      <OwnersMayBe api={api} />
     </>
+  );
+}
+
+type OwnersMayBeValue = NonNullable<DatasetOwnerSetting["owners_may_be"]>;
+
+const OWNERS_MAY_BE: { value: OwnersMayBeValue; label: string }[] = [
+  { value: "people_and_teams", label: "People and teams" },
+  { value: "people_only", label: "People only" },
+  { value: "teams_only", label: "Teams only" },
+];
+
+/** ADR-145 Amendment 4 decision 7: who may be named a dataset's owner, at *Make live* and in Admin ›
+ * Datasets' *Change owner…*. Saved by its own button; the Conduit audits it. */
+function OwnersMayBe({ api }: { api: AdminApi }) {
+  const [held, setHeld] = useState<OwnersMayBeValue | null>(null);
+  const [chosen, setChosen] = useState<OwnersMayBeValue>("people_and_teams");
+  const [said, setSaid] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  useEffect(() => {
+    datasetOwnerSetting(api)
+      .then((found) => {
+        const value = found.owners_may_be ?? "people_and_teams";
+        setHeld(value);
+        setChosen(value);
+      })
+      .catch((e: Error) => setProblem(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api.apiBaseUrl, api.bearerToken]);
+  const save = () => {
+    setSaid(null);
+    setProblem(null);
+    void setDatasetOwnerSetting(api, chosen)
+      .then((saved) => {
+        const value = saved.owners_may_be ?? "people_and_teams";
+        setHeld(value);
+        setSaid(`Dataset owners may now be: ${OWNERS_MAY_BE.find((o) => o.value === value)?.label.toLowerCase()}.`);
+      })
+      .catch((e: Error) => setProblem(e.message));
+  };
+  return (
+    <section aria-label="Dataset owners" style={{ display: "grid", gap: "var(--sp-6)" }}>
+      <h4 style={{ margin: 0 }}>Dataset owners</h4>
+      <p className="label" style={{ margin: 0 }}>
+        Who may be named to answer for a dataset, at its first Make live and in Admin › Datasets&apos; Change owner. Choose
+        teams only if no person&apos;s name should be shown as an owner. Teams arrive with teams themselves: until then a
+        dataset&apos;s owners are people, and teams only refuses every owner.
+      </p>
+      {held && (
+        <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+          <Select aria-label="Dataset owners may be" value={chosen} onChange={(e) => setChosen(e.target.value as OwnersMayBeValue)}>
+            {OWNERS_MAY_BE.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+          <Button aria-label="Save who dataset owners may be" onClick={save}>
+            Save
+          </Button>
+        </div>
+      )}
+      {problem && <p role="alert">{problem}</p>}
+      {said && <p role="status">{said}</p>}
+    </section>
   );
 }
 

@@ -9,6 +9,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import asyncpg
 import pytest
@@ -685,3 +686,85 @@ async def test_change_refuses_a_blank_name_or_an_unknown_pack_before_writing(
 
     read = await store.get_authorized(case.id, AUTHOR, need=AccessLevel.VIEWER)
     assert (read.name, read.domains) == ("Old", ["fibo"])
+
+
+async def test_admin_states_names_open_and_removed_cases_and_nothing_else(
+    store: InvestigationStore,
+) -> None:
+    """Admin › Datasets' linked cases (ADR-143 Amendment 2 decision 2): a case's name and whether
+    it is removed, read without a level, for open and removed cases alike; a case that never
+    existed is left out, never invented."""
+    kept = await store.create(AUTHOR, name="Op Kestrel")
+    gone = await store.create(AUTHOR, name="Op Heron")
+    await store.remove(gone.id, by=AUTHOR)
+    states = await store.admin_states([kept.id, gone.id, "never-made"])
+    assert states == {kept.id: ("Op Kestrel", False), gone.id: ("Op Heron", True)}
+    assert await store.admin_states([]) == {}
+
+
+async def test_replace_authors_is_one_transaction_with_its_audit(store: InvestigationStore) -> None:
+    """*Change owner…* (ADR-145 Amendment 4 decision 6): the new Authors in, every other Author's
+    grant out, recorded, and the audit written on the same connection; an audit that fails rolls
+    every grant back."""
+    case = await store.create(AUTHOR, name="Home of a dataset")
+    await store.set_grant(case.id, "bob", AccessLevel.VIEWER, by=AUTHOR)
+    seen: list[list[str]] = []
+
+    async def audit(conn: object, before: list[str]) -> None:
+        seen.append(before)
+
+    assert await store.replace_authors(case.id, ["dave", "erin"], by=AUTHOR, audit=audit) == [
+        "alice"
+    ]
+    assert await store.list_grants(case.id) == {
+        "bob": AccessLevel.VIEWER, "dave": AccessLevel.AUTHOR, "erin": AccessLevel.AUTHOR,
+    }  # fmt: skip
+    assert seen == [["alice"]]
+
+    async def broken(conn: object, before: list[str]) -> None:
+        raise RuntimeError("the audit stream is down")
+
+    with pytest.raises(RuntimeError):
+        await store.replace_authors(case.id, ["frank"], by=AUTHOR, audit=broken)
+    assert await store.list_grants(case.id) == {
+        "bob": AccessLevel.VIEWER, "dave": AccessLevel.AUTHOR, "erin": AccessLevel.AUTHOR,
+    }  # fmt: skip
+
+
+async def test_replace_authors_writes_the_real_audit_entry_in_its_transaction(
+    store: InvestigationStore, schema: str
+) -> None:
+    """With the real `AuditWriter` writing on the store's connection: the entry is there when the
+    change commits, and gone with it when a later write in the same transaction fails."""
+    from services.api.audit import AuditWriter
+
+    dsn = f"{PostgresConfig.from_env().dsn}?search_path={schema}"
+    audit = await AuditWriter.connect(dsn)
+    case = await store.create(AUTHOR, name="Home of a dataset")
+
+    def recorder(fail: bool) -> Any:
+        async def record(conn: Any, before: list[str]) -> None:
+            await audit.record(
+                principal=AUTHOR, action="change_dataset_owners", investigation_id=case.id,
+                resolved_query={"before": before}, result_cardinality=1, conn=conn,
+            )  # fmt: skip
+            if fail:
+                await conn.execute("SELECT 1/0")
+
+        return record
+
+    try:
+        await store.replace_authors(case.id, ["dave"], by=AUTHOR, audit=recorder(False))
+        with pytest.raises(asyncpg.PostgresError):
+            await store.replace_authors(case.id, ["erin"], by=AUTHOR, audit=recorder(True))
+        conn = await asyncpg.connect(dsn=dsn)
+        try:
+            rows = await conn.fetch(
+                "SELECT resolved_query FROM audit_log WHERE investigation_id = $1", case.id
+            )
+        finally:
+            await conn.close()
+        assert len(rows) == 1
+        assert await store.list_grants(case.id) == {"dave": AccessLevel.AUTHOR}
+    finally:
+        await audit.close()

@@ -67,7 +67,7 @@ import asyncpg
 from pydantic import BaseModel, Field
 
 from conduit_common.identity import new_id
-from schemas.admin import DatasetEgress
+from schemas.admin import DatasetEgress, PromotionPolicy
 from schemas.dataset_model import DatasetOwnersMayBe, HomeCase
 from schemas.domain import Principal
 from schemas.rights import rights_for
@@ -104,6 +104,9 @@ class Dataset(BaseModel):
     #: The highest marking it may hold (ADR-145 decision 8; ADR-143 Amendment 2 decision 3): set
     #: for a drawn dataset at its making; `None` for every other, read as the deployment's highest.
     highest_marking: str | None = None
+    #: ADR-145 decision 8: how a drawn item is promoted into it, set in Admin › Datasets; enforced
+    #: by the promotion (L3.4). Every dataset starts at *Author promotes*.
+    promotion_policy: PromotionPolicy = "author_promotes"
 
 
 def layer_name(case_name: str | None, investigation_id: str) -> str:
@@ -266,6 +269,10 @@ class DatasetStore(Protocol):
     async def set_egress(
         self, dataset_id: str, egress: DatasetEgress
     ) -> tuple[DatasetEgress, Dataset]: ...
+    # ADR-145 decision 8: Admin › Datasets' promotion policy.
+    async def set_promotion_policy(
+        self, dataset_id: str, policy: PromotionPolicy
+    ) -> tuple[PromotionPolicy, Dataset]: ...
 
 
 class DrawnNotCopied(Exception):
@@ -694,6 +701,16 @@ class InMemoryDatasetStore:
         self.datasets[dataset_id] = changed
         return held.egress, changed
 
+    async def set_promotion_policy(
+        self, dataset_id: str, policy: PromotionPolicy
+    ) -> tuple[PromotionPolicy, Dataset]:
+        held = self.datasets.get(dataset_id)
+        if held is None or held.kind == ANALYST_LAYER:
+            raise UnknownDatasetEgressError(dataset_id)
+        changed = held.model_copy(update={"promotion_policy": policy})
+        self.datasets[dataset_id] = changed
+        return held.promotion_policy, changed
+
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS datasets (
@@ -752,6 +769,10 @@ CREATE TABLE IF NOT EXISTS home_cases (
     made_at TIMESTAMPTZ NOT NULL,
     made_by TEXT NOT NULL
 );
+-- ADR-145 decision 8: how a drawn item is promoted into the dataset.
+ALTER TABLE datasets ADD COLUMN IF NOT EXISTS promotion_policy TEXT NOT NULL
+    DEFAULT 'author_promotes'
+    CHECK (promotion_policy IN ('author_promotes', 'second_person_reviews'));
 -- Decision 7: Admin › System's settings for datasets.
 CREATE TABLE IF NOT EXISTS dataset_settings (
     key TEXT PRIMARY KEY,
@@ -765,7 +786,7 @@ _MEMBERS_SQL = (
 )
 _COLUMNS = (
     "d.id, d.name, d.owning_unit, d.created_at, d.created_by, d.egress, d.kind, d.layer_of, "
-    "d.highest_marking, " + _MEMBERS_SQL
+    "d.highest_marking, d.promotion_policy, " + _MEMBERS_SQL
 )
 
 #: The name a unit's datasets may not share, case and spacing aside (`name_key`).
@@ -900,8 +921,9 @@ class PostgresDatasetStore:
                 async with self._maybe(conn) as c, c.transaction():
                     await c.execute(
                         "INSERT INTO datasets (id, name, owning_unit, created_at, created_by, "
-                        "egress, kind, layer_of, highest_marking) "
-                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (id) DO NOTHING",
+                        "egress, kind, layer_of, highest_marking, promotion_policy) "
+                        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "
+                        "ON CONFLICT (id) DO NOTHING",
                         dataset.id,
                         name,
                         dataset.owning_unit,
@@ -911,6 +933,7 @@ class PostgresDatasetStore:
                         dataset.kind,
                         dataset.layer_of,
                         dataset.highest_marking,
+                        dataset.promotion_policy,
                     )
                     await c.executemany(
                         "INSERT INTO composite_members (composite_id, member_id, position) "
@@ -1243,6 +1266,24 @@ class PostgresDatasetStore:
                 egress,
             )
         return cast(DatasetEgress, before), _row(row)
+
+    async def set_promotion_policy(
+        self, dataset_id: str, policy: PromotionPolicy
+    ) -> tuple[PromotionPolicy, Dataset]:
+        async with self._pool.acquire() as conn, conn.transaction():
+            before = await conn.fetchval(
+                "SELECT promotion_policy FROM datasets WHERE id = $1 AND kind <> 'analyst_layer' "
+                "FOR UPDATE",
+                dataset_id,
+            )
+            if before is None:
+                raise UnknownDatasetEgressError(dataset_id)
+            row = await conn.fetchrow(
+                f"UPDATE datasets d SET promotion_policy = $2 WHERE d.id = $1 RETURNING {_COLUMNS}",
+                dataset_id,
+                policy,
+            )
+        return cast(PromotionPolicy, before), _row(row)
 
     async def copy_case(
         self,
