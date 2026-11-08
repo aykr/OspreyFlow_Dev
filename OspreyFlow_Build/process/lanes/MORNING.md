@@ -20,6 +20,7 @@ New ones are added at the bottom as they happen.
 10. **A branch member with no level on the original case does not read the original's layer** (the same reasoning as the alert-jump exception). ADR-144 Amendment 1 decision 2 didn't address members who exist only in the branch.
 11. **An alert in a branch that rests on the original case's layer has its node withheld and its queue row raised** (case's call within my ruling): it can go neither to the source (a leak) nor into the read-only layer.
 12. **ADR-110 Amendment 17** carries studio's Part A2 findings, because Amendment 15 had been rewritten in place on a branch. It was restored, since decisions are amended, never edited.
+13. **L1.2c (your option A): reverting the returning row's load puts its link back exactly as it was before the merge.** The load record keeps the link's prior state for its own-key merges only, never shown anywhere, and restored at its own marking. A revert is refused, in words, if the link has been written since. The other two options were a counted unmerge, which would leave the reverted load's values on the link, or marking the link reverted, which would leave a gap in its history.
 
 ## Evening, 7 November: your records of 7 November applied
 
