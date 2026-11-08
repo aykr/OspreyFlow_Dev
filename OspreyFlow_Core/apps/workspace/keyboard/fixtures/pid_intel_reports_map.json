@@ -1,5 +1,5 @@
 {
-  "_comment": "Generated from packages/demo_fixtures/pid_intel_reports_recipe.yaml (row_template, unmapped_fields, deduplicate, defaults.handling_columns); tests/demo_fixtures/test_reports_map_fixture.py fails when the two differ.",
+  "_comment": "A copy of packages/demo_fixtures/pid_intel_reports_recipe.yaml's row_template, unmapped_fields, deduplicate and defaults.handling_columns, made by hand; tests/demo_fixtures/test_reports_map_fixture.py fails when the two differ.",
   "row_template": {
     "entities": [
       {

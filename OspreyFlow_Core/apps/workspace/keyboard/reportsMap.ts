@@ -8,6 +8,10 @@ import { fileURLToPath } from "node:url";
 
 import { expect, type Page } from "@playwright/test";
 
+import { HANDLING_PART_LABELS } from "../src/ingest/handlingParts";
+
+export { meaning } from "./mapMeaning";
+
 async function press(page: Page, name: string, exact = true) {
   await page.getByRole("button", { name, exact }).focus();
   await page.keyboard.press("Enter");
@@ -19,22 +23,11 @@ export type MapEntity = { ref: string; pole_class: string; type: string; match_o
   handling: Record<string, { field: string }> };  // prettier-ignore
 export type MapEdge = { type: string; from: string; to: string; when?: { field: string; is: string }; handling: Record<string, { field: string }> };
 export type ReportsMap = { row_template: { entities: MapEntity[]; edges: MapEdge[] };
-  unmapped_fields: { field: string; action: string; note?: string }[]; deduplicate: { key: Binding[] } };  // prettier-ignore
+  unmapped_fields: { field: string; action: string; note?: string }[]; deduplicate: { key: Binding[] };
+  handling_columns: Record<string, string> };  // prettier-ignore
 export const REPORTS_MAP = JSON.parse(
   readFileSync(fileURLToPath(new URL("./fixtures/pid_intel_reports_map.json", import.meta.url)), "utf8"),
 ) as ReportsMap;
-
-/** What a saved map means, as the server reads it: a key holding `null` is absent, and a link with
- * `properties: {}` has none (`RecipeEdge.properties` defaults to `{}`). Nothing else is forgiven. */
-export function meaning(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(meaning);
-  if (value === null || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key, v]) => v !== null && v !== undefined && !(key === "properties" && Object.keys(v as object).length === 0))
-      .map(([key, v]) => [key, meaning(v)]),
-  );
-}
 
 export async function choose(page: Page, label: string, value: string) {
   const select = page.getByRole("combobox", { name: label, exact: true });
@@ -63,8 +56,7 @@ export const propertyRow = (page: Page, name: string) =>
 
 export async function bindHandling(page: Page, handling: Record<string, { field: string }>) {
   await tick(page, "Override handling for this element");
-  const labels: Record<string, string> = { classification: "Classification", handling_code: "Handling code",
-    action_code: "Action code", sanitisation_code: "Sanitisation code", originator: "Originator", owning_unit: "Owning unit" };  // prettier-ignore
+  const labels: Record<string, string> = HANDLING_PART_LABELS;
   for (const part of Object.keys(handling)) {
     const select = page.getByRole("combobox", { name: `${labels[part]} for this element`, exact: true });
     await select.focus();
@@ -143,14 +135,11 @@ export async function mapTheReports(page: Page) {
 }
 
 /** The committed recipe's `handling_columns`: the column carrying each part of a report's marking. */
-export const REPORTS_HANDLING_COLUMNS: Record<string, string> = JSON.parse(
-  readFileSync(fileURLToPath(new URL("./fixtures/pid_intel_reports_map.json", import.meta.url)), "utf8"),
-).handling_columns;
+export const REPORTS_HANDLING_COLUMNS: Record<string, string> = REPORTS_MAP.handling_columns;
 
 /** On the draft's own settings (Connect): the column carrying each part of the marking, typed. */
 export async function declareTheMarkingColumns(page: Page) {
-  const labels: Record<string, string> = { classification: "Classification", handling_code: "Handling code",
-    action_code: "Action code", sanitisation_code: "Sanitisation code", originator: "Originator", owning_unit: "Owning unit" };  // prettier-ignore
+  const labels: Record<string, string> = HANDLING_PART_LABELS;
   for (const [part, column] of Object.entries(REPORTS_HANDLING_COLUMNS)) {
     await page.getByRole("textbox", { name: `Column carrying ${labels[part]}`, exact: true }).focus();
     await page.keyboard.type(column);

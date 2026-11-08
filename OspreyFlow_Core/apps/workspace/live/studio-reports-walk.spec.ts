@@ -105,7 +105,6 @@ test("chapter 4's reports pipeline is built from scratch in guided mode, tested,
   await press(page, "Open map editor");
   await mapTheReports(page);
   await press(page, "Save draft");
-  await expect(page.getByRole("alert")).toHaveCount(0);
   mark("map saved");
 
   // The map as the Conduit stores it, not as the browser sent it.

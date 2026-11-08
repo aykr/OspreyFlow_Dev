@@ -272,8 +272,9 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     }
     if (path.endsWith("/row-template") && method === "PUT") {
       const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      // As `check_recipe_rules` refuses it (422 `recipe_rule`, each problem named): an element that
-      // does not bind a part of the marking the source declares a column for.
+      // One of `check_recipe_rules`'s refusals (422 `recipe_rule`, each problem named): an element
+      // that does not bind a part of the marking the source declares a column for. Its others (an
+      // undeclared column, a bound unit with no units, a reference with no index) are not modelled.
       const held = (recipe === "r-new" ? created : draft)?.handling as { handling_columns?: Record<string, string> } | undefined;
       const template = sent.row_template as { entities: { ref: string; handling?: Record<string, unknown> }[];
         edges?: { type: string; handling?: Record<string, unknown> }[] };  // prettier-ignore

@@ -43,11 +43,14 @@ export function edgeTypesForEndpoints(
   fromType: string,
   toType: string,
 ): EdgeTypeDef[] {
-  // `*` at an end means any entity type, as the canvas reads it (`canvas/edgeTypeMenu.ts`): read as
-  // a type name, every link type declared from `*` (`MENTIONED_IN`, from anything to a Document) was
+  // An end declared as `*` alone means any entity type, as the load judges it
+  // (`packages/ontology/validation.py`'s `validate_edge_endpoints`: `declared != ["*"]`): read as a
+  // type name, every link type declared from `*` (`MENTIONED_IN`, from anything to a Document) was
   // offered between no two types, so no map could make one. Found walking chapter 4's reports
-  // pipeline from scratch on a running Conduit (8 November 2026).
-  const at = (ends: readonly string[], type: string) => ends.includes(WILDCARD) || ends.includes(type);
+  // pipeline from scratch on a running Conduit (8 November 2026). A list holding `*` beside other
+  // types is judged as its named types, since the load refuses any other.
+  const at = (ends: readonly string[], type: string) =>
+    (ends.length === 1 && ends[0] === WILDCARD) || ends.includes(type);
   return ontology.edge_types.filter((t) => !t.system && at(t.from, fromType) && at(t.to, toType));
 }
 

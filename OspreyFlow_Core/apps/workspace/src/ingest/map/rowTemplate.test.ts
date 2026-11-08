@@ -69,6 +69,23 @@ describe("entityTypesForPole / edgeTypesForEndpoints", () => {
     expect(edgeTypesForEndpoints(withWildcard, "Endpoint", "Document").map((t) => t.name)).toEqual(["MENTIONED_IN"]);
     expect(edgeTypesForEndpoints(withWildcard, "Document", "Location").map((t) => t.name)).toEqual([]);
   });
+
+  it("judges a list holding `*` beside named types by its named types, as the load does", () => {
+    const mixed: OntologySchema = {
+      ...ontology,
+      edge_types: [{ name: "NOTED_AT", from: ["*", "Endpoint"], to: ["Location"] }],
+    };
+    expect(edgeTypesForEndpoints(mixed, "Endpoint", "Location").map((t) => t.name)).toEqual(["NOTED_AT"]);
+    expect(edgeTypesForEndpoints(mixed, "Location", "Location").map((t) => t.name)).toEqual([]);
+  });
+
+  it("never offers a system link type, though it is declared between any two types", () => {
+    const system: OntologySchema = {
+      ...ontology,
+      edge_types: [{ name: "SAME_AS", from: ["*"], to: ["*"], system: true }],
+    };
+    expect(edgeTypesForEndpoints(system, "Endpoint", "Location")).toEqual([]);
+  });
 });
 
 describe("arityForTransform", () => {

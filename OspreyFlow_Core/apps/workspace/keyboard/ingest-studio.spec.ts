@@ -520,9 +520,9 @@ test("the reports pipeline is edited in expert mode by keyboard, and the save ca
   registerCovered(REGISTRY, "edit-the-reports-pipeline-in-expert-mode-by-keyboard");
 });
 
-// Rule 15: the harness refuses a Map save as `check_recipe_rules` does, so the case above could not
-// pass with a part of a marking left unbound. A report saved with none of the six bound is refused,
-// in words naming the part and its column, and nothing is kept.
+// Rule 15: the harness refuses a Map save that leaves a declared part of the marking unbound, as
+// `check_recipe_rules` does, so the case above could not pass with one unbound. A report saved with
+// none of the six bound is refused in words naming the part and its column.
 test("a reports map leaving a declared part of the marking unbound is refused at save, by keyboard", async ({ page }) => {
   await page.goto(HARNESS);
   await page.getByRole("textbox", { name: "Pipeline name" }).focus();
