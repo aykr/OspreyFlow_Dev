@@ -50,24 +50,25 @@ describe("the badge beside the case's name", () => {
   });
 });
 
-// ADR-084 Amendment 4: on a branch the menu's button says where it sits — its case, then the branch —
-// and the menu is the same tree as the Cases drawer.
-describe("CaseSwitcher on a branch", () => {
-  it("names the case, then the branch, and lists the tree", async () => {
+// ADR-144 Amendment 1: no case is made from another, so the menu names the case alone and lists the
+// cases, each once.
+describe("CaseSwitcher's menu", () => {
+  it("names the case and lists the cases, each once", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
         new Response(
           JSON.stringify([
             { id: "c1", name: "Ledger", level: "author", created_at: "2026-10-01T00:00:00Z", created_by: "a" },
-            { id: "b1", name: "Branch of Ledger (2 nodes)", level: "author", created_at: "2026-10-14T16:40:00Z", created_by: "a", branched_from: "c1" },
+            { id: "c2", name: "Kestrel", level: "editor", created_at: "2026-10-14T16:40:00Z", created_by: "a" },
           ]),
         ),
       ),
     );
-    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="b1" onOpen={() => undefined} />);
-    const button = await screen.findByRole("button", { name: "Case: Ledger › 2 nodes · 14 Oct 16:40" });
+    render(<CaseSwitcher apiBaseUrl="http://api" bearerToken="t" currentId="c1" onOpen={() => undefined} />);
+    const button = await screen.findByRole("button", { name: "Case: Ledger" });
     button.click();
-    expect(await screen.findByRole("list", { name: "Cases and their branches" })).toBeTruthy();
+    const list = await screen.findByRole("list", { name: "Cases" });
+    expect(list.querySelectorAll(":scope > li")).toHaveLength(2);
   });
 });

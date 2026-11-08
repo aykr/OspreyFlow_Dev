@@ -59,20 +59,13 @@ describe("CasePicker", () => {
     expect(document.body.textContent).not.toMatch(/\bc1\b|\bc2\b/);
   });
 
-  it("lists each branch beneath the case it came from, said to be a branch (ADR-084 Amendment 3)", async () => {
-    const withBranches: CaseListing[] = [
-      ...CASES,
-      { id: "b1", name: "Fixture Corp · 2 selected", level: "author", created_at: "2026-10-04T09:00:00Z", created_by: "a", branched_from: "c1" },
-    ];
-    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: withBranches }) });
+  it("lists each case once, flat, said to be nothing but a case (ADR-144 Amendment 1)", async () => {
+    stubFetch({ "GET /v1/investigations": () => ({ status: 200, body: CASES }) });
     render(<CasePicker apiBaseUrl="http://api" bearerToken="t" lastCaseId={null} onOpen={() => undefined} />);
-
-    await screen.findByText("Fixture Corp · 2 selected");
-    const rows = screen.getAllByRole("listitem").map((row) => row.textContent ?? "");
-    const parent = rows.findIndex((text) => text.startsWith("Fixture Corp") && !text.includes("selected"));
-    expect(rows[parent + 1]).toMatch(/^Fixture Corp · 2 selected.*branch/);
-    const branchRow = screen.getAllByRole("listitem")[parent + 1] as HTMLElement;
-    expect(branchRow.dataset.branch).toBe("true");
+    await screen.findByText("Fixture Corp");
+    const rows = screen.getAllByRole("listitem");
+    expect(rows).toHaveLength(CASES.length);
+    for (const row of rows) expect(row.getAttribute("style")).toContain("padding: var(--sp-8) 0");
   });
 
   it("opens the case that is chosen", async () => {

@@ -4,8 +4,8 @@
 import { useEffect, useState } from "react";
 
 import { DropdownPanel } from "../design/primitives/DropdownPanel";
-import { type CaseListing, branchLabel, caseLabel, listCases, returnFor, scopeBadge } from "./cases";
-import { CaseTree } from "./CaseTree";
+import { type CaseListing, caseLabel, listCases, scopeBadge } from "./cases";
+import { CaseList } from "./CaseList";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CaseSwitcherProps {
@@ -15,8 +15,6 @@ export interface CaseSwitcherProps {
   onOpen: (id: string) => void;
   /** Show the full list of cases (the picker) over the workspace. Absent: no such button. */
   onBrowse?: () => void;
-  /** An administrator of the unit may delete any branch in it (ADR-084 Amendment 4). */
-  isAdministrator?: boolean;
 }
 
 export function CaseSwitcher({
@@ -25,7 +23,6 @@ export function CaseSwitcher({
   currentId,
   onOpen,
   onBrowse,
-  isAdministrator = false,
 }: CaseSwitcherProps) {
   const [cases, setCases] = useState<CaseListing[]>([]);
   const [creating, setCreating] = useState(false);
@@ -46,13 +43,7 @@ export function CaseSwitcher({
   }, [apiBaseUrl, bearerToken]);
 
   const current = cases.find((entry) => entry.id === currentId);
-  // ADR-084 Amendment 4: on a branch, where it sits — the case it came from, then the branch.
-  const parent = current?.branched_from ? returnFor(cases, current.id) : null;
-  const currentName = current
-    ? current.branched_from
-      ? `${parent ? `${caseLabel(parent)} › ` : ""}${branchLabel(current)}`
-      : caseLabel(current)
-    : "Current case";
+  const currentName = current ? caseLabel(current) : "Current case";
   const scope = scopeBadge(current?.datasets);
   return (
     <>
@@ -63,15 +54,7 @@ export function CaseSwitcher({
           {/* The space is its own text node, not inside the hidden span: a name computation may
               trim an element's trailing space (jsdom 29 does), which would read "Case:Name". */}
           <span className="visually-hidden">Case:</span>{" "}
-          {current?.branched_from ? (
-            <span>
-              {parent && `${caseLabel(parent)} › `}
-              <span aria-hidden="true">⑂ </span>
-              {branchLabel(current)}
-            </span>
-          ) : (
-            <span>{currentName}</span>
-          )}
+          <span>{currentName}</span>
         </>
       }
       title={currentName}
@@ -80,13 +63,13 @@ export function CaseSwitcher({
     >
       {(close) => (
         <>
-          {/* ADR-084 Amendment 4: the same tree as the Cases drawer — each case, its branches beneath. */}
-          <CaseTree
+          {/* The same list as the Cases drawer, each case once; its views are in the drawer. */}
+          <CaseList
             apiBaseUrl={apiBaseUrl}
             bearerToken={bearerToken}
             currentId={currentId}
             cases={cases}
-            isAdministrator={isAdministrator}
+            showViews={false}
             onOpen={(id) => {
               close();
               onOpen(id);

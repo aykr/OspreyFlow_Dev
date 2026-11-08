@@ -183,7 +183,7 @@ describe("QuestionsPanel", () => {
           would_be: 120000,
           documents_chars: 70000,
           evidence_brief_chars: 50000,
-          options: ["narrow_selection", "narrow_timeline_window", "branch"],
+          options: ["narrow_selection", "narrow_timeline_window", "ask_in_a_view"],
         }),
     });
     mount();
@@ -193,7 +193,7 @@ describe("QuestionsPanel", () => {
     expect((await screen.findByRole("alert")).textContent).toBe(
       "This question comes to 120,000 characters, more than the model can read at once (80,000): " +
         "the documents are 70,000 and the graph facts 50,000. Nothing was sent. " +
-        "Narrow the selection, narrow the timeline window, or branch the case, then ask again.",
+        "Narrow the selection, narrow the timeline window, or ask in a smaller view, then ask again.",
     );
     expect((screen.getByLabelText("Your question") as HTMLTextAreaElement).value).toBe("Anything?");
   });
@@ -231,6 +231,27 @@ describe("QuestionsPanel", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Reject Person · Dana Mercer" }));
     expect(await screen.findByText("Rejected")).toBeTruthy();
     expect(onDelta).not.toHaveBeenCalled();
+  });
+
+  it("in a view (ADR-144 decision 4) lists, asks and decides through that view, and says so", async () => {
+    const delta = { seq: 3, op: "add", nodes: [], edges: [] };
+    const calls = serve({
+      "GET /questions?view_id=v%201": () => json(200, [ANSWERED]),
+      "POST /questions": () => json(200, { ...ANSWERED, id: "q2", question: "Who wrote these?" }),
+      "POST /questions/candidates/c1/accept?view_id=v%201": () => json(200, { node_id: "n9", delta }),
+    });
+    const onLeaveView = vi.fn();
+    mount(vi.fn(), vi.fn(), { view: { id: "v 1", name: "Questions on 2 documents" }, onLeaveView });
+    expect((await screen.findByRole("status")).textContent).toContain("Asking in the view Questions on 2 documents");
+    fireEvent.click(await screen.findByRole("button", { name: "Accept Person · Dana Mercer" }));
+    await screen.findByText("Accepted");
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who wrote these?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("Who wrote these?", { selector: "p" });
+    const asked = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"));
+    expect(JSON.parse(asked?.init?.body as string).view_id).toBe("v 1");
+    fireEvent.click(screen.getByRole("button", { name: "Ask about the whole case instead" }));
+    expect(onLeaveView).toHaveBeenCalled();
   });
 });
 

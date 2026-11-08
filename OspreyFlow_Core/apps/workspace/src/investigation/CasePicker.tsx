@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
-import { type CaseListing, caseLabel, datasetLabel, listCases, nestCases, removeCase } from "./cases";
+import { type CaseListing, caseLabel, datasetLabel, listCases, orderCases, removeCase } from "./cases";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CasePickerProps {
@@ -102,17 +102,16 @@ export function CasePicker({
           )}
           {cases !== null && cases.length > 0 && (
             <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {/* ADR-084 Amendment 3: each case once, its branches indented beneath it. */}
-              {nestCases(cases).map(({ entry, branch }) => (
+              {/* Each case once (ADR-144 Amendment 1: no case is made from another). */}
+              {orderCases(cases).map((entry) => (
                 <li
                   key={entry.id}
-                  data-branch={branch ? "true" : undefined}
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
                     gap: "var(--sp-16)",
-                    padding: branch ? "var(--sp-4) 0 var(--sp-4) var(--sp-32)" : "var(--sp-8) 0",
+                    padding: "var(--sp-8) 0",
                     borderBottom: "1px solid var(--border-subtle)",
                   }}
                 >
@@ -120,7 +119,6 @@ export function CasePicker({
                   <span style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
                     <span className="label">
                       {entry.id === lastCaseId ? "Last opened · " : ""}
-                      {branch ? "branch · " : ""}
                       {entry.datasets && entry.datasets.length > 0
                         ? `reads ${entry.datasets
                             .map((name, i) => {
