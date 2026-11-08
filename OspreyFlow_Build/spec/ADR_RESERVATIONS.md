@@ -58,7 +58,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-110 Amendment 16 | A row that comes back after a full snapshot withdrew it, and merges into its own withdrawn key's link, counts that merge as the row's own, so its load reverts (L1.2c, the owner's ruling A, 7 November) | studio | 2026-11-07 | written |
 | ADR-110 Amendment 17 | A Studio load is stamped with its case's dataset and confined to it, by the scheduler and Run now alike, so two cases on two datasets never merge a link; Amendment 15's point 7 and its known limit restated as proven, and what is not driven (L1.2a Part A2) | studio | 2026-11-08 | written |
 | ADR-110 Amendment 18 | A link write names its type: a merge and a supersede change only their own type's link, and a link state read refuses an id two types hold, so a returning row's load stays unrevertable there (L1.2d, the orchestrator's settlement, 8 November) | studio | 2026-11-08 | written |
-| ADR-140 Amendment 10 | Phase 6's exit met: the reports pipeline built from scratch in guided mode by keys, an expert-mode edit, and a live walk under the lease (L1.2b, 8 November) | studio | 2026-11-08 | reserved |
+| ADR-140 Amendment 10 | Phase 6's exit met: the reports pipeline built from scratch in guided mode by keys, an expert-mode edit, and a live walk under the lease (L1.2b, 8 November) | studio | 2026-11-08 | written |
 
 ## Baseline
 
