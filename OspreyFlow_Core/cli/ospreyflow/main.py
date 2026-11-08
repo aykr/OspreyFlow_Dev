@@ -1245,7 +1245,9 @@ def _map(args: argparse.Namespace, ctx: _Context) -> int:
             placed = map_verbs.place_jar(args.planetiler_jar, tiles)
             print(f"The map builder is in the tiles folder: {placed}")
         map_verbs.make_built_door(tiles)
-        ctx.step(f"build the {args.region} basemap", [*in_conduit, "build", args.region, "--by", who])
+        ctx.step(
+            f"build the {args.region} basemap", [*in_conduit, "build", args.region, "--by", who]
+        )
         return 0
     ctx.step(f"{args.action} the maps", [*in_conduit, args.action, "--by", who])
     return 0

@@ -303,17 +303,21 @@ test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered
   await page.keyboard.press("Tab"); // Label
   await page.keyboard.press("Tab"); // PMTiles path
   await page.keyboard.press("Tab"); // Register provider button
+  await page.keyboard.press("Tab"); // Region
+  await expect(page.getByLabel("Region")).toBeFocused();
   await page.keyboard.press("Tab"); // Build local basemap button
   await expect(page.getByRole("button", { name: "Build local basemap" })).toBeFocused();
 
-  // Always a real 501 — `harness/geospatial.py`'s own docstring has the confirmed-by-import
-  // reason; this test proves the button is keyboard-reachable and really calls the route, not
-  // that the route succeeds (`test_webapp_geospatial.py` proves the 501 itself, at the route).
+  // ADR-147 decision 6: the Conduit's own build, run in its container. This console has launched
+  // nothing, so the route answers 409 in words; this proves the button is keyboard-reachable and
+  // really calls the route with the region (`test_webapp_geospatial.py` proves the run itself).
   const [buildResponse] = await Promise.all([
     page.waitForResponse((r) => r.url().includes("/api/geospatial/build-basemap")),
     page.keyboard.press("Enter"),
   ]);
-  expect(buildResponse.status()).toBe(501);
+  expect(buildResponse.status()).toBe(409);
+  expect(buildResponse.request().postDataJSON()).toEqual({ region: "rutland" });
+  await expect(page.getByRole("status").filter({ hasText: "Launch it first" })).toBeVisible();
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-build-basemap");
 
   await page.keyboard.press("Tab"); // Verify button
@@ -323,7 +327,7 @@ test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered
     page.waitForResponse((r) => r.url().includes("/api/geospatial/verify")),
     page.keyboard.press("Enter"),
   ]);
-  expect(verifyResponse.status()).toBe(501);
+  expect(verifyResponse.status()).toBe(409);
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-verify-map");
 });
 

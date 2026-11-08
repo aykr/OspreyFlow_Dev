@@ -107,27 +107,28 @@ export async function registerLocalProvider(body: {
   );
 }
 
-export async function buildLocalBasemap(): Promise<void> {
-  const response = await fetch("/api/geospatial/build-basemap", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  });
-  if (!response.ok) {
-    throw new ApiError(response.status, await response.text());
-  }
+/** ADR-147 decision 6: the Conduit's own build or verify, run in its container; its exit status and
+ * its own printed lines (fixed words, never a key). */
+export interface MapStepResult {
+  returncode: number;
+  lines: string[];
 }
 
-export async function verifyMap(): Promise<void> {
-  const response = await fetch("/api/geospatial/verify", {
+async function mapStep(path: string, body: object): Promise<MapStepResult> {
+  const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: "{}",
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new ApiError(response.status, await response.text());
+    const detail = (await response.json().catch(() => ({}))) as { detail?: unknown };
+    throw new ApiError(response.status, typeof detail.detail === "string" ? detail.detail : `HTTP ${response.status}`);
   }
+  return (await response.json()) as MapStepResult;
 }
+
+export const buildLocalBasemap = (region: string) => mapStep("/api/geospatial/build-basemap", { region });
+export const verifyMap = () => mapStep("/api/geospatial/verify", {});
 
 // `harness/preflight/__main__.py`'s own `run_streaming` — one `EventSource` per stream, since a
 // native browser `EventSource` is exactly "each check appears as it completes"
