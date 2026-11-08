@@ -1,33 +1,37 @@
-# rules lane · report · L2.8c, the other supersedes through the repoint journal (8 November 2026; after review rounds 1 and 2)
+# rules lane · report · L2.8d, a corrected node an alert names, and L2.8c's carries (8 November 2026)
 
-1. **Settlements (the orchestrator's, 8 November, on the owner's review list):** Q1 a (the graph names each clone `superseded_by`, reported to `on_link_cloned` before the commit); Q2 a (the purge published to connected canvases); Q3 a (D8 measured under the lease); the referent-node gap is its own step, L2.8d, before L2.9. ADR-109 Amendment 11 written under its reserved heading.
-2. **D8–D10: met.** D8, `get_authorized` by id under the rules lease on stack b: 1.85 / 6.27 / 82.46 ms median with 0 / 1 / 10 pending records (Amendment 11 point 7, `l2.8c/d8-timing.txt`). D9 and D10 in `test_repoint_journal_callers_live.py`: the rename and repoint never deadlock; the busy pool refuses in words, and a read stops at the first refusal; record locks in their own key space (each red: deadlock, the bound, skipped, four waits).
-3. **Every caller through the journal: met.** An alert citing the link each caller replaces stays listed for its reader and refused to the OFFICIAL reader of the SECRET clone and to another case. The callers: the confirm and retract routes, the close's confirm, `supersede.py` sync and job, the enrich stage, `NOT_SAME_AS`. Each is red with its journal entry removed, the clone written at OFFICIAL, or the case scope made true.
-4. **The graph: met.** Conformance cases: the clone named before the commit; a rolled-back correction leaves no mark; a self-loop is cloned once, new node to new node (round 2's must-fix; red with the old order).
-5. **Records outlive no writer, and no writer outlives its record: met.** A writer held open past the stale limit keeps its record (red: dropped). A cancelled outside-commit writer closes its record and stops its keep-alive (red: kept beating). A re-mark counts a cited link's ends (red: the node stayed OFFICIAL).
-6. **Bindings at their call sites: met.** `recipe_run` → runner, runner → stage, the stamping graph → adapter, the worker's `register_all`. `alerts` is now a required keyword on both jobs (`test_pipeline_enrich_journal.py`, `test_worker_registration.py`, each red at its site).
-7. **Purge published: met.** The purge is published, and each socket projects it for its reader (red: nothing sent / no record). The re-marking script publishes too. A settle holding no working set still waits for a socket's resync (Amendment 11 point 8).
-8. **Step 3, the fakes' tolerance: met** (red with it put back).
-9. **Gate commit e9c8fd3, tree 0a8da0dc, rebased on main 2b984f2** (admin's L2.4 part 2 merged; `gates/e9c8fd3.*`). **Leased run** on stack a, 15:16–15:22Z: 97/97, covering this lane's live file and the graph-port suite's supersede, restore, withdraw, revert, link-state and footprint cases. **make -k ci:** exit 0, every gate green. **make test:** Python 8,220 passed, 4 failed, 2 errors; JS 2,653/2,654. None of the failures are this branch's: the local osprey.yaml; the closed Valkey port; `graphify-out` at the root; the phone fixture's object store, closed offline; the proxy image build, refused by Docker Hub's 429; and a MatrixView budget under load, which passes alone. The earlier run at 47435fa, before the rebase, is kept: its leased run was 150/151, the one failure the KYC test that fails on main.
-10. **Graph-port withdraw cases:** with main's `_restore_link_state`, the withdraw and link-state cases pass under the marking (`round1/withdraw-cases-with-marking.txt`; the leased run above).
-11. **Carried to L2.8d, a line each:**
-    - (a) A conformance case for "another type holding the id is never marked" (Amendment 11 point 1).
-    - (b) A test that an Alert node carries only `ALERTED_ON` links, which no rule cites (point 3's exemption).
-    - (c) `purge_copies` vs `WorkingSetReverter.remove`'s history scrub: one helper, and whether history serves old copies.
-    - (d) `test_written_back_reads_in_full_stages.py`'s own `_Store.repointing` to the shared stand-in.
-    - (e) Each worker replica now runs the alert store's DDL and opens its pools: Postgres's concurrent-DDL and connection ceilings.
-    - (f) An enrich stage opens a record even when it writes no point.
-    - (g) The review's 11 and 13 as ruled.
-12. **Commits:**
-    - b9f960f-era work rebased onto 83b3d17. Round 0: step 3; D9 and D10; the graph marking; the callers and publish; the amendment.
-    - 3b3066f round 1, then rebased.
-    - 18d4e9d round 2 (47435fa before the rebase onto 2b984f2).
-    - e9c8fd3 the first gate records; this commit holds the second.
-13. **Ratify (outside rules' map):**
-    - Graph: `ports/graph.py`; the ArcadeDB adapter (marking and self-loop); graph-port suite cases.
-    - Case's: `dataset_scope.py`; `working_set/service.py` (`publisher`, 7 lines after `__init__`).
-    - Studio's: `pipeline_run.py`, `recipe_run.py`.
-    - Others: `extract/writer.py`; `app.py` (two routes, two registrations); `supersede.py`; `worker_main.py`; `resolve/same_as_writer.py`, `trigger.py`; `link_changes.py`, `entity_pictures.py`; `scripts/remark_alert_nodes.py`.
-    - Spec and tests: `spec/01_DOMAIN_MODEL.md`; the listed test fakes and `repoint_journal_fakes.py`.
-14. **Requests:** none open. Main took the stack-b pin, `test_port_guard` and `_restore_link_state` (83b3d17).
-15. **Still running:** nothing. Stack b down, lease released.
+1. **Rulings (orchestrator and owner, recorded):**
+   - Q1 a: each caller records the corrected node, with no port change.
+   - Q2: the L2.8c review's items 11 and 13 are built here.
+   - Q3: ADR-109 Amendment 12 reserved and written.
+   - Q4 a: the start-up DDL runs under a lock.
+   - The reviewer's item 4 was settled on (b), the safe default. **An owner question is open:** may a correction that lowers a marking admit lower readers to an alert with no node? If (a), it is one line in `raiser_read_admits`.
+2. **The referent rename: met.** For every caller (confirm and retract routes, the close, `supersede.py` sync and job, the enrich stage), an alert naming the corrected node stays listed for its reader. It is refused to the OFFICIAL reader of the SECRET revision and to another case. Test: `test_repoint_journal_callers_live.py`'s `..._naming_..._stays_listed`. Each is red with that caller's record removed or the settle's rename removed. The refusals are red with the revision at OFFICIAL, or with the case scope made true. A route confirming an alert's own node is covered too (reviewer item 1).
+3. **Lowered markings: met.**
+   - An alert with no node is not given to a reader below its raiser's read, for both a node and a link. Each is red with (a).
+   - A re-mark never lowers a node; red with the node's own marking dropped.
+   - A raised referent re-marks the alert's node; red with referents left out.
+4. **Carries: met.**
+   - (a) Two conformance cases: the other type elsewhere (red with id-only marking) and both types at the node (red with the label dropped).
+   - (b) An Alert node carries only `ALERTED_ON` links; red with a planted `MENTIONED_IN`. The ontology doesn't guarantee it; the writer does.
+   - (c) `remove_and_publish` is one helper; history serves no copy.
+   - (d) The shared stand-in is used.
+   - (e) Alert and hotlist stores share a DDL lock; red: `UniqueViolationError`. Ceilings are in point 4.
+   - (f) A record opens at its first pair; red with it opened eagerly.
+   - (g) Item 11: the stand-in's refusal is tested. Item 13: app.py registers through `register_all`, red with `alerts=` removed.
+5. **Lane-reviewer: run, and fixed.** It returned five must-fix items (Alert node via a route, the incident conformance case, the hotlist DDL, lowered markings, gate evidence) and eleven minor ones. All are fixed except two minor ones left, below. Red records are in `l2.8d/`.
+6. **Gate commit 6afb5b2, tree fbac952d8cf2a2989551d0f376758bdaee9676f8, on main 222b667** (`gates/6afb5b2.*`).
+   - **make -k ci:** exit 0.
+   - **make test:** Python 8,277 passed, 4 failed; JS 2,653/2,654. Every failure is this machine's, as at L2.8c, and is explained in the file.
+   - **Live (rules lease, stack a):** 595/611 at a1bfc9e. The 16 failures:
+     - 14 were packs: L2.8c's own regression on main, fixed at ba6f903, then 40/40.
+     - KYC fails on main.
+     - The rule list fails on O-hyg's leftover rules.
+7. **Contention (rule 14):** platform reached stack a's Postgres unleased at 15:54–16:00Z. No `litellm*` database remains. Every run up to 16:01Z was re-taken.
+8. **Left, minor:** the AST registration test misses a register-by-keyword. The journals' open-at-first-pair helpers are duplicated, and so are the live file's `_still_named`/`_still_listed`.
+9. **Commits:** 1aa4dad, 9559d84, 49164b6, d13ed81, a1bfc9e, ba6f903, 6afb5b2, then this records commit.
+10. **Ratify (outside rules' map):** app.py (routes, `register_all`), supersede.py, pipeline_run.py (studio), worker_main.py, working_set_revert.py, the graph-port suite, spec 01, the test fakes, test_packs.py.
+11. **Requests:**
+    - Mark ADR-109 Amendment 12 `written` in the reservations.
+    - Put the open owner question on the owner's list.
+12. **Still running:** nothing. Stack a is down and the lease released.
