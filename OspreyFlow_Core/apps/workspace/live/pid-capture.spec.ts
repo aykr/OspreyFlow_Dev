@@ -780,7 +780,7 @@ test("CAP-A2-C9", async ({ page }) => {
   // so the shot shows it, not only the inbox's heading (2 November 2026); CAP-M4-a keeps the top. It is
   // aligned at the bottom so the hotlist stays in view: under the GOV.UK brand the whole page scrolls,
   // and aligning the inbox's heading at the top showed the footer instead.
-  await page.getByRole("button", { name: "Jump into investigation" }).first().evaluate((el) => el.scrollIntoView({ block: "end" }));
+  await page.getByRole("button", { name: "Open the alert" }).first().evaluate((el) => el.scrollIntoView({ block: "end" }));
   await page.waitForTimeout(1500);
   await shot(page, "CAP-A2-C9");
   await shot(page, "CAP-M4-b");

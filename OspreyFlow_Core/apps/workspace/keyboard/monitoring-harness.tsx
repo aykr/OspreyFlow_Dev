@@ -1,8 +1,11 @@
-// The Monitoring place with a synthetic case's alerts of every kind (ADR-133 decision 5, stage (a)),
+// Rules and Monitoring (ADR-146 decision 2; the Monitoring place before it) with a synthetic case's
+// alerts of every kind (ADR-133 decision 5, stage (a)),
 // served by the page itself: for the every-harness axe scan (`a11y/every-harness.spec.ts`, which
 // finds this page by its directory) and for the Product Overview deck's screens, in both brands
-// (`?brand=govuk`). Nothing here reaches a server. `?open=<id>` opens that alert; `?tab=rules` and
-// `?tab=watches` open those tabs; `?tab=rules&sentence=preview` writes a rule as a sentence there and
+// (`?brand=govuk`). Nothing here reaches a server. `?open=<id>` opens that alert; `?tab=rules`,
+// `?tab=watches` and `?tab=lists` open *What raises alerts*, `?tab=held` *Held rows* and
+// `?tab=changes` *Changes* (the owner's M1 tabs); `?address=missing` is an alert's address the
+// reader may not see, or that does not exist (ADR-146 decision 6); `?tab=rules&sentence=preview` writes a rule as a sentence there and
 // previews it (ADR-133 stage (b)). ADR-133 stage (c): `?tab=lists` opens the screening lists (with
 // `&lists=manage`, as whoever may load them, after a refresh), and `?tab=rules&template=<typology>`
 // fills the rule form from that template (the high-risk jurisdiction one with two codes). The data
@@ -17,7 +20,7 @@ import { createRoot } from "react-dom/client";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
-import { AlertsPlace } from "../src/alerts/AlertsPlace";
+import { RulesPlace } from "../src/alerts/RulesPlace";
 
 await applyHarnessBrand();
 
@@ -227,7 +230,7 @@ function answer(path: string, search: URLSearchParams): unknown {
   if (local === "patterns") return { patterns: [{ id: "sp1", pattern_id: "pat-1", version: 1, name: "Phone shared by two people", owner_id: "analyst-1", created_at: hoursAgo(500), definition: { nodes: [], edges: [] } }] };
   if (local === "hotlists") return HOTLISTS;
   if (local === "monitors") return { monitors: [{ id: "mo-1", pattern_id: "pat-1", owner_id: "analyst-1", status: "active", created_at: hoursAgo(500) }] };
-  // The owner's answer of 1 November 2026: the alert inbox lives in the Watches tab now.
+  // The alert inbox, beside the queue until L2.10 merges it (ADR-146 decision 1).
   if (local === "alerts")
     return {
       alerts: [{
@@ -247,7 +250,7 @@ window.fetch = async (input: RequestInfo | URL) => {
 };
 
 createRoot(document.getElementById("root")!).render(
-  <AlertsPlace
+  <RulesPlace
     apiBaseUrl="http://monitoring-harness.invalid"
     bearerToken="unused"
     investigationId="inv-1"
@@ -255,6 +258,11 @@ createRoot(document.getElementById("root")!).render(
     isAdministrator={STAGE_D}
     canManageLists={new URLSearchParams(window.location.search).get("lists") === "manage"}
     onCanvas={() => undefined}
+    address={
+      new URLSearchParams(window.location.search).get("address") === "missing"
+        ? { alertId: "gone", state: { status: "missing" } }
+        : null
+    }
   />,
 );
 
@@ -278,7 +286,9 @@ const open = params.get("open");
 for (let i = 0; i < 40 && (tab || open); i++) {
   await settle();
   if (tab) {
-    const label = { rules: "Rules", watches: "Watches", lists: "Lists" }[tab] ?? "Queue";
+    const label =
+      { rules: "What raises alerts", watches: "What raises alerts", lists: "What raises alerts", held: "Held rows", changes: "Changes" }[tab] ??
+      "Alerts";
     const button = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((b) => b.textContent === label);
     if (button) { button.click(); break; }
   } else if (open) {

@@ -14,23 +14,23 @@ import { startScreen, type StartChoice } from "../src/shell/startScreen";
 
 declare global {
   interface Window {
-    __START__?: { opened: { id: string; view?: string } | null };
+    __START__?: { opened: { id: string; view?: string } | null; alert?: string | null };
   }
 }
-window.__START__ = { opened: null };
+window.__START__ = { opened: null, alert: null };
 
 const params = new URLSearchParams(location.search);
 const rights = new Set((params.get("rights") ?? "investigate,edit_pipelines,manage_people").split(","));
 
 // `?figures=1`: Home with figures in, for looking at it (the walkthroughs leave it reading).
 const FIGURES: HomeSummary = {
-  glass: [{ tone: "warn", text: "3 alerts in your team's queue, 1 claimed by you" },
-          { tone: "info", text: "8 cases open to you, last worked on Operation Ledger (synthetic demo)" }],
+  glass: [{ tone: "info", text: "8 cases open to you, last worked on Operation Ledger (synthetic demo)" }],
+  rules: [{ tone: "warn", text: "3 alerts in your team's queue, 1 claimed by you" }],
   studio: [{ tone: "warn", text: "2 rows held for review" }],
   admin: [{ tone: "ok", text: "6 of 6 services healthy" }],
   attention: [
-    { place: "glass", tone: "warn", title: "KYC screening alert in Operation Ledger (synthetic demo)",
-      detail: "Halcyon Marine Ltd's beneficial owner matches a sanctions list entry. Claimed by you.", at: new Date().toISOString(), caseId: "c1" },
+    { place: "rules", tone: "warn", title: "KYC screening alert in Operation Ledger (synthetic demo)",
+      detail: "Halcyon Marine Ltd's beneficial owner matches a sanctions list entry. Claimed by you.", at: new Date().toISOString(), caseId: "c1", alertId: "al-14" },
     { place: "ingest", tone: "warn", title: "2 rows held for review in Operation Ledger (synthetic demo)",
       detail: "A rule could not reach its screening list.", at: new Date(Date.now() - 3600_000).toISOString(), caseId: "c1" },
   ],
@@ -67,6 +67,17 @@ function Harness() {
     },
     browseCases: () => setBrowsing(true),
     openStudio: () => setView("ingest"),
+    openRules: () => setView("rules"),
+    // ADR-146 decision 6: Home opens the alert at its address.
+    openAlert: (alertId) => {
+      window.__START__!.alert = alertId;
+      setView(`alert ${alertId}`);
+    },
+    openCaseOnRules: (id) => {
+      window.__START__!.opened = { id, view: "rules" };
+      setInvestigationId(id);
+      setView("rules");
+    },
   });
   if (shown) return shown;
   return (

@@ -37,11 +37,21 @@ const EXTRA_STATES: Record<string, string[]> = {
   // local-only deployment (platform lane P1); Amendment 3: an engine's limits being set, the usage's
   // own days drawn, and the gateway not giving its usage (P2; the usage table is on every other state).
   "models-harness.html": ["open=add", "open=key", "local=1", "open=limits", "usage=chosen", "usage=fail"],
-  "start-harness.html": ["rights=investigate"],
+  // ADR-146 decisions 2 and 6: Home with Rules and Monitoring's card and an alert's row.
+  "start-harness.html": ["rights=investigate", "figures=1&rights=investigate,triage_alerts,read_alert_queue"],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
   // ADR-145 Amendment 2: Monitoring's badge (inside the GOV.UK notification banner under that
   // brand), and the rail's ⋯ More and the top bar's More views drawn open.
-  "places-harness.html": ["place=ingest", "place=admin", "badge=1", "open=more", "open=views"],
+  // ADR-146 decision 2: Rules and Monitoring in the switcher with its count (inside the GOV.UK header
+  // under that brand), and the place open, its banner a GOV.UK notification banner.
+  "places-harness.html": [
+    "place=ingest", "place=admin", "badge=1", "open=more", "open=views",
+    "badge=1&rights=investigate,triage_alerts,read_alert_queue",
+    "place=rules&rights=investigate,triage_alerts,read_alert_queue",
+  ],
+  // ADR-146 decisions 2 and 6: Rules and Monitoring at an alert's address, and at one the reader may
+  // not see.
+  "rules-place-harness.html": ["address=a1", "address=not-yours"],
   // ADR-145 Amendment 2: the column's fresh-page default, the Inspector alone open.
   "panel-frames-harness.html": ["defaults=1"],
   // L2.3 part 1: the case screen's lightening, each prototype variant (the default is variant a).
@@ -89,6 +99,11 @@ const EXTRA_STATES: Record<string, string[]> = {
     // closing reasons, step 7b), and a KYC screening alert opened (a close match to a listed party).
     "open=a-hot",
     "open=a-kyc",
+    // ADR-146 decision 2: Rules and Monitoring's Held rows and Changes, and an address the reader may
+    // not see.
+    "tab=held",
+    "tab=changes",
+    "address=missing",
   ],
   // ADR-133 decision 6, stage (d): the Checks on load step (the default) and Verify's would-be alerts.
   "checks-on-load-harness.html": ["view=verify"],

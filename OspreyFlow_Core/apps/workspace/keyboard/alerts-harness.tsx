@@ -1,23 +1,24 @@
-// The Alerts place's keyboard harness (ADR-109 phase B, `CLAUDE.md` rule 13): a new surface with its
-// own walkthrough registry (`ALERTS_ACTIONS`). Renders `AlertsPlace` as `App.tsx` mounts it; every
+// The alerts' keyboard harness (ADR-109 phase B, `CLAUDE.md` rule 13), with its own walkthrough
+// registry (`ALERTS_ACTIONS`). Renders Rules and Monitoring (`RulesPlace`, ADR-146 decision 2) as
+// `App.tsx` mounts it; every
 // call it makes is intercepted by `alerts.spec.ts` at the transport. What it hands the canvas is
 // recorded on `window.__ALERTS__`, since nothing here draws a working set.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
-import { AlertsPlace } from "../src/alerts/AlertsPlace";
+import { RulesPlace } from "../src/alerts/RulesPlace";
 
 declare global {
   interface Window {
-    __ALERTS__?: { canvasNodeIds: string[] | null; openedInvestigationId?: string };
+    __ALERTS__?: { canvasNodeIds: string[] | null; addressed: (string | null)[] };
   }
 }
 
-window.__ALERTS__ = { canvasNodeIds: null };
+window.__ALERTS__ = { canvasNodeIds: null, addressed: [] };
 
 createRoot(document.getElementById("root")!).render(
-  <AlertsPlace
+  <RulesPlace
     apiBaseUrl="http://keyboard-test.invalid"
     bearerToken="unused"
     investigationId="inv-1"
@@ -30,9 +31,9 @@ createRoot(document.getElementById("root")!).render(
     onCanvas={(_outcome, nodeIds) => {
       window.__ALERTS__!.canvasNodeIds = nodeIds;
     }}
-    // The owner's answer of 1 November 2026: the alert inbox's jump, from the Watches tab.
-    onOpenInvestigation={(id) => {
-      window.__ALERTS__!.openedInvestigationId = id;
+    // ADR-146 decision 6: an alert opened here is given its address (`App.tsx` pushes it).
+    onOpenAlert={(id) => {
+      window.__ALERTS__!.addressed.push(id);
     }}
   />,
 );

@@ -278,9 +278,10 @@ test("a closing reason is chosen from the closed list with the arrow keys, by ke
   registerCovered(REGISTRY, "choose-a-closing-reason-by-keyboard");
 });
 
-test("the watches and their alert inbox are reached from Monitoring's Watches tab, by keyboard", async ({ page }) => {
-  // The owner's answer of 1 November 2026: the rail's Watches entry is gone, so this tab is the only
-  // way to the hotlists, the monitors and the alert inbox's jump into a new investigation.
+test("the watches are reached with the rules, and an inbox alert opened at its address, by keyboard", async ({ page }) => {
+  // ADR-146: the hotlists and watched patterns are kept with the rules (*What raises alerts*), and the
+  // inbox, beside the queue until L2.10 merges it, opens an alert at its own address (decision 6),
+  // never a case of its own.
   await serve(page);
   const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
   await page.route("**/*/v1/investigations/inv-1/hotlists", (route) => route.fulfill(fulfil({ hotlists: [], audience_default: "only_me", audience_editable: true })));
@@ -294,17 +295,12 @@ test("the watches and their alert inbox are reached from Monitoring's Watches ta
       fired_on: [{ type: "Endpoint", label: "+447700900918", files: [{ name: "batch2.csv", row: 3 }], more_files: 0 }],
     }] })),
   );  // prettier-ignore
-  await page.route("**/*/v1/investigations/inv-1/alerts/w1/jump", (route) =>
-    route.fulfill(fulfil({ investigation: { id: "inv-alert-1", created_at: "2026-09-22T00:00:00Z", created_by: "analyst-1",
-      owning_unit: "unit-1" }, seeded_count: 1 }, 201)),
-  );  // prettier-ignore
   await page.goto("/keyboard/alerts-harness.html");
-  await press(page, page.getByRole("tab", { name: "Watches" }));
-  await expect(page.getByRole("heading", { name: "Hotlists" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Alert inbox" })).toBeVisible();
-  await press(page, page.getByRole("button", { name: "Jump into investigation" }));
-  await press(page, page.getByRole("button", { name: "Open investigation" }));
-  await expect.poll(() => page.evaluate(() => window.__ALERTS__?.openedInvestigationId)).toBe("inv-alert-1");
+  await press(page, page.getByRole("button", { name: "Open the alert" }));
+  await expect.poll(() => page.evaluate(() => window.__ALERTS__?.addressed)).toEqual(["w1"]);
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await expect(page.getByRole("heading", { name: "Hotlists" })).toBeVisible();
   registerCovered(REGISTRY, "reach-the-watches-and-alert-inbox-by-keyboard");
 });
 
@@ -342,7 +338,7 @@ test("a case alert is given to a member, by keyboard (ADR-133 stage a)", async (
 test("a template fills the rule form, which is then deployed, by keyboard (ADR-133 stage a)", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await press(page, page.getByRole("button", { name: "Use the template: Circular flow" }));
   // The keyboard is put on the filled form's name.
   await expect(page.getByLabel("Rule name")).toBeFocused();
@@ -361,7 +357,7 @@ test("a template fills the rule form, which is then deployed, by keyboard (ADR-1
 test("a rule is deployed and another retired, by keyboard", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await page.getByLabel("Rule name").fill("Pass-through");
   await page.getByRole("combobox", { name: "Typology" }).selectOption("rapid_movement");
   await page.getByRole("combobox", { name: "When the rule runs" }).selectOption("pre_commit");
@@ -382,7 +378,7 @@ test("a rule is deployed and another retired, by keyboard", async ({ page }) => 
 test("a KYC screening rule is deployed with its switch, by keyboard", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await page.getByLabel("Rule name").fill("Onboarding screen");
   await page.getByRole("combobox", { name: "Typology" }).selectOption("kyc_screening");
   await page.getByRole("checkbox", { name: "Screen beneficial owners too" }).focus();
@@ -401,10 +397,12 @@ test("a KYC screening rule is deployed with its switch, by keyboard", async ({ p
 test("a pattern drawn in the Query builder is deployed as a rule, by keyboard", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await page.getByLabel("Rule name").fill("Drawn: company with a phone");
   await page.getByRole("combobox", { name: "Typology" }).selectOption("pattern");
-  await page.getByRole("combobox", { name: "Saved pattern", exact: true }).selectOption("pat-1");
+  // The rule form's own: *What raises alerts* also holds the watched patterns' (ADR-146 decision 5).
+  const form = page.getByRole("form", { name: "Deploy a rule" });
+  await form.getByRole("combobox", { name: "Saved pattern", exact: true }).selectOption("pat-1");
   await press(page, page.getByRole("button", { name: "Deploy", exact: true }));
   await expect(page.getByText("Deployed “Drawn: company with a phone”.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules")?.body).toEqual({
@@ -436,7 +434,7 @@ test("held rows are released and rejected, by keyboard", async ({ page }) => {
 test("the rule audit pages, by keyboard", async ({ page }) => {
   await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await press(page, page.getByRole("tab", { name: "Audit" }));
+  await press(page, page.getByRole("tab", { name: "Changes" }));
   await expect(page.getByText("Showing 50 of 60 entries.")).toBeVisible();
   await press(page, page.getByRole("button", { name: "Show more" }));
   await expect(page.getByText("Showing 60 of 60 entries.")).toBeVisible();
@@ -447,15 +445,15 @@ test("an Editor is offered triage but neither deployment nor the audit", async (
   await serve(page, "editor");
   await page.goto("/keyboard/alerts-harness.html");
   await expect(page.getByRole("tab", { name: "Held rows" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Audit" })).toHaveCount(0);
-  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await expect(page.getByRole("tab", { name: "Changes" })).toHaveCount(0);
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await expect(page.getByText("A case Author deploys and retires rules.")).toBeVisible();
 });
 
 // ADR-133 stage (b): a rule written as a sentence, blank by blank, its drawn pattern shown, previewed
 // on the last 90 days and deployed — each step proven at the server it reached.
 async function writeTheSentence(page: Page) {
-  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await page.getByRole("combobox", { name: "Subject" }).focus();
   await page.getByRole("combobox", { name: "Subject" }).selectOption("Person");
   await press(page, page.getByRole("button", { name: "Add a condition" }));
@@ -509,7 +507,7 @@ test("a sentence is previewed on the last 90 days, by keyboard, and nothing is d
 test("an AML template is deployed with its jurisdiction list, by keyboard (ADR-133 stage c)", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await press(page, page.getByRole("button", { name: "Use the template: High-risk jurisdiction" }));
   await expect(page.getByLabel("Rule name")).toBeFocused();
   await page.getByRole("textbox", { name: "High-risk jurisdictions" }).focus();
@@ -528,7 +526,7 @@ test("an AML template is deployed with its jurisdiction list, by keyboard (ADR-1
 test("the screening lists are read by keyboard, with no action offered to a reader (ADR-133 stage c)", async ({ page }) => {
   await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await press(page, page.getByRole("tab", { name: "Lists" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   const table = page.getByRole("table", { name: "Screening lists and their versions" });
   await expect(table).toContainText("Synthetic list");
   await expect(table).toContainText("Up to date with its last refresh.");
@@ -539,7 +537,7 @@ test("the screening lists are read by keyboard, with no action offered to a read
 test("a screening list is refreshed and another subscribed to, by keyboard (ADR-133 stage c)", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html?lists=manage");
-  await press(page, page.getByRole("tab", { name: "Lists" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await press(page, page.getByRole("button", { name: "Refresh now: Synthetic list" }));
   await expect(page.getByRole("status")).toContainText("1 alert raised");
   expect(state.sent.some((s) => s.path === "/v1/admin/screening-lists/Synthetic%20list/refresh")).toBe(true);

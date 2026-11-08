@@ -116,7 +116,7 @@ async function press(page: Page, target: Locator) {
 
 async function rulesTab(page: Page, query = "") {
   await page.goto(`/keyboard/alerts-harness.html${query}`);
-  await press(page, page.getByRole("tab", { name: "Rules" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
 }
 
 test("a sentence is set to run every week on a day at an hour, and deployed, by keyboard", async ({ page }) => {
@@ -222,7 +222,7 @@ test("a second member approves a proposed close, and another is sent back, by ke
 test("a screening list's refresh schedule is set, by keyboard", async ({ page }) => {
   const sent = await serve(page);
   await page.goto("/keyboard/alerts-harness.html?lists=manage");
-  await press(page, page.getByRole("tab", { name: "Lists" }));
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await page.getByRole("combobox", { name: "Refreshed" }).selectOption("weekly");
   await page.getByRole("combobox", { name: "On (refresh day)" }).selectOption("1");
   await press(page, page.getByRole("button", { name: "Save the schedule" }));

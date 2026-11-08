@@ -6,7 +6,7 @@
 // Every native `Input`/`Select`'s own Tab-reachability gets no case here — only an action with
 // real state mutation or a real network call does, the same exemption `query-builder.spec.ts`
 // already establishes for its own native controls. `/v1/hotlists`, `/v1/monitors`, `/v1/patterns`,
-// `/v1/alerts` and `/v1/alerts/{id}/jump` are intercepted so every result is deterministic — the
+// and `/v1/alerts` are intercepted so every result is deterministic — the
 // same "real network call, mocked at the transport" shape every other keyboard spec in this
 // directory already uses.
 import { expect, test, type Page } from "@playwright/test";
@@ -244,7 +244,7 @@ test("submitting the monitor form turns a saved pattern into a monitor, reachabl
   registerCovered("WATCH_PANEL_ACTIONS", "submit-create-monitor");
 });
 
-test("jumping from an alert calls the real jump route and shows the result, reachable by keyboard alone", async ({
+test("an inbox alert is opened at its own address, reachable by keyboard alone (ADR-146 decision 6)", async ({
   page,
 }) => {
   await page.route("**/*/v1/investigations/*/hotlists", async (route) => {
@@ -285,36 +285,12 @@ test("jumping from an alert calls the real jump route and shows the result, reac
       }),
     });
   });
-  await page.route("**/*/v1/investigations/*/alerts/alert-1/jump", async (route) => {
-    await route.fulfill({
-      status: 201,
-      contentType: "application/json",
-      body: JSON.stringify({
-        investigation: {
-          id: "inv-alert-1",
-          created_at: "2026-09-22T00:00:00Z",
-          created_by: "analyst-1",
-          owning_unit: "unit-1",
-        },
-        seeded_count: 1,
-      }),
-    });
-  });
-
   await page.goto("/keyboard/watch-panels-harness.html");
   await expect(page.getByText("Hotlist: 07700 900918 · review by 31 Jan 2027")).toBeVisible();
-  await tabToButtonNamed(page, "Jump into investigation");
+  await tabToButtonNamed(page, "Open the alert");
   await page.keyboard.press("Enter");
-
-  await expect(page.getByTestId("jump-seeded-summary")).toBeVisible();
-  registerCovered("WATCH_PANEL_ACTIONS", "alert-row-jump");
-
-  await tabToButtonNamed(page, "Open investigation");
-  await page.keyboard.press("Enter");
-  await expect
-    .poll(() => page.evaluate(() => window.__WATCH_HARNESS__?.openedInvestigationId))
-    .toBe("inv-alert-1");
-  registerCovered("WATCH_PANEL_ACTIONS", "jump-result-open-investigation");
+  await expect.poll(() => page.evaluate(() => window.__WATCH_HARNESS__?.openedAlertId)).toBe("alert-1");
+  registerCovered("WATCH_PANEL_ACTIONS", "open-an-inbox-alert-at-its-address");
 });
 
 test("every registered watch-panel action has its own proving test case above", () => {
