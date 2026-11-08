@@ -8,8 +8,8 @@ studio	L1.2c	S	done	Revert a load whose returning row merged into its own link (
 studio	L1.2d	S	done	A link merge rewrites only its own type (upsert_edges untyped, found in L1.2c)
 studio	L1.2b	M	done	Phase 6's exit: from scratch in guided mode, an expert-mode edit, a live walk
 studio	L1.3	L	done	Phase 7a: the staging catalogue's engine; screening lists in it
-studio	L1.4	M	building	Phase 7b: the drawers for each step
-studio	L1.5	L	todo	Phase 8: expert steps
+studio	L1.4	M	done	Phase 7b: the drawers for each step
+studio	L1.5	L	building	Phase 8: expert steps
 studio-b	L1.6	L	todo	Phase 9: connectors; the screening-list connector and templates
 studio	L1.7	L	todo	Phase 10: Operations, external orchestration; Releases as YAML
 studio-b	L1.8	S	todo	The Studio's tips and who-can refusals; Domain model wording

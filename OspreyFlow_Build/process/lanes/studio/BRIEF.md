@@ -1,37 +1,42 @@
-# Studio lane · brief L1.4 · phase 7b: the drawers for each staging step, and phase 7's exit
+# Studio lane · brief L1.5 · phase 8: expert steps
 
-Written by the orchestrator, 8 November 2026, after L1.3's merge (`04a8cdf`), for a **fresh studio session** on account
-`sol`. Read `process/lanes/studio/REPORT.md` (L1.3, items 11 and 12) and ADR-140 Amendment 11 first. Rebase
-onto `main`. Opus, medium. Size M.
+Written by the orchestrator, 8 November 2026, after L1.4's merge (`16a709e`), for a **fresh studio session**
+on the orchestrator's account. Read `process/lanes/studio/REPORT.md` (L1.4) and ADR-140 Amendments 11 and 12
+first. Rebase onto `main`. Opus, medium. Size L. After it comes L1.7. Studio-b (the sister lane) is building
+L1.6, connectors, beside you: its files are the plan's studio-b row; ask the orchestrator before touching any.
 
-**The lane, the stacks, the merge rule.** Studio's ownership map; a test stack by `stack_lease.sh acquire
-studio "<purpose>" && …`, pinning the ports it prints; questions, requests and ready-to-merge to the
-orchestrator by message (Prompt L); before ready-to-merge, your own lane-reviewer, then make -k ci and make
-test at a commit rebased onto main, saved under `process/lanes/studio/gates/`.
+**The lane, the stacks, the merge rule.** Studio's ownership map minus studio-b's; a test stack by
+`stack_lease.sh acquire studio "<purpose>" && …` only; Prompt L's rules: never stop on a question (log it under
+"Decisions taken"; only loosening access, real data or contradicting an accepted ADR stops a piece); schemas
+changes ride with the step; before ready-to-merge, your own lane-reviewer, then make -k ci and make test at a
+commit rebased onto main, saved under `process/lanes/studio/gates/`, with a leased live run including
+`test_route_rights.py`. Expert steps run code a person writes, so this step gets the orchestrator's
+independent review too.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 7, 8, 12, 13 and 15 above all); ADR-140 and Amendments 8–11;
-`spec/09_INGEST_STUDIO.md` §9; `spec/ingest_studio_redesign/BUILD_PLAN_INGEST_STUDIO.md` phase 7 ("Drawer
-editors for each step with a live sample"; the profiler on staged tables) and its exit.
+**First, carried from L1.4's independent review (rule 3):** Test of a pipeline with **no** staging steps still
+counts over masked rows. Give it the same two guards the staged path has, red at the real call site.
 
-**Build** (the plan's row L1.4, with L1.3's item 11):
-1. **A drawer per staging step** (Lookup, Join, Filter, Derive, Union, Dedupe) beside the pipeline, as
-   Amendment 8's drawers are, each with a live sample of its output and the save gate's refusals in words;
-   guided mode offers no expression anywhere (rule 8).
-2. **The profiler on staged tables.**
-3. **The run route feeds a pipeline's sources** to the staging engine, each upload its own load, so no
-   two runs share a raw file (L1.3 item 12's check-then-write race closed).
-4. **Per-step counts and staging metering** on `LoadReport` and `RunMetering`, and refs on
-   `RejectionRecord`: a `packages/schemas` change, sent first as a schemas-only commit with make ci and make
-   test run on it. No row key reaches any of them (rule 7, the orchestrator's settlement).
-5. **Phase 7's exit:** the prototype's "Visits and contacts" pipeline, minus its two expert steps, built
-   in the Studio by keys and run on the synthetic data, every created element traceable to its source rows.
+**Binds.** `process/CLAUDE.md` rules 1–15 (3, 5, 6, 8, 12 and 15 above all); ADR-140 (expert mode may declare a
+sandboxed SELECT; rule 8); ADR-006 (no merge in storage); `spec/09_INGEST_STUDIO.md`; the redesign plan's
+phase 8 and its exit.
 
-**Tests first, each red by a plant at the real call site:** each drawer's actions by keyboard (rule 13),
-registry ids as a diff for the orchestrator; axe in dark, light and GOV.UK; a drawer refuses what the save
-gate refuses, in the same words; two concurrent runs of one source never share a raw file; per-step counts
-equal the staged tables'; phase 7's exit walk.
+**Build** (the plan's row L1.5, the redesign's phase 8):
+1. **The `write_sql_transforms` right.**
+2. **SQL transform:** a single SELECT over upstream node names, run by the Vault's DuckDB over staged Parquet
+   in a sandbox (read-only, no file or network functions, a time and a memory limit, the person's own
+   principal); the deploy gate refusing anything else or a SELECT that drops the `_ref` columns; a mandatory
+   plain-words summary; disclosure in every run report.
+3. **Fuzzy match:** left and right, the Splink-backed comparisons already in the product, a threshold that is
+   part of the version, output columns plus `match_score`; it writes a scored, inferred `SAME_AS`, never a
+   merge (rules 5 and 6), below-threshold rows kept and counted.
+4. **YAML editing in expert mode** with the same gates.
 
-**Carried, fix if quick:** `_hash` beside `engine.encode_key_parts`, one encoding.
+**Tests first, each red by a plant at the real call site:** the sandbox refuses `read_csv`, `http`, a second
+statement, a dropped `_ref`, and a query over another case's or dataset's staged table (rule 3); a fuzzy step
+at two thresholds yields two versions and different counts; ADR-006's conformance cases still green (no merge
+in storage); a SAME_AS it writes stays inferred until a person confirms (rule 5); keyboard cases (rule 13) with
+registry ids as a diff; axe in dark, light and GOV.UK.
 
-**Exit.** Phase 7's exit; make ci and make test green offline; a live walk under a named lease and stack;
-a friction fragment. Report in Prompt L's format, then stop.
+**Exit.** Phase 8's exit: the full prototype pipeline runs and its run report discloses both expert steps;
+make ci and make test green offline; live cases under a named lease and stack; a friction fragment. Report in
+Prompt L's format, then stop.
