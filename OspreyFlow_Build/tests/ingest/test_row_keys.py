@@ -163,6 +163,11 @@ class Sink:
     ) -> set[str]:
         return set()  # no full snapshot withdraws here
 
+    async def withdrawn_row_links(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> dict[str, tuple[str, ...]]:
+        return {}  # no full snapshot withdraws here
+
     async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
         return await self.store.fingerprints(recipe_id, case)
 

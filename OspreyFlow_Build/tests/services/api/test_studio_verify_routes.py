@@ -83,6 +83,11 @@ class _FakeRunKeys:
     async def withdrawn_row_keys_among(self, recipe_id: str, case: str, keys: list[str]) -> set[str]:
         return set()  # nothing is withdrawn here
 
+    async def withdrawn_row_links(
+        self, recipe_id: str, case: str, keys: list[str]
+    ) -> dict[str, tuple[str, ...]]:
+        return {}  # nothing is withdrawn here
+
     async def fingerprints(self, recipe_id: str, case: str) -> dict[str, int]:
         return dict(self.made_under)
 

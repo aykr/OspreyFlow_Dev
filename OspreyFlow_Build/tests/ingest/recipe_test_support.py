@@ -28,15 +28,15 @@ from typing import Any
 
 import pyarrow.fs as pa_fs
 import pytest
-from services.ingest import staging
-
 from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
 from ontology.handling import audience_of, load_uk_le_scheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import StoredLink, StoredNode
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema
+from schemas.ingest import LinkPriorState, stored_digest
 from schemas.merge import aggregate_edge_writes
+from services.ingest import staging
 
 
 class LocalStore:
@@ -231,11 +231,16 @@ class MergingGraph(ValidatingGraph):
         #: by (ADR-127 Amendment 19).
         self._revision: dict[str, int] = {}
         self._revisions_before: list[tuple[str, int | None]] = []
+        #: Each link's last writing load, as the adapter keeps it in `audit.load_id`: a merge sets
+        #: it to the merging write's (ADR-110 Amendment 16 reads it to know a link written since).
+        self._last_load: dict[str, str | None] = {}
+        self._last_loads_before: list[tuple[str, str | None, bool]] = []
 
     async def commit_transaction(self, tx: object) -> None:
         await super().commit_transaction(tx)
         self._replaced = []
         self._revisions_before = []
+        self._last_loads_before = []
 
     async def rollback_transaction(self, tx: object) -> None:
         await super().rollback_transaction(tx)
@@ -246,8 +251,14 @@ class MergingGraph(ValidatingGraph):
                 self._revision.pop(link_id, None)
             else:
                 self._revision[link_id] = previous
+        for link_id, load, held in reversed(self._last_loads_before):
+            if held:
+                self._last_load[link_id] = load
+            else:
+                self._last_load.pop(link_id, None)
         self._replaced = []
         self._revisions_before = []
+        self._last_loads_before = []
 
     def _merged(self, existing: EdgeWrite, edge: EdgeWrite, fresh: list[EdgeWrite]) -> None:
         """Replace `existing` where it is held by what the adapter would leave stored."""
@@ -262,12 +273,76 @@ class MergingGraph(ValidatingGraph):
         self._revision[existing.id] = (
             self._revision.get(existing.id, existing.writes) + edge.writes
         )
+        self._note_last_load(existing.id, edge.load_id)
         for held in (self.committed_edges, self.open_edges, fresh):
             for index, link in enumerate(held):
                 if link is existing:
                     self._replaced.append((held, index, existing))
                     held[index] = aggregated.write
                     return
+
+    def _note_last_load(self, link_id: str, load_id: str | None) -> None:
+        self._last_loads_before.append(
+            (link_id, self._last_load.get(link_id), link_id in self._last_load)
+        )
+        self._last_load[link_id] = load_id
+
+    def _held(self, link_id: str) -> tuple[list[EdgeWrite], int] | None:
+        for held in (self.committed_edges, self.open_edges):
+            for index, link in enumerate(held):
+                if link.id == link_id:
+                    return held, index
+        return None
+
+    # --- a link's prior state (ADR-110 Amendment 16), as the adapter keeps it -----------------
+
+    def _stored_form(self, link: EdgeWrite) -> dict[str, Any]:
+        """The link as the adapter keeps it, its flags and audit included: a correction
+        (`superseded`), a revert, or any later write changes it, as they change the stored
+        record on ArcadeDB (so its `stored_digest` moves)."""
+        return {
+            "write": link.model_dump(mode="json"),
+            "superseded": link.id in self.superseded,
+            "reverted": link.id in self.reverted,
+            "revision": self._revision.get(link.id, link.writes),
+            "load_id": self._last_load.get(link.id, link.load_id),
+        }
+
+    async def read_link_state(self, edge_id: str, tx: object = None) -> LinkPriorState | None:
+        found = self._held(edge_id)
+        if found is None:
+            return None
+        held, index = found
+        link = held[index]
+        return LinkPriorState(
+            edge_id=edge_id,
+            edge_type=link.type,
+            revision=self._revision.get(edge_id, link.writes),
+            load_id=self._last_load.get(edge_id, link.load_id),
+            handling=link.handling,
+            stored=self._stored_form(link),
+        )
+
+    async def restore_link_state(self, state: LinkPriorState, tx: object) -> bool:
+        """As the adapter: only while the link reads back to `state.left_digest`, `True` with
+        nothing written when it is already as `state.stored`; put back whole, at the marking the
+        state was read at."""
+        found = self._held(state.edge_id)
+        if found is None or state.left_digest is None:
+            return False
+        held, index = found
+        now = stored_digest(self._stored_form(held[index]))
+        if now == stored_digest(state.stored):
+            return True
+        if now != state.left_digest:
+            return False
+        prior = EdgeWrite.model_validate(state.stored["write"])
+        self._replaced.append((held, index, held[index]))
+        held[index] = prior.model_copy(update={"handling": state.handling})
+        self._revisions_before.append((state.edge_id, self._revision.get(state.edge_id)))
+        self._revision[state.edge_id] = state.revision
+        self._note_last_load(state.edge_id, state.load_id)
+        return True
 
     def _audience(self, edge: EdgeWrite) -> object:
         return audience_of(edge.handling, edge.datasets, self._scheme)
@@ -311,6 +386,7 @@ class MergingGraph(ValidatingGraph):
                 fresh.append(edge)
                 self._revisions_before.append((edge.id, self._revision.get(edge.id)))
                 self._revision[edge.id] = edge.writes
+                self._note_last_load(edge.id, edge.load_id)
                 ids.append(edge.id)
         await super().upsert_edges(fresh, tx)
         return ids

@@ -28018,6 +28018,80 @@ the same link, of any case, went with them.
   already aside, so a rerun does not find those rows dropped again; the revert of the refresh
   reconciles them. Not tested.
 
+### ADR-110, Amendment 16 (8 November 2026) — a row that comes back after a full snapshot withdrew it, and merges into its own withdrawn key's link, counts that merge as the row's own, so its load reverts
+
+Status: written 8 November 2026 by the studio lane (L1.2c), on the owner's ruling (option A, 7
+November). It amends ADR-127 decision 6 for one merge, and Amendment 15's known limit on a
+returning row; everything else in both stands.
+
+**What it replaces.** Under Amendment 15 a full snapshot's withdrawal leaves a dropped row's link in
+place. A row that comes back merges into its own link, so:
+- its load was refused a revert (ADR-127 decision 6: "a merged link's occurrences cannot be split");
+- the refresh that withdrew it was refused while it was kept again (Amendment 8 point 5);
+- the load that created it was refused because a later load merged into it.
+None of the three could be reverted, and the run said so in words.
+
+**Decision.**
+1. **The row's own merge.** A load merges into a link that a returning row's own withdrawn key
+   recorded: the key is in `withdrawn_row_keys`, for this pipeline and this case, and the link is
+   among that key's `edge_ids`. That merge is the row's own. Every other merge is a merge, and its
+   load is still refused (ADR-127 decision 6).
+2. **What the load keeps.** Inside its own transaction, before it writes, the load reads each such
+   link exactly as stored (`GraphPort.read_link_state`). It keeps the state of each link it then
+   merges into on its record (`LoadRecord.own_key_merges`, `LinkPriorState`), with a digest of the
+   link as the load left it, read again in the same transaction after the write (`left_digest`,
+   `stored_digest`: the whole stored record, keys sorted, whole-number floats as integers). The read
+   rides on the
+   engine's own question of which keys the case keeps, with keys computed off the event loop
+   (ADR-127 Amendment 29). Only keys the case does not keep are asked, since a withdrawn key has
+   been moved aside.
+3. **What its revert does.** It puts each link back exactly as the state holds it
+   (`GraphPort.restore_link_state`): occurrences, span, properties, sources, datasets, revision,
+   last load and weight. It writes the link's own type alone, never another type holding the same
+   id. The link leaves every working set, so no canvas keeps the merged copy, and the change is
+   published for the record's case. Its own events and keys go as for any revert. The refresh's
+   revert then
+   gives the row back to the load that first kept it, and that load can then be reverted. A
+   returning row's load, the refresh and the first load unwind in that order.
+4. **What it refuses.** If the link was written since by anyone, its stored record no longer reads
+   back to the load's `left_digest`. That covers a later load of any case, an analyst's correction
+   (`superseded_by`, which leaves the link's audit alone), a revert, a re-stamp of its datasets in
+   place, and a provenance strip. The revert is refused before anything changes:
+   "N link(s) a returning row of it merged into were written again since, and putting them back
+   would take that write away". The words name no other load or case (rule 3). A link an earlier
+   attempt already put back is not refused, so a rerun finishes.
+5. **Its marking.** The state keeps the link's marking. The restore writes the link back at it,
+   never at a weaker one.
+6. **The prior state is graph data (rule 3).** It is held in the run ledger for the revert alone.
+   No route, view, report or metering carries it. `LoadReport` leaves it out of every dump and of
+   its generated type; `LoadRecord`'s generated type names the field, and no route serves a
+   `LoadRecord`.
+
+**Tests.**
+- The GraphPort conformance suite, for both methods: an exact restore; refused once written since;
+  a SECRET link put back SECRET.
+- `tests/ingest/test_snapshot_withdrawal.py`:
+  - the chain unwinds;
+  - the revert is refused once another case wrote the link, in words naming neither;
+  - a merge that is not the row's own is still refused.
+- `tests/services/api/test_link_prior_state_never_told.py`: no report, view, schema or metering
+  carries the prior state.
+- `test_source_refresh_snapshot_live.py`: the chain, and the refusal, through the real revert on
+  ArcadeDB, the run ledger and DuckDB.
+- `test_row_key_withdrawal_ledger.py`: the ledger keeps the state, and no run view carries it.
+- The wrapper's guard in a composite case: `tests/services/api/test_restore_link_state_through_the_wrapper.py`.
+- Each is shown red in `process/lanes/studio/L1.2a_RED_RECORD.md`, with the scripts in
+  `process/lanes/studio/plants/plants5.py`, except the ledger's round trip of the state and the
+  run view's silence about it, which no plant breaks yet.
+
+**Known limit, recorded.** A rerun after a revert that stopped part-way (the graph step done, a later
+step failed) is not yet tested end to end: the planning accepts a link already put back, and the
+restore answers `True` for it, but no test drives the second attempt. Its test is to come.
+
+**What it does not change.** The returning row still merges into its link (Amendment 15) and still
+creates nothing. A load that merged into anything else is refused as before. A record written
+before this amendment holds no own-key merges and is judged as before.
+
 ### ADR-110, Amendment 17 (8 November 2026) — a Studio load is stamped with its case's dataset and confined to it, by the scheduler and Run now alike, so two cases each reading one dataset never merge a link
 
 Status: written 8 November 2026 by the studio lane (L1.2a Part A2). It amends Amendment 15's point 7

@@ -92,6 +92,10 @@ class _RunLedger(Protocol):
         self, recipe_id: str, case: str, keys: Sequence[str]
     ) -> set[str]: ...
 
+    async def withdrawn_row_links(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> dict[str, tuple[str, ...]]: ...
+
 
 class LedgerSink:
     """A load's way of writing to its run's ledger row: `committed` appends the load's record,
@@ -163,9 +167,12 @@ class LedgerSink:
     ) -> set[str]:
         return await self._ledger.withdrawn_row_keys_among(recipe_id, case, keys)
 
-    async def watermark(
-        self, recipe_id: str, case: str, source_id: str
-    ) -> SourceWatermark | None:
+    async def withdrawn_row_links(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> dict[str, tuple[str, ...]]:
+        return await self._ledger.withdrawn_row_links(recipe_id, case, keys)
+
+    async def watermark(self, recipe_id: str, case: str, source_id: str) -> SourceWatermark | None:
         return await self._ledger.watermark(recipe_id, case, source_id)
 
     async def geometries(self, load_id: str, refs: Sequence[str]) -> None:

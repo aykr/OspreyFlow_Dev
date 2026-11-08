@@ -946,9 +946,11 @@ rows' events and their keys, and is refused while a row it withdrew has been loa
 recorded before Amendment 15, whose record lists withdrawn nodes and links, restores those too. A
 pipeline reading more than one source cannot withdraw until the canvas becomes the editor (ADR-140).
 
-Three limits stand (Amendment 15), the first two until the owner rules. A row that comes back merges into its own
-link, so its load is not reverted, nor the refresh that withdrew it; the run says so in words. A row
-dropped again after coming back is left in place, its events too, in words. And a failure to set the events aside after the record is in fails the run in words; the keys are
+A row that comes back merges into its own link, and that merge is the row's own (Amendment 16): its
+load keeps the link as it was stored and its revert puts it back exactly, refused in words once the
+link was written since. So the returning row's load, the refresh that withdrew it and the load that
+first kept it revert in that order. Two limits stand (Amendment 15). A row dropped again after coming
+back is left in place, its events too, in words, until the owner rules. And a failure to set the events aside after the record is in fails the run in words; the keys are
 already aside, so the refresh's revert reconciles them. That path is not tested. A cross-case link
 merge was examined in Part A2 and is not real on main, by its tests. A Studio load is stamped with
 its case's dataset and its loader confined to it, through *Run now* and through the scheduler's slots

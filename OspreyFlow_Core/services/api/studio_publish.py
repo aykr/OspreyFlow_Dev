@@ -19,10 +19,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import yaml
 from services.ingest.engine import (
@@ -51,8 +51,10 @@ from schemas.domain import (
     NodeWrite,
     OntologySchema,
     Principal,
+    TxId,
 )
 from schemas.ingest import (
+    LinkPriorState,
     LoadReport,
     PipelineGraph,
     Recipe,
@@ -63,6 +65,7 @@ from schemas.ingest import (
     SourceWatermark,
     StudioRecipeDraft,
     StudioRecipeStatus,
+    stored_digest,
 )
 
 from .rule_evaluation import (
@@ -371,6 +374,12 @@ class LoadSink(Protocol):
         """Which of these keys an earlier full snapshot withdrew: rows back (Amendment 15)."""
         ...
 
+    async def withdrawn_row_links(
+        self, recipe_id: str, case: str, keys: Sequence[str]
+    ) -> dict[str, tuple[str, ...]]:
+        """Of these keys, those withdrawn, each with its recorded links (Amendment 16)."""
+        ...
+
     # ADR-110 Amendment 6 point 1: asked only by an incremental refresh.
     async def watermark(
         self, recipe_id: str, case: str, source_id: str
@@ -554,6 +563,9 @@ async def load_with_rules(
             written: list[NodeWrite | EdgeWrite] = []
             tx = await graph.begin_transaction()
             try:
+                # ADR-110 Amendment 16: a returning row's own link, read as stored in this
+                # transaction before the load writes, so its revert can put it back.
+                own_links = _OwnLinks(sink, graph, tx) if sink is not None else None
                 report, events = await run_recipe(
                     recipe,
                     rows,
@@ -572,7 +584,7 @@ async def load_with_rules(
                     # The store of loaded rows is the ledger's, reached through the sink (ADR-127
                     # decision 5). A recipe without `deduplicate` is asked too, for the one question
                     # of whether the case holds keys it would reload (it keeps none itself).
-                    row_keys=sink,
+                    row_keys=own_links,
                 )
                 verdict = (
                     await rules.pre_commit(
@@ -642,8 +654,17 @@ async def load_with_rules(
             if withdraw_dropped:
                 assert sink is not None
                 await _withdraw_dropped_rows(recipe, rows, report, sink, investigation_scope)
-            if sink is not None and recipe.deduplicate is not None:
-                await _note_rows_back_unrevertable(recipe, report, sink, investigation_scope)
+            if own_links is not None:
+                merged = _own_key_merges(report, own_links.own, own_links.priors)
+                # And each as this load left it, read again in its transaction after its write:
+                # the revert goes ahead only while the link still reads back to that.
+                report.own_key_merges = [
+                    prior.model_copy(
+                        update={"left_digest": stored_digest(left.stored) if left else None}
+                    )
+                    for prior in merged
+                    for left in [await graph.read_link_state(prior.edge_id, tx)]
+                ]
             if past is not None:
                 # Before the commit, so the record the commit writes keeps the watermark reached.
                 report.watermark = past.reached
@@ -719,32 +740,51 @@ async def withdraw_dropped_rows_events(
     return await analytics.withdraw_events_by_id(ids, report.load_id)
 
 
-async def _note_rows_back_unrevertable(
-    recipe: Recipe, report: LoadReport, sink: LoadSink, case: str
-) -> None:
-    """ADR-110 Amendment 15's known limit, said in words: a row an earlier full snapshot withdrew
-    comes back and merges into its own link, which the withdrawal left in place. A load that merged
-    into a link that already existed is not reverted (ADR-127 decision 6), and the refresh that
-    withdrew the row is refused while it is kept again, so the run says so. Asked of this
-    pipeline's own keys in this case alone."""
+class _OwnLinks:
+    """ADR-110 Amendment 16: the sink, as the engine asks it which of the file's keys the case has
+    kept. That question comes before the load writes, inside its transaction, with every row's key
+    (computed off the event loop, Amendment 29), so it is where a returning row's own link is read
+    as stored: of the keys not kept, those an earlier full snapshot of this pipeline in this case
+    withdrew, each with the links its record holds. Asked of this pipeline's own keys in this case
+    alone (rule 3). Every other question goes to the sink unchanged."""
+
+    def __init__(self, sink: LoadSink, graph: GraphPort, tx: TxId) -> None:
+        self._sink, self._graph, self._tx = sink, graph, tx
+        self.own: dict[str, tuple[str, ...]] = {}
+        self.priors: dict[str, LinkPriorState] = {}
+
+    async def kept(self, recipe_id: str, case: str, keys: Sequence[str]) -> set[str]:
+        kept = set(await self._sink.kept(recipe_id, case, keys))
+        # A withdrawn key is not kept (it was moved aside), so only the others can be one.
+        back = [key for key in keys if key not in kept]
+        self.own = await self._sink.withdrawn_row_links(recipe_id, case, back) if back else {}
+        self.priors = {}
+        for edge_id in sorted({e for links in self.own.values() for e in links}):
+            state = await self._graph.read_link_state(edge_id, self._tx)
+            if state is not None:
+                self.priors[edge_id] = state
+        return kept
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._sink, name)
+
+
+def _own_key_merges(
+    report: LoadReport, own: Mapping[str, tuple[str, ...]], priors: Mapping[str, LinkPriorState]
+) -> list[LinkPriorState]:
+    """The links this load merged into that a returning row's own withdrawn key recorded, each as
+    stored before the merge. Any other merge stays a merge (ADR-127 decision 6): its load is still
+    refused a revert."""
     merged = set(report.merged_edge_ids)
-    if not merged:
-        return
-    back = await sink.withdrawn_row_keys_among(recipe.id, case, report.kept_row_keys)
-    count = sum(
-        1
-        for key in back
-        if (e := report.kept_row_elements.get(key)) is not None and merged & set(e.edge_ids)
-    )
-    if count:
-        one = count == 1
-        report.refresh_notes = [
-            *report.refresh_notes,
-            f"{count} row{'' if one else 's'} withdrawn by an earlier refresh came back and "
-            f"merged into {'its' if one else 'their'} link, which the withdrawal left in place: "
-            "this load cannot be reverted, nor the refresh that withdrew "
-            f"{'it' if one else 'them'}, until the owner rules (ADR-110 Amendment 15)",
-        ]
+    found: dict[str, LinkPriorState] = {}
+    for key in report.kept_row_keys:
+        links, elements = own.get(key), report.kept_row_elements.get(key)
+        if not links or elements is None:
+            continue
+        for edge_id in elements.edge_ids:
+            if edge_id in merged and edge_id in links and edge_id in priors:
+                found.setdefault(edge_id, priors[edge_id])
+    return list(found.values())
 
 
 async def _withdraw_dropped_rows(
