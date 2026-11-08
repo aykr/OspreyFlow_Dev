@@ -866,6 +866,8 @@ class _RunState:
     #: it wrote (stored ids, once flushed), each once, in the order first met.
     row_nodes: dict[int, dict[NodeId, None]] = field(default_factory=dict)
     row_edges: dict[int, dict[EdgeId, None]] = field(default_factory=dict)
+    #: ADR-110 Amendment 18: each link this load wrote, by its stored id, with its own edge type.
+    edge_types: dict[EdgeId, str] = field(default_factory=dict)
     #: Amendment 15: by row index, the events each row wrote, by `event_id`, so a full snapshot
     #: withdraws a dropped row's own events and never another row's on the same link.
     row_events: dict[int, dict[str, None]] = field(default_factory=dict)
@@ -1450,7 +1452,10 @@ def _kept_row_elements(
         events.setdefault(row.row_key, {}).update(state.row_events.get(row.row_index, {}))
     return {
         key: RowElements(
-            node_ids=list(nodes[key]), edge_ids=list(edges[key]), event_ids=list(events[key])
+            node_ids=list(nodes[key]),
+            edge_ids=list(edges[key]),
+            event_ids=list(events[key]),
+            edge_types={e: state.edge_types[e] for e in edges[key] if e in state.edge_types},
         )
         for key in nodes
     }
@@ -1963,6 +1968,7 @@ def _settle_link(state: _RunState, link: _HeldLink, edge_id: EdgeId) -> None:
         )
     for event in link.events:
         event.edge_id = edge_id
+    state.edge_types[edge_id] = link.write.type
     for row_index in link.row_indices:
         state.row_edges.setdefault(row_index, {})[edge_id] = None
     if state.written is not None:
