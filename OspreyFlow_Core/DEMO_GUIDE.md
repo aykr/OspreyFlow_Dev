@@ -973,7 +973,7 @@ still refuses a draft until Test has run since its last edit. *Open map editor* 
 to a strip across the top (a step on it goes back to the pipeline). In the map editor a column is bound
 by dragging it, or by keyboard: **Choose** on the column, then **Bind ‹column› here** on the binding.
 
-**Building chapter 4's pipeline from scratch** (ADR-140 Amendment 10, 8 November 2026; phase 6's exit).
+**Building chapter 4's pipeline from scratch** (ADR-140 Amendment 10, 8 November 2026).
 The seeded draft above stays the demo's path: building the map takes about eighty bindings, far too
 long to show live. This is the same map made by hand, for a rehearsal or a data engineer's training,
 and it ends exactly where the seeded draft starts. `keyboard/ingest-studio.spec.ts` walks these steps
