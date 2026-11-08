@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T00:59:43Z; red at 7c6b1e8: the link change not purging the moved alert's node from the working sets
+diff --git a/OspreyFlow_Core/services/api/link_changes.py b/OspreyFlow_Core/services/api/link_changes.py
+index ecea746..56f17cf 100644
+--- a/OspreyFlow_Core/services/api/link_changes.py
++++ b/OspreyFlow_Core/services/api/link_changes.py
+@@ -477,8 +477,7 @@ class LinkChangeService:
+             await self._graph.commit_transaction(tx)
+         # The moved alerts' re-marked nodes leave every working set that stored a copy at the old
+         # marking (ADR-109 Amendment 10): a stored copy is served from the store, not read again.
+-        if repoint.remarked_nodes:
+-            await self._working_set.remove_reverted(repoint.remarked_nodes, [])
++        pass  # red: no purge
+ 
+         new = old.model_copy(
+             update={
+>           assert alert.alert_node_id not in await working.node_ids(case)
+E           AssertionError: assert '01M6WAPCTP9C8EJP0RW63BQVFW' not in {'01M6WAPCR6T65X56FJ39RH9B1E', '01M6WAPCRM44QD5F3HFBZ83AB4', '01M6WAPCTP9C8EJP0RW63BQVFW'}
+E            +  where '01M6WAPCTP9C8EJP0RW63BQVFW' = Alert(id='01M6WAPCWR30Q9ZYVTSZVWQ0NA', rule_id='typology:01M6WAPCMC45DTK9TFYV4VEZ56', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole
+1 failed, 18 deselected in 7.80s

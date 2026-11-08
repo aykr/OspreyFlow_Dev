@@ -1,0 +1,9 @@
+lease glass; 2026-11-08T00:59:14Z; red at 7c6b1e8: rule_evaluation.py as at c7a32c0 (a merged pending write cited by its own id), the real screening path
+ OspreyFlow_Core/services/api/rule_evaluation.py | 61 ++++++++-----------------
+ 1 file changed, 19 insertions(+), 42 deletions(-)
+>           assert len(same_as) == 1, "both alerts cite the one match"
+E           AssertionError: both alerts cite the one match
+E           assert 0 == 1
+E            +  where 0 = len([])
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+1 failed, 13 deselected in 28.50s

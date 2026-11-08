@@ -1,0 +1,19 @@
+lease glass; 2026-11-08T00:59:51Z; green at 7c6b1e8
+19 passed in 98.95s (0:01:38)
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (... first_seen=datetime.datetime(2026, 11, 8, 1, 2, 57, 202794, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=No
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (... first_seen=datetime.datetime(2026, 11, 8, 1, 2, 57, 202794, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None) = Edge(id='01M6WAW3NPFAMX8M1PF3B8FE
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+1 failed, 106 passed in 150.05s (0:02:30)
+>       assert alert.referent_node_ids == [preloaded[last]]
+E       AssertionError: assert ['01M6W0YEQXHXG43HHTWBE79GS4'] == ['01M6WB14BD52948NN8GZJAZRXJ']
+E         At index 0 diff: '01M6W0YEQXHXG43HHTWBE79GS4' != '01M6WB14BD52948NN8GZJAZRXJ'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+1 failed, 98 passed, 1 warning in 290.22s (0:04:50)
+49 passed, 216 deselected in 162.26s (0:02:42)
+end 2026-11-08T01:11:35Z
+lease glass; 2026-11-08T01:11:48Z; the watch-route test alone
+1 passed, 1 warning in 14.88s
