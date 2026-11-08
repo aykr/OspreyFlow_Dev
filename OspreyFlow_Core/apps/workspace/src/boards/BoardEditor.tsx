@@ -2,13 +2,16 @@
 // declare an item, link two by the link handle, by Alt-drag, by right-click *Draw a link from here*
 // or by the *Draw a link…* form opened from the selected item; move an item by dragging it or by the
 // arrow keys; inspect, edit, withdraw; give a drawn item a picture; and decide *Looks like a loaded
-// item* pairs. Drawn items are dashed amber; loaded items are live references, solid and grey, linked
+// item* pairs. A drawn item's source is a note, a Document of the case on the board, or both; its
+// picture is uploaded with its own marking and source note, or chosen from the image Documents on
+// the board; its icon is a display setting only (C17). Drawn items are dashed amber; loaded items are live references, solid and grey, linked
 // to but never edited here. Every refusal (the case's ceiling, a type outside the case's model) is
 // shown in the Conduit's own words. Under the GOV.UK brand the forms are GOV.UK fields with an error
 // summary, statuses GOV.UK tags and the type choice radios (decision 13).
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import { currentBrand } from "../brand/brand";
+import { GLYPH_NAMES } from "../color/nodeGlyphs";
 import {
   GRADES,
   clamp,
@@ -23,6 +26,7 @@ import {
 } from "./boardModel";
 import {
   boardPictures,
+  choosePicture,
   decideMatch,
   declareItem,
   drawLink,
@@ -101,7 +105,7 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
     const found = await matchSuggestions(apiBaseUrl, bearerToken, caseId, boardId);
     setMatches(found.ok ? found.value : null);
     const shown = await boardPictures(apiBaseUrl, bearerToken, caseId, boardId);
-    setPictures(shown.ok ? shown.value : {});
+    setPictures(shown.ok ? (shown.value.pictures ?? {}) : {});
   }, [apiBaseUrl, bearerToken, caseId, boardId]);
 
   useEffect(() => {
@@ -112,6 +116,10 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
   const drawnIds = useMemo(() => new Set(opened?.drawn ?? []), [opened]);
   const mayDraw = opened?.may_draw ?? false;
   const scheme = opened?.grading_scheme ?? "5x5x5";
+  // A source document or a picture is chosen from the Documents on the board: no route lists a
+  // case's documents, and these are the ones this reader may already see.
+  const documents = useMemo(() => (opened?.nodes ?? []).filter((n) => n.type === "Document"), [opened]);
+  const images = useMemo(() => documents.filter((n) => (n.properties as Record<string, unknown>)?.media_kind === "image"), [documents]);
 
   // After a reload the item's button may be drawn a frame or two later: try for a few frames.
   const focusItem = (id: string, tries = 10) =>
@@ -212,8 +220,16 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
       setProblem(answer.message);
       return;
     }
-    const links = answer.value.links?.length ?? 0;
-    setSaid(`${labelOf(id)} withdrawn${links ? `, with ${links} link${links === 1 ? "" : "s"} drawn to it` : ""}. It is kept in the audit.`);
+    const gone = answer.value.links ?? [];
+    const named = gone.map((edgeId) => {
+      const edge = opened?.edges.find((e) => e.id === edgeId);
+      return edge ? linkLabel(edge) : null;
+    });
+    const words = named.filter(Boolean).join(", ");
+    const links = gone.length
+      ? `, with ${gone.length} link${gone.length === 1 ? "" : "s"} drawn to it${words ? ` (${words})` : ""}`
+      : "";
+    setSaid(`${labelOf(id)} withdrawn${links}. It is kept in the audit.`);
     setPanel(null);
     setSelected(null);
     await reload();
@@ -440,13 +456,14 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               title={`New ${panel.type}`}
               type={panel.type}
               entityType={entityTypes.find((t) => t.name === panel.type)}
+              documents={documents}
               markings={opened.markings ?? []}
               scheme={scheme}
               govuk={govuk}
               onCancel={() => setPanel(null)}
               onSave={async (form) => {
                 const at = nextPlace(positions);
-                const answer = await declareItem(apiBaseUrl, bearerToken, caseId, boardId, { ...form, type: panel.type, x: at.x, y: at.y });
+                const answer = await declareItem(apiBaseUrl, bearerToken, caseId, boardId, { ...form, icon: form.icon || undefined, type: panel.type, x: at.x, y: at.y });
                 if (!answer.ok) return answer.message;
                 setPanel(null);
                 setSaid(`${form.label} added to the board, with a watch for it.`);
@@ -462,6 +479,7 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               title={`Edit ${itemLabel(byId.get(panel.id)!)}`}
               type={byId.get(panel.id)!.type}
               entityType={entityTypes.find((t) => t.name === byId.get(panel.id)!.type)}
+              documents={documents}
               markings={opened.markings ?? []}
               scheme={scheme}
               govuk={govuk}
@@ -470,7 +488,7 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               onSave={async (form) => {
                 const itemId = opened.items?.[panel.id];
                 if (!itemId) return "This item cannot be edited here.";
-                const answer = await editItem(apiBaseUrl, bearerToken, caseId, itemId, form);
+                const answer = await editItem(apiBaseUrl, bearerToken, caseId, itemId, { ...form, icon: form.icon || undefined });
                 if (!answer.ok) return answer.message;
                 setPanel(null);
                 setSaid(`${form.label} changed.`);
@@ -486,6 +504,7 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               to={panel.to}
               items={opened.nodes.filter((n) => n.id !== panel.from)}
               linkTypes={opened.link_types ?? []}
+              documents={documents}
               markings={opened.markings ?? []}
               scheme={scheme}
               govuk={govuk}
@@ -495,7 +514,16 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
                 focusItem(from);
               }}
               onSave={async (form) => {
-                const answer = await drawLink(apiBaseUrl, bearerToken, caseId, boardId, { ...form, source: panel.from });
+                const answer = await drawLink(apiBaseUrl, bearerToken, caseId, boardId, {
+                  label: form.label,
+                  marking: form.marking,
+                  grading: form.grading,
+                  sourceNote: form.sourceNote,
+                  sourceDocument: form.sourceDocument,
+                  type: form.type,
+                  target: form.target,
+                  source: panel.from,
+                });
                 if (!answer.ok) return answer.message;
                 setPanel(null);
                 setSaid(`Link drawn: ${form.label}.`);
@@ -511,6 +539,15 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
                 Withdraw {itemLabel(byId.get(panel.id)!)}?
               </h3>
               <p className="caption">It is taken off every board and canvas, with the links drawn to it, and its watch ends. It is never deleted: it is kept in the audit.</p>
+              {(() => {
+                const going = opened.edges.filter((e) => isDrawn(e) && (e.source === panel.id || e.target === panel.id));
+                return going.length > 0 ? (
+                  <p className="caption">
+                    The link{going.length === 1 ? "" : "s"} drawn to it, withdrawn with it:{" "}
+                    {going.map((e) => `${linkLabel(e)} (${labelOf(e.source === panel.id ? e.target : e.source)})`).join(", ")}.
+                  </p>
+                ) : null;
+              })()}
               <div className="board__row">
                 <button type="button" className={govuk ? "govuk-button govuk-button--warning board__button" : "btn btn--danger board__button"} onClick={() => void withdraw(panel.id)}>
                   Withdraw the item
@@ -527,15 +564,24 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               drawn={drawnIds.has(selectedNode.id)}
               mine={selectedMine}
               markings={opened.markings ?? []}
+              documents={documents}
+              images={images}
               govuk={govuk}
               onEdit={() => setPanel({ kind: "edit", id: selectedNode.id })}
               onWithdraw={() => setPanel({ kind: "withdraw", id: selectedNode.id })}
               onLink={() => openLink(selectedNode.id, null)}
               mayDraw={mayDraw}
-              onPicture={async (file, marking) => {
-                const answer = await uploadPicture(apiBaseUrl, bearerToken, caseId, boardId, selectedNode.id, file, marking);
+              onPicture={async (file, marking, note) => {
+                const answer = await uploadPicture(apiBaseUrl, bearerToken, caseId, boardId, selectedNode.id, file, marking, note);
                 if (!answer.ok) return answer.message;
                 setSaid(`Picture added to ${itemLabel(selectedNode)}.`);
+                await reload();
+                return null;
+              }}
+              onChoosePicture={async (documentId, marking) => {
+                const answer = await choosePicture(apiBaseUrl, bearerToken, caseId, boardId, selectedNode.id, { documentId, marking });
+                if (!answer.ok) return answer.message;
+                setSaid(`Picture chosen for ${itemLabel(selectedNode)}.`);
                 await reload();
                 return null;
               }}
@@ -709,8 +755,15 @@ interface AssertedForm {
   marking: string;
   grading: Grading;
   sourceNote: string;
+  /** A Document on the board, or "" for none. */
+  sourceDocument: string;
   properties: Record<string, string>;
+  /** A glyph name, or "" for the type's own icon. */
+  icon: string;
 }
+
+const NO_SOURCE = "Give a source note or choose a document of the case: where this comes from.";
+const hasSource = (form: AssertedForm) => Boolean(form.sourceNote.trim() || form.sourceDocument);
 
 function GradingFields({ grading, scheme, govuk, onChange, idPrefix }: { grading: Grading; scheme: string; govuk: boolean; onChange: (g: Grading) => void; idPrefix: string }) {
   const parts = GRADES[scheme] ?? GRADES["5x5x5"]!;
@@ -749,6 +802,7 @@ function AssertedFields({
   form,
   setForm,
   markings,
+  documents,
   scheme,
   govuk,
   idPrefix,
@@ -757,6 +811,7 @@ function AssertedFields({
   form: AssertedForm;
   setForm: (f: AssertedForm) => void;
   markings: string[];
+  documents: BoardNode[];
   scheme: string;
   govuk: boolean;
   idPrefix: string;
@@ -805,6 +860,26 @@ function AssertedFields({
           onChange={(e) => setForm({ ...form, sourceNote: e.target.value })}
         />
       </div>
+      {documents.length > 0 && (
+        <div className={govuk ? "govuk-form-group" : "board__field"}>
+          <label htmlFor={`${idPrefix}-document`} className={govuk ? "govuk-label" : "label"}>
+            A document of the case (optional)
+          </label>
+          <select
+            id={`${idPrefix}-document`}
+            className={govuk ? "govuk-select" : "input"}
+            value={form.sourceDocument}
+            onChange={(e) => setForm({ ...form, sourceDocument: e.target.value })}
+          >
+            <option value="">None</option>
+            {documents.map((d) => (
+              <option key={d.id} value={d.id}>
+                {itemLabel(d)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </>
   );
 }
@@ -875,6 +950,7 @@ function ItemForm({
   title,
   type,
   entityType,
+  documents,
   markings,
   scheme,
   govuk,
@@ -885,6 +961,7 @@ function ItemForm({
   title: string;
   type: string;
   entityType: EntityTypeShape | undefined;
+  documents: BoardNode[];
   markings: string[];
   scheme: string;
   govuk: boolean;
@@ -899,9 +976,11 @@ function ItemForm({
     marking: start?.handling.classification ?? markings[0] ?? "",
     grading: (drawn?.grading as Grading | undefined) ?? EMPTY_GRADE(scheme),
     sourceNote: drawn?.source_note ?? "",
+    sourceDocument: drawn?.source_document ?? "",
     properties: Object.fromEntries(
       Object.entries((start?.properties ?? {}) as Record<string, unknown>).filter(([, v]) => typeof v === "string") as [string, string][],
     ),
+    icon: drawn?.icon ?? "",
   });
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [problem, setProblem] = useState<string | null>(null);
@@ -920,7 +999,7 @@ function ItemForm({
       onCancel={onCancel}
       onSubmit={() => {
         if (!form.label.trim()) return setProblem("Say what you call it.");
-        if (!form.sourceNote.trim()) return setProblem("Give a source note: where this comes from.");
+        if (!hasSource(form)) return setProblem(NO_SOURCE);
         const missing = required.filter((p) => !form.properties[p.name]?.trim());
         if (missing.length) return setProblem(`A ${type} needs its ${missing.map((p) => p.name.replaceAll("_", " ")).join(" and ")}.`);
         void onSave(form).then((refused) => setProblem(refused));
@@ -930,6 +1009,7 @@ function ItemForm({
         form={form}
         setForm={(next) => setForm(start ? next : withLabel(next))}
         markings={markings}
+        documents={documents}
         scheme={scheme}
         govuk={govuk}
         idPrefix="board-item"
@@ -951,6 +1031,19 @@ function ItemForm({
           />
         </div>
       ))}
+      <div className={govuk ? "govuk-form-group" : "board__field"}>
+        <label htmlFor="board-item-icon" className={govuk ? "govuk-label" : "label"}>
+          Icon (how it looks only, not evidence)
+        </label>
+        <select id="board-item-icon" className={govuk ? "govuk-select" : "input"} value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })}>
+          <option value="">The {type}&apos;s own icon</option>
+          {GLYPH_NAMES.map((g) => (
+            <option key={g} value={g}>
+              {g.replaceAll("_", " ").replaceAll("-", " ")}
+            </option>
+          ))}
+        </select>
+      </div>
     </FormShell>
   );
 }
@@ -960,6 +1053,7 @@ function LinkForm({
   to,
   items,
   linkTypes,
+  documents,
   markings,
   scheme,
   govuk,
@@ -970,13 +1064,22 @@ function LinkForm({
   to: string | null;
   items: BoardNode[];
   linkTypes: string[];
+  documents: BoardNode[];
   markings: string[];
   scheme: string;
   govuk: boolean;
   onSave: (form: AssertedForm & { type: string; target: string }) => Promise<string | null>;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState<AssertedForm>({ label: "", marking: markings[0] ?? "", grading: EMPTY_GRADE(scheme), sourceNote: "", properties: {} });
+  const [form, setForm] = useState<AssertedForm>({
+    label: "",
+    marking: markings[0] ?? "",
+    grading: EMPTY_GRADE(scheme),
+    sourceNote: "",
+    sourceDocument: "",
+    properties: {},
+    icon: "",
+  });
   const [target, setTarget] = useState<string>(to ?? items[0]?.id ?? "");
   const [type, setType] = useState<string>(linkTypes[0] ?? "");
   const [problem, setProblem] = useState<string | null>(null);
@@ -990,7 +1093,7 @@ function LinkForm({
       onSubmit={() => {
         if (!target) return setProblem("Choose the item it links to.");
         if (!type) return setProblem("Choose what links them.");
-        if (!form.sourceNote.trim()) return setProblem("Give a source note: where this comes from.");
+        if (!hasSource(form)) return setProblem(NO_SOURCE);
         const label = form.label.trim() || type.toLowerCase().replaceAll("_", " ");
         void onSave({ ...form, label, type, target }).then((refused) => setProblem(refused));
       }}
@@ -1020,7 +1123,7 @@ function LinkForm({
           ))}
         </div>
       </fieldset>
-      <AssertedFields form={form} setForm={setForm} markings={markings} scheme={scheme} govuk={govuk} idPrefix="board-link" labelText="What does the link say? (optional)" />
+      <AssertedFields form={form} setForm={setForm} markings={markings} documents={documents} scheme={scheme} govuk={govuk} idPrefix="board-link" labelText="What does the link say? (optional)" />
     </FormShell>
   );
 }
@@ -1033,33 +1136,48 @@ function Inspector({
   mine,
   mayDraw,
   markings,
+  documents,
+  images,
   govuk,
   onEdit,
   onWithdraw,
   onLink,
   onPicture,
+  onChoosePicture,
 }: {
   node: BoardNode;
   drawn: boolean;
   mine: boolean;
   mayDraw: boolean;
   markings: string[];
+  documents: BoardNode[];
+  images: BoardNode[];
   govuk: boolean;
   onEdit: () => void;
   onWithdraw: () => void;
   onLink: () => void;
-  onPicture: (file: File, marking: string) => Promise<string | null>;
+  onPicture: (file: File, marking: string, note: string) => Promise<string | null>;
+  onChoosePicture: (documentId: string, marking: string) => Promise<string | null>;
 }) {
   const assertion = node.provenance.drawn;
   const [file, setFile] = useState<File | null>(null);
   const [marking, setMarking] = useState(markings[0] ?? "");
+  const [note, setNote] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<string>(images[0]?.id ?? "");
+  const [chosenMarking, setChosenMarking] = useState(markings[0] ?? "");
+  const [choiceProblem, setChoiceProblem] = useState<string | null>(null);
+  const sourceDocument = assertion?.source_document ? documents.find((d) => d.id === assertion.source_document) : undefined;
   const rows: [string, string][] = assertion
     ? [
         ["Drawn by", assertion.asserted_by],
         ["Grading", `${assertion.grading.source}${assertion.grading.intelligence}${assertion.grading.handling} (${assertion.grading.scheme ?? "5x5x5"})`],
         ["Marking", node.handling.classification],
-        ["Source note", assertion.source_note ?? "A document of the case"],
+        ["Source note", assertion.source_note ?? "None: a document of the case"],
+        ...(assertion.source_document
+          ? ([["Source document", sourceDocument ? itemLabel(sourceDocument) : "A document of the case"]] as [string, string][])
+          : []),
+        ...(assertion.icon ? ([["Icon", assertion.icon.replaceAll("_", " ").replaceAll("-", " ")]] as [string, string][]) : []),
       ]
     : [
         ["From", "A dataset this case reads: a live reference, not editable here"],
@@ -1104,9 +1222,13 @@ function Inspector({
           onSubmit={(e) => {
             e.preventDefault();
             if (!file) return setProblem("Choose a picture: a png, jpeg, webp or gif.");
-            void onPicture(file, marking).then((refused) => {
+            if (!note.trim()) return setProblem("Say where the picture comes from.");
+            void onPicture(file, marking, note).then((refused) => {
               setProblem(refused);
-              if (!refused) setFile(null);
+              if (!refused) {
+                setFile(null);
+                setNote("");
+              }
             });
           }}
         >
@@ -1134,6 +1256,12 @@ function Inspector({
               ))}
             </select>
           </div>
+          <div className={govuk ? "govuk-form-group" : "board__field"}>
+            <label htmlFor="board-picture-note" className={govuk ? "govuk-label" : "label"}>
+              Where the picture comes from
+            </label>
+            <input id="board-picture-note" className={govuk ? "govuk-input" : "input"} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} />
+          </div>
           {problem && (
             <p role="alert" className={govuk ? "govuk-error-message" : "board__problem"}>
               {problem}
@@ -1141,6 +1269,50 @@ function Inspector({
           )}
           <button type="submit" className={govuk ? "govuk-button govuk-button--secondary board__button" : "btn board__button"}>
             Add the picture
+          </button>
+        </form>
+      )}
+      {mine && images.length > 0 && (
+        <form
+          className="board__picture"
+          aria-label="Choose a picture on the board"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!chosen) return setChoiceProblem("Choose a picture on the board.");
+            void onChoosePicture(chosen, chosenMarking).then((refused) => setChoiceProblem(refused));
+          }}
+        >
+          <div className={govuk ? "govuk-form-group" : "board__field"}>
+            <label htmlFor="board-picture-choice" className={govuk ? "govuk-label" : "label"}>
+              Or a picture on the board
+            </label>
+            <select id="board-picture-choice" className={govuk ? "govuk-select" : "input"} value={chosen} onChange={(e) => setChosen(e.target.value)}>
+              {images.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {itemLabel(d)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={govuk ? "govuk-form-group" : "board__field"}>
+            <label htmlFor="board-picture-choice-marking" className={govuk ? "govuk-label" : "label"}>
+              The link&apos;s marking
+            </label>
+            <select id="board-picture-choice-marking" className={govuk ? "govuk-select" : "input"} value={chosenMarking} onChange={(e) => setChosenMarking(e.target.value)}>
+              {markings.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+          {choiceProblem && (
+            <p role="alert" className={govuk ? "govuk-error-message" : "board__problem"}>
+              {choiceProblem}
+            </p>
+          )}
+          <button type="submit" className={govuk ? "govuk-button govuk-button--secondary board__button" : "btn board__button"}>
+            Use this picture
           </button>
         </form>
       )}

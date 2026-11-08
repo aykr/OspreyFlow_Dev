@@ -1,9 +1,10 @@
 // Drawing boards keyboard harness (ADR-143 decisions 4 to 7; Amendment 2 decisions 5 and 8): the
 // Glass's *Boards* for case c1, which holds Alice's shared board *Wing B* (two loaded people, Mercer
-// and Ward, linked, and two drawn items) and her private board *Night shift*. The Conduit is a stand-in
+// and Ward, linked, two drawn items and a loaded image Document, the photo of Mercer) and her private
+// board *Night shift*; the case has one view, *Visits*, to start a board from. The Conduit is a stand-in
 // kept here, so the axe scan of every harness (`a11y/every-harness.spec.ts`) sees the boards filled: it
 // answers each reader as the board routes do (only the creator draws; `?as=bob` reads as another
-// member). `?board=<id>` opens a board at once; `?press=<button text>` presses a button once drawn, for
+// member). `?board=<id>` opens a board at once; `?press=<button text>` presses a button (or a radio's label) once drawn, for
 // the axe scan of a form or a question. What was sent is on `window.__BOARDS__`.
 import { createRoot } from "react-dom/client";
 
@@ -45,6 +46,10 @@ function loaded(id: string, family: string): Json {
   return { id, type: "Person", properties: { family_name: family }, provenance: provenance(null), handling: handling(), audit, datasets: ["src"] };
 }
 
+function documentNode(id: string, title: string): Json {
+  return { id, type: "Document", properties: { title, media_kind: "image", object_ref: `media/${id}.png` }, provenance: provenance(null), handling: handling(), audit, datasets: ["src"] };
+}
+
 function drawnNode(id: string, item: string, label: string, board: string): Json {
   return {
     id,
@@ -74,12 +79,12 @@ const boards: HeldBoard[] = [
     name: "Wing B",
     created_by: "alice",
     shared: true,
-    nodes: [loaded("p-mercer", "Mercer"), loaded("p-ward", "Ward"), drawnNode("d-tall", "i-tall", "Unknown male “Tall”", "b-wing"), drawnNode("d-ms", "i-ms", "M. Mercer", "b-wing")],
+    nodes: [loaded("p-mercer", "Mercer"), loaded("p-ward", "Ward"), drawnNode("d-tall", "i-tall", "Unknown male “Tall”", "b-wing"), drawnNode("d-ms", "i-ms", "M. Mercer", "b-wing"), documentNode("doc-photo", "Photo of Mercer, 3 Nov")],
     edges: [
       { id: "e-loaded", type: "ASSOCIATE_OF", source: "p-mercer", target: "p-ward", provenance: provenance(null), handling: handling(), audit, datasets: ["src"] },
     ],
     items: { "d-tall": "i-tall", "d-ms": "i-ms" },
-    layout: { "p-mercer": { x: 0.2, y: 0.3 }, "p-ward": { x: 0.5, y: 0.3 }, "d-tall": { x: 0.3, y: 0.7 }, "d-ms": { x: 0.75, y: 0.6 } },
+    layout: { "p-mercer": { x: 0.2, y: 0.3 }, "p-ward": { x: 0.5, y: 0.3 }, "d-tall": { x: 0.3, y: 0.7 }, "d-ms": { x: 0.75, y: 0.6 }, "doc-photo": { x: 0.85, y: 0.2 } },
   },
   { id: "b-night", name: "Night shift", created_by: "alice", shared: false, nodes: [], edges: [], items: {}, layout: {} },
 ];
@@ -129,12 +134,17 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const rest = path.slice(base.length);
   if (rest === "boards" && method === "GET") return json(200, boards.filter(visible).map(wire));
   if (rest === "boards" && method === "POST") {
+    // As BoardInput does: a board from a view names the view.
+    if ((body as Json).start === "view" && !(body as Json).view_id) return json(422, { detail: [{ loc: ["body"], msg: "a board from a view names the view" }] });
     made += 1;
     const b: HeldBoard = { id: `b-made-${made}`, name: String((body as Json).name), created_by: reader, shared: false, nodes: [], edges: [], items: {}, layout: {} };
     boards.push(b);
     return json(201, wire(b));
   }
   if (rest === "drawn-watches") return json(200, []);
+  if (rest === "views" && method === "GET") {
+    return json(200, [{ id: "v-visits", case_id: "c1", name: "Visits", created_by: reader, created_at: at, shared: false, chosen: 2, threshold: 0.9, drawing: false }]);
+  }
   const item = /^board-items\/([^/]+)(\/withdraw)?$/.exec(rest);
   if (item) {
     const b = boards.find((x) => Object.values(x.items).includes(item[1]!));
@@ -167,7 +177,7 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
       more: false,
     });
   }
-  if (tail === "pictures") return json(200, {});
+  if (tail === "pictures") return json(200, { pictures: {} });
   if (b.created_by !== reader) return json(403, { error: "not_the_boards_creator", detail: "Only the person who made this board draws on it." });
   if (tail === "share") {
     b.shared = true;
@@ -208,7 +218,18 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     });
     return json(201, { element_id: `e-made-${made}`, item_id: `i-link-${made}`, watch_id: null });
   }
-  if (/^nodes\/[^/]+\/picture$/.test(tail) && method === "PUT") return json(201, { element_id: "e-picture", item_id: "i-picture" });
+  if (/^nodes\/[^/]+\/picture$/.test(tail) && method === "PUT") {
+    // The route requires the picture's own source note (C17 a), as the Conduit's Query does.
+    if (!url.searchParams.get("source_note")) return json(422, { detail: [{ loc: ["query", "source_note"], msg: "Field required" }] });
+    return json(201, { element_id: "e-picture", item_id: "i-picture" });
+  }
+  if (/^nodes\/[^/]+\/picture$/.test(tail) && method === "POST") {
+    // C17 (b): only an image Document the case holds is a picture.
+    const chosen = String((body as Json).document_id);
+    const doc = b.nodes.find((n) => n.id === chosen);
+    if (!doc || doc.type !== "Document") return json(422, { error: "not_a_picture", detail: "that is not a picture this case holds" });
+    return json(201, { element_id: "e-chosen", item_id: "i-chosen" });
+  }
   return json(404, {});
 };
 
@@ -217,12 +238,13 @@ await applyHarnessBrand();
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 
-// `press` names buttons to press in turn, separated by "|", each once it is drawn.
+// `press` names buttons (or radios, by their label) to press in turn, separated by "|", each once it is drawn.
 const presses = (params.get("press") ?? "").split("|").filter(Boolean);
 const pressNext = () => {
   const name = presses[0];
   if (!name) return;
-  const button = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent?.trim() === name);
+  // A button by its text, or a radio by its label's text.
+  const button = Array.from(document.querySelectorAll<HTMLElement>("button, label")).find((b) => b.textContent?.trim() === name);
   if (button) {
     presses.shift();
     button.click();

@@ -60,8 +60,10 @@ const EXTRA_STATES: Record<string, string[]> = {
   // over an opened view.
   "views-harness.html": ["as=bob", "show=form", "show=lens", "asking=delete"],
   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
-  // item and link forms and the withdrawal's question; another member's read-only view; a blank board.
+  // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
+  // the boards list with a board from a view chosen (L3.3 round 1).
   "boards-harness.html": [
+    "press=From%20a%20view%20of%20this%20case",
     "board=b-wing",
     "board=b-wing&as=bob",
     "board=b-night",

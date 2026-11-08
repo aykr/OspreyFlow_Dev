@@ -1,8 +1,9 @@
 // Drawing boards by keyboard alone (ADR-143 decision 5: "every board action has its keyboard case";
-// rule 13): open, make (blank and from the selection) and share a board; declare an item, inspect it,
-// move it by the arrow keys, edit it and withdraw it after asking once; open the link form from the
-// selected item and from an item's menu (Shift+F10); add a picture; decide a suggested match both
-// ways; start a drawing with no case; go back to the boards. No `page.mouse`, no `.click()` in these.
+// rule 13): open, make (blank, from a view and from the selection) and share a board; declare an item,
+// with a document of the case as its source and an icon of its own; inspect it, move it by the arrow
+// keys, edit it and withdraw it after asking once (from the inspector and from its menu, Shift+F10);
+// open the link form from the selected item and from an item's menu; add a picture, or choose one on
+// the board; decide a suggested match both ways; start a drawing with no case; go back to the boards. No `page.mouse`, no `.click()` in these.
 //
 // The pointer gestures (C7: drag moves; the link handle, Alt-drag and right-click draw a link) are
 // below the keyboard cases, each named as a pointer case and not registered: they are not what rule
@@ -59,12 +60,28 @@ test("a board is made from the selection by keyboard", async ({ page }) => {
   const fromSelection = page.getByRole("radio", { name: /From the selection \(2 items/ });
   await page.getByRole("radio", { name: "Blank" }).focus();
   await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
   await expect(fromSelection).toBeChecked();
   await press(page, "Make the board");
   await expect(page.getByRole("heading", { name: "From the canvas" })).toBeVisible();
   const made = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/boards"));
   expect(made?.body).toEqual({ name: "From the canvas", start: "selection", node_ids: ["p-mercer", "p-ward"] });
   registerCovered("BOARD_ACTIONS", "make-a-board-from-the-selection-by-keyboard");
+});
+
+test("a board is made from a view of the case by keyboard", async ({ page }) => {
+  await open(page);
+  await typeInto(page, "Board name", "From visits");
+  const fromView = page.getByRole("radio", { name: "From a view of this case" });
+  await page.getByRole("radio", { name: "Blank" }).focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(fromView).toBeChecked();
+  await expect(page.getByLabel(/^The view/)).toHaveValue("v-visits");
+  await press(page, "Make the board");
+  await expect(page.getByRole("heading", { name: "From visits" })).toBeVisible();
+  const made = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/boards"));
+  expect(made?.body).toEqual({ name: "From visits", start: "view", view_id: "v-visits" });
+  registerCovered("BOARD_ACTIONS", "make-a-board-from-a-view-by-keyboard");
 });
 
 test("a private board is shared with the case by keyboard", async ({ page }) => {
@@ -100,6 +117,41 @@ test("an item is declared by keyboard: marked, graded and sourced, its type's na
   });
   expect((declared?.body as { marking: string }).marking).toBe("OFFICIAL");
   registerCovered("BOARD_ACTIONS", "declare-an-item-by-keyboard");
+});
+
+async function choosePerson(page: Page): Promise<void> {
+  const person = page.getByRole("radio", { name: "Person" });
+  await person.focus();
+  await page.keyboard.press("Space");
+  await expect(person).toBeChecked();
+}
+
+test("an item is declared by keyboard with a document of the case as its source and an icon of its own", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await choosePerson(page);
+  await press(page, "Declare a Person");
+  await page.keyboard.type("Visitor in the photo");
+  // No note: the document on the board is the source (decision 4: a note, a document, or both).
+  await page.getByLabel("A document of the case (optional)").selectOption("doc-photo");
+  await page.getByLabel(/^Icon/).selectOption({ index: 1 });
+  const icon = await page.getByLabel(/^Icon/).inputValue();
+  expect(icon).not.toBe("");
+  await press(page, "Add to board");
+  await expect(item(page, /^Person Visitor in the photo \(drawn\)/)).toBeFocused();
+  const declared = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/items"));
+  expect(declared?.body).toMatchObject({ label: "Visitor in the photo", source_note: null, source_document: "doc-photo", icon });
+  registerCovered("BOARD_ACTIONS", "declare-an-item-with-a-source-document-by-keyboard");
+  registerCovered("BOARD_ACTIONS", "choose-an-items-icon-by-keyboard");
+});
+
+test("an item with neither a source note nor a document is refused before it is sent", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await choosePerson(page);
+  await press(page, "Declare a Person");
+  await page.keyboard.type("No source");
+  await press(page, "Add to board");
+  await expect(page.getByRole("alert")).toContainText("Give a source note or choose a document of the case");
+  expect((await sent(page)).some((s) => s.method === "POST" && s.path.endsWith("/items"))).toBe(false);
 });
 
 test("a refusal is said in the Conduit's own words, naming the ceiling", async ({ page }) => {
@@ -187,18 +239,79 @@ test("an item is edited by keyboard", async ({ page }) => {
   registerCovered("BOARD_ACTIONS", "edit-an-item-by-keyboard");
 });
 
-test("an item is withdrawn by keyboard after asking once, with the links drawn to it", async ({ page }) => {
+test("an item is withdrawn by keyboard after asking once, with the links drawn to it named", async ({ page }) => {
   await open(page, "?board=b-wing");
+  // A link drawn to it first, so the question has a link to name.
   await item(page, /^Person Unknown male “Tall” \(drawn\)/).focus();
   await page.keyboard.press("Enter");
+  await press(page, "Draw a link…");
+  await drawTheLink(page);
+  // The form gives focus back to the item once the board is read again: wait for it.
+  await expect(item(page, /^Person Unknown male “Tall” \(drawn\)/)).toBeFocused();
   await press(page, "Withdraw Unknown male “Tall”");
-  await expect(page.getByRole("dialog", { name: "Withdraw Unknown male “Tall”?" })).toContainText("kept in the audit");
+  const question = page.getByRole("dialog", { name: "Withdraw Unknown male “Tall”?" });
+  await expect(question).toContainText("kept in the audit");
+  await expect(question).toContainText("The link drawn to it, withdrawn with it: associate of (Ward).");
   expect((await sent(page)).some((s) => s.path.endsWith("/withdraw"))).toBe(false);
   await press(page, "Withdraw the item");
   await expect(item(page, /Unknown male “Tall”/)).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "withdrawn" })).toHaveText(
+    "Unknown male “Tall” withdrawn, with 1 link drawn to it (associate of). It is kept in the audit.",
+  );
   const withdrawn = (await sent(page)).filter((s) => s.path.endsWith("/withdraw"));
   expect(withdrawn.map((s) => s.path)).toEqual(["/v1/investigations/c1/board-items/i-tall/withdraw"]);
   registerCovered("BOARD_ACTIONS", "withdraw-an-item-after-asking-once-by-keyboard");
+});
+
+async function fromTheMenu(page: Page, name: RegExp, action: string): Promise<void> {
+  await item(page, name).focus();
+  await page.keyboard.press("Shift+F10");
+  const menu = page.getByRole("menu", { name: "Item actions" });
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  // Down the menu to the action, by the arrow keys alone.
+  for (let i = 0; i < 6; i += 1) {
+    if (await menu.getByRole("menuitem", { name: action, exact: true }).evaluate((el) => el === document.activeElement)) break;
+    await page.keyboard.press("ArrowDown");
+  }
+  await expect(menu.getByRole("menuitem", { name: action, exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+}
+
+test("an item is inspected from its menu by keyboard", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await fromTheMenu(page, /^Person Unknown male “Tall” \(drawn\)/, "Inspect");
+  await expect(page.getByRole("region", { name: "Unknown male “Tall”" })).toContainText("Drawn by");
+  registerCovered("BOARD_ACTIONS", "inspect-an-item-from-its-menu-by-keyboard");
+});
+
+test("an item is edited from its menu by keyboard", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await fromTheMenu(page, /^Person Unknown male “Tall” \(drawn\)/, "Edit");
+  await expect(page.getByLabel("What do you call it?")).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type("Tall man");
+  await press(page, "Save the change");
+  const edit = (await sent(page)).find((s) => s.method === "PATCH");
+  expect(edit?.body).toMatchObject({ label: "Tall man" });
+  registerCovered("BOARD_ACTIONS", "edit-an-item-from-its-menu-by-keyboard");
+});
+
+test("an item is withdrawn from its menu by keyboard after asking once", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await fromTheMenu(page, /^Person Unknown male “Tall” \(drawn\)/, "Withdraw");
+  await expect(page.getByRole("dialog", { name: "Withdraw Unknown male “Tall”?" })).toBeVisible();
+  expect((await sent(page)).some((s) => s.path.endsWith("/withdraw"))).toBe(false);
+  await press(page, "Withdraw the item");
+  await expect(item(page, /Unknown male “Tall”/)).toHaveCount(0);
+  registerCovered("BOARD_ACTIONS", "withdraw-an-item-from-its-menu-by-keyboard");
+});
+
+test("a loaded item's menu offers no Edit or Withdraw", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await item(page, /^Person Mercer \(loaded\)/).first().focus();
+  await page.keyboard.press("Shift+F10");
+  const menu = page.getByRole("menu", { name: "Item actions" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["Draw a link from here", "Inspect"]);
 });
 
 test("a picture is added to a drawn item by keyboard", async ({ page }) => {
@@ -207,11 +320,30 @@ test("a picture is added to a drawn item by keyboard", async ({ page }) => {
   await page.keyboard.press("Enter");
   await page.getByLabel("Picture of Unknown male “Tall”").setInputFiles({ name: "tall.png", mimeType: "image/png", buffer: Buffer.from("png") });
   await page.getByLabel("The picture's marking").selectOption("OFFICIAL");
+  // Its own source note is required (C17 a): without one nothing is sent.
+  await press(page, "Add the picture");
+  await expect(page.getByRole("alert")).toContainText("Say where the picture comes from.");
+  expect((await sent(page)).some((s) => s.method === "PUT" && s.path.includes("/picture"))).toBe(false);
+  await typeInto(page, "Where the picture comes from", "Wing B camera, 4 Nov");
   await press(page, "Add the picture");
   const put = (await sent(page)).find((s) => s.method === "PUT" && s.path.includes("/nodes/d-tall/picture"));
-  expect(put?.path).toContain("name=tall.png");
-  expect(put?.path).toContain("marking=OFFICIAL");
+  const query = new URL(`http://x${put!.path}`).searchParams;
+  expect(Object.fromEntries(query)).toEqual({ name: "tall.png", marking: "OFFICIAL", source_note: "Wing B camera, 4 Nov" });
+  await expect(page.getByRole("status").filter({ hasText: "Picture added" })).toHaveText("Picture added to Unknown male “Tall”.");
   registerCovered("BOARD_ACTIONS", "add-a-picture-to-a-drawn-item-by-keyboard");
+});
+
+test("a picture on the board is chosen for a drawn item by keyboard", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await item(page, /^Person Unknown male “Tall” \(drawn\)/).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Or a picture on the board")).toHaveValue("doc-photo");
+  await page.getByLabel("The link's marking").selectOption("OFFICIAL");
+  await press(page, "Use this picture");
+  const chosen = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/nodes/d-tall/picture"));
+  expect(chosen?.body).toEqual({ document_id: "doc-photo", marking: "OFFICIAL" });
+  await expect(page.getByRole("status").filter({ hasText: "Picture chosen" })).toHaveText("Picture chosen for Unknown male “Tall”.");
+  registerCovered("BOARD_ACTIONS", "choose-a-picture-on-the-board-by-keyboard");
 });
 
 test("Same is decided on a suggested match by keyboard, writing one decision and merging nothing", async ({ page }) => {

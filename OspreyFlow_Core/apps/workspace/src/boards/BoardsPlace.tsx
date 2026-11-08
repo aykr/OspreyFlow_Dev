@@ -1,5 +1,6 @@
 // The Glass's *Boards* (ADR-143 decision 5; Amendment 2 decision 5; ADR-145 decision 1): the case's
-// drawing boards this person may see, a new board (blank, or from the selection on the canvas), and a
+// drawing boards this person may see, a new board (blank, from one of the case's views, or from the
+// selection on the canvas), and a
 // drawing with no case, which makes a drawn dataset, its home case and its board in one step. A board
 // always belongs to a case; deleting one never deletes what was drawn on it.
 import { useCallback, useEffect, useState } from "react";
@@ -7,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { currentBrand } from "../brand/brand";
 import { BoardEditor, type EntityTypeShape } from "./BoardEditor";
 import { listBoards, makeBoard, startDrawing, type Board } from "./boardsApi";
+import { listViews } from "../views/viewsApi";
 import "./boards.css";
 
 export interface BoardsPlaceProps {
@@ -45,7 +47,9 @@ export function BoardsPlace({
   const [open, setOpen] = useState<string | null>(initialBoard);
   const [problem, setProblem] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [start, setStart] = useState<"blank" | "selection">("blank");
+  const [start, setStart] = useState<"blank" | "view" | "selection">("blank");
+  const [views, setViews] = useState<{ id: string; name: string }[]>([]);
+  const [viewId, setViewId] = useState("");
   const [drawingName, setDrawingName] = useState("");
   const [ceiling, setCeiling] = useState<string>(markings[Math.min(1, markings.length - 1)] ?? "");
   const [pack, setPack] = useState<"" | "fibo" | "niem" | "stix">("");
@@ -55,6 +59,10 @@ export function BoardsPlace({
     const answer = await listBoards(apiBaseUrl, bearerToken, caseId);
     if (answer.ok) setBoards(answer.value);
     else setProblem(answer.message);
+    // The case's views this reader may see, to start a board from (ADR-144); none offers none.
+    const found = await listViews(apiBaseUrl, bearerToken, caseId).catch(() => []);
+    setViews(found.map((v) => ({ id: v.id, name: v.name })));
+    setViewId((held) => held || found[0]?.id || "");
   }, [apiBaseUrl, bearerToken, caseId]);
 
   useEffect(() => {
@@ -128,11 +136,16 @@ export function BoardsPlace({
                 aria-labelledby="boards-new-title"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  const named = name.trim() || (start === "selection" ? `Selection of ${selection.length}` : "New board");
+                  const fromView = views.find((v) => v.id === viewId);
+                  if (start === "view" && !fromView) return setProblem("Choose the view to start from.");
+                  const named =
+                    name.trim() ||
+                    (start === "selection" ? `Selection of ${selection.length}` : start === "view" ? `From ${fromView!.name}` : "New board");
                   void makeBoard(apiBaseUrl, bearerToken, caseId, {
                     name: named,
                     start,
                     ...(start === "selection" ? { nodeIds: [...selection] } : {}),
+                    ...(start === "view" ? { viewId } : {}),
                   }).then((answer) => {
                     if (!answer.ok) return setProblem(answer.message);
                     setName("");
@@ -160,6 +173,20 @@ export function BoardsPlace({
                     </div>
                     <div className={govuk ? "govuk-radios__item" : "board__radio"}>
                       <input
+                        id="boards-start-view"
+                        className={govuk ? "govuk-radios__input" : undefined}
+                        type="radio"
+                        name="boards-start"
+                        disabled={views.length === 0}
+                        checked={start === "view"}
+                        onChange={() => setStart("view")}
+                      />
+                      <label htmlFor="boards-start-view" className={govuk ? "govuk-label govuk-radios__label" : undefined}>
+                        From a view of this case{views.length === 0 ? " (none yet)" : ""}
+                      </label>
+                    </div>
+                    <div className={govuk ? "govuk-radios__item" : "board__radio"}>
+                      <input
                         id="boards-start-selection"
                         className={govuk ? "govuk-radios__input" : undefined}
                         type="radio"
@@ -174,6 +201,20 @@ export function BoardsPlace({
                     </div>
                   </div>
                 </fieldset>
+                {start === "view" && views.length > 0 && (
+                  <div className={govuk ? "govuk-form-group" : "board__field"}>
+                    <label htmlFor="boards-new-view" className={govuk ? "govuk-label" : "label"}>
+                      The view (its items come as live references)
+                    </label>
+                    <select id="boards-new-view" className={govuk ? "govuk-select" : "input"} value={viewId} onChange={(e) => setViewId(e.target.value)}>
+                      {views.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <button type="submit" className={button(true)}>
                   Make the board
                 </button>

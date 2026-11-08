@@ -10,6 +10,7 @@
 import type {
   Board,
   BoardOpened,
+  BoardPictures,
   DrawnItemMade,
   DrawnWatch,
   Grading,
@@ -18,7 +19,7 @@ import type {
   Withdrawn,
 } from "../../../../packages/schemas/generated";
 
-export type { Board, BoardOpened, DrawnItemMade, DrawnWatch, Grading, MatchSuggestions, NewDrawing, Withdrawn };
+export type { Board, BoardOpened, BoardPictures, DrawnItemMade, DrawnWatch, Grading, MatchSuggestions, NewDrawing, Withdrawn };
 
 export type Answer<T> = { ok: true; value: T } | { ok: false; message: string; code?: string };
 
@@ -28,11 +29,15 @@ export interface Asserted {
   marking: string;
   grading: Grading;
   sourceNote: string;
+  /** A Document of the case this comes from (on the board), as well as or instead of a note. */
+  sourceDocument?: string;
 }
 
 export interface ItemToDraw extends Asserted {
   type: string;
   properties: Record<string, string>;
+  /** A display setting only (C17 c), not evidence: the type's own icon when not given. */
+  icon?: string;
   x: number;
   y: number;
 }
@@ -82,6 +87,7 @@ function asserted(given: Asserted): Record<string, unknown> {
     marking: given.marking,
     grading: given.grading,
     source_note: given.sourceNote.trim() || null,
+    ...(given.sourceDocument ? { source_document: given.sourceDocument } : {}),
   };
 }
 
@@ -120,7 +126,14 @@ export const declareItem = (api: string, token: string, caseId: string, boardId:
   answered<DrawnItemMade>(
     send(caseUrl(api, caseId, `boards/${encodeURIComponent(boardId)}/items`), token, {
       method: "POST",
-      body: JSON.stringify({ ...asserted(item), type: item.type, properties: item.properties, x: item.x, y: item.y }),
+      body: JSON.stringify({
+        ...asserted(item),
+        type: item.type,
+        properties: item.properties,
+        ...(item.icon ? { icon: item.icon } : {}),
+        x: item.x,
+        y: item.y,
+      }),
     }),
     "The item could not be added",
   );
@@ -155,7 +168,7 @@ export const editItem = (
   token: string,
   caseId: string,
   itemId: string,
-  change: Partial<Asserted> & { properties?: Record<string, string> },
+  change: Partial<Asserted> & { properties?: Record<string, string>; icon?: string },
 ) =>
   answered<DrawnItemMade>(
     send(caseUrl(api, caseId, `board-items/${encodeURIComponent(itemId)}`), token, {
@@ -165,7 +178,9 @@ export const editItem = (
         ...(change.marking !== undefined ? { marking: change.marking } : {}),
         ...(change.grading !== undefined ? { grading: change.grading } : {}),
         ...(change.sourceNote !== undefined ? { source_note: change.sourceNote } : {}),
+        ...(change.sourceDocument ? { source_document: change.sourceDocument } : {}),
         ...(change.properties !== undefined ? { properties: change.properties } : {}),
+        ...(change.icon ? { icon: change.icon } : {}),
       }),
     }),
     "The item could not be changed",
@@ -199,7 +214,7 @@ export const decideMatch = (
   );
 
 export const boardPictures = (api: string, token: string, caseId: string, boardId: string) =>
-  answered<Record<string, string>>(
+  answered<BoardPictures>(
     send(caseUrl(api, caseId, `boards/${encodeURIComponent(boardId)}/pictures`), token),
     "The pictures could not be loaded",
   );
@@ -216,8 +231,9 @@ export async function uploadPicture(
   nodeId: string,
   file: File,
   marking: string,
+  sourceNote: string,
 ): Promise<Answer<DrawnItemMade>> {
-  const query = new URLSearchParams({ name: file.name, marking });
+  const query = new URLSearchParams({ name: file.name, marking, source_note: sourceNote.trim() });
   return answered<DrawnItemMade>(
     fetch(`${pictureUrl(api, caseId, boardId, nodeId)}?${query.toString()}`, {
       method: "PUT",
@@ -227,6 +243,23 @@ export async function uploadPicture(
     "The picture could not be added",
   );
 }
+
+/** C17 (b): a picture the case already holds (an image Document on the board), linked in the layer. */
+export const choosePicture = (
+  api: string,
+  token: string,
+  caseId: string,
+  boardId: string,
+  nodeId: string,
+  choice: { documentId: string; marking: string },
+) =>
+  answered<DrawnItemMade>(
+    send(pictureUrl(api, caseId, boardId, nodeId), token, {
+      method: "POST",
+      body: JSON.stringify({ document_id: choice.documentId, marking: choice.marking }),
+    }),
+    "The picture could not be chosen",
+  );
 
 /** *New drawing board* with no case: a drawn dataset, its home case and the board, in one step. */
 export const startDrawing = (
