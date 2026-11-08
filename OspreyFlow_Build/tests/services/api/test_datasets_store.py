@@ -4,6 +4,7 @@ case's datasets in the order named, and copies them to a branch (ADR-099)."""
 
 from __future__ import annotations
 
+import asyncpg
 import pytest
 from services.api.config import PostgresConfig
 from services.api.datasets import DatasetRefusedError, PostgresDatasetStore
@@ -22,6 +23,18 @@ async def store():
     s = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
     yield s
     await s.close()
+
+
+@pytest.fixture
+async def fresh_dsn():
+    """A schema of its own, for a table made as an older deployment made it."""
+    dsn = PostgresConfig.from_env().dsn
+    schema = f"datasets_test_{new_id().lower()}"
+    conn = await asyncpg.connect(dsn)
+    await conn.execute(f'CREATE SCHEMA "{schema}"')
+    yield f"{dsn}{'&' if '?' in dsn else '?'}search_path={schema}"
+    await conn.execute(f'DROP SCHEMA "{schema}" CASCADE')
+    await conn.close()
 
 
 async def test_a_case_reads_one_dataset_and_a_branch_takes_it(store) -> None:
@@ -173,3 +186,47 @@ async def test_postgres_holds_one_home_case_per_dataset_and_the_owner_setting(st
         assert await store.owner_setting() == "people_only"
     finally:
         await store.set_owner_setting(before)
+
+
+async def test_postgres_holds_a_drawn_dataset_for_its_home_case_alone(store) -> None:
+    """ADR-143 Amendment 2 decisions 3 and 5: the kind `drawn` stored (the check widened), its
+    highest marking kept, its home case reading it with a layer, never offered for another case
+    to choose and refused when one names it."""
+    from services.api.datasets import DRAWN, DatasetRefusedError
+
+    home, other = new_id(), new_id()
+    drawn = await store.create_drawn(
+        ALICE, f"Drawing {new_id()}", highest_marking="OFFICIAL", home_case=home
+    )
+    assert (drawn.kind, drawn.highest_marking) == (DRAWN, "OFFICIAL")
+    (held,) = [d for d in await store.list_all() if d.id == drawn.id]
+    assert (held.kind, held.highest_marking) == (DRAWN, "OFFICIAL")
+    assert [d.id for d in await store.chosen_of_case(home)] == [drawn.id]
+    assert await store.layer_of_case(home) is not None
+    assert drawn.id not in [d.id for d in await store.list_for(ALICE)]
+    with pytest.raises(DatasetRefusedError):
+        await store.set_for_case(other, [drawn.id], ALICE)
+    assert await store.chosen_of_case(other) == []
+
+
+async def test_postgres_widens_an_old_kind_check_to_take_drawn(fresh_dsn: str) -> None:
+    """A deployment made before drawn datasets has the column's check without `drawn`: `connect`
+    widens it once, and a second `connect` changes nothing."""
+    conn = await asyncpg.connect(fresh_dsn)
+    try:
+        await conn.execute(
+            "CREATE TABLE datasets (id TEXT PRIMARY KEY, name TEXT NOT NULL, owning_unit TEXT "
+            "NOT NULL, created_at TIMESTAMPTZ NOT NULL, created_by TEXT NOT NULL, kind TEXT NOT "
+            "NULL DEFAULT 'source' CHECK (kind IN ('source', 'composite', 'analyst_layer')))"
+        )
+        for _ in range(2):
+            s = await PostgresDatasetStore.connect(fresh_dsn)
+            await s.close()
+        checks = await conn.fetch(
+            "SELECT pg_get_constraintdef(c.oid) AS d FROM pg_constraint c JOIN pg_class t "
+            "ON t.oid = c.conrelid WHERE t.relname = 'datasets' AND c.contype = 'c' "
+            "AND pg_get_constraintdef(c.oid) LIKE '%kind%'"
+        )
+        assert len(checks) == 1 and "drawn" in checks[0]["d"]
+    finally:
+        await conn.close()

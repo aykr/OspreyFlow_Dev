@@ -31,6 +31,8 @@ ROUTE_RIGHTS = {
     "list_datasets_route": None,
     "create_dataset_route": "create_case",
     "create_composite_route": "create_case",
+    # ADR-143 Amendment 2 decision 5: a drawn dataset, made with its case.
+    "make_drawn_dataset": "create_case",
     # A dataset's domain model (ADR-112 Amendment 6, L3.1b), behind the dataset's own gate.
     "read_dataset_model": "edit_target_model",
     "open_dataset_model_draft": "edit_target_model",

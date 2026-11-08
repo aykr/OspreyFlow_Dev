@@ -563,6 +563,18 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     their data; read at read time as its own id and its members. Read-only for now: nothing is
     written into it, and a case reading it writes only into its own layer (ADR-099 Amendment 15).
     Made by `POST /v1/datasets/composites`, or by the migration;
+  - **Every dataset has a `highest_marking`** (ADR-145 decision 8; ADR-143 Amendment 2 decision 3):
+    the highest marking it may hold. A drawn dataset's maker sets it at its making, within their
+    own clearance; for every other it is the deployment's highest (stored as none). Admin ›
+    Datasets shows it; L3.3 enforces it on what is written into the dataset and its cases' layers.
+  - **`drawn`** (ADR-143 Amendment 2 decision 5, built in L3.1b): made from *New drawing board* with
+    no case, in one step with its domain model, live at version 1 (the starter pack chosen, or the
+    POLE core alone), and its home case, its maker the Author; the board is L3.3's. It is read
+    through its home case alone, so its Author shares it by sharing that case: no other case may
+    choose it (it is in no case's list of datasets to choose, and the store refuses it), no
+    pipeline loads into it (409 `drawn_not_loaded`), and no rule is made, changed or made live in
+    its case until it is merged (409 `drawn_not_judged`). It is listed in the Studio and in Admin ›
+    Datasets with a *Drawn* badge;
   - **`analyst_layer`**: belongs to exactly one case (`layer_of`), made with the case, named for
     it, of its unit. Never offered: no dataset list, case listing, Admin list or Studio switcher
     returns one, it cannot be chosen for a case or as a member (refused exactly as a missing
