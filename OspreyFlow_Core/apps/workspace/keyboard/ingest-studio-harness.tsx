@@ -87,6 +87,11 @@ const HELD = [
 ];  // prettier-ignore
 
 const HANDLING = { classification: "OFFICIAL", handling_code: "P", originator: "unit-a", owning_unit: "unit-a" };
+// Chapter 4's reports file declares a column for each of the six parts of a marking, as the committed
+// recipe's `handling_columns` does, so every element of its map binds all six (ADR-127 Amendment 2).
+const HANDLING_PARTS = ["classification", "handling_code", "action_code", "sanitisation_code", "originator", "owning_unit"];
+const REPORTS_HANDLING = { ...HANDLING, units: ["unit-a", "unit-b"],
+  handling_columns: Object.fromEntries(HANDLING_PARTS.map((part) => [part, part])) };  // prettier-ignore
 let SOURCES: Record<string, unknown>[] = [
   { id: "src-calls", dataset_id: "harbour-extract", connection_id: "files", name: "Wing phone calls file",
     location: "harbour-extract/calls.csv", connector_profile: "generic-csv", handling: HANDLING,
@@ -94,7 +99,7 @@ let SOURCES: Record<string, unknown>[] = [
       dropped_rows: "keep", owner: "engineer-1", paused: false }, version: 1,
     created_by: "engineer-1", created_at: day(9) },
   { id: "src-reports", dataset_id: "harbour-extract", connection_id: "files", name: "Intelligence reports file",
-    location: "harbour-extract/intel_reports.csv", connector_profile: "generic-csv", handling: HANDLING,
+    location: "harbour-extract/intel_reports.csv", connector_profile: "generic-csv", handling: REPORTS_HANDLING,
     legal_basis: "Synthetic demonstration", refresh: { trigger: "manual", mode: "snapshot", dropped_rows: "keep",
       owner: "engineer-1", paused: false }, version: 1, created_by: "engineer-1", created_at: day(8) },
 ];  // prettier-ignore
@@ -104,18 +109,40 @@ const PROFILE = { rows_sampled: 3, sample_is_whole_source: true, values_masked: 
 ] };  // prettier-ignore
 // Chapter 4's reports, synthetic (rule 9): the source the from-scratch walk registers nothing for,
 // since it is already registered, and maps.
-const REPORTS_PROFILE = { rows_sampled: 2, sample_is_whole_source: true, values_masked: false, columns: [
-  { name: "report_id", sample_size: 2, null_count: 0, distinct_count: 2, inferred_type: "string", type_confidence: 1 },
-  { name: "title", sample_size: 2, null_count: 0, distinct_count: 2, inferred_type: "string", type_confidence: 1 },
-] };  // prettier-ignore
+// Its columns are the real file's header, in its order (`pid_files.header_for`); its rows are invented.
+const REPORTS_COLUMNS = ["subject_1", "report_ref", "subject_1_role", "subject_2", "subject_2_role", "subject_3",
+  "subject_3_role", "subject_1_nino", "subject_2_nino", "subject_3_nino", "phone_mentioned", "area_ref", "area_ref_2",
+  "area_ref_3", "subject_1_family_name", "subject_1_given_names", "subject_1_date_of_birth", "subject_2_family_name",
+  "subject_2_given_names", "subject_2_date_of_birth", "subject_3_family_name", "subject_3_given_names",
+  "subject_3_date_of_birth", "category", "submitted_at", "title", "report_text", "reviewer_initials", "classification",
+  "handling_code", "action_code", "sanitisation_code", "originator", "owning_unit"];  // prettier-ignore
+const REPORTS_PROFILE = { rows_sampled: 2, sample_is_whole_source: true, values_masked: false,
+  columns: REPORTS_COLUMNS.map((name) => ({ name, sample_size: 2, null_count: 0, distinct_count: 2, inferred_type: "string", type_confidence: 1 })) };  // prettier-ignore
+const reportRow = (n: number, title: string): Record<string, string> => ({
+  ...Object.fromEntries(REPORTS_COLUMNS.map((name) => [name, ""])),
+  subject_1: `SYN-P${n}`, report_ref: `SYN-IR ${n}`, subject_1_nino: `SYN-NI-${n}`, subject_1_family_name: `Synthname${n}`,
+  phone_mentioned: n === 1 ? "07700 900001" : "", area_ref: `SYN-WING-${n}`, category: "intelligence",
+  submitted_at: "2026-01-0" + n + "T09:00:00Z", title, report_text: `Invented report ${n}.`, reviewer_initials: "SY",
+  classification: "OFFICIAL", handling_code: "P", action_code: "", sanitisation_code: "", originator: "unit-a", owning_unit: "unit-a",
+});  // prettier-ignore
 const SAMPLE_ROWS: Record<string, Record<string, string>[]> = {
   "r-visits": [{ caller: "SYN-0441", called: "SYN-0912" }, { caller: "SYN-0442", called: "SYN-0912" }, { caller: "SYN-0443", called: "SYN-0913" }],
-  "r-new": [{ report_id: "SYN-IR-1", title: "Report one" }, { report_id: "SYN-IR-2", title: "Report two" }],
+  "r-new": [reportRow(1, "Report one"), reportRow(2, "Report two")],
 };  // prettier-ignore
 const ONTOLOGY = { version: 1, entity_types: [
-  { name: "Document", pole_class: "object", channel: "violet", shape: "page", properties: [{ name: "title", type: "string" }, { name: "report_id", type: "string" }] },
-  { name: "Person", pole_class: "person", channel: "cyan", shape: "circle", properties: [{ name: "name", type: "string" }] },
-], edge_types: [] };  // prettier-ignore
+  { name: "Document", pole_class: "object", channel: "violet", shape: "page", properties: [{ name: "title", type: "string" },
+    { name: "report_id", type: "string" }, { name: "message_id", type: "string" }, { name: "sent_at", type: "datetime" },
+    { name: "document_kind", type: "string" }] },
+  { name: "Endpoint", pole_class: "object", channel: "violet", shape: "hexagon", properties: [{ name: "value_raw", type: "string" },
+    { name: "value_normalised", type: "string" }, { name: "e164", type: "string" }, { name: "endpoint_kind", type: "string" }] },
+  { name: "Person", pole_class: "person", channel: "cyan", shape: "circle", properties: [{ name: "name", type: "string" },
+    { name: "prison_number", type: "string" }, { name: "nino", type: "string" }, { name: "family_name", type: "string" },
+    { name: "given_names", type: "string" }, { name: "date_of_birth", type: "date" }] },
+  { name: "Location", pole_class: "location", channel: "green", shape: "pin", properties: [{ name: "site_ref", type: "string" }] },
+], edge_types: [
+  { name: "MENTIONED_IN", from: ["Location", "Person", "Endpoint"], to: ["Document"], properties: [] },
+] };  // prettier-ignore
+const TRANSFORMS = [{ name: "msisdn", arity: 1 }];
 const VERIFY = { rows_read: 3, sample_is_whole_source: true, values_masked: false, rows_deduplicated: 0,
   entities_by_type: { Person: { created: 3, referenced: 0 } }, edges_by_type: {}, rejections: [], nodes: [], edges: [] };  // prettier-ignore
 
@@ -176,6 +203,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   if (path === "/v1/investigations") return reply(CASES);
   if (path === "/v1/handling-scheme") return reply(SCHEME);
+  if (path === "/v1/ingest/connectors") return reply([{ id: "generic-csv", label: "CSV file", group: "Generic", structured: true, available: true }]);
   if (path === "/v1/ingest/connections") return reply([{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: day(30) }]);
   if (path === "/v1/datasets/harbour-extract/source-files")
     return reply({ root: "/ingest", files: [
@@ -231,13 +259,23 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     }
     if (path.endsWith("/row-template") && method === "PUT") {
       const sent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      // As `check_recipe_rules` refuses it (422 `recipe_rule`, each problem named): an element that
+      // does not bind a part of the marking the source declares a column for.
+      const held = (recipe === "r-new" ? created : draft)?.handling as { handling_columns?: Record<string, string> } | undefined;
+      const template = sent.row_template as { entities: { ref: string; handling?: Record<string, unknown> }[];
+        edges?: { type: string; handling?: Record<string, unknown> }[] };  // prettier-ignore
+      const problems = Object.entries(held?.handling_columns ?? {}).flatMap(([part, column]) =>
+        [...template.entities.map((e) => [e.ref, e.handling] as const), ...(template.edges ?? []).map((e) => [e.type, e.handling] as const)]
+          .filter(([, handling]) => (handling?.[part] as { field?: string } | undefined)?.field !== column)
+          .map(([name]) => `element '${name}' does not bind ${part}, which the source declares in column '${column}'.`));  // prettier-ignore
+      if (problems.length) return reply({ error: "recipe_rule", problems }, 422);
       if (recipe === "r-new" && created) created = { ...created, ...sent, verified_at: null };
       else draft = { ...draft, ...sent, verified_at: null };
       return reply(recipe === "r-new" ? created : draft);
     }
   }
   if (path === "/v1/ontology") return reply(ONTOLOGY);
-  if (path === "/v1/ingest/transforms") return reply([]);
+  if (path === "/v1/ingest/transforms") return reply(TRANSFORMS);
   if (path.endsWith("/publish") && method === "POST") {
     const refused = refusal(path, "publish_pipelines", "editor");
     if (refused) return refused;
@@ -278,6 +316,8 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     return reply(created);
   }
   if (created && path.endsWith("/ingest/recipes/r-new")) return reply(created);
+  // The draft list Connect reads to find the draft it opens (`listDrafts`).
+  if (path.endsWith("/ingest/recipes") && method === "GET") return reply(created ? [draft, created] : [draft]);
   if (path.endsWith("/ingest/recipe-registry")) return reply(created ? [deployed, draft, created] : [deployed, draft]);
   if (path.endsWith("/ingest/recipes/r-calls/runs")) return reply(RUNS);
   if (path.endsWith("/ingest/recipes/r-calls/run") && method === "POST")

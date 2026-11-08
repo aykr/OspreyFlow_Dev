@@ -2,6 +2,9 @@
 // 2; `CLAUDE.md` rule 13): the tabs, the dataset switcher, the Runs tab's grid, held rows and Run now,
 // Sources' Add files, and Deploy as vN with Deploy and run now — no `page.mouse`, no `.click()`. The
 // harness serves itself and records every request, so each case proves its action reached its route.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { expect, test, type Page } from "@playwright/test";
 
 import { INGEST_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
@@ -398,10 +401,134 @@ test("a column is bound in the Map editor by choosing it and the binding, then E
   registerCovered(REGISTRY, "bind-a-column-by-choosing-both-and-enter");
 });
 
-// Phase 6's exit: chapter 4's *Intelligence reports* pipeline built from scratch in guided mode, by
-// keys alone, the way the demo script walks it: name it, choose its registered source, preview the
-// rows, map a report to a Document (the title bound by the keyboard bind), Test, Deploy as v1.
-test("the reports pipeline is built from scratch in guided mode by keyboard", async ({ page }) => {
+// Phase 6's exit (ADR-140 Amendment 10): chapter 4's *Intelligence reports* pipeline built from
+// scratch in guided mode, by keys alone, as the demo script walks it, into exactly the committed map.
+// The map is read from `fixtures/pid_intel_reports_map.json`, which
+// `tests/demo_fixtures/test_reports_map_fixture.py` holds to `pid_intel_reports_recipe.yaml`, and each
+// entity, link, condition, content binding, handling part, transform, literal, optional binding,
+// ignored column and the row key is set through the controls a person uses. The saved map must equal
+// the committed one, not merely contain it.
+type Binding = { field?: string; literal?: string; transform?: string; optional?: boolean };
+type MapEntity = { ref: string; pole_class: string; type: string; match_on?: string; on_match?: string;
+  when?: { field: string; is: string }; properties: Record<string, Binding>; content?: { kind: string; field: string };
+  handling: Record<string, { field: string }> };  // prettier-ignore
+type MapEdge = { type: string; from: string; to: string; when?: { field: string; is: string }; handling: Record<string, { field: string }> };
+type ReportsMap = { row_template: { entities: MapEntity[]; edges: MapEdge[] };
+  unmapped_fields: { field: string; action: string; note?: string }[]; deduplicate: { key: Binding[] } };  // prettier-ignore
+const REPORTS_MAP = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./fixtures/pid_intel_reports_map.json", import.meta.url)), "utf8"),
+) as ReportsMap;
+
+/** What a saved map means, as the server reads it: a key holding `null` is absent, and a link with
+ * `properties: {}` has none (`RecipeEdge.properties` defaults to `{}`). Nothing else is forgiven. */
+function meaning(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(meaning);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key, v]) => v !== null && v !== undefined && !(key === "properties" && Object.keys(v as object).length === 0))
+      .map(([key, v]) => [key, meaning(v)]),
+  );
+}
+
+async function choose(page: Page, label: string, value: string) {
+  const select = page.getByRole("combobox", { name: label, exact: true });
+  await select.focus();
+  await select.selectOption(value);
+}
+
+async function tick(page: Page, name: string) {
+  const box = page.getByRole("checkbox", { name, exact: true });
+  await box.focus();
+  await page.keyboard.press("Space");
+  await expect(box).toBeChecked();
+}
+
+/** The keyboard bind: Choose on the column (unless it is already chosen), then Bind here. */
+async function bind(page: Page, column: string, target: string) {
+  if (await page.getByRole("button", { name: `Choose column ${column}`, exact: true }).isVisible()) {
+    await press(page, `Choose column ${column}`);
+  }
+  await press(page, `Bind ${column} here: ${target}`);
+}
+
+/** One property's own controls: the inspector shows each under its name. */
+const propertyRow = (page: Page, name: string) =>
+  page.locator("strong").filter({ hasText: new RegExp(`^${name}$`) }).locator("xpath=..");
+
+async function bindHandling(page: Page, handling: Record<string, { field: string }>) {
+  await tick(page, "Override handling for this element");
+  const labels: Record<string, string> = { classification: "Classification", handling_code: "Handling code",
+    action_code: "Action code", sanitisation_code: "Sanitisation code", originator: "Originator", owning_unit: "Owning unit" };  // prettier-ignore
+  for (const part of Object.keys(handling)) {
+    const select = page.getByRole("combobox", { name: `${labels[part]} for this element`, exact: true });
+    await select.focus();
+    await select.selectOption({ label: `From column ${handling[part]!.field}` });
+  }
+}
+
+async function setCondition(page: Page, when: { field: string; is: string }) {
+  await tick(page, "Conditional element");
+  await choose(page, "Condition column", when.field);
+  await choose(page, "Condition test", when.is);
+}
+
+async function buildEntity(page: Page, entity: MapEntity) {
+  await press(page, "+ entity");
+  const ref = page.getByRole("textbox", { name: "Entity ref", exact: true });
+  await ref.focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type(entity.ref);
+  await choose(page, "POLE class", entity.pole_class);
+  await choose(page, "Entity type", entity.type);
+  const matchOn = page.getByRole("textbox", { name: "Match on", exact: true });
+  await matchOn.focus();
+  await page.keyboard.type(entity.match_on ?? "");
+  if (entity.on_match === "reference") {
+    await page.getByRole("radio", { name: "reference existing" }).focus();
+    await page.keyboard.press("Space");
+  }
+  for (const [name, binding] of Object.entries(entity.properties)) {
+    await choose(page, "Add a property", name);
+    const row = propertyRow(page, name);
+    if (binding.literal !== undefined) {
+      await row.getByRole("combobox", { name: "Binding kind" }).focus();
+      await row.getByRole("combobox", { name: "Binding kind" }).selectOption("literal");
+      await row.getByRole("textbox", { name: "Literal value" }).focus();
+      await page.keyboard.type(binding.literal);
+      continue;
+    }
+    await bind(page, binding.field!, name);
+    if (binding.transform) {
+      await row.getByRole("combobox", { name: "Transform" }).focus();
+      await row.getByRole("combobox", { name: "Transform" }).selectOption(binding.transform);
+    }
+    if (binding.optional) {
+      await row.getByRole("checkbox", { name: /^Optional/ }).focus();
+      await page.keyboard.press("Space");
+    }
+  }
+  if (entity.when) await setCondition(page, entity.when);
+  if (entity.content) {
+    await choose(page, "Its own text", entity.content.kind);
+    await choose(page, "Column holding its text", entity.content.field);
+  }
+  await bindHandling(page, entity.handling);
+  await expect(page.getByRole("button", { name: `Entity ${REPORTS_MAP.row_template.entities.indexOf(entity) + 1}: ${entity.ref} (${entity.type})` })).toBeVisible();
+}
+
+async function buildLink(page: Page, edge: MapEdge) {
+  await choose(page, "From entity", edge.from);
+  await choose(page, "To entity", edge.to);
+  await choose(page, "Link type", edge.type);
+  await press(page, "Add link");
+  if (edge.when) await setCondition(page, edge.when);
+  await bindHandling(page, edge.handling);
+}
+
+test("the reports pipeline is built from scratch in guided mode by keyboard, into the committed map", async ({ page }) => {
+  test.setTimeout(240_000);
+  page.setDefaultTimeout(8_000);
   await page.goto(HARNESS);
   await page.getByRole("textbox", { name: "Pipeline name" }).focus();
   await page.keyboard.type("Intelligence reports");
@@ -416,19 +543,34 @@ test("the reports pipeline is built from scratch in guided mode by keyboard", as
   await press(page, "Preview");
   await press(page, "Run preview");
   await expect(drawer(page).getByRole("cell", { name: "Report two" })).toBeVisible();
+  // The row key, on the draft's own settings: what makes a report the same report again.
+  await press(page, "Settings");
+  await press(page, "The draft's own settings");
+  for (const part of REPORTS_MAP.deduplicate.key) {
+    await page.getByRole("textbox", { name: "Key column name" }).focus();
+    await page.keyboard.type(part.field!);
+    await page.keyboard.press("Enter");
+  }
+  await press(page, "Save");
+  await expect.poll(async () => (await asked(page)).some((a) => a.method === "PATCH" && a.path.endsWith("/r-new") && a.body!.includes('"deduplicate"'))).toBe(true);
+  const patch = (await asked(page)).filter((a) => a.method === "PATCH" && a.path.endsWith("/r-new")).at(-1)!;
+  expect((JSON.parse(patch.body!) as { deduplicate: unknown }).deduplicate).toEqual(REPORTS_MAP.deduplicate);
+  await press(page, "Close the drawer");
   await openTheMapEditor(page);
-  await press(page, "+ entity");
-  await expect(page.getByRole("button", { name: /^Entity 1: .* \(Document\)$/ })).toBeVisible();
-  const add = page.getByLabel("Add a property");
-  await add.focus();
-  await page.keyboard.type("title");
-  await press(page, "Choose column title");
-  await press(page, "Bind title here: title");
+  for (const entity of REPORTS_MAP.row_template.entities) await buildEntity(page, entity);
+  for (const edge of REPORTS_MAP.row_template.edges) await buildLink(page, edge);
+  for (const ignored of REPORTS_MAP.unmapped_fields) {
+    await page.getByRole("textbox", { name: `Note for ignoring ${ignored.field}` }).focus();
+    await page.keyboard.type(ignored.note ?? "");
+    await press(page, `Ignore ${ignored.field}`);
+  }
   await press(page, "Save draft");
   await expect.poll(async () => (await asked(page)).some((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template"))).toBe(true);
-  const put = (await asked(page)).find((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template"))!;
-  const template = (JSON.parse(put.body!) as { row_template: { entities: { type: string; properties: Record<string, unknown> }[] } }).row_template;
-  expect(template.entities).toMatchObject([{ type: "Document", properties: { title: { field: "title" } } }]);
+  const put = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template")).at(-1)!;
+  const saved = JSON.parse(put.body!) as { row_template: unknown; unmapped_fields: unknown };
+  expect(meaning(saved.row_template)).toEqual(meaning(REPORTS_MAP.row_template));
+  expect(meaning(saved.unmapped_fields)).toEqual(meaning(REPORTS_MAP.unmapped_fields));
+  await expect(page.getByText(/does not bind/)).toHaveCount(0);
   await page.getByRole("navigation", { name: "Pipeline strip" }).getByRole("button", { name: "Load: Load" }).focus();
   await page.keyboard.press("Enter");
   // The harness refuses as the routes do: the map's save cleared Test's mark, so Deploy is refused
@@ -447,6 +589,25 @@ test("the reports pipeline is built from scratch in guided mode by keyboard", as
   await expect(page.getByText("Deployed", { exact: true })).toBeVisible();
   expect((await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-new/publish"))).toBe(true);
   registerCovered(REGISTRY, "build-the-reports-pipeline-from-scratch-in-guided-mode-by-keyboard");
+});
+
+// Rule 15: the harness refuses a Map save as `check_recipe_rules` does, so the case above could not
+// pass with a part of a marking left unbound. A report saved with none of the six bound is refused,
+// in words naming the part and its column, and nothing is kept.
+test("a reports map leaving a declared part of the marking unbound is refused at save, by keyboard", async ({ page }) => {
+  await page.goto(HARNESS);
+  await page.getByRole("textbox", { name: "Pipeline name" }).focus();
+  await page.keyboard.type("Intelligence reports");
+  await press(page, "New pipeline");
+  await press(page, "Source: New source");
+  const chooser = page.getByRole("combobox", { name: "Registered source" });
+  await chooser.focus();
+  await chooser.selectOption("src-reports");
+  await press(page, "Use this source");
+  await openTheMapEditor(page);
+  await press(page, "+ entity");
+  await press(page, "Save draft");
+  await expect(page.getByRole("alert").filter({ hasText: /does not bind classification, which the source declares in column 'classification'/ })).toBeVisible();
 });
 
 // --- The review of L1.2 (7 November 2026): what the first pass left unproved -------------------

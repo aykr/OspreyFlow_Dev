@@ -178,7 +178,11 @@ function UnmappedFieldRow({
   return (
     <div style={{ display: "flex", gap: "var(--sp-8, 8px)", alignItems: "center" }}>
       <strong style={{ flex: 1 }}>{field}</strong>
+      {/* Each row's note box and button are named with their column: every row once read only
+          "Ignore" and a placeholder, so a keyboard or screen-reader user could not tell which column
+          a control ignored (found building phase 6's exit, 8 November 2026). */}
       <Input
+        aria-label={`Note for ignoring ${field}`}
         placeholder="note (optional)"
         value={note}
         onChange={(e) => setNote(e.target.value)}
@@ -186,7 +190,9 @@ function UnmappedFieldRow({
           if (e.key === "Enter") ignore();
         }}
       />
-      <Button onClick={ignore}>Ignore</Button>
+      <Button aria-label={`Ignore ${field}`} onClick={ignore}>
+        Ignore
+      </Button>
     </div>
   );
 }
