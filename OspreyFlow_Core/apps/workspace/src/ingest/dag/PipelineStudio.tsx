@@ -11,6 +11,7 @@ import type {
 } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
+import { Select } from "../../design/primitives/Select";
 import { createDraft, fetchDraft, fetchRecipeRegistry, savePipeline } from "../api";
 import { MapEditor } from "../map/MapEditor";
 import { PublishScreen } from "../publish/PublishScreen";
@@ -19,6 +20,7 @@ import { GuidedSteps, guidedMayNotRemove } from "./GuidedSteps";
 import { NodeDrawer, type DrawerPane } from "./NodeDrawer";
 import { PipelineCanvas } from "./PipelineCanvas";
 import { addEnrichAfter, addExtractAfter, addSourceChain, removeNode } from "./pipelineGraphEdit";
+import { STAGING_KIND_NAMES, STAGING_KINDS, addStagingStep, isStagingStep, removeStagingStep, type StagingKind } from "./stagingSteps";
 import { readStudioMode, writeStudioMode, type StudioMode } from "./studioMode";
 
 export interface PipelineStudioProps {
@@ -212,6 +214,7 @@ function PipelineEditor({
   const [problems, setProblems] = useState<string[]>([]);
   const [said, setSaid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stepKind, setStepKind] = useState<StagingKind>("lookup");
 
   useEffect(() => {
     let cancelled = false;
@@ -312,6 +315,31 @@ function PipelineEditor({
           >
             + Enrich
           </Button>
+          {/* ADR-140 Amendment 12: a staging step from the closed catalogue, reading the step or
+              source chosen (else the last step), with its drawer opened to set it. */}
+          <Select
+            aria-label="Staging step to add"
+            value={stepKind}
+            disabled={busy}
+            onChange={(e) => setStepKind(e.target.value as StagingKind)}
+          >
+            {STAGING_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {STAGING_KIND_NAMES[k]}
+              </option>
+            ))}
+          </Select>
+          <Button
+            disabled={busy || !(pipeline.nodes ?? []).some((n) => n.kind === "source")}
+            onClick={() => {
+              const added = addStagingStep(pipeline, stepKind, selectedId);
+              setSelectedId(added.id);
+              setPane({ at: "node", view: "settings" });
+              change(added.graph);
+            }}
+          >
+            + Step
+          </Button>
           <Button
             // ADR-140 decision 3: guided mode shows an expert step read-only, and removing it, or the
             // step that feeds it, is an edit of it; the reviews of L1.2 found Remove enabled for both
@@ -322,7 +350,7 @@ function PipelineEditor({
             onClick={() => {
               if (!selected) return;
               setSelectedId(null);
-              change(removeNode(pipeline, selected.id));
+              change(isStagingStep(selected) ? removeStagingStep(pipeline, selected.id) : removeNode(pipeline, selected.id));
             }}
           >
             Remove selected

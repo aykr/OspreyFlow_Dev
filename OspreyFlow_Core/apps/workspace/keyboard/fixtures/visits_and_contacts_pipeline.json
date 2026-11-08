@@ -1,0 +1,250 @@
+{
+  "base": {
+    "nodes": [
+      {
+        "id": "domain",
+        "kind": "domain_model",
+        "label": "Domain model",
+        "config": {}
+      },
+      {
+        "id": "visit_bookings",
+        "kind": "source",
+        "label": "Visit bookings",
+        "config": {}
+      },
+      {
+        "id": "number_owners",
+        "kind": "source",
+        "label": "Number owners",
+        "config": {}
+      },
+      {
+        "id": "map",
+        "kind": "map",
+        "label": "Map",
+        "config": {}
+      },
+      {
+        "id": "load",
+        "kind": "load",
+        "label": "Load",
+        "config": {}
+      }
+    ],
+    "edges": [
+      {
+        "source": "domain",
+        "target": "visit_bookings"
+      },
+      {
+        "source": "domain",
+        "target": "number_owners"
+      },
+      {
+        "source": "visit_bookings",
+        "target": "map"
+      },
+      {
+        "source": "map",
+        "target": "load"
+      }
+    ]
+  },
+  "pipeline": {
+    "nodes": [
+      {
+        "id": "domain",
+        "kind": "domain_model",
+        "label": "Domain model",
+        "config": {}
+      },
+      {
+        "id": "visit_bookings",
+        "kind": "source",
+        "label": "Visit bookings",
+        "config": {}
+      },
+      {
+        "id": "number_owners",
+        "kind": "source",
+        "label": "Number owners",
+        "config": {}
+      },
+      {
+        "id": "map",
+        "kind": "map",
+        "label": "Map",
+        "config": {}
+      },
+      {
+        "id": "load",
+        "kind": "load",
+        "label": "Load",
+        "config": {}
+      },
+      {
+        "id": "with_establishment",
+        "kind": "lookup",
+        "label": "Lookup: establishment",
+        "config": {
+          "label": "Lookup: establishment",
+          "input": "visit_bookings",
+          "list": "establishments",
+          "on": "estab_id",
+          "add": [
+            {
+              "column": "name",
+              "as": "establishment"
+            }
+          ]
+        }
+      },
+      {
+        "id": "with_owner",
+        "kind": "join",
+        "label": "Join: owner of contact",
+        "config": {
+          "label": "Join: owner of contact",
+          "left": "with_establishment",
+          "right": "number_owners",
+          "left_key": "contact_number",
+          "right_key": "number",
+          "normalise": "msisdn",
+          "how": "left",
+          "add": [
+            {
+              "column": "owner_family_name"
+            }
+          ]
+        }
+      },
+      {
+        "id": "titled",
+        "kind": "derive",
+        "label": "Derive: the booking's title",
+        "config": {
+          "label": "Derive: the booking's title",
+          "input": "with_owner",
+          "column": "title",
+          "operation": "concat",
+          "columns": [
+            "establishment",
+            "visit_at"
+          ],
+          "settings": {
+            "separator": " · "
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "source": "domain",
+        "target": "visit_bookings"
+      },
+      {
+        "source": "domain",
+        "target": "number_owners"
+      },
+      {
+        "source": "map",
+        "target": "load"
+      },
+      {
+        "source": "visit_bookings",
+        "target": "with_establishment"
+      },
+      {
+        "source": "with_establishment",
+        "target": "with_owner"
+      },
+      {
+        "source": "number_owners",
+        "target": "with_owner"
+      },
+      {
+        "source": "with_owner",
+        "target": "titled"
+      },
+      {
+        "source": "titled",
+        "target": "map"
+      }
+    ]
+  },
+  "row_template": {
+    "entities": [
+      {
+        "ref": "booking",
+        "pole_class": "object",
+        "type": "Document",
+        "match_on": "message_id",
+        "on_match": "reference",
+        "properties": {
+          "message_id": {
+            "field": "booking_id"
+          },
+          "title": {
+            "field": "title"
+          },
+          "sent_at": {
+            "field": "booked_at"
+          },
+          "document_kind": {
+            "literal": "other"
+          }
+        }
+      },
+      {
+        "ref": "contact",
+        "pole_class": "object",
+        "type": "Endpoint",
+        "match_on": "value_normalised",
+        "on_match": "reference",
+        "properties": {
+          "value_raw": {
+            "field": "contact_number"
+          },
+          "value_normalised": {
+            "field": "contact_number",
+            "transform": "msisdn"
+          },
+          "endpoint_kind": {
+            "literal": "msisdn"
+          }
+        }
+      },
+      {
+        "ref": "owner",
+        "pole_class": "person",
+        "type": "Person",
+        "match_on": "family_name",
+        "on_match": "reference",
+        "when": {
+          "field": "owner_family_name",
+          "is": "not_null"
+        },
+        "properties": {
+          "family_name": {
+            "field": "owner_family_name"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "type": "MENTIONED_IN",
+        "from": "contact",
+        "to": "booking",
+        "properties": {}
+      },
+      {
+        "type": "USES",
+        "from": "owner",
+        "to": "contact",
+        "properties": {}
+      }
+    ]
+  }
+}

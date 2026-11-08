@@ -29,6 +29,7 @@ import type {
   LoadChecksView,
   PipelineGraph,
   DomainPackEntry,
+  StagingPreview,
 } from "../../../../packages/schemas/generated";
 
 export interface HandlingCode {
@@ -622,6 +623,28 @@ export async function savePipeline(
     }
   }
   return { kind: "saved", draft: await parseOrThrow(response, "PUT /v1/ingest/recipes/{id}/pipeline") };
+}
+
+/** A staging step's drawer's live sample (ADR-140 Amendment 12): the steps up to `step` over the
+ * first ten rows of each source, of the pipeline the drawer holds, saved or not. Writes nothing.
+ * Its `problems` are the save gate's refusals, in the gate's own words. */
+export async function previewStaging(
+  apiBaseUrl: string,
+  bearerToken: string,
+  investigationId: string,
+  recipeId: string,
+  pipeline: PipelineGraph,
+  step: string,
+): Promise<StagingPreview> {
+  const response = await fetch(
+    `${studioCase(apiBaseUrl, investigationId)}/ingest/recipes/${recipeId}/staging-preview`,
+    {
+      method: "POST",
+      headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+      body: JSON.stringify({ pipeline, step }),
+    },
+  );
+  return parseCodedErrorOrThrow(response, "POST /v1/ingest/recipes/{id}/staging-preview");
 }
 
 export async function fetchDomainPacks(
