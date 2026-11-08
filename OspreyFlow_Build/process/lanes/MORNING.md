@@ -125,6 +125,35 @@ New ones are added at the bottom as they happen.
     Amendment 7 reserved, `4c2edce`); a layer's size in bytes stored; the promotion policy field built
     now in L2.4 part 2 and enforced in L3.4.
 
+32. **Admin's footprint count respects handling, reversing my earlier settlement.** I had settled R1 as a
+    count "with no principal". The independent review showed that let an administrator learn that SECRET
+    or restricted items exist in a layer, and their size, without clearance (rules 3 and 7; ADR-124
+    decision 10). The count now takes the administrator's own principal and counts only what it may
+    read. If you want administrators to see every layer's full size regardless of markings, that is
+    your ruling to make as an ADR amendment; until then the strict rule holds.
+33. **Case's L3.2 is split.** L3.2 is the views, the migration and the Conduit without branches; L3.2b
+    (a fresh session) the Glass's Views panel and wiring `no_branches_check` into make ci, whose
+    real-tree test is red until then.
+34. **The object stores' ports are guarded** (`fdfc244`). A studio offline run had written three synthetic
+    files to stack a's store on 9000 while I had left it unguarded; nothing was read.
+
+35. **An alert naming a corrected node is still withheld from its readers** (rules' finding, ADR-109
+    Amendment 11 point 7): it becomes its own small step, L2.8d, before L2.9, on rules' recommendation.
+    It withholds too much rather than too little, so nothing leaks meanwhile.
+
+36. **No row key reaches provenance or the Glass, hashed or not** (studio's L1.3 review, then its own
+    reviewer): a plain hash of a booking id or a phone number can be reversed by trying every value, so it
+    is still a source-system identifier (rule 7). An element names its source row by source, row number
+    and load; the load's own record resolves that on the server. This replaces my first ruling (hash it).
+37. **All three ready steps were held by their independent reviews** (admin L2.4 part 2, rules L2.8c,
+    studio L1.3), each for a real access or rule 8 defect, and sent back with a fix list. None of the three
+    had run its own lane-reviewer first; each has been asked to, as the plan's review rule 1 says.
+
+38. **A removed composite case's layer is never merged, only deleted or left** (admin's Q5, on its
+    recommendation): ADR-143 Amendment 2 decision 1 merges a removed case's layer "into the dataset", but a
+    composite holds none of its members' data. The alternative, merging into a member dataset the merger
+    chooses (an Author of that member doing it), is yours to choose for L3.4.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):

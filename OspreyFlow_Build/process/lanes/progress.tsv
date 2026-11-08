@@ -24,13 +24,15 @@ admin	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	done	Alerts: G2, G3 and G9 fixed (access first)
 glass	L2.8b	M	done	Old records under the new check: audit words, held rows, pack items, Alert node re-marking
 rules	L2.8c	S	building	The other link supersedes through the repoint journal
+rules	L2.8d	S	todo	An alert naming a corrected node in referent_node_ids is listed again (ADR-109 Am 11 point 7)
 rules	L2.9	L	todo	Four places: Rules and Monitoring; /alerts/<id>; the way back
 rules	L2.10	L	todo	One queue; What raises alerts; watches; team routing; Raise an alert
 rules	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
 rules	L2.12	M	todo	Reporting folded: Figures, Alert monitoring, the Reports Viewer
 case	L3.1	L	done	Phase 5 as amended: one dataset per case, composites, the analyst layer; no branch layers
 case	L3.1b	L	done	Phase 5's model half; Make live's owner step; home cases; drawn kind
-case	L3.2	L	building	Case views replace branches; no branches anywhere
+case	L3.2	L	building	Case views; the migration; the Conduit without branches; no_branches_check (Conduit half)
+case	L3.2b	M	todo	No branches in the Glass: the Views panel, keyboard and axe; the check in make ci
 case	L3.3	L	todo	Drawing boards; drawn datasets; drawn items watched; marking ceiling
 case	L3.4	L	todo	Promotion; a removed case's layer merged or deleted
 case	L3.5	M	todo	Analyst-defined link types
