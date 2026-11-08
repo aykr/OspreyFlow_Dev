@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
+import socket
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -41,15 +43,33 @@ LOADER = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1", dataset
 ELSEWHERE = Principal(id="analyst-2", clearance="SECRET", org_unit="unit-1", datasets=["ledger"])
 
 
+def _answers(endpoint: str) -> bool:
+    """Whether the pinned object store is up: the port guard pins an unset endpoint to a closed
+    port, which this file then skips rather than fails on."""
+    host, _, port = endpoint.rpartition(":")
+    try:
+        with socket.create_connection((host or "localhost", int(port)), timeout=1):
+            return True
+    except (OSError, ValueError):
+        return False
+
+
 @pytest.fixture
 def storage() -> Iterator[ObjectStorageConfig]:
+    # Never the default object store (localhost:9000 is stack a's): only the one a lease pins. The
+    # port guard watches Python's sockets, and pyarrow's S3 client opens its own, so this refusal is
+    # what keeps an offline run out of a stack's store (8 November 2026: an offline run of this file
+    # wrote a bucket to stack a's store without a lease, the friction row's slip).
+    endpoint = os.environ.get("MINIO_ENDPOINT", "")
+    if not endpoint or not os.environ.get("OSPREY_LANE") or not _answers(endpoint):
+        pytest.skip("live: run under a lease, with the MINIO_ENDPOINT and OSPREY_LANE it prints")
     config = dataclasses.replace(
         ObjectStorageConfig.from_env(), bucket=f"studio-l14-{uuid.uuid4().hex[:12]}"
     )
     yield config
     fs = staging.filesystem(config)
     if fs.get_file_info(config.bucket).type != pa_fs.FileType.NotFound:
-        fs.delete_dir(config.bucket)
+        fs.delete_dir_contents(config.bucket)
 
 
 def _held(fs: pa_fs.FileSystem, path: str) -> list[dict[str, object]] | None:
