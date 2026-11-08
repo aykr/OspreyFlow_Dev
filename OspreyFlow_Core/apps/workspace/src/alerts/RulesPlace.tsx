@@ -19,7 +19,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Tabs } from "../design/primitives";
 import { listCases, type AccessLevel } from "../investigation/cases";
 import { NO_SUCH_ALERT, type AlertAtAddressState } from "./address";
-import { AlertQueue } from "./AlertQueue";
+import { AlertQueue, type AlertEvidence } from "./AlertQueue";
 import type { CanvasOutcome } from "./api";
 import { HeldRowsPanel } from "./HeldRowsPanel";
 import { ListsPanel } from "./ListsPanel";
@@ -51,6 +51,8 @@ export interface RulesPlaceProps {
   address?: { alertId: string; state: AlertAtAddressState } | null;
   /** Gives an alert its address when it is opened here, or leaves it (`null`) when it is closed. */
   onOpenAlert?: (alertId: string | null) => void;
+  /** *Open the evidence* (ADR-146 decision 6): resolves to words when it could not be opened. */
+  onOpenEvidence?: (evidence: AlertEvidence) => Promise<string | null>;
 }
 
 export function RulesPlace(props: RulesPlaceProps) {
@@ -121,6 +123,7 @@ export function RulesPlace(props: RulesPlaceProps) {
             onCanvas={props.onCanvas}
             openAlertId={addressedId}
             onOpenAlert={props.onOpenAlert}
+            onOpenEvidence={props.onOpenEvidence}
           />
           <div style={{ maxWidth: 640 }}>
             <AlertInbox {...api} onOpenAlert={(id) => props.onOpenAlert?.(id)} />

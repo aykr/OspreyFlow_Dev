@@ -65,6 +65,24 @@ test("an address the reader may not see says so as for a missing alert, and Back
   registerCovered(REGISTRY, "back-to-the-queue-from-an-address-by-keyboard");
 });
 
+// ADR-146 decision 6 (R5): the alert's evidence opened as a private view, and the way back to the
+// alert, still open.
+test("the evidence is opened, and Back to the alert returns to it, still open, by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/rules-place-harness.html?address=a1");
+  await press(page, page.getByRole("button", { name: "Open the evidence" }));
+  const banner = page.getByRole("region", { name: "Open view" });
+  await expect(banner.getByText("Opened from an alert")).toBeVisible();
+  expect(await page.evaluate(() => window.__RULES__?.evidence)).toEqual([{ alertId: "a1", nodeIds: ["n1"] }]);
+  registerCovered(REGISTRY, "open-the-evidence-by-keyboard");
+  // Focus lands on the way back to the alert when the view opens.
+  await expect(banner.getByRole("button", { name: "← Back to the alert" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/alerts\/a1(\?|$)/);
+  await expect(page.getByRole("button", { name: /Open alert:.*Structuring/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Open the evidence" })).toBeVisible();
+  registerCovered(REGISTRY, "back-to-the-alert-from-its-evidence-by-keyboard");
+});
+
 test("every registered Rules and Monitoring action has its own proving test case above", () => {
   assertAllCovered(REGISTRY, RULES_PLACE_ACTIONS);
 });

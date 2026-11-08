@@ -5185,8 +5185,8 @@ async def patterns_load_route(
 #
 # Owner-only, not investigation-scoped — the same reasoning `/v1/patterns/*` already gives.
 # `Alert.investigation_id` (the triggering event's own investigation, not the hotlist/monitor's
-# own creation context — `schemas.domain.Alert`'s own docstring has the full reasoning) is what
-# `POST /v1/alerts/{alert_id}/jump` opens a new case from.
+# own creation context — `schemas.domain.Alert`'s own docstring has the full reasoning) is the case
+# an alert's address, `GET /v1/alerts/{alert_id}`, opens it in (ADR-146 Amendment 2).
 
 
 @app.post(

@@ -39,6 +39,16 @@ export interface AlertQueueProps extends AlertsApi {
   openAlertId?: string | null;
   /** Told the alert opened here, so it is given its address; `null` when it is closed. */
   onOpenAlert?: (alertId: string | null) => void;
+  /** ADR-146 decision 6, *Open the evidence*: the alert's evidence, as the reader was shown it,
+   * opened in the Glass as a private view of the alert's case, with the way back to the alert. */
+  onOpenEvidence?: (evidence: AlertEvidence) => Promise<string | null>;
+}
+
+/** What *Open the evidence* opens: the nodes the reader was shown, under the alert's name. */
+export interface AlertEvidence {
+  alertId: string;
+  title: string;
+  nodeIds: string[];
 }
 
 const STATUS_WORDS: Record<string, string> = { open: "Open", claimed: "Claimed", closing: "Closing", closed: "Closed" };
@@ -331,6 +341,31 @@ function AlertDetail(props: AlertDetailProps) {
       </p>
       {said && <p role="status" className="label">{said}</p>}
       {problem && <p role="alert" style={{ color: "var(--error)" }}>{problem}</p>}
+      {props.onOpenEvidence && nodes.length > 0 && (
+        // Any reader of the alert: a private view saves nothing of the case (ADR-144), and the
+        // Conduit refuses it to someone who may not work the case.
+        <div>
+          <Button
+            variant="primary"
+            disabled={busy}
+            onClick={() =>
+              void (async () => {
+                setBusy(true);
+                setProblem(null);
+                const refused = await props.onOpenEvidence!({
+                  alertId,
+                  title: alertTitle(alert, f.kind),
+                  nodeIds: nodes.map((n) => n.id),
+                });
+                if (refused) setProblem(refused);
+                setBusy(false);
+              })()
+            }
+          >
+            Open the evidence
+          </Button>
+        </div>
+      )}
       {canTriage && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
           <Button

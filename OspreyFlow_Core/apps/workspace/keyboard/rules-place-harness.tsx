@@ -5,9 +5,11 @@
 // `?address=<id>` starts on that alert's address; `a1` is this case's, `a-other` is another case's
 // (its reload into that case is recorded on `window.__RULES__.went`, not made), and any other id is
 // answered as missing, as the Conduit answers an alert the reader may not see. `?brand=govuk` draws
-// it in the GOV.UK frame.
+// it in the GOV.UK frame. *Open the evidence* (ADR-146 decision 6) is recorded on
+// `window.__RULES__.evidence` and opens the real lens banner (`views/ViewLensBanner.tsx`) as `App.tsx`
+// draws it over the case, with *← Back to the alert*; `App.test.tsx` proves App's own wiring.
 import { createRoot } from "react-dom/client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
@@ -17,13 +19,14 @@ import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { openAlertInItsCase, useAlertAtAddress } from "../src/alerts/address";
 import { RulesPlace } from "../src/alerts/RulesPlace";
 import { alertPath, navigate, useAddress } from "../src/shell/router";
+import { ViewLensBanner } from "../src/views/ViewLensBanner";
 
 declare global {
   interface Window {
-    __RULES__?: { went: string[] };
+    __RULES__?: { went: string[]; evidence: { alertId: string; nodeIds: string[] }[] };
   }
 }
-window.__RULES__ = { went: [] };
+window.__RULES__ = { went: [], evidence: [] };
 
 const brand = await applyHarnessBrand();
 const params = new URLSearchParams(location.search);
@@ -70,6 +73,8 @@ window.fetch = async (input: RequestInfo | URL) => {
 };
 
 function Harness() {
+  // `?evidence=1`: the lens open on a1's evidence, for the accessibility scan.
+  const [lensOf, setLensOf] = useState<string | null>(params.get("evidence") ? "a1" : null);
   const address = useAddress();
   const alertId = address.kind === "alert" ? address.alertId : null;
   const state = useAlertAtAddress("http://rules-harness.invalid", "unused", alertId);
@@ -78,6 +83,24 @@ function Harness() {
       openAlertInItsCase(alertId, state.caseId, (url) => window.__RULES__!.went.push(url));
     }
   }, [state, alertId]);
+  if (lensOf) {
+    return (
+      <ViewLensBanner
+        name="From alert: Structuring"
+        shared={false}
+        missing={0}
+        onBack={() => setLensOf(null)}
+        from={{
+          label: "Opened from an alert",
+          backLabel: "← Back to the alert",
+          onBack: () => {
+            setLensOf(null);
+            navigate(alertPath(lensOf));
+          },
+        }}
+      />
+    );
+  }
   return (
     <RulesPlace
       apiBaseUrl="http://rules-harness.invalid"
@@ -88,6 +111,12 @@ function Harness() {
       onCanvas={() => undefined}
       address={alertId && state ? { alertId, state } : null}
       onOpenAlert={(id) => navigate(id ? alertPath(id) : "/keyboard/rules-place-harness.html")}
+      onOpenEvidence={async ({ alertId, nodeIds }) => {
+        window.__RULES__!.evidence.push({ alertId, nodeIds });
+        navigate("/keyboard/rules-place-harness.html");
+        setLensOf(alertId);
+        return null;
+      }}
     />
   );
 }

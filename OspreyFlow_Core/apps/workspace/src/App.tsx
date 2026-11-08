@@ -99,7 +99,7 @@ import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import { ViewLensBanner } from "./views/ViewLensBanner";
 import { ViewsPanel } from "./views/ViewsPanel";
-import { type CaseView, type CaseViewOpened, openView } from "./views/viewsApi";
+import { type CaseView, type CaseViewOpened, openView, saveView } from "./views/viewsApi";
 import { bringFactIntoView } from "./questions/graphFacts";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { exploreOverlayPlace } from "./explore/exploreOverlayPlace";
@@ -677,6 +677,9 @@ export function App() {
   // ADR-144 and the owner's ruling of 8 November 2026 (Amendment 2): an opened view, shown on the
   // canvas as a read-only lens over the case, and `viewsRead` bumped to read the views again.
   const [lens, setLens] = useState<Lens | null>(null);
+  // ADR-146 decision 6: the alert a view was opened from (*Open the evidence*), for the lens's way
+  // back to it, still open; `null` for a view opened any other way.
+  const [lensFromAlert, setLensFromAlert] = useState<{ alertId: string; title: string } | null>(null);
   const [viewsRead, setViewsRead] = useState(0);
   const [viewProblem, setViewProblem] = useState<string | null>(null);
   // ADR-144 decision 4: the view *Ask the model about these* saved, whose conversation is open.
@@ -921,6 +924,8 @@ export function App() {
     const timeline = crossFilterRef.current?.store.getState();
     if (caseWindowRef.current === undefined) caseWindowRef.current = timeline?.window ?? null;
     setLens(buildLens(opened));
+    // Opened another way, a view has no alert to go back to (*Open the evidence* sets it after).
+    setLensFromAlert(null);
     setSelectedNodeIds([]);
     setSelectedNode(null);
     // The view's window, or none: a view keeps no window of the case's.
@@ -949,6 +954,7 @@ export function App() {
   function closeLens(): void {
     lensAskedRef.current += 1;
     setLens(null);
+    setLensFromAlert(null);
     setViewProblem(null);
     setSelectedNodeIds([]);
     setSelectedNode(null);
@@ -1692,6 +1698,20 @@ export function App() {
             }}
             address={addressedAlert && addressed ? { alertId: addressedAlert, state: addressed } : null}
             onOpenAlert={(alertId) => navigate(alertId ? alertPath(alertId) : "/")}
+            // ADR-146 decision 6 (R5): the alert's evidence as a private view of its case (ADR-144
+            // decision 4), opened as the Glass's read-only lens, with the way back to the alert.
+            onOpenEvidence={async ({ alertId, title, nodeIds }) => {
+              if (!investigationId) return "Open the alert's case first.";
+              const saved = await saveView(API_BASE_URL, bearerToken, investigationId, {
+                name: `From alert: ${title}`.slice(0, 200),
+                nodeIds,
+              });
+              if (!saved.ok) return saved.message;
+              navigate("/");
+              await openLens(saved.view.id);
+              setLensFromAlert({ alertId, title });
+              return null;
+            }}
           />
         )}
         {view === "strength" && investigationId && (
@@ -1738,6 +1758,19 @@ export function App() {
                 shared={lens.opened.view.shared ?? false}
                 missing={lens.opened.missing}
                 onBack={closeLens}
+                from={
+                  lensFromAlert
+                    ? {
+                        label: "Opened from an alert",
+                        backLabel: "← Back to the alert",
+                        onBack: () => {
+                          const { alertId } = lensFromAlert;
+                          closeLens();
+                          navigate(alertPath(alertId));
+                        },
+                      }
+                    : undefined
+                }
               />
             )}
             {view === "graph" && viewProblem && (
