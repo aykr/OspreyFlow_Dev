@@ -257,6 +257,54 @@ def leased_without_the_lease(environ: Mapping[str, str]) -> str | None:
     )
 
 
+#: The closed port an unset `MINIO_ENDPOINT` is pinned to, so no client, the C-level ones included, falls
+#: back to its default, localhost:9000, which is stack a's object store.
+CLOSED_OBJECT_STORE = "localhost:59995"
+
+
+def object_store_unleased(environ: Mapping[str, str]) -> str | None:
+    """The refusal, in words, for a run naming a leased stack's object store (`MINIO_ENDPOINT`) whose lease
+    `OSPREY_LANE` does not hold; None otherwise. Checked at start-up because pyarrow's S3 client opens its
+    sockets in C, past `guard_socket` (found 8 November 2026, twice)."""
+    raw = environ.get("MINIO_ENDPOINT", "")
+    if not raw:
+        return None
+    parts = urlsplit(raw if "://" in raw else f"//{raw}")
+    try:
+        port = parts.port
+    except ValueError:
+        return None
+    leased = stack_ports_all()
+    if port is None or port not in leased or not _is_this_machine(parts.hostname):
+        return None
+    stack = leased[port]
+    lane = environ.get("OSPREY_LANE") or None
+    holder = lease_holder(environ, stack)
+    if lane is not None and holder == lane:
+        return None
+    return (
+        f"Refused: MINIO_ENDPOINT={raw} is test stack {stack}'s object store, whose lease is held by "
+        f"{holder or 'nobody'}, not {lane or 'this run (OSPREY_LANE is not set)'}.\n"
+        "Nothing was collected. Leave MINIO_ENDPOINT unset for a stack-free run (the guard pins it to a closed "
+        f"port, {CLOSED_OBJECT_STORE}), or take the lease and pin the export line acquire prints."
+    )
+
+
+def stack_ports_all() -> dict[int, str]:
+    """Every port of every stack, guarded or not: port -> stack (the object stores included)."""
+    ports: dict[int, str] = {}
+    try:
+        with open(STACKS_TABLE, encoding="utf-8") as table:
+            for line in table:
+                cells = line.rstrip("\n").split("\t")
+                if line.startswith("#") or len(cells) < 4 or not cells[3].isdigit():
+                    continue
+                ports[int(cells[3])] = cells[0]
+    except OSError:
+        ports = {9000: "a"}
+    return ports
+
+
 def refusal(found: list[str]) -> str:
     return (
         "Refused: this test run would reach a live deployment on this machine.\n"
@@ -331,6 +379,10 @@ def pytest_configure(config: pytest.Config) -> None:
     unleased = leased_without_the_lease(os.environ)
     if unleased:
         raise pytest.UsageError(unleased)
+    store = object_store_unleased(os.environ)
+    if store:
+        raise pytest.UsageError(store)
+    os.environ.setdefault("MINIO_ENDPOINT", CLOSED_OBJECT_STORE)
     restore = guard_socket()
     config.add_cleanup(restore)
     neutralise_uvloop()

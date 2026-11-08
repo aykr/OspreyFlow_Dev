@@ -400,3 +400,41 @@ def test_each_stack_s_object_store_is_refused_to_anyone_but_its_holder(
     finally:
         restore()
     assert _RecordingSocket.asked == []
+
+
+# --- The object store, reached by C-level clients the socket guard cannot see (8 November 2026) ------------
+#
+# Twice in one day a lane's offline run wrote to stack a's object store on 9000: `MINIO_ENDPOINT` defaults to
+# localhost:9000, and pyarrow's S3 client opens its sockets in C, past `guard_socket`. So the guard decides it
+# at start-up: an unset endpoint becomes a closed port, and a leased store named without its lease stops the run.
+
+
+def test_an_unset_object_store_endpoint_becomes_a_closed_port(tmp_path: Path) -> None:
+    run = _run(tmp_path / "run",
+               "import os\ndef test_endpoint():\n    assert os.environ['MINIO_ENDPOINT'] == 'localhost:59995'\n",
+               {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993",
+                "CLICKHOUSE_HTTP_PORT": "59994", "POSTGRES_PASSWORD": "throwaway"})
+    assert run.returncode == 0, run.stdout + run.stderr
+
+
+@pytest.mark.parametrize(("lane", "holder", "refused"),
+                         [(None, None, True), ("studio", "rules", True), ("studio", None, True), ("rules", "rules", False)])
+def test_a_leased_object_store_named_without_its_lease_stops_at_start_up(
+    tmp_path: Path, lane: str | None, holder: str | None, refused: bool
+) -> None:
+    lease = tmp_path / "lease"
+    lease.mkdir()
+    if holder is not None:
+        _hold_lease(lease, holder, "a")
+    env = {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993",
+           "CLICKHOUSE_HTTP_PORT": "59994", "POSTGRES_PASSWORD": "throwaway",
+           "MINIO_ENDPOINT": "localhost:9000", "OSPREY_LEASE_DIR": str(lease)}
+    if lane is not None:
+        env["OSPREY_LANE"] = lane
+    run = _run(tmp_path / "run", "def test_nothing():\n    pass\n", env)
+    said = run.stdout + run.stderr
+    if refused:
+        assert run.returncode == 4, said
+        assert "MINIO_ENDPOINT=localhost:9000" in said and "stack a" in said
+    else:
+        assert run.returncode == 0, said
