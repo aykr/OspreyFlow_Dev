@@ -129,9 +129,9 @@ LIVE: list[Plant] = [
     ("the store's decision not conditional on the status read", STORE,
      [("\"WHERE id = $1 AND ($9::text IS NULL OR status = $9::text)\"", "\"WHERE id = $1 AND $9::text IS NOT DISTINCT FROM $9::text\"")],
      [f"{LS}::test_a_table_made_before_accepted_takes_it_after_connect"]),
-    ("add_extension without the dataset's lock", MODELS,
-     [("            await self._locked(conn, dataset_id)\n            live = await self._in(conn, dataset_id, \"live\")\n            draft = await self._in(conn, dataset_id, \"draft\")\n            if draft is None:\n                draft = _first_or_copy",
-       "            live = await self._in(conn, dataset_id, \"live\")\n            draft = await self._in(conn, dataset_id, \"draft\")\n            if draft is None:\n                draft = _first_or_copy")],
+    ("the dataset's model lock planted out of `_locked`", MODELS,
+     [("            \"SELECT pg_advisory_xact_lock(hashtext('target_models:' || $1))\", dataset_id",
+       "            \"SELECT 1 WHERE $1::text IS NOT NULL\", dataset_id")],
      [f"{TS}::test_two_link_types_added_at_once_both_land_in_the_draft"]),
 ]
 
