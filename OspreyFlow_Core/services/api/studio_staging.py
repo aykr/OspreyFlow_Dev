@@ -50,7 +50,7 @@ from schemas.ingest import (
     StagingPreviewInput,
     StudioRecipeDraft,
 )
-from schemas.staging import StagingStep, step_inputs
+from schemas.staging import LookupStep, StagingStep, step_inputs
 
 from .run_source import branch_location, topological
 from .studio_map import resolve_source_handling
@@ -192,6 +192,13 @@ WITHHELD = (
 )
 
 
+#: What the preview says when a Lookup's list rows are not the reader's to read.
+LISTS_WITHHELD = (
+    "The sample is withheld: it reads this dataset's reference lists, which only a case that "
+    "reads the dataset may read."
+)
+
+
 def preview_staging(
     draft: StudioRecipeDraft,
     body: StagingPreviewInput,
@@ -232,6 +239,14 @@ def preview_staging(
             step=body.step, problems=[f"the pipeline has no step {body.step!r} to preview"]
         )
     wanted = _ancestry(steps, body.step)
+    # A list's rows carry no marking of their own: they are the dataset's, read as its elements
+    # are, by a case that reads the dataset (rule 4; the lane review's second round).
+    if any(isinstance(s, LookupStep) for s in wanted) and (
+        not draft.dataset_id or draft.dataset_id not in (principal.datasets or [])
+    ):
+        return StagingPreview(
+            step=body.step, problems=[*problems, LISTS_WITHHELD], values_masked=True
+        )
     read = source_tables(draft, pipeline, load_id="preview", limit=PREVIEW_ROWS)
     every_row = [r for rows in read.raw.values() for r in rows]
     sample = sample_markings(draft, scheme, every_row)

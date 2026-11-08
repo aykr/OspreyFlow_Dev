@@ -489,8 +489,10 @@ export function StagingSample({
     { key: "#", header: "Row", numeric: true, render: (r) => String(r.i + 1) },
     ...columnNames.map((name) => ({ key: name, header: name, render: (r: { i: number; values: Record<string, string> }) => r.values[name] ?? "" })),
   ];
-  // The withheld sentence is the sample's own, not the save gate's (rule 3; the review of L1.4).
-  const withheld = (preview?.problems ?? []).filter((p) => p.startsWith("The sample is withheld"));
+  // The sample's own words (withheld, rule 3; a source not yet saved), shown apart from the save
+  // gate's refusals (the review of L1.4).
+  const own = (p: string) => p.startsWith("The sample is withheld") || p.includes("is not the saved pipeline's");
+  const withheld = (preview?.problems ?? []).filter(own);
   const problems = (preview?.problems ?? []).filter((p) => !withheld.includes(p));
   return (
     <section aria-label="Sample of this step" style={{ display: "grid", gap: "var(--sp-8)", minWidth: 0 }}>

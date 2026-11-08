@@ -257,17 +257,22 @@ def staging_from_pipeline(graph: PipelineGraph) -> list[StagingStep] | None:
 def pipeline_with_staging(graph: PipelineGraph, staging: Sequence[StagingStep]) -> PipelineGraph:
     """`graph` with `staging` as its step nodes, in place of any it held: each step a node whose
     config is its record less its id and kind; a line from each table it reads, and from the last
-    step to each Map, which no source then feeds directly. The inverse of `staging_from_pipeline`
+    step to each Map, which no source or profile then feeds directly. The inverse of
+    `staging_from_pipeline`
     (`tests/ingest/test_staging_pipeline_nodes.py`)."""
     kept = [n for n in graph.nodes if n.kind not in STAGING_KINDS]
     gone = {n.id for n in graph.nodes} - {n.id for n in kept}
     maps = [n.id for n in kept if n.kind is PipelineNodeKind.MAP]
-    sources = {n.id for n in kept if n.kind is PipelineNodeKind.SOURCE}
+    # With steps, Map reads only the last step's table: no source or profile feeds it directly
+    # (the gate's own rule, `staging_graph_violations`).
+    feeders = {
+        n.id for n in kept if n.kind in (PipelineNodeKind.SOURCE, PipelineNodeKind.PROFILE)
+    }
     edges = [
         e
         for e in graph.edges
         if e.source not in gone and e.target not in gone
-        and not (staging and e.source in sources and e.target in maps)
+        and not (staging and e.source in feeders and e.target in maps)
     ]  # fmt: skip
     nodes = list(kept)
     for step in staging:

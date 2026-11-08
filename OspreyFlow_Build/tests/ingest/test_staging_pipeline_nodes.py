@@ -153,3 +153,18 @@ def test_a_step_that_is_not_the_last_cannot_feed_map() -> None:
     assert "'Join: owner of contact' feeds Map, but Map reads only the last step's table" in (
         pipeline_rule_violations(graph)
     )
+
+
+def test_steps_given_to_a_chain_with_a_profile_make_a_pipeline_its_gate_accepts() -> None:
+    """The lane review's second round: a v1 chain (source → profile → map) given steps loses its
+    profile's line to Map too, so the server's own build passes the server's own gate."""
+    assert RECIPE.staging
+    chain = _base()
+    chain.nodes.append(PipelineNode(id="profile", kind=PipelineNodeKind.PROFILE, label="Profile"))
+    chain.edges = [e for e in chain.edges if (e.source, e.target) != ("visit_bookings", "map")]
+    chain.edges += [
+        PipelineEdge(source="visit_bookings", target="profile"),
+        PipelineEdge(source="profile", target="map"),
+    ]
+    graph = pipeline_with_staging(chain, RECIPE.staging)
+    assert pipeline_rule_violations(graph) == []

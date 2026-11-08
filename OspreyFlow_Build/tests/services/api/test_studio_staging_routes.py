@@ -45,6 +45,7 @@ from tests.services.api.test_studio_recipe_routes import (
     _UNCLEARED_HANDLING,
     NO_ROLE_ANALYST,
     SOURCE_APPROVER,
+    SOURCE_AUTHOR,
     _ready_draft,
 )
 from tests.services.api.test_studio_verify_routes import (  # noqa: F401  (fixtures)
@@ -119,6 +120,11 @@ def staged(graph_client: TestClient, tmp_path: Path, store: Path) -> TestClient:
         dataset_id="pid",
         row_template=RECIPE.row_template,
         pipeline=_pipeline(tmp_path),
+    )
+    # The route's principal is scoped to its case's datasets (`dataset_scope.scope_to_case`): a
+    # case reading the recipe's dataset.
+    app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR.model_copy(
+        update={"datasets": ["pid"]}
     )
     app.dependency_overrides[get_target_models] = lambda: _Models([ESTABLISHMENTS.id])
     app.dependency_overrides[get_staging_storage] = lambda: STORAGE
@@ -264,11 +270,16 @@ def test_a_preview_reads_only_the_saved_pipeline_s_sources(
     """Rules 3 and 4 (the review of L1.4): a source the request names that is not the saved
     draft's own (here, another file in the ingest folder) is refused in words and never read."""
     other = tmp_path / "elsewhere.csv"
-    other.write_text("secret_column\nSHOULD-NOT-BE-READ\n", encoding="utf-8")
+    # Shaped as the owners' file, so the Join would bring its name across if it were read.
+    other.write_text(
+        "number,owner_family_name,since\n+447700900731,SHOULD-NOT-BE-READ,2020-01-01\n",
+        encoding="utf-8",
+    )
     graph = _draft(staged).pipeline.model_copy(deep=True)
     owners = next(n for n in graph.nodes if n.id == "number_owners")
     owners.config = {**owners.config, "source_location": str(other)}
-    body = _preview(staged, "with_establishment", graph).json()
+    # The Join reads the swapped source, so a read of it would show in its sample.
+    body = _preview(staged, "with_owner", graph).json()
     assert (
         "source 'Owners' is not the saved pipeline's: save its source before a step's sample "
         "reads it"
@@ -334,3 +345,20 @@ def test_a_step_s_sample_runs_beside_refusals_of_steps_it_does_not_need(staged: 
         "step's table, so its rows would go nowhere",
     ]
     assert len(body["rows"]) == 6
+
+
+def test_a_lookup_s_list_rows_are_withheld_from_a_case_not_reading_the_dataset(
+    staged: TestClient,
+) -> None:
+    """Rule 4 (the lane review's second round): a list's rows carry no marking; they are the
+    dataset's, read by a case that reads it. A case on another dataset is given nothing of a
+    sample a Lookup is in, and the sample of a step no Lookup feeds is unaffected."""
+    app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR.model_copy(
+        update={"datasets": ["ledger"]}
+    )
+    response = _preview(staged, "with_establishment")
+    body = response.json()
+    assert body["values_masked"] is True and body["rows"] == [] and body["counts"] == []
+    withheld = "The sample is withheld: it reads this dataset's"
+    assert any(p.startswith(withheld) for p in body["problems"])
+    assert "HMP Fenwick Moor" not in response.text
