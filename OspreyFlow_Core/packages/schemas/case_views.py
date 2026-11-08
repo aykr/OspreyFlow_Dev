@@ -1,0 +1,114 @@
+"""A case view: a saved lens on a case (ADR-144; `01_DOMAIN_MODEL.md` §2.2c).
+
+A case is the only container. A **view** is saved under one case and holds **no data**: a name, its
+creator, whether it is shared with the case, what it shows (a chosen set of nodes or a filter), a
+layout, a timeline range and a resolution threshold (*Match strictness*), and, for a drawing board
+(ADR-143 decision 5, L3.3), `drawing`. It re-reads the case each time it opens (decision 2), through
+the reader's own principal, so it never widens what its reader may see (ADR-099).
+
+- **`CaseView`**: the view as stored and listed.
+- **`CaseViewInput`**: what *Save what I see as a view* sends.
+- **`CaseViewOpened`**: the view opened now: the items the reader may see, and how many of its
+  chosen items it could not show, **never which** (decision 2; rule 3).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from schemas.domain import Edge, Interval, Node, NodeId, PrincipalId
+
+
+class ViewFilter(BaseModel):
+    """What a filtered view keeps (ADR-124 decision 2's filter, ADR-144 decision 1): entity types,
+    a date window, or both. Applied to the reader's own projection of the case and nothing else."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity_types: list[str] | None = None
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
+
+    @model_validator(mode="after")
+    def _a_choice_is_made(self) -> ViewFilter:
+        if self.entity_types is None and self.valid_from is None and self.valid_to is None:
+            raise ValueError("choose entity types, a date window, or both")
+        if self.valid_from and self.valid_to and self.valid_from > self.valid_to:
+            raise ValueError("the window ends before it starts")
+        return self
+
+
+class NodePosition(BaseModel):
+    """Where a node sits on the view's canvas."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    x: float
+    y: float
+
+
+class CaseViewInput(BaseModel):
+    """*Save what I see as a view* (ADR-144 decision 4): a name and exactly one of a node selection
+    or a filter, with the layout, timeline range and threshold the reader had."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    node_ids: list[NodeId] | None = Field(default=None, max_length=10_000)
+    filter: ViewFilter | None = None
+    layout: dict[NodeId, NodePosition] = Field(default_factory=dict)
+    window: Interval | None = None
+    threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _one_lens(self) -> CaseViewInput:
+        if (self.node_ids is None) == (self.filter is None):
+            raise ValueError("a view shows a chosen set of nodes or a filter, exactly one")
+        return self
+
+
+class CaseView(BaseModel):
+    """A view as stored and listed (ADR-144 decisions 1 and 3). Private to `created_by` until
+    shared; deleted only by its creator; deleting it deletes nothing else."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    case_id: str
+    name: str
+    created_by: PrincipalId
+    created_at: datetime
+    shared: bool = False
+    node_ids: list[NodeId] | None = None
+    filter: ViewFilter | None = None
+    layout: dict[NodeId, NodePosition] = Field(default_factory=dict)
+    window: Interval | None = None
+    threshold: float | None = None
+    #: A drawing board (ADR-143 decision 5); boards are built in L3.3.
+    drawing: bool = False
+    #: The retired case this view was converted from by the upgrade (ADR-144 decision 6), whose
+    #: audit stays readable from the view; `None` for a view a person saved.
+    converted_from_case: str | None = None
+
+
+class CaseViewOpened(BaseModel):
+    """A view opened now (decision 2): what the reader may see of it, live. `missing` counts the
+    chosen nodes it could not show, for whatever reason, and names none of them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    view: CaseView
+    nodes: list[Node]
+    edges: list[Edge]
+    missing: int = Field(ge=0)
+
+
+ALL_MODELS: tuple[type[BaseModel], ...] = (
+    ViewFilter,
+    NodePosition,
+    CaseViewInput,
+    CaseView,
+    CaseViewOpened,
+)

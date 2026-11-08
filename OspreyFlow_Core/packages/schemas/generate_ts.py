@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from schemas.admin import ALL_MODELS as ADMIN_MODELS  # noqa: E402
 from schemas.analytics import ALL_MODELS as ANALYTICS_MODELS  # noqa: E402
+from schemas.case_views import ALL_MODELS as CASE_VIEW_MODELS  # noqa: E402
 from schemas.compute import ALL_MODELS as COMPUTE_PORT_MODELS  # noqa: E402
 from schemas.dataset_model import ALL_MODELS as DATASET_MODEL_MODELS  # noqa: E402
 from schemas.deployment import ALL_MODELS as DEPLOYMENT_MODELS  # noqa: E402
@@ -69,6 +70,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *MONITORING_MODELS,
     *STRENGTH_MODELS,
     *DATASET_MODEL_MODELS,
+    *CASE_VIEW_MODELS,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

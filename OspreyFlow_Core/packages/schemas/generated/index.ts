@@ -383,3 +383,8 @@ export type { ImpactedCase } from "./ImpactedCase";
 export type { ModelImpact } from "./ModelImpact";
 export type { MadeLive } from "./MadeLive";
 export type { DrawnDatasetInput } from "./DrawnDatasetInput";
+export type { ViewFilter } from "./ViewFilter";
+export type { NodePosition } from "./NodePosition";
+export type { CaseViewInput } from "./CaseViewInput";
+export type { CaseView } from "./CaseView";
+export type { CaseViewOpened } from "./CaseViewOpened";

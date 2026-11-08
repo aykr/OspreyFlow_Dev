@@ -709,6 +709,40 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     Where that is a service account, a disabled account or a gone one, it gives none; the case is
     named "needs an owner" and is not given an Author by default.
 
+### 2.2c Case views (ADR-144, ADR-144 Amendment 1)
+
+A **dataset** holds data and has one domain model. A **case** reads one dataset (or one composite)
+and holds its analyst layer (ADR-143 decision 1), its views and its boards. A **view** is a saved
+lens on one case. There is nothing between a case and a view, and no case is made from another.
+
+`CaseView` (`packages/schemas/case_views.py`) holds **no data**:
+- `id`, `case_id`, `name`, `created_by` and `created_at`;
+- `shared`: `false` until its creator chooses *Share with the case*;
+- exactly one of `node_ids` (a chosen set) or `filter` (`ViewFilter`: entity types, a date window,
+  or both);
+- `layout`: node positions;
+- `window`: a timeline range;
+- `threshold`: *Match strictness*, 0 to 1;
+- `drawing`: a board (L3.3);
+- `converted_from_case`: the retired case the upgrade converted it from (ADR-144 decision 6),
+  whose audit stays readable from the view.
+
+The invariants, each with the test that fails if it is broken (rule 12):
+- **Live, never a copy.** Opening a view re-reads the case under the reader's own principal.
+  `CaseViewOpened` returns only what that reader may see, and `missing` counts the chosen nodes it
+  could not show without naming them.
+  - `test_a_view_shows_the_rest_and_counts_the_missing` is red with the view returning its stored
+    selection.
+- **Private until shared.** Another member of the case is answered 404 for a private view, not
+  403, and the case's view list never shows it to them. Once shared, it opens for every member at
+  their own level.
+  - `test_a_private_view_is_invisible_to_another_member`.
+- **Only its creator deletes it, and deleting it deletes nothing else.**
+  - `test_deleting_a_view_leaves_everything_drawn_in_place`.
+- **A view never widens access.** Its case's level check comes first. A reader who holds no level
+  on the case is refused every view route as the case's own routes refuse them.
+  - `test_every_view_route_refuses_a_non_member` (rule 4).
+
 ### 2.3 Resolution state
 
 ```python
