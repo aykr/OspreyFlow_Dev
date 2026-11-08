@@ -9227,7 +9227,7 @@ async def accept_model_proposal(
 
 @app.post(
     "/v1/datasets/{dataset_id}/model/proposals/{proposal_id}/decline",
-    dependencies=_DECIDES_TYPES,
+    dependencies=[*_DECIDES_TYPES, Depends(refuse_changing_a_composites_model)],
 )
 async def decline_model_proposal(
     dataset_id: StudioDatasetDep,
