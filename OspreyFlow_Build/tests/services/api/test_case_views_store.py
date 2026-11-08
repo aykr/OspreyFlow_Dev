@@ -10,6 +10,7 @@ clause is what keeps it: with it replaced by `TRUE`, Bob reads Alice's private v
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 import asyncpg
 import pytest
@@ -86,3 +87,96 @@ async def test_the_postgres_privacy_check_fails_with_the_reader_planted_out(
     monkeypatch.setattr(case_views_module, "_VISIBLE", "($2::text IS NOT NULL)")
     assert [v.id for v in await store.visible_in(CASE, "bob")] == [saved.id]
     assert (await store.get(CASE, saved.id, "bob")).id == saved.id
+
+
+# --- a view's conversation and its proposals, on Postgres (L3.2's Q2; the review's items 3, 11) --
+
+
+async def test_the_postgres_question_store_never_mixes_a_views_conversation(dsn: str) -> None:
+    from datetime import UTC, datetime
+
+    from services.api.questions import PostgresQuestionStore, QuestionEntry
+
+    store = await PostgresQuestionStore.connect(dsn)
+    try:
+        for entry_id, view_id in (("q-case", None), ("q-view", "v-1")):
+            await store.add(
+                QuestionEntry(
+                    id=entry_id, investigation_id=CASE, author="alice", question="Who?",
+                    answer="Dana.", model="local-model", view_id=view_id,
+                    created_at=datetime(2026, 11, 8, tzinfo=UTC),
+                )  # fmt: skip
+            )
+        assert [e.id for e in await store.list_for_case(CASE)] == ["q-case"]
+        assert [e.id for e in await store.list_for_case(CASE, "v-1")] == ["q-view"]
+        assert await store.list_for_case(CASE, "v-2") == []
+    finally:
+        await store.close()
+
+
+async def _a_views_proposal(dsn: str) -> tuple[Any, str]:
+    from services.api.review import ExtractionCandidateStore
+    from services.extract.candidates import ExtractionCandidate
+
+    from schemas.domain import Handling, Principal
+
+    store = await ExtractionCandidateStore.connect(dsn)
+    alice = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1")
+    handling = Handling(
+        classification="OFFICIAL", handling_code="P", originator="unit-1", owning_unit="unit-1"
+    )
+    (record,) = await store.store(
+        [
+            ExtractionCandidate(
+                id=new_id(), document_id="doc-1", entity_type="Person",
+                properties={"family_name": "MERCER"}, confidence=0.9, model="local-model",
+                locator="char span 0-6", excerpt_hash="", handling=handling,
+            )  # fmt: skip
+        ],
+        alice,
+        view_id="v-1",
+    )
+    return store, record.id
+
+
+async def test_a_views_proposal_is_read_on_postgres_only_through_its_view(dsn: str) -> None:
+    from services.api.dataset_scope import read_in_view, set_case_datasets
+    from services.api.review import ExtractionCandidateNotFoundError
+
+    from schemas.domain import Principal
+
+    store, candidate = await _a_views_proposal(dsn)
+    bob = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1")
+    try:
+        set_case_datasets(None)
+        assert await store.list_for_document("doc-1", bob) == []
+        with pytest.raises(ExtractionCandidateNotFoundError):
+            await store.get_authorized(candidate, bob)
+        read_in_view("v-2")
+        assert await store.list_for_document("doc-1", bob) == []
+        read_in_view("v-1")
+        assert [r.id for r in await store.list_for_document("doc-1", bob)] == [candidate]
+        assert (await store.get_authorized(candidate, bob)).view_id == "v-1"
+    finally:
+        set_case_datasets(None)
+        await store.close()
+
+
+async def test_the_postgres_view_clause_check_fails_with_it_planted_out(
+    dsn: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, at the real query: the clause planted to pass every row, a view's proposal is
+    listed with no view opened."""
+    from services.api import review
+    from services.api.dataset_scope import set_case_datasets
+
+    from schemas.domain import Principal
+
+    monkeypatch.setattr(review, "view_clause", lambda position: ("", []))
+    store, candidate = await _a_views_proposal(dsn)
+    try:
+        set_case_datasets(None)
+        bob = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1")
+        assert [r.id for r in await store.list_for_document("doc-1", bob)] == [candidate]
+    finally:
+        await store.close()

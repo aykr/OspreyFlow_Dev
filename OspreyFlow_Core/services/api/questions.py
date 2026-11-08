@@ -714,7 +714,13 @@ class QuestionsService:
                     await self._candidates.get_document_text(document_id, principal)
                 except DocumentNotFoundError:
                     await self._candidates.store_document_text(document_id, text, principal)
-        records = await self._candidates.store(proposals, principal) if proposals else []
+        records = (
+            await self._candidates.store(
+                proposals, principal, **({"view_id": view_id} if view_id is not None else {})
+            )
+            if proposals
+            else []
+        )
         entry = QuestionEntry(
             id=new_id(),
             investigation_id=investigation_id,

@@ -420,6 +420,7 @@ from .dataset_scope import (
     UnknownDatasetError,
     made_in,
     outside_any_case,
+    read_in_view,
     refuse_in_a_composite_case,
     refuse_writing_a_node_in_a_composite_case,
     scope_to_case,
@@ -5890,8 +5891,10 @@ async def _view_node_ids(
     view_id: str,
     principal: Principal,
 ) -> list[str]:
-    """The nodes a view shows, for a reader the store lets see it (`ViewNotFound` otherwise)."""
+    """The nodes a view shows, for a reader the store lets see it (`ViewNotFound` otherwise). The
+    request may then read what is kept with the view (`read_in_view`)."""
     view = await views.get(case_id, view_id, principal.id)
+    read_in_view(view_id)
     if view.node_ids is not None:
         return list(view.node_ids)
     assert view.filter is not None
@@ -5916,6 +5919,7 @@ async def list_questions_route(
     reader who may see the view (the owner's ruling of 8 November 2026; 404 as for no view)."""
     if view_id is not None:
         await views.get(investigation.id, view_id, principal.id)
+        read_in_view(view_id)  # its proposals are read only through it
     history = await questions.history(investigation.id, principal, view_id=view_id)
     names = await principal_names.display_names(q.author for q in history)
     return [q.model_copy(update={"author_name": names.get(q.author)}) for q in history]
@@ -5932,8 +5936,14 @@ async def accept_question_candidate_route(
     questions: QuestionsDep,
     audit: AuditDep,
     valkey: Annotated[Valkey, Depends(get_valkey)],
+    views: CaseViewsDep,
+    view_id: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
 ) -> QuestionAccepted:
-    """Accepts one of the model's proposals: an inferred node linked to its Document."""
+    """Accepts one of the model's proposals: an inferred node linked to its Document. A proposal
+    from a view's conversation is found only with that view named, for a reader who may see it."""
+    if view_id is not None:
+        await views.get(investigation.id, view_id, principal.id)
+        read_in_view(view_id)
     result = await questions.accept(investigation.id, candidate_id, principal)
     await publish_delta(valkey, investigation.id, result.delta)
     await audit.record(
@@ -5956,8 +5966,14 @@ async def reject_question_candidate_route(
     principal: PrincipalDep,
     questions: QuestionsDep,
     audit: AuditDep,
+    views: CaseViewsDep,
+    view_id: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
 ) -> RejectedResponse:
-    """Rejects one of the model's proposals: nothing is written."""
+    """Rejects one of the model's proposals: nothing is written. A proposal from a view's
+    conversation is found only with that view named, for a reader who may see it."""
+    if view_id is not None:
+        await views.get(investigation.id, view_id, principal.id)
+        read_in_view(view_id)
     await questions.reject(investigation.id, candidate_id, principal)
     await audit.record(
         principal=principal,

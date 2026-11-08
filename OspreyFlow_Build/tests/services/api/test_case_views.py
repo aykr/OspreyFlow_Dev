@@ -57,6 +57,9 @@ PEOPLE = {
 CASE = "case-k"
 #: Alice is the case's Author, Bob an Editor and Rita a Viewer; Carol, of the same unit, holds none.
 LEVELS = {"alice": AccessLevel.AUTHOR, "bob": AccessLevel.EDITOR, "rita": AccessLevel.VIEWER}
+#: A second case, Bob's, of which Alice is an Editor too: a view is reached only through its own.
+OTHER = "case-b"
+CASES = {CASE: LEVELS, OTHER: {"bob": AccessLevel.AUTHOR, "alice": AccessLevel.EDITOR}}
 
 
 class _Resolver:
@@ -78,12 +81,12 @@ class _Investigations:
     async def get_authorized(
         self, investigation_id: str, principal: Principal, *, need: AccessLevel
     ) -> Investigation:
-        level = LEVELS.get(principal.id)
-        if investigation_id != CASE or level is None:
+        level = CASES.get(investigation_id, {}).get(principal.id)
+        if level is None:
             raise InvestigationNotFoundError(investigation_id)
         if level.rank < need.rank:
             raise InsufficientAccessError(investigation_id)
-        return self.case
+        return self.case.model_copy(update={"id": investigation_id})
 
 
 class _Audit:
@@ -501,3 +504,164 @@ async def test_the_store_never_mixes_a_views_conversation_with_the_cases() -> No
     assert [e.id for e in await store.list_for_case(CASE)] == ["q-case"]
     assert [e.id for e in await store.list_for_case(CASE, "v-1")] == ["q-view"]
     assert await store.list_for_case(CASE, "v-2") == []
+
+
+# --- a private view's proposals (the lane review's blocker 3) -----------------------------------
+
+
+@pytest.fixture
+def proposals(world: _World) -> Iterator[tuple[Any, str, str]]:
+    """Alice's private view, and a proposal its conversation made on a Document, kept with the
+    view, in a candidate store that refuses what the Postgres store refuses (`view_clause`)."""
+    import asyncio
+
+    from services.api.app import get_extraction_candidates
+    from services.extract.candidates import ExtractionCandidate
+
+    from .test_case_writes import HANDLING
+    from .test_email_extraction import InMemoryCandidates
+
+    view_id = _saved()
+    candidates = InMemoryCandidates()
+    (record,) = asyncio.run(
+        candidates.store(
+            [
+                ExtractionCandidate(
+                    id="cand-v", document_id="doc-1", entity_type="Person",
+                    properties={"family_name": "MERCER"}, confidence=0.9, model="local-model",
+                    locator="char span 0-6", excerpt_hash="", handling=HANDLING,
+                )  # fmt: skip
+            ],
+            PEOPLE["alice"],
+            view_id=view_id,
+        )
+    )
+    from services.api.app import get_questions, get_valkey
+
+    class _NotAsked:
+        def __getattr__(self, name: str) -> Any:
+            raise AssertionError(f"refused before the questions service: {name}")
+
+    app.dependency_overrides[get_extraction_candidates] = lambda: candidates
+    app.dependency_overrides[get_questions] = lambda: _NotAsked()
+    app.dependency_overrides[get_valkey] = lambda: _NotAsked()
+    try:
+        yield candidates, view_id, record.id
+    finally:
+        for dependency in (get_extraction_candidates, get_questions, get_valkey):
+            app.dependency_overrides.pop(dependency, None)
+
+
+def test_a_private_views_proposals_are_not_read_through_the_case(
+    world: _World, proposals: tuple[Any, str, str]
+) -> None:
+    """Bob, an Editor of the case, finds none of the proposals of Alice's private view's
+    conversation through the case's review routes: not listed, and not accepted or rejected, each
+    answered as for a candidate that does not exist; nothing is reviewed."""
+    candidates, _view_id, candidate = proposals
+    base = f"/v1/investigations/{CASE}/ingest/candidates"
+    bob = _as("bob")
+    assert bob.get(base, params={"document_id": "doc-1"}).json() == []
+    for verb in ("accept", "reject"):
+        refused = bob.post(f"{base}/{candidate}/{verb}", json={})
+        missing = bob.post(f"{base}/no-such/{verb}", json={})
+        assert (refused.status_code, refused.json()) == (missing.status_code, missing.json())
+    assert candidates.records[candidate].status.value == "pending"
+
+
+def test_a_private_views_proposals_need_the_view_to_be_seen(
+    world: _World, proposals: tuple[Any, str, str]
+) -> None:
+    """Through the question routes, a proposal kept with Alice's private view is refused to Bob
+    as for a view that does not exist, whatever view he names."""
+    _, view_id, candidate = proposals
+    q = f"/v1/investigations/{CASE}/questions/candidates/{candidate}"
+    for verb in ("accept", "reject"):
+        refused = _as("bob").post(f"{q}/{verb}", params={"view_id": view_id})
+        assert (refused.status_code, refused.json()) == (404, {"error": "view_not_found"})
+
+
+def test_the_proposal_check_fails_with_the_view_clause_planted_out(
+    world: _World, proposals: tuple[Any, str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red: the store's view clause planted out (here the fake's, which mirrors
+    `view_clause`), Bob lists the private view's proposal through the case."""
+    from . import test_email_extraction
+
+    monkeypatch.setattr(test_email_extraction, "_in_reach", lambda record, principal: True)
+    listed = _as("bob").get(
+        f"/v1/investigations/{CASE}/ingest/candidates", params={"document_id": "doc-1"}
+    )
+    assert [r["id"] for r in listed.json()] == [proposals[2]]
+
+
+def test_a_view_is_reached_only_through_its_own_case(world: _World) -> None:
+    """Rule 4: Alice's shared view of Kestrel, asked for through Bob's other case, where both hold
+    a level, answers as a view that does not exist on every route, and is not listed there."""
+    world.datasets.cases[OTHER] = ["src"]
+    view_id = _saved(shared=True)
+    other = f"/v1/investigations/{OTHER}/views"
+    for who in ("alice", "bob"):
+        client = _as(who)
+        assert client.get(other).json() == []
+        for response in (
+            client.get(f"{other}/{view_id}"),
+            client.post(f"{other}/{view_id}/share"),
+            client.delete(f"{other}/{view_id}"),
+        ):
+            assert (response.status_code, response.json()) == (404, {"error": "view_not_found"})
+    assert view_id in world.views.views
+
+
+def test_the_own_case_check_fails_with_the_case_planted_out(
+    world: _World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, red: the store's `get` planted to find a view by id whatever its case."""
+
+    async def any_case(self: InMemoryCaseViewStore, case_id: str, view_id: str, reader: str) -> Any:
+        view = self.views.get(view_id)
+        if view is None or not case_views_module.visible_to(view, reader):
+            raise case_views_module.ViewNotFound(view_id)
+        return view
+
+    monkeypatch.setattr(InMemoryCaseViewStore, "get", any_case)
+    world.datasets.cases[OTHER] = ["src"]
+    view_id = _saved(shared=True)
+    assert _as("bob").get(f"/v1/investigations/{OTHER}/views/{view_id}").status_code == 200
+
+
+# --- no branch route (ADR-144 Amendment 1's test) ---------------------------------------------
+
+BRANCH_PATHS = ["/branch", "/branch-by-filter", "/branch/x"]
+
+
+def _no_branch_route_answers(path_tail: str) -> None:
+    for method in ("GET", "POST", "PUT", "DELETE"):
+        answered = _as("alice").request(method, f"/v1/investigations/{CASE}{path_tail}", json={})
+        assert answered.status_code in (404, 405), (method, path_tail, answered.status_code)
+        assert answered.status_code == 404 or method != "POST", (method, path_tail)
+
+
+@pytest.mark.parametrize("tail", BRANCH_PATHS)
+def test_no_route_under_a_case_makes_a_branch(world: _World, tail: str) -> None:
+    """ADR-144 Amendment 1: `/v1/investigations/*/branch*` answers 404; no route under it exists."""
+    _no_branch_route_answers(tail)
+    assert not [r for r in app.routes if "/branch" in getattr(r, "path", "")]
+
+
+def test_the_no_branch_route_check_fails_with_one_put_back(world: _World) -> None:
+    """Rule 15, red: a branch route put back is found, by the request and by the route table."""
+    from fastapi.routing import APIRoute
+
+    async def branch() -> dict[str, str]:
+        return {"id": "a-branch"}
+
+    app.router.routes.append(
+        APIRoute("/v1/investigations/{investigation_id}/branch", branch, methods=["POST"])
+    )
+    try:
+        with pytest.raises(AssertionError):
+            _no_branch_route_answers("/branch")
+    finally:
+        app.router.routes.pop()
+    assert not [r for r in app.routes if "/branch" in getattr(r, "path", "")]
