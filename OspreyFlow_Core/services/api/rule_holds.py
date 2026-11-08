@@ -22,7 +22,7 @@ from ports.media import MediaStore
 from schemas.domain import HeldRow, OntologySchema, Principal, RuleAuditEntry, RuleAuditPage
 from schemas.ingest import LoadReport, Recipe
 
-from .alerts import read_evidence_ids
+from .alerts import AlertStore, evidence_node_ids, read_evidence_ids, settle_repoints
 from .audit import AuditWriter
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .studio_publish import LoadSink, load_with_rules, post_commit_notes
@@ -41,6 +41,11 @@ def _old_firing(entry: RuleAuditEntry) -> bool:
     )
 
 
+#: The entries about one alert: checked by what that alert cites now, not what it cited when the
+#: entry was written, since a repoint (ADR-109 Amendment 10) moves an alert onto a link's successor.
+_ABOUT_AN_ALERT = ("rule_fired", "alert_node_withheld")
+
+
 async def readable_rule_audit(
     audit: AuditWriter,
     graph: GraphPort,
@@ -48,33 +53,62 @@ async def readable_rule_audit(
     reader: Principal,
     *,
     analytics: AnalyticsPort,
+    alerts: AlertStore,
     offset: int = 0,
     limit: int = 100,
 ) -> RuleAuditPage:
-    """The case's rule audit as `reader` may read it (ADR-109 ruling 1; ADR-146 decision 10). Every
-    node, link and transaction the entries name is read in one batched read per kind as the reader
-    (`read_evidence_ids`, the queue's check), and an entry naming any the reader cannot see is
-    withheld whole, before paging, so the total never counts it. A firing written before its links
-    and transactions were recorded keeps its entry, with its words withheld: whether the reader may
-    see what it cites cannot be known (fail closed; the orchestrator's call, for the owner)."""
+    """The case's rule audit as `reader` may read it (ADR-109 ruling 1; ADR-146 decision 10). An
+    entry about an alert (a firing, a withheld node) is checked by everything its alert cites now,
+    its own node included; any other by the nodes, links and transactions it names. All are read in
+    one batched read per kind as the reader (`read_evidence_ids`, the queue's check), transactions
+    in the reader's case, and an entry naming any the reader cannot see is withheld whole, before
+    paging, so the total never counts it; one about an alert the store no longer holds is withheld.
+    A firing written before its links were recorded keeps its entry, its words withheld (fail
+    closed, the orchestrator's call). An evaluation's count of findings is withheld from a reader
+    from whom any of that rule's firings is withheld, and kept for one who may see them all."""
+    await settle_repoints(alerts, graph)
     entries = await audit.list_for_case(investigation_id, RULE_AUDIT_ACTIONS)
+    about = sorted({str(e.detail["alert_id"]) for e in entries
+                    if e.action in _ABOUT_AN_ALERT and "alert_id" in e.detail})  # fmt: skip
+    current = await alerts.cited_by_ids(about)
+
+    def cites(entry: RuleAuditEntry) -> tuple[list[str], list[str], list[str]] | None:
+        if entry.action in _ABOUT_AN_ALERT and "alert_id" in entry.detail:
+            alert = current.get(str(entry.detail["alert_id"]))
+            if alert is None:
+                return None
+            return evidence_node_ids(alert), list(alert.edge_ids), list(alert.event_ids)
+        return _ids(entry, "node_ids"), _ids(entry, "edge_ids"), _ids(entry, "event_ids")
+
+    named = [cites(e) for e in entries]
     readable = await read_evidence_ids(
         reader,
         graph,
         analytics,
-        node_ids={n for e in entries for n in _ids(e, "node_ids")},
-        edge_ids={n for e in entries for n in _ids(e, "edge_ids")},
-        event_ids_by_scope={investigation_id: {n for e in entries for n in _ids(e, "event_ids")}},
+        node_ids={n for c in named if c for n in c[0]},
+        edge_ids={n for c in named if c for n in c[1]},
+        event_ids_by_scope={investigation_id: {n for c in named if c for n in c[2]}},
     )
+    shown = [c is not None and readable.covers(*c) for c in named]
+    unseen_rules = {
+        str(e.detail.get("rule_id"))
+        for e, ok in zip(entries, shown, strict=True)
+        if not ok and e.action in _ABOUT_AN_ALERT
+    }
     kept: list[RuleAuditEntry] = []
-    for entry in entries:
-        cited = (_ids(entry, "node_ids"), _ids(entry, "edge_ids"), _ids(entry, "event_ids"))
-        if not readable.covers(*cited):
+    for entry, ok in zip(entries, shown, strict=True):
+        if not ok:
             continue
         if _old_firing(entry) and "words" in entry.detail:
             entry = entry.model_copy(
                 update={"detail": {k: v for k, v in entry.detail.items() if k != "words"}}
             )
+        if entry.action == "rule_evaluated" and str(entry.detail.get("rule_id")) in unseen_rules:
+            entry = entry.model_copy(update={
+                "detail": {**{k: v for k, v in entry.detail.items() if k != "findings"},
+                           "findings_withheld": True},
+                "result_cardinality": 0,
+            })  # fmt: skip
         kept.append(entry)
     return RuleAuditPage(entries=kept[offset : offset + limit], total=len(kept))
 

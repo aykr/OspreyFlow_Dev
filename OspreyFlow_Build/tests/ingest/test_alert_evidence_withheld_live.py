@@ -693,15 +693,15 @@ async def test_a_firing_over_a_hidden_link_or_transaction_is_withheld_from_the_r
         alert, _ = await _hidden_world(stores, graph, analytics, case, "RA")
 
         async def fired(reader: Principal) -> list[Any]:
-            page = await readable_rule_audit(stores["audit"], graph, case, reader, analytics=analytics)
+            page = await readable_rule_audit(stores["audit"], graph, case, reader, analytics=analytics, alerts=stores["alerts"])
             return [e for e in page.entries if e.action == "rule_fired"]
 
         (entry,) = await fired(SECRET_LOADER)
         assert entry.detail["alert_id"] == alert.id and entry.detail["edge_ids"] == alert.edge_ids
         assert sorted(entry.detail["event_ids"]) == sorted(alert.event_ids)
         assert await fired(TEAMMATE) == []
-        teammate = await readable_rule_audit(stores["audit"], graph, case, TEAMMATE, analytics=analytics)
-        cleared = await readable_rule_audit(stores["audit"], graph, case, SECRET_LOADER, analytics=analytics)
+        teammate = await readable_rule_audit(stores["audit"], graph, case, TEAMMATE, analytics=analytics, alerts=stores["alerts"])
+        cleared = await readable_rule_audit(stores["audit"], graph, case, SECRET_LOADER, analytics=analytics, alerts=stores["alerts"])
         assert teammate.total < cleared.total
         assert all(e.detail.get("alert_id") != alert.id for e in teammate.entries)
 
@@ -722,11 +722,16 @@ async def test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_i
         await gate._audit("rule_fired", {"rule_id": loaded.rule_id, "alert_id": loaded.id,
                                          "trigger": "pre_commit", "words": loaded.words,
                                          "node_ids": list(loaded.referent_node_ids)}, 1)  # fmt: skip
-        for reader in (TEAMMATE, SECRET_LOADER):
-            page = await readable_rule_audit(stores["audit"], graph, case, reader, analytics=analytics)
-            old = [e for e in page.entries if e.action == "rule_fired" and "edge_ids" not in e.detail]
-            assert len(old) == 1, reader.id
-            assert "words" not in old[0].detail and old[0].detail["alert_id"] == loaded.id
+        # Checked by what its alert cites now (L2.8b's B7): the SECRET loader keeps the entry, its
+        # words withheld; the OFFICIAL teammate, who may not see that alert, is not given it.
+        page = await readable_rule_audit(stores["audit"], graph, case, SECRET_LOADER, analytics=analytics,
+                                         alerts=stores["alerts"])  # fmt: skip
+        old = [e for e in page.entries if e.action == "rule_fired" and "edge_ids" not in e.detail]
+        assert len(old) == 1
+        assert "words" not in old[0].detail and old[0].detail["alert_id"] == loaded.id
+        teammate = await readable_rule_audit(stores["audit"], graph, case, TEAMMATE, analytics=analytics,
+                                             alerts=stores["alerts"])  # fmt: skip
+        assert all(e.detail.get("alert_id") != loaded.id for e in teammate.entries)
 
 
 # ---- L2.8b item 2: held rows' reasons -----------------------------------------------------------
@@ -944,3 +949,94 @@ async def test_an_alert_citing_a_changed_link_follows_it_to_its_successor() -> N
         assert row.edge_ids == [result.edge.id] != [link_id]
     finally:
         await alerts.close()
+
+
+
+# ---- L2.8b's B2 and B7: audit entries about an alert, by what it cites now ----------------------
+
+
+async def test_an_entry_saying_an_alerts_node_was_withheld_is_withheld_with_the_alert(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """B2: a row raised with no node over a link a revert took back writes `alert_node_withheld`,
+    naming its alert and its accounts, which the teammate may read. The queue withholds that alert
+    from everyone; so does the audit, checking the entry by what its alert cites. Red with the
+    entry checked by the nodes it names: the teammate learnt an alert existed over the accounts."""
+    from services.api.rule_holds import readable_rule_audit
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        loaded, _ = await _hidden_world(stores, graph, analytics, case, "WH")
+        around = await graph.expand(_expand(list(loaded.referent_node_ids)), TEAMMATE)
+        quiet = next(e for e in around.edges if e.type == "TRANSACTED")
+        tx = await graph.begin_transaction()
+        await graph.revert_elements([], [quiet.id], tx)
+        await graph.commit_transaction(tx)
+        rule = await stores["rules"].create(ANALYST, case, _structuring("post_commit"))
+        raised = await _gate(stores, graph, analytics, [], case, loader=ANALYST).raise_committed(
+            Finding(rule=rule, deployer=ANALYST, typology="structuring", subject=quiet.source,
+                    refs=("finding",), words="A quiet payment", node_ids=[quiet.source, quiet.target],
+                    edge_ids=[quiet.id]))  # fmt: skip
+        assert raised.alert_node_id is None
+        page = await readable_rule_audit(stores["audit"], graph, case, TEAMMATE, analytics=analytics,
+                                         alerts=stores["alerts"])  # fmt: skip
+        assert all(e.detail.get("alert_id") != raised.id for e in page.entries)
+
+
+async def test_a_firing_stays_in_the_audit_when_its_alert_follows_a_link_to_its_successor(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """B7: an analyst changes the link an OFFICIAL alert cites (its details, not its marking): the
+    alert follows the successor (ADR-109 Amendment 10), and its firing stays in the audit, read by
+    what the alert cites now. Red with the entry checked by the link it named when raised: the
+    firing vanished for every reader, and from the total."""
+    from services.api.link_changes import LinkChangeRequest, LinkChangeService
+    from services.api.rule_holds import readable_rule_audit
+    from services.api.working_set.service import WorkingSetService
+
+    from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+    from tests.services.api.working_set.fakes import FakeWorkingSetStore
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await _raised(stores, graph, analytics, case, "FS")
+        (alert,) = await _case_alerts(stores, ANALYST, case)
+        (link,) = await graph.get_edges(alert.edge_ids, ANALYST)
+        working = FakeWorkingSetStore()
+        await working.add_nodes(case, await graph.get_nodes(alert.referent_node_ids, ANALYST))
+        await working.add_edges(case, [link])
+        service = LinkChangeService(InMemoryChanges(), WorkingSetService(graph, working, SCHEME), graph,
+                                    ONTOLOGY, MovedNotes(), scheme=SCHEME, alerts=stores["alerts"])  # fmt: skip
+        await service.change(case, link.id, ANALYST,
+                             LinkChangeRequest(reason="the amount was wrong", properties={**link.properties,
+                                                                                          "amount": 9_600.0}))  # fmt: skip
+        page = await readable_rule_audit(stores["audit"], graph, case, ANALYST, analytics=analytics,
+                                         alerts=stores["alerts"])  # fmt: skip
+        assert [e.detail["alert_id"] for e in page.entries if e.action == "rule_fired"] == [alert.id]
+
+
+async def test_an_evaluations_count_is_withheld_from_a_reader_who_cannot_see_every_finding(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """B2's count: the SECRET rule's evaluation counted one finding, which the OFFICIAL teammate may
+    not see. The teammate is given the evaluation without its count; the SECRET loader, who sees
+    every finding, keeps the figure. Red with the count served to both."""
+    from services.api.rule_holds import readable_rule_audit
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        loaded, _ = await _hidden_world(stores, graph, analytics, case, "CT")
+        rule_id = loaded.rule_id.removeprefix("typology:")
+
+        async def evaluated(reader: Principal) -> list[Any]:
+            page = await readable_rule_audit(stores["audit"], graph, case, reader, analytics=analytics,
+                                             alerts=stores["alerts"])  # fmt: skip
+            return [e for e in page.entries if e.action == "rule_evaluated" and e.detail.get("rule_id") == rule_id]
+
+        (cleared,) = await evaluated(SECRET_LOADER)
+        assert cleared.detail["findings"] == 1 and cleared.result_cardinality == 1
+        given = await evaluated(TEAMMATE)
+        assert given, "the teammate is given the evaluation, only not its count"
+        for entry in given:
+            assert "findings" not in entry.detail and entry.detail["findings_withheld"] is True
+            assert entry.result_cardinality == 0

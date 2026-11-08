@@ -10623,15 +10623,17 @@ async def read_rule_audit(
     audit: AuditDep,
     principal_names: PrincipalNamesDep,
     analytics: AnalyticsDep,
+    alerts_store: AlertsStoreDep,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> RuleAuditPage:
     """The rule audit inspection read (ruling 1): the case's Authors, and the deployment admin
-    through ADR-052 §4's safety net. An entry naming a node the reader cannot see is withheld whole,
-    from the page and the total (rule 3)."""
+    through ADR-052 §4's safety net. An entry naming a node, link or transaction the reader cannot
+    see is withheld whole, from the page and the total (rule 3; `readable_rule_audit`)."""
     page = await readable_rule_audit(
-        audit, graph, investigation.id, principal, analytics=analytics, offset=offset, limit=limit
-    )
+        audit, graph, investigation.id, principal, analytics=analytics, alerts=alerts_store,
+        offset=offset, limit=limit,
+    )  # fmt: skip
     # Who acted, by name — only for the entries this reader is served (ADR-106 decision 3).
     names = await principal_names.display_names(e.principal_id for e in page.entries)
     page = page.model_copy(

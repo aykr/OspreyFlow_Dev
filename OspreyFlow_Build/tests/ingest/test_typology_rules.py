@@ -479,8 +479,8 @@ async def test_a_rule_audit_entry_naming_a_hidden_node_is_withheld_from_page_and
                     _deposits("J"), recipe=_marked(RECIPE, "SECRET"),
                     loader=SECRET_LOADER)  # fmt: skip
 
-        seen_by_secret = await readable_rule_audit(stores["audit"], graph, case, SECRET_LOADER, analytics=analytics)
-        seen_by_official = await readable_rule_audit(stores["audit"], graph, case, ANALYST, analytics=analytics)
+        seen_by_secret = await readable_rule_audit(stores["audit"], graph, case, SECRET_LOADER, analytics=analytics, alerts=stores["alerts"])
+        seen_by_official = await readable_rule_audit(stores["audit"], graph, case, ANALYST, analytics=analytics, alerts=stores["alerts"])
         fired = [e for e in seen_by_secret.entries if e.action == "rule_fired"]
         assert len(fired) == 2
         assert [e.detail["rule_id"] for e in seen_by_official.entries
