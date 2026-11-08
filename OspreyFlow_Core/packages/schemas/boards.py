@@ -11,8 +11,9 @@ the provenance class `analyst_drawn`, drawn dashed in amber everywhere it appear
   L3.7's, and until it is built every board grades in `5x5x5`).
 - **`DrawnItemInput`**, **`DrawnLinkInput`**, **`DrawnItemEdit`**: declaring, linking, editing.
 - **`BoardInput`**, **`Board`**, **`BoardOpened`**: making, listing and opening a board.
-- **`MatchSuggestion`**, **`MatchDecision`**: *Looks like a loaded item* (decision 6). A suggestion
-  is `inferred` and never acts on its own (rule 5); a decision writes a link, never a merge (rule 6).
+- **`MatchSuggestion`**, **`MatchDecision`**: *Looks like a loaded item* (decision 6). A
+  suggestion is `inferred` and never acts on its own (rule 5); a decision writes a link, never a
+  merge (rule 6).
 - **`DrawnWatch`**: the watch drawing an item sets (Amendment 2 decision 8).
 """
 
@@ -37,6 +38,7 @@ from schemas.domain import (
 )
 
 __all__ = ["GRADING_PARTS", "DrawnAssertion", "Grading", "GradingScheme"]
+
 
 class _Asserted(BaseModel):
     """What every drawn node and link is given (decision 4)."""

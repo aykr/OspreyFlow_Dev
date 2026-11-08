@@ -152,7 +152,8 @@ export interface SourceRef {
 }
 /**
  * ADR-143 decision 4: on the provenance of every drawn node and link. A drawn item is asserted
- * by its author, not model-derived: rule 5's `inferred` is for the matches it raises, not for it.
+ * by its author, not model-derived: rule 5's `inferred` is for the matches it raises, not for
+ * it.
  */
 export interface DrawnAssertion {
   provenance_class?: ProvenanceClass;
