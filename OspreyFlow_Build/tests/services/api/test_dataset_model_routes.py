@@ -75,13 +75,16 @@ class _Cases:
         return [(SimpleNamespace(id=c, name=f"Case {c}"), "editor") for c in CASES[principal.id]]
 
 
-def _recipe(recipe_id: str, label: str, writes: list[str]) -> Any:
+def _recipe(recipe_id: str, label: str, writes: list[str], dataset: str = "ds-a") -> Any:
     """A deployed pipeline as `feeding` returns it: what its row template writes is what counts."""
     entities = [SimpleNamespace(type=t) for t in writes if t[0].isupper() and not t.isupper()]
     edges = [SimpleNamespace(type=t) for t in writes if t.isupper()]
     return SimpleNamespace(
         recipe_id=recipe_id,
         label=label,
+        dataset_id=dataset,
+        status="published",
+        flagged_reason=None,
         row_template=SimpleNamespace(entities=entities, edges=edges),
     )
 
@@ -99,8 +102,19 @@ class _Recipes:
         return list(self.deployed) if dataset_ids == ["ds-a"] else []
 
     async def flag_for_model(self, dataset_id: str, flagged: list[tuple[str, str]]) -> list[str]:
+        """As the store refuses (`test_studio_recipes_store.py`): only this dataset's published
+        recipes are flagged, each with its first reason; an already flagged one is unchanged."""
         self.flagged.append((dataset_id, flagged))
-        return [label for label in ("Bank accounts",) if flagged]
+        once: dict[str, str] = {}
+        for recipe_id, reason in flagged:
+            once.setdefault(recipe_id, reason)
+        labels = []
+        for recipe in self.deployed:
+            published = recipe.status == "published" and recipe.dataset_id == dataset_id
+            if recipe.recipe_id in once and published:
+                recipe.status, recipe.flagged_reason = "flagged", once[recipe.recipe_id]
+                labels.append(recipe.label)
+        return sorted(labels)
 
     async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None:
         assert paused and reason

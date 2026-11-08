@@ -1225,9 +1225,14 @@ class StudioRecipeStore:
         type each of these deployed recipes writes, so each needs attention, its scheduled and
         watched runs blocked (ADR-110 decision 4) until it is deployed again under the new model.
         `flagged` is `(recipe_id, reason)` pairs, each recipe's reason naming its own types. Only a
-        published recipe of this dataset is flagged; one already flagged keeps its first reason.
-        Returns the labels flagged, for the route to say. L3.1b, ratified by the studio lane."""
-        if not flagged:
+        published recipe of this dataset is flagged; one already flagged keeps its first reason; a
+        recipe named twice takes its first reason. Returns the labels flagged, sorted, for the
+        route to say. L3.1b, ratified by the studio lane (`test_studio_recipes_store.py`)."""
+        # One reason per recipe, the first given: `UPDATE ... FROM` would pick among repeats.
+        once: dict[str, str] = {}
+        for recipe_id, reason in flagged:
+            once.setdefault(recipe_id, reason)
+        if not once:
             return []
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
@@ -1236,8 +1241,8 @@ class StudioRecipeStore:
                 "WHERE r.recipe_id = f.recipe_id AND r.status = $4 AND r.dataset_id = $5 "
                 "RETURNING r.label",
                 StudioRecipeStatus.FLAGGED.value,
-                [recipe_id for recipe_id, _ in flagged],
-                [reason for _, reason in flagged],
+                list(once),
+                list(once.values()),
                 StudioRecipeStatus.PUBLISHED.value,
                 dataset_id,
             )
