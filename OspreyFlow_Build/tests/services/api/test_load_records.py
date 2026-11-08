@@ -699,6 +699,8 @@ async def _run_staged(
 
     monkeypatch.setattr(pipeline_run, "_run_extract_stage", extract_stage)
     monkeypatch.setattr(pipeline_run, "_run_enrich_stage", enrich_stage)
+    # Each run's files are in its own folder, its ingest folder (`studio_profile._confined`).
+    monkeypatch.setenv("OSPREY_INGEST_ROOT", str(tmp_path))
     recipe, repo, first = _staged_pipeline(tmp_path)
     ledger = Ledger()
     await run_published_pipeline(

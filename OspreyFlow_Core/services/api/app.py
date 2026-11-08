@@ -799,6 +799,7 @@ from .studio_profile import (
     RecipeNotReadyForProfileError,
     SourceHandlingIncompleteError,
     SourceUnreadableError,
+    offered_to,
     profile_recipe_source,
 )
 from .studio_publish import (
@@ -825,6 +826,7 @@ from .studio_staging import (
     StagedTestInputs,
     dataset_reference_lists,
     preview_staging,
+    sources_not_offered,
     staging_gate,
 )
 from .studio_verify import RowTemplateMissingError, run_verify
@@ -8868,6 +8870,7 @@ async def create_studio_recipe_draft(
     (`StudioRecipeDraft.ready_for_profile` reports that, §2)."""
     # ADR-127 decision 5: judged by shape at creation (no draft to read the source through yet).
     _check_deduplicate(body.deduplicate, None)
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
     draft = await studio_recipes.create_draft(
         principal,
         label=body.label,
@@ -8884,6 +8887,21 @@ async def create_studio_recipe_draft(
         result_cardinality=1,
     )
     return draft
+
+
+def _refuse_a_file_not_offered(location: str | None, dataset_id: str | None) -> None:
+    """Connect's half of the save gate (the orchestrator's review of L1.4): a draft's file must be
+    one of its dataset's files in the ingest folder (`studio_profile._confined`), refused in the
+    words `register_dataset_source` refuses one in, whether or not the file exists."""
+    if location and not offered_to(location, dataset_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": "source_not_offered",
+                "detail": "That file is not one of this dataset's files in the ingest folder. "
+                "Choose it from the dataset's files, or upload it.",
+            },
+        )
 
 
 def _check_deduplicate(config: DeduplicateConfig | None, columns: list[str] | None) -> None:
@@ -8918,6 +8936,7 @@ async def update_studio_recipe_draft(
     `deduplicate` (ADR-127 decision 5) is judged against the columns of the source it will be read
     from (the body's location, else the draft's): each key names a source column, as a run reads
     it. Absent leaves the draft's own; an empty `key` clears it."""
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
     if body.deduplicate is not None and body.deduplicate.key:
         location = body.source_location or recipe.source_location
         _check_deduplicate(
@@ -8972,6 +8991,7 @@ async def update_studio_recipe_pipeline(
     steps are judged here too, against its source nodes and the dataset's lists, in the words a
     drawer's Preview shows (`studio_staging.staging_gate`)."""
     problems = pipeline_rule_violations(body)
+    problems.extend(sources_not_offered(body, recipe.dataset_id))
     problems.extend(
         p
         for p in staging_gate(
@@ -9318,7 +9338,9 @@ async def _studio_dry_run(
     # node may name its own), and records each with the hash of its bytes, which *Run now* is held
     # to. Hashed before the read, so a file changed during Verify reads as changed at the run.
     locations = files_a_run_reads(recipe, repo_root=repo_root)
-    checked = [await asyncio.to_thread(identify, location) for location in locations]
+    checked = [
+        await asyncio.to_thread(identify, location, recipe.dataset_id) for location in locations
+    ]
     report = await run_verify(
         recipe,
         principal,
@@ -9888,7 +9910,7 @@ async def run_studio_recipe(
     verified = await studio_recipes.verified_sources(recipe.recipe_id, recipe.version)
     if verified is not None:
         now = [
-            await asyncio.to_thread(identify, location)
+            await asyncio.to_thread(identify, location, recipe.dataset_id)
             for location in files_a_run_reads(
                 recipe, repo_root=repo_root, source_location=body.source_location
             )

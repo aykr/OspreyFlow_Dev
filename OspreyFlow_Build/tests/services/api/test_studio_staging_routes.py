@@ -362,3 +362,202 @@ def test_a_lookup_s_list_rows_are_withheld_from_a_case_not_reading_the_dataset(
     withheld = "The sample is withheld: it reads this dataset's"
     assert any(p.startswith(withheld) for p in body["problems"])
     assert "HMP Fenwick Moor" not in response.text
+
+
+# --- the orchestrator's review of L1.4: a dataset's files, and Test's guards (rules 3 and 4) ----
+
+NOT_OFFERED = (
+    "source 'Owners' reads a file that is not one of this dataset's files in the ingest folder: "
+    "choose it from the dataset's files, or upload it"
+)
+
+
+def _another_dataset_s_file(tmp_path: Path) -> Path:
+    """A file uploaded into another dataset's folder (`<root>/uploaded/ledger/`), shaped as the
+    owners' file so the Join would bring its name across if it were read. The test's ingest root
+    is `tmp_path` (`tests/conftest.py`'s autouse fixture), so this is where an upload puts it."""
+    folder = tmp_path / "uploaded" / "ledger"
+    folder.mkdir(parents=True)
+    other = folder / "owners.csv"
+    other.write_text(
+        "number,owner_family_name,since\n07700 900731,LEDGER-ONLY-NAME,2020-01-01\n",
+        encoding="utf-8",
+    )
+    return other
+
+
+def _naming(client: TestClient, location: Path) -> PipelineGraph:
+    graph = _draft(client).pipeline.model_copy(deep=True)
+    owners = next(n for n in graph.nodes if n.id == "number_owners")
+    owners.config = {**owners.config, "source_location": str(location)}
+    return graph
+
+
+def test_another_dataset_s_file_named_by_a_source_node_is_refused_at_save(
+    staged: TestClient, tmp_path: Path
+) -> None:
+    before = _draft(staged).pipeline
+    graph = _naming(staged, _another_dataset_s_file(tmp_path))
+    saved = staged.put(f"{RECIPE_URL}/pipeline", json=graph.model_dump(mode="json"))
+    assert saved.status_code == 422
+    assert saved.json()["problems"] == [NOT_OFFERED]
+    assert _draft(staged).pipeline == before
+    # The drawer says it in the same words, and reads nothing.
+    previewed = _preview(staged, "with_owner", graph)
+    assert previewed.json()["problems"] == [NOT_OFFERED, *_unsaved(graph, staged)]
+    assert "LEDGER-ONLY-NAME" not in previewed.text
+
+
+def _unsaved(graph: PipelineGraph, client: TestClient) -> list[str]:
+    from services.api.studio_staging import _unsaved_sources
+
+    return _unsaved_sources(_draft(client), graph)
+
+
+def test_another_dataset_s_file_held_by_a_saved_pipeline_is_never_read(
+    staged: TestClient, tmp_path: Path
+) -> None:
+    """A pipeline saved before the gate refused it: the preview, Test, the Map and Load Preview
+    and the run each read through `_confined`, for the recipe's own dataset."""
+    from services.api.run_source import identify
+    from services.api.studio_profile import SourceUnreadableError
+    from services.api.studio_staging import source_tables
+
+    other = _another_dataset_s_file(tmp_path)
+    _update(staged, pipeline=_naming(staged, other))
+    previewed = _preview(staged, "with_owner")
+    assert "LEDGER-ONLY-NAME" not in previewed.text
+    assert NOT_OFFERED in previewed.json()["problems"]
+    for route in ("verify", "preview-graph"):
+        response = staged.post(f"{RECIPE_URL}/{route}")
+        assert response.status_code == 422, (route, response.text)
+        assert "LEDGER-ONLY-NAME" not in response.text
+    # The run's own reads: each source's table (`pipeline_run._run_staged_branch`) and the hash
+    # *Run now* is held to.
+    with pytest.raises(SourceUnreadableError):
+        source_tables(_draft(staged), _draft(staged).pipeline, load_id="run-1")
+    with pytest.raises(SourceUnreadableError):
+        identify(str(other), "pid")
+
+
+def test_the_dataset_s_own_uploaded_file_is_read(staged: TestClient, tmp_path: Path) -> None:
+    """The control: the same file in this dataset's own folder is saved and read."""
+    folder = tmp_path / "uploaded" / "pid"
+    folder.mkdir(parents=True)
+    own = folder / "owners.csv"
+    shutil.copy(FIXTURES / "number_owners.csv", own)
+    graph = _naming(staged, own)
+    saved = staged.put(f"{RECIPE_URL}/pipeline", json=graph.model_dump(mode="json"))
+    assert saved.status_code == 200, saved.text
+    body = _preview(staged, "with_owner").json()
+    assert body["problems"] == [] and len(body["rows"]) == 5
+
+
+def test_connect_refuses_another_dataset_s_file(staged: TestClient, tmp_path: Path) -> None:
+    other = str(_another_dataset_s_file(tmp_path))
+    draft = _draft(staged)
+    body = {
+        "label": draft.label,
+        "connector_profile": "generic-csv",
+        "source_location": other,
+        "handling": draft.handling,
+        "legal_basis": draft.legal_basis,
+    }
+    for response in (
+        staged.patch(RECIPE_URL, json=body),
+        staged.post("/v1/investigations/inv-1/ingest/recipes", json=body),
+    ):
+        assert response.status_code == 422, response.text
+        assert response.json()["detail"]["error"] == "source_not_offered"
+    assert _draft(staged).source_location == draft.source_location
+
+
+def test_no_sample_of_any_step_reaches_a_case_not_reading_the_dataset(
+    staged: TestClient,
+) -> None:
+    """Rule 4: a recipe's files are its dataset's, as its lists are. A case on another dataset is
+    given nothing of any step's sample, nor of Test or the Map and Load Preview."""
+    app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR.model_copy(
+        update={"datasets": ["ledger"]}
+    )
+    graph = _draft(staged).pipeline.model_copy(deep=True)
+    # A step no Lookup feeds: a Filter straight over the bookings.
+    graph.nodes.append(
+        PipelineNode(
+            id="raw_filter", kind=PipelineNodeKind.FILTER, label="Raw",
+            config={"input": "visit_bookings", "keep": [{"field": "estab_id", "equals": "FMR"}]},
+        )  # fmt: skip
+    )
+    graph.edges.append(PipelineEdge(source="visit_bookings", target="raw_filter"))
+    _update(staged, pipeline=graph)
+    withheld = "The sample is withheld: it reads this dataset's files and lists"
+    for step in ("raw_filter", "with_owner"):
+        response = _preview(staged, step)
+        body = response.json()
+        assert body["values_masked"] is True and body["rows"] == [] and body["counts"] == []
+        assert any(p.startswith(withheld) for p in body["problems"]), body["problems"]
+        assert "WHITLOW" not in response.text and "VB-2605" not in response.text
+    for route in ("verify", "preview-graph"):
+        response = staged.post(f"{RECIPE_URL}/{route}")
+        assert response.status_code == 422, (route, response.text)
+        assert any(p.startswith(withheld) for p in response.json()["problems"])
+        assert "WHITLOW" not in response.text and "VB-2605" not in response.text
+
+
+def test_test_and_the_map_preview_give_nothing_to_a_reader_not_cleared_for_the_source(
+    staged: TestClient,
+) -> None:
+    """Rule 3 (the review of L1.4, item (e)): the drawer's guard on Test and the Map and Load
+    Preview, which run the same steps over the same rows."""
+    _update(staged, handling=_UNCLEARED_HANDLING)
+    for route in ("verify", "preview-graph"):
+        response = staged.post(f"{RECIPE_URL}/{route}")
+        assert response.status_code == 422, (route, response.text)
+        assert any(p.startswith("The sample is withheld") for p in response.json()["problems"])
+        for name in ("WHITLOW", "VB-2605-001", "HMP Fenwick Moor"):
+            assert name not in response.text
+    assert _draft(staged).verified_at is None
+
+
+def _one_hidden_row(staged: TestClient, tmp_path: Path, hidden: str) -> None:
+    """The bookings and owners with a per-row `classification` column, OFFICIAL but for the
+    third booking's (`hidden`), and the booking's marking bound to it (ADR-127 decision 3)."""
+    import csv
+
+    for name in ("visit_bookings", "number_owners"):
+        with (FIXTURES / f"{name}.csv").open(encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        for index, row in enumerate(rows):
+            third_booking = name == "visit_bookings" and index == 2
+            row["classification"] = hidden if third_booking else "OFFICIAL"
+        with (tmp_path / f"{name}.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+    template = RECIPE.row_template.model_copy(deep=True)
+    booking = next(e for e in template.entities if e.ref == "booking")
+    booking.handling = {"classification": {"field": "classification"}}
+    _update(staged, row_template=template)
+
+
+def test_one_hidden_row_among_ten_withholds_the_whole_sample_and_test(
+    staged: TestClient, tmp_path: Path
+) -> None:
+    """The review's should-fix: one row of ten above the reader's clearance by its own per-row
+    column, not the whole source masked, withholds the drawer's sample, Test and the Preview."""
+    _one_hidden_row(staged, tmp_path, "SECRET")
+    response = _preview(staged, "titled")
+    assert response.json()["rows"] == [] and response.json()["counts"] == []
+    assert any(p.startswith("The sample is withheld") for p in response.json()["problems"])
+    for route in ("verify", "preview-graph"):
+        response = staged.post(f"{RECIPE_URL}/{route}")
+        assert response.status_code == 422, (route, response.text)
+        assert "OKAFOR" not in response.text  # the hidden booking's visitor
+
+
+def test_the_same_ten_rows_all_readable_are_shown(staged: TestClient, tmp_path: Path) -> None:
+    """The control for the case above: the same column, every row OFFICIAL."""
+    _one_hidden_row(staged, tmp_path, "OFFICIAL")
+    assert len(_preview(staged, "titled").json()["rows"]) == 5
+    for route in ("verify", "preview-graph"):
+        assert staged.post(f"{RECIPE_URL}/{route}").status_code == 200, route

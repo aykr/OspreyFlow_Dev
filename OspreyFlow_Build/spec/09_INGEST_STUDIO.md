@@ -245,7 +245,14 @@ location came from — the picker, an upload, the folder watch, or a location a 
 draft or a run. The location is resolved (a `..` walk, a link to elsewhere) before it is judged,
 and one outside the folder is refused before anything is opened, in words that neither name the
 path nor depend on whether it exists (the security review, 18 October 2026: a pipeline author could
-read any file the server could; `tests/services/api/test_source_confinement.py`).
+read any file the server could; `tests/services/api/test_source_confinement.py`). **And only one of
+the recipe's own dataset's files** (ADR-099 Amendment 3): one directly in the folder or its
+`uploaded/` folder (placed before that amendment, offered to every case), or in the dataset's own
+folder under either, exactly the files the dataset's listing offers. Another dataset's file is refused
+at Connect and at the pipeline's save, in words, and every read of a source (Profile, Map, a step's
+sample, Test, Preview, a run and the hash *Run now* is held to) passes the same check for the
+recipe's dataset, so a pipeline saved before the check cannot read one either (ADR-140 Amendment 12,
+the orchestrator's review; `tests/services/api/test_studio_staging_routes.py`).
 
 ### Structured connector catalogue
 

@@ -54,7 +54,7 @@ from schemas.staging import LookupStep, StagingStep, step_inputs
 
 from .run_source import branch_location, topological
 from .studio_map import resolve_source_handling
-from .studio_profile import _read_rows, sample_markings
+from .studio_profile import _read_rows, offered_to, sample_markings
 from .target_models import TargetModelStore
 
 #: Q4 (a): a drawer's live sample reads the first ten rows of each source, as Map's sample pages.
@@ -107,6 +107,21 @@ def staging_gate(
         lists=references,
         dataset_id=dataset_id or "",
     )
+
+
+def sources_not_offered(pipeline: PipelineGraph, dataset_id: str | None) -> list[str]:
+    """Each source node naming a file that is not one of the recipe's dataset's files in the
+    ingest folder (`studio_profile._confined`), as words: the save gate's refusal, so a pipeline
+    never holds a file its case could not pick (the orchestrator's review of L1.4, rules 3 and 4:
+    a source node naming another dataset's uploaded file was previewed and loaded). A node naming
+    no file reads the draft's, which Connect judged."""
+    return [
+        f"source '{node.label}' reads a file that is not one of this dataset's files in the "
+        "ingest folder: choose it from the dataset's files, or upload it"
+        for node in source_nodes(pipeline)
+        if node.config.get("source_location")
+        and not offered_to(str(node.config["source_location"]), dataset_id)
+    ]
 
 
 def _source_draft(draft: StudioRecipeDraft, node: PipelineNode) -> StudioRecipeDraft:
@@ -192,6 +207,13 @@ WITHHELD = (
 )
 
 
+#: What the preview, and Test, say when the recipe's dataset is not one the reader's case reads.
+DATASET_WITHHELD = (
+    "The sample is withheld: it reads this dataset's files and lists, which only a case that "
+    "reads the dataset may read."
+)
+
+
 #: What the preview says when a Lookup's list rows are not the reader's to read.
 LISTS_WITHHELD = (
     "The sample is withheld: it reads this dataset's reference lists, which only a case that "
@@ -220,14 +242,23 @@ def preview_staging(
     words, and nothing is read."""
     pipeline = body.pipeline
     problems = [*pipeline_rule_violations(pipeline)]
+    not_offered = sources_not_offered(pipeline, draft.dataset_id)
+    problems.extend(not_offered)
     problems.extend(
         p
         for p in staging_gate(pipeline, references=references, dataset_id=draft.dataset_id)
         if p not in problems
     )
     unsaved = _unsaved_sources(draft, pipeline)
-    if unsaved:
+    if unsaved or not_offered:
         return StagingPreview(step=body.step, problems=[*problems, *unsaved])
+    # A recipe's files and lists are its dataset's, read as its elements are, by a case that reads
+    # the dataset (rule 4; the lane review's second round for a Lookup's lists, the orchestrator's
+    # review of L1.4 for every step's sample, which shows the dataset's files' rows).
+    if draft.dataset_id and draft.dataset_id not in (principal.datasets or []):
+        return StagingPreview(
+            step=body.step, problems=[*problems, DATASET_WITHHELD], values_masked=True
+        )
     # A step's record the schema refuses cannot be run at all; any other refusal (a source not yet
     # used, a later step half set) is reported beside the sample, which runs whenever the steps
     # this one needs can.

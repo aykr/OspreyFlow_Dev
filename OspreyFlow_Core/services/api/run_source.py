@@ -110,12 +110,12 @@ def files_a_run_reads(
     return list(dict.fromkeys(location for location in locations if location))
 
 
-def identify(location: str) -> VerifiedSource:
+def identify(location: str, dataset_id: str | None) -> VerifiedSource:
     """The file at `location` as it is now: read through the same confinement every source read
-    passes (`studio_profile._confined`), its bytes hashed in chunks."""
+    passes (`studio_profile._confined`, for the recipe's dataset), its bytes hashed in chunks."""
     digest = hashlib.sha256()
     try:
-        with Path(_confined(location)).open("rb") as handle:
+        with Path(_confined(location, dataset_id)).open("rb") as handle:
             while chunk := handle.read(_CHUNK):
                 digest.update(chunk)
     except OSError as exc:

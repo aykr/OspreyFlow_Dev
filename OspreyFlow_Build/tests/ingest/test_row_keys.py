@@ -557,7 +557,9 @@ async def test_a_published_recipe_run_twice_through_the_studios_own_path_loads_o
     assert len(store.rows) == 3
 
 
-async def test_a_studio_built_recipe_run_twice_creates_nothing_the_second_time() -> None:
+async def test_a_studio_built_recipe_run_twice_creates_nothing_the_second_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The whole job inside the Studio (Brief 2 §6, §7): a draft with `deduplicate` is built into a
     recipe by Publish, committed as YAML, run twice into one case; the second run loads nothing and
     reports `rows_already_loaded`. And Verify, which reads the draft, counts what the run would."""
@@ -615,6 +617,8 @@ async def test_a_studio_built_recipe_run_twice_creates_nothing_the_second_time()
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
+        # The run reads its file from its ingest folder (`studio_profile._confined`).
+        monkeypatch.setenv("OSPREY_INGEST_ROOT", tmp)
         (root / "recipes").mkdir()
         (root / "recipes" / f"{base.id}.yaml").write_text(serialise_recipe(published))
         source = root / "cash.csv"

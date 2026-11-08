@@ -28998,7 +28998,7 @@ recommended option (a), on the owner's review list:
 | `tests/ingest/test_staging_pipeline_nodes.py` | a staging list round-trips through the pipeline identically, in run order; a bad record, a line missing, a last step feeding no Map, refused in plain words |
 | `tests/ingest/test_staged_counts.py` | per-step counts equal the staged tables'; a rejection's refs; one encoding |
 | `tests/ingest/test_reference_list_rows.py` | a list's rows imported and read back; no file refused in words; another list's file refused; never replaced; synthetic fixtures only; only lists the dataset may read |
-| `tests/services/api/test_studio_staging_routes.py` | a drawer refuses what the save gate refuses, in the same words, a later step's refusal included; save and publish judge the steps; the preview writes nothing, needs `edit_pipelines`, hides another unit's recipe, reads only the saved pipeline's sources, and gives a reader not cleared for every sampled row nothing of the run (rules 3 and 4); Test runs the steps; a list the live model does not name is not read |
+| `tests/services/api/test_studio_staging_routes.py` | a drawer refuses what the save gate refuses, in the same words, a later step's refusal included; save and publish judge the steps; the preview writes nothing, needs `edit_pipelines`, hides another unit's recipe, reads only the saved pipeline's sources, and gives a reader not cleared for every sampled row nothing of the run (rules 3 and 4); Test runs the steps; a list the live model does not name is not read; another dataset's file refused at Connect and save and never read by a preview, Test, Preview or run, the dataset's own read; no step's sample, Test or Preview reaches a case not reading the dataset; Test and Preview give nothing to a reader not cleared for every row, one hidden row among ten by its own column included |
 | `tests/ingest/test_staged_pipeline_run.py` | two concurrent runs of one source never share a raw file; staging metered; a withdrawing refresh refused |
 | `tests/ingest/test_phase7_exit.py` | **the phase's exit**: the pipeline the keys build, published through `build_recipe` and run on the synthetic data, every element naming rows of files that exist |
 | `apps/workspace/src/ingest/dag/stagingSteps.test.ts` with `tests/ingest/test_visits_pipeline_fixture.py` | the Glass's own step edits build the pipeline the server builds |
@@ -29017,14 +29017,20 @@ fewer matches than the whole source holds; Test reads the first rows Test reads.
 per-step counts are on the run's report and its view, not yet drawn on the Glass's run report. The
 run's resources (`run_resources`) open the target-model store and the staging store, which the
 Conduit's lifespan then holds, so the scheduler's and the seed's runs read a staged pipeline's lists
-as the route's run does. **Recorded for review, not changed here:** Test, staged or not, shows
-counts over a sample whose values it masks from a reader not cleared for them, and the reader's own
-map (a `when` condition, a value map) or steps decide those counts; that predates this step and is
-Test's settled behaviour, at the editor's level with `verify_pipelines`. **Recorded, older than this
-step:** a source node's file is confined to the ingest folder (`studio_profile._confined`), not to
-the recipe's dataset's own files, on the pipeline's save as on a draft's creation, and its rows are
-read at the draft's handling; registering a source refuses another dataset's folder, the pipeline's
-own save does not yet. Asked of the orchestrator for an owner.
+as the route's run does. **Fixed on the orchestrator's review (rules 3 and 4).** A source node's
+file is confined to the recipe's dataset's own files (`studio_profile._confined(location,
+dataset_id)`, the one check every read passes: Profile, Map, a step's sample, Test, Preview, a run
+and `run_source.identify`), and another dataset's file is refused in words at the pipeline's save
+(`studio_staging.sources_not_offered`, shown in the drawer in the same words) and at Connect (the
+words `register_dataset_source` uses); 09 §2 has the rule. Test of a staged pipeline, and the Map and
+Load Preview that run it, now have the drawer's two guards: nothing of the run for a reader not
+cleared for every row Test reads, and nothing for a case not reading the recipe's dataset, refused in
+the drawer's words (422); a step's sample is withheld from such a case whatever its steps, not only
+behind a Lookup. The tests' ingest root is each test's own folder (`tests/conftest.py`), not the
+whole filesystem, so the rule is the one the tests run under. **Recorded, unchanged:** Test of a
+pipeline with no staging steps still shows counts over a sample whose values it masks from a reader
+not cleared for them; that predates phase 7 and is Test's settled behaviour, at the editor's level
+with `verify_pipelines`.
 
 ### ADR-112, Amendment 7 (8 November 2026) — a right to manage model engines, each job's model and their keys, manage_models, held by the administrator and grantable alone
 

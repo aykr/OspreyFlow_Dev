@@ -48,9 +48,10 @@ from .studio_profile import (
     RecipeNotReadyForProfileError,
     connector_for,
     row_markings,
+    sample_markings,
 )
 from .studio_profile import _read_rows as _read_recipe_rows
-from .studio_staging import StagedTestInputs, source_tables
+from .studio_staging import DATASET_WITHHELD, WITHHELD, StagedTestInputs, source_tables
 
 __all__ = ["JudgeChecks", "RowTemplateMissingError", "run_verify"]
 
@@ -181,6 +182,13 @@ async def run_verify(
     if steps and staging is not None:
         recipe = recipe.model_copy(update={"staging": steps})
         assert draft.pipeline is not None
+        # The drawer's sample's two guards (the orchestrator's review of L1.4, rules 3 and 4): the
+        # reader writes the steps, so Test's counts and rejections over rows the reader may not view
+        # could answer questions about a hidden value; and the files and lists are the dataset's,
+        # read by a case that reads it. Either way Test, and the Map and Load Preview that run it,
+        # give nothing of the run, refused in the drawer's words.
+        if draft.dataset_id and draft.dataset_id not in (principal.datasets or []):
+            raise RecipeRuleError([DATASET_WITHHELD])
         try:
             read = source_tables(
                 draft, draft.pipeline, load_id="test", limit=DEFAULT_SAMPLE_SIZE + 1
@@ -193,6 +201,9 @@ async def run_verify(
             )
         except StagingError as refused:
             raise RecipeRuleError(refused.problems) from refused
+        tested_rows = [r for rows in read.raw.values() for r in rows[:DEFAULT_SAMPLE_SIZE]]
+        if not sample_markings(draft, scheme, tested_rows).readable_by(principal, scheme):
+            raise RecipeRuleError([WITHHELD])
         sample_is_whole_source = all(
             len(t.rows) <= DEFAULT_SAMPLE_SIZE for t in read.tables.values()
         )
@@ -214,7 +225,7 @@ async def run_verify(
         except StagingError as refused:
             raise RecipeRuleError(refused.problems) from refused
         result = tested.result
-        sampled = [r for rows in read.raw.values() for r in rows[:DEFAULT_SAMPLE_SIZE]]
+        sampled = tested_rows
         result.rejections = [r.model_copy(update={"sample": ""}) for r in result.rejections]
         result.rows_read = sum(len(t.rows) for t in read.tables.values())
     else:
