@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from conduit_common.identity import new_id
 from ontology.errors import HandlingSchemeError
 from ontology.handling import HandlingScheme, evaluate_handling, principal_may_view
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.analytics import CountedHandling, EventRecord
 from schemas.domain import AlertExplanation, Handling, Judgement, Node, Principal, ProvenanceState
@@ -47,7 +48,7 @@ from schemas.packs import (
 from schemas.trends import TrendFigures
 
 from .alert_queue import node_name
-from .alerts import distinct_handlings
+from .alerts import AlertStore, distinct_handlings, read_evidence, settle_repoints
 from .assessments import judgement_visible_to, resolve_superseded_citation
 from .export import (
     BlockedItem,
@@ -124,6 +125,8 @@ async def readable(
     graph: GraphPort,
     case_id: str,
     *,
+    alerts: AlertStore,
+    analytics: AnalyticsPort,
     withheld_in_store: bool = False,
 ) -> tuple[list[StoredPackItem], bool]:
     """The items this reader gets, in order, and whether any were withheld from them — a yes or
@@ -131,8 +134,20 @@ async def readable(
     ADR-134 decision 4) and `withheld_in_store` its own yes or no; each item is then checked again
     here: by `item_visible`, a second line that must agree with the query, and against the graph
     now, as the reader, for what it cites."""
+    # An alert item is checked by what its alert cites now, as the queue checks it (ADR-146
+    # decision 10; L2.8b item 3): every link and transaction, its repoints applied first, in one
+    # batched read per kind as the reader, whatever is hidden.
+    await settle_repoints(alerts, graph)
+    cited = await alerts.cited_by_ids([i.alert.alert_id for i in items if i.alert is not None])
+    evidence = await read_evidence(
+        list(cited.values()), reader, graph, analytics, scope=lambda _: case_id
+    )
     shown: list[StoredPackItem] = []
     for item in items:
+        if item.alert is not None:
+            alert = cited.get(item.alert.alert_id)
+            if alert is None or not evidence.covers((), alert.edge_ids, alert.event_ids):
+                continue
         if item_visible(item.handlings, reader, scheme) and await _still_visible(
             item, reader, graph, case_id
         ):
@@ -254,6 +269,8 @@ async def export_pack(
     graph: GraphPort,
     ledger: ExportLedgerStore,
     policy: ExportManifestPolicy,
+    alerts: AlertStore,
+    analytics: AnalyticsPort,
     withheld_in_store: bool = False,
 ) -> PackExport:
     """The gate for a pack. The exporter's access is checked again now, item by item, as every
@@ -268,6 +285,8 @@ async def export_pack(
         scheme,
         graph,
         pack.investigation_id,
+        alerts=alerts,
+        analytics=analytics,
         withheld_in_store=withheld_in_store,
     )
     if not shown:

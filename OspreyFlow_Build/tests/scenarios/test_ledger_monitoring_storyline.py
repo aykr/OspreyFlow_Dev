@@ -72,6 +72,7 @@ from tests.scenarios.ledger_monitoring_support import (
     World,
     load_week,
 )
+from tests.services.api.repoint_journal_cleanup import remove_repoint_records  # noqa: F401 - autouse teardown
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
 from adapters.analytics_duckdb.schema import create_events_table
@@ -549,7 +550,7 @@ async def test_the_referred_alert_goes_into_the_pack_closed_and_inferred(scene: 
     assert (snapshot.kind, snapshot.status, snapshot.outcome, snapshot.match) == (
         "typology", "closed", "referred", "inferred")  # fmt: skip
     assert snapshot.typology == "rapid_movement"
-    shown, withheld = await packs.readable([item], scene.analyst, SCHEME, scene.world.graph, scene.case)
+    shown, withheld = await packs.readable([item], scene.analyst, SCHEME, scene.world.graph, scene.case, alerts=scene.stores.alerts, analytics=scene.stores.analytics)
     assert shown == [item] and withheld is False
 
 
@@ -567,7 +568,7 @@ async def test_the_alert_item_is_withheld_from_a_reader_without_the_dataset(scen
     item = await _r1_item(scene)
     public = scene.colleague.model_copy(update={"clearance": "PUBLIC"})
     for reader in (scene.stranger, public):
-        shown, withheld = await packs.readable([item], reader, SCHEME, scene.world.graph, scene.case)
+        shown, withheld = await packs.readable([item], reader, SCHEME, scene.world.graph, scene.case, alerts=scene.stores.alerts, analytics=scene.stores.analytics)
         assert shown == [] and withheld is True  # a yes, never a count or a name
 
 
@@ -583,7 +584,7 @@ async def test_an_item_citing_an_alert_the_revert_took_back_is_not_shown_to_its_
     await story(scene)
     item = await _r1_item(scene)
     graph = scene.world.graph
-    assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case) == ([item], False)
+    assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case, alerts=scene.stores.alerts, analytics=scene.stores.analytics) == ([item], False)
     r1 = item.alert
     assert r1 is not None
     alert_nodes = [n for n in r1.node_ids if graph.nodes[n].type == "Alert"]
@@ -591,7 +592,7 @@ async def test_an_item_citing_an_alert_the_revert_took_back_is_not_shown_to_its_
     tx = await graph.begin_transaction()
     await graph.revert_elements(alert_nodes, [], tx)
     await graph.commit_transaction(tx)
-    assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case) == ([], True)
+    assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case, alerts=scene.stores.alerts, analytics=scene.stores.analytics) == ([], True)
 
 
 async def _figures(scene: Scene, reader: Principal) -> Any:
@@ -638,3 +639,53 @@ async def test_a_reader_without_the_dataset_counts_nothing_on_the_board(scene: S
     m = figures.monitoring
     assert m.raised_by_rule == m.closed_by_outcome == m.hotlist_matches == []
     assert all(c.value == 0 for c in m.time_to_close) and figures.alerts_total == 0
+
+
+async def test_an_item_citing_an_alert_whose_link_was_taken_back_is_not_shown(scene: Scene) -> None:
+    """L2.8b item 3 (ADR-146 decision 10): a pack's alert item is rechecked by what its alert cites
+    now, its links and transactions as well as its nodes, as the queue checks it. Only a link R1
+    cites is taken back here, every node it rests on still live: the item is not shown, and said as
+    the yes. Red with the recheck by nodes alone (`packs._still_visible`): the item was shown."""
+    await story(scene)
+    item = await _r1_item(scene)
+    graph = scene.world.graph
+    readable = {"alerts": scene.stores.alerts, "analytics": scene.stores.analytics}
+    assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case, **readable) == ([item], False)
+    (r1,) = [a for a in await scene.stores.alerts.list_case_queue(scene.case, scene.analyst)
+             if a.id == item.alert.alert_id]  # type: ignore[union-attr]  # fmt: skip
+    assert r1.edge_ids, "R1 cites links"
+    tx = await graph.begin_transaction()
+    await graph.revert_elements([], r1.edge_ids[:1], tx)
+    await graph.commit_transaction(tx)
+    assert all(n in graph.nodes for n in item.alert.node_ids)  # type: ignore[union-attr]
+    assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case, **readable) == ([], True)
+
+
+async def test_the_export_gate_withholds_an_alert_item_whose_link_was_taken_back(scene: Scene) -> None:
+    """L2.8b (the reviewer's finding 12): the pack export gate rechecks an alert item by what its
+    alert cites now, as the pack's reads do. With R1's link taken back, an export of the pack that
+    holds only R1's item has nothing within the exporter's reach, and is refused, writing no ledger
+    entry. Red with the gate rechecking by the item's nodes alone: R1's item left the Conduit."""
+    from services.api.packs import PackExportRefused, PackVersion, export_pack
+    from tests.services.api.test_pack_export_withheld import _Ledger
+
+    from schemas.packs import PackExportRequest, ReportPack
+
+    await story(scene)
+    item = await _r1_item(scene)
+    graph = scene.world.graph
+    (r1,) = [a for a in await scene.stores.alerts.list_case_queue(scene.case, scene.analyst)
+             if a.id == item.alert.alert_id]  # type: ignore[union-attr]  # fmt: skip
+    tx = await graph.begin_transaction()
+    await graph.revert_elements([], r1.edge_ids[:1], tx)
+    await graph.commit_transaction(tx)
+    now = datetime.now(UTC)
+    pack = ReportPack(id="p-r1", investigation_id=scene.case, title="R1", created_by="ed", created_at=now,
+                      updated_at=now)  # fmt: skip
+    version = PackVersion(pack_id="p-r1", version=1, published_at=now, published_by="ed", items=[item])
+    ledger = _Ledger()
+    with pytest.raises(PackExportRefused):
+        await export_pack(pack=pack, version=version, request=PackExportRequest(), exporter=scene.analyst,
+                          scheme=SCHEME, graph=graph, ledger=ledger, policy="disclose",  # type: ignore[arg-type]
+                          alerts=scene.stores.alerts, analytics=scene.stores.analytics)  # fmt: skip
+    assert ledger.entries == [], "nothing was exported, so nothing is in the ledger"

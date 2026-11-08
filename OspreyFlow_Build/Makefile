@@ -15,13 +15,19 @@ TOOLS := PYTHONPATH=$(BUILD)
 
 # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
 # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
-ci: core-check lint-tools licence-check design-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check bundle
+ci: core-check lint-tools licence-check design-check opentofu-check chart-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check bundle
 
 # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
 # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
 lanes-check:
 	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
 	$(IN_CORE) $(TOOLS) $(PY) -m tools.adr_reservations_check
+
+# Rule 3: each unfiltered internal graph lookup named only by the module allowed it (the revert's,
+# the engine's write path, the alert store's repoint settle). Static; shown red with a third caller
+# planted (process/lanes/glass/l2.8b/red-b1-confined.txt).
+confinement-check:
+	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
 
 core-check:
 	$(MAKE) -C $(CORE) check

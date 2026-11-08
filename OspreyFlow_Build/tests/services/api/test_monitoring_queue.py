@@ -89,6 +89,12 @@ class _Graph:
     """Answers `get_nodes` as the adapter does: an id hidden from the reader is simply absent.
     Counts every read, so a test can show the number of reads does not depend on a hidden alert."""
 
+
+    async def stored_link_states(self, edge_ids: Any, *, edge_type: Any = None) -> dict[str, Any]:
+        """The port's unfiltered stored states (the alert store's repoint settle asks, for one type
+        or every type): an id this fake holds no link for is absent, as the port answers."""
+        return {}
+
     def __init__(self, names: dict[str, str], hidden: set[str] | None = None) -> None:
         self.names = names
         self.hidden = hidden or set()

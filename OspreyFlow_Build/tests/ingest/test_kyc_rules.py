@@ -63,6 +63,7 @@ from schemas.domain import (
     SourceRef,
     TypologyRuleInput,
 )
+from tests.services.api.repoint_journal_cleanup import remove_repoint_records  # noqa: F401 - autouse teardown
 
 SCHEME = load_uk_le_scheme()
 ONTOLOGY = load_deployment_ontology()
@@ -488,3 +489,128 @@ async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_fal
         words = [f.words for f in seen.factors if f.factor == "owner_listed"]
         assert any("Elena Petrov" in w and "confirmed on a sanctions list" in w for w in words), words
         assert any("Priya Nair" in w and "possibly" in w for w in words), words
+
+
+async def test_a_confirmed_screening_match_repoints_the_other_alert_citing_it(stores: dict[str, Any]) -> None:
+    """ADR-109 Amendments 9 and 10 through the real screening path (L2.8b item 8, replacing the
+    hand-written SAME_AS): two applicants owned through the same trust by Elena Petrov, onboarded one
+    after the other, each raise a screening alert citing the one match the screening wrote between
+    Petrov and the listed PETROVA (a pair of one audience is one link). A true positive on the first
+    confirms the match into a new revision; the second alert cites that revision and stays in the
+    queue. Red without the repoint: the second alert cited the superseded match and was withheld."""
+    from services.api import alert_queue
+
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        await _onboard(graph, gate, [_application("Halcyon Two Ltd")])
+        petrov = [a for a in await _alerts(stores, case) if "Petrov" in (a.words or "")]
+        assert len(petrov) == 2, [a.words for a in petrov]
+        matches = [set(a.edge_ids) for a in petrov]
+        shared = matches[0] & matches[1]
+        same_as = [e for e in await graph.get_edges(sorted(shared), OFFICER) if e.type == "SAME_AS"]
+        assert len(same_as) == 1, "both alerts cite the one match"
+        first, second = petrov
+        proposed = await alert_queue.dispose(stores["alerts"], graph, gate.analytics, case, first.id, OFFICER,
+                                             disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        if proposed.status == "closing":  # a sanctions match is high: a second person closes it
+            colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+            await alert_queue.approve_close(stores["alerts"], graph, gate.analytics, case, first.id, colleague)
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == second.id]
+        assert same_as[0].id not in row.edge_ids, "the second alert follows the confirmed match"
+        listed = [q.alert.id for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)]
+        assert second.id in listed
+
+
+async def test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record(
+    stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A second person approves a true positive whose match the graph refuses inside the close's
+    transaction, after the alert's node was confirmed and its pair recorded: the close is rolled
+    back before any commit was sent, so its repoint record is closed with it, none left waiting for
+    the stale threshold, and the alert is as it was (its node, its match, closing). Red with the
+    record settled as for a commit reported failed: the record, holding the node's pair, was left."""
+    from services.api import alert_queue
+
+    class Refused(LookupError):
+        """The graph refusing a confirm (as any adapter refusal inside the transaction)."""
+
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        petrov = next(a for a in await _alerts(stores, case) if "Petrov" in (a.words or ""))
+        assert petrov.alert_node_id is not None, "a real screening alert has its own node"
+        await alert_queue.dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                  disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        (before,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == petrov.id]
+        node_supersedes: list[str] = []
+        supersede_node = graph.supersede_node
+
+        async def counted(node_id: str, *a: Any, **k: Any) -> Any:
+            node_supersedes.append(node_id)
+            return await supersede_node(node_id, *a, **k)
+
+        async def refuses(*_a: Any, **_k: Any) -> Any:
+            raise Refused("the graph refused the match's confirm")
+
+        started = datetime.now(UTC)
+        monkeypatch.setattr(graph, "supersede_node", counted)
+        monkeypatch.setattr(graph, "supersede_edge", refuses)
+        colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+        with pytest.raises(Refused):
+            await alert_queue.approve_close(stores["alerts"], graph, gate.analytics, case, petrov.id, colleague)
+        monkeypatch.undo()
+        assert node_supersedes == [petrov.alert_node_id], "its node confirmed (a pair recorded) first"
+        async with stores["alerts"]._pool.acquire() as conn:
+            left = await conn.fetchval(
+                "SELECT count(*) FROM alert_repoint_records WHERE recorded_at >= $1", started
+            )
+        assert left == 0
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == petrov.id]
+        assert (row.edge_ids, row.alert_node_id, row.status) == (before.edge_ids, before.alert_node_id, "closing")
+
+
+async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node(
+    stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2.8b's B6, through the real screening path, whose alerts have their own node: a second person
+    approves a true positive, which confirms the alert's node and its match in the graph, and the
+    triage write is then refused (another member's at the same moment). The alert's node rename is
+    in the close's own record, so the alert names its confirmed node and stays in the queue. Red
+    with only the match recorded: the alert named a superseded node, hidden from every reader."""
+    from services.api import alert_queue
+    from services.api.alerts import AlertTriageConflict
+
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        petrov = next(a for a in await _alerts(stores, case) if "Petrov" in (a.words or ""))
+        assert petrov.alert_node_id is not None, "a real screening alert has its own node"
+        proposed = await alert_queue.dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                             disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        assert proposed.status == "closing"
+        real = stores["alerts"].set_queue_triage
+
+        async def taken(alert_id: str, *a: Any, **k: Any) -> Any:
+            if k.get("status") == "closed":
+                raise AlertTriageConflict(alert_id)
+            return await real(alert_id, *a, **k)
+
+        monkeypatch.setattr(stores["alerts"], "set_queue_triage", taken)
+        colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+        with pytest.raises(AlertTriageConflict):
+            await alert_queue.approve_close(stores["alerts"], graph, gate.analytics, case, petrov.id, colleague)
+        monkeypatch.undo()
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == petrov.id]
+        assert row.alert_node_id != petrov.alert_node_id, "the alert names its confirmed node"
+        listed = [q.alert.id for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)]
+        assert petrov.id in listed

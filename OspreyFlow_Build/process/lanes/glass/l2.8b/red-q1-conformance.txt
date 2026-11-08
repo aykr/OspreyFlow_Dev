@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T00:40:02Z; red at d558530: supersede_edge returning a fresh id of the adapter's own
+diff --git a/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py b/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
+index 1fa8778..445f58c 100644
+--- a/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
++++ b/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
+@@ -2170,7 +2170,7 @@ class GraphArcadeDBAdapter:
+                 )
+             }
+         )
+-        replacement_edge_id = replacement.id
++        replacement_edge_id = new_edge_id()
+         new_audit = AuditStub(
+             created_at=replacement.created_at,
+             created_by=replacement.created_by,
+>           assert returned == wanted
+E           AssertionError: assert '01M6W9J7GYH7X5EZCH0Q2A82BM' == '01M6W9J7GSPKWMECMRQ9ED6E8K'
+E             - 01M6W9J7GSPKWMECMRQ9ED6E8K
+E             + 01M6W9J7GYH7X5EZCH0Q2A82BM
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_supersede_edge_returns_the_replacements_own_id[graph_arcadedb[gremlin]]
+1 failed, 264 deselected in 2.51s

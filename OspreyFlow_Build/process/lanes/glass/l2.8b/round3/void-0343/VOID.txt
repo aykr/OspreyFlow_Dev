@@ -1,0 +1,1 @@
+lease glass 03:42:59-03:51:53Z, at 7e24025. Void as a whole: the greens ran over edits made in this worktree during the run, and reds 1, 2 and 6 failed for other reasons than their tests claim (1 and 2 failed the same way green: a close confirming only its node re-marked nothing; 6 never reached its refusal, its alert having no node). Kept for the record; rerun in full.

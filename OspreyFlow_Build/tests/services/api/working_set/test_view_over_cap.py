@@ -163,9 +163,21 @@ async def test_hidden_stored_items_move_neither_the_figure_nor_the_outcome_on_an
 # --- (c) the live forward ---------------------------------------------------------------------
 
 
+class _NoPurges:
+    """The alert store as the socket's sync reaches it (`purge_remarked_copies`, ADR-109 Amendment
+    10): a journal holding no record waiting for a working-set purge."""
+
+    async def applied_purges(self) -> list[tuple[str, list[str]]]:
+        return []
+
+    async def purged(self, record_id: str) -> None:
+        raise AssertionError("no record to close")
+
+
 class _Socket:
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
+        self.app = type("App", (), {"state": type("State", (), {"alerts_store": _NoPurges()})()})()
 
     async def send_text(self, text: str) -> None:
         self.sent.append(json.loads(text))

@@ -1,0 +1,14 @@
+lease glass; 2026-11-08T04:01:12Z; green at bf28fcd
+34 passed in 221.82s (0:03:41)
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (... first_seen=datetime.datetime(2026, 11, 8, 4, 6, 33, 535713, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=No
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (... first_seen=datetime.datetime(2026, 11, 8, 4, 6, 33, 535713, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None) = Edge(id='01M6WNC9T5M3C793S50H616M
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+1 failed, 117 passed in 191.90s (0:03:11)
+51 passed, 1 warning in 49.18s
+52 passed, 222 deselected in 173.32s (0:02:53)
+79 passed in 1.70s
+end 2026-11-08T04:11:53Z
+tree unchanged during the run, at bf28fcd

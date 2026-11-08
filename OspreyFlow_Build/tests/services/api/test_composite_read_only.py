@@ -436,10 +436,39 @@ async def _close(
     class _Store:
         def __init__(self) -> None:
             self.triaged: list[object] = []
+            self.recorded: list[tuple[str, str]] = []
 
         async def set_queue_triage(self, *args: object, **kwargs: object) -> object:
             self.triaged.append(kwargs)
             return object()
+
+        def repointing(self, graph: object) -> Any:
+            """`AlertStore.repointing` (ADR-109 Amendment 10), around the close's graph write: what
+            the close records, kept; nothing re-marked, so nothing to purge."""
+            from contextlib import asynccontextmanager
+
+            store = self
+
+            class _Repoint:
+                remarked_nodes: list[str] = []
+
+                async def record(self, old: str, new: str, *, old_type: str) -> None:
+                    store.recorded.append((old, new))
+
+                async def record_node(self, old: str, new: str) -> None:
+                    store.recorded.append((old, new))
+
+                def never_committed(self) -> None:
+                    store.recorded.clear()
+
+                async def purged(self) -> None:
+                    return None
+
+            @asynccontextmanager
+            async def around() -> Any:
+                yield _Repoint()
+
+            return around()
 
     member_node = _member_node(ProvenanceState.INFERRED)
     if in_the_layer is not None:  # an alert raised in the composite case (Amendment 15 item 2)

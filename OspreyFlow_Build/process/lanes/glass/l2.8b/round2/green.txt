@@ -1,0 +1,106 @@
+lease glass; 2026-11-08T01:48:57Z; green at bd9143e
+>           assert await _pending(stores, link) == []
+E           AssertionError: assert [('01M6WDJ89A...063PJQYZ13M')] == []
+E             Left contains one more item: ('01M6WDJ89AVTV0FTQDBFFK82HE', '01M6WDJ8KHTX4WV063PJQYZ13M')
+E             Use -v to get more diff
+>           result = await service.change("inv-1", link_id, CHANGER,
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: 'SupersedingGraph' object has no attribute 'stored_link_states'
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_graph_failure_leaves_every_alert_on_the_live_link
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_citing_a_changed_link_follows_it_to_its_successor
+2 failed, 26 passed in 147.57s (0:02:27)
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 8, 1, 52, 41, 855155, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=No
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...first_seen=datetime.datetime(2026, 11, 8, 1, 52, 41, 855155, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None) = Edge(id='01M6WDQ6C3Q5SYZETGTGMTF0
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+>       rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), NO_TRANSACTIONS, case, member)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       assert await _queued_ids(alerts, case, owner) == [alert.id]
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), NO_TRANSACTIONS, case, elsewhere)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       assert await _queued_ids(alerts, "any-case", owner) == [alert.id]
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       rows = await alert_queue.monitoring_queue(alerts, _Graph({}), NO_TRANSACTIONS, "c", owner)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       assert await _queued_ids(alerts, "c", member) == [alert.id]
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       assert other.id not in await _queued_ids(alerts, "case-this", owner)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       assert await _queued_ids(alerts, "c", owner) == []
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       assert await _queued_ids(alerts, "c", owner) == []
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       rows = await alert_queue.monitoring_queue(alerts, _Graph(GRAPH_NAMES), NO_TRANSACTIONS, case, owner)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       shown_with = await alert_queue.monitoring_queue(alerts, with_graph, NO_TRANSACTIONS, case_with, member)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>           await alert_queue.claim(alerts, graph, NO_TRANSACTIONS, case, target, stranger)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       given = await alert_queue.assign(alerts, graph, NO_TRANSACTIONS, case, made["typology"].id, owner,
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_the_queue_shows_a_typology_a_hotlist_and_a_monitor_alert_to_a_team_member
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_an_only_me_hotlist_alert_reaches_its_owner_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_shared_alert_reaches_the_owners_unit_and_no_other
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_an_alert_raised_before_teams_existed_reaches_its_owner_alone
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_notify_stub_reaches_its_owner_alone_on_a_team_hotlist
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_hotlist_turned_back_to_only_me_withdraws_its_alerts_from_the_team
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_another_cases_typology_alert_is_not_in_this_queue
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_an_alert_of_a_dataset_the_case_does_not_read_is_not_queued
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_scheduled_runs_notice_is_never_queued
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_severity_defaults_by_kind_and_the_filters_are_applied_in_the_query
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_hidden_alert_reveals_nothing_through_count_order_or_reads
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_team_member_claims_and_closes_a_hotlist_alert_and_a_stranger_cannot
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py::test_a_case_alert_is_given_to_a_member_and_a_shared_one_only_to_be_claimed
+14 failed, 40 passed in 141.67s (0:02:21)
+>           assert alert.referent_node_ids == [node_id]
+E           AssertionError: assert ['01M6TKB5YK20831E81PD008SWZ'] == ['01M6WDWCR992RCNK3S4YN160T6']
+E             At index 0 diff: '01M6TKB5YK20831E81PD008SWZ' != '01M6WDWCR992RCNK3S4YN160T6'
+E             Use -v to get more diff
+>       shown_with = await alert_queue.queue(alerts, with_graph, NO_TRANSACTIONS, case_with, member)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       everything = await alert_queue.queue(alerts, _Graph(names), NO_TRANSACTIONS, case, deployer)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       with_hidden = await _figures(alerts, graph, hidden_case, owner)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       owners = (await _figures(alerts, graph, case, owner)).monitoring
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       m = (await _figures(alerts, _Graph(NAMES), case, owner)).monitoring
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       figures = await _figures(alerts, _Graph(NAMES), case, owner)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+>       figures = await _figures(alerts, _Graph(NAMES), case, owner)
+>           states = await graph.stored_link_states(sorted(links))
+E           AttributeError: '_Graph' object has no attribute 'stored_link_states'
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+FAILED ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py::test_the_case_queue_reveals_no_hidden_alert_through_count_order_or_reads
+FAILED ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py::test_the_case_queue_holds_typology_alerts_only_and_filters_by_status
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py::test_a_hidden_alert_changes_no_dashboard_figure
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py::test_an_only_me_hotlists_matches_are_in_its_owners_figures_and_no_one_elses
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py::test_the_sections_count_by_rule_outcome_time_and_match
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py::test_the_typology_figures_still_count_typology_alerts_only
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py::test_the_feed_carries_the_new_sections_as_figures_only
+8 failed, 105 passed, 1 warning in 328.43s (0:05:28)
+49 passed, 216 deselected in 170.91s (0:02:50)
+end 2026-11-08T02:02:08Z

@@ -212,10 +212,12 @@ async def alert_to_view(
     graph: GraphPort,
     analytics: AnalyticsPort,
     hotlists_store: HotlistReader | None = None,
+    *,
+    case: str,
 ) -> AlertView:
     # ADR-146 decision 10 (gap map G3): an alert's words name what it concerns, so they are withheld
     # with its evidence, as its referents are; a hotlist's own identifier is the reader's to see.
-    available = await evidence_available(alert, principal, graph, analytics)
+    available = await evidence_available(alert, principal, graph, analytics, case=case)
     fired_on: list[FiredOn] | None = None
     if available and alert.mode is AlertMode.FULL and alert.referent_node_ids:
         nodes = [await graph.get_node(node_id, principal) for node_id in alert.referent_node_ids]
@@ -244,14 +246,15 @@ async def jumpable_alert(
     principal: Principal,
     graph: GraphPort,
     analytics: AnalyticsPort,
+    case: str,
 ) -> Alert:
     """The alert a jump branches from: the principal's own, and every node, link and transaction it
     cites readable to them now, or refused exactly as a missing alert, before anything is created
     (ADR-124 Amendment 17; rule 3, and ADR-146's tests: "`/alerts/<id>` for a reader who may not
     see the alert is refused exactly as a missing alert"). Seeding the readable referents of such an
     alert would give the jumper the entities the hidden link or transactions tie together."""
-    alert = await alerts.get_authorized(alert_id, principal)
-    if not await evidence_available(alert, principal, graph, analytics):
+    alert = await alerts.get_authorized(alert_id, principal, graph=graph)
+    if not await evidence_available(alert, principal, graph, analytics, case=case):
         raise AlertNotFoundError(alert_id)
     return alert
 

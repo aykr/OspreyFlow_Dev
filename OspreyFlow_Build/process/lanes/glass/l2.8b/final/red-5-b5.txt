@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T06:16:01Z; red at 09ab55c: the re-mark's supersede unrecorded
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..d4739cb 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -997,7 +997,7 @@ class AlertStore:
+         async def recorded(old: str, new: str) -> None:
+             await self._add_to_record(record_id, remarks=[(old, new)])
+ 
+-        report = await remark_alerts(graph, self, self.scheme, rows, on_supersede=recorded)
++        report = await remark_alerts(graph, self, self.scheme, rows, on_supersede=None)  # red
+         return report.superseded_nodes
+ 
+     async def set_queue_triage(
+>           assert row.alert_node_id != alert.alert_node_id
+E           AssertionError: assert '01M6WWSJ0RKZ7J47T6G3YCVY6M' != '01M6WWSJ0RKZ7J47T6G3YCVY6M'
+E            +  where '01M6WWSJ0RKZ7J47T6G3YCVY6M' = Alert(id='01M6WWSJ4055BBDE9Z0VWW7495', rule_id='typology:01M6WWSHS7NV5DFPK17ED0RQHE', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+E            +  and   '01M6WWSJ0RKZ7J47T6G3YCVY6M' = Alert(id='01M6WWSJ4055BBDE9Z0VWW7495', rule_id='typology:01M6WWSHS7NV5DFPK17ED0RQHE', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_that_fails_is_retried_by_the_next_read
+1 failed, 37 deselected in 8.50s

@@ -1,0 +1,37 @@
+lease glass; 2026-11-08T00:38:46Z; red at d558530: the audit's check by nodes alone; an old firing's words shown
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 37b4440..b8effaa 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -925,8 +925,6 @@ class ReadableEvidence:
+         """Every one of these nodes, links and transactions is readable."""
+         return (
+             all(i in self.nodes for i in node_ids)
+-            and set(edge_ids) <= self.edge_ids
+-            and set(event_ids) <= self.event_ids
+         )
+ 
+     def whole(self, alert: Alert) -> bool:
+diff --git a/OspreyFlow_Core/services/api/rule_holds.py b/OspreyFlow_Core/services/api/rule_holds.py
+index 0511ebc..b661c61 100644
+--- a/OspreyFlow_Core/services/api/rule_holds.py
++++ b/OspreyFlow_Core/services/api/rule_holds.py
+@@ -71,7 +71,7 @@ async def readable_rule_audit(
+         cited = (_ids(entry, "node_ids"), _ids(entry, "edge_ids"), _ids(entry, "event_ids"))
+         if not readable.covers(*cited):
+             continue
+-        if _old_firing(entry) and "words" in entry.detail:
++        if False and _old_firing(entry) and "words" in entry.detail:
+             entry = entry.model_copy(
+                 update={"detail": {k: v for k, v in entry.detail.items() if k != "words"}}
+             )
+>           assert await fired(TEAMMATE) == []
+E           AssertionError: assert [RuleAuditEnt...ardinality=1)] == []
+E             Left contains one more item: RuleAuditEntry(recorded_at=datetime.datetime(2026, 11, 8, 0, 38, 52, 909112, tzinfo=datetime.timezone.utc), principal_...F2R', '01M6W9G0ZP97QNFR4YA321DF2T', '01M6W9G0ZP97QNFR4YA321DF2W', '01M6W9G0ZP97QNFR4YA321DF2Y']}, result_cardinality=1)
+E             Use -v to get more diff
+>               assert "words" not in old[0].detail and old[0].detail["alert_id"] == loaded.id
+E               AssertionError: assert ('words' not in {'words': '4 movements from 01M6W9G688R0RR0WME3NQFZ44D to 01M6W9G692HT3RAVRY3NGD8GJZ, each below 10,000, sum to 38,000...ule_id': 'typology:01M6W9G6C2725W1K653X4NCWYS', 'trigger': 'pre_commit', 'alert_id': '01M6W9G6H7YMZQ8M1RBHJHFER3', ...})
+E                +  where {'words': '4 movements from 01M6W9G688R0RR0WME3NQFZ44D to 01M6W9G692HT3RAVRY3NGD8GJZ, each below 10,000, sum to 38,000...ule_id': 'typology:01M6W9G6C2725W1K653X4NCWYS', 'trigger': 'pre_commit', 'alert_id': '01M6W9G6H7YMZQ8M1RBHJHFER3', ...} = RuleAuditEntry(recorded_at=date
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_over_a_hidden_link_or_transaction_is_withheld_from_the_rule_audit
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_its_words
+2 failed, 17 deselected in 11.85s

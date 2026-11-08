@@ -772,16 +772,27 @@ written, the row still raised and the withholding audited with its reason in wor
 referents with a restricted code belong to different units (no single marking is safe), where a
 referent's marking cannot be read in the load, or where a cited link cannot be read when the alert
 is raised after the commit (taken back or replaced since it was found; one such link never stops a
-sweep). They are also the deployer's §3.8 alerts, and the case team's queue below. A close that
-confirms a link (a true positive's `SAME_AS`) writes the link's new revision, and repoints every
-alert citing the old one to it in the same transaction, the closing alert and the rest locked
-together in id order and renamed as they stand; the queue then checks the new revision for every
-reader, as it checks any link (ADR-109 Amendment 9).
+sweep). They are also the deployer's §3.8 alerts, and the case team's queue below. Every write that supersedes
+a link alerts may cite (a true positive's confirmed `SAME_AS`, a link change, a picture's
+replacement or removal) keeps one record in Postgres from before the graph's commit until every
+citing alert cites the newest revision, its node is re-marked and renamed, and its working-set
+copies are purged, whatever the triage write then does; a record is applied, before every read of
+alerts, once the graph's own stored states show its write committed (each link read for its own
+type; an id two types hold moves no alert), its re-marks re-run where one never landed, and a
+record held open by a writer committing in many transactions is applied only once that writer has
+left. A record is dropped only when stale and its write never committed, or closed by its writer
+when it records nothing or rolls back before sending its commit. Transactions are read in the
+reader's own case.
+The queue then checks the new revision for every reader, as it checks any link (ADR-109 Amendments 9
+and 10). The rule audit withholds an entry naming a node, link or transaction the reader cannot see
+(a firing written before its links were recorded keeps its entry, its words withheld), a pack's
+alert item is checked by what its alert cites now, and a row a rule holds gives the rule's name and
+typology, never the finding's words.
 
 **The audit read** returns entries of `rule_deployed`, `rule_retired`, `rule_evaluated`,
 `rule_fired`, `rule_failed`, `rows_held`, `rows_released`, `rows_rejected` and
-`alert_node_withheld`. An entry naming a node the reader cannot see is withheld whole, before
-paging, so the total never counts it.
+`alert_node_withheld`. An entry naming a node, link or transaction the reader cannot see is withheld
+whole, before paging, so the total never counts it (one batched read per kind, the queue's check).
 
 **The case team's queue (phase B, ruling 3), since ADR-133 stage (a) the one queue for every kind.**
 It holds the case's typology alerts (the case's members') and the hotlist and monitor alerts the

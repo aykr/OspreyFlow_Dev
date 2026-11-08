@@ -1,0 +1,17 @@
+lease glass; 2026-11-08T00:33:24Z; osprey-test-pg, active typology rules (the orchestrator's query), read only, nothing changed
+== database osprey
+SELECT id, investigation_id, params->'sentence'->>'scope', status FROM typology_rules WHERE status='active': rows with a deployment-wide scope, in full
+01M6W58AXQMF086YDTT1F9RJ8C|case-01M6W58AXAENZSQFKMY8Y3QS9E|deployment|active
+01M6W58B0DJ3K6FED2RAQTFJH2|case-01M6W58B02QDBWE0MAWX1640HQ|deployment|active
+01M6W58B54N293P19W74BDY326|01M6W58B54N293P19W74BDY324|deployment|active
+01M6W58B6FK38SCSW5WH4CSM6C|01M6W58B6FK38SCSW5WH4CSM6B|deployment|active
+01M6W58BBPX48RV2CJYDBCE0M0|01M6W58BBPX48RV2CJYDBCE0KZ|deployment|active
+counts by scope:
+deployment|5
+(none: a typology rule of its case)|1639
+this_case|41
+== database ospreyflow
+SELECT id, investigation_id, params->'sentence'->>'scope', status FROM typology_rules WHERE status='active': rows with a deployment-wide scope, in full
+counts by scope:
+(none: a typology rule of its case)|485
+this_case|74

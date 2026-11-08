@@ -1,0 +1,21 @@
+lease glass; 2026-11-08T03:43:04Z; red at 7e24025: the triage writing the confirmed node back
+diff --git a/OspreyFlow_Core/services/api/alert_queue.py b/OspreyFlow_Core/services/api/alert_queue.py
+index adbbfcb..c7f6600 100644
+--- a/OspreyFlow_Core/services/api/alert_queue.py
++++ b/OspreyFlow_Core/services/api/alert_queue.py
+@@ -517,8 +517,7 @@ async def _close(
+         disposition=disposition,
+         disposition_reason=reason,
+         decided_by=member.id,
+-        # No node here: the close's record owns the node's rename (to the newest revision the graph
+-        # holds, after any re-mark), and writing the confirmed node back would undo it.
++        alert_node_id=confirmed_node,  # red: the confirmed node written back
+         close_proposed_by=proposed_by,
+     )
+ 
+>           assert node.handling.classification == "SECRET"
+E           AssertionError: assert 'OFFICIAL' == 'SECRET'
+E             - SECRET
+E             + OFFICIAL
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_puts_back_the_node_its_own_record_re_marked
+1 failed, 34 deselected in 28.29s

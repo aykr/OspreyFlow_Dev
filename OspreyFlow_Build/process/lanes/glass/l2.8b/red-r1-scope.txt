@@ -1,0 +1,7 @@
+2026-11-08T01:35:26Z; red (hermetic), R1: the scopes as at HEAD 5f9e1d1, the alert's own case (evidence_available given the case keyword only, unused)
+>       assert await _shown(store, graph, analytics) == []
+E       AssertionError: assert ['elsewhere'] == []
+E         Left contains one more item: 'elsewhere'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py::test_a_shared_alert_raised_elsewhere_gives_none_of_that_cases_transactions
+1 failed, 37 deselected in 0.46s

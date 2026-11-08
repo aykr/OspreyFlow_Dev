@@ -149,6 +149,21 @@ class SupersedingGraph(FakeGraphPort):
     ontology does not hold, properties the type does not declare — and keeps nothing a rolled-back
     transaction wrote."""
 
+
+    async def stored_link_states(self, edge_ids: Any, *, edge_type: Any = None) -> dict[str, Any]:
+        """The port's unfiltered stored states (the alert store's repoint settle asks): each link
+        this fake holds, superseded once a committed change replaced it, naming its successor (the
+        settle follows `superseded_by`, as the adapter fills it); an id it holds no link for is
+        absent, as the port answers."""
+        from ports.graph import StoredLink
+
+        replaced = {old: write.id for old, write in self.superseded}
+        return {
+            e: StoredLink(reverted=False, superseded=e in replaced, superseded_by=replaced.get(e))
+            for e in edge_ids
+            if e in self.stored
+        }
+
     def __init__(self, stored_edge_ids: set[str]) -> None:
         super().__init__(Subgraph(nodes=[], edges=[]))
         self.stored = set(stored_edge_ids)
@@ -905,3 +920,4 @@ async def test_a_revision_with_no_recorded_handling_is_left_out_for_every_reader
         _revision(1, "OFFICIAL", "OFFICIAL"),
     ]
     assert await _history_for(rows, reader) == ["Revision 4", "Revision 2", "Revision 1"]
+

@@ -1,0 +1,19 @@
+lease glass; 2026-11-08T01:48:55Z; red at bd9143e: the pack's recheck by an alert item's nodes alone
+diff --git a/OspreyFlow_Core/services/api/packs.py b/OspreyFlow_Core/services/api/packs.py
+index 0b33436..faadc5e 100644
+--- a/OspreyFlow_Core/services/api/packs.py
++++ b/OspreyFlow_Core/services/api/packs.py
+@@ -146,8 +146,7 @@ async def readable(
+     for item in items:
+         if item.alert is not None:
+             alert = cited.get(item.alert.alert_id)
+-            if alert is None or not evidence.covers((), alert.edge_ids, alert.event_ids):
+-                continue
++            pass
+         if item_visible(item.handlings, reader, scheme) and await _still_visible(
+             item, reader, graph, case_id
+         ):
+>       with pytest.raises(PackExportRefused):
+E       Failed: DID NOT RAISE PackExportRefused
+FAILED ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py::test_the_export_gate_withholds_an_alert_item_whose_link_was_taken_back
+1 failed, 27 deselected in 2.18s

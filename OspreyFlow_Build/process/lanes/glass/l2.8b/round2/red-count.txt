@@ -1,0 +1,19 @@
+lease glass; 2026-11-08T01:48:46Z; red at bd9143e: an evaluation's count served to every reader
+diff --git a/OspreyFlow_Core/services/api/rule_holds.py b/OspreyFlow_Core/services/api/rule_holds.py
+index b30fdaa..46682d0 100644
+--- a/OspreyFlow_Core/services/api/rule_holds.py
++++ b/OspreyFlow_Core/services/api/rule_holds.py
+@@ -103,7 +103,7 @@ async def readable_rule_audit(
+             entry = entry.model_copy(
+                 update={"detail": {k: v for k, v in entry.detail.items() if k != "words"}}
+             )
+-        if entry.action == "rule_evaluated" and str(entry.detail.get("rule_id")) in unseen_rules:
++        if False:
+             entry = entry.model_copy(update={
+                 "detail": {**{k: v for k, v in entry.detail.items() if k != "findings"},
+                            "findings_withheld": True},
+>               assert "findings" not in entry.detail and entry.detail["findings_withheld"] is True
+E               AssertionError: assert ('findings' not in {'load_id': '01M6WDG7RH9KFF9F815JYYS915', 'rule_id': '01M6WDG7R8SG0N2YP48JE78D0P', 'trigger': 'pre_commit', 'findings': 1})
+E                +  where {'load_id': '01M6WDG7RH9KFF9F815JYYS915', 'rule_id': '01M6WDG7R8SG0N2YP48JE78D0P', 'trigger': 'pre_commit', 'findings': 1} = RuleAuditEntry(recorded_at=datetime.datetime(2026, 11, 8, 1, 48, 54, 28384, tzinfo=datetime.timezone.utc), principal_i...F9F815JYYS915', 'rule_id': '
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_evaluations_count_is_withheld_from_a_reader_who_cannot_see_every_finding
+1 failed, 27 deselected in 7.59s

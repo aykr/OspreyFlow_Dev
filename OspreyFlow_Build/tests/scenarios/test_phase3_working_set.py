@@ -399,3 +399,129 @@ def test_a_lower_clearance_principal_sharing_an_investigation_sees_the_filtered_
         assert secret_id not in official_node_ids
         assert hub_id in official_node_ids  # the OFFICIAL content is still there
         assert "filtered_count" not in snapshot  # ADR-124: nothing says something was left out
+
+
+def test_a_node_a_settle_re_marked_is_purged_before_the_socket_sends_a_snapshot(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-109 Amendment 10 (L2.8b's R2), through the socket's real sync: a settle on a read path
+    re-marked a node that a case's working set holds a copy of, and recorded it to purge (an applied
+    journal record with that node, as the settle leaves it). The socket's first sync purges it
+    (`purge_remarked_copies`, before `working_set.sync`): the snapshot sent does not hold the copy,
+    and the record is closed. Red with the purge call at the socket's connect removed: the stale
+    copy was sent."""
+    import json
+
+    private_key, _ = keypair
+    headers = _bearer(private_key)
+    fixture = _run(_arrange_graph())
+    hub_node, hub_id, visible_id = fixture["hub_node"], fixture["hub_id"], fixture["visible_id"]
+
+    from services.api.app import app
+    from services.api.config import PostgresConfig
+
+    from conduit_common.identity import new_id
+
+    with TestClient(app) as client:
+        created = client.post("/v1/investigations", headers=headers, json=new_case())
+        assert created.status_code == 201, created.text
+        investigation_id = created.json()["id"]
+        _run(give_case_its_dataset(investigation_id, _UNIT))
+        assert client.post(f"/v1/investigations/{investigation_id}/seed", headers=headers,
+                           json={"nodes": [hub_node], "edges": []}).status_code == 200  # fmt: skip
+        expanded = client.post(f"/v1/investigations/{investigation_id}/expand", headers=headers,
+                               json={"request": {"node_ids": [hub_id], "depth": 1}})  # fmt: skip
+        assert visible_id in {n["id"] for n in expanded.json()["delta"]["nodes"]}
+
+        record = new_id()
+
+        async def plant() -> None:
+            conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+            try:
+                await conn.execute(
+                    "INSERT INTO alert_repoint_records (id, applied, purge) VALUES ($1, true, $2::jsonb)",
+                    record, json.dumps([visible_id]),
+                )  # fmt: skip
+            finally:
+                await conn.close()
+
+        async def left() -> int:
+            conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+            try:
+                return int(await conn.fetchval("SELECT count(*) FROM alert_repoint_records WHERE id = $1", record))
+            finally:
+                await conn.execute("DELETE FROM alert_repoint_records WHERE id = $1", record)
+                await conn.close()
+
+        _run(plant())
+        with client.websocket_connect(f"/v1/investigations/{investigation_id}/stream", headers=headers) as ws:
+            ws.send_json({"last_acknowledged_seq": None})
+            snapshot = ws.receive_json()
+        assert snapshot["op"] == "snapshot"
+        assert visible_id not in {n["id"] for n in snapshot["nodes"]}
+        assert hub_id in {n["id"] for n in snapshot["nodes"]}
+        assert _run(left()) == 0, "the record is closed once purged"
+
+
+def test_a_node_a_settle_re_marked_is_purged_before_a_resync_sends_its_snapshot(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-109 Amendment 10 (L2.8b's R2 and D7), the socket's resync ("try again", no last
+    sequence) after its first sync: a settle re-marks a node the case's working set holds a copy of
+    while the socket is open. The resync purges it (`_try_again`'s `purge_remarked_copies`) before
+    its snapshot, which does not hold the copy, and the record is closed. Red with that purge call
+    removed: the resync sent the stale copy."""
+    import json
+
+    private_key, _ = keypair
+    headers = _bearer(private_key)
+    fixture = _run(_arrange_graph())
+    hub_node, hub_id, visible_id = fixture["hub_node"], fixture["hub_id"], fixture["visible_id"]
+
+    from services.api.app import app
+    from services.api.config import PostgresConfig
+
+    from conduit_common.identity import new_id
+
+    with TestClient(app) as client:
+        created = client.post("/v1/investigations", headers=headers, json=new_case())
+        assert created.status_code == 201, created.text
+        investigation_id = created.json()["id"]
+        _run(give_case_its_dataset(investigation_id, _UNIT))
+        assert client.post(f"/v1/investigations/{investigation_id}/seed", headers=headers,
+                           json={"nodes": [hub_node], "edges": []}).status_code == 200  # fmt: skip
+        expanded = client.post(f"/v1/investigations/{investigation_id}/expand", headers=headers,
+                               json={"request": {"node_ids": [hub_id], "depth": 1}})  # fmt: skip
+        assert visible_id in {n["id"] for n in expanded.json()["delta"]["nodes"]}
+
+        record = new_id()
+
+        async def plant() -> None:
+            conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+            try:
+                await conn.execute(
+                    "INSERT INTO alert_repoint_records (id, applied, purge) VALUES ($1, true, $2::jsonb)",
+                    record, json.dumps([visible_id]),
+                )  # fmt: skip
+            finally:
+                await conn.close()
+
+        async def left() -> int:
+            conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+            try:
+                return int(await conn.fetchval("SELECT count(*) FROM alert_repoint_records WHERE id = $1", record))
+            finally:
+                await conn.execute("DELETE FROM alert_repoint_records WHERE id = $1", record)
+                await conn.close()
+
+        with client.websocket_connect(f"/v1/investigations/{investigation_id}/stream", headers=headers) as ws:
+            ws.send_json({"last_acknowledged_seq": None})
+            first = ws.receive_json()
+            assert first["op"] == "snapshot" and visible_id in {n["id"] for n in first["nodes"]}
+            _run(plant())  # a settle elsewhere, while the socket is open
+            ws.send_json({"last_acknowledged_seq": None})  # try again
+            snapshot = ws.receive_json()
+        assert snapshot["op"] == "snapshot"
+        assert visible_id not in {n["id"] for n in snapshot["nodes"]}
+        assert hub_id in {n["id"] for n in snapshot["nodes"]}
+        assert _run(left()) == 0, "the record is closed once purged"

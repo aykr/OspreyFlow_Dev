@@ -1,0 +1,17 @@
+lease glass; 2026-11-08T06:18:16Z; red at 09ab55c: the purge before a resync's snapshot removed
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index f8fdad2..6f7372f 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -12933,7 +12933,6 @@ async def _try_again(
+     state.buffering = True
+     state.overflowed = False
+     state.buffer.clear()
+-    await purge_remarked_copies(websocket.app.state.alerts_store, working_set)  # as at connect
+     deltas = await working_set.sync(investigation_id, principal, last_acknowledged_seq=None)
+     snapshot = deltas[0] if deltas else None
+     if isinstance(snapshot, DeltaSnapshot):
+>           assert visible_id not in {n["id"] for n in snapshot["nodes"]}
+E           AssertionError: assert '01M6WWXGXBCHDVXY0D607BN5NA' not in {'01M6WWXGXBCHDVXY0D607BN5N9', '01M6WWXGXBCHDVXY0D607BN5NA'}
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py::test_a_node_a_settle_re_marked_is_purged_before_a_resync_sends_its_snapshot
+1 failed, 4 deselected, 1 warning in 12.17s

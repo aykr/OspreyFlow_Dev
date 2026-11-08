@@ -135,6 +135,28 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
                 raise AlertNotFoundError(alert_id)
             return QueueRow(alert, "typology", "medium", "case")
 
+        repointed: dict[str, str] = {}
+
+        def repointing(self, graph: Any) -> Any:
+            """`AlertStore.repointing`: what the close confirmed, recorded and applied."""
+            from contextlib import asynccontextmanager
+
+            store = self
+
+            class _Repoint:
+                async def record(self, old: str, new: str, *, old_type: str) -> None:
+                    store.repointed[old] = new
+
+                def never_committed(self) -> None:
+                    """A close rolled back before its commit: nothing it recorded is applied."""
+                    store.repointed.clear()
+
+            @asynccontextmanager
+            async def around() -> Any:
+                yield _Repoint()
+
+            return around()
+
         async def set_queue_triage(
             self, alert_id: str, *_a: Any, expect_status: Any, **_k: Any
         ) -> Alert:

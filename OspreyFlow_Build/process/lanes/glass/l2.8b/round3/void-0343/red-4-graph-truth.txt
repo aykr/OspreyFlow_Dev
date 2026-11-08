@@ -1,0 +1,21 @@
+lease glass; 2026-11-08T03:45:35Z; red at 7e24025: the recorded successor trusted over the graph's superseded_by
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 468b787..90023d5 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -857,8 +857,7 @@ class AlertStore:
+                 return []
+             return None
+         finals: dict[str, str] = {}
+-        for old, _ in links:
+-            newest = await self._newest(graph.stored_link_states, old)
++        for old, newest in links:  # red: the recorded successor trusted
+             if newest is None or newest == old:
+                 return None  # not committed (or never: the stale threshold)
+             finals[old] = newest
+>           assert row.edge_ids == [raised]
+E           AssertionError: assert ['never-commi...79ATECF6ZEVF'] == ['01M6WM6541A35PG1RRK1GFYC3B']
+E             At index 0 diff: 'never-committed-01M6WM6557Y8BB79ATECF6ZEVF' != '01M6WM6541A35PG1RRK1GFYC3B'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_what_the_graph_committed_not_what_it_recorded
+1 failed, 34 deselected in 8.44s

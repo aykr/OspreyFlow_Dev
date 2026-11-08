@@ -1,0 +1,25 @@
+lease glass; 2026-11-08T01:47:24Z; red at bd9143e: the writer dropping its record on failure (BaseException)
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index cbb170a..a60e594 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -681,8 +681,8 @@ class AlertStore:
+         repoint = LinkRepoint(self, record_id)
+         try:
+             yield repoint
+-        except Exception:
+-            await self._settle_record(graph, record_id)
++        except BaseException:
++            await self._close_record(record_id)
+             raise
+         repoint.remarked_nodes = await self._settle_record(graph, record_id, writer=True) or []
+ 
+>           assert alert.id in listed and listed[alert.id].edge_ids != [link.id]
+E           AssertionError: assert ('01M6WDE07BKZFC67DJTQHPNPZY' in {})
+E            +  where '01M6WDE07BKZFC67DJTQHPNPZY' = Alert(id='01M6WDE07BKZFC67DJTQHPNPZY', rule_id='typology:01M6WDDT3NK5SVM9MB2WFQN33B', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).id
+>           assert alert.id in listed and listed[alert.id].edge_ids != [link.id]
+E           AssertionError: assert ('01M6WDE7KFZQ0YZKZ9JZRDBHM5' in {})
+E            +  where '01M6WDE7KFZQ0YZKZ9JZRDBHM5' = Alert(id='01M6WDE7KFZQ0YZKZ9JZRDBHM5', rule_id='typology:01M6WDE77KCR5T6WXQQRKWJBJ2', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).id
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[timeout]
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[cancellation]
+2 failed, 26 deselected in 24.69s

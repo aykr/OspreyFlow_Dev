@@ -1,0 +1,19 @@
+lease glass; 2026-11-08T01:47:59Z; red at bd9143e: the record closed before the re-mark
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index cbb170a..199401f 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -819,6 +819,7 @@ class AlertStore:
+                     await conn.execute(
+                         "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, new
+                     )
++        await self._close_record(record_id)  # red: closed before the re-mark
+         remarked = await self._remark_citing(graph, record_id, sorted(set(finals.values())))
+         # Every node renamed or re-marked here is superseded: its working-set copies are stale.
+         purge = sorted({*renamed, *remarked})
+>           assert row.alert_node_id != alert.alert_node_id
+E           AssertionError: assert '01M6WDEV0JN33GKRXG602CB5EG' != '01M6WDEV0JN33GKRXG602CB5EG'
+E            +  where '01M6WDEV0JN33GKRXG602CB5EG' = Alert(id='01M6WDEV51ZJPHM54QXQVTA0RD', rule_id='typology:01M6WDETQN7Y7D03DZYTANZ227', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+E            +  and   '01M6WDEV0JN33GKRXG602CB5EG' = Alert(id='01M6WDEV51ZJPHM54QXQVTA0RD', rule_id='typology:01M6WDETQN7Y7D03DZYTANZ227', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_that_fails_is_retried_by_the_next_read
+1 failed, 27 deselected in 9.39s

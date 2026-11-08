@@ -1,0 +1,22 @@
+lease glass; 2026-11-08T03:58:40Z; red at bf28fcd: the records' locks drawn from the store's own pool
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 07a1487..3a7188d 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -824,7 +824,7 @@ class AlertStore:
+         # returned to the pool holding it, and the server frees a session lock when its connection
+         # ends, so a crashed settle never holds one for good. `hashtext` can map two ids to one key:
+         # harmless, since a collision only makes a reader skip a record, which a later read settles.
+-        async with self._lock_pool.acquire() as lock:
++        async with self._pool.acquire() as lock:  # red: locks from the store's own pool
+             if not await lock.fetchval("SELECT pg_try_advisory_lock(hashtext($1))", record_id):
+                 return None
+             try:
+>           return await fut
+>               await getter
+E               asyncio.exceptions.CancelledError
+>           await asyncio.wait_for(
+>               raise TimeoutError from exc_val
+E               TimeoutError
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_more_records_settled_at_once_than_the_store_holds_connections_all_finish
+1 failed, 33 deselected in 101.74s (0:01:41)

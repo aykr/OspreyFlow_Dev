@@ -112,6 +112,38 @@ def _row_to_held(row: asyncpg.Record) -> HeldRow:
     )
 
 
+#: How a rule hold's reason began before L2.8b: the finding's own words followed, naming what the
+#: deployer read, which a reviewer of the row may not see (ADR-146 decision 10).
+_OLD_MATCH_REASON = "it matched: "
+
+
+async def _without_finding_words(conn: asyncpg.Connection, held: list[HeldRow]) -> list[HeldRow]:
+    """A row held before L2.8b with its reason the finding's words is shown as the rule's name alone
+    (fail closed; the orchestrator's ruling on L2.8b's Q2). The name is the case's rule's, read by
+    id; where it cannot be read, "the rule"."""
+    old = [h for h in held if h.reason.startswith(_OLD_MATCH_REASON)]
+    if not old:
+        return held
+    names: dict[str, str] = {}
+    try:
+        names = {
+            r["id"]: r["name"]
+            for r in await conn.fetch(
+                "SELECT id, name FROM typology_rules WHERE id = ANY($1::text[])",
+                sorted({h.rule_id for h in old}),
+            )
+        }
+    except asyncpg.UndefinedTableError:
+        names = {}
+    return [
+        h.model_copy(update={"reason": f"it matched “{names[h.rule_id]}”" if h.rule_id in names
+                             else "it matched the rule"})  # fmt: skip
+        if h.reason.startswith(_OLD_MATCH_REASON)
+        else h
+        for h in held
+    ]
+
+
 class HeldRowStore:
     def __init__(self, pool: asyncpg.Pool, scheme: HandlingScheme) -> None:
         self._pool = pool
@@ -176,7 +208,7 @@ class HeldRowStore:
                 principal.org_unit,
                 *extra,
             )
-        return [_row_to_held(r) for r in rows]
+            return await _without_finding_words(conn, [_row_to_held(r) for r in rows])
 
     async def get_authorized(
         self, held_id: str, investigation_id: str, principal: Principal
@@ -193,9 +225,10 @@ class HeldRowStore:
                 principal.org_unit,
                 *extra,
             )
-        if row is None:
-            raise HeldRowNotFoundError(held_id)
-        return _row_to_held(row)
+            if row is None:
+                raise HeldRowNotFoundError(held_id)
+            (held,) = await _without_finding_words(conn, [_row_to_held(row)])
+        return held
 
     async def discard_for_load(self, load_id: str, *, discarded_by: str, at: datetime) -> int:
         """Rejects the rows of a load that are still held, because the load was reverted and a row

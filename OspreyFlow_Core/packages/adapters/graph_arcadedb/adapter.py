@@ -1887,13 +1887,23 @@ class GraphArcadeDBAdapter:
                         load_id=None if load_id is None else str(load_id),
                         reverted=row.get("reverted") is True,
                         superseded=row.get("superseded_by") is not None,
+                        superseded_by=(
+                            None if row.get("superseded_by") is None else str(row["superseded_by"])
+                        ),
                     )
         return found
 
-    async def stored_link_states(self, edge_ids: Sequence[EdgeId]) -> dict[EdgeId, StoredLink]:
-        gathered: dict[EdgeId, list[tuple[bool, bool]]] = {}
+    async def stored_link_states(
+        self, edge_ids: Sequence[EdgeId], *, edge_type: str | None = None
+    ) -> dict[EdgeId, StoredLink]:
+        gathered: dict[EdgeId, list[tuple[bool, str | None]]] = {}
         chunks = _id_chunks(edge_ids)
-        types = await self._types_with_unique_id("edge") if chunks else []
+        if not chunks:
+            types: list[str] = []
+        elif edge_type is not None:
+            types = [physical_type_name(edge_type)]  # that type's index alone
+        else:
+            types = await self._types_with_unique_id("edge")
         for chunk in chunks:
             results = await asyncio.gather(
                 *(
@@ -1907,14 +1917,18 @@ class GraphArcadeDBAdapter:
             )
             for rows in results:
                 for row in rows:
+                    by = row.get("superseded_by")
                     gathered.setdefault(str(row["id"]), []).append(
-                        (row.get("reverted") is True, row.get("superseded_by") is not None)
+                        (row.get("reverted") is True, None if by is None else str(by))
                     )
         # An id two types hold is read as the worst of them: superseded if either copy is,
         # reverted only if both are, so the revert refuses when in doubt.
         return {
             edge_id: StoredLink(
-                reverted=all(r for r, _ in states), superseded=any(sup for _, sup in states)
+                reverted=all(r for r, _ in states),
+                superseded=any(by is not None for _, by in states),
+                superseded_by=next((by for _, by in states if by is not None), None),
+                held_by=len(states),
             )
             for edge_id, states in gathered.items()
         }

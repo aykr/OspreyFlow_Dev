@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T06:15:52Z; red at 09ab55c: the recorded successor trusted over the graph's superseded_by
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..400d027 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -926,7 +926,7 @@ class AlertStore:
+             first = await self._first_hop(graph, old, old_type)
+             if first is None or not first.superseded or first.superseded_by is None:
+                 return None  # not committed (or never: the stale threshold)
+-            newest = await self._newest(graph.stored_link_states, first.superseded_by)
++            newest = {o: n for o, n, _ in _typed_pairs(row["links"])}[old]  # red: the recorded successor trusted
+             if newest is None:
+                 return None
+             # An id two types hold cannot say which type's link an alert cites (alerts name a
+>           assert row.edge_ids == [raised]
+E           AssertionError: assert ['never-commi...775C6QFYX5FV'] == ['01M6WWSB2FNNAM3CKXJVYFT7NM']
+E             At index 0 diff: 'never-committed-01M6WWSB364P38775C6QFYX5FV' != '01M6WWSB2FNNAM3CKXJVYFT7NM'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_what_the_graph_committed_not_what_it_recorded
+1 failed, 37 deselected in 9.19s

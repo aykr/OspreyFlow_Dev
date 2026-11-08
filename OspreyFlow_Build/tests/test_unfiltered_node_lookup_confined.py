@@ -28,8 +28,12 @@ CONFINED = {
     "existing_node_ids": {"services/ingest/engine.py"},
     "live_edges_touching": {"services/ingest/load_revert.py"},
     "live_nodes_naming_geometry": {"services/ingest/load_revert.py"},
-    "stored_writes": {"services/ingest/load_revert.py"},
-    "stored_link_states": {"services/ingest/load_revert.py"},
+    # ADR-109 Amendment 10: the alert store's repoint settle follows a superseded Alert node to its
+    # successor (round 3; the orchestrator's item 4).
+    "stored_writes": {"services/ingest/load_revert.py", "services/api/alerts.py"},
+    # ADR-109 Amendment 10: the alert store's repoint settle asks whether a recorded link was
+    # superseded, and returns nothing to a reader (ratified for L2.8b, the orchestrator's B1).
+    "stored_link_states": {"services/ingest/load_revert.py", "services/api/alerts.py"},
     "events_of_load_among": {"services/ingest/load_revert.py"},
 }
 ALLOWED = CONFINED["existing_node_ids"]

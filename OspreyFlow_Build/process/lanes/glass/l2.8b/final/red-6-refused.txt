@@ -1,0 +1,18 @@
+lease glass; 2026-11-08T06:16:55Z; red at 09ab55c: a close rolled back before its commit settled as one reported failed
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 0398e96..734ea0f 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -747,7 +747,7 @@ class AlertStore:
+         except Exception:
+             try:
+                 await self._release_record(record_id)
+-                if repoint.abandoned:
++                if False:  # red: settled as for a commit reported failed
+                     await self._close_record(record_id)
+                 else:
+                     await self._settle_record(graph, record_id, writer=True)
+>           assert left == 0
+E           assert 1 == 0
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record
+1 failed, 15 deselected in 14.53s

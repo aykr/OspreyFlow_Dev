@@ -1,0 +1,12 @@
+2026-11-08T02:06:13Z; make confinement-check, red: the Makefile diff applied (working tree only, not committed) and a third caller planted
+E           AssertionError: these name GraphPort.stored_link_states: ['services/api/zz_planted_third_caller.py']
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py:84: AssertionError
+E           AssertionError: stored_link_states
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py:91: AssertionError
+FAILED ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py::test_only_the_reverts_module_names_its_unfiltered_lookups
+FAILED ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py::test_the_module_each_lookup_is_confined_to_does_call_it
+========================= 2 failed, 6 passed in 4.57s ==========================
+make: *** [confinement-check] Error 1
+exit 2
+2026-11-08T02:06:18Z; make confinement-check, green: the plant removed
+============================== 8 passed in 5.49s ===============================

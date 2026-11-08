@@ -3442,6 +3442,87 @@ async def test_supersede_node_rollback_leaves_zero_trace_of_the_partial_operatio
         assert await adapter.get_node(new_id, CLEARED) is None
 
 
+async def test_supersede_edge_returns_the_replacements_own_id(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The successor is the replacement written, under its own id, and that id is what the call
+    returns: the alert store records `old → returned id` before the graph's commit and repoints
+    every alert citing the old link to it (`06_DECISIONS.md` ADR-109 Amendment 10), so a fresh id
+    of the adapter's own would leave every repointed alert citing a link that does not exist."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="A"),
+                _node("Person", classification="OFFICIAL", family_name="B"),
+            ],
+            [],
+        )
+        _, (old_edge_id,) = await _write(
+            adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")]
+        )
+        wanted = new_edge_id()
+        tx = await adapter.begin_transaction()
+        returned = await adapter.supersede_edge(
+            old_edge_id,
+            EdgeWrite(
+                id=wanted,
+                type="ASSOCIATE_OF",
+                source=a,
+                target=b,
+                provenance=_provenance(),
+                handling=_handling("OFFICIAL"),  # type: ignore[arg-type]
+                created_by="reviewer-1",
+                created_at=now_utc(),
+            ),
+            tx,
+            old_type="ASSOCIATE_OF",
+        )
+        await adapter.commit_transaction(tx)
+        assert returned == wanted
+        (edge,) = await adapter.get_edges([wanted], CLEARED)
+        assert edge.id == wanted
+
+
+async def test_the_stored_states_name_each_superseded_elements_successor(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`stored_link_states` and `stored_writes` say, of a superseded link and a superseded node, which
+    element replaced it (`superseded_by`), whatever the caller may read: the alert store's repoint
+    settle follows that to the newest revision, so what the graph committed is the one truth
+    (`06_DECISIONS.md` ADR-109 Amendment 10). A live element names none."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="A"),
+                _node("Person", classification="OFFICIAL", family_name="B"),
+            ],
+            [],
+        )
+        _, (old_link,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        new_link, new_node = new_edge_id(), new_node_id()
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_edge(
+            old_link,
+            EdgeWrite(id=new_link, type="ASSOCIATE_OF", source=a, target=b, provenance=_provenance(),
+                      handling=_handling("OFFICIAL"), created_by="reviewer-1", created_at=now_utc()),  # type: ignore[arg-type]
+            tx,
+            old_type="ASSOCIATE_OF",
+        )  # fmt: skip
+        await adapter.commit_transaction(tx)
+        links = await adapter.stored_link_states([old_link, new_link])
+        assert links[old_link].superseded and links[old_link].superseded_by == new_link
+        assert links[new_link].superseded_by is None
+        tx = await adapter.begin_transaction()
+        replacement = _node("Person", classification="SECRET", family_name="A").model_copy(update={"id": new_node})
+        await adapter.supersede_node(a, replacement, tx)
+        await adapter.commit_transaction(tx)
+        nodes = await adapter.stored_writes([a, b])
+        assert nodes[a].superseded and nodes[a].superseded_by == new_node
+        assert nodes[b].superseded_by is None
+
+
 async def test_supersede_edge_replaces_it_in_default_reads(
     factory: GraphAdapterFactory,
 ) -> None:
@@ -6662,6 +6743,33 @@ async def test_a_correction_marks_only_its_own_types_link_superseded(
         assert [(e.id, e.audit.load_id) for e in transacted] == [(link, "load-9")], "left live"
         paid = await adapter.read_link_state(link, "TRANSACTED")
         assert paid is not None and "superseded_by" not in paid.stored, "and unmarked"
+
+
+async def test_a_links_stored_state_read_for_its_type_names_that_types_successor_alone(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-109 Amendment 10 (L2.8b's D3), over ADR-110 Amendment 18: where two types hold one id and
+    one is superseded, `stored_link_states` given `edge_type` answers for that type alone, its
+    successor named or none; over every type it says two types hold the id (`held_by`), so the
+    repoint settle can tell a bare id it must not move alerts by."""
+    async with factory.context() as adapter:
+        a, b = await _two_endpoints(adapter)
+        _, (link,) = await _write(adapter, [], [_call_on(a, b, day=1, load_id="load-1")])
+        other = _edge("TRANSACTED", a, b, classification="OFFICIAL", load_id="load-9")
+        await _write(adapter, [], [other.model_copy(update={"id": link})])
+
+        tx = await adapter.begin_transaction()
+        successor = await adapter.supersede_edge(
+            link, _call_on(a, b, day=2, load_id="analyst"), tx, old_type="COMMUNICATED_WITH"
+        )
+        await adapter.commit_transaction(tx)
+
+        called = (await adapter.stored_link_states([link], edge_type="COMMUNICATED_WITH"))[link]
+        assert (called.superseded, called.superseded_by, called.held_by) == (True, successor, 1)
+        paid = (await adapter.stored_link_states([link], edge_type="TRANSACTED"))[link]
+        assert (paid.superseded, paid.superseded_by) == (False, None), "the other type's own state"
+        assert (await adapter.stored_link_states([link]))[link].held_by == 2
+        assert (await adapter.stored_link_states([successor]))[successor].held_by == 1
 
 
 async def test_a_restored_link_keeps_its_marking(factory: GraphAdapterFactory) -> None:

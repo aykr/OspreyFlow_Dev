@@ -1,0 +1,7 @@
+2026-11-08T00:55:48Z; red (hermetic): a pending link the store merges, over rule_evaluation.py as at HEAD c7a32c0
+>       assert alert.edge_ids == ["e-held"]
+E       AssertionError: assert ['e-written'] == ['e-held']
+E         At index 0 diff: 'e-written' != 'e-held'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_node_marking.py::test_a_pending_link_the_store_merges_is_cited_by_the_stored_id
+1 failed, 7 deselected in 0.87s

@@ -1,0 +1,16 @@
+2026-11-08T01:36:04Z; red (static): a third caller of stored_link_states planted (services/api/zz_planted_third_caller.py), with alerts.py named as the second
+E           AssertionError: these name GraphPort.stored_link_states: ['services/api/zz_planted_third_caller.py']
+E           assert {'services/ap...rd_caller.py'} == set()
+E             
+E             Extra items in the left set:
+E             'services/api/zz_planted_third_caller.py'
+E             Use -v to get more diff
+E           AssertionError: stored_link_states
+E           assert {'services/ap...ad_revert.py'} == {'services/ap...ad_revert.py'}
+E             
+E             Extra items in the left set:
+E             'services/api/zz_planted_third_caller.py'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py::test_only_the_reverts_module_names_its_unfiltered_lookups
+FAILED ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py::test_the_module_each_lookup_is_confined_to_does_call_it
+2 failed, 6 passed in 4.73s

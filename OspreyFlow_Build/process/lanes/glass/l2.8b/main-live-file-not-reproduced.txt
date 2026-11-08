@@ -1,0 +1,4 @@
+lease glass; 2026-11-08T00:28:57Z; main 5ddc85f's own live file on main's own code (a detached worktree of main)
+9 passed in 72.66s (0:01:12)
+lease glass; 2026-11-08T00:30:24Z; the live file at cbf83d4, on cbf83d4's code (a detached worktree)
+9 passed in 62.75s (0:01:02)

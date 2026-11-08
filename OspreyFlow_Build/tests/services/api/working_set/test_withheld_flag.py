@@ -287,12 +287,24 @@ async def test_a_signature_the_table_does_not_define_sets_the_flag() -> None:
 # --- (f) on the real wire -----------------------------------------------------------------------
 
 
+class _NoPurges:
+    """The alert store as the socket's sync reaches it (`purge_remarked_copies`, ADR-109 Amendment
+    10): a journal holding no record waiting for a working-set purge."""
+
+    async def applied_purges(self) -> list[tuple[str, list[str]]]:
+        return []
+
+    async def purged(self, record_id: str) -> None:
+        raise AssertionError("no record to close")
+
+
 class _Socket:
     """A WebSocket that asks once to be resynced from nothing and records what it is sent."""
 
     def __init__(self) -> None:
         self.sent: list[str] = []
         self._asked = False
+        self.app = type("App", (), {"state": type("State", (), {"alerts_store": _NoPurges()})()})()
 
     async def receive_json(self) -> dict[str, Any]:
         if self._asked:

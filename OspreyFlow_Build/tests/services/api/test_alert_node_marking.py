@@ -209,10 +209,66 @@ async def test_a_referent_unseen_in_the_load_is_said_as_one() -> None:
     graph, stores = TxGraph({}, {}), Stores()
     gate = _sweep_gate(graph, stores)
     finding = _sweep_finding(gate, [], ["cust-not-yet-readable"])
-    node_id, why = await gate._alert_node_in_load(
+    node_id, why, _ = await gate._alert_node_in_load(
         finding, "tx", unseen=None, load_id="load-1", known={}, writes=RuleWrites()
     )
     assert (node_id, why) == (None, "unseen_referent")
     await gate.after_commit(PreCommitVerdict(findings=[(finding, None)], withheld={0: why}))
     (said,) = stores.withheld_because
     assert said.startswith("the marking of something it names could not be read") and "different units" not in said
+
+
+# ---- a pending write the store merges is cited by its stored id (L2.8b) --------------------------
+
+
+async def test_a_pending_link_the_store_merges_is_cited_by_the_stored_id() -> None:
+    """A second screening hit on a match already held: its pending `SAME_AS` write merges into the
+    stored link (one pair, one audience), whose id the store returns. The alert row cites that id,
+    never the write's own, which no link holds and which the queue's link check (ADR-146 decision
+    10) would read as hidden from every reader. Red before: the row cited the write's id."""
+    from schemas.domain import EdgeWrite, Provenance, ProvenanceState, SourceRef
+
+    class MergingGraph(TxGraph):
+        async def upsert_edges(self, edges: Any, tx: str) -> list[str]:
+            self.log.extend(f"edge {e.type}" for e in edges)
+            return ["e-held" if e.type == "SAME_AS" else e.id for e in edges]
+
+    graph = MergingGraph({"cust-1": _handling(), "listed-1": _handling()}, {"e-held": _handling()})
+    stores = Stores()
+    gate = _sweep_gate(graph, stores)
+    match = EdgeWrite(id="e-written", type="SAME_AS", source="cust-1", target="listed-1",
+                      properties={"score": 0.98, "model_version": "screening:list"}, basis="probabilistic",
+                      provenance=Provenance(state=ProvenanceState.INFERRED, first_seen=NOW,
+                                            sources=[SourceRef(document_id="list", locator="e-1", excerpt_hash="")]),
+                      handling=_handling(), created_by="kyc-sweeper", created_at=NOW)  # fmt: skip
+    finding = Finding(rule=gate.rules[0], deployer=SWEEPER, typology="kyc_screening", subject="cust-1",
+                      refs=("hit",), words="cust-1 matches a listed party", node_ids=["cust-1", "listed-1"],
+                      edge_ids=["e-written"], pending=(match,))  # fmt: skip
+    alert = await gate.raise_committed(finding)
+    assert alert.edge_ids == ["e-held"]
+
+
+# ---- the re-mark never guesses a marking (L2.8b's B9) ---------------------------------------------
+
+
+async def test_a_re_mark_over_a_link_it_cannot_read_lists_the_alert_unsafe_and_changes_nothing() -> None:
+    """`alerts.remark_alerts` computes a node's marking from what its alert rests on, read as the
+    service principal. A cited link it cannot read (gone, or pending in the repoint journal) gives
+    no safe marking: the alert is listed unsafe and its node left as it is, as `write_alert_node`
+    withholds. Red before: the marking was computed from what was left, the link not counted."""
+    from services.api.alerts import remark_alerts
+
+    from schemas.domain import Alert, AlertMode
+
+    class Store:
+        async def handlings_of(self, alert_id: str) -> None:
+            return None
+
+        async def set_alert_node(self, *_: Any, **__: Any) -> bool:
+            raise AssertionError("nothing is re-marked")
+
+    graph = TxGraph({"alert-node": _handling(), "cust-1": _handling()}, {})
+    alert = Alert(id="a-1", rule_id="typology:r", owner_id="o", mode=AlertMode.FULL, referent_node_ids=["cust-1"],
+                  edge_ids=["e-unreadable"], alert_node_id="alert-node", created_at=NOW)  # fmt: skip
+    report = await remark_alerts(graph, Store(), SCHEME, [alert])  # type: ignore[arg-type]
+    assert report.unsafe == ["a-1"] and report.remarked == []

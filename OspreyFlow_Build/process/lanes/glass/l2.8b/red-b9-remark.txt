@@ -1,0 +1,7 @@
+2026-11-08T01:36:54Z; red (hermetic), B9: remark_alerts as at HEAD 98312f2
+>       assert report.unsafe == ["a-1"] and report.remarked == []
+E       AssertionError: assert ([] == ['a-1']
+E         Right contains one more item: 'a-1'
+E         Use -v to get more diff)
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_node_marking.py::test_a_re_mark_over_a_link_it_cannot_read_lists_the_alert_unsafe_and_changes_nothing
+1 failed, 8 deselected in 1.37s

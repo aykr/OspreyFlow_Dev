@@ -1,0 +1,22 @@
+lease glass; 2026-11-08T06:18:11Z; red at 09ab55c: stored_writes naming no successor
+diff --git a/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py b/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
+index a665c85..3cb6381 100644
+--- a/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
++++ b/OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py
+@@ -1887,9 +1887,7 @@ class GraphArcadeDBAdapter:
+                         load_id=None if load_id is None else str(load_id),
+                         reverted=row.get("reverted") is True,
+                         superseded=row.get("superseded_by") is not None,
+-                        superseded_by=(
+-                            None if row.get("superseded_by") is None else str(row["superseded_by"])
+-                        ),
++                        superseded_by=None,  # red: the node half
+                     )
+         return found
+ 
+>           assert nodes[a].superseded and nodes[a].superseded_by == new_node
+E           AssertionError: assert (True and None == '01M6WWXESB9TXB2D1RSDB7PTD6')
+E            +  where True = StoredNode(load_id=None, reverted=False, superseded=True, superseded_by=None).superseded
+E            +  and   None = StoredNode(load_id=None, reverted=False, superseded=True, superseded_by=None).superseded_by
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py::test_the_stored_states_name_each_superseded_elements_successor[graph_arcadedb[gremlin]]
+1 failed, 277 deselected in 3.82s

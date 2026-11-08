@@ -327,11 +327,11 @@ async def test_the_reason_is_the_units_one_with_the_withholding_swallowed_as_it_
     was before the rebase onto L2.8, and the audit gives the units' words, which are false here."""
     real = rule_evaluation.write_alert_node
 
-    async def swallowed(*args: Any, **kwargs: Any) -> str | None:
+    async def swallowed(*args: Any, **kwargs: Any) -> tuple[str | None, Any]:
         try:
             return await real(*args, **kwargs)
         except rule_evaluation._AlertInAReadOnlyLayer:  # noqa: SLF001
-            return None
+            return None, args[2]  # no node, the finding as given (`write_alert_node`'s shape)
 
     monkeypatch.setattr(rule_evaluation, "write_alert_node", swallowed)
     queue = await _raised_in_a_branch(path, monkeypatch)
