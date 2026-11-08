@@ -59,10 +59,12 @@ class ModelsAdminView(BaseModel):
     defaults: dict[str, str]
     #: The deployment's own model for each role, from the pinned lists (ADR-095), read-only here.
     local_models: dict[str, str | None]
-    #: `osprey.yaml`'s declarations, read-only here: the installer's (ADR-135 Amendment 2 decision 1).
+    #: `osprey.yaml`'s declarations, read-only here: the installer's
+    #: (ADR-135 Amendment 2 decision 1).
     local_only: bool
     sendable_handling_codes: list[str]
-    #: Where the settings come from: `osprey.yaml` until the first change here, then the models file.
+    #: Where the settings come from: `osprey.yaml` until the first change here, then the
+    #: models file.
     source: Literal["osprey.yaml", "models file"]
 
 
@@ -113,7 +115,7 @@ class ModelAdminHistory(BaseModel):
     entries: list[ModelAdminEntry]
 
 
-ALL_MODELS = [
+ALL_MODELS: tuple[type[BaseModel], ...] = (
     AdminEngine,
     ModelsAdminView,
     EngineInput,
@@ -122,4 +124,4 @@ ALL_MODELS = [
     ConnectionTestResult,
     ModelAdminEntry,
     ModelAdminHistory,
-]
+)

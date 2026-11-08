@@ -96,6 +96,7 @@
     "load_screening_lists",
     "manage_dashboards",
     "manage_geospatial",
+    "manage_models",
     "manage_ontology",
     "manage_people",
     "manage_strength_influencers",
@@ -293,6 +294,13 @@
   "right:manage_geospatial": {
    "rights": [
     "manage_geospatial"
+   ],
+   "places": [],
+   "answered_hidden": []
+  },
+  "right:manage_models": {
+   "rights": [
+    "manage_models"
    ],
    "places": [],
    "answered_hidden": []
