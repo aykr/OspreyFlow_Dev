@@ -137,6 +137,10 @@ class _NoAlerts:
         assert not alert_ids, "these packs hold no alert item"
         return {}
 
+    async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
+        """`AlertStore.settle_pending` over a journal holding no record: nothing to settle. Every
+        read of alerts calls it (`settle_repoints` refuses a store without it, L2.8c)."""
+
 
 async def test_pack_material_hidden_by_handling_is_true_and_a_cleared_exporter_gets_false() -> None:
     """Violation caught: the pack export a count (`2`) to a recipient, or no signal at all."""

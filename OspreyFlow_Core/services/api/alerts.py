@@ -1420,11 +1420,10 @@ async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:
 
 
 async def settle_repoints(store: object, graph: GraphPort) -> None:
-    """`AlertStore.settle_pending`, before a read of alerts. A store with no journal (a test's
-    stand-in for the queue's reads) has nothing to settle."""
-    settle = getattr(store, "settle_pending", None)
-    if settle is not None:
-        await settle(graph)
+    """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
+    the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
+    no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+    await store.settle_pending(graph)  # type: ignore[attr-defined]
 
 
 async def evidence_available(
