@@ -24,6 +24,9 @@ const VIEW = {
 };
 const SET = { ...VIEW, engines: [{ ...VIEW.engines[0], key_state: "set", key_set_at: "2026-11-08T10:00:00Z", key_set_by: "admin-1" }] };
 
+const NO_FIGURES = { calls: 0, succeeded: 0, failed: 0, prompt_tokens: 0, completion_tokens: 0, tokens: 0 };
+const NO_USAGE = { start: "2026-11-01", end: "2026-11-08", rows: [], by_engine: {}, by_job: {}, total: NO_FIGURES };
+
 type Answer = { status: number; body: unknown };
 
 function stub(answers: (path: string, init?: RequestInit) => Answer | undefined) {
@@ -34,7 +37,11 @@ function stub(answers: (path: string, init?: RequestInit) => Answer | undefined)
       const path = new URL(String(url)).pathname;
       sent.push({ path, method: init?.method ?? "GET", body: String(init?.body ?? "") });
       const answer = answers(path, init) ??
-        (path === "/v1/admin/models/history" ? { status: 200, body: { entries: [] } } : { status: 200, body: VIEW });
+        (path === "/v1/admin/models/history"
+          ? { status: 200, body: { entries: [] } }
+          : path === "/v1/admin/models/usage"
+            ? { status: 200, body: NO_USAGE }
+            : { status: 200, body: VIEW });
       return { ok: answer.status < 400, status: answer.status, json: async () => answer.body } as Response;
     }),
   );

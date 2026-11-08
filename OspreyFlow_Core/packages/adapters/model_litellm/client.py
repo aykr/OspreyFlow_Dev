@@ -28,6 +28,13 @@ against a live LiteLLM/Ollama vision model that this translates correctly to Oll
 `images` field, so this client never needs a second, image-specific code path for schema
 conformance or retries.
 
+**Each call names its engine and job** (ADR-135 Amendment 3): inside `usage.calling(engine, job)`,
+set by the routing, a chat call carries one tag, `osprey:<engine>/<job>`, which the gateway records
+its usage under, and a hosted engine's call goes with that engine's own gateway key
+(`usage.engine_key`), whose limits the gateway enforces; a call outside it, or for `local`, goes
+with the master key, untagged. A limit's refusal is `ModelLimitReached`, never the gateway's words.
+No call carries a person's id (`user`) or anything else about who asked.
+
 `transcribe()` is architecturally different from the other three: Whisper's `/audio/transcriptions`
 is a multipart upload, not a JSON chat completion, and its response shape is fixed (segments, word
 timings) rather than caller-schema-driven, so there is nothing to validate here the way
@@ -54,6 +61,7 @@ from .errors import (
     ModelUnavailableError,
     TranscriptionFailedError,
 )
+from .usage import LOCAL, current_call, engine_key, limit_refusal, usage_tag
 
 _MAX_ATTEMPTS = 3
 
@@ -89,6 +97,7 @@ class LiteLLMClient:
     def __init__(
         self, config: LiteLLMConfig, *, transport: httpx.AsyncBaseTransport | None = None
     ) -> None:
+        self._master = config.api_key
         self._http = httpx.AsyncClient(
             base_url=config.base_url,
             headers={"Authorization": f"Bearer {config.api_key}"},
@@ -98,6 +107,18 @@ class LiteLLMClient:
 
     async def aclose(self) -> None:
         await self._http.aclose()
+
+    def _routed(self, body: dict[str, Any] | None = None) -> dict[str, str]:
+        """The headers for the current call (its engine's key, or none to keep the master key),
+        and its tag added to `body`."""
+        call = current_call()
+        if call is None:
+            return {}
+        if body is not None:
+            body["metadata"] = {"tags": [usage_tag(call.engine, call.job)]}
+        if call.engine == LOCAL:
+            return {}
+        return {"Authorization": f"Bearer {engine_key(self._master, call.engine)}"}
 
     async def extract_json(
         self,
@@ -130,6 +151,9 @@ class LiteLLMClient:
                 continue
             except httpx.HTTPStatusError as exc:
                 last_error = exc
+                limit = limit_refusal(exc.response)
+                if limit is not None:
+                    raise limit from None
                 if exc.response.status_code == 404:
                     raise ModelUnavailableError(
                         f"model {model!r} is not available from the model proxy: not routed, "
@@ -162,28 +186,25 @@ class LiteLLMClient:
                     "image_url": {"url": f"data:{image_mime_type};base64,{encoded}"},
                 },
             ]
-        resp = await self._http.post(
-            "/chat/completions",
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": content}],
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "extraction",
-                        "schema": response_schema,
-                        "strict": True,
-                    },
+        body: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": content}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "extraction",
+                    "schema": response_schema,
+                    "strict": True,
                 },
             },
-        )
+        }
+        headers = self._routed(body)
+        resp = await self._http.post("/chat/completions", json=body, headers=headers)
         resp.raise_for_status()
         body = resp.json()
         return str(body["choices"][0]["message"]["content"])
 
-    async def transcribe(
-        self, *, model: str, audio: bytes, language: str | None
-    ) -> dict[str, Any]:
+    async def transcribe(self, *, model: str, audio: bytes, language: str | None) -> dict[str, Any]:
         """`/audio/transcriptions` — a multipart upload, not a JSON chat completion. Returns the
         raw OpenAI-Whisper-shaped response body (`text`, `language`, `segments`, each segment's
         `words` when word-level timestamps are requested); `ModelLiteLLMAdapter.transcribe()` is
@@ -196,11 +217,17 @@ class LiteLLMClient:
         if language is not None:
             data["language"] = language
         try:
+            # Untagged: whether the gateway reads a tag from a multipart form was not measured, so
+            # none is sent (ADR-135 Amendment 3, "Left"); the engine's key still carries its limits.
             resp = await self._http.post(
                 "/audio/transcriptions",
                 data=data,
                 files={"file": ("audio.wav", audio, "audio/wav")},
+                headers=self._routed(),
             )
+            limit = limit_refusal(resp)
+            if limit is not None:
+                raise limit
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise TranscriptionFailedError(
@@ -215,9 +242,12 @@ class LiteLLMClient:
         proxy actually returned one vector per input, in order."""
         if not texts:
             return []
-        resp = await self._http.post(
-            "/embeddings", json={"model": model, "input": list(texts)}
-        )
+        body: dict[str, Any] = {"model": model, "input": list(texts)}
+        # Untagged: a tag on `/embeddings` was not measured (ADR-135 Amendment 3, "Left").
+        resp = await self._http.post("/embeddings", json=body, headers=self._routed())
+        limit = limit_refusal(resp)
+        if limit is not None:
+            raise limit
         resp.raise_for_status()
         body = resp.json()
         by_index = sorted(body["data"], key=lambda row: row["index"])

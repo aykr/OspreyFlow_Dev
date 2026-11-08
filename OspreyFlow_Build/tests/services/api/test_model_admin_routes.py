@@ -137,8 +137,9 @@ def _call(client: TestClient, route: APIRoute) -> httpx.Response:
 # --- rule 4 ------------------------------------------------------------------------------------
 
 
-def test_there_are_nine_models_routes() -> None:
-    assert len(_models_routes()) == 9
+def test_there_are_eleven_models_routes() -> None:
+    # P1's nine, and ADR-135 Amendment 3's limits and usage.
+    assert len(_models_routes()) == 11
 
 
 @pytest.mark.parametrize(
@@ -152,7 +153,8 @@ def test_every_models_route_refuses_a_principal_without_manage_models(
     refused = {k: v.status_code for k, v in answers.items() if v.status_code != 403}
     assert refused == {}
     assert all(v.json()["detail"]["right"] == "manage_models" for v in answers.values())
-    assert world.gateway.asked == [] and world.audit.entries == []
+    # Nothing reached the gateway at all: no completion, no key, no usage read.
+    assert world.gateway.seen == [] and world.audit.entries == []
 
 
 @pytest.mark.parametrize("principal", [ADMIN, MODELS_ONLY], ids=["administrator", "granted-singly"])

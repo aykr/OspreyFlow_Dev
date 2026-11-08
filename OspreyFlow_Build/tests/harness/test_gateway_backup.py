@@ -82,6 +82,37 @@ def test_a_backup_holds_no_key_and_no_sealed_value_of_the_gateway(
     assert 'COPY public."LiteLLM_SpendLogs"' in dumped
 
 
+def test_a_backup_holds_no_engine_key_of_the_gateway(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-135 Amendment 3: each engine's own gateway key is a row of `LiteLLM_VerificationToken`
+    (its hash, its last four, its spend). Restored elsewhere, that row would keep the old
+    deployment's engine key working there, for anyone who holds the old master key; so no backup
+    holds those rows, and a restore's first start makes each engine's key afresh."""
+    compose = _env(tmp_path / "dep", SALT_HERE)
+    engine_hash = "9aed966cd5732b4d1da7a405e41fee7b74772b0f73edc0ef564ec9814571918f"
+    engine_row = f"{engine_hash}\tsk-...ENG4\t12.0"
+    gateway = _pg_dump_honouring_exclusions({
+        "LiteLLM_VerificationToken": [engine_row],
+        "LiteLLM_SpendLogs": ["2026-11-08\tgemini/gemini-2.5-flash\t1"],
+    })  # fmt: skip
+
+    def run(command: list[str], **_kw: object) -> str:
+        if "--roles-only" in command:
+            return "CREATE ROLE litellm;\n"
+        if "-Atc" in command:
+            return "litellm\nospreyflow\n"
+        if command[-1] == "litellm":
+            return gateway(command)  # type: ignore[operator]
+        return "-- dump of ospreyflow\nCREATE TABLE t (i int);\n"
+
+    monkeypatch.setattr(backup, "_run", run)
+    backup.backup_postgres_all(compose, tmp_path / "set" / "postgres")
+    dumped = (tmp_path / "set" / "postgres" / "litellm.sql").read_text()
+    assert "9aed966cd5732b4d" not in dumped and "ENG4" not in dumped
+    assert 'CREATE TABLE public."LiteLLM_VerificationToken"' in dumped
+
+
 def _set(tmp_path: Path, *, keys: list[str]) -> Path:
     directory = tmp_path / "set"
     (directory / "config").mkdir(parents=True)

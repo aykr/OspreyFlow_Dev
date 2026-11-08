@@ -2,7 +2,7 @@
 // engines outside this deployment, each job's default engine and each engine's key. Behind
 // `manage_models`. A key is typed into a write-only field, sent once, and cleared: nothing here
 // ever holds or shows one, and nothing the Conduit answers carries one.
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import type {
   AdminEngine,
@@ -18,13 +18,16 @@ import {
   editEngine,
   readHistory,
   readModels,
+  readUsage,
   removeEngine,
   removeKey,
   setDefaults,
   setKey,
+  setLimits,
   testConnection,
   type ModelsApi,
 } from "./ModelsApi";
+import { LimitsForm, ModelsUsage, limitsInWords } from "../../models/ModelsUsage";
 
 /** The jobs an engine outside the deployment may take. Embeddings never leave it (ADR-135). */
 const JOBS = [
@@ -192,11 +195,17 @@ function KeyForm({ engine, onSend, onCancel }: { engine: AdminEngine; onSend: (k
 export function Models({ api }: { api: ModelsApi }) {
   const [view, setView] = useState<ModelsAdminView | null>(null);
   const [history, setHistory] = useState<ModelAdminEntry[]>([]);
-  const [open, setOpen] = useState<{ kind: "add" } | { kind: "edit" | "key"; name: string } | null>(null);
+  const [open, setOpen] = useState<{ kind: "add" } | { kind: "edit" | "key" | "limits"; name: string } | null>(null);
   const [defaults, setDefaultsDraft] = useState<Record<string, string>>({});
   const [said, setSaid] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // One reader for the usage section for as long as the Conduit and token are the same.
+  const readUsageHere = useCallback(
+    (start: string, end: string) => readUsage(api, start, end),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [api.apiBaseUrl, api.bearerToken],
+  );
   const refreshHistory = () => {
     readHistory(api)
       .then((h) => setHistory(h.entries))
@@ -242,9 +251,9 @@ export function Models({ api }: { api: ModelsApi }) {
   return (
     <>
       <p className="label" style={{ margin: 0 }}>
-        Engines outside this deployment that analysts may choose, each job&apos;s default engine, and each engine&apos;s key.
-        A key is kept by the model gateway alone: it is never shown again, never sent back and never in the audit log. Every
-        change is recorded there.
+        Engines outside this deployment that analysts may choose, each job&apos;s default engine, each engine&apos;s key
+        and limits, and how much each is used. A key is kept by the model gateway alone: it is never shown again, never
+        sent back and never in the audit log. Every change is recorded there.
       </p>
       {problem && <p role="alert">{problem}</p>}
       {said && <p role="status">{said}</p>}
@@ -270,6 +279,7 @@ export function Models({ api }: { api: ModelsApi }) {
                   <th>Jobs and models</th>
                   <th>Privacy contract</th>
                   <th>Key</th>
+                  <th>Limits</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -285,6 +295,7 @@ export function Models({ api }: { api: ModelsApi }) {
                   </td>
                   <td>Nothing leaves</td>
                   <td>No key needed</td>
+                  <td>No limits</td>
                   <td />
                 </tr>
                 {view.engines.map((engine) => {
@@ -316,9 +327,13 @@ export function Models({ api }: { api: ModelsApi }) {
                           </div>
                         )}
                       </td>
+                      <td>{limitsInWords(engine.limits)}</td>
                       <td className="admin-models-actions">
                         <Button aria-label={`Edit ${label}`} onClick={() => setOpen({ kind: "edit", name })}>
                           Edit
+                        </Button>
+                        <Button aria-label={`Set limits for ${label}`} onClick={() => setOpen({ kind: "limits", name })}>
+                          Set limits
                         </Button>
                         <Button
                           aria-label={`${engine.key_state === "set" ? "Rotate" : "Enter"} key for ${label}`}
@@ -388,6 +403,24 @@ export function Models({ api }: { api: ModelsApi }) {
                   />
                 ) : null;
               })()}
+            {open?.kind === "limits" &&
+              (() => {
+                const engine = view.engines.find((e) => e.provider.name === open.name);
+                const label = engine?.provider.label ?? open.name;
+                return engine ? (
+                  <LimitsForm
+                    key={open.name}
+                    engine={engine}
+                    onCancel={() => setOpen(null)}
+                    onSave={(limits) =>
+                      act(
+                        setLimits(api, engine.provider.name, limits),
+                        `${label}: its limits are saved; the model gateway applies them from the next call.`,
+                      )
+                    }
+                  />
+                ) : null;
+              })()}
             {open?.kind === "add" ? (
               <EngineForm
                 initial={EMPTY}
@@ -440,6 +473,8 @@ export function Models({ api }: { api: ModelsApi }) {
               Save the defaults
             </Button>
           </section>
+
+          <ModelsUsage read={readUsageHere} />
 
           <section aria-labelledby="models-history">
             <h3 id="models-history">History</h3>

@@ -33,7 +33,7 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast, get_args
 
@@ -87,7 +87,12 @@ from valkey.asyncio import Valkey
 
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
 from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
-from adapters.model_litellm.errors import ExtractionFailedError, ModelUnavailableError
+from adapters.model_litellm.errors import (
+    ExtractionFailedError,
+    ModelLimitReached,
+    ModelUnavailableError,
+    UsageUnavailableError,
+)
 from conduit_common.identity import new_edge_id, new_id, now_utc
 from geo.bilinear import ControlPoint
 from geo.image_dimensions import (
@@ -277,8 +282,10 @@ from schemas.model_admin import (
     DefaultsInput,
     EngineInput,
     KeyInput,
+    LimitsInput,
     ModelAdminHistory,
     ModelsAdminView,
+    ModelUsageView,
 )
 from schemas.monitoring import (
     CheckNotJudged,
@@ -367,6 +374,7 @@ from . import connections as connections_module
 from . import dossier as dossier_module
 from . import kyc as kyc_module
 from . import model_admin as model_admin_module
+from . import model_usage as model_usage_module
 from . import ownership as ownership_module
 from . import readiness as readiness_module
 from . import reports as reports_module
@@ -1286,6 +1294,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.strength_influencers = None
         await litellm_client.aclose()
         app.state.model_admin = None
+        await model_admin.close()
         await model_admin_audit.close()
         await gateway_http.aclose()
         await resources.close()
@@ -2831,6 +2840,21 @@ async def _model_egress_refused_handler(request: Request, exc: ModelEgressRefuse
     """ADR-114 Amendment 6: material that may not leave, for a role with no local model."""
     return JSONResponse(
         status_code=409, content={"error": "model_egress_refused", "detail": str(exc)}
+    )
+
+
+@app.exception_handler(ModelLimitReached)
+async def _model_limit_reached_handler(request: Request, exc: ModelLimitReached) -> JSONResponse:
+    """ADR-135 Amendment 3: an engine's limit stopped the call. Said in the Conduit's own words,
+    never the gateway's (which name its key's hash or part of it)."""
+    headers = {}
+    if exc.resets_at is not None:
+        wait = max(1, int((exc.resets_at - datetime.now(UTC)).total_seconds()))
+        headers["Retry-After"] = str(wait)
+    return JSONResponse(
+        status_code=429,
+        content={"error": "model_limit_reached", "detail": exc.words},
+        headers=headers,
     )
 
 
@@ -14108,6 +14132,38 @@ async def models_admin_remove_key_route(
     except model_admin_module.ModelAdminRefused as refused:
         raise _model_admin_refused(refused) from None
     return admin.view()
+
+
+@app.put("/v1/admin/models/engines/{name}/limits", dependencies=_MANAGE_MODELS)
+async def models_admin_limits_route(
+    name: str, request: Request, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    """ADR-135 Amendment 3: an engine's limits, applied by the gateway to the engine's own key and
+    audited."""
+    body = await _model_admin_body(request, LimitsInput)
+    try:
+        await admin.set_limits(principal.id, name, body.limits)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.get("/v1/admin/models/usage", dependencies=_MANAGE_MODELS)
+async def models_admin_usage_route(
+    admin: ModelAdminDep, start: date | None = None, end: date | None = None
+) -> ModelUsageView:
+    """ADR-135 Amendment 3: calls and tokens per engine and job from the gateway's own records,
+    over whole UTC days (the last 30 by default). Counts only; no figure per person."""
+    last = end or datetime.now(UTC).date()
+    first = start or last - timedelta(days=29)
+    try:
+        return await model_usage_module.usage_view(admin, first, last)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    except UsageUnavailableError as unavailable:
+        raise HTTPException(
+            status_code=502, detail={"error": "model_usage_unavailable", "detail": str(unavailable)}
+        ) from None
 
 
 @app.post("/v1/admin/models/engines/{name}/test", dependencies=_MANAGE_MODELS)

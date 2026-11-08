@@ -31,10 +31,36 @@ stack a, with its own database and a stand-in provider (ADR-135 Amendment 2, "Me
   cooldown passes, not "Invalid model name" (measured on 8 November 2026 with the Conduit's own
   client, `GatewayAdmin`, under the platform lease on stack a).
 
-Not measured, so not modelled as refusals and never relied on: `POST /credentials` for a name that
-exists, and `PATCH /credentials/{name}` or `PATCH /model/{id}/update` at all. The Conduit's client
-asks neither: it removes a credential before making it (`GatewayAdmin.put_credential`) and deletes
-an edited engine's entries before making them again (`ModelAdmin._reconcile`).
+**Usage and limits** (ADR-135 Amendment 3), measured on 8 November 2026 under two platform leases on
+stack a, against the same image (litellm 1.101.0):
+
+- every call is recorded under each of its tags (the body's `tags` or `metadata.tags`, and two
+  `User-Agent: …` tags the gateway adds itself) per day: calls, successes, failures, prompt and
+  completion tokens; a call refused for an unknown model or an exhausted budget is a failure;
+  `GET /tag/daily/activity?start_date&end_date` answers them under `breakdown.entities`, ten rows
+  of day and tag a page unless `page_size` says otherwise (1000 taken), with `has_more`; `400`
+  without both dates, an empty list for an empty or reversed period, and `401` to any token but
+  the master key ("Only proxy admin can be used…"); no prompt or answer text is kept;
+- an `rpm`/`tpm` on a model entry is **not** enforced (the default routing reads it as a weight);
+- a virtual key (`POST /key/generate`, a chosen `key` value allowed, its `key_alias` unique or
+  400) holds `rpm_limit`, `tpm_limit`, `max_budget` and `budget_duration`, all enforced: a request
+  once the minute's requests or tokens have reached the limit is refused 429 `throttling_error`
+  naming **the key's SHA-256**; once the spend has reached the budget, 429 `budget_exceeded`
+  naming the key's alias and **its last four characters**; the call that crosses a limit is
+  answered (the next, half a second later, refused). Spend is each token times the entry's
+  `input_cost_per_token`/`output_cost_per_token`
+  (none: 0). A `1d` budget resets at the next midnight UTC after the first spend; `30d` on the
+  first of the next month;
+- `GET /key/info?key=` (404 "Key not found in database"), `POST /key/update` (404 "Key not
+  found."; its answer **carries the key**) and `POST /key/delete` (404 "No keys found"); a call
+  with a deleted key is 401, echoing its last four characters and its hash.
+
+Not measured, so not modelled as refusals and never relied on: whether a request refused by a
+rate limit is recorded as a failure (the stand-in records it nowhere, and no test reads it);
+`POST /credentials` for a name that exists, and `PATCH /credentials/{name}` or
+`PATCH /model/{id}/update` at all. The Conduit's client asks neither: it removes a credential
+before making it (`GatewayAdmin.put_credential`) and deletes an edited engine's entries before
+making them again (`ModelAdmin._reconcile`).
 
 The stand-in is an `httpx.MockTransport`, so the code under test sends real HTTP requests through
 the same `httpx.AsyncClient` it uses against the real gateway. Its own red-then-green proof is
@@ -46,9 +72,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import secrets
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import parse_qs
 
 import httpx
 
@@ -59,6 +88,9 @@ class StandInProvider:
 
     accepted_key: str
     offered_models: frozenset[str]
+    #: The tokens it reports for each answer.
+    prompt_tokens: int = 17
+    completion_tokens: int = 5
 
 
 def _fragment(secret: str) -> str:
@@ -90,6 +122,44 @@ class _Stored:
 
 
 @dataclass
+class _VirtualKey:
+    alias: str | None
+    rpm_limit: int | None = None
+    tpm_limit: int | None = None
+    max_budget: float | None = None
+    budget_duration: str | None = None
+    spend: float = 0.0
+    budget_reset_at: float | None = None
+    window_start: float = -1e18
+    window_requests: int = 0
+    window_tokens: int = 0
+    #: Spend not yet written: (when it is, the cost).
+    pending: list[tuple[float, float]] = field(default_factory=list)
+
+
+_FIGURES = ("api_requests", "successful_requests", "failed_requests", "prompt_tokens",
+            "completion_tokens", "total_tokens")  # fmt: skip
+_KEY_FIELDS = ("rpm_limit", "tpm_limit", "max_budget", "budget_duration")
+
+
+def _day(at: float) -> str:
+    return datetime.fromtimestamp(at, UTC).date().isoformat()
+
+
+def _next_reset(at: float, duration: str) -> float:
+    """When a budget set for `duration` next resets (measured: `1d` the next midnight UTC, `30d`
+    the first of the next month)."""
+    now = datetime.fromtimestamp(at, UTC)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if duration == "30d":
+        first = midnight.replace(day=1)
+        nxt = first.replace(year=first.year + 1, month=1) if first.month == 12 else first.replace(
+            month=first.month + 1)  # fmt: skip
+        return nxt.timestamp()
+    return (midnight + timedelta(days=1)).timestamp()
+
+
+@dataclass
 class StandInGateway:
     master_key: str
     salt_key: str
@@ -111,7 +181,26 @@ class StandInGateway:
     #: Every call the gateway made to a provider: the address it went to (None for the provider's
     #: own) and the key it carried, so a test can say where a key was sent.
     sent: list[tuple[str | None, str | None]] = field(default_factory=list)
+    #: Every chat request body as it arrived, so a test can say what the Conduit sent (a person's
+    #: id, a prompt) and with which token.
+    received: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    #: How long a call's spend takes to count against its key's budget (measured: the call after
+    #: the crossing one, half a second later, was refused, so none is modelled).
+    spend_lag_seconds: float = 0.0
+    #: When set, `POST /key/delete` is refused with this status (a write its database does not
+    #: take), so a test can say what a failed removal leaves.
+    refuse_key_delete: int | None = None
+    #: Every request as it arrived (method, path with its query, headers, body), whatever it asked.
+    seen: list[str] = field(default_factory=list)
+    #: What every answer says (an extraction's test sets JSON its schema accepts).
+    answer: str = "OK"
+    #: The rendered entries' own answers report these tokens.
+    local_prompt_tokens: int = 17
+    local_completion_tokens: int = 5
     _db: dict[str, _Stored] = field(default_factory=dict)
+    _keys: dict[str, _VirtualKey] = field(default_factory=dict)
+    #: (day, tag) -> each recorded figure.
+    _daily: dict[tuple[str, str], dict[str, int]] = field(default_factory=dict)
     _creds: dict[str, tuple[str, str]] = field(default_factory=dict)
     _cooled_until: dict[str, float] = field(default_factory=dict)
     #: A deleted entry's name, still cooled down: (its id, until when).
@@ -152,6 +241,25 @@ class StandInGateway:
         ids = [i for i in self.stored_ids() if self._db[i].model_name == model_name]
         return ids[0] if ids else None
 
+    def virtual_key(self, key: str) -> _VirtualKey | None:
+        return self._keys.get(key)
+
+    def virtual_keys(self) -> dict[str, _VirtualKey]:
+        return dict(self._keys)
+
+    def record_usage(
+        self, day: str, tag: str, *, calls: int, failed: int = 0, prompt: int = 0,
+        completion: int = 0,
+    ) -> None:  # fmt: skip
+        """Plant a day's figures under a tag, as the gateway's own daily table holds them."""
+        row = self._daily.setdefault((day, tag), dict.fromkeys(_FIGURES, 0))
+        row["api_requests"] += calls
+        row["successful_requests"] += calls - failed
+        row["failed_requests"] += failed
+        row["prompt_tokens"] += prompt
+        row["completion_tokens"] += completion
+        row["total_tokens"] += prompt + completion
+
     def restart(self, *, salt_key: str | None = None) -> None:
         """A restart; with another encryption key, every stored entry it cannot read is dropped,
         and the gateway's log says so (measured)."""
@@ -171,20 +279,33 @@ class StandInGateway:
     # --- the API ------------------------------------------------------------------------------
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
+        sent = request.content.decode("utf-8", "replace")
+        headers = " ".join(f"{k}={v}" for k, v in request.headers.items())
+        self.seen.append(f"{request.method} {request.url.raw_path.decode()} {headers} {sent}")
         auth = request.headers.get("authorization", "")
         token = auth.removeprefix("Bearer ").strip()
         if not token:
             return _error(401, "Authentication Error, No api key passed in.", "auth_error")
+        path, method = request.url.path, request.method
+        if token != self.master_key and token in self._keys:
+            if method == "POST" and path == "/chat/completions":
+                return self._chat(self._body(request), token, request)
+            return _error(
+                401,
+                "Authentication Error, Only proxy admin can be used to generate, delete, update "
+                f"info for new keys/users/teams. Route={path}. Your role=unknown.",
+                "auth_error",
+            )
         if token != self.master_key:
             return _error(
                 401,
                 "Authentication Error, Invalid proxy server token passed. Received API Key = "
-                f"sk-...{token[-4:]}, Key Hash (Token) =0. Unable to find token in cache or "
+                f"sk-...{token[-4:]}, Key Hash (Token) ={_hash(token)}. Unable to find token in "
+                "cache or "
                 "`LiteLLM_VerificationTokenTable`",
                 "token_not_found_in_db",
             )
-        body: dict[str, Any] = json.loads(request.content or b"{}") if request.content else {}
-        path, method = request.url.path, request.method
+        body = self._body(request)
         if method == "PATCH":
             self.patches.append(path)
         if method == "POST" and path == "/model/new":
@@ -209,7 +330,11 @@ class StandInGateway:
         if method == "GET" and path in ("/v2/model/info", "/model/info"):
             return httpx.Response(200, json={"data": self._info()})
         if method == "POST" and path == "/chat/completions":
-            return self._chat(body)
+            return self._chat(body, None, request)
+        if method == "GET" and path == "/tag/daily/activity":
+            return self._tag_activity(parse_qs(request.url.query.decode()))
+        if path.startswith("/key/"):
+            return self._key_admin(method, path, body, parse_qs(request.url.query.decode()))
         if path == "/credentials" and method == "POST" and self.refuse_credentials:
             return _error(
                 self.refuse_credentials,
@@ -320,11 +445,172 @@ class StandInGateway:
             )
         return rows
 
-    def _chat(self, body: Mapping[str, Any]) -> httpx.Response:
+    @staticmethod
+    def _body(request: httpx.Request) -> dict[str, Any]:
+        return json.loads(request.content or b"{}") if request.content else {}
+
+    def _chat(
+        self, body: Mapping[str, Any], virtual: str | None, request: httpx.Request
+    ) -> httpx.Response:
+        self.received.append((virtual or "master", dict(body)))
+        tags = _tags(body, request)
+        refused = self._limited(virtual, tags)
+        if refused is not None:
+            return refused
+        answer = self._answer(body)
+        if answer.status_code == 200:
+            usage = json.loads(answer.content)["usage"]
+            self._record(tags, ok=True, prompt=usage["prompt_tokens"],
+                         completion=usage["completion_tokens"])  # fmt: skip
+            if virtual is not None:
+                self._spend(virtual, str(body.get("model", "")), usage)
+        elif answer.status_code != 429:
+            self._record(tags, ok=False)
+        return answer
+
+    def _limited(self, virtual: str | None, tags: list[str]) -> httpx.Response | None:
+        """A virtual key's limits, checked before the call (measured: the call that crosses a limit
+        is answered, the next refused)."""
+        if virtual is None:
+            return None
+        held = self._keys[virtual]
+        now = self.clock()
+        written = [cost for at, cost in held.pending if at <= now]
+        held.pending = [(at, cost) for at, cost in held.pending if at > now]
+        held.spend += sum(written)
+        if held.budget_reset_at is not None and now >= held.budget_reset_at:
+            held.spend = 0.0
+            held.budget_reset_at = None
+        if held.max_budget is not None and held.spend >= held.max_budget:
+            self._record(tags, ok=False)
+            return _error(
+                429,
+                f"Budget has been exceeded! Key={held.alias} (sk-...{virtual[-4:]}) Current cost: "
+                f"{held.spend}, Max budget: {held.max_budget}",
+                "budget_exceeded",
+            )
+        if now >= held.window_start + 60:
+            held.window_start, held.window_requests, held.window_tokens = now, 0, 0
+        resets = datetime.fromtimestamp(held.window_start + 60, UTC).strftime("%Y-%m-%d %H:%M:%S")
+        for kind, limit, used in (("requests", held.rpm_limit, held.window_requests),
+                                  ("tokens", held.tpm_limit, held.window_tokens)):  # fmt: skip
+            if limit is not None and used >= limit:
+                return _error(
+                    429,
+                    f"Rate limit exceeded for api_key: {_hash(virtual)}. Limit type: {kind}. "
+                    f"Current limit: {limit}, Remaining: 0. Limit resets at: {resets} UTC",
+                    "throttling_error",
+                )
+        held.window_requests += 1
+        return None
+
+    def _spend(self, virtual: str, model_name: str, usage: Mapping[str, int]) -> None:
+        held = self._keys[virtual]
+        held.window_tokens += int(usage["total_tokens"])
+        ids = [i for i in self.stored_ids() if self._db[i].model_name == model_name]
+        params = self.stored_params(ids[0]) if ids else {}
+        cost = usage["prompt_tokens"] * float(params.get("input_cost_per_token", 0) or 0) + usage[
+            "completion_tokens"] * float(params.get("output_cost_per_token", 0) or 0)  # fmt: skip
+        held.pending.append((self.clock() + self.spend_lag_seconds, cost))
+        if held.budget_duration and held.budget_reset_at is None:
+            held.budget_reset_at = _next_reset(self.clock(), held.budget_duration)
+
+    def _record(self, tags: list[str], *, ok: bool, prompt: int = 0, completion: int = 0) -> None:
+        day = _day(self.clock())
+        for tag in tags:
+            self.record_usage(day, tag, calls=1, failed=0 if ok else 1, prompt=prompt,
+                              completion=completion)  # fmt: skip
+
+    def _tag_activity(self, query: Mapping[str, list[str]]) -> httpx.Response:
+        start = (query.get("start_date") or [""])[0]
+        end = (query.get("end_date") or [""])[0]
+        if not start or not end:
+            return httpx.Response(
+                400, json={"detail": {"error": "Please provide start_date and end_date"}}
+            )
+        wanted = set(query.get("tags") or [])
+        # Paged by rows of day and tag (measured: 10 a page by default, `page_size` taken, and
+        # `has_more` while pages remain).
+        size = int((query.get("page_size") or ["10"])[0])
+        page = int((query.get("page") or ["1"])[0])
+        rows = [(day, tag, figures) for (day, tag), figures in sorted(self._daily.items())
+                if start <= day <= end and (not wanted or tag in wanted)]  # fmt: skip
+        pages = (len(rows) + size - 1) // size
+        days: dict[str, dict[str, dict[str, int]]] = {}
+        for day, tag, figures in rows[(page - 1) * size : page * size]:
+            days.setdefault(day, {})[tag] = dict(figures)
+        results = []
+        for day, entities in days.items():
+            total = {f: sum(e[f] for e in entities.values()) for f in _FIGURES}
+            results.append({
+                "date": day,
+                "metrics": {"spend": 0.0, **total},
+                "breakdown": {
+                    "entities": {t: {"metrics": {"spend": 0.0, **e}, "metadata": {}}
+                                 for t, e in entities.items()},
+                    "models": {}, "model_groups": {}, "providers": {}, "api_keys": {},
+                },
+            })  # fmt: skip
+        return httpx.Response(
+            200,
+            json={"results": results,
+                  "metadata": {"page": page, "total_pages": pages, "has_more": page < pages}},
+        )  # fmt: skip
+
+    def _key_admin(
+        self, method: str, path: str, body: Mapping[str, Any], query: Mapping[str, list[str]]
+    ) -> httpx.Response:
+        if method == "GET" and path == "/key/info":
+            key = (query.get("key") or [""])[0]
+            held = self._keys.get(key)
+            if held is None:
+                return _error(404, "Key not found in database", "not_found_error")
+            info = {"key_alias": held.alias, "spend": held.spend,
+                    "budget_reset_at": None if held.budget_reset_at is None
+                    else datetime.fromtimestamp(held.budget_reset_at, UTC).isoformat(),
+                    **{f: getattr(held, f) for f in _KEY_FIELDS}}  # fmt: skip
+            return httpx.Response(200, json={"key": key, "info": info})
+        if method == "POST" and path == "/key/generate":
+            alias = body.get("key_alias")
+            if alias is not None and any(k.alias == alias for k in self._keys.values()):
+                return _error(
+                    400,
+                    f"Key with alias '{alias}' already exists. Unique key aliases across all keys "
+                    "are required.",
+                    "bad_request_error",
+                )
+            key = str(body.get("key") or f"sk-{secrets.token_urlsafe(16)}")
+            self._keys[key] = _VirtualKey(alias=alias)
+            for f in _KEY_FIELDS:
+                setattr(self._keys[key], f, body.get(f))
+            return httpx.Response(200, json={"key": key, "key_alias": alias, "spend": 0.0})
+        if method == "POST" and path == "/key/update":
+            key = str(body.get("key", ""))
+            held = self._keys.get(key)
+            if held is None:
+                return _error(404, "Key not found.", "not_found_error")
+            for f in _KEY_FIELDS:
+                if f in body:
+                    setattr(held, f, body[f])
+            return httpx.Response(200, json={"key": key, "token": _hash(key), "spend": held.spend})
+        if method == "POST" and path == "/key/delete" and self.refuse_key_delete:
+            return _error(self.refuse_key_delete, "Internal Server Error", "internal_server_error")
+        if method == "POST" and path == "/key/delete":
+            keys = [str(k) for k in body.get("keys") or []]
+            if not keys or any(k not in self._keys for k in keys):
+                return _error(404, "{'error': 'No keys found'}", "internal_server_error")
+            for k in keys:
+                del self._keys[k]
+            return httpx.Response(200, json={"deleted_keys": keys})
+        return _error(404, "Not Found", "not_found_error")
+
+    def _answer(self, body: Mapping[str, Any]) -> httpx.Response:
         model_name = str(body.get("model", ""))
         self.asked.append(model_name)
         if model_name in self.config_models:
-            return _ok(model_name)
+            return _ok(
+                model_name, self.local_prompt_tokens, self.local_completion_tokens, self.answer
+            )
         ids = [i for i in self.stored_ids() if self._db[i].model_name == model_name]
         gone = self._cooled_names.get(model_name)
         if not ids and gone is not None and gone[1] > self.clock():
@@ -391,7 +677,7 @@ class StandInGateway:
                 "exist" + group,
                 "invalid_request_error",
             )
-        return _ok(model_name)
+        return _ok(model_name, provider.prompt_tokens, provider.completion_tokens, self.answer)
 
     def _cool(self, model_id: str, now: float) -> None:
         self._cooled_until[model_id] = now + self.cooldown_seconds
@@ -404,20 +690,40 @@ def _error(status: int, message: str, kind: str) -> httpx.Response:
     )
 
 
-def _ok(model_name: str) -> httpx.Response:
+def _hash(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _tags(body: Mapping[str, Any], request: httpx.Request) -> list[str]:
+    """A call's tags as the gateway records them: the body's, then the two it adds from the
+    request's `User-Agent` (measured)."""
+    named = list(body.get("tags") or dict(body.get("metadata") or {}).get("tags") or [])
+    agent = request.headers.get("user-agent", "")
+    if agent:
+        named += [f"User-Agent: {agent.split('/')[0]}", f"User-Agent: {agent}"]
+    return [str(t) for t in named]
+
+
+def _ok(
+    model_name: str, prompt: int = 1, completion: int = 1, answer: str = "OK"
+) -> httpx.Response:
     return httpx.Response(
         200,
         json={
-            "id": "x",
+            "id": f"chatcmpl-{secrets.token_hex(8)}",
             "object": "chat.completion",
             "model": model_name,
             "choices": [
                 {
                     "index": 0,
                     "finish_reason": "stop",
-                    "message": {"role": "assistant", "content": "OK"},
+                    "message": {"role": "assistant", "content": answer},
                 }
             ],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            "usage": {
+                "prompt_tokens": prompt,
+                "completion_tokens": completion,
+                "total_tokens": prompt + completion,
+            },
         },
     )

@@ -324,10 +324,12 @@
     "models_admin_defaults_route",
     "models_admin_edit_engine_route",
     "models_admin_history_route",
+    "models_admin_limits_route",
     "models_admin_remove_engine_route",
     "models_admin_remove_key_route",
     "models_admin_set_key_route",
     "models_admin_test_route",
+    "models_admin_usage_route",
     "models_admin_view_route"
    ]
   },

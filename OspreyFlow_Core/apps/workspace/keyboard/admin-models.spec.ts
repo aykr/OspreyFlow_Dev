@@ -99,6 +99,42 @@ test("an engine is removed by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "remove-a-model-engine-by-keyboard");
 });
 
+test("an engine's limits are set by keyboard", async ({ page }) => {
+  await press(page, "Set limits for Gemini");
+  await typeInto(page, "Requests a minute", "30");
+  await typeInto(page, "Tokens a minute", "50000");
+  await typeInto(page, /Token budget/, "500000");
+  await page.getByLabel("Budget period", { exact: true }).focus();
+  await page.keyboard.press("End"); // the last listed, "a month"
+  await press(page, "Save the limits");
+  await expect(page.getByRole("status")).toContainText("its limits are saved");
+  expect(await asked(page)).toContain("PUT /engines/gemini/limits");
+  await expect(page.getByRole("table", { name: "Engines", exact: true })).toContainText(
+    "30 requests a minute; 50,000 tokens a minute; 500,000 tokens a month",
+  );
+  registerCovered(REGISTRY, "set-a-model-engines-limits-by-keyboard");
+});
+
+test("the usage's period is chosen by keyboard, and days are chosen by keyboard", async ({ page }) => {
+  const usageAsked = async () => (await asked(page)).filter((a) => a.startsWith("GET /usage"));
+  await expect(page.getByRole("table", { name: "Usage by engine and job" })).toContainText("61,100");
+  // Type-ahead on the closed list (on macOS an arrow key opens it instead of moving the choice).
+  await page.getByLabel("Period", { exact: true }).focus();
+  await page.keyboard.type("This"); // "this month"
+  await expect.poll(async () => (await usageAsked()).length).toBe(2);
+  await page.keyboard.press("Tab");
+  await page.waitForTimeout(1100); // the list's type-ahead forgets after a second
+  await page.getByLabel("Period", { exact: true }).focus();
+  await page.keyboard.type("Days"); // "days I choose"
+  await page.getByLabel("First day").focus();
+  await page.keyboard.type("02112026");
+  await page.getByLabel("Last day").focus();
+  await page.keyboard.type("03112026");
+  await press(page, "Show the usage");
+  await expect.poll(async () => (await usageAsked()).at(-1)).toBe("GET /usage?start=2026-11-02&end=2026-11-03");
+  registerCovered(REGISTRY, "choose-the-model-usage-period-by-keyboard");
+});
+
 test("every registered Models action has its own proving test case above", () => {
   assertAllCovered("MODELS_ACTIONS", MODELS_ACTIONS);
 });

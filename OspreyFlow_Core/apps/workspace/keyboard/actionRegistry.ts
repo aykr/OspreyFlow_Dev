@@ -769,6 +769,9 @@ export const MODELS_ACTIONS = defineActionRegistry("MODELS_ACTIONS", [
   "test-a-model-engine-by-keyboard",
   "set-each-jobs-default-engine-by-keyboard",
   "remove-a-model-engine-by-keyboard",
+  // ADR-135 Amendment 3: an engine's limits and the gateway's usage.
+  "set-a-model-engines-limits-by-keyboard",
+  "choose-the-model-usage-period-by-keyboard",
 ] as const);
 
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [

@@ -2,7 +2,9 @@
 // The Conduit is stood in for by an in-memory answerer that records every request
 // (`window.modelsAsked`), so `admin-models.spec.ts` proves each action reached its route, and the
 // every-harness axe scan sees a populated screen. Synthetic (rule 9): no real key, no real provider.
-// `?open=add` and `?open=key` draw the forms open; `?local=1` a local-only deployment.
+// `?open=add`, `?open=key` and `?open=limits` draw the forms open; `?local=1` a local-only deployment;
+// `?usage=chosen` the usage's own days drawn; `?usage=fail` the gateway not giving its usage.
+// Usage and limits (ADR-135 Amendment 3) are answered from the same in-memory record.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -21,11 +23,13 @@ type Engine = {
   key_set_at: string | null;
   key_set_by: string | null;
   default_for: string[];
+  limits?: Record<string, number | string | null>;
 };  // prettier-ignore
 const engines: Engine[] = [
   { provider: { name: "gemini", label: "Gemini", roles: { extraction: "gemini-2.5-flash" }, api_base: null,
                 privacy_contract: false, contract_reference: null },
-    key_state: "set", key_set_at: "2026-11-08T09:00:00Z", key_set_by: "admin-1", default_for: [] },
+    key_state: "set", key_set_at: "2026-11-08T09:00:00Z", key_set_by: "admin-1", default_for: [],
+    limits: { requests_per_minute: 60, tokens_per_minute: null, budget_tokens: 2000000, budget_period: "month" } },
   { provider: { name: "openai", label: "OpenAI", roles: { extraction: "gpt-4o-mini", vision: "gpt-4o" }, api_base: null,
                 privacy_contract: true, contract_reference: "DPA 2026/07" },
     key_state: "lost", key_set_at: "2026-11-01T09:00:00Z", key_set_by: "admin-1", default_for: [] },
@@ -53,6 +57,22 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
   const reply = (status: number, value: unknown) => new Response(JSON.stringify(value), { status });
   if (path === "/history") return reply(200, { entries: history });
+  if (path === "/usage" && params.get("usage") === "fail") {
+    return reply(502, { detail: { error: "model_usage_unavailable", detail: "The model gateway could not be reached, so its usage cannot be read now." } });
+  }
+  if (path === "/usage") {
+    const query = new URL(String(input)).searchParams;
+    asked[asked.length - 1] = `GET /usage?start=${query.get("start")}&end=${query.get("end")}`;
+    const figures = (calls: number, tokens: number) => ({ calls, succeeded: calls - 1, failed: 1, prompt_tokens: tokens - 200, completion_tokens: 200, tokens });
+    return reply(200, {
+      start: query.get("start"), end: query.get("end"),
+      rows: [
+        { engine: "local", engine_label: "This deployment's own model", job: "extraction", figures: figures(40, 52000) },
+        { engine: "gemini", engine_label: "Gemini", job: "extraction", figures: figures(12, 9100) },
+      ],
+      by_engine: {}, by_job: {}, total: figures(52, 61100),
+    });
+  }  // prettier-ignore
   if (path === "" && method === "GET") return reply(200, view());
   if (path === "/engines" && method === "POST") {
     engines.push({ provider: body.provider as Engine["provider"], key_state: "none", key_set_at: null, key_set_by: null, default_for: [] });
@@ -62,11 +82,15 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     defaults = body.defaults as Record<string, string>;
     return reply(200, view());
   }
-  const match = /^\/engines\/([^/]+)(\/key|\/test)?$/.exec(path);
+  const match = /^\/engines\/([^/]+)(\/key|\/test|\/limits)?$/.exec(path);
   const engine = match ? engines.find((e) => e.provider.name === decodeURIComponent(match[1])) : undefined;
   if (!match || !engine) return reply(404, { detail: { detail: "There is no engine of that name." } });
   if (match[2] === "/test") {
     return reply(200, { engine: engine.provider.name, outcome: "ok", ok: true, words: "Connected: the engine answered." });
+  }
+  if (match[2] === "/limits") {
+    engine.limits = body.limits as Engine["limits"];
+    return reply(200, view());
   }
   if (match[2] === "/key") {
     // The key is never kept here either: only that one was sent.
@@ -86,9 +110,22 @@ createRoot(document.getElementById("root")!).render(
   </section>,
 );
 
+if (params.get("usage") === "chosen") {
+  for (let i = 0; i < 40; i++) {
+    const period = document.getElementById("usage-period") as HTMLSelectElement | null;
+    if (period) {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(period, "chosen");
+      period.dispatchEvent(new Event("change", { bubbles: true }));
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 const open = params.get("open");
 if (open) {
-  const name = open === "add" ? "Add an engine" : "Enter key for OpenAI";
+  const name = open === "add" ? "Add an engine" : open === "limits" ? "Set limits for Gemini" : "Enter key for OpenAI";
   for (let i = 0; i < 40; i++) {
     const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label") === name);
     if (button) {
