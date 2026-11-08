@@ -824,6 +824,22 @@ export const MODELS_ACTIONS = defineActionRegistry("MODELS_ACTIONS", [
   "choose-the-model-usage-period-by-keyboard",
 ] as const);
 
+// ADR-147: Admin › Maps (platform lane P3).
+export const MAPS_ACTIONS = defineActionRegistry("MAPS_ACTIONS", [
+  "add-a-map-provider-by-keyboard",
+  "edit-a-map-provider-by-keyboard",
+  "enter-a-map-key-by-keyboard",
+  "remove-a-map-key-by-keyboard",
+  "make-a-map-provider-the-default-by-keyboard",
+  "remove-a-map-provider-by-keyboard",
+  "build-the-basemap-by-keyboard",
+  "verify-the-map-providers-by-keyboard",
+  "add-a-prefetch-area-by-keyboard",
+  "remove-a-prefetch-area-by-keyboard",
+  "set-the-prefetch-schedule-by-keyboard",
+  "fetch-every-prefetch-area-now-by-keyboard",
+] as const);
+
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "save-a-persons-roles-by-keyboard",
   "register-a-dashboard-by-keyboard",

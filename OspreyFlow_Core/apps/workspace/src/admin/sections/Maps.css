@@ -1,0 +1,9 @@
+/* Admin › Maps (ADR-147): its forms and action rows, from the design tokens only. */
+.admin-maps-form {
+  display: flex; flex-direction: column; gap: var(--sp-6);
+  max-width: 560px; padding: var(--sp-12); border: 1px solid var(--border-subtle);
+}
+.admin-maps-row { display: flex; flex-direction: column; gap: var(--sp-4); }
+.admin-maps-check { display: flex; align-items: center; gap: var(--sp-6); }
+.admin-maps-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-6); }
+.admin-maps-lines { margin: var(--sp-4) 0 0; padding-left: var(--sp-12); }
