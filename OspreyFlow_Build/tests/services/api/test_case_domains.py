@@ -464,7 +464,11 @@ class _Alerts:
     def __init__(self, alert: Alert) -> None:
         self.alert = alert
 
-    async def get_authorized(self, alert_id: str, principal: Principal) -> Alert:
+    async def get_authorized(
+        self, alert_id: str, principal: Principal, *, graph: object = None
+    ) -> Alert:
+        """`AlertStore.get_authorized`: given the graph, the real store settles its repoint journal
+        first (ADR-109 Amendment 10); this one holds no record to settle."""
         return self.alert
 
 

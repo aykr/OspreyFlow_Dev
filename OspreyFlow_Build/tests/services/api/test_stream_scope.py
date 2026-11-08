@@ -71,6 +71,17 @@ class _Valkey:
         return _PubSub()
 
 
+class _NoPurges:
+    """The alert store as the socket's sync reaches it (`purge_remarked_copies`, ADR-109 Amendment
+    10): a journal holding no record waiting for a working-set purge."""
+
+    async def applied_purges(self) -> list[tuple[str, list[str]]]:
+        return []
+
+    async def purged(self, record_id: str) -> None:
+        raise AssertionError("no record to close")
+
+
 class _Socket:
     def __init__(self, working_set: WorkingSetService, datasets: InMemoryDatasetStore) -> None:
         class _State:
@@ -82,6 +93,7 @@ class _Socket:
         self.app.state.working_set = working_set
         self.app.state.valkey = _Valkey()
         self.app.state.datasets = datasets
+        self.app.state.alerts_store = _NoPurges()
         self.sent: list[dict[str, Any]] = []
         self.closed_with: int | None = None
 
