@@ -66,6 +66,7 @@ to pass (`PUSH_LOG.md` records it). The owner gave a standing yes to the downloa
 
 | Step | Work | Size | Exit |
 | --- | --- | --- | --- |
+| O-hyg | Test hygiene, from 7–8 November's findings: live files that create deployment-wide rules (`test_load_checks`, `test_rule_sentence_routes`, `test_rule_maker_checker_routes`, `test_rule_schedule`, `test_rule_sentences`, `test_sentence_rules`) clean up after themselves; `tests/services/api/test_ws_ticket.py:26` reads `VALKEY_PORT` instead of a hard-coded 6379; tests that read their own records select by their own ids; and `make ci` runs, or names, the fast tier, which GitHub's `test` job runs and `make ci` does not | S | A second run of each file over a database the first left changes nothing; no test connects to a port it was not given |
 | O-acc | ADR-142 Amendment 1: `accounts.conf`; `--account` on `open`, `resume`, `headless` and the orchestrator's start; `pause`, `pause --now`, `switch`; the `paused` heartbeat state; `HANDOFF.md`; the merge gate's `wip(` refusal; Prompt R's handoff line; the monitor's *Account* column; `fallback` lines | M | ADR-142 Amendment 1's six tests green and shown red first; the runbook's commands updated; the owner can pause the case lane and resume it on another account by hand |
 
 ## Lane 1 · Studio (`lane/studio`) · Opus · medium
