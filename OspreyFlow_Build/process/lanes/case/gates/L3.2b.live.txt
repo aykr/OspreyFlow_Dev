@@ -1,0 +1,8 @@
+# L3.2b live run: lease case on stack a ("L3.2b live view routes and migration"), 2026-11-08T18:10:57Z–18:11:25Z,
+# at the lane's commit before the lane review (c1ce452's tree less the friction row); released 18:12:00Z, stack brought down first.
+# Ports pinned as the lease printed: ARCADEDB_HTTP_PORT=2491 POSTGRES_PORT=55433 VALKEY_PORT=6379 MINIO_ENDPOINT=localhost:9000 OSPREY_LANE=case
+.venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini tests/services/api/test_case_views.py tests/services/api/test_case_views_store.py tests/test_migrate_branches_to_views_store.py tests/services/api/test_unconverted_case_merge_live.py tests/services/api/test_questions_store.py -q -p no:randomly
+48 passed, 1 warning in 27.16s
+.venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini tests/conformance/graph_port -q -k edges_among   (the real ArcadeDB adapter: edges_among's edge-type filter, which the view's collapse reads)
+4 passed, 345 deselected in 13.75s
+# The review's later changes to the Conduit are tests only (test_case_views.py's SECRET-match case and its plant, which use no stack) and a docstring; they ran in make test at the tip.
