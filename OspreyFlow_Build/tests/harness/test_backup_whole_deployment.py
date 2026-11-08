@@ -269,6 +269,8 @@ def test_the_set_names_the_recipes_item(
     monkeypatch.setattr(backup, "backup_graph_store", lambda c, d, **kw: touch(d))
     monkeypatch.setattr(backup, "backup_postgres_all", lambda c, f: [("postgres", touch(f / "dump.sql"))])
     monkeypatch.setattr(backup, "backup_identity", lambda c, d: touch(d))
+    # ADR-135 Amendment 2: a deployment whose Models were never changed has no models file.
+    monkeypatch.setattr(backup, "backup_models_file", lambda c, d: None)
     monkeypatch.setattr(backup, "backup_object_store", lambda c, d, **kw: touch(d))
     monkeypatch.setattr(backup, "backup_analytics", lambda c, d, **kw: touch(d))
     seen: dict[str, str] = {}
@@ -381,6 +383,8 @@ def test_a_backup_set_holds_the_weights_file_and_its_checksum(
         backup, "backup_postgres_all", lambda c, f: [("postgres", touch(f / "dump.sql"))]
     )
     monkeypatch.setattr(backup, "backup_identity", lambda c, d: touch(d))
+    # ADR-135 Amendment 2: a deployment whose Models were never changed has no models file.
+    monkeypatch.setattr(backup, "backup_models_file", lambda c, d: None)
     monkeypatch.setattr(backup, "backup_object_store", lambda c, d, **kw: touch(d))
     monkeypatch.setattr(backup, "backup_analytics", lambda c, d, **kw: touch(d))
     monkeypatch.setattr(backup, "backup_recipes", lambda c, d, **kw: touch(d))

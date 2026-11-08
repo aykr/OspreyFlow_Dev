@@ -518,6 +518,17 @@ def test_models_reads_the_named_deployments_own_settings(
             {"name": "gemini", "label": label, "roles": {"extraction": "gemini-x"}}]}
         path.write_text(yaml.safe_dump(config), encoding="utf-8")
     capsys.readouterr()
+    # The stand-in for Docker runs nothing, so the Conduit's key path is not there to ask, as for a
+    # stopped deployment: `exec` refuses, and the command reads the named deployment's own files
+    # (ADR-135 Amendment 2: before the keys move, presence is read from its `deployment.env`).
+    captured = machine.docker.capture
+
+    def no_conduit(argv: list[str], **kw: object) -> tuple[int, str]:
+        if "services.api.model_keys" in argv:
+            return 1, 'service "api" is not running'
+        return captured(argv, **kw)  # type: ignore[arg-type]
+
+    machine.docker.capture = no_conduit  # type: ignore[method-assign]
     assert machine("models", "--name", "bravo") == 0
     said = capsys.readouterr().out
     assert "Bravo engine" in said and "Alpha engine" not in said
