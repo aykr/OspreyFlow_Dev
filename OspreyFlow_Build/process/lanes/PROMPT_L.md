@@ -42,6 +42,10 @@ Take a stack only as `stack_lease.sh acquire <lane> "<purpose>" && <the live run
 `;`, and never touch a test stack's containers, databases or networks with docker or psql unless the
 lease is yours (8 November 2026: a refused acquire chained with `;` ran on against another lane's stack).
 
+Playwright never reuses a server already on its port (8 November 2026: a lane's keyboard run was served
+another worktree's tree): a busy port fails the run, so wait for it or find who holds it (`lsof -iTCP:<port>
+-sTCP:LISTEN`); set OSPREY_REUSE_SERVER=1 only for a server you started yourself in this worktree.
+
 Every question for the owner, every request (a reservation, a shared commit, a ratification) and your
 ready-to-merge go to the orchestrator's session by cross-session message (send to `uds:/tmp/cc-socks/8906.sock`: a
 session on another account cannot find it by its name, ospreyflow-7e), never only in

@@ -32,7 +32,7 @@ export default defineConfig({
     {
       command: `npx vite --port ${VITE_PORT} --strictPort`,
       port: VITE_PORT,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
       cwd: "..",
       env: { HARNESS_API_PORT: API_PORT },
     },
@@ -42,7 +42,7 @@ export default defineConfig({
         `--config ${SCRATCH_CONFIG} --real-data-exceptions ${SCRATCH_RDE} ` +
         `--out-root ${SCRATCH_OUT_ROOT}`,
       port: Number(API_PORT),
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
       cwd: "../../..",
       env: { PYTHONPATH: ".:packages" },
     },
@@ -52,7 +52,7 @@ export default defineConfig({
     {
       command: `npx vite --port ${INSTALL_VITE_PORT} --strictPort`,
       port: INSTALL_VITE_PORT,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
       cwd: "..",
       env: { HARNESS_API_PORT: INSTALL_API_PORT },
     },
@@ -66,7 +66,7 @@ export default defineConfig({
         `--token ${INSTALL_TOKEN} --port ${INSTALL_API_PORT} ` +
         `--draft ${INSTALL_SCRATCH}/osprey.draft.yaml --answers ${INSTALL_SCRATCH}/install.yaml`,
       port: Number(INSTALL_API_PORT),
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
       cwd: "../../..",
       env: { PYTHONPATH: ".:packages:cli" },
     },

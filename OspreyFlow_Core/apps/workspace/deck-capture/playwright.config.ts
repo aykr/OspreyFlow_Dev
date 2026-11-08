@@ -13,7 +13,7 @@ export default defineConfig({
     {
       command: "npx vite --port 5187 --strictPort",
       port: 5187,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
       cwd: "..",
     },
     {
@@ -21,7 +21,7 @@ export default defineConfig({
       // harness; `fraud.capture.ts` fulfils the style's same-origin glyph reads from disk.
       command: "npx http-server . -p 5188 --cors -s",
       port: 5188,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
       // Playwright resolves this against the config's own directory, which `npx http-server`'s
       // relative root argument does not reliably survive.
       cwd: "../../../../OspreyFlow_Data/basemap",

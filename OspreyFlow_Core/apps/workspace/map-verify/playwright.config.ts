@@ -10,7 +10,7 @@ export default defineConfig({
   webServer: {
     command: "npx vite --port 5185 --strictPort",
     port: 5185,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
     cwd: "..",
   },
   use: {

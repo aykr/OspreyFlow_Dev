@@ -48,7 +48,7 @@ export default defineConfig({
   webServer: {
     command: "npx vite --port 5173 --strictPort",
     port: 5173,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
     cwd: "..",
     env: {
       VITE_API_BASE_URL: process.env.OSPREY_LIVE_API_BASE_URL ?? "",

@@ -11,7 +11,7 @@ export default defineConfig({
   webServer: {
     command: "node scripts/sync_govuk_assets.mjs && npx vite --port 5183 --strictPort",
     port: 5183,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
     cwd: "..",
   },
   use: {
