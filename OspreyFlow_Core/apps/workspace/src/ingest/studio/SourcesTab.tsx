@@ -1,6 +1,6 @@
 // 2 Sources (ADR-140 decision 7, Amendment 4): the dataset's registered sources, each registered once
-// with its governance, the register wizard, and a source's own page. Below, the files added straight
-// to the dataset (the unstructured path, ADR-094 step 3).
+// with its governance, the register wizard, and a source's own page; the screening lists the dataset
+// subscribes to (Amendment 13). Below, the files added straight to the dataset (ADR-094 step 3).
 import { useEffect, useMemo, useState } from "react";
 
 import type { SourceTable } from "../../../../../packages/schemas/generated";
@@ -10,6 +10,7 @@ import { sourceName } from "../../inspector/sourceLocator";
 import { fetchHandlingScheme, type HandlingScheme } from "../api";
 import { listSources } from "../sources/api";
 import { RegisterSourceWizard } from "../sources/RegisterSourceWizard";
+import { ScreeningLists } from "../sources/ScreeningLists";
 import { SourcePage } from "../sources/SourcePage";
 
 export interface SourcesTabProps {
@@ -128,6 +129,7 @@ export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId
           )}
         </section>
       )}
+      {!open && !registering && <ScreeningLists api={api} datasetId={datasetId} />}
       <section aria-label="Files added to the dataset" style={{ display: "grid", gap: "var(--sp-8)" }}>
         <h2 style={{ margin: 0, fontSize: "var(--fs-16)" }}>Files added to the dataset</h2>
         <p className="label" style={{ margin: 0 }}>

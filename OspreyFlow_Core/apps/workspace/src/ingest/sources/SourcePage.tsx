@@ -9,7 +9,15 @@ import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import type { HandlingScheme } from "../api";
 import { statusWords } from "../studio/vocabulary";
-import { editGovernance, pauseRefresh, resumeRefresh, sourceLineage, sourceProfile, type SourcesApi } from "./api";
+import {
+  editGovernance,
+  pauseRefresh,
+  readConnectorSource,
+  resumeRefresh,
+  sourceLineage,
+  sourceProfile,
+  type SourcesApi,
+} from "./api";
 import { type Governance, GovernanceFields, governanceOf, handlingOf, missing, refreshInWords } from "./GovernanceFields";
 
 export interface SourcePageProps {
@@ -93,6 +101,20 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
     }
   }
 
+  // ADR-140 Amendment 13: a SQL, API or JSON source is read again into its file by *Refresh now*.
+  async function readNow() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const done = await readConnectorSource(api, datasetId, source.id);
+      setSaid(`Read again: ${done.words}.`);
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : "The source could not be read.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const refresh = source.refresh;
   return (
     <section aria-label={`Source ${source.name}`} style={{ display: "grid", gap: "var(--sp-12)" }}>
@@ -161,7 +183,12 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
                   </Button>
                 </div>
               ))}
-            <div>
+            <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+              {source.read && (
+                <Button disabled={busy} onClick={() => void readNow()}>
+                  Refresh now
+                </Button>
+              )}
               <Button onClick={() => setEditing(governanceOf(source.handling ?? {}, source.legal_basis, source.refresh))}>
                 Edit governance
               </Button>

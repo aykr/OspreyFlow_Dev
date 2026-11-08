@@ -4,7 +4,16 @@
 import type {
   Connection,
   ConnectionInput,
+  ConnectionTest,
+  ConnectorRead,
+  DatasetOwnListImportInput,
+  DatasetSubscriptions,
+  DeploymentList,
+  DeploymentListInput,
   GovernanceEdited,
+  ListImport,
+  ListScheduleInput,
+  OfferedList,
   RegisterSourceInput,
   SourceGovernanceInput,
   SourceLineage,
@@ -91,4 +100,59 @@ export const pauseRefresh = (api: SourcesApi, datasetId: string, sourceId: strin
 export const resumeRefresh = (api: SourcesApi, datasetId: string, sourceId: string) =>
   call<SourceTable>(api, `${dataset(api, datasetId)}/sources/${encodeURIComponent(sourceId)}/refresh/resume`, "Resuming the refresh", {
     method: "POST",
+  });
+
+// --- ADR-140 Amendment 13: connector sources, screening lists, subscriptions, a dataset's lists ---
+
+/** *Refresh now* for a SQL, API or JSON source: read again into its file. */
+export const readConnectorSource = (api: SourcesApi, datasetId: string, sourceId: string) =>
+  call<ConnectorRead>(api, `${dataset(api, datasetId)}/sources/${encodeURIComponent(sourceId)}/read`, "Reading the source", {
+    method: "POST",
+  });
+
+export const testConnection = (api: SourcesApi, connectionId: string) =>
+  call<ConnectionTest>(api, `${api.apiBaseUrl}/v1/admin/connections/${encodeURIComponent(connectionId)}/test`, "Testing the connection", {
+    method: "POST",
+  });
+
+const studioLists = (api: SourcesApi) => `${api.apiBaseUrl}/v1/studio/screening-lists`;
+
+/** The deployment-wide lists, for whoever may load screening lists; `null` for anyone else (403). */
+export async function listDeploymentLists(api: SourcesApi): Promise<DeploymentList[] | null> {
+  const response = await fetch(studioLists(api), { headers: { Authorization: `Bearer ${api.bearerToken}` } });
+  if (response.status === 403) return null;
+  if (!response.ok) throw new Error(`Reading the screening lists failed (${response.status}).`);
+  return (await response.json()) as DeploymentList[];
+}
+
+export const addDeploymentList = (api: SourcesApi, body: DeploymentListInput) =>
+  call<DeploymentList>(api, studioLists(api), "Adding the list", { method: "POST", body: JSON.stringify(body) });
+
+export const refreshDeploymentList = (api: SourcesApi, listId: string) =>
+  call<ListImport>(api, `${studioLists(api)}/${encodeURIComponent(listId)}/refresh`, "Refreshing the list", { method: "POST" });
+
+export const setDeploymentListSchedule = (api: SourcesApi, listId: string, body: ListScheduleInput) =>
+  call<DeploymentList>(api, `${studioLists(api)}/${encodeURIComponent(listId)}/schedule`, "Setting the schedule", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+
+export const listSubscriptions = (api: SourcesApi, datasetId: string) =>
+  call<DatasetSubscriptions>(api, `${dataset(api, datasetId)}/screening-subscriptions`, "Reading the subscriptions");
+
+export const setSubscribed = (api: SourcesApi, datasetId: string, listId: string, subscribed: boolean) =>
+  call<DatasetSubscriptions>(
+    api,
+    `${dataset(api, datasetId)}/screening-subscriptions/${encodeURIComponent(listId)}`,
+    subscribed ? "Subscribing" : "Unsubscribing",
+    { method: subscribed ? "PUT" : "DELETE" },
+  );
+
+export const offeredLists = (api: SourcesApi, datasetId: string) =>
+  call<OfferedList[]>(api, `${dataset(api, datasetId)}/reference-lists/offered`, "Reading the lists");
+
+export const importOwnList = (api: SourcesApi, datasetId: string, listId: string, body: DatasetOwnListImportInput) =>
+  call<ListImport>(api, `${dataset(api, datasetId)}/reference-lists/${encodeURIComponent(listId)}/import`, "Importing the list", {
+    method: "POST",
+    body: JSON.stringify(body),
   });
