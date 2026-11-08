@@ -1,0 +1,20 @@
+lease glass; 2026-11-08T00:50:56Z; red at d558530 (+ the live file's own-records fix): the re-mark never written (alerts.remark_alerts, which the script runs), every run a dry run
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 37b4440..2e10bb4 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -1059,7 +1059,7 @@ async def remark_alerts(
+         if required == node.handling:
+             continue
+         report.remarked.append(alert.id)
+-        if dry_run:
++        if True:  # red: never written
+             continue
+         tx = await graph.begin_transaction()
+         try:
+>           assert row.alert_node_id != old.alert_node_id
+E           AssertionError: assert '01M6WA69PBDFKEBB094ESFGC27' != '01M6WA69PBDFKEBB094ESFGC27'
+E            +  where '01M6WA69PBDFKEBB094ESFGC27' = Alert(id='01M6WA69QHBKNTEYNF6NBXAN52', rule_id='typology:01M6WA69D2BE1J24ARA10EQG75', owner_id='loader-secret', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+E            +  and   '01M6WA69PBDFKEBB094ESFGC27' = Alert(id='01M6WA69QHBKNTEYNF6NBXAN52', rule_id='typology:01M6WA69D2BE1J24ARA10EQG75', owner_id='loader-secret', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marking
+1 failed, 18 deselected in 6.49s

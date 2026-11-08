@@ -1,0 +1,29 @@
+lease glass; 2026-11-08T00:51:03Z; red at d558530: the queue's check by nodes alone, with the repoint's re-mark off (the re-mark alone would withhold it by its node)
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 37b4440..256d758 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -699,7 +699,7 @@ class AlertStore:
+         """A repointed alert's node raised to its new evidence's marking (ADR-109 Amendment 10): a
+         link re-marked above the node it was cited by would otherwise leave the node, and the words
+         it carries, readable by expand and `list_nodes` to a reader who may not see the link."""
+-        if moved:
++        if False:
+             rows = list((await self.cited_by_ids(moved)).values())
+             await remark_alerts(graph, self, self.scheme, rows)
+ 
+@@ -934,8 +934,6 @@ class ReadableEvidence:
+         readable."""
+         return (
+             all(i in self.nodes for i in evidence_node_ids(alert))
+-            and set(alert.edge_ids) <= self.edge_ids
+-            and set(alert.event_ids) <= self.event_ids
+         )
+ 
+ 
+>           assert await _listed(stores, graph, analytics, case, TEAMMATE) == []
+E           AssertionError: assert ['01M6WA6G46MMEXVCAFCG21NHGD'] == []
+E             Left contains one more item: '01M6WA6G46MMEXVCAFCG21NHGD'
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole
+1 failed, 18 deselected in 5.91s

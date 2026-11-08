@@ -1,0 +1,22 @@
+lease glass; 2026-11-08T00:38:58Z; red at d558530: an old hold reason shown as written
+diff --git a/OspreyFlow_Core/services/api/held_rows.py b/OspreyFlow_Core/services/api/held_rows.py
+index 787e239..562402e 100644
+--- a/OspreyFlow_Core/services/api/held_rows.py
++++ b/OspreyFlow_Core/services/api/held_rows.py
+@@ -121,7 +121,7 @@ async def _without_finding_words(conn: asyncpg.Connection, held: list[HeldRow])
+     """A row held before L2.8b with its reason the finding's words is shown as the rule's name alone
+     (fail closed; the orchestrator's ruling on L2.8b's Q2). The name is the case's rule's, read by
+     id; where it cannot be read, "the rule"."""
+-    old = [h for h in held if h.reason.startswith(_OLD_MATCH_REASON)]
++    old = []
+     if not old:
+         return held
+     names: dict[str, str] = {}
+>       assert shown == {named.id: f"it matched “{rule.name}”", unnamed.id: "it matched the rule"}
+E       AssertionError: assert {'01M6W9G8E7Z...0 four times'} == {'01M6W9G8E7Z...hed the rule'}
+E         Differing items:
+E         {'01M6W9G8E7Z1RZ2CZRN8F5EYG3': 'it matched: GBSECRETMULE paid GBSECRETHUB 9,500 four times'} != {'01M6W9G8E7Z1RZ2CZRN8F5EYG3': 'it matched “Structuring (pre_commit)”'}
+E         {'01M6W9G8E7Z1RZ2CZRN8F5EYG4': 'it matched: GBSECRETMULE paid GBSECRETHUB 9,500 four times'} != {'01M6W9G8E7Z1RZ2CZRN8F5EYG4': 'it matched the rule'}
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_row_held_with_the_findings_words_is_shown_with_the_rules_name_alone
+1 failed, 18 deselected in 1.16s

@@ -1,0 +1,18 @@
+lease glass; 2026-11-08T00:39:10Z; red at d558530: the inbox's words shown whatever the evidence
+diff --git a/OspreyFlow_Core/services/api/watch_routes.py b/OspreyFlow_Core/services/api/watch_routes.py
+index dbc22f8..468a739 100644
+--- a/OspreyFlow_Core/services/api/watch_routes.py
++++ b/OspreyFlow_Core/services/api/watch_routes.py
+@@ -231,7 +231,7 @@ async def alert_to_view(
+         evidence_available=available,
+         investigation_id=alert.investigation_id,
+         created_at=alert.created_at,
+-        words=alert.words if available else None,
++        words=alert.words,
+         hotlist=await _alert_hotlist(alert, principal, hotlists_store),
+         fired_on=fired_on,
+     )
+>           assert by_id[hidden.id]["words"] is None and by_id[hidden.id]["referent_node_ids"] == []
+E           AssertionError: assert ('+447700900111 called +447700900222, both on your hotlist' is None)
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link_is_hidden
+1 failed, 10 deselected, 1 warning in 13.38s

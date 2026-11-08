@@ -1,0 +1,78 @@
+lease glass; 2026-11-08T00:39:24Z; red at d558530: no repoint journal: nothing recorded, applied or settled
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 37b4440..229f7d1 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -654,13 +654,7 @@ class AlertStore:
+         not), each record is settled from the graph's own stored states: the old link superseded
+         and the new one stored, it is applied; else the write did not happen and it is dropped. So
+         a failure between the two stores leaves no alert citing a superseded link."""
+-        repoint = LinkRepoint(self)
+-        try:
+-            yield repoint
+-        except BaseException:
+-            await self._settle(graph, repoint.pairs, drop_unsettled=True)
+-            raise
+-        await self._remark_moved(graph, await self.apply_repoints(repoint.pairs))
++        yield _NoRepoint()
+ 
+     async def settle_pending(self, graph: GraphPort, *, now: datetime | None = None) -> None:
+         """Before every read of alerts: any recorded repoint whose graph write has committed is
+@@ -670,12 +664,7 @@ class AlertStore:
+         is answered beyond which revision an alert cites (the queue still checks that revision as
+         the reader). A record older than `STALE_REPOINT_AFTER` whose old link is still live has lost
+         its writer and is dropped. One indexed read of an almost always empty table."""
+-        async with self._pool.acquire() as conn:
+-            rows = await conn.fetch(
+-                "SELECT old_edge_id, new_edge_id, recorded_at FROM alert_link_repoints"
+-            )
+-        if not rows:
+-            return
++        return
+         cutoff = (now or datetime.now(UTC)) - STALE_REPOINT_AFTER
+         fresh = {r["old_edge_id"]: r["new_edge_id"] for r in rows if r["recorded_at"] >= cutoff}
+         stale = {r["old_edge_id"]: r["new_edge_id"] for r in rows if r["recorded_at"] < cutoff}
+>           assert revision != link, "the confirmed match is a new revision"
+E           AssertionError: the confirmed match is a new revision
+E           assert '01M6W9H19PP459FTP15GMQG09Z' != '01M6W9H19PP459FTP15GMQG09Z'
+>           with pytest.raises(ConnectionError):
+E           Failed: DID NOT RAISE ConnectionError
+>           assert second.id in queued and queued[second.id].edge_ids != [link]
+E           AssertionError: assert ('01M6W9HE53BDM5Q4RE58ZQS9T6' in {})
+E            +  where '01M6W9HE53BDM5Q4RE58ZQS9T6' = Alert(id='01M6W9HE53BDM5Q4RE58ZQS9T6', rule_id='typology:01M6W9HE53BDM5Q4RE58ZQS9T7', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+>           assert await _pending(stores) == [(fresh_live, f"{fresh_live}-new")]
+E           AssertionError: assert [('01M6W9HK0G...DM429GV-new')] == [('fresh-01M6...DM429GW-new')]
+E             At index 0 diff: ('01M6W9HK0GE0QXECNJ50XWQ03W', '01M6W9HK69239WEKSVA8YC2K9F') != ('fresh-01M6W9HK73YGHEMY6HEDM429GW', 'fresh-01M6W9HK73YGHEMY6HEDM429GW-new')
+E             Left contains 2 more items, first extra item: ('fresh-01M6W9HK73YGHEMY6HEDM429GW', 'fresh-01M6W9HK73YGHEMY6HEDM429GW-new')
+E             Use -v to get more diff
+>           assert row.edge_ids == [changed.edge.id], "the alert follows its link to the successor"
+E           AssertionError: the alert follows its link to the successor
+E           assert ['01M6W9HQXEW5C2FNPR22QW8X48'] == ['01M6W9HRB3KPHEWRGA0D9WKZN4']
+E             At index 0 diff: '01M6W9HQXEW5C2FNPR22QW8X48' != '01M6W9HRB3KPHEWRGA0D9WKZN4'
+E             Use -v to get more diff
+>           assert len(same_as) == 1, "both alerts cite the one match"
+E           AssertionError: both alerts cite the one match
+E           assert 0 == 1
+E            +  where 0 = len([])
+>           assert row.edge_ids == [result.edge.id] != [link_id]
+E           AssertionError: assert ['e-01M6W9J0C...G720WMEVP81H'] == ['01M6W9J0D6N4WJCH66SASN9N46']
+E             At index 0 diff: 'e-01M6W9J0CW6XK2G720WMEVP81H' != '01M6W9J0D6N4WJCH66SASN9N46'
+E             Use -v to get more diff
+>       assert await _cites(alerts, alert) == [new]
+E       AssertionError: assert ['01M6W9J24Z9SBJA7XV01DMEW12'] == ['01M6W9J27ZKR8NXCCSCRC6MAE6']
+E         At index 0 diff: '01M6W9J24Z9SBJA7XV01DMEW12' != '01M6W9J27ZKR8NXCCSCRC6MAE6'
+E         Use -v to get more diff
+>       assert await _cites(alerts, alert) == [new]
+E       AssertionError: assert ['01M6W9J48EAR0BNZ8B9A7WDWNR'] == ['01M6W9J4BBZ9BRXDFBABKTDVPH']
+E         At index 0 diff: '01M6W9J48EAR0BNZ8B9A7WDWNR' != '01M6W9J4BBZ9BRXDFBABKTDVPH'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_triage_refused_after_the_graph_commit_still_repoints_every_citing_alert
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_stale_record_is_dropped_if_its_link_is_live_and_applied_if_superseded
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+FAILED ../OspreyFlow_Build/tests/services/api/test_link_changes.py::test_an_alert_citing_a_changed_link_follows_it_to_its_successor
+FAILED ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py::test_an_alert_citing_a_picture_link_follows_it_when_it_is_replaced_or_removed[replace]
+FAILED ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py::test_an_alert_citing_a_picture_link_follows_it_when_it_is_replaced_or_removed[remove]
+9 failed, 101 deselected in 37.27s

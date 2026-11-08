@@ -1,0 +1,6 @@
+lease glass; 2026-11-08T00:40:19Z; red at d558530: the re-marking script leaving the working sets' stale copies
+>           assert old.alert_node_id not in await working.node_ids(case)
+E           AssertionError: assert '01M6W9JVF203Q3H6Z5CVYBVQVQ' not in {'01M6W9JTY80F8H4KDJV902CBVW', '01M6W9JTZ3V289KYZNHEYC1TKY', '01M6W9JVF203Q3H6Z5CVYBVQVQ'}
+E            +  where '01M6W9JVF203Q3H6Z5CVYBVQVQ' = Alert(id='01M6W9JVGCWKFAB2B8AVQX1SP9', rule_id='typology:01M6W9JV1TR0KW292D3GD5W9WY', owner_id='loader-secret', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marking
+1 failed, 18 deselected in 6.07s

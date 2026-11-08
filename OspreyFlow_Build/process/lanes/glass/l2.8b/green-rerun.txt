@@ -1,0 +1,10 @@
+lease glass; 2026-11-08T00:51:23Z; green re-run at d558530 + the live file's own-records fix, after removing the three records my stale-threshold test had left in the shared table
+19 passed in 87.91s (0:01:27)
+16 passed in 0.79s
+>           assert len(same_as) == 1, "both alerts cite the one match"
+E           AssertionError: both alerts cite the one match
+E           assert 0 == 1
+E            +  where 0 = len([])
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+1 failed, 13 deselected in 8.59s
+end 2026-11-08T00:53:01Z

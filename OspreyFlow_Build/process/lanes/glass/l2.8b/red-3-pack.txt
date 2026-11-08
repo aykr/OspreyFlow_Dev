@@ -1,0 +1,21 @@
+lease glass; 2026-11-08T00:39:00Z; red at d558530: a pack's alert item rechecked by its nodes alone
+diff --git a/OspreyFlow_Core/services/api/packs.py b/OspreyFlow_Core/services/api/packs.py
+index e6777b9..e87363c 100644
+--- a/OspreyFlow_Core/services/api/packs.py
++++ b/OspreyFlow_Core/services/api/packs.py
+@@ -146,8 +146,7 @@ async def readable(
+     for item in items:
+         if item.alert is not None:
+             alert = cited.get(item.alert.alert_id)
+-            if alert is None or not evidence.covers((), alert.edge_ids, alert.event_ids):
+-                continue
++            pass
+         if item_visible(item.handlings, reader, scheme) and await _still_visible(
+             item, reader, graph, case_id
+         ):
+>       assert await packs.readable([item], scene.analyst, SCHEME, graph, scene.case, **readable) == ([], True)
+E       AssertionError: assert ([StoredPackI...ne)])], False) == ([], True)
+E         At index 0 diff: [StoredPackItem(id='01M6W9GAGGPPADYX8QA064DFR3', kind='alert', marking='OFFICIAL', added_by='analyst-01M6W9GAAGRZMTCENYVRGY4397', added_at=datetime.datetime(2026, 11, 8, 0, 39, 2, 416415, tzinfo=datetime.timezone.utc), trend_id=None, trend=None, assessment=None, entity=Non
+E         ...Full output truncated (2 lines hidden), use '-vv' to show
+FAILED ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py::test_an_item_citing_an_alert_whose_link_was_taken_back_is_not_shown
+1 failed, 26 deselected in 1.74s

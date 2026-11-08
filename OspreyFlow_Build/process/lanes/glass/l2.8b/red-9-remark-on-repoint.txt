@@ -1,0 +1,21 @@
+lease glass; 2026-11-08T00:40:12Z; red at d558530: the repoint not re-marking the moved alerts' nodes
+diff --git a/OspreyFlow_Core/services/api/alerts.py b/OspreyFlow_Core/services/api/alerts.py
+index 37b4440..469f3ef 100644
+--- a/OspreyFlow_Core/services/api/alerts.py
++++ b/OspreyFlow_Core/services/api/alerts.py
+@@ -699,7 +699,7 @@ class AlertStore:
+         """A repointed alert's node raised to its new evidence's marking (ADR-109 Amendment 10): a
+         link re-marked above the node it was cited by would otherwise leave the node, and the words
+         it carries, readable by expand and `list_nodes` to a reader who may not see the link."""
+-        if moved:
++        if False:
+             rows = list((await self.cited_by_ids(moved)).values())
+             await remark_alerts(graph, self, self.scheme, rows)
+ 
+>           assert row.alert_node_id != alert.alert_node_id, "the node was re-marked into a revision"
+E           AssertionError: the node was re-marked into a revision
+E           assert '01M6W9JM1M4ZGNFFVANHQYGB35' != '01M6W9JM1M4ZGNFFVANHQYGB35'
+E            +  where '01M6W9JM1M4ZGNFFVANHQYGB35' = Alert(id='01M6W9JM3DGH61XCEVXK3XF5A9', rule_id='typology:01M6W9JKWX1MPQ9Y4CH3ES288Q', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+E            +  and   '01M6W9JM1M4ZGNFFVANHQYGB35' = Alert(id='01M6W9JM3DGH61XCEVXK3XF5A9', rule_id='typology:01M6W9JKWX1MPQ9Y4CH3ES288Q', owner_id='analyst-rules', mode=<...eason=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity=None, team=None).alert_
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole
+1 failed, 18 deselected in 6.35s

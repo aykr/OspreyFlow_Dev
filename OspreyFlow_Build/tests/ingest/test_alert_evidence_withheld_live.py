@@ -536,9 +536,12 @@ async def _two_alerts_on_one_secret_match(stores: dict[str, Any], graph: Any, ca
     return first, second, link
 
 
-async def _pending(stores: dict[str, Any]) -> list[tuple[str, str]]:
+async def _pending(stores: dict[str, Any], *old_links: str) -> list[tuple[str, str]]:
+    """The repoint records this test made, by its own links: the table is shared with every other
+    run, so never read whole."""
     async with stores["alerts"]._pool.acquire() as conn:
-        rows = await conn.fetch("SELECT old_edge_id, new_edge_id FROM alert_link_repoints ORDER BY 1")
+        rows = await conn.fetch("SELECT old_edge_id, new_edge_id FROM alert_link_repoints "
+                                "WHERE old_edge_id = ANY($1::text[]) ORDER BY 1", list(old_links))  # fmt: skip
     return [(r["old_edge_id"], r["new_edge_id"]) for r in rows]
 
 
@@ -574,7 +577,7 @@ async def test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert
         queued = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics,
                                                                          case, SECRET_LOADER)}  # fmt: skip
         assert second.id in queued and queued[second.id].edge_ids == [now.id]
-        assert await _pending(stores) == []
+        assert await _pending(stores, link) == []
         assert second.id not in await _listed(stores, graph, analytics, case, TEAMMATE)
 
 
@@ -597,7 +600,7 @@ async def test_a_graph_failure_leaves_every_alert_on_the_live_link(
             await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
                                       disposition="true_positive", reason="matches")  # fmt: skip
         monkeypatch.undo()
-        assert await _pending(stores) == []
+        assert await _pending(stores, link) == []
         assert await _listed(stores, graph, analytics, case, SECRET_LOADER) == sorted([first.id, second.id])
         for queued in await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER):
             assert queued.alert.edge_ids == [link]
@@ -661,12 +664,15 @@ async def test_a_stale_record_is_dropped_if_its_link_is_live_and_applied_if_supe
         async with stores["alerts"]._pool.acquire() as conn:
             await conn.execute("UPDATE alert_link_repoints SET recorded_at = $1 WHERE old_edge_id = ANY($2::text[])",
                                datetime.now(UTC) - STALE_REPOINT_AFTER * 2, [link, live])  # fmt: skip
-        await stores["alerts"].settle_pending(graph)
-        assert await _pending(stores) == [(fresh_live, f"{fresh_live}-new")]
-        cited = {a.id: a.edge_ids for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER)}
-        assert cited[first.id] == cited[second.id] == [moved]
-        async with stores["alerts"]._pool.acquire() as conn:
-            await conn.execute("DELETE FROM alert_link_repoints WHERE old_edge_id = $1", fresh_live)
+        try:
+            await stores["alerts"].settle_pending(graph)
+            assert await _pending(stores, link, live, fresh_live) == [(fresh_live, f"{fresh_live}-new")]
+            cited = {a.id: a.edge_ids for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER)}
+            assert cited[first.id] == cited[second.id] == [moved]
+        finally:  # this test's own records, whatever happened: the table is shared
+            async with stores["alerts"]._pool.acquire() as conn:
+                await conn.execute("DELETE FROM alert_link_repoints WHERE old_edge_id = ANY($1::text[])",
+                                   [link, live, fresh_live])  # fmt: skip
 
 
 # ---- L2.8b item 1: the rule audit ---------------------------------------------------------------
