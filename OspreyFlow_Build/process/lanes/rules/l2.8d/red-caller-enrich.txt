@@ -1,0 +1,66 @@
+# red: caller-enrich — lease rules, stack a, re-taken after the 15:54-16:00Z contention, at ea0a129 + working tree, 2026-11-08T16:25:00Z
+# plant in services/api/pipeline_run.py:
+# - '        await on_link_cloned.superseded(mention.id, new)'
+# + '        pass'
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x150a60fe0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x151753a10>, 'audit': <services.api.audit.AuditWriter object at 0x151769b50>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1505037a0>
+
+    async def test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed(
+        stores: dict[str, Any], analytics: Any
+    ) -> None:
+        """`pipeline_run`'s enrich stage: an online geocode supersedes the mention `p` with its point.
+        Red with `_persist_online_point`'s `superseded` removed."""
+        from services.api.pipeline_run import _run_enrich_stage
+    
+        from tests.ingest.test_studio_run_geometries import RecordingAnalytics
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            p, alert = await _named_node(stores, graph, case, p_state=ProvenanceState.ASSERTED, p_type="Location")
+            pipeline, branch = _enrich_pipeline(p)
+    
+            async def provider(name: str) -> tuple[float, float] | None:
+                return (-1.8984, 52.4778)
+    
+            stage, _ = await _run_enrich_stage(pipeline.nodes[1], pipeline=pipeline, branches=[branch], graph=graph,
+                                               principal=READER, scheme=SCHEME, analytics=RecordingAnalytics(),  # type: ignore[arg-type]
+                                               online_geocode=provider, alerts=stores["alerts"])  # fmt: skip
+            assert stage.matched_online == 1, stage
+>           await _still_named(stores, graph, analytics, case, alert, p)
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:736: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x150a60fe0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x151753a10>, 'audit': <services.api.audit.AuditWriter object at 0x151769b50>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x1518e7620>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x1505037a0>
+case = 'case-01M6XZM5FTFA8SJ6EZ2QHFQGQY'
+alert = Alert(id='01M6XZMDBDZRAT8GRTAE459PFA', rule_id='typology:01M6XZMDBDZRAT8GRTAE459PFB', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)
+node = '01M6XZMD8QHNS4B5XVV1NPDCYM'
+
+    async def _still_named(stores: dict[str, Any], graph: Any, analytics: Any, case: str, alert: Alert,
+                           node: str) -> None:  # fmt: skip
+        """The alert is listed for the reader, naming the newest revision of `node` the graph holds; it
+        is not given to the case's OFFICIAL reader, who may not read that revision, nor to the cleared
+        reader in another case."""
+        from services.api import alert_queue
+    
+        async def listed_for(reader: Principal, in_case: str) -> dict[str, Alert]:
+            return {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, in_case, reader)}
+    
+        listed = await listed_for(READER, case)
+>       assert alert.id in listed, "the alert naming the corrected node is withheld from its reader"
+E       AssertionError: the alert naming the corrected node is withheld from its reader
+E       assert '01M6XZMDBDZRAT8GRTAE459PFA' in {}
+E        +  where '01M6XZMDBDZRAT8GRTAE459PFA' = Alert(id='01M6XZMDBDZRAT8GRTAE459PFA', rule_id='typology:01M6XZMDBDZRAT8GRTAE459PFB', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:631: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed
+1 failed in 9.71s

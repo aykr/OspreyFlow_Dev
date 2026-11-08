@@ -1,0 +1,77 @@
+# red: other-case-scope-true — lease rules, stack a, re-taken after the 15:54-16:00Z contention, at ea0a129 + working tree, 2026-11-08T16:27:47Z
+# plant in services/api/alerts.py:
+# - '        f"(typology IS NOT NULL AND investigation_id = {case}) "'
+# + '        f"(typology IS NOT NULL AND (investigation_id = {case} OR true)) "'
+# exit 1
+
+NQVV3D6WWZNQ16XE', rule_id='typology:01M6XZRZANNQVV3D6WWZNQ16XF', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:636: AssertionError
+_ test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x117c6c500>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x117c6c470>, 'audit': <services.api.audit.AuditWriter object at 0x117afc980>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x117c6edb0>
+
+    async def test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed(
+        stores: dict[str, Any], analytics: Any
+    ) -> None:
+        """`pipeline_run`'s enrich stage: an online geocode supersedes the mention `p` with its point.
+        Red with `_persist_online_point`'s `superseded` removed."""
+        from services.api.pipeline_run import _run_enrich_stage
+    
+        from tests.ingest.test_studio_run_geometries import RecordingAnalytics
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            p, alert = await _named_node(stores, graph, case, p_state=ProvenanceState.ASSERTED, p_type="Location")
+            pipeline, branch = _enrich_pipeline(p)
+    
+            async def provider(name: str) -> tuple[float, float] | None:
+                return (-1.8984, 52.4778)
+    
+            stage, _ = await _run_enrich_stage(pipeline.nodes[1], pipeline=pipeline, branches=[branch], graph=graph,
+                                               principal=READER, scheme=SCHEME, analytics=RecordingAnalytics(),  # type: ignore[arg-type]
+                                               online_geocode=provider, alerts=stores["alerts"])  # fmt: skip
+            assert stage.matched_online == 1, stage
+>           await _still_named(stores, graph, analytics, case, alert, p)
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:736: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x117c6c500>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x117c6c470>, 'audit': <services.api.audit.AuditWriter object at 0x117afc980>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x117c13c80>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x117c6edb0>
+case = 'case-01M6XZS3F92FNYY6ZCEQMT9H78'
+alert = Alert(id='01M6XZSD1VEE2P57AQ6NY21C59', rule_id='typology:01M6XZSD1VEE2P57AQ6NY21C5A', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)
+node = '01M6XZSCX4Y91F6ST57W555QXE'
+
+    async def _still_named(stores: dict[str, Any], graph: Any, analytics: Any, case: str, alert: Alert,
+                           node: str) -> None:  # fmt: skip
+        """The alert is listed for the reader, naming the newest revision of `node` the graph holds; it
+        is not given to the case's OFFICIAL reader, who may not read that revision, nor to the cleared
+        reader in another case."""
+        from services.api import alert_queue
+    
+        async def listed_for(reader: Principal, in_case: str) -> dict[str, Alert]:
+            return {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics, in_case, reader)}
+    
+        listed = await listed_for(READER, case)
+        assert alert.id in listed, "the alert naming the corrected node is withheld from its reader"
+        (now,) = listed[alert.id].referent_node_ids
+        states = await graph.stored_writes([node, now])
+        assert now != node and states[node].superseded and not states[now].superseded
+        assert alert.id not in await listed_for(LOW, case), "a reader who may not read the new revision is given it"
+>       assert alert.id not in await listed_for(READER, f"case-{new_id()}"), "a reader of another case is given it"
+E       AssertionError: a reader of another case is given it
+E       assert '01M6XZSD1VEE2P57AQ6NY21C59' not in {'01M6XZSD1VEE2P57AQ6NY21C59': Alert(id='01M6XZSD1VEE2P57AQ6NY21C59', rule_id='typology:01M6XZSD1VEE2P57AQ6NY21C5A', o...=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None)}
+E        +  where '01M6XZSD1VEE2P57AQ6NY21C59' = Alert(id='01M6XZSD1VEE2P57AQ6NY21C59', rule_id='typology:01M6XZSD1VEE2P57AQ6NY21C5A', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:636: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_a_node_a_route_corrects_stays_listed[confirm]
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_a_node_a_route_corrects_stays_listed[retract]
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_the_node_a_close_confirms_stays_listed
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_a_node_supersede_py_corrects_stays_listed[submit]
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_a_node_supersede_py_corrects_stays_listed[job]
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_naming_the_mention_the_pipelines_online_point_corrects_stays_listed
+6 failed in 130.71s (0:02:10)

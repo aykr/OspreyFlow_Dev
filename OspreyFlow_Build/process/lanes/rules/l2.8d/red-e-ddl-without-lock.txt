@@ -1,0 +1,43 @@
+# red: e-ddl-without-lock — lease rules, stack a, re-taken after the 15:54-16:00Z contention, at ea0a129 + working tree, 2026-11-08T16:28:20Z
+# plant in services/api/alerts.py:
+# - '            await conn.execute(\n                "SELECT pg_advisory_xact_lock($1, $2)", REPOINT_LOCK_SPACE, _BOOTSTRAP_LOCK_KEY\n            )\n'
+# + ''
+# exit 1
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_stores_starting_together_create_the_alert_tables_without_failing _____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x12757cd40>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x127774b60>, 'audit': <services.api.audit.AuditWriter object at 0x1683fecc0>, ...}
+
+    async def test_stores_starting_together_create_the_alert_tables_without_failing(stores: dict[str, Any]) -> None:
+        """Carry (e). Every Conduit and worker replica runs the alert store's start-up DDL as it
+        connects. Eight stores connect at once to an empty schema: each runs it under the DDL's own
+        advisory lock, in turn, and none fails. Red with the lock removed: Postgres's `IF NOT EXISTS`
+        is not safe against itself, and a store failed on the catalogue's unique index."""
+        from services.api.alerts import AlertStore
+    
+        dsn = PostgresConfig.from_env().dsn
+        schema = f"l28d_{new_id().replace('-', '')[:12].lower()}"
+        admin = await asyncpg.connect(dsn)
+        try:
+            await admin.execute(f'CREATE SCHEMA "{schema}"')
+            scoped = f"{dsn}{'&' if '?' in dsn else '?'}search_path={schema}"
+            results = await asyncio.wait_for(
+                asyncio.gather(*(AlertStore.connect(scoped) for _ in range(8)), return_exceptions=True), BOUND
+            )
+            failed = [r for r in results if isinstance(r, BaseException)]
+            for store in results:
+                if not isinstance(store, BaseException):
+                    await store.close()
+>           assert failed == [], failed
+E           AssertionError: [UniqueViolationError('duplicate key value violates unique constraint "pg_type_typname_nsp_index"'), UniqueViolationEr..._nsp_index"'), UniqueViolationError('duplicate key value violates unique constraint "pg_type_typname_nsp_index"'), ...]
+E           assert [UniqueViolat...index"'), ...] == []
+E             
+E             Left contains 7 more items, first extra item: UniqueViolationError('duplicate key value violates unique constraint "pg_type_typname_nsp_index"')
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:873: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_stores_starting_together_create_the_alert_tables_without_failing
+1 failed in 2.27s
