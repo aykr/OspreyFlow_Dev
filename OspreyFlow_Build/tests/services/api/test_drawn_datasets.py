@@ -92,8 +92,15 @@ def test_its_highest_marking_is_within_the_makers_clearance(
     above = _draw(world, "junior", highest_marking="SECRET")
     assert above.status_code == 409, above.text
     assert above.json()["detail"]["error"] == "above_your_clearance"
+    # The words name the maker's own limit and nothing else of the scheme: no marking above it,
+    # not even the one asked for, and none of the deployment's others (rule 3).
+    assert above.json()["detail"]["message"] == (
+        "a drawn dataset may hold nothing above your own clearance, OFFICIAL"
+    )
     unknown = _draw(world, highest_marking="VERY SECRET INDEED")
     assert unknown.status_code == 422
+    # Only what was sent is echoed: the deployment's markings are not listed.
+    assert unknown.json()["detail"] == "'VERY SECRET INDEED' is not a marking of this deployment"
     assert [d for d in world.datasets.datasets.values() if d.kind == DRAWN] == []
     assert world.cases.made.keys() == {"case-a"}
 
