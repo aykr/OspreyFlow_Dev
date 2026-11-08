@@ -79,16 +79,16 @@ async def _write_layer_a(adapter: GraphPort, loaded: str) -> tuple[list[str], li
         adapter,
         [first, second],
         [
-            _edge("KNOWS", first.id, second.id, classification="OFFICIAL", datasets=[LAYER_A]),
-            _edge("KNOWS", loaded, first.id, classification="OFFICIAL", datasets=[LAYER_A]),
+            _edge("ASSOCIATE_OF", first.id, second.id, classification="OFFICIAL", datasets=[LAYER_A]),
+            _edge("ASSOCIATE_OF", loaded, first.id, classification="OFFICIAL", datasets=[LAYER_A]),
         ],
     )
 
 
 @_each
 async def test_the_size_is_the_stored_properties_bytes(factory: GraphAdapterFactory) -> None:
-    short = _node("Person", classification="OFFICIAL", datasets=[LAYER_A], name="Al")
-    long = _node("Person", classification="OFFICIAL", datasets=[LAYER_B], name="A" * 400)
+    short = _node("Person", classification="OFFICIAL", datasets=[LAYER_A], given_names="Al")
+    long = _node("Person", classification="OFFICIAL", datasets=[LAYER_B], given_names="A" * 400)
     async with factory.context() as adapter:
         await _write(adapter, [short, long], [])
         sizes = await adapter.dataset_footprints([LAYER_A, LAYER_B])
