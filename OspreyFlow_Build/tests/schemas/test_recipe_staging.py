@@ -53,10 +53,10 @@ def _committed_recipes() -> list[Recipe]:
 
 
 def test_a_recipe_without_staging_serialises_byte_for_byte_as_before() -> None:
-    recipes = _committed_recipes()
+    # A recipe that declares staging steps (phase 7's own fixtures) is not one published before.
+    recipes = [r for r in _committed_recipes() if r.staging is None]
     assert len(recipes) >= 40, len(recipes)
     for recipe in recipes:
-        assert recipe.staging is None
         text = serialise_recipe(recipe)
         before = yaml.safe_dump(
             recipe.model_dump(mode="json", by_alias=True, exclude_none=True, exclude={"staging"}),
