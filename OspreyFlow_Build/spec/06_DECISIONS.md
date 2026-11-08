@@ -30605,8 +30605,11 @@ registration and by *Refresh now*. *Admin › Connections*' fields for the new k
 Re-screening a dataset's customers against a Studio list's changed entries is the rules': the import
 counts what it added, changed and delisted for them. **Two deployment-wide list stores** now stand side
 by side: ADR-133's (the Lists tab, which the rules screen against) and this one (Studio › Sources,
-versions as reference lists); which is the store of record is put to the owner through the orchestrator,
-the recommendation being this one with the rules reading it in L2.10–L2.11. An incremental source's file
+versions as reference lists). Which is the store of record is the owner's to rule, since retiring
+ADR-133's Lists tab would change an accepted ADR. This step builds to the recommendation (this store,
+with the rules reading it once ruled), but leaves ADR-133's store, its refresh, its schedule and its
+Lists tab exactly as they were, so either other answer stays open. The rules lane's switch-over waits
+for the ruling. An incremental source's file
 grows with each read; pruning rows every pipeline has loaded is not built (a file past the cap is
 refused in words). A torn write of a read's file has no test that could catch it in one process; the
 rename is recorded as untested.
