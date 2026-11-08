@@ -28155,6 +28155,40 @@ principal to the case's datasets (ADR-099 decisions 2–4).
   refused unless that is the case's loading dataset.
 - **Timing.** Each run's `metering.wall_ms` is left out of the comparisons, and no timing is claimed.
 
+### ADR-110, Amendment 18 (8 November 2026) — a link write names its type: a merge and a supersede change only their own type's link, and a link state read refuses an id two types hold
+
+Status: written 8 November 2026 by the studio lane (L1.2d), from Amendment 16's final review. It
+amends Amendment 16's `read_link_state` and the ArcadeDB adapter's two id-only link writes.
+
+**What it found.** A link's id is unique within its type, and two types can hold the same id (a
+fixed id, written twice). Three places reached a link by id alone:
+- `upsert_edges`' merge updated `g.E().has("id",…)`, so a merge into one type's link rewrote the
+  other type's link too;
+- `supersede_edge` read and marked `g.E().has("id",…)`, so a correction of one type's link
+  marked every type's link holding the id superseded;
+- `read_link_state` took the first type it found holding the id.
+
+**Decision.**
+1. **A merge writes its own type alone.** `upsert_edges` names the link's type in its update
+   (`hasLabel`), as the restore already does (Amendment 16).
+2. **A correction refuses an ambiguous id.** `supersede_edge` finds which types hold the id. Where
+   two do, it raises `AmbiguousLinkId` and changes nothing; where one does, it reads and marks
+   that type's link alone. A correction cannot name its old link's type, so refusing is the only
+   certain answer.
+3. **A state read refuses an ambiguous id.** `GraphPort.read_link_state` raises `AmbiguousLinkId`
+   where two types hold the id, never the first found. A returning row's load keeps no prior
+   state for such a link, so its merge stays a merge and its revert is refused as any merge is.
+   A revert whose own link's id became ambiguous since is refused before anything changes:
+   "N link(s) a returning row of it merged into share their id with a link of another type, so
+   which to put back is not certain". The words name no type or other link (rule 3).
+
+**Tests.**
+- Conformance: a merge leaves the other type's link as it was; a state read refuses an id two
+  types hold; a correction refuses one and marks a single type's link alone.
+- `tests/ingest/test_snapshot_withdrawal.py`: an ambiguous own link is not captured and its load
+  stays refused; a revert whose own link's id became ambiguous is refused.
+- Each is shown red in `process/lanes/studio/L1.2a_RED_RECORD.md`.
+
 ### ADR-143, Amendment 3 (7 November 2026) — where a fresh drawing's items live, and who merges a drawn dataset
 
 Status: accepted from the owner's rulings of 7 November 2026 on Amendment 2's two open questions, L5 and L6
