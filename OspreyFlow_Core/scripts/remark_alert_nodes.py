@@ -19,14 +19,15 @@ only if it still names the old one. An alert whose referents' restricted marking
 different units has no single safe marking; it is listed, not changed.
 
 Then every working set (Valkey) holding a copy of a node it re-marked loses that copy and its
-links, and the case's delta stream is deleted: a stored copy keeps the marking it was copied with
-and is served from the store, not read again from the graph, so it would still go to a reader
-below the new marking. With the stream gone, `deltas_after` finds a gap and every client of the
-case is sent a full projected snapshot from what is stored now. The re-marked revision is not put
-in its place: the case's analysts open the alert again to draw it, at its marking.
+links (`WorkingSetService.remove_reverted`: each case's stream dropped and one removal appended,
+so its clients are sent a fresh projected snapshot): a stored copy keeps the marking it was copied
+with and is served from the store, so it would still go to a reader below the new marking. The
+run's re-marks are one record of the alert store's repoint journal, so a run that fails part-way
+is finished, and its copies purged, by the next settle and working-set read, or the next run.
 
 `--dry-run` writes nothing; it lists what a run would re-mark. Idempotent: a second run finds every
-node at its marking and no copy of an old one, and reports 0.
+node at its marking and no copy of an old one, and reports 0. A dry run still opens the alert
+store, whose start-up DDL creates its tables if absent.
 """
 
 from __future__ import annotations
@@ -34,11 +35,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-from typing import Any
 
-from services.api.alerts import AlertStore, RemarkReport, remark_alerts
+from services.api.alerts import AlertStore, RemarkReport, purge_remarked_copies, remark_alerts
 from services.api.config import PostgresConfig, ValkeyConfig
-from services.api.working_set.store import ValkeyWorkingSetStore, WorkingSetStorage
+from services.api.working_set.service import WorkingSetService
+from services.api.working_set.store import ValkeyWorkingSetStore
 from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -54,34 +55,26 @@ async def remark(
     *,
     dry_run: bool,
     investigation_id: str | None = None,
-    working_sets: WorkingSetStorage | None = None,
-    valkey: Any = None,
+    working_set: WorkingSetService | None = None,
 ) -> RemarkReport:
     """Every alert's node (or one case's, `investigation_id`), re-marked where it is below what it
     rests on now (`alerts.remark_alerts`, which every repoint also runs); with `dry_run`, listed and
-    not changed."""
+    not changed. A run's re-marks are one record of the alert store's repoint journal (ADR-109
+    Amendment 10): each supersede recorded before its commit, so a run that fails part-way is
+    finished by the next settle, and the superseded nodes' working-set copies purged, by this run
+    or, after a failure, by the next working-set read or run (`purge_remarked_copies`)."""
     rows = await alerts.with_alert_nodes(investigation_id=investigation_id)
-    report = await remark_alerts(graph, alerts, scheme, rows, dry_run=dry_run)
-    if working_sets is not None and not dry_run:
-        old = {a.alert_node_id for a in rows if a.alert_node_id and a.id in report.remarked}
-        report.cases_purged = await purge_working_sets(working_sets, valkey, old) if old else 0
+    if dry_run:
+        return await remark_alerts(graph, alerts, scheme, rows, dry_run=True)
+    if working_set is not None:
+        await purge_remarked_copies(alerts, working_set)  # what an earlier run left to purge
+    async with alerts.repointing(graph) as repoint:
+        report = await remark_alerts(graph, alerts, scheme, rows, on_supersede=repoint.record_node)
+    if working_set is not None and repoint.remarked_nodes:
+        await working_set.remove_reverted(repoint.remarked_nodes, [])
+        await repoint.purged()
+        report.cases_purged = len(repoint.remarked_nodes)
     return report
-
-
-async def purge_working_sets(store: WorkingSetStorage, valkey: Any, old_node_ids: set[str]) -> int:
-    """Every case's stored copy of a re-marked node, and its links, removed, and the case's delta
-    stream deleted so its clients take a fresh snapshot. Returns how many cases changed."""
-    changed = 0
-    for case in await store.case_ids():
-        held = sorted(await store.node_ids(case) & old_node_ids)
-        if not held:
-            continue
-        links = {e for ids in (await store.adjacent_edge_ids(case, held)).values() for e in ids}
-        await store.remove_edges(case, sorted(links))
-        await store.remove_nodes(case, held)
-        await valkey.delete(f"ws:{case}:deltas")
-        changed += 1
-    return changed
 
 
 async def _main(argv: list[str] | None = None) -> int:
@@ -95,10 +88,11 @@ async def _main(argv: list[str] | None = None) -> int:
     alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
     valkey_config = ValkeyConfig.from_env()
     valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    graph = GraphArcadeDBAdapter(client, scheme)
     try:
         report = await remark(
-            GraphArcadeDBAdapter(client, scheme), alerts, scheme, dry_run=args.dry_run,
-            working_sets=ValkeyWorkingSetStore(valkey), valkey=valkey,
+            graph, alerts, scheme, dry_run=args.dry_run,
+            working_set=WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme),
         )  # fmt: skip
     finally:
         await client.aclose()
@@ -109,7 +103,7 @@ async def _main(argv: list[str] | None = None) -> int:
     for alert_id in report.remarked:
         print(f"  {alert_id}")
     if not args.dry_run:
-        print(f"{report.cases_purged} working set(s) lost a stale copy and will snapshot afresh.")
+        print(f"{report.cases_purged} superseded node(s) removed from the working sets holding one.")
     if report.unsafe:
         print(f"{len(report.unsafe)} alert(s) have no single safe marking and were left: "
               + ", ".join(report.unsafe))  # fmt: skip

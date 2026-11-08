@@ -810,7 +810,7 @@ async def test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marki
         assert await graph.get_node(old.alert_node_id, TEAMMATE) is not None, "a dry run writes nothing"
 
         # A case's working set holds a copy of the old node and its ALERTED_ON link, as the canvas
-        # left them: the run removes both and deletes the case's delta stream (a fresh snapshot).
+        # left them: the run removes both (`WorkingSetService.remove_reverted`).
         from services.api.working_set.store import ValkeyWorkingSetStore
 
         working = ValkeyWorkingSetStore(stores["valkey"])
@@ -820,12 +820,13 @@ async def test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marki
         await working.add_nodes(case, [old_node, *await graph.get_nodes(old.referent_node_ids, SECRET_LOADER)])  # type: ignore[list-item]
         await working.add_edges(case, alerted)
         await stores["valkey"].xadd(f"ws:{case}:deltas", {"d": "a delta naming the old node"})
+        from services.api.working_set.service import WorkingSetService
+
         done = await remark(graph, stores["alerts"], SCHEME, dry_run=False, investigation_id=case,
-                            working_sets=working, valkey=stores["valkey"])  # fmt: skip
+                            working_set=WorkingSetService(graph, working, SCHEME))  # fmt: skip
         assert old.alert_node_id not in await working.node_ids(case)
         assert not ({e.id for e in alerted} & await working.edge_ids(case))
-        assert await stores["valkey"].exists(f"ws:{case}:deltas") == 0
-        assert done.cases_purged == 1
+        assert done.cases_purged >= 1
         assert old.id in done.remarked
         (row,) = [a for a in await stores["alerts"].with_alert_nodes(investigation_id=case) if a.id == old.id]
         assert row.alert_node_id != old.alert_node_id

@@ -819,7 +819,9 @@ class AlertStore:
                     await conn.execute(
                         "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, new
                     )
-        purge = await self._remark_citing(graph, record_id, sorted(set(finals.values())))
+        remarked = await self._remark_citing(graph, record_id, sorted(set(finals.values())))
+        # Every node renamed or re-marked here is superseded: its working-set copies are stale.
+        purge = sorted({*renamed, *remarked})
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE alert_repoint_writes SET applied = true, purge = $2::jsonb WHERE id = $1",
