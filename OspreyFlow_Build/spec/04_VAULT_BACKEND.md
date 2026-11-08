@@ -198,7 +198,7 @@ Everything above it speaks one protocol. Routing, fallback, per-team budgets and
 As built (ADR-135 Amendment 3): limits are per engine, set in *Admin › Models* and held on each
 hosted engine's own gateway key, never on a model entry (whose `rpm`/`tpm` the gateway does not
 enforce, measured); every hosted entry is priced a unit a token, so a budget is in tokens. Per-team
-limits wait for teams (ADR-112 Amendment 5).
+limits are a further amendment's, now that teams are built (ADR-145 Amendment 5).
 
 The example below shows the shape. A deployment's rendered `litellm.yaml` carries its own
 `models.extraction` (`qwen2.5:7b-instruct` by default, the 14b the other choice, each pinned by

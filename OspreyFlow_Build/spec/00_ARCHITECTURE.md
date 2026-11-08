@@ -760,8 +760,8 @@ off the list is refused, and the conformance suite keeps its own small model.
 
 **As built (8 November 2026, ADR-135 Amendment 3):** budgets and rate limits are set **per engine**
 in *Admin › Models* and applied by the gateway to the engine's own gateway key (requests and tokens a
-minute, a token budget per day or month); per-team limits wait for teams (ADR-112 Amendment 5).
-Usage, calls and tokens per engine and job, is read from the gateway's own records, as counts, with
+minute, a token budget per day or month); per-team limits are a further amendment's, now that teams
+are built (ADR-145 Amendment 5). Usage, calls and tokens per engine and job, is read from the gateway's own records, as counts, with
 no figure per person.
 
 ## 3. Quality attributes and how each is actually achieved

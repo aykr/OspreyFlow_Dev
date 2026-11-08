@@ -29701,8 +29701,10 @@ network of the lane's own and a stand-in provider (no hosted provider was called
    /v1/admin/models/engines/{name}/limits`. The count of Models routes is eleven.
 
 **Left, and why:**
-- **Per-team limits**: no teams yet (settlement 1). When ADR-112 Amendment 5's teams are built, a
-  team's limits are a further key or the gateway's own teams, by a further amendment.
+- **Per-team limits**: settled as per engine while teams were not built (settlement 1). Teams
+  arrived on `main` with admin's L2.5 (ADR-145 Amendment 5) as this step closed; a team's limits —
+  a further gateway key per team, or the gateway's own teams — are a further amendment, with the
+  owner's ruling on whose calls count to a team.
 - **Fallbacks** (`04_VAULT_BACKEND.md` §4's `router_settings.fallbacks`): not in P2's row.
 - **Transcriptions and embeddings are not tagged**: whether the gateway reads a tag from a
   multipart form, or from `/embeddings`, was not measured, so none is sent; a transcription's

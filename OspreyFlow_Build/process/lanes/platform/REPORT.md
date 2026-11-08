@@ -17,7 +17,7 @@ Settled by the orchestrator (owner away), in ADR-135 Amendment 3: limits are per
 - A start that cannot reach the gateway keeps retrying.
 
 **Left:**
-- **Per-team limits:** no teams yet.
+- **Per-team limits:** settled per engine while teams were unbuilt; L2.5's teams reached main as P2 closed, so a team's limits are a further amendment.
 - **Fallbacks:** not in this step's row.
 - **Transcriptions and embeddings are not counted:** tagging them was not measured.
 - **An old engine key outlives a changed master key:** no verb changes the master key.
