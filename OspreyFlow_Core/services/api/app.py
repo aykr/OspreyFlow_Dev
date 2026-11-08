@@ -108,7 +108,7 @@ from ontology.pattern_where import PatternConditionRefused, check_pattern_condit
 from ontology.yardstick import Yardstick, load_phia_yardstick
 from ports.analytics import AnalyticsPort, TrendLimitExceeded
 from ports.compute import ComputePort
-from ports.graph import GraphPort
+from ports.graph import AmbiguousLinkId, GraphPort
 from ports.media import MediaStore
 from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
@@ -2414,6 +2414,21 @@ async def _composite_read_only_handler(
     was written."""
     return JSONResponse(
         status_code=409, content={"error": "composite_read_only", "detail": str(exc)}
+    )
+
+
+@app.exception_handler(AmbiguousLinkId)
+async def _ambiguous_link_id_handler(request: Request, exc: AmbiguousLinkId) -> JSONResponse:
+    """ADR-110 Amendment 18: a correction (a link change, a picture, an alert's close) named a link
+    whose id two edge types hold, so which to change is not certain; nothing was written. The
+    words name no type and no other link (rule 3)."""
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "link_id_ambiguous",
+            "detail": "this link shares its id with a link of another type, so it cannot be "
+            "changed here; nothing was written",
+        },
     )
 
 

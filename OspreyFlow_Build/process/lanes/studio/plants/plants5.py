@@ -60,6 +60,9 @@ PLANTS = {
         ("            except AmbiguousLinkId:\n                ambiguous += 1\n",
          "            except KeyError:\n                ambiguous += 1\n"),
     ], [UNIT, "-k", "ambiguous"]),
+    "D6": ("L1.2d: the app's AmbiguousLinkId handler removed (a 500 where a refusal belongs)", f"{CORE}/services/api/app.py", [
+        ("@app.exception_handler(AmbiguousLinkId)\n", ""),
+    ], ["tests/services/api/test_ambiguous_link_id_refused.py"]),
 }
 ADAPTER = f"{CORE}/packages/adapters/graph_arcadedb/adapter.py"
 CONF = "tests/conformance/graph_port/test_suite.py"
