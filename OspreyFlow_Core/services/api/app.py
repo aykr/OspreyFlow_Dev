@@ -1429,7 +1429,30 @@ async def get_principal(
         return scoped if scoped is not None else outside_any_case(identity)
     if investigation_id is None:
         return outside_any_case(identity)
-    return await scope_to_case(identity, investigation_id, get_datasets(request))
+    return await scope_to_case(
+        identity,
+        investigation_id,
+        get_datasets(request),
+        holds_a_level=holds_a_level_in(lambda: get_investigations(request)),
+    )
+
+
+def holds_a_level_in(
+    investigations: InvestigationStore | Callable[[], InvestigationStore],
+) -> Callable[[Principal, str], Any]:
+    """Whether a principal holds any level on a case, by the case's own Viewer check: what a branch
+    asks before its reader reads its original's layer (`scope_to_case`). Given as a getter, the
+    store is looked up only when a branch asks."""
+
+    async def holds(principal: Principal, investigation_id: str) -> bool:
+        store = investigations() if callable(investigations) else investigations
+        try:
+            await store.get_authorized(investigation_id, principal, need=AccessLevel.VIEWER)
+        except (InvestigationNotFoundError, InsufficientAccessError):
+            return False
+        return True
+
+    return holds
 
 
 def get_principal_resolver(request: Request) -> PrincipalResolver:
@@ -9086,7 +9109,9 @@ def _schedule_executor(application: FastAPI) -> ScheduleExecutor:
 
     async def check_case(owner: Principal, case: str) -> Principal:
         await state.investigations.get_authorized(case, owner, need=AccessLevel.EDITOR)
-        scoped = await scope_to_case(owner, case, state.datasets)
+        scoped = await scope_to_case(
+            owner, case, state.datasets, holds_a_level=holds_a_level_in(state.investigations)
+        )
         # ADR-099 Amendment 15: a run is a load, so none in a case reading a composite, before
         # `run_recipe_as` writes anything; the executor says so in words.
         await refuse_in_a_composite_case()
@@ -9166,7 +9191,9 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
 
     async def check_case(author: Principal, case: str, level: AccessLevel) -> Principal:
         await state.investigations.get_authorized(case, author, need=level)
-        return await scope_to_case(author, case, state.datasets)
+        return await scope_to_case(
+            author, case, state.datasets, holds_a_level=holds_a_level_in(state.investigations)
+        )
 
     async def judge(rule: TypologyRule, author: Principal, slot: datetime) -> int:
         async def as_author(owner_id: str) -> Principal | None:
@@ -12949,7 +12976,12 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
     # case reads. The ticket's principal was minted outside any case and reads no dataset; the
     # header's was never scoped and reads every one. The snapshot, a resync and each live push all
     # use the principal from here on.
-    principal = await scope_to_case(principal, investigation_id, get_datasets(websocket))  # type: ignore[arg-type]
+    principal = await scope_to_case(
+        principal,  # type: ignore[arg-type]
+        investigation_id,
+        get_datasets(websocket),  # type: ignore[arg-type]
+        holds_a_level=holds_a_level_in(lambda: get_investigations(websocket)),  # type: ignore[arg-type]
+    )
     await websocket.accept()
     await audit.record(
         principal=principal,

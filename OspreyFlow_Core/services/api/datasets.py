@@ -213,6 +213,8 @@ class DatasetStore(Protocol):
     ) -> None: ...
     #: The original case's layer a branch reads, read-only; `None` for any other case.
     async def read_only_layer_of(self, investigation_id: str) -> str | None: ...
+    #: The case a layer is the layer of; `None` for an id that is not a layer.
+    async def case_of_layer(self, layer_id: str) -> str | None: ...
     #: ADR-143 decision 1: the case's layer, made if it has none (idempotent), and its id.
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -478,6 +480,10 @@ class InMemoryDatasetStore:
     async def read_only_layer_of(self, investigation_id: str) -> str | None:
         return self.layer_reads.get(investigation_id)
 
+    async def case_of_layer(self, layer_id: str) -> str | None:
+        held = self.datasets.get(layer_id)
+        return held.layer_of if held is not None and held.kind == ANALYST_LAYER else None
+
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
     ) -> str:
@@ -538,6 +544,15 @@ class InMemoryDatasetStore:
             original = await self.layer_of_case(from_investigation_id) or self.layer_reads.get(
                 from_investigation_id
             )
+            if original is None and chosen:
+                # An original with no layer yet is given one now, so the branch is linked to it
+                # and never makes one of its own at its first mark.
+                parent = self.datasets[chosen[0]]
+                original = await self.ensure_layer(
+                    from_investigation_id,
+                    unit=parent.owning_unit,
+                    created_by=created_by or parent.created_by,
+                )
             if original is not None:
                 self.layer_reads[to_investigation_id] = original
             return
@@ -865,6 +880,13 @@ class PostgresDatasetStore:
             )
         return found
 
+    async def case_of_layer(self, layer_id: str) -> str | None:
+        async with self._pool.acquire() as conn:
+            found: str | None = await conn.fetchval(
+                "SELECT layer_of FROM datasets WHERE id = $1 AND kind = 'analyst_layer'", layer_id
+            )
+        return found
+
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
     ) -> str:
@@ -1031,6 +1053,21 @@ class PostgresDatasetStore:
                 to_investigation_id,
             )
             if as_a_branch:
+                linked = await conn.fetchval(
+                    "SELECT COALESCE("
+                    "(SELECT id FROM datasets WHERE layer_of = $1 AND kind = 'analyst_layer'), "
+                    "(SELECT layer_id FROM case_layer_reads WHERE investigation_id = $1))",
+                    from_investigation_id,
+                )
+                if linked is None and parent is not None:
+                    # An original with no layer yet is given one now, so the branch is linked to
+                    # it and never makes one of its own at its first mark (ADR-144 Amendment 1
+                    # decision 2).
+                    await self.ensure_layer(
+                        from_investigation_id,
+                        unit=parent["owning_unit"],
+                        created_by=created_by or parent["created_by"],
+                    )
                 await conn.execute(
                     "INSERT INTO case_layer_reads (investigation_id, layer_id) "
                     "SELECT $2, COALESCE("

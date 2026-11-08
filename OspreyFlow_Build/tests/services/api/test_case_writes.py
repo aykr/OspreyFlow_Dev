@@ -614,7 +614,9 @@ async def test_the_no_layer_check_fails_with_the_layer_made_on_scoping(
 
     real = app_module.scope_to_case
 
-    async def making(principal: Principal, investigation_id: str, held: Any) -> Principal:
+    async def making(
+        principal: Principal, investigation_id: str, held: Any, **_: Any
+    ) -> Principal:
         chosen = await held.chosen_of_case(investigation_id)
         if chosen:
             await held.ensure_layer(

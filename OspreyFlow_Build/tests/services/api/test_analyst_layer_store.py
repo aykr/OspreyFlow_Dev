@@ -134,6 +134,31 @@ async def test_a_branch_holds_no_layer_and_reads_its_originals(store) -> None:
         await store.ensure_layer(branch, unit=alice.org_unit, created_by=alice.id)
 
 
+async def test_a_branch_of_an_original_with_no_layer_yet_links_to_one_made_for_it(store) -> None:
+    """The final L3.1 review's 3b, on Postgres: an original the migration has not reached has no
+    layer, so a branch of it got no link and later a layer of its own at its first mark, which
+    ADR-144 Amendment 1 decision 2 forbids. Now the original's layer is made at branch time and
+    the branch is linked to it."""
+    alice = _analyst()
+    source = await store.create(alice, "Source")
+    parent, branch = new_id(), new_id()
+    async with store._pool.acquire() as conn:  # noqa: SLF001 — a case the migration has not reached
+        await conn.execute(
+            "INSERT INTO investigation_datasets (investigation_id, dataset_id, position) "
+            "VALUES ($1, $2, 0)",
+            parent,
+            source.id,
+        )
+    assert await store.layer_of_case(parent) is None
+    await store.copy_case(parent, branch)
+    layer = await store.layer_of_case(parent)
+    assert layer is not None
+    assert await store.read_only_layer_of(branch) == layer
+    assert await store.layer_of_case(branch) is None
+    with pytest.raises(BranchLayerError):
+        await store.ensure_layer(branch, unit=alice.org_unit, created_by=alice.id)
+
+
 async def test_a_case_opened_from_an_alert_keeps_a_layer_of_its_own(store) -> None:
     """The exception (ADR-143 Amendment 1 item 3): its maker may hold no level on the original."""
     alice = _analyst()

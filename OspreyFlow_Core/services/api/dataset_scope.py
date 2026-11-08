@@ -111,7 +111,8 @@ def analyst_layer() -> str | None:
 
 def read_only_layer() -> str | None:
     """The original case's layer a branch reads, read-only (ADR-144 Amendment 1 decision 2); `None`
-    outside a branch, or for a reader the link does not apply to."""
+    outside a branch. Set for every reader of the branch, so a write into it is refused for each,
+    though only a reader holding a level on the original reads it (`scope_to_case`)."""
     return _READ_ONLY_LAYER.get()
 
 
@@ -210,18 +211,40 @@ async def refuse_writing_a_node_in_a_composite_case(
         await refuse_in_a_composite_case()
 
 
+#: Whether a principal holds any level on a case (its Viewer check, answered as a yes or no).
+HoldsALevel = Callable[[Principal, str], Awaitable[bool]]
+
+
 async def scope_to_case(
-    principal: Principal, investigation_id: str, store: DatasetStore
+    principal: Principal,
+    investigation_id: str,
+    store: DatasetStore,
+    *,
+    holds_a_level: HoldsALevel | None = None,
 ) -> Principal:
     """`principal`, reading only the datasets of `investigation_id`. Says nothing about whether the
     principal may open the case: that is the route's own level check, which comes after this, so
-    this writes nothing (a case with no layer yet is given one by `analyst_writes_into`)."""
+    this writes nothing (a case with no layer yet is given one by `analyst_writes_into`).
+
+    In a branch, the original case's layer is read only by a reader who holds a level on the
+    original (`holds_a_level`; the orchestrator's call of 7 November 2026, on rule 3, as for the
+    alert jump): a member of the branch alone reads no layer, and with no check to ask, no one
+    does. Either way nothing is written into it (`BranchLayerError`)."""
     datasets = await store.ids_of_case(investigation_id)
     layer = await store.layer_of_case(investigation_id) if datasets else None
+    borrowed = await store.read_only_layer_of(investigation_id) if datasets and not layer else None
+    if borrowed is not None and borrowed in datasets:
+        original = await store.case_of_layer(borrowed)
+        if (
+            holds_a_level is None
+            or original is None
+            or not await holds_a_level(principal, original)
+        ):
+            datasets = [d for d in datasets if d != borrowed]
     scoped = principal.model_copy(update={"datasets": datasets})
     set_case_datasets(datasets, layer=layer, scope=(investigation_id, store, scoped))
-    if datasets and layer is None:
-        _READ_ONLY_LAYER.set(await store.read_only_layer_of(investigation_id))
+    if borrowed is not None:
+        _READ_ONLY_LAYER.set(borrowed)  # refused as a write for every reader of the branch
     return scoped
 
 
@@ -544,6 +567,7 @@ __all__: Sequence[str] = (
     "refuse_unless_in_the_layer",
     "refuse_writing_a_node_in_a_composite_case",
     "NoAnalystLayerError",
+    "HoldsALevel",
     "read_only_layer",
     "set_case_datasets",
 )
