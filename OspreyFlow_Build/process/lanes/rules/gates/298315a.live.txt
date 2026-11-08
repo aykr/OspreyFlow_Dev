@@ -1,0 +1,21 @@
+# leased live run at 298315a (tree eb4bbf855545c5c6817de9aadad2332e17de3fda), 0 changed files — lease rules, stack b, start 2026-11-08T22:54:36Z
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+4 failed, 1597 passed, 9 warnings in 276.01s (0:04:36)
+end 22:59:13Z
+# 25 files: the 18 of 570fdf1's run, test_alert_address_live, test_phase8_exit_criterion_end_to_end, test_case_writes,
+#   test_case_domains, test_drawn_datasets, test_history_labels, test_alert_evidence_withheld, test_alert_queue_counts.
+# Explained:
+#   test_route_rights: P2's two model routes missing from ROUTE_RIGHTS on main (platform has it); the counts route's row is in.
+#   test_typology_rule_routes' rule list: the shared database's leftover rules (L2.8d's record), on main.
+#   test_phase8_exit_criterion_end_to_end: red on main before B14 — its loader token held no create_case (fixed here),
+#     then B4 seeds no node into a case of one dataset (assert 0 == 4, ADR-099 Amendment 12), not this step's.
+#     B14's address is proven live by test_alert_address_live.py instead (passed here).
+#   test_phase7_stage6c_watch_routes' 250th-node case: its hotlisted number drawn from a pool of 100 (_drama_number) met
+#     an earlier node with the same number. Re-taken alone on stack b at 22:59:46Z: it passed, two other ingest cases
+#     failed on MinIO's INTERNAL_FAILURE at upload, and B14's own case in the file passed both times. Environmental.
+# The over-the-wire tier (test_phase8_exit_over_the_wire.py) needs a rendered deployment of this branch; the only one is
+#   the owner's, which lanes do not rebuild. Not run; for the orchestrator at merge or on D2's rebuilt deployment.
+# Every lease released and its stack brought down by the runner's exit trap.
