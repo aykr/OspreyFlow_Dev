@@ -1,0 +1,22 @@
+
+Running 16 tests using 1 worker
+
+  ✓   1 a11y/every-harness.spec.ts:172:7 › models-harness.html (dark) has no automated WCAG 2.2 A or AA violations (1.0s)
+  ✓   2 a11y/every-harness.spec.ts:172:7 › models-harness.html (light) has no automated WCAG 2.2 A or AA violations (904ms)
+  ✓   3 a11y/every-harness.spec.ts:172:7 › models-harness.html (govuk) has no automated WCAG 2.2 A or AA violations (949ms)
+  ✓   4 a11y/every-harness.spec.ts:190:5 › models-harness.html: every labelled field's name contains its visible label (2.5.3) (576ms)
+  ✓   5 a11y/every-harness.spec.ts:172:7 › models-harness.html open=add (dark) has no automated WCAG 2.2 A or AA violations (914ms)
+  ✓   6 a11y/every-harness.spec.ts:172:7 › models-harness.html open=add (light) has no automated WCAG 2.2 A or AA violations (901ms)
+  ✓   7 a11y/every-harness.spec.ts:172:7 › models-harness.html open=add (govuk) has no automated WCAG 2.2 A or AA violations (940ms)
+  ✓   8 a11y/every-harness.spec.ts:190:5 › models-harness.html open=add: every labelled field's name contains its visible label (2.5.3) (590ms)
+  ✓   9 a11y/every-harness.spec.ts:172:7 › models-harness.html open=key (dark) has no automated WCAG 2.2 A or AA violations (877ms)
+  ✓  10 a11y/every-harness.spec.ts:172:7 › models-harness.html open=key (light) has no automated WCAG 2.2 A or AA violations (879ms)
+  ✓  11 a11y/every-harness.spec.ts:172:7 › models-harness.html open=key (govuk) has no automated WCAG 2.2 A or AA violations (955ms)
+  ✓  12 a11y/every-harness.spec.ts:190:5 › models-harness.html open=key: every labelled field's name contains its visible label (2.5.3) (586ms)
+  ✓  13 a11y/every-harness.spec.ts:172:7 › models-harness.html local=1 (dark) has no automated WCAG 2.2 A or AA violations (849ms)
+  ✓  14 a11y/every-harness.spec.ts:172:7 › models-harness.html local=1 (light) has no automated WCAG 2.2 A or AA violations (877ms)
+  ✓  15 a11y/every-harness.spec.ts:172:7 › models-harness.html local=1 (govuk) has no automated WCAG 2.2 A or AA violations (908ms)
+  ✓  16 a11y/every-harness.spec.ts:190:5 › models-harness.html local=1: every labelled field's name contains its visible label (2.5.3) (584ms)
+
+  16 passed (14.8s)
+EXIT 0

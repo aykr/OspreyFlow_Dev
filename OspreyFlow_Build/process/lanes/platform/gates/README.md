@@ -1,17 +1,17 @@
-# Platform P1 · gates at eeb7494 (tree 8227554e2548d99ec2bd7590bcb9dfaad5cc9695), on main 8e80496
+# Platform P1 · gates at b298593 (tree f5bef1304019de5b52c2e662043b8344014f735e), on main b65cc9e
 
 Run 8 November 2026 offline (store ports pinned to unused ports, no stack held), from `OspreyFlow_Build`:
-`make -k ci` (`eeb7494.ci.txt`), `make -k test` (`eeb7494.test.txt`); then `make test-js` (`eeb7494.test-js.txt`,
+`make -k ci` (`b298593.ci.txt`), `make -k test` (`b298593.test.txt`); then `make test-js` (`b298593.test-js.txt`,
 which `make test` does not reach after a pytest failure), the Models keyboard walkthrough
-(`eeb7494.keyboard-admin-models.txt`: `apps/workspace/keyboard/admin-models.spec.ts`, 9 passed) and its axe scans
-(`eeb7494.axe-models-harness.txt`: `models-harness.html`, 4 states × dark, light and GOV.UK, 16 passed).
+(`b298593.keyboard-admin-models.txt`: `apps/workspace/keyboard/admin-models.spec.ts`, 9 passed) and its axe scans
+(`b298593.axe-models-harness.txt`: `models-harness.html`, 4 states × dark, light and GOV.UK, 16 passed).
 
 **make -k ci:** every gate passes but these.
 - The seven `trivy-image-*` scans: Docker Hub refused the base images, `429 Too Many Requests` (14 lines).
 - `citation-check`: this README's earlier version cited a test without its `tests/` prefix; corrected in the
-  commit after eeb7494 (`make citation-check` passes there).
+  commit after b298593 (`make citation-check` passes there).
 
-**make -k test:** 8315 passed, 2 skipped (the two live gateway tests, run under a lease instead), 6 failed, 2 errors.
+**make -k test:** 8334 passed, 2 skipped (the two live gateway tests, run under a lease instead), 5 failed, 2 errors.
 - `tests/services/api/test_admin_sections.py` (2): Models is in no section until the orchestrator commits the
   section-list diff; with it applied both pass.
 - `tests/test_doc_citations_check.py::test_the_repository_itself_is_clean`: the citation above.

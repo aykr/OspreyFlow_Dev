@@ -1,0 +1,19 @@
+
+Running 9 tests using 1 worker
+
+[WebServer] 16:58:38 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 16:58:38 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 16:58:38 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 16:58:38 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+  ✓  1 keyboard/admin-models.spec.ts:29:1 › an engine is added by keyboard (434ms)
+  ✓  2 keyboard/admin-models.spec.ts:43:1 › an engine is edited by keyboard (205ms)
+  ✓  3 keyboard/admin-models.spec.ts:52:1 › a lost key is entered again by keyboard, and the field is empty afterwards (229ms)
+  ✓  4 keyboard/admin-models.spec.ts:62:1 › a key is rotated by keyboard (210ms)
+  ✓  5 keyboard/admin-models.spec.ts:71:1 › a key is removed by keyboard (154ms)
+  ✓  6 keyboard/admin-models.spec.ts:78:1 › an engine's connection is tested by keyboard (141ms)
+  ✓  7 keyboard/admin-models.spec.ts:85:1 › each job's default engine is set by keyboard (146ms)
+  ✓  8 keyboard/admin-models.spec.ts:94:1 › an engine is removed by keyboard (143ms)
+  ✓  9 keyboard/admin-models.spec.ts:102:1 › every registered Models action has its own proving test case above (140ms)
+
+  9 passed (3.3s)
+EXIT 0
