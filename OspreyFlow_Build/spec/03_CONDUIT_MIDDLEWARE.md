@@ -127,12 +127,14 @@ DELETE /v1/investigations/{id}/views/{view}           delete it, and nothing els
 ```
 
 Someone else's private view, another case's view and no view at all answer alike: 404
-`view_not_found`. A view's `window` and `threshold` are returned on the view: the window is the
-timeline's range, which the Glass applies to the timeline as it does for the case. The Conduit does
-not yet collapse resolved entities at the view's `threshold`: a view of chosen nodes returns each
-node as stored, and a filtered view returns the case's own projection, collapsed at the case's
-threshold. Collapsing at the view's threshold is carried to L3.2b, named by
-`test_a_view_opens_collapsed_at_its_threshold`.
+`view_not_found`. A view's `window` and `threshold` are returned on the view. The window is the
+timeline's range, which the Glass applies to the timeline as it does for the case. The threshold is
+the Conduit's (ADR-144 Amendment 2 decision 3): opening a view returns each node it shows with the
+cluster it falls in at the view's `threshold`, or the case's when the view has none, worked out from
+the `SAME_AS` and `NOT_SAME_AS` links among the shown nodes alone, read with the caller's principal.
+A link the caller may not see joins nothing, and a manual split holds however loose the view
+(`test_a_view_opens_collapsed_at_its_threshold`,
+`test_a_match_the_reader_may_not_see_does_not_collapse_what_they_see`).
 
 A deleted view's conversation stays in the store, read by no route: the questions are listed only
 through a view the reader may open, so they go with the view. Its pending proposals stay pending

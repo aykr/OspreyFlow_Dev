@@ -260,11 +260,13 @@ def test_a_filtered_view_reads_the_readers_own_projection(world: _World) -> None
     assert opened["missing"] == 0
 
 
-# --- collapsed at the view's own threshold (spec 03 §3.1b; ADR-144 Amendment 2) ----------------
+# --- collapsed at the view's own threshold (spec 03 §3.1, case views; ADR-144 Amendment 2) ---
 
 
-def _match(edge_id: str, a: str, b: str, score: float, kind: str = SAME_AS) -> Edge:
-    return _in("src", edge(edge_id, a, b)).model_copy(
+def _match(
+    edge_id: str, a: str, b: str, score: float, kind: str = SAME_AS, marking: str = "OFFICIAL"
+) -> Edge:
+    return _in("src", edge(edge_id, a, b, marking)).model_copy(
         update={"type": kind, "properties": {"score": score}}
     )
 
@@ -313,6 +315,38 @@ def test_a_view_collapses_only_through_what_its_reader_may_see(world: _World) ->
     bob = _clusters(_as("bob").get(f"{VIEWS}/{view_id}").json())
     assert bob["open"] != bob["near"]
     assert "secret" not in bob
+
+
+def test_a_match_the_reader_may_not_see_does_not_collapse_what_they_see(world: _World) -> None:
+    """Rule 3: a SECRET `SAME_AS` link between `open` and `near`, both OFFICIAL. Alice (SECRET) sees
+    them as one entity; Bob (OFFICIAL) sees two, so the collapse cannot tell him the link exists.
+    Red with `_matches` reading the links among the same shown ids with a wide principal
+    (`test_the_reader_check_fails_with_a_secret_match_read_unscoped`)."""
+    _hold(world, _match("m-secret", "open", "near", 0.95, marking="SECRET"))
+    view_id = _saved(threshold=0.9, shared=True)
+    alice = _clusters(_as("alice").get(f"{VIEWS}/{view_id}").json())
+    assert alice["open"] == alice["near"]
+    bob = _clusters(_as("bob").get(f"{VIEWS}/{view_id}").json())
+    assert bob["open"] != bob["near"]
+
+
+def test_the_reader_check_fails_with_a_secret_match_read_unscoped(
+    world: _World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15, the real call site's own shape: `_matches` asks `edges_among` for the links among
+    exactly the shown ids, as it does, but with a principal wider than the reader's. Bob's `open`
+    and `near` then collapse through a link he may not see."""
+    _hold(world, _match("m-secret", "open", "near", 0.95, marking="SECRET"))
+
+    async def wide(graph: Any, node_ids: Any, principal: Principal) -> Any:
+        everyone = principal.model_copy(update={"datasets": None, "clearance": "SECRET"})
+        ids = list(node_ids)
+        return ids, await graph.edges_among(ids, everyone, edge_types=[SAME_AS, NOT_SAME_AS])
+
+    monkeypatch.setattr(case_views_module, "_matches", wide)
+    view_id = _saved(threshold=0.9, shared=True)
+    bob = _clusters(_as("bob").get(f"{VIEWS}/{view_id}").json())
+    assert bob["open"] == bob["near"]
 
 
 def test_the_reader_check_fails_with_the_matches_read_unscoped(
@@ -763,9 +797,9 @@ def test_the_no_branch_route_check_fails_with_one_put_back(world: _World) -> Non
 def test_a_deleted_views_conversation_and_proposals_are_read_by_no_one(
     world: _World, proposals: tuple[Any, str, str], conversation: tuple[Any, str]
 ) -> None:
-    """Spec 03 §3.1b: once Alice deletes her view, its conversation and its pending proposal stay
-    stored and are read by no route, hers included: the view is gone, so nothing lets a request
-    into it."""
+    """Spec 03 §3.1 (case views): once Alice deletes her view, its conversation and its pending
+    proposal stay stored and are read by no route, hers included: the view is gone, so nothing lets
+    a request into it."""
     candidates, view_id, candidate = proposals
     questions, conversation_view = conversation
     # The two fixtures each saved a view; delete both, as their creator.

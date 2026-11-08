@@ -17,12 +17,12 @@ ids it could not show, for whatever reason (gone, hidden, outside the case's rea
 none. A filtered view narrows the reader's own projection of the case's working set, as ADR-124's
 filter did. A result past the working set's cap is the typed `limit_exceeded` (rule 2).
 
-**Collapsed at the view's own threshold** (ADR-144 decision 1 and Amendment 2; spec 03 §3.1b): each
-node shown carries the cluster it falls in at the view's `threshold`, or at the case's when the view
-has none, worked out from the `SAME_AS` and `NOT_SAME_AS` links among the shown nodes alone, read
-with the reader's principal. A hidden node therefore never joins two shown ones (rule 3), and a
-manual split holds however loose the view. The Glass collapses by these ids as it does for the case;
-it applies the view's `window` to the timeline itself.
+**Collapsed at the view's own threshold** (ADR-144 decision 1 and Amendment 2; spec 03 §3.1, case
+views): each node shown carries the cluster it falls in at the view's `threshold`, or at the case's
+when the view has none, worked out from the `SAME_AS` and `NOT_SAME_AS` links among the shown nodes
+alone, read with the reader's principal. A hidden node or link therefore never joins two shown ones
+(rule 3), and a manual split holds however loose the view. The Glass collapses by these ids as it
+does for the case; it applies the view's `window` to the timeline itself.
 """
 
 from __future__ import annotations
