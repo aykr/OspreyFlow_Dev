@@ -641,6 +641,21 @@ class InvestigationStore:
                 raise InvestigationNotFoundError(investigation_id)
             await self._record(conn, investigation_id, by.id, "remove", investigation_id, None)
 
+    async def admin_states(self, investigation_ids: Sequence[str]) -> dict[str, tuple[str, bool]]:
+        """Admin › Datasets' linked cases (ADR-143 Amendment 2 decision 2): each case's name and
+        whether it is removed, open and removed alike, and nothing else of it. No level check:
+        the route's right (`administer_system`) is the gate. A case that does not exist is left
+        out."""
+        if not investigation_ids:
+            return {}
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, name, removed_at IS NOT NULL AS removed FROM investigations "
+                "WHERE id = ANY($1::text[])",
+                list(set(investigation_ids)),
+            )
+        return {r["id"]: (r["name"] or "", bool(r["removed"])) for r in rows}
+
     async def list_grants(self, investigation_id: str) -> dict[str, AccessLevel]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
