@@ -76,6 +76,9 @@ class _Directory:
         PEOPLE[user_id] = PEOPLE[user_id].model_copy(update={"roles": roles})
         return PEOPLE[user_id]
 
+    async def list_dashboards(self) -> list[Any]:
+        return [SimpleNamespace(account_id="sa-board")]
+
     async def set_enabled(self, user_id: str, enabled: bool) -> PersonAccount:
         self.disabled.append(user_id)
         PEOPLE[user_id] = PEOPLE[user_id].model_copy(update={"enabled": enabled})
@@ -179,6 +182,35 @@ class _AdminPeople:
         return [(i, chosen[(i.kind, i.id)]) for i in items]
 
 
+class _Cases:
+    """`InvestigationStore`'s safety-net reads: a case found by unit only, its grants."""
+
+    def __init__(self) -> None:
+        from services.api.investigations import AccessLevel, Investigation
+
+        self.made = {
+            cid: Investigation(id=cid, name=name, created_at=T0, created_by="seed", owning_unit=unit)
+            for cid, name, unit in (("c3", "Op Wren", "unit-1"), ("c4", "Op Kite", "unit-1"),
+                                    ("c9", "Elsewhere", "unit-2"))
+        }  # fmt: skip
+        self.grants: dict[str, dict[str, Any]] = {
+            "c3": {"gone": AccessLevel.AUTHOR}, "c4": {"ana-1": AccessLevel.AUTHOR}, "c9": {}}  # fmt: skip
+
+    async def get_for_access_admin(self, case_id: str, principal: Principal) -> Any:
+        from services.api.investigations import InvestigationNotFoundError
+
+        case = self.made.get(case_id)
+        if case is None or case.owning_unit != principal.org_unit:
+            raise InvestigationNotFoundError(case_id)
+        return case
+
+    async def list_grants(self, case_id: str) -> dict[str, Any]:
+        return dict(self.grants[case_id])
+
+    async def set_grant(self, case_id: str, account: str, level: Any, *, by: Principal) -> None:
+        self.grants[case_id][account] = level
+
+
 class _Audit:
     def __init__(self) -> None:
         self.entries: list[dict[str, Any]] = []
@@ -203,12 +235,14 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     roles.seed("r1", "Intel desk", [Right.INVESTIGATE, Right.READ_REPORTS])
     roles.seed("r2", "Feeds", [Right.READ_DATA_FEEDS])
     state = {"principal_resolver": _Resolver(), "custom_roles": roles, "identity_admin": directory,
+             "investigations": _Cases(), "principal_names": _People(),
              "admin_people": admin_people, "audit": audit,
              "handling_scheme": load_uk_le_scheme()}  # fmt: skip
     for name, value in state.items():
         monkeypatch.setattr(app.state, name, value, raising=False)
     yield SimpleNamespace(client=TestClient(app), roles=roles, directory=directory,
-                          admin_people=admin_people, audit=audit)  # fmt: skip
+                          admin_people=admin_people, audit=audit,
+                          cases=app.state.investigations)  # fmt: skip
 
 
 def _as(person: str) -> dict[str, str]:
@@ -226,6 +260,7 @@ ROUTES: list[tuple[str, str, dict[str, Any] | None]] = [
     ("GET", "/v1/admin/people/rows", None),
     ("GET", "/v1/admin/people/ana-1/disable-plan", None),
     ("POST", "/v1/admin/people/ana-1/disable", {"transfers": []}),
+    ("PUT", "/v1/admin/cases/c3/authors/ana-2", None),
 ]  # fmt: skip
 
 
@@ -556,3 +591,35 @@ def test_a_team_level_needs_a_team_that_exists(world: SimpleNamespace) -> None:
 
 def test_a_deployment_with_no_directory_grants_as_before(world: SimpleNamespace) -> None:
     assert _level(world, "robot", "author", configured=False) is None
+
+
+# --- Name an Author (R1) ----------------------------------------------------------------------------
+
+
+def _name(world: SimpleNamespace, case_id: str, account: str) -> Any:
+    return world.client.put(f"/v1/admin/cases/{case_id}/authors/{account}", headers=_as("adm-1"))
+
+
+def test_an_author_is_named_for_a_case_whose_only_author_is_disabled(world: SimpleNamespace) -> None:
+    answer = _name(world, "c3", "ana-2")
+    assert answer.status_code == 204, answer.text
+    assert world.cases.grants["c3"]["ana-2"].value == "author"
+    assert world.audit.entries[-1]["action"] == "name_an_author"
+
+
+def test_a_case_with_an_author_is_refused_and_left_alone(world: SimpleNamespace) -> None:
+    answer = _name(world, "c4", "ana-2")
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "has_an_author"
+    assert "ana-2" not in world.cases.grants["c4"]
+
+
+def test_another_units_case_is_not_found(world: SimpleNamespace) -> None:
+    answer = _name(world, "c9", "ana-2")
+    assert answer.status_code == 404 and world.cases.grants["c9"] == {}
+    assert _name(world, "nope", "ana-2").status_code == 404
+
+
+def test_a_service_account_is_not_named_an_author(world: SimpleNamespace) -> None:
+    answer = _name(world, "c3", "robot")
+    assert answer.status_code == 409 and answer.json()["detail"]["error"] == "service_account"
+    assert "robot" not in world.cases.grants["c3"]

@@ -11906,6 +11906,67 @@ async def people_rows_route(
     return await admin_people.rows(people, unit=principal.org_unit)
 
 
+@app.put(
+    "/v1/admin/cases/{case_id}/authors/{account_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def name_an_author_route(
+    case_id: str,
+    account_id: str,
+    request: Request,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    identity_admin: IdentityAdminDep,
+    custom_roles: CustomRolesDep,
+    audit: AuditDep,
+) -> None:
+    """*Name an Author* (ADR-145 decision 6, R1): a case of the administrator's own unit with no
+    Author an enabled person holds, in their own name or through a team, is given one. Another
+    unit's case, or one that does not exist, is 404 alike (ADR-052 §4's reach); a case that has an
+    Author is 409 `has_an_author`, since naming one is then its Authors' to do; the person is held
+    to who may hold a level (`_may_hold_a_level`). It reads nothing of the case. Audited as
+    name_an_author."""
+    try:
+        case = await investigations.get_for_access_admin(case_id, principal)
+    except InvestigationNotFoundError:
+        raise HTTPException(status_code=404, detail={"error": "case_not_found"}) from None
+    people = {p.id: p for p in await identity_admin.list_people()}
+    teams = {t.role_id for t in await custom_roles.teams(_today())}
+
+    def answers(account: str) -> bool:
+        if account.startswith(TEAM_GRANT_PREFIX):
+            team = account[len(TEAM_GRANT_PREFIX) :]
+            return team in teams and any(
+                f"{CUSTOM_ROLE_PREFIX}{team}" in p.roles and p.enabled and not p.system_account
+                for p in people.values()
+            )
+        person = people.get(account)
+        return person is not None and person.enabled and not person.system_account
+
+    grants = await investigations.list_grants(case.id)
+    if any(answers(a) for a, level in grants.items() if level is AccessLevel.AUTHOR):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "has_an_author",
+                "message": (
+                    f"{case.name or case.id} has an Author already: its Authors name another"
+                ),
+            },
+        )
+    grantee = _grantee(account_id)
+    await _may_hold_a_level(request, grantee, AccessLevel.AUTHOR)
+    await investigations.set_grant(case.id, grantee, AccessLevel.AUTHOR, by=principal)
+    await audit.record(
+        principal=principal,
+        action="name_an_author",
+        investigation_id=case.id,
+        resolved_query={"account": grantee},
+        result_cardinality=1,
+    )
+
+
 @app.get(
     "/v1/admin/people/{user_id}/disable-plan",
     dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],

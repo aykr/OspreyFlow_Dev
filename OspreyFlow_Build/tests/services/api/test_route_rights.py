@@ -355,6 +355,7 @@ ROUTE_RIGHTS = {
     "set_team_cover_route": "manage_people",
     "people_rows_route": "manage_people",
     "disable_plan_route": "manage_people",
+    "name_an_author_route": "manage_people",
     "list_schedules_route": "operate_schedules",
     "schedule_runs_route": "operate_schedules",
     "pause_schedule_route": "operate_schedules",
