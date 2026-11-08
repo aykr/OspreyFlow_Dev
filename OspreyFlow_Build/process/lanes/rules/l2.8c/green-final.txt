@@ -1,0 +1,4 @@
+# green: L2.8c's live file, L2.8b's live file and the conformance case — lease rules, stack b, start 2026-11-08T13:13:44Z, at 6d62834 + working tree
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+1 failed, 65 passed in 647.56s (0:10:47)
+end 13:24:33Z
