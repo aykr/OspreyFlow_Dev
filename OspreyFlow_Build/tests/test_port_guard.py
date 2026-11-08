@@ -191,9 +191,10 @@ class _RecordingSocket:
         return 0
 
 
-def _hold_lease(lease_dir: Path, holder: str) -> None:
-    (lease_dir / "stack.lease").mkdir(parents=True)
-    (lease_dir / "stack.lease" / "info").write_text(f"holder={holder}\npurpose=x\nsince=x\nworktree=x\n")
+def _hold_lease(lease_dir: Path, holder: str, stack: str = "a") -> None:
+    lock = lease_dir / ("stack.lease" if stack == "a" else f"stack-{stack}.lease")
+    lock.mkdir(parents=True)
+    (lock / "info").write_text(f"holder={holder}\nstack={stack}\npurpose=x\nsince=x\nworktree=x\n")
 
 
 @pytest.mark.parametrize(
@@ -319,5 +320,59 @@ def test_a_run_naming_a_lane_and_the_leased_ports_without_the_lease_stops_at_sta
         assert run.returncode == 4, f"expected a usage error (4), got {run.returncode}:\n{said}"
         assert "OSPREY_LANE=studio" in said and "lease" in said
         assert "59991" in said, "the refusal says how to run stack-free"
+    else:
+        assert run.returncode == 0, said
+
+
+
+# --- Two throwaway stacks, one holder each (ADR-142 Amendment 3, 8 November 2026) --------------------
+
+
+@pytest.mark.parametrize(
+    ("lane", "reached", "refused"),
+    [("studio", (2491, 55433, 6379), (2492, 55434, 6380)), ("rules", (2492, 55434, 6380), (2491, 55433, 6379))],
+)
+def test_each_stack_is_reached_only_by_its_own_holder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, lane: str, reached: tuple[int, ...], refused: tuple[int, ...]
+) -> None:
+    """Studio holds stack a and rules holds stack b: each reaches its own stack's ports and is refused the
+    other's (red with stack b's ports unguarded, and with one holder checked for both stacks)."""
+    from tests import port_guard
+
+    monkeypatch.setenv("OSPREY_LEASE_DIR", str(tmp_path))
+    monkeypatch.setenv("OSPREY_LANE", lane)
+    _hold_lease(tmp_path, "studio", "a")
+    _hold_lease(tmp_path, "rules", "b")
+    _RecordingSocket.asked = []
+    restore = port_guard.guard_socket(_RecordingSocket)  # type: ignore[arg-type]
+    try:
+        for port in reached:
+            _RecordingSocket().connect(("127.0.0.1", port))
+        for port in refused:
+            with pytest.raises(ConnectionRefusedError, match="lease"):
+                _RecordingSocket().connect(("127.0.0.1", port))
+    finally:
+        restore()
+    assert [a[1] for a in _RecordingSocket.asked] == list(reached)
+
+
+_STACK_B_PINS = {"ARCADEDB_HTTP_PORT": "2492", "POSTGRES_PORT": "55434", "VALKEY_PORT": "6380",
+                 "POSTGRES_PASSWORD": "throwaway", "CLICKHOUSE_HTTP_PORT": "59994"}
+
+
+@pytest.mark.parametrize(("stack_b_holder", "refused"), [("rules", False), ("studio", True), (None, True)])
+def test_a_run_pinning_stack_b_goes_ahead_only_under_stack_b_s_lease(
+    tmp_path: Path, stack_b_holder: str | None, refused: bool
+) -> None:
+    lease = tmp_path / "lease"
+    _hold_lease(lease, "case", "a")
+    if stack_b_holder is not None:
+        _hold_lease(lease, stack_b_holder, "b")
+    run = _run(tmp_path / "run", "def test_nothing():\n    pass\n",
+               {**_STACK_B_PINS, "OSPREY_LANE": "rules", "OSPREY_LEASE_DIR": str(lease)})
+    said = run.stdout + run.stderr
+    if refused:
+        assert run.returncode == 4, f"expected a usage error (4), got {run.returncode}:\n{said}"
+        assert "OSPREY_LANE=rules" in said and "stack b" in said
     else:
         assert run.returncode == 0, said

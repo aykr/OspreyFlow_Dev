@@ -54,10 +54,11 @@ def hb(tmp_path: Path):
         old = next(line for line in text.splitlines() if line.startswith("at="))
         path.write_text(text.replace(old, f"at={_ago(minutes)}"))
 
-    def hold_lease(holder: str, minutes: int) -> None:
-        (lease / "stack.lease").mkdir(parents=True)
-        (lease / "stack.lease" / "info").write_text(
-            f"holder={holder}\npurpose=phase 6 route tests\nsince={_ago(minutes)}\n"
+    def hold_lease(holder: str, minutes: int, stack: str = "a") -> None:
+        lock = lease / ("stack.lease" if stack == "a" else f"stack-{stack}.lease")
+        lock.mkdir(parents=True)
+        (lock / "info").write_text(
+            f"holder={holder}\nstack={stack}\npurpose=phase 6 route tests\nsince={_ago(minutes)}\n"
             f"worktree=/x/{holder}\n"
         )
 
@@ -106,7 +107,7 @@ def test_a_lease_older_than_its_limit_needs_you(hb) -> None:
     _all_beat(hb)
     hb.hold_lease("studio", 121)
     [line] = _needs(hb("show"))
-    assert line.startswith("The dev stack has been leased by studio since ")
+    assert line.startswith("Test stack a has been leased by studio since ")
 
 
 def test_a_lane_that_never_beat_needs_you(hb) -> None:
@@ -285,3 +286,35 @@ def test_shows_run_at_once_do_not_mix_their_lines(hb) -> None:
     for out in outs:
         assert _needs(type("S", (), {"stdout": out})()) == ["case is waiting for you: Q1: which of a, b or c?"], out
         assert out.count("glass is ready to merge") == 1, out
+
+
+
+# --- Six lanes and two stacks (ADR-142 Amendment 3, 8 November 2026) -----------------------------------
+
+
+def test_the_lanes_shown_by_default_are_the_six_of_amendment_3(hb) -> None:
+    """With no OSPREY_LANES, the heartbeat shows the lanes scripts/lanes.conf lists, in its order, and not
+    the retired glass lane (red against the four-lane default)."""
+    out = hb("show", OSPREY_LANES="").stdout
+    lanes = {"STUDIO", "CASE", "ADMIN", "RULES", "PLATFORM", "DOCS", "GLASS"}
+    order = [line.split(":", 1)[0] for line in out.splitlines() if line.split(":", 1)[0] in lanes]
+    assert order == ["STUDIO", "CASE", "ADMIN", "RULES", "PLATFORM", "DOCS"]
+    assert "GLASS:" not in out
+
+
+def test_each_test_stack_is_shown_with_its_holder(hb) -> None:
+    _all_beat(hb)
+    out = hb("show").stdout
+    assert "Test stack a: free" in out and "Test stack b: free" in out
+    hb.hold_lease("studio", 10, "a")
+    hb.hold_lease("rules", 20, "b")
+    out = hb("show").stdout
+    assert "Test stack a: leased by studio for 'phase 6 route tests', 10 minutes" in out
+    assert "Test stack b: leased by rules for 'phase 6 route tests', 20 minutes" in out
+
+
+def test_a_stack_b_lease_older_than_its_limit_needs_you(hb) -> None:
+    _all_beat(hb)
+    hb.hold_lease("rules", 121, "b")
+    [line] = _needs(hb("show"))
+    assert line.startswith("Test stack b has been leased by rules since ")

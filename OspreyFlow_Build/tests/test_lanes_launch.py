@@ -48,6 +48,9 @@ def launcher(tmp_path: Path):
     (repo / "OspreyFlow_Build" / "scripts").mkdir(parents=True)
     shutil.copy(HEARTBEAT, repo / "OspreyFlow_Build" / "scripts" / "lanes_heartbeat.sh")
     shutil.copy(LEASE, repo / "OspreyFlow_Build" / "scripts" / "stack_lease.sh")
+    # The tables both read (ADR-142 Amendment 3): the lanes, and the two test stacks.
+    for table in ("lanes.conf", "lane_stacks.tsv"):
+        shutil.copy(BUILD / "scripts" / table, repo / "OspreyFlow_Build" / "scripts" / table)
     # stack_lease.sh asks docker about the dev stack named by this file (a stand-in docker says "down").
     (repo / "OspreyFlow_Core" / "deploy" / "compose").mkdir(parents=True)
     (repo / "OspreyFlow_Core" / "deploy" / "compose" / "dev.yaml").write_text("services: {}\n")
@@ -158,7 +161,7 @@ def test_open_with_no_session_opens_one_window_on_the_lanes_prompt(launcher) -> 
     assert "L1.1: phase 4's remainder." in prompt
 
 
-@pytest.mark.parametrize("lane", ["studio", "glass", "case"])
+@pytest.mark.parametrize("lane", ["studio", "case", "admin", "rules", "platform"])
 def test_headless_refuses_any_lane_but_docs(launcher, lane) -> None:
     launcher("setup", lane)
     refused = launcher("headless", lane)
@@ -244,10 +247,10 @@ def test_an_unknown_account_or_a_missing_directory_is_refused_before_any_session
     assert not launcher.opened.exists()
 
 
-def _lease(launcher, holder: str) -> Path:
-    lock = launcher.base / "lease" / "stack.lease"
+def _lease(launcher, holder: str, stack: str = "a") -> Path:
+    lock = launcher.base / "lease" / ("stack.lease" if stack == "a" else f"stack-{stack}.lease")
     lock.mkdir(parents=True)
-    (lock / "info").write_text(f"holder={holder}\npurpose=live tests\nsince=2026-11-07T18:00:00Z\n")
+    (lock / "info").write_text(f"holder={holder}\nstack={stack}\npurpose=live tests\nsince=2026-11-07T18:00:00Z\n")
     return lock
 
 
@@ -378,3 +381,38 @@ def test_watch_never_switches_a_lane_without_the_owners_fallback_line(launcher) 
     before = _windows(launcher)
     watch()
     assert _windows(launcher) == before and len(before) == 1
+
+
+
+# --- Six lanes and two stacks (ADR-142 Amendment 3, 8 November 2026) -----------------------------------
+
+
+@pytest.mark.parametrize("lane", ["admin", "rules", "platform"])
+def test_the_new_lanes_are_known(launcher, lane: str) -> None:
+    assert launcher("setup", lane).returncode == 0
+    assert (launcher.wt / lane).is_dir()
+
+
+def test_the_retired_glass_lane_is_refused(launcher) -> None:
+    """Glass was split into admin and rules: opening it again would start a seventh lane no table lists
+    (red against the four-lane launcher, which knew glass)."""
+    refused = launcher("setup", "glass")
+    assert refused.returncode == 2 and "Unknown lane 'glass'" in refused.stderr
+    assert "admin" in refused.stderr and "platform" in refused.stderr
+
+
+def test_pausing_a_lane_holding_stack_b_releases_stack_b(launcher) -> None:
+    launcher("setup", "case")
+    lock = _lease(launcher, "case", "b")
+    _handoff(launcher, "case")
+    done = _lane_runs(launcher, "case", "pause-done", "case", "L3.2")
+    assert done.returncode == 0, done.stderr
+    assert not lock.exists()
+
+
+def test_an_unclean_pause_names_the_stack_still_held(launcher) -> None:
+    launcher("setup", "case")
+    _lease(launcher, "case", "b")
+    assert launcher("pause", "case", "--now").returncode == 0
+    handoff = (launcher.wt / "case" / "OspreyFlow_Build" / "process" / "lanes" / "case" / "HANDOFF.md").read_text()
+    assert "still holds the lease on test stack b" in handoff

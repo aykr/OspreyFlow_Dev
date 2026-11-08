@@ -52,10 +52,27 @@ STATE="${OSPREY_LANES_DIR:-$HOME/.ospreyflow/lanes}"
 LANES_DIR="$ROOT/OspreyFlow_Build/process/lanes"
 HEARTBEAT="$ROOT/OspreyFlow_Build/scripts/lanes_heartbeat.sh"
 LEASE_SH="$ROOT/OspreyFlow_Build/scripts/stack_lease.sh"
-LEASE_INFO="${OSPREY_LEASE_DIR:-$HOME/.ospreyflow}/stack.lease/info"
+LEASE_DIR="${OSPREY_LEASE_DIR:-$HOME/.ospreyflow}"
 mkdir -p "$WT" "$STATE"
 
-lane_ok() { case "$1" in studio|glass|case|docs) ;; *) echo "Unknown lane '$1' (studio, glass, case, docs)." >&2; exit 2;; esac; }
+# The lanes (ADR-142 Amendment 3: glass split into admin and rules on 8 November 2026, platform added).
+LANE_NAMES="studio case admin rules platform docs"
+# shellcheck source=/dev/null
+[ -f "$(dirname "$0")/lanes.conf" ] && . "$(dirname "$0")/lanes.conf"
+lane_ok() {
+  case " $LANE_NAMES " in *" $1 "*) ;; *) echo "Unknown lane '$1' ($(echo "$LANE_NAMES" | sed 's/ /, /g'))." >&2; exit 2;; esac
+}
+# The test stack a lane holds (its lock's info names it), or nothing: stack.lease is stack a's, stack-<s>.lease another's.
+stack_held_by() {
+  local info
+  for info in "$LEASE_DIR"/stack.lease/info "$LEASE_DIR"/stack-*.lease/info; do
+    [ -f "$info" ] || continue
+    if [ "$(sed -n 's/^holder=//p' "$info")" = "$1" ]; then
+      case "$info" in */stack.lease/info) echo a ;; *) basename "$(dirname "$info")" .lease | sed 's/^stack-//' ;; esac
+      return 0
+    fi
+  done
+}
 
 # --- accounts ---------------------------------------------------------------------------------------
 
@@ -193,7 +210,7 @@ pause() {
     local h head files holder
     h="$(handoff_of "$lane")"; head="$(git -C "$dir" log -1 --format='%h %s' 2>/dev/null || echo '?')"
     files="$(git -C "$dir" status --short 2>/dev/null || true)"
-    holder="$(sed -n 's/^holder=//p' "$LEASE_INFO" 2>/dev/null || true)"
+    holder="$(stack_held_by "$lane")"
     mkdir -p "$(dirname "$h")"
     {
       echo "# $lane · paused (unclean) from outside, $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -201,7 +218,7 @@ pause() {
       echo "The lane could not answer, so the orchestrator recorded this; nothing was committed for it."
       echo
       echo "- Branch head: $head"
-      [ "$holder" = "$lane" ] && echo "- It still holds the dev-stack lease: bring the stack down and release it first."
+      [ -n "$holder" ] && echo "- It still holds the lease on test stack $holder: bring that stack down (stack_lease.sh down $lane) and release it first."
       echo "- Uncommitted files in the worktree (reconcile them before anything else):"
       if [ -n "$files" ]; then printf '%s\n' "$files" | head -20 | sed 's/^/    /'; else echo "    (none)"; fi
       echo "- Done, next and open questions: unknown; read REPORT.md and git log main..lane/$lane."
@@ -222,8 +239,8 @@ pause_done() {
   [ -f "$h" ] || { echo "Refused: write $h first (at most 30 lines)." >&2; exit 1; }
   n=$(wc -l < "$h" | tr -d ' ')
   [ "$n" -le 30 ] || { echo "Refused: $h has $n lines; at most 30." >&2; exit 1; }
-  holder="$(sed -n 's/^holder=//p' "$LEASE_INFO" 2>/dev/null || true)"
-  if [ "$holder" = "$lane" ]; then
+  holder="$(stack_held_by "$lane")"
+  if [ -n "$holder" ]; then
     ( cd "$dir" && "$LEASE_SH" release "$lane" ) || { echo "Refused: the lease could not be released, so the lane is not paused." >&2; exit 1; }
   fi
   git -C "$dir" add -A

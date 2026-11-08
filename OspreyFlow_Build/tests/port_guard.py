@@ -87,9 +87,13 @@ PINNED = (
 )
 
 
-#: The leased throwaway test stack's ports (ADR-142 decision 4; SESSIONS_RUNBOOK.md §4). A test reaches
-#: them only from the lane named in the lease, given as OSPREY_LANE: three rule-14 breaches on
-#: 7 November 2026 came from tests a lane believed were stack-free.
+#: The lanes' throwaway test stacks (ADR-142 decision 4 and Amendment 3; SESSIONS_RUNBOOK.md §4), one lease
+#: each, read from `scripts/lane_stacks.tsv`, the table `stack_lease.sh` starts and stops them by. A test
+#: reaches a stack's ports only from the lane named in that stack's lease, given as OSPREY_LANE: three
+#: rule-14 breaches on 7 November 2026 came from tests a lane believed were stack-free.
+STACKS_TABLE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "lane_stacks.tsv")
+
+#: Stack a's ports, as the guard knew them before the second stack; used if the table cannot be read.
 LEASED_PORTS: dict[int, str] = {
     2491: "ArcadeDB (the leased test stack)",
     55433: "Postgres (the leased test stack)",
@@ -98,13 +102,30 @@ LEASED_PORTS: dict[int, str] = {
 }
 
 
-def _leased_ports() -> dict[int, str]:
-    """LEASED_PORTS, plus any port the guard's own tests name in OSPREY_GUARD_TEST_PORTS (a real
-    listener of theirs, so a connection that got through is seen arriving). Nothing else sets it."""
-    ports = dict(LEASED_PORTS)
+def stack_ports() -> dict[int, tuple[str, str]]:
+    """Every guarded port of every stack: port -> (stack, what it is)."""
+    ports: dict[int, tuple[str, str]] = {}
+    try:
+        with open(STACKS_TABLE, encoding="utf-8") as table:
+            for line in table:
+                cells = line.rstrip("\n").split("\t")
+                if line.startswith("#") or len(cells) < 6 or not cells[3].isdigit() or cells[5] != "yes":
+                    continue
+                ports[int(cells[3])] = (cells[0], f"{cells[1]} (leased test stack {cells[0]})")
+    except OSError:
+        ports = {port: ("a", what) for port, what in LEASED_PORTS.items()}
+    return ports
+
+
+def _leased_ports() -> dict[int, tuple[str, str]]:
+    """`stack_ports()`, plus any port the guard's own tests name in OSPREY_GUARD_TEST_PORTS ("<port>" for
+    stack a, "<stack>:<port>" for another): a real listener of theirs, so a connection that got through is
+    seen arriving. Nothing else sets it."""
+    ports = stack_ports()
     for raw in os.environ.get("OSPREY_GUARD_TEST_PORTS", "").split(","):
-        if raw.strip().isdigit():
-            ports[int(raw)] = "a port the port guard's own test planted as leased"
+        stack, _, port = raw.strip().rpartition(":")
+        if port.isdigit():
+            ports[int(port)] = (stack or "a", "a port the port guard's own test planted as leased")
     return ports
 
 
@@ -141,8 +162,10 @@ class LeaseNotHeld(ConnectionRefusedError):
     error on purpose: a test then sees the stack as absent and skips, as when the stack is down."""
 
 
-def lease_holder(environ: Mapping[str, str]) -> str | None:
-    lease = os.path.join(environ.get("OSPREY_LEASE_DIR", os.path.expanduser("~/.ospreyflow")), "stack.lease", "info")
+def lease_holder(environ: Mapping[str, str], stack: str = "a") -> str | None:
+    """The lane holding a stack's lease (stack a's lock keeps its old name, stack.lease), or None."""
+    name = "stack.lease" if stack == "a" else f"stack-{stack}.lease"
+    lease = os.path.join(environ.get("OSPREY_LEASE_DIR", os.path.expanduser("~/.ospreyflow")), name, "info")
     try:
         with open(lease, encoding="utf-8") as info:
             for line in info:
@@ -210,23 +233,27 @@ def leased_without_the_lease(environ: Mapping[str, str]) -> str | None:
     lane = environ.get("OSPREY_LANE") or None
     if lane is None:
         return None
-    pinned = []
+    leased = stack_ports()
+    pinned: dict[str, list[str]] = {}
     for name in PORT_SETTINGS:
         raw = environ.get(name, "")
-        if raw.isdigit() and int(raw) in LEASED_PORTS and _is_this_machine(environ.get(_HOST_OF[name])):
-            pinned.append(f"{name}={raw}")
-    holder = lease_holder(environ)
-    if not pinned or holder == lane:
+        if raw.isdigit() and int(raw) in leased and _is_this_machine(environ.get(_HOST_OF[name])):
+            pinned.setdefault(leased[int(raw)][0], []).append(f"{name}={raw}")
+    unheld = {stack: pins for stack, pins in pinned.items() if lease_holder(environ, stack) != lane}
+    if not unheld:
         return None
+    said = "; ".join(
+        f"stack {stack} ({', '.join(pins)}), whose lease is held by {lease_holder(environ, stack) or 'nobody'}"
+        for stack, pins in sorted(unheld.items())
+    )
     return (
-        f"Refused: OSPREY_LANE={lane} with the leased stack's ports pinned ({', '.join(pinned)}), but the "
-        f"lease is held by {holder or 'nobody'}.\n"
+        f"Refused: OSPREY_LANE={lane} with a leased stack's ports pinned that this lane does not hold: {said}.\n"
         "Nothing was collected and no connection was made. For a stack-free run, unset OSPREY_LANE and pin "
         "the closed ports:\n"
         "  unset OSPREY_LANE; export ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 "
         "CLICKHOUSE_HTTP_PORT=59994\n"
-        "For a live run, take the lease first (OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "
-        '"<purpose>").'
+        "For a live run, take a lease first (OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "
+        '"<purpose>") and pin the ports it prints.'
     )
 
 
@@ -260,11 +287,12 @@ def guard_socket(sock_cls: type[socket.socket] = socket.socket) -> Callable[[], 
             host = address[0]
             if isinstance(host, str) and _is_this_machine(host) and not in_ci(os.environ):
                 lane = os.environ.get("OSPREY_LANE") or None
-                holder = lease_holder(os.environ)
+                stack, what = leased[address[1]]
+                holder = lease_holder(os.environ, stack)
                 if lane is None or holder != lane:
                     raise LeaseNotHeld(
                         f"Refused before connecting: {host}:{address[1]} is "
-                        f"{leased[address[1]]}, and the lease is held by {holder or 'nobody'}, "
+                        f"{what}, and stack {stack}'s lease is held by {holder or 'nobody'}, "
                         f"not {lane or 'this run (OSPREY_LANE is not set)'}. Take the lease first "
                         "(OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> \"<purpose>\") and "
                         "run with OSPREY_LANE=<lane>."

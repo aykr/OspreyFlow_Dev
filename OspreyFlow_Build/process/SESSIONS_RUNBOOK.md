@@ -128,10 +128,18 @@ rebased, or you paste the brief's text directly).
 Keep the orchestrator's tab open. That makes four tabs: orchestrator, studio, glass, case, and a
 fifth for the heartbeat monitor (§5).
 
-## 4. The dev stack: one at a time
+## 4. The test stacks: one holder each
 
-**The lease is enforced (7 November 2026, after three breaches):** `tests/port_guard.py` refuses a connection to the
-leased stack's ports (2491, 55433, 6379) unless `OSPREY_LANE` names the lease's holder. The refusal is a connection
+**Two stacks from 8 November 2026 (ADR-142 Amendment 3).** Six lanes queue for live runs, so there are two
+throwaway stacks, a and b, each with its own lease, listed in `OspreyFlow_Build/scripts/lane_stacks.tsv`:
+stack a is the original below (2491, 55433, 6379, 9000; ClickHouse's 18123 is stack a's alone), stack b is
+`osprey-test-b-*` on 127.0.0.1 (2492, 55434, 6380, 9002). `acquire` takes whichever is free (or the one
+named: `acquire <lane> "<purpose>" b`) and prints the ports to pin; a lane holds one stack at a time;
+`up`, `down` and `release` act on the holder's own stack; `ports <lane>` prints the export line again;
+`status` and the heartbeat show both. Everything below holds for each stack.
+
+**The lease is enforced (7 November 2026, after three breaches):** `tests/port_guard.py` refuses a connection to a
+leased stack's ports (stack a's 2491, 55433, 6379; stack b's 2492, 55434, 6380) unless `OSPREY_LANE` names that stack's holder. The refusal is a connection
 error, so a test without the lease sees the stack as absent. The launcher sets `OSPREY_LANE` for each lane; set it
 yourself in any other shell (`export OSPREY_LANE=studio`).
 
@@ -145,13 +153,13 @@ lanes run live tests on the throwaway stack in `FDE_HANDOVER.md` (`osprey-probe-
 default, under the same lease. `stack_lease.sh release` refuses while either stack is up. The commands
 below bring it up and down with the lease's own `up` and `down` (8 November 2026: `make dev-up`, once advised here and by `acquire` itself, binds 2480, the owner's deployment's port).
 
-There is one stack for the machine. A lane that needs Postgres, ArcadeDB or Valkey:
+A lane that needs Postgres, ArcadeDB or Valkey:
 
 ```
 OspreyFlow_Build/scripts/stack_lease.sh status
 OspreyFlow_Build/scripts/stack_lease.sh acquire studio "phase 6 route tests"
 OspreyFlow_Build/scripts/stack_lease.sh up studio
-# … run the live tests, with OSPREY_LANE=studio and the leased ports pinned (tests/port_guard.py) …
+# … run the live tests with the export line acquire printed (OSPREY_LANE=studio and that stack's ports) …
 OspreyFlow_Build/scripts/stack_lease.sh down studio
 OspreyFlow_Build/scripts/stack_lease.sh release studio
 ```
@@ -297,10 +305,12 @@ Before changing code, write me a short plan: the files you will touch, the tests
 (rules 1, 4, 12, 13), and any question as multiple choice (at most four, recommendation first). Wait if
 you asked one; otherwise proceed.
 
-The test stack is shared: take OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>",
-start it with stack_lease.sh up <lane> and stop it with stack_lease.sh down <lane> before release (the
-throwaway containers on 2491, 55433 and 6379; never make dev-up, whose 2480 is the owner's own
-deployment), and name the lease in any timing or reliability figure you record. Send a heartbeat with
+The test stacks are shared: take one with OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>"
+(it gives you stack a or b, whichever is free, and prints the export line for its ports: pin exactly
+those, with OSPREY_LANE=<lane>), start it with stack_lease.sh up <lane> and stop it with stack_lease.sh
+down <lane> before release (the throwaway containers in scripts/lane_stacks.tsv; never make dev-up,
+whose 2480 is the owner's own deployment), and name the lease and its stack in any timing or reliability
+figure you record. Send a heartbeat with
 OspreyFlow_Build/scripts/lanes_heartbeat.sh beat <lane> <state> "<what you are doing>" when you start
 planning, start work, start tests, ask me something (waiting-for-owner), are blocked, are ready to merge
 (ready-to-merge), finish (idle), and after every commit. If a beat shows a message from the

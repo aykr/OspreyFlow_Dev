@@ -21,9 +21,16 @@
 set -euo pipefail
 
 DIR="${OSPREY_LANES_DIR:-$HOME/.ospreyflow/lanes}"
-LEASE="${OSPREY_LEASE_DIR:-$HOME/.ospreyflow}/stack.lease"
+LEASE_DIR="${OSPREY_LEASE_DIR:-$HOME/.ospreyflow}"
 WT="${OSPREY_WORKTREES:-$HOME/dev/osprey-wt}"
-LANES="${OSPREY_LANES:-studio glass case docs}"
+# The lanes and the test stacks (ADR-142 Amendment 3): scripts/lanes.conf and scripts/lane_stacks.tsv.
+SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
+LANE_NAMES="studio case admin rules platform docs"
+# shellcheck source=/dev/null
+[ -f "$SCRIPTS_DIR/lanes.conf" ] && . "$SCRIPTS_DIR/lanes.conf"
+LANES="${OSPREY_LANES:-$LANE_NAMES}"
+STACKS="$(grep -v '^#' "$SCRIPTS_DIR/lane_stacks.tsv" 2>/dev/null | cut -f1 | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
+STACKS="${STACKS:-a}"
 QUIET_MIN="${OSPREY_QUIET_MINUTES:-45}"       # a working lane silent this long is flagged
 LEASE_MAX_MIN="${OSPREY_LEASE_MAX_MINUTES:-120}"
 BEHIND_MAX="${OSPREY_BEHIND_MAX:-5}"
@@ -163,16 +170,20 @@ show() {
     echo
   done
   echo
-  if [ -d "$LEASE" ]; then
-    local h p s a; h=$(field holder "$LEASE/info"); p=$(field purpose "$LEASE/info"); s=$(field since "$LEASE/info")
-    a=$(age_s "$s")
-    echo "Dev stack: leased by $h for '$p', $(mins "$a") minutes"
-    if [ "$(mins "$a")" -ge "$LEASE_MAX_MIN" ]; then
-      echo "The dev stack has been leased by $h since $s ($p)" >> "$needs"
+  local st lock
+  for st in $STACKS; do
+    if [ "$st" = a ]; then lock="$LEASE_DIR/stack.lease"; else lock="$LEASE_DIR/stack-$st.lease"; fi
+    if [ -d "$lock" ]; then
+      local h p s a; h=$(field holder "$lock/info"); p=$(field purpose "$lock/info"); s=$(field since "$lock/info")
+      a=$(age_s "$s")
+      echo "Test stack $st: leased by $h for '$p', $(mins "$a") minutes"
+      if [ "$(mins "$a")" -ge "$LEASE_MAX_MIN" ]; then
+        echo "Test stack $st has been leased by $h since $s ($p)" >> "$needs"
+      fi
+    else
+      echo "Test stack $st: free"
     fi
-  else
-    echo "Dev stack: free"
-  fi
+  done
   echo "Claude sessions running: $(sessions)"
   echo
   if [ -s "$needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$needs"; else echo "Nothing needs you."; fi

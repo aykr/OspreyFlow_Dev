@@ -54,21 +54,61 @@ def lease(tmp_path: Path):
     return run
 
 
-def test_a_second_acquire_while_one_is_held_is_refused_and_names_the_holder(lease) -> None:
+def test_a_third_acquire_while_both_stacks_are_held_is_refused_and_names_both_holders(lease) -> None:
+    """ADR-142 Amendment 3: two throwaway stacks, one holder each. The first two lanes get a and b; the
+    third is refused and told who holds each (red against the one-stack script, which refused the second)."""
     first = lease("acquire", "studio", "phase 6 route tests")
     assert first.returncode == 0, first.stderr
-    second = lease("acquire", "glass", "axe scans")
-    assert second.returncode == 1
-    assert "holder=studio" in second.stderr
-    assert "purpose=phase 6 route tests" in second.stderr
-    assert "holder=studio" in lease("status").stdout
+    assert "stack a" in first.stdout
+    second = lease("acquire", "rules", "axe scans")
+    assert second.returncode == 0, second.stderr
+    assert "stack b" in second.stdout
+    third = lease("acquire", "case", "conformance")
+    assert third.returncode == 1
+    assert "holder=studio" in third.stderr and "holder=rules" in third.stderr
+    assert "purpose=phase 6 route tests" in third.stderr
+    status = lease("status").stdout
+    assert "holder=studio" in status and "holder=rules" in status
+
+
+def test_a_lane_holds_one_stack_at_a_time(lease) -> None:
+    assert lease("acquire", "studio", "walk").returncode == 0
+    again = lease("acquire", "studio", "a second walk")
+    assert again.returncode == 1
+    assert "already holds stack a" in again.stderr
+    assert not (lease.lock.parent / "stack-b.lease").exists()
+
+
+def test_a_named_stack_is_taken_even_when_another_is_free(lease) -> None:
+    taken = lease("acquire", "case", "conformance", "b")
+    assert taken.returncode == 0, taken.stderr
+    assert "stack b" in taken.stdout
+    assert (lease.lock.parent / "stack-b.lease" / "info").read_text().count("stack=b") == 1
+    assert not lease.lock.exists()
+
+
+def test_acquire_prints_the_ports_of_the_stack_taken(lease) -> None:
+    """The export line a lane copies must name its own stack's ports, which tests/port_guard.py lets
+    only that stack's holder reach (rule 12: the two read one table, scripts/lane_stacks.tsv)."""
+    from tests import port_guard
+
+    lease("acquire", "studio", "walk")
+    taken = lease("acquire", "rules", "axe scans")
+    line = next(l for l in taken.stdout.splitlines() if "ARCADEDB_HTTP_PORT=" in l)
+    pins = dict(w.split("=", 1) for w in line.split() if "=" in w and w.split("=", 1)[0].endswith("_PORT"))
+    assert pins["ARCADEDB_HTTP_PORT"] == "2492" and pins["POSTGRES_PORT"] == "55434"
+    assert "OSPREY_LANE=rules" in line
+    b_ports = {p for p, (stack, _) in port_guard.stack_ports().items() if stack == "b"}
+    # ClickHouse's throwaway is stack a's alone (lane_stacks.tsv), so stack b pins it to a closed port.
+    assert pins.pop("CLICKHOUSE_HTTP_PORT") == "59994"
+    assert {int(v) for v in pins.values()} <= b_ports
 
 
 def test_release_by_a_lane_not_holding_it_is_refused(lease) -> None:
     lease("acquire", "studio", "phase 6 route tests")
-    other = lease("release", "glass")
+    other = lease("release", "rules")
     assert other.returncode == 1
-    assert "held by studio, not glass" in other.stderr
+    assert "rules holds no stack" in other.stderr
     assert lease.lock.is_dir()
 
 
@@ -92,8 +132,8 @@ def test_the_holder_releases_once_the_stack_is_down(lease) -> None:
     lease("acquire", "case", "conformance")
     done = lease("release", "case", docker="down")
     assert done.returncode == 0, done.stderr
-    assert lease("status").stdout.strip() == "free"
-    assert lease("acquire", "glass", "axe scans").returncode == 0
+    assert lease("status").stdout.strip() == "a: free\nb: free"
+    assert lease("acquire", "rules", "axe scans").returncode == 0
 
 
 def test_release_with_the_throwaway_test_stack_still_up_is_refused(lease) -> None:
@@ -151,5 +191,39 @@ def test_up_is_refused_to_a_lane_not_holding_the_lease(lease, tmp_path: Path) ->
         refused = lease("up", "case", docker="recording")
     finally:
         del _DOCKER["recording"]
-    assert refused.returncode == 1 and "held by studio" in refused.stderr
+    assert refused.returncode == 1 and "case holds no stack" in refused.stderr
     assert not log.exists()
+
+
+_STACK_B = ("osprey-test-b-arcadedb", "osprey-test-b-pg", "osprey-test-b-valkey", "osprey-test-b-objectstore")
+
+
+def test_up_and_down_start_and_stop_only_the_holders_own_stack(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "walk")
+    lease("acquire", "rules", "axe scans")
+    script, log = _recording_docker(tmp_path)
+    _DOCKER["recording"] = script
+    try:
+        assert lease("up", "rules", docker="recording").returncode == 0
+        assert lease("down", "rules", docker="recording").returncode == 0
+    finally:
+        del _DOCKER["recording"]
+    calls = log.read_text().splitlines()
+    assert calls[0].split()[:1] == ["start"] and set(calls[0].split()[1:]) == set(_STACK_B)
+    assert calls[1].split()[:1] == ["stop"] and set(calls[1].split()[1:]) == set(_STACK_B)
+
+
+def test_a_release_looks_only_at_its_own_stack(lease) -> None:
+    """Stack a up (another lane's live run) must not stop stack b's holder from releasing a stack b that
+    is down; and stack a's holder is still refused while a is up (red with one check over every
+    osprey-test-* container)."""
+    _DOCKER["a-up"] = '#!/bin/sh\nif [ "$1" = ps ]; then case "$*" in *osprey-test-pg*) echo 7e7e7e7e7e7e;; esac; fi\nexit 0\n'
+    try:
+        lease("acquire", "studio", "walk")
+        lease("acquire", "rules", "axe scans")
+        b = lease("release", "rules", docker="a-up")
+        a = lease("release", "studio", docker="a-up")
+    finally:
+        del _DOCKER["a-up"]
+    assert b.returncode == 0, b.stderr
+    assert a.returncode == 1 and "still up" in a.stderr
