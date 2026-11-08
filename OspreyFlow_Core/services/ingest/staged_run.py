@@ -16,15 +16,17 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from collections.abc import Callable, Collection, Mapping
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Collection, Mapping, Sequence
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
 from schemas.analytics import EventRecord
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema, Principal, SourceRef, TxId
+from schemas.staging import FuzzyMatchStep, SqlStep, StagingStep
 from schemas.ingest import (
+    ExpertStepDisclosure,
     LoadReport,
     Recipe,
     RejectionRecord,
@@ -35,6 +37,7 @@ from schemas.ingest import (
 from .engine import DryRunResult, RowKeys, dry_run_recipe, run_recipe
 from .staging import ObjectStorageConfig
 from .staging_catalogue import (
+    StagedRef,
     StagedTable,
     StagingError,
     StagingRejection,
@@ -64,6 +67,8 @@ class StagedLoad:
 class StagedTest:
     result: DryRunResult
     staging: StagingResult
+    #: ADR-140 decision 16: what each expert step disclosed, as the run report says it.
+    expert_steps: list[ExpertStepDisclosure] = field(default_factory=list)
 
 
 def staging_rejection_record(rejection: StagingRejection) -> RejectionRecord:
@@ -112,6 +117,36 @@ def map_rejection_record(
     )
 
 
+def expert_disclosures(steps: Sequence[StagingStep] | None) -> list[ExpertStepDisclosure]:
+    """ADR-140 decision 16 and brief §5.3–5.4: what every run report, and Test, says of each expert
+    step, in words: the SQL step's summary and SELECT; the fuzzy match's tables, comparisons and
+    threshold, and the SAME_AS it writes, inferred and never a merge. Settings, never a row's value."""
+    found: list[ExpertStepDisclosure] = []
+    for step in steps or []:
+        if isinstance(step, SqlStep):
+            found.append(
+                ExpertStepDisclosure(
+                    step=step.id, kind="sql", label=step.label, summary=step.summary,
+                    select=step.select, reads=list(step.inputs),
+                )  # fmt: skip
+            )
+        elif isinstance(step, FuzzyMatchStep):
+            found.append(
+                ExpertStepDisclosure(
+                    step=step.id,
+                    kind="fuzzy_match",
+                    label=step.label,
+                    reads=[step.left, step.right],
+                    compares=[f"{c.left} ≈ {c.right} by {c.method}" for c in step.compare]
+                    + [f"only pairs agreeing on {b.method} of {b.left} and {b.right}"
+                       for b in step.block_on],  # fmt: skip
+                    threshold=step.threshold,
+                    same_as=[step.same_as.left, step.same_as.right],
+                )
+            )
+    return found
+
+
 def step_counts(staging: StagingResult) -> list[StagingStepCount]:
     """Each step's counts, in run order, as the load report carries them (Amendment 12)."""
     return [StagingStepCount.model_validate(asdict(report)) for report in staging.reports]
@@ -123,6 +158,7 @@ def _stage(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     subscribed: Collection[str],
+    may_read: Callable[[StagedRef], bool] | None = None,
 ) -> StagingResult:
     if not recipe.staging:
         raise StagingError([f"recipe {recipe.id!r} has no staging steps"])
@@ -132,6 +168,7 @@ def _stage(
         lists=lists,
         dataset_id=dataset_id,
         subscribed=subscribed,
+        may_read=may_read,
     )
 
 
@@ -150,6 +187,8 @@ class PreparedStaging:
     parquet_bytes: int
     rows_read: int
     stage_raw: Callable[[], object]
+    #: The recipe's steps, for the run report's disclosure of its expert steps.
+    steps: Sequence[StagingStep] = ()
 
 
 async def prepare_staged_load(
@@ -161,8 +200,13 @@ async def prepare_staged_load(
     subscribed: Collection[str] = (),
     load_id: str,
     storage: ObjectStorageConfig,
+    may_read: Callable[[StagedRef], bool] | None = None,
 ) -> PreparedStaging:
-    staging = await asyncio.to_thread(_stage, recipe, sources, lists, dataset_id, subscribed)
+    """`may_read` (ADR-140 decision 12): whether the person the run is for may read a source row;
+    a SQL step's tables hold only those rows (`run_staging`)."""
+    staging = await asyncio.to_thread(
+        _stage, recipe, sources, lists, dataset_id, subscribed, may_read
+    )
     paths: dict[str, str] = {}
     rows_staged = parquet_bytes = 0
     for step in recipe.staging or []:
@@ -190,6 +234,7 @@ async def prepare_staged_load(
         stage_raw=functools.partial(
             stage_sources_and_lists, sources, staging.lists_read, storage=storage
         ),
+        steps=list(recipe.staging or []),
     )
 
 
@@ -202,6 +247,7 @@ def finish_staged_report(report: LoadReport, prepared: PreparedStaging) -> None:
     ]
     report.rows_read = prepared.rows_read
     report.staging_steps = step_counts(prepared.staging)
+    report.expert_steps = expert_disclosures(prepared.steps)
 
 
 async def run_staged_recipe(
@@ -221,6 +267,7 @@ async def run_staged_recipe(
     scheme: HandlingScheme | None = None,
     row_keys: RowKeys | None = None,
     written: list[NodeWrite | EdgeWrite] | None = None,
+    may_read: Callable[[StagedRef], bool] | None = None,
     **engine: Any,
 ) -> StagedLoad:
     storage = storage or ObjectStorageConfig.from_env()
@@ -232,6 +279,7 @@ async def run_staged_recipe(
         subscribed=subscribed,
         load_id=load_id,
         storage=storage,
+        may_read=may_read,
     )
     report, events = await run_recipe(
         recipe,
@@ -295,4 +343,4 @@ async def dry_run_staged_recipe(
         *(map_rejection_record(r, staging.output) for r in result.rejections),
     ]
     result.rows_read = sum(len(table.rows) for table in sources.values())
-    return StagedTest(result, staging)
+    return StagedTest(result, staging, expert_disclosures(recipe.staging))
