@@ -552,10 +552,12 @@ LOADING_ELSEWHERE = {
 }
 #: Under the prefixes but not refused by the route, each for a reason.
 NOT_BY_THE_ROUTE = {
-    # Dry runs, writing nothing (`verify`'s docstring; the two previews).
+    # Dry runs, writing nothing (`verify`'s docstring; the three previews, a staging step's
+    # shown writing nothing in `test_studio_staging_routes.py`).
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/verify",
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/preview-graph",
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/handling-preview",
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/staging-preview",
     # Refused by `review.accept_candidate` and `reject_candidate` after their own read, so a
     # finding the reader cannot see answers 404 (`test_composite_read_only.py`).
     "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/accept",

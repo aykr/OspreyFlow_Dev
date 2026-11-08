@@ -32,10 +32,11 @@ from services.ingest.engine import (
     run_recipe,
 )
 from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
-from services.ingest.pipeline import recipe_packs
+from services.ingest.pipeline import recipe_packs, staging_from_pipeline
 from services.ingest.recipe_loader import load_recipe
 from services.ingest.recipe_rules import RecipeRuleError, check_reference_matches
 from services.ingest.snapshot_withdrawal import DroppedRow, plan_withdrawal
+from services.ingest.staged_run import PreparedStaging
 from services.ingest.watermark import RefreshRead, WatermarkRead, WatermarkRefused, read_past
 
 from conduit_common.transactions import rollback_keeping_failure
@@ -204,6 +205,9 @@ def build_recipe(
         # ADR-108 phase C: the published YAML carries the topology the runner executes, so a run
         # is provably against what was published. `None` for a v1 draft — its YAML is unchanged.
         pipeline=draft.pipeline,
+        # ADR-140 Amendment 12 (Q1 (a)): the steps are the pipeline's step nodes, in run order,
+        # judged by the save gate at the publish route before this is built.
+        staging=staging_from_pipeline(draft.pipeline) if draft.pipeline is not None else None,
         # ADR-127 decision 5: what makes a row the same row again, into the committed file, so a
         # run keeps and checks the keys of the rows it loads.
         deduplicate=draft.deduplicate,
@@ -284,18 +288,6 @@ async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROO
     instance's own checkout would never see this commit. Pushing to a
     shared remote (or routing every instance through one writable
     git-backed service) is real, undesigned work this phase does not do."""
-    if recipe.staging:
-        # ADR-140 Amendment 11: a recipe's staging steps are judged by the save gate
-        # (`staging_catalogue.staging_rule_violations`) against its dataset's sources and lists,
-        # which the Studio's save and publish give it with the step drawers (phase 7b). Until
-        # then, publishing one is refused in words, never committed unjudged.
-        raise RecipeRuleError(
-            [
-                f"Recipe {recipe.id!r} declares staging steps, which the Studio cannot judge "
-                "against its dataset's sources and lists before publishing yet; it is not "
-                "published."
-            ]
-        )
     return await commit_recipe_file(
         recipe.id, serialise_recipe(recipe).encode("utf-8"), version=recipe.version,
         repo_root=repo_root,
@@ -474,6 +466,41 @@ async def run_published_recipe(
     )
     if analytics is not None and sink is not None:
         await withdraw_dropped_rows_events(report, sink, analytics)
+    await after_the_load(
+        recipe,
+        rows,
+        report,
+        events,
+        held_rows,
+        principal,
+        row_numbers=row_numbers,
+        load_id=load_id,
+        analytics=analytics,
+        rules=rules,
+        scheme=scheme,
+        sink=sink,
+    )
+    return report
+
+
+async def after_the_load(
+    recipe: Recipe,
+    rows: Sequence[Mapping[str, str]],
+    report: LoadReport,
+    events: list[EventRecord],
+    held_rows: frozenset[int],
+    principal: Principal,
+    *,
+    row_numbers: list[int] | None,
+    load_id: str,
+    analytics: AnalyticsPort | None,
+    rules: RuleGate | None,
+    scheme: HandlingScheme | None,
+    sink: LoadSink | None,
+) -> None:
+    """What every committed load does next, a plain one's and a staged one's alike (ADR-140
+    Amendment 12): its events to the analytics store, its places to the map, and the case's
+    post-commit rules."""
     # The run's events (a call's time, a message's text) go to the analytics store, as every seed's
     # do; they were dropped here, so nothing loaded through the Studio reached the timeline,
     # *Show messages* or extraction (found building ADR-094 step 2).
@@ -513,7 +540,6 @@ async def run_published_recipe(
     # ADR-109 ruling 1: the case's post-commit rules, once the load's events can be read with it.
     if rules is not None:
         report.rule_notes.extend(await post_commit_notes(rules, events, load_id=load_id, sink=sink))
-    return report
 
 
 async def load_with_rules(
@@ -533,6 +559,7 @@ async def load_with_rules(
     sink: LoadSink | None = None,
     withdraw_dropped: bool = False,
     past: WatermarkRead | None = None,
+    staged: PreparedStaging | None = None,
 ) -> tuple[LoadReport, list[EventRecord], frozenset[int]]:
     """One load in one graph transaction, judged by the case's pre-commit rules before it commits
     (`06_DECISIONS.md` ADR-109 ruling 1). A hit loads with its alert: the `Alert` node is written
@@ -547,7 +574,11 @@ async def load_with_rules(
     serialises the runs (`snapshot_withdrawal.plan_withdrawal`); their keys move aside with the
     load's record and their own events go after it (`run_published_recipe`). The graph is untouched.
     Only with a sink, which answers the ledger's questions, and a recipe with `deduplicate`: a
-    refresh never runs a keyless pipeline (Amendment 6 point 2)."""
+    refresh never runs a keyless pipeline (Amendment 6 point 2).
+
+    `staged` (ADR-140 Amendment 12): a staged run prepared up to Map (`staged_run.
+    prepare_staged_load`); `rows` are its last table's, each element records the source rows its
+    row came from, and the sources' raw rows are written by the engine after its own refusals."""
     if withdraw_dropped and (sink is None or recipe.deduplicate is None):
         raise RecipeRuleError(
             [
@@ -598,6 +629,8 @@ async def load_with_rules(
                     # decision 5). A recipe without `deduplicate` is asked too, for the one question
                     # of whether the case holds keys it would reload (it keeps none itself).
                     row_keys=own_links,
+                    row_refs=staged.refs if staged is not None else None,
+                    stage_raw=staged.stage_raw if staged is not None else True,
                 )
                 verdict = (
                     await rules.pre_commit(

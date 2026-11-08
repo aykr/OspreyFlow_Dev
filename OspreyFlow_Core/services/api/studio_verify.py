@@ -20,8 +20,12 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 
 from services.ingest.engine import RowKeys, dry_run_recipe
+from services.ingest.pipeline import staging_from_pipeline
 from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, _shape_mask
-from services.ingest.recipe_rules import check_reference_matches
+from services.ingest.recipe_rules import RecipeRuleError, check_reference_matches
+from services.ingest.reference_list_import import lists_for_run
+from services.ingest.staged_run import dry_run_staged_recipe
+from services.ingest.staging_catalogue import StagingError
 
 from ontology.handling import HandlingScheme, principal_may_view
 from ports.graph import GraphPort
@@ -46,6 +50,7 @@ from .studio_profile import (
     row_markings,
 )
 from .studio_profile import _read_rows as _read_recipe_rows
+from .studio_staging import StagedTestInputs, source_tables
 
 __all__ = ["JudgeChecks", "RowTemplateMissingError", "run_verify"]
 
@@ -109,6 +114,7 @@ async def run_verify(
     investigation_id: str | None = None,
     checks: JudgeChecks | None = None,
     locations: Sequence[str] | None = None,
+    staging: StagedTestInputs | None = None,
 ) -> VerifyReport:
     """`row_keys` and `investigation_id` (ADR-127 decision 5): given the store of loaded rows and
     the case, the dry run counts the rows the run would skip by the draft's own `deduplicate`, as
@@ -121,7 +127,12 @@ async def run_verify(
     `locations` (build order step 30): the files a run of this recipe reads
     (`run_source.files_a_run_reads`), read here in the run's order, so Verify checks what the run
     will load — a pipeline's source node naming its own file once made Verify read the draft's
-    while the run read the node's. Left out, the draft's own file, as before."""
+    while the run read the node's. Left out, the draft's own file, as before.
+
+    `staging` (ADR-140 Amendment 12): for a pipeline with staging steps, the dataset's lists and
+    the store their rows are kept in. Test then runs the steps over the first rows of each source
+    and Map over the last table, as the load does (`staged_run.dry_run_staged_recipe`), so Test
+    and the load reject the same rows. A rejection's sample is left empty: its refs say where."""
     if not draft.ready_for_profile:
         raise RecipeNotReadyForProfileError(draft.recipe_id)
     if draft.row_template is None:
@@ -131,7 +142,12 @@ async def run_verify(
     check_reference_matches(draft.row_template, ontology)
 
     source_handling = resolve_source_handling(draft)
-    all_rows = (
+    steps = staging_from_pipeline(draft.pipeline) if draft.pipeline is not None else None
+    if steps and staging is None:
+        raise RecipeRuleError(
+            ["This pipeline has staging steps, which Test runs only with the dataset's lists."]
+        )
+    all_rows = [] if steps else (
         _read_recipe_rows(draft)
         if not locations
         else [
@@ -162,17 +178,57 @@ async def run_verify(
         deduplicate=draft.deduplicate,
     )
 
-    result = await dry_run_recipe(
-        recipe,
-        sampled,
-        graph=graph,
-        ontology=ontology,
-        principal=principal,
-        source=(locations[0] if locations else draft.source_location) or draft.recipe_id,
-        scheme=scheme,
-        row_keys=row_keys,
-        investigation_scope=investigation_id,
-    )
+    if steps and staging is not None:
+        recipe = recipe.model_copy(update={"staging": steps})
+        assert draft.pipeline is not None
+        try:
+            read = source_tables(
+                draft, draft.pipeline, load_id="test", limit=DEFAULT_SAMPLE_SIZE + 1
+            )
+            lists = lists_for_run(
+                steps,
+                staging.references,
+                dataset_id=draft.dataset_id or "",
+                storage=staging.storage,
+            )
+        except StagingError as refused:
+            raise RecipeRuleError(refused.problems) from refused
+        sample_is_whole_source = all(
+            len(t.rows) <= DEFAULT_SAMPLE_SIZE for t in read.tables.values()
+        )
+        for table in read.tables.values():
+            del table.rows[DEFAULT_SAMPLE_SIZE:]
+        try:
+            tested = await dry_run_staged_recipe(
+                recipe,
+                sources=read.tables,
+                lists=lists,
+                dataset_id=draft.dataset_id or "",
+                graph=graph,
+                ontology=ontology,
+                principal=principal,
+                scheme=scheme,
+                row_keys=row_keys,
+                investigation_scope=investigation_id,
+            )
+        except StagingError as refused:
+            raise RecipeRuleError(refused.problems) from refused
+        result = tested.result
+        sampled = [r for rows in read.raw.values() for r in rows[:DEFAULT_SAMPLE_SIZE]]
+        result.rejections = [r.model_copy(update={"sample": ""}) for r in result.rejections]
+        result.rows_read = sum(len(t.rows) for t in read.tables.values())
+    else:
+        result = await dry_run_recipe(
+            recipe,
+            sampled,
+            graph=graph,
+            ontology=ontology,
+            principal=principal,
+            source=(locations[0] if locations else draft.source_location) or draft.recipe_id,
+            scheme=scheme,
+            row_keys=row_keys,
+            investigation_scope=investigation_id,
+        )
 
     # Each simulated node and link is masked by its own resolved marking (ADR-127 decision 3: the
     # source's own is only the lowest a row may carry), and a rejected row, which resolved to none,
@@ -209,9 +265,11 @@ async def run_verify(
 
     # A rejected row resolved to no marking: it is masked unless the principal may view every
     # marking *that row's* declared and bound cells could give (an unreadable one gives them all).
+    # A staged Test's rejections carry no sample at all (their refs say where), so there is
+    # nothing of a row to mask, and `sampled` is not the table their row numbers count in.
     rejections = [
         rejection.model_copy(update={"sample": _masked_sample(sampled, rejection.row_index)})
-        if values_masked or rejected_row_unreadable(rejection.row_index)
+        if not steps and (values_masked or rejected_row_unreadable(rejection.row_index))
         else rejection
         for rejection in result.rejections
     ]

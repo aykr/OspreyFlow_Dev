@@ -269,6 +269,8 @@ from schemas.ingest import (
     SchedulePreview,
     SchedulePreviewInput,
     ScheduleUpdateInput,
+    StagingPreview,
+    StagingPreviewInput,
     StudioRecipeDraft,
     StudioRecipeStatus,
     StudioRole,
@@ -818,6 +820,12 @@ from .studio_recipes import (
     StudioRecipeStore,
     recipe_reader,
     reconcile_recipe_pins,
+)
+from .studio_staging import (
+    StagedTestInputs,
+    dataset_reference_lists,
+    preview_staging,
+    staging_gate,
 )
 from .studio_verify import RowTemplateMissingError, run_verify
 from .superset_embed import (
@@ -1849,6 +1857,15 @@ ModelRoutesDep = Annotated[ModelRoutes, Depends(get_model_routes)]
 SiteImageStorageDep = Annotated[ObjectStorageConfig, Depends(get_site_image_storage)]
 TileCacheStorageDep = Annotated[ObjectStorageConfig, Depends(get_tile_cache_storage)]
 AnalyticsDep = Annotated[AnalyticsPort, Depends(get_analytics)]
+
+
+def get_staging_storage(request: Request) -> ObjectStorageConfig:
+    """ADR-140 Amendment 12: where a staged run's Parquet, its sources' raw rows and a reference
+    list's rows are kept, the bucket the engine's own staging names."""
+    return ObjectStorageConfig.from_env()
+
+
+StagingStorageDep = Annotated[ObjectStorageConfig, Depends(get_staging_storage)]
 
 
 def get_pipeline_recogniser_for(request: Request) -> RecogniserFor:
@@ -8948,11 +8965,24 @@ async def update_studio_recipe_pipeline(
     studio_recipes: StudioRecipesDep,
     audit: AuditDep,
     body: PipelineGraph,
+    models: TargetModelsDep,
+    staging_storage: StagingStorageDep,
 ) -> StudioRecipeDraft:
     """ADR-108 phase B: the pipeline's own save. The graph half of the save gate runs here —
     a violation answers 422 `pipeline_invalid` with every problem in words, and nothing is
-    stored; the row-template half stays Map's own, unchanged."""
+    stored; the row-template half stays Map's own, unchanged. ADR-140 Amendment 12: its staging
+    steps are judged here too, against its source nodes and the dataset's lists, in the words a
+    drawer's Preview shows (`studio_staging.staging_gate`)."""
     problems = pipeline_rule_violations(body)
+    problems.extend(
+        p
+        for p in staging_gate(
+            body,
+            references=await dataset_reference_lists(models, recipe.dataset_id, staging_storage),
+            dataset_id=recipe.dataset_id,
+        )
+        if p not in problems
+    )
     if problems:
         return JSONResponse(  # type: ignore[return-value]
             status_code=422,
@@ -9176,6 +9206,43 @@ async def get_studio_recipe_sample_row(
 
 
 @app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/staging-preview",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
+async def preview_studio_recipe_staging(
+    investigation: InvestigationViewerDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+    models: TargetModelsDep,
+    staging_storage: StagingStorageDep,
+    body: StagingPreviewInput,
+) -> StagingPreview:
+    """A staging step's drawer's live sample (ADR-140 Amendment 12, Q4 (a)): the steps up to one,
+    over the first ten rows of each source, read as Map's sample is read (`edit_pipelines`, the
+    viewer's level, the person's own principal, masked where they may not view a row), with the
+    save gate's refusals for the pipeline the drawer holds, in its own words. It writes nothing:
+    no staged Parquet, no raw rows, no draft."""
+    preview = await asyncio.to_thread(
+        preview_staging,
+        recipe,
+        body,
+        principal=principal,
+        scheme=scheme,
+        references=await dataset_reference_lists(models, recipe.dataset_id, staging_storage),
+        storage=staging_storage,
+    )
+    await audit.record(
+        principal=principal,
+        action="preview_studio_recipe_staging",
+        resolved_query={"recipe_id": recipe.recipe_id, "step": body.step},
+        result_cardinality=len(preview.rows),
+    )
+    return preview
+
+
+@app.post(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/map/handling-preview",
     dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
 )
@@ -9225,6 +9292,8 @@ async def _studio_dry_run(
     compute: ComputePort,
     repo_root: Path,
     influencers_store: InfluencerStore | None,
+    models: TargetModelStore,
+    staging_storage: ObjectStorageConfig,
 ) -> tuple[VerifyReport, list[Any]]:
     """The dry run Test and Preview share (§5; ADR-140 decision 14): the report, and the files it
     read with their hashes. It writes nothing; what Test records afterwards is Test's alone."""
@@ -9262,6 +9331,10 @@ async def _studio_dry_run(
         investigation_id=investigation.id,
         checks=judge_checks,
         locations=locations,
+        staging=StagedTestInputs(
+            references=await dataset_reference_lists(models, recipe.dataset_id, staging_storage),
+            storage=staging_storage,
+        ),
     )
     return report, checked
 
@@ -9288,6 +9361,8 @@ async def verify_studio_recipe(
     screening_lists: ScreeningListsDep,
     compute: ComputeDep,
     repo_root: RecipesRepoRootDep,
+    models: TargetModelsDep,
+    staging_storage: StagingStorageDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
 ) -> VerifyReport:
     """§5: the dry run. No persistent write of any kind happens here — no
@@ -9304,7 +9379,8 @@ async def verify_studio_recipe(
         ontology=ontology, recipe_runs=recipe_runs, typology_rules=typology_rules,
         analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
         hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
-        repo_root=repo_root, influencers_store=influencers_store,
+        repo_root=repo_root, influencers_store=influencers_store, models=models,
+        staging_storage=staging_storage,
     )  # fmt: skip
     # §5: "Verify must pass before publish" — recorded here, against a
     # *completed* run (rejections included, per §5's own "a run with
@@ -9344,6 +9420,8 @@ async def preview_studio_recipe_graph(
     screening_lists: ScreeningListsDep,
     compute: ComputeDep,
     repo_root: RecipesRepoRootDep,
+    models: TargetModelsDep,
+    staging_storage: StagingStorageDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
 ) -> VerifyReport:
     """Phase 6's *Preview* of a Map or Load step (ADR-140 decision 14; ADR-140 Amendment 8 point 2):
@@ -9357,7 +9435,8 @@ async def preview_studio_recipe_graph(
         ontology=ontology, recipe_runs=recipe_runs, typology_rules=typology_rules,
         analytics=analytics, principal_resolver=principal_resolver, patterns_store=patterns_store,
         hotlists_store=hotlists_store, screening_lists=screening_lists, compute=compute,
-        repo_root=repo_root, influencers_store=influencers_store,
+        repo_root=repo_root, influencers_store=influencers_store, models=models,
+        staging_storage=staging_storage,
     )  # fmt: skip
     await audit.record(
         principal=principal,
@@ -9472,6 +9551,8 @@ async def publish_studio_recipe(
     audit: AuditDep,
     body: PublishRecipeInput,
     sources: SourcesDep,
+    models: TargetModelsDep,
+    staging_storage: StagingStorageDep,
 ) -> StudioRecipeDraft:
     """§6/§8: draft → published, source-approver only — this same gate is
     what §8's "approve a mapping that changes an existing recipe's
@@ -9486,6 +9567,17 @@ async def publish_studio_recipe(
     # ADR-108 phase B: what the runner cannot run yet is refused in words, never published and
     # silently part-run (rule 2). Phase C's pipeline runner empties this gate.
     if recipe.pipeline is not None:
+        # ADR-140 Amendment 12: the steps are judged by the save gate before they are built into
+        # the recipe and committed, never committed unjudged.
+        unjudged = staging_gate(
+            recipe.pipeline,
+            references=await dataset_reference_lists(models, recipe.dataset_id, staging_storage),
+            dataset_id=recipe.dataset_id,
+        )
+        if unjudged:
+            return JSONResponse(  # type: ignore[return-value]
+                status_code=422, content={"error": "pipeline_invalid", "problems": unjudged}
+            )
         unrunnable = pipeline_run_violations(recipe.pipeline)
         if unrunnable:
             return JSONResponse(  # type: ignore[return-value]
@@ -9747,6 +9839,8 @@ async def run_studio_recipe(
     recipe_runs: RecipeRunsDep,
     studio_recipes: StudioRecipesDep,
     influencers: OptionalStrengthInfluencersDep = None,
+    models: TargetModelsDep = None,  # type: ignore[assignment]
+    staging_storage: StagingStorageDep = None,  # type: ignore[assignment]
 ) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -9831,6 +9925,8 @@ async def run_studio_recipe(
             kyc_expiries=kyc_expiries,
             recipe_runs=recipe_runs,
             influencers=influencers,
+            target_models=models,
+            staging_storage=staging_storage,
         ),
         principal=principal,
         recipe=recipe,

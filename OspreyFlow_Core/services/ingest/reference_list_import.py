@@ -24,11 +24,14 @@ from __future__ import annotations
 import argparse
 import csv
 import dataclasses
+import json
 import sys
 from collections.abc import Collection, Sequence
 from pathlib import Path
+from urllib.parse import quote
 
 import pyarrow.fs as pa_fs
+import pyarrow.parquet as pq
 
 from schemas.dataset_model import ReferenceList
 from schemas.staging import LookupStep, StagingStep
@@ -36,6 +39,7 @@ from schemas.staging import LookupStep, StagingStep
 from . import staging as _staging
 from .staging import ObjectStorageConfig
 from .staging_catalogue import (
+    _META,
     StagedTable,
     StagingError,
     list_rows_path,
@@ -94,6 +98,31 @@ def read_list_rows(reference: ReferenceList, *, storage: ObjectStorageConfig) ->
             ]
         )
     return table
+
+
+def kept_lists(dataset_id: str, *, storage: ObjectStorageConfig) -> list[ReferenceList]:
+    """The lists whose rows are kept for `dataset_id`, each by the record its own file carries, at
+    the highest version kept (ADR-140 Amendment 12): no other store of list records exists until
+    L1.6. Read from each file's schema alone, never its rows."""
+    fs = _staging.filesystem(storage)
+    folder = f"{storage.bucket}/reference_lists/{quote(dataset_id, safe='')}"
+    if fs.get_file_info(folder).type == pa_fs.FileType.NotFound:
+        return []
+    newest: dict[str, ReferenceList] = {}
+    for info in fs.get_file_info(pa_fs.FileSelector(folder)):
+        if info.type != pa_fs.FileType.File or not info.path.endswith(".parquet"):
+            continue
+        with fs.open_input_file(info.path) as source:
+            meta = pq.read_schema(source).metadata or {}
+        record = json.loads(meta.get(_META, b"{}")).get("reference")
+        if record is None:
+            continue
+        found = ReferenceList.model_validate(record)
+        if found.dataset_id != dataset_id:
+            continue
+        if found.id not in newest or newest[found.id].version < found.version:
+            newest[found.id] = found
+    return sorted(newest.values(), key=lambda r: (r.name, r.id))
 
 
 def lists_for_run(
