@@ -106,6 +106,8 @@ class FakeCompose:
 
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
+        #: What each command was given on standard input (a model key, ADR-135 Amendment 2).
+        self.inputs: list[str] = []
         #: service -> host ports its running container publishes.
         self.published: dict[str, list[int]] = {}
         self.running = True
@@ -154,7 +156,9 @@ class FakeCompose:
                                      "pending": download}  # fmt: skip
             self.events.append(f"started {name}")
 
-    def __call__(self, args: list[str], *, stage: str, **_kwargs: object) -> str:
+    def __call__(self, args: list[str], *, stage: str, **kwargs: object) -> str:
+        if kwargs.get("input") is not None:
+            self.inputs.append(str(kwargs["input"]))
         self.calls.append(list(args))
         env_file = Path(args[args.index("--env-file") + 1])
         compose_file = Path(args[args.index("-f") + 1])
@@ -318,16 +322,15 @@ def test_it_renders_a_newly_enabled_provider_and_stores_its_key_from_the_termina
     deployment.write_config(GEMINI)
     assert deployment.reapply({"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}) == 0
 
-    assert _pairs(deployment.env)["OSPREY_MODEL_KEY_GEMINI"] == GEMINI_KEY
-    gateway = yaml.safe_load((deployment.folder / "litellm.yaml").read_text(encoding="utf-8"))
-    names = [m["model_name"] for m in gateway["model_list"]]
-    assert "gemini/gemini-2.5-flash" in names
+    _moved_into_the_gateway(deployment, GEMINI_KEY)
+    engines = _pairs(deployment.env)["OSPREY_MODEL_ENGINES"]
+    assert '"name":"gemini"' in engines
     copy = yaml.safe_load((deployment.folder / "osprey.yaml").read_text(encoding="utf-8"))
     assert copy["models"]["providers"][0]["name"] == "gemini"
-    # The key is in deployment.env alone: no other file, no output, no prompt.
+    # The key is in no file at all once moved: no output, no prompt, no argument.
     holding = [p.name for p in deployment.out_root.rglob("*")
                if p.is_file() and GEMINI_KEY.encode() in p.read_bytes()]  # fmt: skip
-    assert holding == ["deployment.env"]
+    assert holding == []
     out = capsys.readouterr()
     assert GEMINI_KEY not in out.out + out.err
     assert deployment.prompts == []
@@ -339,7 +342,7 @@ def test_with_no_key_in_the_terminal_it_is_asked_for_hidden(deployment: Deployme
     deployment.replies.append(GEMINI_KEY)
     assert deployment.reapply() == 0
     assert deployment.prompts == ["Key for Gemini (OSPREY_MODEL_KEY_GEMINI; not shown): "]
-    assert _pairs(deployment.env)["OSPREY_MODEL_KEY_GEMINI"] == GEMINI_KEY
+    _moved_into_the_gateway(deployment, GEMINI_KEY)
 
 
 def test_no_key_given_changes_nothing(
@@ -358,8 +361,9 @@ def test_a_key_already_held_is_kept_and_not_asked_for(deployment: Deployment) ->
     assert deployment.reapply({"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}) == 0
     deployment.write_config({**GEMINI, "sendable_handling_codes": ["P", "O"]})
     assert deployment.reapply() == 0
+    # Moved into the gateway by the first apply, so the second neither asks nor refuses.
     assert deployment.prompts == []
-    assert _pairs(deployment.env)["OSPREY_MODEL_KEY_GEMINI"] == GEMINI_KEY
+    _moved_into_the_gateway(deployment)
 
 
 def test_every_other_secret_is_unchanged(deployment: Deployment) -> None:
@@ -458,7 +462,20 @@ def test_a_run_once_job_is_neither_started_nor_waited_on(
     assert deployment.reapply({"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}) == 0
     assert "ingest" not in deployment.compose.restarted()
     assert "ingest" not in capsys.readouterr().out
-    assert _pairs(deployment.env)["OSPREY_MODEL_KEY_GEMINI"] == GEMINI_KEY
+    _moved_into_the_gateway(deployment, GEMINI_KEY)
+
+
+def _moved_into_the_gateway(deployment: Deployment, key: str = "") -> None:
+    """ADR-135 Amendment 2 decision 3: after an apply the key is in the gateway, handed on standard
+    input to the Conduit's key path (never an argument), and its line has left deployment.env."""
+    pairs = _pairs(deployment.env)
+    assert "OSPREY_MODEL_KEY_GEMINI" not in pairs
+    assert pairs["OSPREY_MODEL_KEYS_IN_GATEWAY"] == "yes"
+    moves = [c for c in deployment.compose.calls if "services.api.model_keys" in c]
+    assert moves
+    if key:
+        assert all(key not in word for call in moves for word in call)
+        assert deployment.compose.inputs[-1] == f"gemini={key}\n"
 
 
 FOURTEEN = "qwen2.5:14b-instruct"
@@ -570,8 +587,12 @@ def test_what_reaches_a_service_decides_whether_it_restarts(tmp_path: Path) -> N
         "mounts": {"image": "a", "volumes": ["./table.yaml:/t.yaml:ro", "./theme/x:/x:ro"]},
         "untouched": {"image": "a", "volumes": ["data:/data"]},
         # A run-once job reads it whole too, but `up` never starts it (`render.py`'s `ingest`).
-        "job": {"image": "a", "env_file": ["deployment.env"], "restart": "no",
-                "profiles": ["batch"]},  # fmt: skip
+        "job": {
+            "image": "a",
+            "env_file": ["deployment.env"],
+            "restart": "no",
+            "profiles": ["batch"],
+        },  # fmt: skip
     }
     for folder, key, table, theme in ((old, "1", "a", "a"), (new, "2", "b", "b")):
         (folder / "theme" / "x").mkdir(parents=True)
@@ -601,9 +622,12 @@ def test_it_runs_no_first_install_step(
     assert deployment.reapply({"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}) == 0
     assert ran == []
     # Compose is asked what runs, and to start services again — nothing else: no rebuild, no
-    # one-off run, no removal. And `up` only with flags that keep every volume.
+    # one-off run, no removal. And `up` only with flags that keep every volume. The one `exec` is
+    # the Conduit's key path, moving the key into the gateway (ADR-135 Amendment 2).
     verbs = {call[call.index("-f") + 2] for call in deployment.compose.calls}
-    assert verbs <= {"ps", "up"}, verbs
+    assert verbs <= {"ps", "up", "exec"}, verbs
+    execs = [c for c in deployment.compose.calls if c[c.index("-f") + 2] == "exec"]
+    assert all("services.api.model_keys" in c for c in execs), execs
     for up in deployment.compose.ups():
         flags = {a for a in up[up.index("up") + 1 :] if a.startswith("-")}
         assert flags <= {"-d", "--no-deps", "--force-recreate", "--wait", "--remove-orphans"}

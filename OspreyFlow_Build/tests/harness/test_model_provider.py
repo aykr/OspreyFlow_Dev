@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -51,12 +52,25 @@ WITH_PROVIDER = ModelsConfig(local_only=False, provider=PROVIDER, sendable_handl
         ({"local_only": True, "provider": PROVIDER}, "local_only"),
         ({"local_only": False, "provider": PROVIDER, "hosted_fallback": "x"}, "hosted_fallback"),
         ({"local_only": False, "provider": {"name": "openai", "roles": {}}}, "at least one role"),
-        ({"local_only": False, "provider": {"name": "Open AI!", "roles": {"extraction": "m"}}},
-         "provider name"),
-        ({"local_only": False, "provider": {"name": "openai", "roles": {"extraction": "m"},
-                                            "api_base": "http://insecure.example"}}, "https"),
-        ({"local_only": False, "provider": {"name": "openai", "roles": {"summarise": "m"}}},
-         "roles"),
+        (
+            {"local_only": False, "provider": {"name": "Open AI!", "roles": {"extraction": "m"}}},
+            "provider name",
+        ),
+        (
+            {
+                "local_only": False,
+                "provider": {
+                    "name": "openai",
+                    "roles": {"extraction": "m"},
+                    "api_base": "http://insecure.example",
+                },
+            },
+            "https",
+        ),
+        (
+            {"local_only": False, "provider": {"name": "openai", "roles": {"summarise": "m"}}},
+            "roles",
+        ),
     ],
 )
 def test_a_provider_that_cannot_be_right_is_refused_in_words(
@@ -66,15 +80,22 @@ def test_a_provider_that_cannot_be_right_is_refused_in_words(
         ModelsConfig.model_validate(fields)
 
 
-def test_the_model_table_routes_the_provider_with_its_key_read_from_the_environment(
+def test_the_model_table_keeps_the_local_models_and_the_conduit_is_told_the_provider(
     tmp_path: Path,
 ) -> None:
-    table = yaml.safe_load(render_litellm_config(_config(tmp_path, WITH_PROVIDER)))
-    routed = {m["model_name"]: m["litellm_params"] for m in table["model_list"]}
-    assert routed["openai/gpt-4o-mini"]["model"] == "openai/gpt-4o-mini"
-    assert routed["openai/gpt-4o-mini"]["api_key"] == "os.environ/OSPREY_MODEL_PROVIDER_KEY"
-    assert "openai/gpt-4o" in routed
-    assert "qwen2.5:7b-instruct" in routed  # the local models stay: unsendable material runs there
+    """ADR-135 Amendment 2 decision 3: the provider's entries are the gateway database's, made by
+    the Conduit from what it is told (`OSPREY_MODEL_ENGINES`); the rendered table keeps the local
+    models, where unsendable material runs."""
+    config = _config(tmp_path, WITH_PROVIDER)
+    table = yaml.safe_load(render_litellm_config(config))
+    routed = {m["model_name"] for m in table["model_list"]}
+    assert "qwen2.5:7b-instruct" in routed
+    assert not any(name.startswith("openai/") for name in routed)
+    env = render(config, resolver=_fake_resolver).artefacts["deployment.env"]
+    engines = json.loads(next(line.split("=", 1)[1] for line in env.splitlines()
+                              if line.startswith("OSPREY_MODEL_ENGINES=")))  # fmt: skip
+    assert engines[0]["name"] == "openai"
+    assert engines[0]["roles"]["extraction"] == "openai/gpt-4o-mini"
 
 
 def test_the_conduit_is_told_the_routes_and_codes_and_the_gateway_the_key_by_reference(
@@ -125,4 +146,5 @@ def test_a_local_only_deployment_renders_no_provider(tmp_path: Path) -> None:
     assert "OSPREY_MODEL_ENGINES" not in rendered.artefacts["deployment.env"]
     compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
     assert "OSPREY_MODEL_PROVIDER_KEY" not in compose["services"]["litellm"]["environment"]
-    assert "os.environ/" not in render_litellm_config(config)
+    # The gateway's own master key is read from its environment; no provider's key is named.
+    assert "OSPREY_MODEL" not in render_litellm_config(config)

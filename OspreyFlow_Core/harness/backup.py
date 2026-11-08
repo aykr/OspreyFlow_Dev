@@ -156,12 +156,13 @@ def _compose(compose_file: Path) -> list[str]:
     ]
 
 
-def _run(command: list[str], *, item: str, capture: bool = True) -> str:
+def _run(command: list[str], *, item: str, capture: bool = True, input: str | None = None) -> str:
     completed = subprocess.run(  # noqa: S603 - a fixed argv, never a shell string
         command,
         capture_output=capture,
         text=True,
         check=False,
+        input=input,
     )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()[:800]
@@ -307,6 +308,27 @@ def databases_to_dump(listed: list[str]) -> list[str]:
     return [name for name in listed if name and name != KEYCLOAK_DATABASE]
 
 
+#: The gateway's own database (ADR-135 Amendment 2 decision 3).
+GATEWAY_DATABASE = "litellm"
+#: Its tables whose rows hold a key or a value sealed under the deployment's encryption key:
+#: the credentials, the model entries (every parameter sealed) and its stored settings.
+#: `05_DEPLOYMENT.md` §6.1: "A backup carries no secrets … Nothing in a backup may ever be
+#: encrypted with a deployment-scoped key." Their schema is kept, their rows are not, so every
+#: restore brings the engines back from the models file and asks for each key again (the owner's
+#: ruling, 8 November 2026).
+GATEWAY_SEALED_TABLES = (
+    '"LiteLLM_CredentialsTable"',
+    '"LiteLLM_ProxyModelTable"',
+    '"LiteLLM_Config"',
+)
+
+
+def _without_secrets(database: str) -> list[str]:
+    if database != GATEWAY_DATABASE:
+        return []
+    return [f"--exclude-table-data=public.{table}" for table in GATEWAY_SEALED_TABLES]
+
+
 def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Path]]:
     """Every database on the deployment's Postgres, and the roles they grant to (ADR-114
     Amendment 3). One dump was not the deployment: the dashboards keep their own `superset`
@@ -343,7 +365,16 @@ def backup_postgres_all(compose_file: Path, folder: Path) -> list[tuple[str, Pat
     )
     for database in databases_to_dump(listed.split()):
         dump = _run(
-            on_postgres + ["pg_dump", "--clean", "--if-exists", "-U", user, database],
+            on_postgres
+            + [
+                "pg_dump",
+                "--clean",
+                "--if-exists",
+                *_without_secrets(database),
+                "-U",
+                user,
+                database,
+            ],
             item="postgres",
         )
         target = folder / ("dump.sql" if database == main_database else f"{database}.sql")
@@ -689,6 +720,31 @@ def _set_aside(target: Path) -> str:
     )
 
 
+MODELS_FILE_IN_CONDUIT = "/run/osprey/model-settings/models.yaml"
+
+
+def backup_models_file(compose_file: Path, destination: Path) -> Path | None:
+    """The models file (ADR-135 Amendment 2 decision 2), from the Conduit's own volume: engines,
+    defaults and each key's record, never a key. Read through the running Conduit, or, when it is
+    stopped (a quiesced backup), a one-off container of its image on the same volume. None only
+    where *Models* has changed nothing yet; a file that cannot be read stops the backup in words,
+    never a set silently without it (`05_DEPLOYMENT.md` §6, rule 2)."""
+    read = f"cat {MODELS_FILE_IN_CONDUIT} 2>/dev/null || true"
+    compose = _compose(compose_file)
+    try:
+        text = _run([*compose, "exec", "-T", "api", "sh", "-c", read], item="models")
+    except BackupFailed:
+        text = _run(
+            [*compose, "run", "--rm", "--no-deps", "-T", "--entrypoint", "sh", "api", "-c", read],
+            item="models",
+        )
+    if not text.strip():
+        return None
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(text, encoding="utf-8")
+    return destination
+
+
 def _take_set(
     compose_file: Path,
     target: Path,
@@ -736,6 +792,9 @@ def _take_set(
     else:
         empty.append("recipes")
     written.extend(backup_configuration(compose_file, target))
+    models_file = backup_models_file(compose_file, target / "config" / "models.yaml")
+    if models_file is not None:
+        written.append(("models", models_file))
 
     entries = []
     for item, path in written:

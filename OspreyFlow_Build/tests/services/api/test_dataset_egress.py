@@ -41,7 +41,7 @@ from typing import Any
 import pytest
 import yaml
 from fastapi.testclient import TestClient
-from harness.render import model_engines_env, render_litellm_config
+from harness.render import model_engines_env
 from pydantic import ValidationError
 from services.api.app import (
     app,
@@ -67,7 +67,7 @@ from schemas.deployment import ModelProviderConfig, ModelsConfig, OspreyConfig
 from schemas.domain import Handling, Principal
 from schemas.model import ExtractionRequest
 from tests.harness.test_render import FIXTURE_CONFIG
-from tests.services.api.test_model_engines import GatewayRefused, StandInGateway
+from tests.services.api.test_model_engines import GatewayRefused, StandInGateway, gateway_table
 
 LOCAL = "qwen2.5:7b-instruct"
 GEMINI = "gemini/gemini-2.5-flash"
@@ -117,7 +117,7 @@ def _routes(extraction: str | None = LOCAL) -> ModelRoutes:
 
 
 def _gateway() -> StandInGateway:
-    table = dict(yaml.safe_load(render_litellm_config(_config())))
+    table = gateway_table(_config())
     return StandInGateway(table, GATEWAY_ENV, PROVIDERS_ACCEPT)
 
 
@@ -163,7 +163,7 @@ async def test_the_stand_in_gateway_refuses_for_this_table_as_the_real_one_does(
     for model in ("gemini/gemini-9", "mistral/large"):  # a model, a provider, not in its table
         with pytest.raises(GatewayRefused, match="Invalid model name"):
             await gateway.extract(_ask(None, None).model_copy(update={"model": model}))
-    wrong = StandInGateway(dict(yaml.safe_load(render_litellm_config(_config()))),
+    wrong = StandInGateway(gateway_table(_config()),
                            {"OSPREY_MODEL_KEY_GEMINI": "AIza-wrong"}, PROVIDERS_ACCEPT)  # fmt: skip
     with pytest.raises(GatewayRefused, match="not valid"):
         await wrong.extract(_ask(None, None).model_copy(update={"model": GEMINI}))

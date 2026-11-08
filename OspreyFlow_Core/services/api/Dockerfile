@@ -88,6 +88,10 @@ RUN /app/.venv/bin/python -c "import duckdb; duckdb.connect().install_extension(
 # DuckDB file into it. Creating it with the right owner is what makes
 # `osprey-data` usable rather than merely mounted.
 RUN mkdir -p /var/lib/osprey/data && chown -R osprey:osprey /var/lib/osprey
+# ADR-135 Amendment 2 decision 2: the models file's folder. A named volume takes this folder's
+# owner and mode on first mount, so the Conduit's user can write it on any host.
+RUN mkdir -p /run/osprey/model-settings && chown osprey:osprey /run/osprey/model-settings \
+    && chmod 700 /run/osprey/model-settings
 
 USER osprey
 EXPOSE 8000

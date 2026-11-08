@@ -322,6 +322,16 @@ ROUTE_RIGHTS = {
     "register_dashboard_route": "manage_dashboards",
     "remove_dashboard_route": "manage_dashboards",
     "system_status_route": "administer_system",
+    # ADR-135 Amendment 2, ADR-112 Amendment 7: Admin › Models.
+    "models_admin_view_route": "manage_models",
+    "models_admin_history_route": "manage_models",
+    "models_admin_add_engine_route": "manage_models",
+    "models_admin_edit_engine_route": "manage_models",
+    "models_admin_remove_engine_route": "manage_models",
+    "models_admin_defaults_route": "manage_models",
+    "models_admin_set_key_route": "manage_models",
+    "models_admin_remove_key_route": "manage_models",
+    "models_admin_test_route": "manage_models",
     # ADR-136 decision 2: every dataset's egress, set by an administrator alone, audited.
     "admin_datasets_route": "administer_system",
     # ADR-145 Amendment 4 decision 7: Admin › System's *Dataset owners may be*.
@@ -401,9 +411,9 @@ def test_every_right_guards_at_least_one_route() -> None:
     lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b. A
     promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
     dataset's approvers in Admin › Datasets; its review route arrives with the promotion (L3.4).
-    `manage_models` (ADR-112 Amendment 7) gains its routes in platform's P1."""
+    `manage_models` (ADR-112 Amendment 7) guards *Admin › Models*' routes (platform's P1)."""
     not_yet = {"revert_loads", "read_audit",
-               "export_override", "review_promotions", "manage_models",
+               "export_override", "review_promotions",
                # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (boards,
                # promotion, proposed types, the drawn-dataset merge, Rules and Monitoring).
                "draw_on_boards", "promote_to_dataset", "propose_types", "accept_types",

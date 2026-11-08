@@ -73,6 +73,8 @@ class FakeKube:
             return 0, "secret/ospreyflow-secrets configured", ""
         if argv[0] == "helm":
             return (1, "", "Error: context deadline exceeded") if self.helm_fails else (0, "", "")
+        if "exec" in argv and "services.api.model_keys" in argv:
+            return 0, "moved into the gateway", ""  # the Conduit's key path (ADR-135 Amendment 2)
         if "exec" in argv:
             user = json.loads(stdin or "")
             if user["username"] in self.users:
@@ -135,7 +137,8 @@ def test_the_first_administrator_holds_admin_and_analyst(tmp_path: Path) -> None
     open a case, so the first administrator is made with the Analyst role too."""
     kube = FakeKube()
     _install(tmp_path, kube)
-    (user,) = [json.loads(stdin or "") for argv, stdin in kube.calls if "exec" in argv]
+    (user,) = [json.loads(stdin or "") for argv, stdin in kube.calls
+               if "exec" in argv and "keycloak-0" in argv]  # fmt: skip
     assert sorted(user["attributes"]["roles"]) == ["analyst", "osprey-admin"]
     assert Right.INVESTIGATE in rights_for(user["attributes"]["roles"])
 
@@ -214,3 +217,26 @@ def test_another_profile_is_refused(tmp_path: Path) -> None:
                       encoding="utf-8")
     with pytest.raises(ClusterInstallFailed, match="profile: cluster"):
         install(config, out_root=tmp_path, kube=FakeKube(), environ={}, resolver=_resolver)
+
+
+def test_a_providers_key_is_put_into_the_gateway_on_stdin_and_never_an_argument(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-135 Amendment 2 decision 3: on a cluster too the gateway holds the keys, handed to the
+    Conduit's key path once the chart is up."""
+    key = "AIza-cluster-NEVER-AN-ARGUMENT"
+    monkeypatch.setitem(
+        CONFIG, "models",
+        {"local_only": False, "sendable_handling_codes": ["P"],
+         "providers": [{"name": "gemini", "roles": {"extraction": "gemini-2.5-flash"}}]},
+    )  # fmt: skip
+    kube = FakeKube()
+    done = _install(tmp_path, kube, environ={**MANAGED, "OSPREY_MODEL_KEY_GEMINI": key})
+    moves = [(argv, stdin) for argv, stdin in kube.calls if "services.api.model_keys" in argv]
+    assert len(moves) == 1
+    (argv, stdin), = moves
+    order = [c[0][0] for c in kube.calls]
+    assert order.index("helm") < kube.calls.index((argv, stdin))
+    assert argv[argv.index("exec"):][:3] == ["exec", "-i", "deploy/api"] and "move" in argv
+    assert stdin == f"gemini={key}\n" and not any(key in word for word in argv)
+    assert "model keys put into the gateway: gemini" in done.lines

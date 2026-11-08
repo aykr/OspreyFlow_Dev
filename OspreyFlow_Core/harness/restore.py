@@ -131,6 +131,9 @@ class DryRun:
     #: Items the deployment did not have when the set was taken (a fresh deployment's recipes
     #: repository, say): nothing is restored for them, and the dry run says so.
     empty: tuple[str, ...] = ()
+    #: ADR-135 Amendment 2 with `05_DEPLOYMENT.md` §6.1: the engines whose key must be entered
+    #: again, since no backup carries a key.
+    keys_to_enter: tuple[str, ...] = ()
 
     def render(self) -> str:
         lines = [
@@ -156,6 +159,14 @@ class DryRun:
                 "",
                 "  WARNING     this set was taken with the Conduit running. Its graph store and",
                 "              its analytics database were captured at different instants.",
+            ]
+        if self.keys_to_enter:
+            lines += [
+                "",
+                "  model keys  no backup carries a key (05_DEPLOYMENT.md §6.1). After the restore,",
+                f"              enter the key of {', '.join(self.keys_to_enter)} again,",
+                "              in Admin › Models or with ospreyflow models key <name>. The",
+                "              engines, their models and each job's default are restored.",
             ]
         lines += [
             "",
@@ -220,6 +231,7 @@ def dry_run_for(directory: Path, manifest: dict[str, Any]) -> DryRun:
         audit_statement=manifest["audit_disposition"]["statement"],
         quiesced=bool(manifest["quiesced"]),
         empty=tuple(manifest.get("empty", ())),
+        keys_to_enter=tuple(engines_with_keys(directory)),
     )
 
 
@@ -613,6 +625,35 @@ def check_schema_compatibility(manifest: dict[str, Any]) -> None:
         )
 
 
+def engines_with_keys(directory: Path) -> list[str]:
+    """The engines whose key the set's models file records (ADR-135 Amendment 2): each must be
+    entered again after the restore, since the backup holds none (`05_DEPLOYMENT.md` §6.1)."""
+    path = directory / "config" / "models.yaml"
+    if not path.is_file():
+        return []
+    import yaml
+
+    recorded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return sorted(dict(recorded.get("keys") or {}))
+
+
+def restore_models_file(compose_file: Path, models_file: Path) -> None:
+    """The models file back into the Conduit's own volume (ADR-135 Amendment 2 decision 9)."""
+    _run(
+        _compose(compose_file)
+        + [
+            "exec",
+            "-T",
+            "api",
+            "sh",
+            "-c",
+            "umask 077 && cat > /run/osprey/model-settings/models.yaml",
+        ],
+        item="models",
+        input=models_file.read_text(encoding="utf-8"),
+    )
+
+
 def run_restore(
     *,
     directory: Path,
@@ -661,6 +702,8 @@ def run_restore(
         )
     for held in by_item.get("identity", []):
         restore_identity(compose_file, held)
+    for models_file in by_item.get("models", []):
+        restore_models_file(compose_file, models_file)
     return plan
 
 

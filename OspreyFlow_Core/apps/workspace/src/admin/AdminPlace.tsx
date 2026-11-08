@@ -15,6 +15,7 @@ import { Connections } from "./sections/Connections";
 import { Dashboards } from "./sections/Dashboards";
 import { Datasets } from "./sections/Datasets";
 import { DemoPacks } from "./sections/DemoPacks";
+import { Models } from "./sections/Models";
 import { People } from "./sections/People";
 import { ProposedTypesSection } from "./sections/ProposedTypes";
 import { Schedules } from "./Schedules";
@@ -54,6 +55,8 @@ export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
   "proposed-types": (api) => <ProposedTypesSection api={api} />,
   operations: (api) => <Schedules api={api} />,
   system: (api) => <System api={api} />,
+  // ADR-135 Amendment 2: engines, each job's default and their keys (platform lane P1).
+  models: (api) => <Models api={api} />,
   "demo-packs": (api) => <DemoPacks api={api} />,
 };
 

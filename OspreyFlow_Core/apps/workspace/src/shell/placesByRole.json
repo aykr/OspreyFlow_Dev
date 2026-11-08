@@ -319,7 +319,17 @@
     "manage_models"
    ],
    "places": [],
-   "answered_hidden": []
+   "answered_hidden": [
+    "models_admin_add_engine_route",
+    "models_admin_defaults_route",
+    "models_admin_edit_engine_route",
+    "models_admin_history_route",
+    "models_admin_remove_engine_route",
+    "models_admin_remove_key_route",
+    "models_admin_set_key_route",
+    "models_admin_test_route",
+    "models_admin_view_route"
+   ]
   },
   "right:manage_ontology": {
    "rights": [

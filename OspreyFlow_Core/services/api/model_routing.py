@@ -31,7 +31,7 @@ the engines by `harness/render.py` (`OSPREY_MODEL_ENGINES`, `OSPREY_MODEL_DEFAUL
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, cast
 
@@ -226,7 +226,20 @@ class RoutedModel:
 
     @property
     def routes(self) -> ModelRoutes:
+        source = getattr(self, "_source", None)
+        if source is not None:
+            self._routes = source()
         return self._routes
+
+    def set_routes(self, routes: ModelRoutes) -> None:
+        """ADR-135 Amendment 2: *Admin › Models* changes the engines while the Conduit runs; the
+        next request is routed by them, with no restart."""
+        self._routes = routes
+
+    def follow(self, source: Callable[[], ModelRoutes]) -> None:
+        """Read the routes from `source` at each request, so a change another Conduit replica made
+        (through the shared models file) is followed too."""
+        self._source = source
 
     async def held(self, datasets: Sequence[str] | None) -> Mapping[str, Dataset]:
         """Each of `datasets` this router can read the egress of; the rest are `none`."""
@@ -246,7 +259,7 @@ class RoutedModel:
         """The engine and model a request for `role` reaches. `asked` is used only where the
         deployment's local model for the role is not known. `datasets` are those the material comes
         from, and `held` their egress as `held()` read it (ADR-136)."""
-        routes = self._routes
+        routes = self.routes
         if engine is not None and engine != LOCAL:
             named = routes.engines.get(engine)
             if named is None:

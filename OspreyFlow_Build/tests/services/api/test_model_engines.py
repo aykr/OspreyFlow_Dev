@@ -35,7 +35,7 @@ from typing import Any
 import pytest
 import yaml
 from fastapi.testclient import TestClient
-from harness.render import model_engines_env, render_litellm_config
+from harness.render import model_engines_env, provider_model_entries, render_litellm_config
 from services.api.app import app, get_model_routes, get_principal
 from services.api.config import DeploymentModels
 from services.api.datasets import Dataset, InMemoryDatasetStore
@@ -135,8 +135,18 @@ class StandInGateway:
         return []
 
 
+def gateway_table(config: OspreyConfig) -> dict[str, Any]:
+    """The gateway's table as it routes: the rendered local models and each hosted engine's
+    entries, which ADR-135 Amendment 2 keeps in the gateway's database (made by the Conduit, and
+    tested against its own stand-in in `test_model_admin_routes.py`) rather than the rendered file.
+    Each entry names its key as this file's stand-in reads it."""
+    table = dict(yaml.safe_load(render_litellm_config(config)))
+    table["model_list"] = [*table["model_list"], *provider_model_entries(config)]
+    return table
+
+
 def _table() -> dict[str, Any]:
-    return dict(yaml.safe_load(render_litellm_config(_config())))
+    return gateway_table(_config())
 
 
 def _config() -> OspreyConfig:
@@ -226,9 +236,7 @@ async def test_with_no_local_model_unsendable_material_naming_gemini_is_refused_
 ):
     gateway = _gateway()
     with pytest.raises(ModelEgressRefused, match="handling code C may not be sent"):
-        await _routed(gateway, _routes(extraction=None)).extract(
-            _ask("gemini", _handling("C"))
-        )
+        await _routed(gateway, _routes(extraction=None)).extract(_ask("gemini", _handling("C")))
     assert gateway.asked == []
 
 
@@ -266,9 +274,7 @@ async def test_no_engine_named_runs_on_the_default_and_a_default_with_no_key_run
     # The default's key removed: it is not used, and nothing reaches the gateway for it.
     without = {"OSPREY_MODEL_KEY_GEMINI": GEMINI_KEY}
     gateway = _gateway(without)
-    result = await _routed(gateway, _routes(keys=without)).extract(
-        _ask(None, _handling("P"))
-    )
+    result = await _routed(gateway, _routes(keys=without)).extract(_ask(None, _handling("P")))
     assert (result.engine, gateway.asked) == ("local", [LOCAL])
 
 
@@ -296,7 +302,8 @@ def test_the_status_shows_each_engine_its_defaults_and_whether_its_key_is_presen
     }  # fmt: skip
     roles = {s.role: s for s in statuses}
     assert (roles["extraction"].runs_at, roles["extraction"].model) == (
-        "anthropic", "anthropic/claude-sonnet-4"
+        "anthropic",
+        "anthropic/claude-sonnet-4",
     )
     assert notice == (
         "Case content with handling code P is sent to anthropic for extraction, and may be sent to "
