@@ -16,16 +16,21 @@ never on raw bytes). Problems are words a person can act on, in a stable order.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Sequence
+
+from pydantic import TypeAdapter, ValidationError
 
 from ontology.packs import PACK_NAMES
 from schemas.domain import OntologySchema
 from schemas.ingest import (
+    PipelineEdge,
     PipelineGraph,
     PipelineNode,
     PipelineNodeKind,
     RowTemplate,
     StudioRecipeDraft,
 )
+from schemas.staging import StagingStep, step_inputs
 
 #: The domain pack a v1 recipe reads as: the POLE core itself (phase D's packs overlay it).
 CORE_PACK = "pole"
@@ -152,6 +157,157 @@ def pipeline_rule_violations(graph: PipelineGraph) -> list[str]:
                     f"extract '{node.label}' is not fed by a map; "
                     "an extract works on what a map bound, never on raw bytes"
                 )
+    problems.extend(staging_graph_violations(graph))
+    return problems
+
+
+# --- Staging steps as nodes (ADR-140 Amendment 12; Q1 (a)) -------------------------------------
+
+#: The staging catalogue's node kinds (rule 8: closed; the expert steps are phase 8's).
+STAGING_KINDS: frozenset[PipelineNodeKind] = frozenset(
+    {
+        PipelineNodeKind.LOOKUP,
+        PipelineNodeKind.JOIN,
+        PipelineNodeKind.FILTER,
+        PipelineNodeKind.DERIVE,
+        PipelineNodeKind.UNION,
+        PipelineNodeKind.DEDUPE,
+    }
+)
+_STEP: TypeAdapter[StagingStep] = TypeAdapter(StagingStep)
+KIND_LABELS = {
+    "lookup": "Lookup", "join": "Join", "filter": "Filter",
+    "derive": "Derive", "union": "Union", "dedupe": "Dedupe",
+}  # fmt: skip
+
+
+def step_nodes(graph: PipelineGraph) -> list[PipelineNode]:
+    return [n for n in graph.nodes if n.kind in STAGING_KINDS]
+
+
+def _step_record(node: PipelineNode) -> dict[str, object]:
+    return {**node.config, "id": node.id, "kind": node.kind.value}
+
+
+def _step_of(node: PipelineNode) -> StagingStep:
+    return _STEP.validate_python(_step_record(node))
+
+
+def _record_problems(node: PipelineNode) -> list[str]:
+    """A step node's config refused by its kind's record, each cause in words: a missing key, a
+    key the step does not declare (rule 8: no expression under a name of its own), a wrong value."""
+    try:
+        _step_of(node)
+    except ValidationError as exc:
+        words = []
+        for error in exc.errors():
+            where = ".".join(str(p) for p in error["loc"][1:]) or "its settings"
+            if error["type"] == "extra_forbidden":
+                words.append(f"step {node.id!r} declares {where!r}, which a {node.kind.value} "
+                             "step does not read")  # fmt: skip
+            elif error["type"] == "missing":
+                words.append(f"step {node.id!r} needs {where!r}")
+            else:
+                words.append(f"step {node.id!r}: {where}: {error['msg']}")
+        return words
+    return []
+
+
+def _run_order(nodes: Sequence[PipelineNode], inputs: dict[str, list[str]]) -> list[PipelineNode]:
+    """The steps so each comes after every step it reads; ties kept in the graph's node order."""
+    ordered: list[PipelineNode] = []
+    placed: set[str] = set()
+    ids = {n.id for n in nodes}
+    pending = list(nodes)
+    while pending:
+        ready = next(
+            (n for n in pending if all(t in placed or t not in ids for t in inputs[n.id])), None
+        )
+        if ready is None:  # a cycle among steps: the graph's own rule says so
+            ordered.extend(pending)
+            break
+        ordered.append(ready)
+        placed.add(ready.id)
+        pending.remove(ready)
+    return ordered
+
+
+def staging_from_pipeline(graph: PipelineGraph) -> list[StagingStep] | None:
+    """The recipe's `staging:` list, built from the pipeline's step nodes in run order: each node's
+    id and kind with its config. `None` for a pipeline with no step. Raises pydantic's
+    `ValidationError` for a step whose config is not its record; the save gate refuses that first
+    (`pipeline_rule_violations`)."""
+    nodes = step_nodes(graph)
+    if not nodes:
+        return None
+    steps = {n.id: _step_of(n) for n in nodes}
+    order = _run_order(nodes, {i: step_inputs(s) for i, s in steps.items()})
+    return [steps[n.id] for n in order]
+
+
+def pipeline_with_staging(graph: PipelineGraph, staging: Sequence[StagingStep]) -> PipelineGraph:
+    """`graph` with `staging` as its step nodes, in place of any it held: each step a node whose
+    config is its record less its id and kind; a line from each table it reads, and from the last
+    step to each Map, which no source then feeds directly. The inverse of `staging_from_pipeline`
+    (`tests/ingest/test_staging_pipeline_nodes.py`)."""
+    kept = [n for n in graph.nodes if n.kind not in STAGING_KINDS]
+    gone = {n.id for n in graph.nodes} - {n.id for n in kept}
+    maps = [n.id for n in kept if n.kind is PipelineNodeKind.MAP]
+    sources = {n.id for n in kept if n.kind is PipelineNodeKind.SOURCE}
+    edges = [
+        e
+        for e in graph.edges
+        if e.source not in gone and e.target not in gone
+        and not (staging and e.source in sources and e.target in maps)
+    ]  # fmt: skip
+    nodes = list(kept)
+    for step in staging:
+        record = step.model_dump(by_alias=True, exclude_none=True)
+        record.pop("id")
+        record.pop("kind")
+        nodes.append(
+            PipelineNode(
+                id=step.id,
+                kind=PipelineNodeKind(step.kind),
+                label=step.label or KIND_LABELS[step.kind],
+                config=record,
+            )
+        )
+        edges.extend(PipelineEdge(source=t, target=step.id) for t in step_inputs(step))
+    if staging:
+        edges.extend(PipelineEdge(source=staging[-1].id, target=m) for m in maps)
+    return PipelineGraph(nodes=nodes, edges=edges)
+
+
+def staging_graph_violations(graph: PipelineGraph) -> list[str]:
+    """The graph's own rules for step nodes: each config its kind's record; each table a step reads
+    joined to it by a line, so the canvas never draws what the recipe does not do; and the last
+    step feeding a Map. The rest of the save gate (the tables and lists a step may read, its
+    adapters) is `staging_catalogue.staging_rule_violations`, which needs the dataset's lists."""
+    nodes = step_nodes(graph)
+    if not nodes:
+        return []
+    problems: list[str] = []
+    good: dict[str, StagingStep] = {}
+    for node in nodes:
+        found = _record_problems(node)
+        problems.extend(found)
+        if not found:
+            good[node.id] = _step_of(node)
+    if problems:
+        return problems
+    edges = {(e.source, e.target) for e in graph.edges}
+    for node_id, step in good.items():
+        for table in step_inputs(step):
+            if (table, node_id) not in edges:
+                problems.append(
+                    f"step {node_id!r} reads {table!r}, but no line joins them on the pipeline"
+                )
+    order = staging_from_pipeline(graph) or []
+    last = order[-1].id
+    kinds = {n.id: n.kind for n in graph.nodes}
+    if not any(s == last and kinds.get(t) is PipelineNodeKind.MAP for s, t in edges):
+        problems.append(f"the last step, {last!r}, feeds no Map: Map reads the last step's table")
     return problems
 
 
