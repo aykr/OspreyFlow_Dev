@@ -31005,8 +31005,13 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
      writer was of that unit: `AuditWriter.record` now writes the acting principal's `org_unit`. **The
      unit filter is in the `WHERE` clause** (rule 3): another unit's entry is neither on the page nor in
      the total, and every filter (person, kind, case, dataset, from, to) is ANDed after it. An entry
-     naming a case that does not exist, or written before the column and naming no case, is no unit's
-     and is never shown; the page says so (rule 2).
+     naming a case that does not exist, or naming no case and written before the column or by the
+     system (`operator`, `system`: a reverted load, a map prefetch), is no unit's and is never shown;
+     the page says so (rule 2). **A case's entry is read only for the unit's administrator**
+     (`osprey-admin`, ADR-052 §4's safety net): a holder of `read_audit` without that role is read
+     only the entries naming no case, and told so. An entry naming no case is its writer's unit's, not
+     the unit of what it is about (a unit-B administrator's change to unit A's dataset is unit B's):
+     the stream records no other unit for it. A removed case's entries are still its unit's.
    - **The rule audit** (ADR-109 ruling 1; ADR-146 Amendment 2 returns it here) is never read from the
      stream. It is read for one case, through `readable_rule_audit` itself, behind the case rule-audit
      route's own gate (an Author, or the unit's administrator by ADR-052 §4's safety net) and
@@ -31018,11 +31023,20 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
    tell, and it can name nodes, documents and queries. Its words and count are withheld
    (`words_withheld`) except for the two kinds whose words the reader's own section already shows: *People
    and roles* to `manage_people`, *Datasets* to `administer_system`. Its existence (who, when, the
-   action, its case of the reader's unit) is shown.
+   action, its case of the reader's unit) is shown. **The dataset filter reads words**
+   (`dataset_id`, or a list under `dataset_ids`), so it looks only into entries whose words the
+   reader is shown: it never tells which withheld entries name a dataset. A load's entry names its
+   recipe and load, not its dataset, so a dataset filter finds no load (left for a dataset column).
+   Dashboard identities' entries are not *People and roles*: their own section asks
+   `manage_dashboards`, so their words are withheld here.
 3. **Kinds.** Decision 10's five (*Analyst assertions*, *Loads and promotions*, *Types*, *People and
    roles*, *Datasets*), by the actions the stream records under each (`KIND_ACTIONS`), and *Reads and
    refusals* for every other action. The run ledger's loads appear as their audit entries; the Studio's
    run history keeps its own narrowed read (Amendment 1), and is not merged here.
+   `test_every_kinds_action_is_one_the_conduit_records` holds each listed action to one the Conduit
+   writes. **Not built:** decision 10's link from each entry to the record holding it (a case's entry
+   names its case; the link needs each record's own screen to open at an entry); dates are whole days
+   from midnight UTC.
 4. **Operations' ageing** (decision 9; `services/api/promotion_ageing.py`): *What ages, and when* above the
    schedules, the promotions waiting for review with their age, and *Alert the reviewers and
    administrators after N days* (1 to 90, default 3, audited), all behind `operate_schedules`.
@@ -31033,8 +31047,11 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
    **Promotions are case's L3.4:** everything reads them through one seam, `WaitingPromotions` (its
    record `PendingPromotion`), which the Conduit fills with `NoPromotionsYet` until then. L3.4 provides
    `waiting_for_review(reader)` filtered in its own store as the reader, `all_waiting()` for the sweep,
-   and the call to `sweep`; L2.7's *Needs you* reads `alerts_for(person)`. A team's Author grant does not
-   yet make its members recipients.
+   and the call to `sweep` with its `recipients` callable: the dataset's home-case Authors, the people
+   directory and custom roles' current rights handed to `recipients_of` (the reads
+   `admin_dataset_authors_route` makes); L2.7's *Needs you* reads `alerts_for(person)`. A team's Author
+   grant does not yet make its members recipients, and an alert's recipients are fixed when it is
+   raised (one raised while the dataset has no reviewer reaches only the administrators).
 
 Tests: `test_audit_section_store.py` (real Postgres: by unit, filters never widen, the rule audit never
 from the stream, the engines' true total, once by the database); `test_audit_section_routes.py` (each
