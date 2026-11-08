@@ -2218,6 +2218,10 @@ class ExplainedTransaction(BaseModel):
 class AlertExplanation(BaseModel):      # what fired it, all visible to the reader or not shown
     alert: Alert; summary: str; nodes: list[Node]; edges: list[Edge]
     transactions: list[ExplainedTransaction]
+class AlertAtAddress(BaseModel):        # ADR-146 decision 6: GET /v1/alerts/{id}, an alert at its own address
+    investigation_id: str               # the case it is worked in; the reader is scoped to it
+    explanation: AlertExplanation       # as explain_alert gives it there; an alert the reader may
+                                        # not see is 404, exactly as a missing one (rule 3)
 class AlertDispositionInput(BaseModel):
     disposition: Literal["true_positive", "false_positive"]; reason: str   # required
 
