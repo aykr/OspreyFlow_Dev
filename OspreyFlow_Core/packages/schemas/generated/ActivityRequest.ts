@@ -68,14 +68,11 @@ export interface WeekdayHour {
   [k: string]: unknown;
 }
 /**
- * The events a branch reads from the cases it came from (ADR-084 Amendment 2).
- *
- * A branch is a case of its own holding copies of some of its parent's links; the events behind
- * those links stay under the parent's scope. An event under one of `scopes` counts only if its
- * link is one of `edge_ids`, the links the branch holds, so a branch never reads its parent's
- * events for links it did not take. Every other `EventFilter` predicate and the access filter
- * apply to these events exactly as to the case's own. Set by the Conduit from the case's own
- * record and working set, never taken from a caller.
+ * Events read from other cases beside the case's own (ADR-084 Amendment 2). Since L3.2 no
+ * case reads another's (ADR-144 Amendment 1): the Conduit sets `EventFilter.inherited` to `None`
+ * on every read and discards a caller's value. The shape is kept for the analytics port, which
+ * still honours it: an event under one of `scopes` counts only if its link is one of
+ * `edge_ids`, inside `window` when one is given, under the access filter as the case's own.
  */
 export interface InheritedEvents {
   scopes?: Scopes;

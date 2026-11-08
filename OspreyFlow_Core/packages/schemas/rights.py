@@ -26,7 +26,6 @@ class Right(StrEnum):
     CREATE_CASE = "create_case"  # C1
     SHARE_CASE = "share_case"  # C2, Author (the administrator's safety net: an orphaned case)
     REMOVE_CASE = "remove_case"  # C3, Author
-    BRANCH_CASE = "branch_case"  # C4, Editor
     EXPORT = "export"  # C5, Editor, through the export gate
     EXPORT_OVERRIDE = "export_override"  # C6, Editor: a consult-originator item, justified
     # Investigation
@@ -101,7 +100,7 @@ class Right(StrEnum):
 
 R = Right
 ANALYST = frozenset({
-    R.CREATE_CASE, R.SHARE_CASE, R.REMOVE_CASE, R.BRANCH_CASE, R.EXPORT, R.EXPORT_OVERRIDE,
+    R.CREATE_CASE, R.SHARE_CASE, R.REMOVE_CASE, R.EXPORT, R.EXPORT_OVERRIDE,
     R.INVESTIGATE, R.EDIT_GRAPH, R.CONFIRM_INFERRED, R.EXTRACT_FILES, R.RESOLVE_ENTITIES,
     R.RECORD_ASSESSMENT, R.ASK_MODEL, R.RUN_ANALYSIS, R.PROPOSE_LINK_TYPE,
     R.DRAW_ON_BOARDS, R.PROMOTE_TO_DATASET, R.PROPOSE_TYPES,

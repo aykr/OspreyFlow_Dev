@@ -71,7 +71,7 @@ class AnalyticsEngine(StrEnum):
 
 class SearchBackend(StrEnum):
     """`05_DEPLOYMENT.md` §3's reduced variant, as a declarable component rather than a hidden
-    branch: "If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch
+    code path: "If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch
     and falls back to PostgreSQL full-text, stating the trade-off on screen: search quality
     degrades and semantic search is unavailable."
 
