@@ -755,14 +755,30 @@ def recipe_handlings(recipe: Recipe, scheme: HandlingScheme | None = None) -> li
 
 
 def _provenance(
-    defaults: Mapping[str, Any], *, source: str, row_index: int, now: datetime
+    defaults: Mapping[str, Any],
+    *,
+    source: str,
+    row_index: int,
+    now: datetime,
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
 ) -> Provenance:
+    """`row_refs` (ADR-140 decision 11): for a staged table, by row position, the source rows the
+    row came from (`staging_catalogue.map_input`); the element records each of them, a Join's row
+    both sides', in place of the one row of `source`."""
     state = defaults.get("state", "asserted")
     return Provenance(
         state=ProvenanceState(state),
-        sources=[SourceRef(document_id=source, locator=f"row {row_index}", excerpt_hash="")],
+        sources=_row_sources(source, row_index, row_refs),
         first_seen=now,
     )
+
+
+def _row_sources(
+    source: str, row_index: int, row_refs: Mapping[int, Sequence[SourceRef]] | None
+) -> list[SourceRef]:
+    if row_refs is not None:
+        return [ref.model_copy() for ref in row_refs[row_index]]
+    return [SourceRef(document_id=source, locator=f"row {row_index}", excerpt_hash="")]
 
 
 def preview_handling_and_provenance(
@@ -848,6 +864,8 @@ class _RunState:
     #: the seeders, the basemap builder) means the run does not combine: it flushes each write as it
     #: is held, because without a scheme a restricted code's units cannot be told apart.
     scheme: HandlingScheme | None = None
+    #: ADR-140 decision 11: a staged table's source rows by row position (`_provenance`).
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None
     #: ADR-127 Amendment 19: the links held and not yet written, by `edge_write_key`, in the order
     #: each was first held.
     held_links: dict[tuple[Hashable, ...], _HeldLink] = field(default_factory=dict)
@@ -1502,6 +1520,7 @@ async def _write_entity(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=now,
     )
 
@@ -1654,6 +1673,7 @@ async def _write_held_content(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=now,
     )
     if document_id not in state.documents_written:
@@ -1783,15 +1803,14 @@ async def _write_edge(
         _merge_override(state.recipe.defaults.provenance, edge.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=now,
     )
     # `01_DOMAIN_MODEL.md` §7: duplicate rows collapse to one event, but
     # every source row reference is retained on the survivor — every
     # collapsed duplicate's row index, not just the representative row's.
     for duplicate_index in duplicate_row_indices:
-        provenance.sources.append(
-            SourceRef(document_id=state.source, locator=f"row {duplicate_index}", excerpt_hash="")
-        )
+        provenance.sources.extend(_row_sources(state.source, duplicate_index, state.row_refs))
     interval = edge_interval(resolved.instant, resolved.valid_to, resolved.span)
 
     write = EdgeWrite(
@@ -2057,6 +2076,8 @@ class _DryRunState:
     source: str
     now: datetime
     scheme: HandlingScheme | None = None
+    #: As `_RunState.row_refs`: Test records what the load records.
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None
     nodes: dict[NodeId, Node] = field(default_factory=dict)
     #: Keyed by (edge type, source id, target id, audience) — same-pair edges of one audience merge
     #: within the sample, mirroring `GraphArcadeDBAdapter.upsert_edges`'s real merge (ADR-102
@@ -2115,6 +2136,7 @@ async def _dry_run_entity(
         _merge_override(state.recipe.defaults.provenance, entity.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=state.now,
     )
     node_id = new_node_id()
@@ -2192,6 +2214,7 @@ def _dry_run_edge(
         _merge_override(state.recipe.defaults.provenance, edge.provenance),
         source=state.source,
         row_index=row_index,
+        row_refs=state.row_refs,
         now=state.now,
     )
     interval = edge_interval(resolved.instant, resolved.valid_to, resolved.span)
@@ -2221,6 +2244,7 @@ async def dry_run_recipe(
     scheme: HandlingScheme | None = None,
     row_keys: RowKeys | None = None,
     investigation_scope: str | None = None,
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
 ) -> DryRunResult:
     """Verify (`09_INGEST_STUDIO.md` §5): the same `resolve_rows()` output
     Map's own preview machinery is built on, simulated instead of loaded.
@@ -2250,6 +2274,7 @@ async def dry_run_recipe(
         source=source,
         now=datetime.now(UTC),
         scheme=scheme,
+        row_refs=row_refs,
     )
     for staged_row in staged_rows:
         refs: dict[str, NodeId] = {}
@@ -2333,6 +2358,7 @@ async def run_recipe(
     written: list[NodeWrite | EdgeWrite] | None = None,
     scheme: HandlingScheme | None = None,
     row_keys: RowKeys | None = None,
+    row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
 ) -> tuple[LoadReport, list[EventRecord]]:
     """`row_keys` (ADR-127 decision 5): the store of loaded rows. A recipe with `deduplicate` skips
     a row whose key the case (`investigation_scope`) already kept, whatever the recipe's version,
@@ -2426,6 +2452,7 @@ async def run_recipe(
         investigation_scope=investigation_scope,
         written=written,
         scheme=scheme,
+        row_refs=row_refs,
     )
     events: list[EventRecord] = []
 
