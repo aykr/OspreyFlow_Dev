@@ -227,6 +227,12 @@ New ones are added at the bottom as they happen.
     must be entered again after a restore (backups carry no secrets). Still never `make dev-up` for lane
     tests, never airbyte on 8000.
 
+53. **Rules' L2.8d merged** (`7dfb3a1`, your ruling (a) applied to the queue, the audit and packs alike;
+    main's 14 red pack cases green again); rules' fresh session is on L2.9. **Admin's L2.5 held by its
+    independent review** for a privilege escalation: Invite did not apply your Q3b rule, so a people manager
+    could invite an administrator and sign in as them; plus the lock-out race and a cached right on open
+    sockets. Being fixed.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
