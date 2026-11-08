@@ -192,11 +192,15 @@ class BoardMove(BaseModel):
 
 
 class Withdrawn(BaseModel):
-    """What a withdrawal took back (never deleted: kept in the audit). Every drawn link touching a
-    withdrawn node goes with it, and is named here, so nothing is dropped silently (rule 2)."""
+    """What a withdrawal took back (never deleted: kept in the audit). Every drawn link and picture
+    touching a withdrawn node goes with it. Those the caller may see are named here, so nothing is
+    dropped silently (rule 2); one they may not see is named only in the audit, and counted in
+    nothing here, not even among the watches ended (rule 3)."""
 
     nodes: list[NodeId] = Field(default_factory=list)
     links: list[EdgeId] = Field(default_factory=list)
+    #: The pictures' `DEPICTS` links withdrawn with the node, apart from its drawn links.
+    pictures: list[EdgeId] = Field(default_factory=list)
     watches_ended: int = 0
 
 
