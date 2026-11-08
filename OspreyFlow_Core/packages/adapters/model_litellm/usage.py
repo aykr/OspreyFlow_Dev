@@ -91,10 +91,6 @@ def engine_key(master: str, engine: str) -> str:
     return "sk-osprey-" + digest.hexdigest()[:48]
 
 
-def engine_key_alias(engine: str) -> str:
-    return f"osprey-engine-{engine}"
-
-
 # --- a limit's refusal --------------------------------------------------------------------------
 
 _RESETS = re.compile(r"Limit resets at: (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) UTC")

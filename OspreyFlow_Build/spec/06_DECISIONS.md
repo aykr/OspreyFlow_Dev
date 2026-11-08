@@ -29657,9 +29657,12 @@ network of the lane's own and a stand-in provider (no hosted provider was called
 3. **Each hosted engine's calls go with its own gateway key** (`usage.engine_key`): an HMAC-SHA-256
    of the engine's name under the gateway master key the Conduit already holds, never stored,
    written, logged or returned, the same in every replica, and changed with the master key. The
-   Conduit makes it in the gateway with the engine's entries (`/key/info`, then `/key/generate` or
-   `/key/update`; never deleted to change it, which would lose the budget's spend so far) and
-   deletes it with the engine. Local calls keep the master key and have no limits.
+   Conduit makes it in the gateway with the engine's entries (`/key/update`, and `/key/generate` on
+   its 404; never deleted to change it, which would lose the budget's spend so far; with no alias,
+   which must be unique and would collide under another master key) and deletes it with the engine.
+   **The key is only ever in a request's body, never its address**: the HTTP client logs every
+   request's address, so `GET /key/info?key=…` is never asked. Local calls keep the master key and
+   have no limits.
 4. **Limits** (`PUT /v1/admin/models/engines/{name}/limits`, `EngineLimits`): requests a minute,
    tokens a minute, and a token budget per day or month (both or neither, refused in words half
    set), each optional. They are the engine key's `rpm_limit`, `tpm_limit`, `max_budget` and

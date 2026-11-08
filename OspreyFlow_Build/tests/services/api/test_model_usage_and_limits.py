@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -338,3 +339,21 @@ def test_no_request_to_the_gateway_carries_a_person_s_id(client: TestClient, wor
     for _token, body in world.gateway.received:
         assert "user" not in body and "end_user" not in body
         assert body["metadata"] == {"tags": ["osprey:gemini/extraction"]}
+
+
+def test_no_engine_key_or_master_key_reaches_any_log_record(
+    client: TestClient, world: World, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The engine's key is in a request's body only, never its address: the HTTP client logs every
+    request's address (httpx, at INFO), so a key in a query string is a key in the Conduit's log."""
+    caplog.set_level(logging.DEBUG)
+    _limits(client, requests_per_minute=5)
+    _limits(client, requests_per_minute=6)
+    world.extract()
+    client.get("/v1/admin/models/usage")
+    client.delete("/v1/admin/models/engines/gemini")
+    logged = "\n".join(f"{r.name} {r.getMessage()}" for r in caplog.records)
+    assert "HTTP Request" in logged  # the client's own request lines were captured
+    key = engine_key(MASTER, "gemini")
+    for secret in (key, key[-12:], MASTER, GOOD):
+        assert secret not in logged, secret

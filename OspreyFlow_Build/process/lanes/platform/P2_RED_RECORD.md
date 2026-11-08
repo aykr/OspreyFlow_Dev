@@ -23,6 +23,7 @@ against the code as committed and seen to pass. Offline runs use the port guard'
 | `apps/workspace/keyboard/admin-models.spec.ts` "an engine's limits are set by keyboard" (and the registry's assertion) | the limits form's save made a plain button, never submitting | 2 failed |
 | same, "the usage's period is chosen by keyboard…" (and the registry's assertion) | choosing a period never asks the Conduit again | 2 failed |
 | `tests/services/api/test_model_gateway_live.py::test_usage_a_request_rate_and_a_token_budget_against_the_real_gateway` (live, platform lease, stack a, a freshly started pinned gateway) | hosted entries made without a price (and the price read-back removed) | 1 failed: DID NOT RAISE ModelLimitReached — the real gateway never stops an unpriced budget |
+| `test_model_usage_and_limits.py::test_no_engine_key_or_master_key_reaches_any_log_record` (found by the lane before its review) | none: as first built, `put_engine_key` asked `GET /key/info?key=<engine key>`, and httpx logs every request's address at INFO | 1 failed (the engine's key in the log); fixed by updating first and making on its 404, the key only in bodies |
 
 Live, under the platform lease on stack a (released after each run): the pinned gateway and a stand-in
 provider (`fakeprov.py`) on a network of the lane's own, `OSPREY_LIVE_GATEWAY_URL=http://127.0.0.1:54400`.

@@ -46,7 +46,7 @@ import yaml
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
 from adapters.model_litellm.connection import check_connection
-from adapters.model_litellm.usage import engine_key, engine_key_alias
+from adapters.model_litellm.usage import engine_key
 from schemas.deployment import ModelProviderConfig, ModelsConfig
 from schemas.model_admin import (
     AdminEngine,
@@ -338,22 +338,21 @@ class GatewayAdmin:
             raise self._refused(resp, "the key's removal")
 
     async def put_engine_key(self, provider: str, limits: EngineLimits) -> None:
-        """The engine's own gateway key, made if the gateway has none (`/key/info` 404, measured)
-        and its limits set (`/key/update`, measured to change them at once, `None` clearing one).
-        Never deleted to change it, which would lose the budget's spend so far. Every answer is
-        discarded: the update's carries the key."""
+        """The engine's own gateway key with its limits: updated where the gateway holds it
+        (`/key/update`, measured to change them at once, `None` clearing one), made where it does
+        not (the update's 404, measured; then `/key/generate`). Never deleted to change it, which
+        would lose the budget's spend so far. **The key is only ever in a request's body**, never
+        its address: the HTTP client logs every address, so `GET /key/info?key=…` is never asked.
+        Every answer is discarded: the update's carries the key."""
         key = engine_key(self._master, provider)
         fields = key_limits(limits)
-        found = await self._call("GET", f"/key/info?key={key}")
-        if found.status_code == 200:
-            resp = await self._call("POST", "/key/update", {"key": key, **fields})
-        elif found.status_code == 404:
+        resp = await self._call("POST", "/key/update", {"key": key, **fields})
+        if resp.status_code == 404:
+            # No alias: a key's alias must be unique (measured, 400), and a key derived under
+            # another master key would then collide with the old one and stop every change.
             resp = await self._call("POST", "/key/generate", {
-                "key": key, "key_alias": engine_key_alias(provider), **fields,
-                "metadata": {"osprey_engine": provider},
+                "key": key, **fields, "metadata": {"osprey_engine": provider},
             })  # fmt: skip
-        else:
-            raise self._refused(found, "the engine's limits")
         if resp.status_code != 200:
             raise self._refused(resp, "the engine's limits")
 
