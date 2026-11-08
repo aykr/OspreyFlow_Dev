@@ -1,18 +1,24 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index a6ea5b7..9174f05 100644
+index 9174f05..ed64d61 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -775,6 +775,13 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
-   "change-a-schedule-by-keyboard",
-   // ADR-136 decision 2: a dataset's egress, set by an administrator.
-   "set-a-datasets-egress-by-keyboard",
-+  // ADR-145 decision 8 and Amendment 4 decisions 6 and 7; ADR-143 Amendment 2 decision 1 (L2.4
-+  // part 2): a dataset's owners and promotion policy, a removed case's dry runs, System's setting.
-+  "change-a-datasets-owner-by-keyboard",
-+  "set-a-datasets-promotion-policy-by-keyboard",
-+  "dry-run-a-removed-cases-merge-by-keyboard",
-+  "dry-run-a-removed-cases-delete-by-keyboard",
-+  "set-who-may-own-a-dataset-by-keyboard",
-   // ADR-140 Amendment 4: a connection named by an administrator.
-   "name-a-connection-by-keyboard",
+@@ -787,6 +787,19 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
    // ADR-145 decision 5: Admin's sections.
+   "move-between-admin-sections-by-keyboard",
+   "open-a-coming-admin-section-by-keyboard",
++  // ADR-145 decisions 6 and 7 and Amendment 5 (L2.5): People's row, Name an Author, Disable…, and
++  // Roles: a custom role made, copied and edited, a team, its lead and its cover.
++  "give-the-super-user-preset-by-keyboard",
++  "give-a-custom-role-by-keyboard",
++  "name-an-author-by-keyboard",
++  "transfer-and-disable-a-person-by-keyboard",
++  "copy-a-built-in-role-by-keyboard",
++  "make-a-custom-role-by-keyboard",
++  "edit-a-custom-role-by-keyboard",
++  "show-a-roles-versions-by-keyboard",
++  "make-a-role-a-team-by-keyboard",
++  "hand-over-a-teams-lead-by-keyboard",
++  "name-a-teams-cover-by-keyboard",
+ ] as const);
+ 
+ // ADR-110 decision 7 (D5): the Publish screen's structured schedule.
