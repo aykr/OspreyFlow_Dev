@@ -1322,3 +1322,29 @@ def test_a_board_from_a_view_keeps_only_what_its_maker_may_see_of_a_view_they_ma
     assert "p-secret" not in str(opened)
     held = next(v for v in world.views.views.values() if v.id == board)
     assert held.node_ids == ["p-loaded"]
+
+
+def test_a_picture_is_given_only_to_a_node_on_the_board_it_is_given_through(
+    world: SimpleNamespace,
+) -> None:
+    """A node drawn on board X is no subject of board Y's picture routes, unless Y holds it."""
+    drawn = _item(_board())["element_id"]
+    elsewhere = _board()
+    for answer in (
+        _as("alice").post(
+            f"/v1/investigations/{K}/boards/{elsewhere}/nodes/{drawn}/picture",
+            json={"document_id": "img-1", "marking": "OFFICIAL"},
+        ),
+        _as("alice").put(
+            f"/v1/investigations/{K}/boards/{elsewhere}/nodes/{drawn}/picture",
+            params={"name": "x.png", "marking": "OFFICIAL", "source_note": "n"}, content=b"png",
+        ),  # fmt: skip
+    ):
+        assert answer.status_code == 404, answer.text
+    assert not [e for e in world.graph.edges() if e.type == "DEPICTS"]
+    holding = _board(start="selection", node_ids=[drawn])
+    held = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{holding}/nodes/{drawn}/picture",
+        json={"document_id": "img-1", "marking": "OFFICIAL"},
+    )
+    assert held.status_code == 201, held.text
