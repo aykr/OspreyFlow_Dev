@@ -113,7 +113,9 @@ NEEDS: dict[str, frozenset[str]] = {"rules": frozenset({"read_alert_queue"})}
 #: decision 10; held rows in the Studio's Runs, ADR-140). Each answers whoever holds its right, R&M
 #: offered or not (ADR-146 Amendment 2 point 3).
 SHARED_READS = {
+    # Its rows only to whom R&M is offered and to the Reports Viewer (`require_queue_rows`).
     "read_alert_queue": "Home's Needs your attention, the switcher's count, a report pack's alert items",
+    "read_alert_queue_counts": "Home's counts, for a reader of the queue R&M is not offered to",
     "list_held_rows": "Home's held rows count; the Studio's Runs",
     "reject_held_rows": "the Studio's Runs",
     "release_held_rows_route": "the Studio's Runs",

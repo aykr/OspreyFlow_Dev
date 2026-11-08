@@ -29920,7 +29920,7 @@ from about 20 hours to about 13.
    `test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder` and the heartbeat's and
    launcher's cases for the nine lanes, each red first against the two-stack, six-lane tables.
 
-### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and the four routes it shares (two reads, two writes); an alert's address; the jump replaced; the Rule author's queue read, as the owner ruled
+### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and the five routes it shares (three reads, two writes); an alert's address; the jump replaced; the Rule author's queue read, as the owner ruled
 
 Status: built by the rules lane in L2.9 (ADR-145 Amendment 4 decision 1; ADR-146 decisions 2 and 6), with
 the orchestrator's settlements of 8 November 2026 on the lane's Q2 (a, as below), and the owner's ruling
@@ -29946,13 +29946,22 @@ on Q1 (a, point 5). ADR-146 and ADR-145 Amendment 1 are unchanged except where t
    lists with the Studio's list connector (L1.6, ADR-140 Amendment 9). A whole-deployment rule's approval
    still needs `administer_system` and `deploy_rules` both, and now the place too. On the owner's list
    for review.
-3. **Routes shared with other places, no gate.** The queue's list (`GET …/alert-queue`) is read outside
+3. **Routes shared with other places, no gate.** The queue's list (`GET …/alert-queue`) and its counts are read outside
    the place by Home's *Needs your attention*, the switcher's count and a report pack's alert items (the
    Glass); the held rows' list, rejection and release (`GET …/held-rows`, `POST …/held-rows/reject`,
    `POST …/ingest/recipes/{id}/held-rows/release`) are worked in the Studio's Runs too (ADR-140) and
    counted on Home. Each answers whoever holds its own right, as before, so the Data Engineer keeps
-   held rows in the Studio; a Reports Viewer's Home keeps its alerts, each row opening its case, until
-   L2.12 builds that journey (ADR-145 Amendment 4 decision 10). A route asking for a right that acts
+   held rows in the Studio. **The queue's rows** (each alert's title, words and id) go only to a reader
+   the place is offered to and to the Reports Viewer, whose Home keeps its list of the alerts on the
+   cases they can read, each row opening its case, until L2.12 builds that journey (ADR-145 Amendment 4
+   decision 10; by the role, so a custom role copied from it is given counts); the Reports Viewer has
+   no way into an alert's detail, which is the place's. Any other reader of the queue (the Data
+   Engineer) is refused the rows (403 `queue_rows_not_offered`) and reads **the queue's counts**,
+   `GET …/alert-queue/counts` (`AlertQueueCounts`: open, claimed and closing, counted as the queue
+   counts them, so an alert with hidden evidence is not counted), and Home says how many and lists
+   none (the orchestrator's ruling (a) on its independent review's item 4, within ADR-145 Amendment 4
+   decision 10; `tests/services/api/test_alert_queue_counts.py`, red with the rows' check removed:
+   the Data Engineer answered every row; `home/homeData.test.ts`). A route asking for a right that acts
    only in the place (`author_rules`, `triage_alerts`, `deploy_rules`, `read_rule_audit`,
    `keep_watches`, `load_screening_lists`) must be the place's.
 4. **Offered where usable (ADR-145 Amendment 1).** `places.json` names the place's rights (the gate's)

@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import time
+from collections import Counter
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -199,6 +200,7 @@ from schemas.domain import (
     AlertDispositionInput,
     AlertExplanation,
     AlertKind,
+    AlertQueueCounts,
     AlertSeverity,
     Assumption,
     CompiledSentence,
@@ -732,8 +734,9 @@ from .rule_sentences import (
     sentence_of,
 )
 from .rules_place import PLACE as RULES_PLACE
-from .rules_place import opens_rules_place
+from .rules_place import opens_rules_place, reads_queue_rows
 from .rules_place import refusal as rules_place_refusal
+from .rules_place import rows_refusal as queue_rows_refusal
 from .run_resources import RECIPES_REPO_ROOT, build_run_resources
 from .run_source import (
     SourceChangedSinceVerifyError,
@@ -10416,9 +10419,52 @@ async def _report_limit_handler(request: Request, exc: ReportLimitExceededError)
     return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=exc.detail.model_dump())
 
 
+async def require_queue_rows(principal: PrincipalDep) -> Principal:
+    """ADR-146 Amendment 2 point 3: the queue's rows, each alert's title, words and id, only to a
+    reader Rules and Monitoring is offered to and to the Reports Viewer (ADR-145 Amendment 4
+    decision 10); anyone else holding the queue's read is refused them, before anything is read,
+    and reads the counts (`read_alert_queue_counts`)."""
+    if not reads_queue_rows(principal.roles):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=queue_rows_refusal())
+    return principal
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/alert-queue/counts",
+    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+)
+async def read_alert_queue_counts(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+    analytics: AnalyticsDep,
+) -> AlertQueueCounts:
+    """The case's queue as counts alone (ADR-146 Amendment 2 point 3): Home's figure for a reader
+    of the queue whom the place is not offered to. Counted as the queue is, by the same read, so an
+    alert any of whose evidence is hidden from the reader is not counted (rule 3)."""
+    rows = await alert_queue.monitoring_queue(
+        alerts_store, graph, analytics, investigation.id, principal,
+        statuses=["open", "claimed", "closing"],
+    )  # fmt: skip
+    await audit.record(
+        principal=principal,
+        action="read_alert_queue_counts",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=len(rows),
+    )
+    by = Counter(r.alert.status for r in rows)
+    return AlertQueueCounts(open=by["open"], claimed=by["claimed"], closing=by["closing"])
+
+
 @app.get(
     "/v1/investigations/{investigation_id}/alert-queue",
-    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE))],
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_queue_rows),
+    ],
 )
 async def read_alert_queue(
     investigation: InvestigationViewerDep,

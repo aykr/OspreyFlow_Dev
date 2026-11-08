@@ -14,6 +14,11 @@ export interface QueuedAlertLite {
   alert: { id: string; status: string; assignee: string | null; typology?: string | null; created_at: string };
   summary: string;
 }
+export interface AlertQueueCountsLite {
+  open: number;
+  claimed: number;
+  closing: number;
+}
 export interface HeldRowLite {
   id: string;
   status: string;
@@ -31,6 +36,8 @@ export interface DashboardLite {
 
 export interface CaseFigures {
   alerts?: QueuedAlertLite[] | Unreadable;
+  /** The queue as counts alone, for a reader refused its rows (ADR-146 Amendment 2 point 3). */
+  alertCounts?: AlertQueueCountsLite | Unreadable;
   held?: HeldRowLite[] | Unreadable;
   recipes?: RecipeLite[] | Unreadable;
   entities?: number | Unreadable;
@@ -136,6 +143,18 @@ export function summariseHome(input: HomeInputs): HomeSummary {
       }
     }
     rules.push({ tone: inQueue > 0 ? "warn" : "ok", text: `${plural(inQueue, "alert", "alerts")} in your team's queue, ${mine} claimed by you` });
+    if (unread > 0) rules.push({ tone: "error", text: `The queue of ${plural(unread, "case", "cases")} could not be read` });
+  }
+  // A reader refused the rows is told how many alone, with no alert listed (ADR-146 Amendment 2 point 3).
+  const counted = figures.filter((f) => f.alerts === undefined && f.alertCounts !== undefined);
+  if (counted.length > 0) {
+    let open = 0;
+    let unread = 0;
+    for (const f of counted) {
+      if (!readable(f.alertCounts)) unread += 1;
+      else open += f.alertCounts.open + f.alertCounts.claimed + f.alertCounts.closing;
+    }
+    rules.push({ tone: open > 0 ? "warn" : "ok", text: `${plural(open, "alert", "alerts")} open in your cases' queues` });
     if (unread > 0) rules.push({ tone: "error", text: `The queue of ${plural(unread, "case", "cases")} could not be read` });
   }
   if (readable(input.cases)) {
@@ -269,8 +288,12 @@ export async function loadHome(args: {
           may("edit_pipelines") ? get<RecipeLite[]>(`${at}/ingest/recipes`) : undefined,
           may("investigate") ? get<{ nodes: Record<string, number> }>(`${at}/explore/counts`) : undefined,
         ]);
+        // Refused the rows (the place not offered), the queue is read as counts alone.
+        const alertCounts =
+          may("read_alert_queue") && alerts === undefined ? await get<AlertQueueCountsLite>(`${at}/alert-queue/counts`) : undefined;
         perCase[c.id] = {
           alerts,
+          ...(alertCounts !== undefined ? { alertCounts } : {}),
           held,
           recipes,
           entities: readable(counts) ? Object.values(counts.nodes).reduce((a, b) => a + b, 0) : counts,

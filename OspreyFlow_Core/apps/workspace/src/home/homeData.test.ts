@@ -164,3 +164,40 @@ describe("the team queue's count", () => {
     expect(summariseHome(withClosing).rules[0]!.text).toBe("1 alert in your team's queue, 0 claimed by you");
   });
 });
+
+// ADR-146 Amendment 2 point 3: a reader of the queue whom Rules and Monitoring is not offered to (the
+// Data Engineer) is refused its rows and given its counts: Home says how many, and lists no alert.
+describe("the queue as counts alone", () => {
+  it("reads the counts when the rows are refused, and lists no alert", async () => {
+    const asked: string[] = [];
+    const fetcher = (async (url: string) => {
+      const path = url.replace("http://api", "");
+      asked.push(path);
+      if (path === "/v1/investigations") return new Response(JSON.stringify(CASES));
+      if (path.endsWith("/alert-queue")) return new Response(JSON.stringify({ detail: { error: "queue_rows_not_offered" } }), { status: 403 });
+      if (path.endsWith("/alert-queue/counts")) return new Response(JSON.stringify({ open: 2, claimed: 1, closing: 0 }));
+      return new Response("{}", { status: 404 });
+    }) as unknown as typeof fetch;
+    const read = await loadHome({ apiBaseUrl: "http://api", bearerToken: "t", rights: new Set(["read_alert_queue"]),
+                                  me: "u-me", lastCaseId: null, now: NOW, fetcher });  // prettier-ignore
+    expect(read.perCase.c1!.alerts).toBeUndefined();
+    expect(read.perCase.c1!.alertCounts).toEqual({ open: 2, claimed: 1, closing: 0 });
+    const home = summariseHome(read);
+    expect(home.attention.filter((r) => r.place === "rules")).toEqual([]);
+    expect(home.rules.map((f) => f.text)).toEqual(["6 alerts open in your cases' queues"]);
+  });
+
+  it("asks for no counts where the rows are given", async () => {
+    const asked: string[] = [];
+    const fetcher = (async (url: string) => {
+      const path = url.replace("http://api", "");
+      asked.push(path);
+      if (path === "/v1/investigations") return new Response(JSON.stringify(CASES));
+      if (path.endsWith("/alert-queue")) return new Response("[]");
+      return new Response("{}", { status: 404 });
+    }) as unknown as typeof fetch;
+    await loadHome({ apiBaseUrl: "http://api", bearerToken: "t", rights: new Set(["read_alert_queue"]),
+                     me: "u-me", lastCaseId: null, now: NOW, fetcher });  // prettier-ignore
+    expect(asked.filter((p) => p.endsWith("/counts") && p.includes("alert-queue"))).toEqual([]);
+  });
+});
