@@ -71,6 +71,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-140 Amendment 12 | Phase 7b as built: staging steps as pipeline nodes, the drawers and their live sample, per-step counts and metering, a dataset's own reference list rows from its version file (L1.4) | studio | 2026-11-08 | reserved |
 | ADR-135 Amendment 3 | Model usage and limits: calls and tokens per engine and job from the gateway's records, limits per engine on its own gateway key, a budget in tokens, no person in usage (P2) | platform | 2026-11-08 | reserved |
 | ADR-146 Amendment 2 | Rules and Monitoring as built: the place gate and its two shared reads, the alert's address route, the router, the jump replaced, the Rule author question open (L2.9) | rules | 2026-11-08 | reserved |
+| ADR-145 Amendment 6 | Audit and Operations' ageing as built (L2.6) | admin | 2026-11-08 | reserved |
 
 ## Baseline
 
