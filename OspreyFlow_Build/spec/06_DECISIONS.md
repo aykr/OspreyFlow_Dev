@@ -30512,16 +30512,25 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    server without it is refused. Incremental reads take rows past the source's **cursor**, compared in
    the column's own type from the server's catalogue, its value bound.
 3. **API: behind the egress allow-list.** An HTTPS base URL, a bearer secret or none, paging by `page`
-   (until an empty page) or by a next link at a dotted path, which must stay on the same host. The host
+   (until an empty page) or by a next link at a dotted path, which must keep the base URL's scheme,
+   host and port (a next link over plain HTTP would carry the bearer secret in clear). The host
    must be on `OSPREY_CONNECTOR_EGRESS`, which only an operator sets. A host off it is refused in words
    that say whom to ask, so the "egress allow-list request" is a request to an operator. A refusal (401,
    403, 404, 5xx), or records missing where the read says, is refused in words: never read as no rows.
-4. **Each read lands whole as the source's one file**, `uploaded/<dataset>/<source>.csv`, written to a
-   temporary name and renamed into place. Registration reads once and registers the source on that
-   file only if the read succeeds. From then on the run path, the folder watch (its pattern set to the
-   file), raw rows, watermark, confinement and rule gate are those of any file source, unchanged.
-   *Refresh now* (`POST …/sources/{id}/read`) reads again. A read past 500,000 rows, or 1,000 pages, is
-   refused whole (rule 2).
+4. **Each read lands as the source's one file**, `uploaded/<dataset>/<source>.csv`, written to a
+   temporary name and renamed into place. Registration first checks everything (the read's kind, the
+   name, a file or source already there, a keyless refresh), then reads once into a **new** file, then
+   registers the source on it; a name whose file exists is refused, never overwritten, and a refused
+   registration takes its file back. From then on the run path, the folder watch (its pattern set to
+   the file), raw rows, watermark, confinement and rule gate are those of any file source, unchanged.
+   *Refresh now* (`POST …/sources/{id}/read`) reads again. An API or JSON read, or a SQL snapshot, is
+   the file whole. **An incremental SQL read adds its rows to the file**, since earlier rows may not
+   have been loaded yet (a paused watch, a failed run), and leaves the file as it was when it finds
+   nothing; each run's own watermark (ADR-110 Amendment 6) then reads only what that pipeline has not
+   loaded, so nothing is dropped and nothing loads twice. A read, or a file, past 500,000 rows, or an
+   API past 1,000 pages, is refused whole (rule 2). The two settings the connectors read
+   (`OSPREY_CONNECTION_SECRET_<NAME>`, `OSPREY_CONNECTOR_EGRESS`) reach the Conduit as every
+   `deployment.env` line does (each owned service's `env_file`, `harness/render.py`).
 5. **The screening-list connector** (`services/api/list_connector.py`). A list is **imported once for
    the deployment** from a file in the ingest folder, through its format's **template** (OFAC SDN,
    OFSI consolidated, the UK Sanctions List, UN, EU, OpenSanctions;
@@ -30530,30 +30539,39 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    saved as that list's own mapping. A row the blank template cannot map refuses the whole list, by row
    number and never by content (rules 2 and 7). Rule 9 is judged as ADR-133's lists judge it: synthetic
    by SHA-256 (the screening manifest and `connectors/screening/synthetic.sha256`), else real, naming a
-   dataset this device admits, with UN and OpenSanctions synthetic-only until licensed.
+   dataset this device admits, with UN and OpenSanctions synthetic-only until licensed. A format's
+   files are read by ADR-133's own reader (`screening_refresh.read_files`).
 6. **A version only when the rows change.** An import keeps a new version at Amendment 11's path,
    `reference_lists/deployment/<name>@v<n>.parquet`, written once and never replaced, only when its
-   rows' digest differs from the current version's. The same rows again are `unchanged`, so an import
-   is idempotent per version. Two imports at once cannot both apply: the store's compare-and-set on the
-   version refuses the second. Every attempt is recorded in words, and a refused or failed one is the
-   list's failure until a later import succeeds.
+   rows' digest differs from the current version's, each cell taken as the keeper keeps it (a blank
+   cell is empty). The same rows again are `unchanged`, so an import is idempotent per version. A
+   version's record is its rows' (never its schedule). Two imports at once cannot both apply: the
+   store's compare-and-set on the version refuses the second; a version file an import kept but never
+   applied (the process stopped between) was never live and is stepped over, never replaced. Every
+   attempt is recorded in words, a refused or failed one is the list's failure until a later import
+   succeeds, and a list's import history says when older imports are left out (`more`).
 7. **Subscribed per dataset, by id** (`dataset_list_subscriptions`). The lists a dataset's rule or
    Lookup is offered (`GET …/reference-lists/offered`) are computed by the save gate's own
    `readable_lists`: the dataset's own lists (kept files whose ids its live domain model names) and the
    deployment-wide lists it subscribes to. Another dataset's list is never offered, whatever its kind,
-   name or id.
+   name or id, and a name two readable lists share is offered as neither (the gate refuses it). A
+   source author is shown each deployment list's name, template, version, entries, last import and
+   whether it failed (`SubscribableList`), never its file, who added it, its real dataset, its mapping
+   or its failure's words; a connection's settings likewise only to an administrator.
 8. **A dataset's own list's rows from its own file** (`POST …/reference-lists/{id}/import`). The file
    must be one the dataset's listing offers, refused in the same words whether or not it exists. The
    list must be one its live model names; a first import gives its name and key column, and a later one
    takes the record from the version kept. A new version is kept only when the rows change. This
-   replaces L1.4's stand-in for the Studio; its CLI is retired at the wiring with L1.4 (point 10).
+   replaces L1.4's stand-in: its command line is retired, and `import_list` stays only as the tests'
+   seed of a synthetic list.
 9. **Schedule and *Refresh now*.** Deployment-wide lists are refreshed every day or every week at an hour.
    Each slot runs once (claimed in Valkey, then marked on the list), as the person who set the schedule,
-   who must still sign in and hold `load_screening_lists`; it ticks on the monitoring minute.
-10. **The seam with L1.4.** `subscribed_list_ids` and `deployment_references` are the two functions a
-    staged run's `dataset_reference_lists` and `lists_for_run(subscribed=…)` take once L1.4 is on main.
-    The wiring and the stand-in's retirement are this lane's, at that point (the orchestrator, 8
-    November 2026).
+   who must still sign in and hold `load_screening_lists`, and audited as that person; it ticks on the
+   monitoring minute.
+10. **The seam with L1.4, built.** `studio_staging.dataset_reference_lists` answers the dataset's own
+    lists and each deployment-wide list it subscribes to by id (the list store is opened with the run's
+    resources, one pool), and `subscribed_in` reads the subscriptions back from that answer for the save
+    gate, Test, the drawer's sample and the run (`lists_for_run(subscribed=…)`).
 
 **Tests (each shown red first; `process/lanes/studio-b/L1.6_RED_RECORD.md`).**
 
@@ -30566,20 +30584,29 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
 | `tests/services/api/test_list_connector_store.py` (live) | the Postgres store refuses what its twin refuses |
 | `tests/connectors/test_api_and_json_connectors.py` | egress; the API's refusals in words; every page; a next link off the host; the cap; JSON at its records path; a read landing whole |
 | `tests/services/api/test_connector_routes.py` | a secret never answered or audited; only an administrator names or tests a connection; a refused first read registers nothing; *Refresh now* behind the dataset's gate |
-| `tests/connectors/test_sql_connector_live.py` (live) | **the phase's exit**: `visit_bookings` from a synthetic NOMIS replica, incremental, a refresh reading only new rows; a writing login refused; refusals in words; a server without TLS refused |
+| `tests/connectors/test_sql_connector_live.py` (live) | **the phase's exit**: `visit_bookings` registered and refreshed through the routes over the Postgres source store and its cursor; a SQL source's file loaded through the source-refresh path into ArcadeDB, the refresh loading only the new row; a writing login refused; refusals in words; a server without TLS refused |
+| `tests/services/api/test_list_rows_parquet_live.py` (live) | the real keeper keeps and refuses what its twin does: blank cells, never replaced, another list's file |
+| `tests/services/api/test_subscribed_lists_seam.py` | a Lookup reads a deployment list only while its dataset subscribes, at the gate and in the run |
 | `apps/workspace/src/ingest/sources/connectors.test.tsx` | the wizard's read; subscription by id; *Manage* only for whoever may load lists; the blank mapping |
 | `keyboard/sources-connectors.spec.ts` | each action by keyboard (rule 13), `SOURCES_CONNECTORS_ACTIONS` |
 | `a11y/every-harness.spec.ts` | the harness's seven states in dark, light and GOV.UK |
 
 **Phase 9's exit is met:** `visit_bookings` is registered from the fixture Postgres with an incremental
-watermark, and a refresh loads only new rows (`test_sql_connector_live.py`, under the lease named in the
-lane's report). The fixture lacks TLS, so its cases connect without it; that is the fixture's one named
-difference, and the real connector is shown refusing that same server.
+watermark through the register route, and a refresh reads only the new rows into its file; a SQL
+source's file loaded through the source-refresh path loads only the new row
+(`test_sql_connector_live.py`, under the lease named in the lane's report). The load half reads a
+payments-shaped synthetic table, the only recipe the live source-refresh path publishes. The fixture
+lacks TLS, so its cases connect without it; that is the fixture's one named difference, and the real
+connector is shown refusing that same server.
 
 **Not built.** Scheduled polling of a SQL or API source waits on R17's poll floor; it is read at
 registration and by *Refresh now*. *Admin › Connections*' fields for the new kinds are the admin lane's
 (requested). The rule's list picker reading `…/reference-lists/offered` is the rules lane's (requested).
 Re-screening a dataset's customers against a Studio list's changed entries is the rules': the import
-counts what it added, changed and delisted for them. The wiring into L1.4's staged run (point 10) waits
-for L1.4 on main. A torn write of a read's file has no test that could catch it in one process; the
+counts what it added, changed and delisted for them. **Two deployment-wide list stores** now stand side
+by side: ADR-133's (the Lists tab, which the rules screen against) and this one (Studio › Sources,
+versions as reference lists); which is the store of record is put to the owner through the orchestrator,
+the recommendation being this one with the rules reading it in L2.10–L2.11. An incremental source's file
+grows with each read; pruning rows every pipeline has loaded is not built (a file past the cap is
+refused in words). A torn write of a read's file has no test that could catch it in one process; the
 rename is recorded as untested.

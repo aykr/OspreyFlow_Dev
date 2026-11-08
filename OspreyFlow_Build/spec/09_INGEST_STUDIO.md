@@ -278,17 +278,19 @@ when a read needs it and never stored, audited or answered.
   and the read runs in a `READ ONLY` transaction. A source names a table or view and, optionally, its
   columns; never an expression (a sandboxed SELECT is expert mode's, L1.5).
 - **API**: an HTTPS base URL, no sign-in or a bearer secret, and paging by `page` or by a next link
-  named at a dotted path (which must stay on the same host). Its host must be on the deployment's
+  named at a dotted path (which must keep the base URL's scheme, host and port). Its host must be on the deployment's
   egress allow-list, `OSPREY_CONNECTOR_EGRESS`, which only an operator sets.
 - **JSON**: files in the dataset's folder whose names match a pattern, their records at a dotted path.
 
-**Each read lands whole as the source's one file**, `uploaded/<dataset>/<source>.csv`, written to a
-temporary name and renamed into place. The source is registered on that file, after a first read that
-must succeed; from there it is a file source like any other: its folder watch runs its deployed
-pipelines on each new read, a run keeps what it read as its load's raw rows, and the watermark, the
-confinement and the rule gate apply as built. An incremental SQL source reads only rows past its
-**cursor** (the highest watermark value it has read), so the file then holds only what is new; the
-run's own watermark applies on top. A read holding more than 500,000 rows, or an API giving more than
+**Each read lands as the source's one file**, `uploaded/<dataset>/<source>.csv`, written to a
+temporary name and renamed into place. Registration checks everything first, then reads once into a
+new file (a name whose file exists is refused, never overwritten) and registers the source on it; a
+refused registration takes the file back. From there it is a file source like any other: its folder
+watch runs its deployed pipelines on each new read, a run keeps what it read as its load's raw rows,
+and the watermark, the confinement and the rule gate apply as built. An incremental SQL source reads
+only rows past its **cursor** (the highest watermark value it has read) and adds them to its file,
+whose earlier rows may not have been loaded yet; a read that finds nothing leaves the file. Each run's
+own watermark then reads only what that pipeline has not loaded. A read holding more than 500,000 rows, or an API giving more than
 1,000 pages, is refused whole (rule 2). *Refresh now* on the source page reads again; a scheduled poll
 of a SQL or API source waits on the poll floor (R17) and is not built.
 
