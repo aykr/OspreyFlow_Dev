@@ -246,3 +246,29 @@ async def test_a_pending_link_the_store_merges_is_cited_by_the_stored_id() -> No
                       edge_ids=["e-written"], pending=(match,))  # fmt: skip
     alert = await gate.raise_committed(finding)
     assert alert.edge_ids == ["e-held"]
+
+
+# ---- the re-mark never guesses a marking (L2.8b's B9) ---------------------------------------------
+
+
+async def test_a_re_mark_over_a_link_it_cannot_read_lists_the_alert_unsafe_and_changes_nothing() -> None:
+    """`alerts.remark_alerts` computes a node's marking from what its alert rests on, read as the
+    service principal. A cited link it cannot read (gone, or pending in the repoint journal) gives
+    no safe marking: the alert is listed unsafe and its node left as it is, as `write_alert_node`
+    withholds. Red before: the marking was computed from what was left, the link not counted."""
+    from services.api.alerts import remark_alerts
+
+    from schemas.domain import Alert, AlertMode
+
+    class Store:
+        async def handlings_of(self, alert_id: str) -> None:
+            return None
+
+        async def set_alert_node(self, *_: Any, **__: Any) -> bool:
+            raise AssertionError("nothing is re-marked")
+
+    graph = TxGraph({"alert-node": _handling(), "cust-1": _handling()}, {})
+    alert = Alert(id="a-1", rule_id="typology:r", owner_id="o", mode=AlertMode.FULL, referent_node_ids=["cust-1"],
+                  edge_ids=["e-unreadable"], alert_node_id="alert-node", created_at=NOW)  # fmt: skip
+    report = await remark_alerts(graph, Store(), SCHEME, [alert])  # type: ignore[arg-type]
+    assert report.unsafe == ["a-1"] and report.remarked == []

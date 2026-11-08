@@ -1055,6 +1055,14 @@ async def remark_alerts(
         report.checked += 1
         referents = await graph.get_nodes(sorted(set(alert.referent_node_ids)), reader)
         links = await graph.get_edges(sorted(set(alert.edge_ids)), reader) if alert.edge_ids else []
+        unread = len(referents) < len(set(alert.referent_node_ids)) or len(links) < len(
+            set(alert.edge_ids)
+        )
+        if unread:
+            # Something it rests on cannot be read for its marking (gone, pending in the journal):
+            # no safe marking, never one guessed from what is left (as `write_alert_node`).
+            report.unsafe.append(alert.id)
+            continue
         rests_on = [
             node.handling,
             *(n.handling for n in referents),
