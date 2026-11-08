@@ -31,7 +31,24 @@ const LINKED = { dataset_id: "enron", cases: [
   { investigation_id: "gone-2", name: "Op Wren", state: "removed", home_case: false, through: null, items: 1, links: 0, size_bytes: 90 },
 ] };  // prettier-ignore
 
-async function serve(page: Page): Promise<string[]> {
+// L2.5: the roles (one custom role made a team), the rows (a case with no Author) and a disable plan.
+const TEAM = { role_id: "r1", display_name: "Intel", mailbox: "intel@example.org", lead: "u1", cover: null,
+               cover_until: null, acting_lead: "u1", members: [{ id: "u1", name: "Demo Analyst" }, { id: "u3", name: "Bea Engineer" }] };  // prettier-ignore
+const CATALOGUE = {
+  built_in: [
+    { id: "analyst", label: "Analyst", rights: ["investigate", "triage_alerts"], gives: [] },
+    { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "review_promotions"], gives: [] },
+    { id: "super_user", label: "Super user", rights: ["investigate", "edit_pipelines"], gives: ["analyst", "data_engineer", "rule_author"] },
+  ],
+  custom: [{ id: "r1", name: "Intel desk", version: 1, rights: ["investigate"], changed_by: "a", changed_at: "", holders: 1, team: TEAM }],
+};  // prettier-ignore
+const ROWS = { rows: [{ id: "u1", levels: [{ investigation_id: "c1", name: "Op Kestrel", level: "author", through: null }] }],
+               without_author: [{ investigation_id: "c3", name: "Op Wren" }] };  // prettier-ignore
+const PLAN = { person: "u1", not_yet_listed: ["boards"],
+               items: [{ kind: "case_author", id: "c1", label: "Only Author of the case Op Kestrel" }] };  // prettier-ignore
+const COLLEAGUE = { ...PERSON, id: "u3", username: "bea", name: "Bea Engineer", roles: ["data_engineer"] };
+
+async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[]> {
   const asked: string[] = [];
   let dashboards = [{ client_id: "osprey-dashboard-old", account_id: "sa-0", clearance: "OFFICIAL", org_unit: "verify" }];
   await page.route("**/*/v1/**", async (route) => {
@@ -45,7 +62,25 @@ async function serve(page: Page): Promise<string[]> {
       return json(201, { person: { ...PERSON, id: "u2", username: sent.username, name: sent.username, must_set_password: true },
                          delivery: "one_time_code", one_time_code: "ABCD-EFGH-JKLM-NPQR" });  // prettier-ignore
     }
-    if (path === "people") return json(200, [PERSON]);
+    if (path === "people") return json(200, [PERSON, COLLEAGUE]);
+    if (path === "people/rows") return json(200, ROWS);
+    if (path === "people/u1/disable-plan") return json(200, opts.owns ? PLAN : { ...PLAN, items: [] });
+    if (path === "roles" && request.method() === "POST") {
+      const sent = request.postDataJSON() as { name: string; rights: string[] };
+      return json(201, { id: "r2", version: 1, changed_by: "a", changed_at: "", holders: 0, team: null, ...sent });
+    }
+    if (path === "roles") return json(200, CATALOGUE);
+    if (path === "roles/r1/versions")
+      return json(200, [{ version: 1, name: "Intel desk", rights: ["investigate"], changed_by: "adm-1", changed_at: "2026-11-08T09:00:00Z" }]);
+    if (path === "roles/r1" && request.method() === "PUT")
+      return json(200, { ...CATALOGUE.custom[0], ...(request.postDataJSON() as object), version: 2 });
+    if (path === "roles/r1/team" && request.method() === "PUT") return json(200, { ...TEAM, ...(request.postDataJSON() as object) });
+    if (path === "teams/r1/lead" && request.method() === "PUT") return json(200, { ...TEAM, ...(request.postDataJSON() as object) });
+    if (path === "teams/r1/cover" && request.method() === "PUT") {
+      const sent = request.postDataJSON() as { cover: string; until: string };
+      return json(200, { ...TEAM, cover: sent.cover, cover_until: sent.until });
+    }
+    if (path === "cases/c3/authors/u3" && request.method() === "PUT") return route.fulfill({ status: 204 });
     if (path === "organisation-arrivals")
       return json(200, [{ subject: "sub-1", provider_username: "pat.example", last_refused: "2026-11-05T09:30:00Z", attempts: 1 }]);
     if (path === "people/u1/organisation-link" && request.method() === "POST")
@@ -312,7 +347,7 @@ test("a person is disabled and enabled again by keyboard", async ({ page }) => {
   await page.goto("/keyboard/admin-harness.html?rights=manage_people");
   await press(page, "Disable osprey-demo-analyst");
   await press(page, "Confirm disabling osprey-demo-analyst");
-  await expect(page.getByText("Disabled")).toBeVisible();
+  await expect(page.getByText("Disabled", { exact: true })).toBeVisible();
   await press(page, "Enable osprey-demo-analyst");
   await expect.poll(() => asked).toContain("POST people/u1/enable");
   expect(asked).toContain("POST people/u1/disable");
@@ -441,7 +476,7 @@ test("Admin's sections are moved between by keyboard", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "People and roles" })).toBeVisible();
   await section(page, "People and roles").focus();
   await page.keyboard.press("Tab");
-  await expect(section(page, "Roles (coming)")).toBeFocused();
+  await expect(section(page, "Roles")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(section(page, "Dashboard identities")).toBeFocused();
   await page.keyboard.press("Enter");
@@ -467,6 +502,142 @@ test("a coming section is opened by keyboard, and calls nothing", async ({ page 
   await expect(section(page, "Audit (coming)")).toHaveAttribute("aria-current", "page");
   expect(asked.length).toBe(before);
   registerCovered(REGISTRY, "open-a-coming-admin-section-by-keyboard");
+});
+
+// L2.5 (ADR-145 decisions 6 and 7 and Amendment 5; rule 13): every new action of People and Roles, by
+// keyboard alone, each proving its call reached the server with what it says.
+test("a person is given the Super user preset by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent: unknown[] = [];
+  page.on("request", (r) => r.url().endsWith("/people/u1/roles") && sent.push(r.postDataJSON()));
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await press(page, "Super user preset for osprey-demo-analyst");
+  await press(page, "Save roles for osprey-demo-analyst");
+  await expect.poll(() => asked).toContain("PUT people/u1/roles");
+  expect((sent[0] as { roles: string[] }).roles.slice().sort()).toEqual(["analyst", "data_engineer", "rule_author"]);
+  registerCovered(REGISTRY, "give-the-super-user-preset-by-keyboard");
+});
+
+test("a person is given a custom role by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent: unknown[] = [];
+  page.on("request", (r) => r.url().endsWith("/people/u1/roles") && sent.push(r.postDataJSON()));
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await page.getByLabel("Intel desk for osprey-demo-analyst").focus();
+  await page.keyboard.press("Space");
+  await press(page, "Save roles for osprey-demo-analyst");
+  await expect.poll(() => asked).toContain("PUT people/u1/roles");
+  expect((sent[0] as { roles: string[] }).roles).toContain("role:r1");
+  registerCovered(REGISTRY, "give-a-custom-role-by-keyboard");
+});
+
+test("an Author is named for a case with none by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await page.getByLabel("Author for Op Wren").focus();
+  // A closed select takes an arrow key differently by platform; typing an option's start chooses it.
+  await page.keyboard.type("Bea");
+  await expect(page.getByLabel("Author for Op Wren")).toHaveValue("u3");
+  await press(page, "Name an Author of Op Wren");
+  await expect.poll(() => asked).toContain("PUT cases/c3/authors/u3");
+  await expect(page.getByText("Bea Engineer is now an Author of Op Wren.")).toBeVisible();
+  registerCovered(REGISTRY, "name-an-author-by-keyboard");
+});
+
+test("a person's case is transferred and they are disabled by keyboard", async ({ page }) => {
+  const asked = await serve(page, { owns: true });
+  const sent: unknown[] = [];
+  page.on("request", (r) => r.url().endsWith("/people/u1/disable") && sent.push(r.postDataJSON()));
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await press(page, "Disable osprey-demo-analyst");
+  const choice = page.getByLabel("Transfer to, for Only Author of the case Op Kestrel");
+  await choice.focus();
+  await page.keyboard.type("Bea");
+  await expect(choice).toHaveValue("u3");
+  await press(page, "Transfer and disable osprey-demo-analyst");
+  await expect.poll(() => asked).toContain("POST people/u1/disable");
+  expect(sent[0]).toEqual({ transfers: [{ kind: "case_author", id: "c1", to: "u3" }] });
+  registerCovered(REGISTRY, "transfer-and-disable-a-person-by-keyboard");
+});
+
+test("a built-in role is copied into a new role by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent: unknown[] = [];
+  page.on("request", (r) => r.url().endsWith("/v1/admin/roles") && r.method() === "POST" && sent.push(r.postDataJSON()));
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await open(page, "Roles");
+  await press(page, "Copy Analyst into a new role");
+  await page.getByLabel("Role name").fill("Desk analyst");
+  await page.getByLabel("Triage alerts").focus();
+  await page.keyboard.press("Space");
+  await press(page, "Save new role");
+  await expect.poll(() => asked).toContain("POST roles");
+  expect(sent[0]).toEqual({ name: "Desk analyst", rights: ["investigate"] });
+  registerCovered(REGISTRY, "copy-a-built-in-role-by-keyboard");
+});
+
+test("a custom role is made by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await open(page, "Roles");
+  await press(page, "New role");
+  await page.getByLabel("Role name").fill("Reports desk");
+  await page.getByLabel("Investigate").focus();
+  await page.keyboard.press("Space");
+  await press(page, "Save new role");
+  await expect.poll(() => asked).toContain("POST roles");
+  await expect(page.getByText("Reports desk saved as v1.")).toBeVisible();
+  registerCovered(REGISTRY, "make-a-custom-role-by-keyboard");
+});
+
+test("a custom role's versions are shown by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await open(page, "Roles");
+  await press(page, "Versions of Intel desk");
+  await expect.poll(() => asked).toContain("GET roles/r1/versions");
+  await expect(page.getByRole("list", { name: "Versions of Intel desk" })).toContainText("v1, 2026-11-08 by adm-1: Investigate");
+  registerCovered(REGISTRY, "show-a-roles-versions-by-keyboard");
+});
+
+test("a custom role is edited by keyboard into its next version", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await open(page, "Roles");
+  await press(page, "Edit Intel desk");
+  await page.getByLabel("Triage alerts").focus();
+  await page.keyboard.press("Space");
+  await press(page, "Save Intel desk");
+  await expect.poll(() => asked).toContain("PUT roles/r1");
+  await expect(page.getByText("Intel desk saved as v2.")).toBeVisible();
+  registerCovered(REGISTRY, "edit-a-custom-role-by-keyboard");
+});
+
+test("a role's team is saved, its lead handed over and a cover named by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await open(page, "Roles");
+  await press(page, "Team for Intel desk");
+  await page.getByLabel("Team mailbox for Intel desk").fill("intel-desk@example.org");
+  await press(page, "Save team Intel desk");
+  await expect.poll(() => asked).toContain("PUT roles/r1/team");
+  registerCovered(REGISTRY, "make-a-role-a-team-by-keyboard");
+  const lead = page.getByLabel("Lead of Intel", { exact: true });
+  await lead.focus();
+  await page.keyboard.type("Bea");
+  await expect(lead).toHaveValue("u3");
+  await press(page, "Hand over the lead of Intel");
+  await expect.poll(() => asked).toContain("PUT teams/r1/lead");
+  registerCovered(REGISTRY, "hand-over-a-teams-lead-by-keyboard");
+  const cover = page.getByLabel("Cover for Intel", { exact: true });
+  await cover.focus();
+  await page.keyboard.type("Demo");
+  await expect(cover).toHaveValue("u1");
+  await page.getByLabel("Cover's last day for Intel").fill("2026-11-14");
+  await press(page, "Save cover for Intel");
+  await expect.poll(() => asked).toContain("PUT teams/r1/cover");
+  await expect(page.getByText("Cover saved.")).toBeVisible();
+  registerCovered(REGISTRY, "name-a-teams-cover-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {

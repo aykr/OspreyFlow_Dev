@@ -112,6 +112,13 @@ const EXTRA_STATES: Record<string, string[]> = {
     "rights=administer_system&serve=datasets&show=owner",
     "rights=administer_system&serve=datasets&show=dry-run",
     "rights=administer_system&serve=datasets&open=System",
+    // L2.5: People's row with its case levels and a case with no Author, Disable… with its
+    // transfers, and Roles: the lists, a role's form, a team with its lead and cover.
+    "rights=manage_people&serve=people",
+    "rights=manage_people&serve=people&show=disable",
+    "rights=manage_people&serve=people&open=Roles",
+    "rights=manage_people&serve=people&open=Roles&show=role-form",
+    "rights=manage_people&serve=people&open=Roles&show=team",
   ],
 };
 
