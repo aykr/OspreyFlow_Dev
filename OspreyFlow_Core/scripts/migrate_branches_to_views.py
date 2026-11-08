@@ -58,8 +58,11 @@ from .migrate_cases_to_one_dataset import ACTOR as LEGACY_LAYER_MAKER
 from .stamp_datasets import _Sql, _type_names
 
 ACTOR = "migrate-branches-to-views"
-#: The tag on everything moved from a retired case's own layer (ADR-144 decision 6).
+#: The tag on everything moved from a retired case's own layer (ADR-144 decision 6). Written on the
+#: stored record beside its datasets, readable by an administrator's query; no port reads it yet.
 TAG = "from_branch"
+#: What a view holds (`CaseViewInput.node_ids`).
+MAX_VIEW_NODES = CaseViewInput.model_fields["node_ids"].metadata[0].max_length
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,9 @@ class Reads(Protocol):
     async def node_ids(self, case_id: str) -> list[str]: ...
     async def threshold(self, case_id: str) -> float | None: ...
     async def elements_in(self, layer_id: str) -> int: ...
+    #: Whether the case was opened from an alert (its jump's audit row); `None` when no audit can
+    #: be read to say.
+    async def opened_from_an_alert(self, case_id: str) -> bool | None: ...
 
 
 class Writes(Protocol):
@@ -157,7 +163,8 @@ async def _original_of(
     current = case.made_from
     while current is not None and current in by_id and current not in seen:
         parent = by_id[current]
-        if parent.made_from is None or current in kept:
+        # A removed parent is the original too, so the case is reported, never put further up.
+        if parent.made_from is None or current in kept or parent.removed:
             return current
         seen.add(current)
         current = parent.made_from
@@ -170,18 +177,32 @@ async def migrate(reads: Reads, writes: Writes, report: Report | None = None) ->
     by_id = {c.id: c for c in cases}
     made = [c for c in cases if c.made_from is not None]
 
-    # Q3 first, so a case made from such a case goes under it.
+    # Q3 first, so a case made from such a case goes under it. A case opened from an alert is told
+    # apart by the audit row the jump wrote; one opened since L3.1 has a layer its maker made, one
+    # opened before has the layer `migrate_cases_to_one_dataset` made and is converted as the brief
+    # says. With no audit to ask, a layer not made by that script cannot be placed.
     kept: set[str] = set()
+    ambiguous: set[str] = set()
     for case in made:
         own = await reads.own_layer(case.id)
-        if (
-            own is not None
-            and own[1] != LEGACY_LAYER_MAKER
-            and not await reads.reads_layer(case.id)
-        ):
+        if own is None or own[1] == LEGACY_LAYER_MAKER or await reads.reads_layer(case.id):
+            continue
+        jumped = await reads.opened_from_an_alert(case.id)
+        if jumped is None:
+            ambiguous.add(case.id)
+        elif jumped:
             kept.add(case.id)
 
     for case in made:
+        if case.removed:
+            # Removed by its Author: nothing of it is shown to the original's members.
+            report.unplaced.append((case.label, "it was removed; nothing of it is moved"))
+            continue
+        if case.id in ambiguous:
+            report.unplaced.append(
+                (case.label, "no audit record says whether it was opened from an alert or copied")
+            )
+            continue
         if case.id in kept:
             await writes.drop_origin(case)
             report.kept_as_cases.append(case.label)
@@ -206,20 +227,24 @@ async def migrate(reads: Reads, writes: Writes, report: Report | None = None) ->
                 (case.label, f"its original case {original.label} has no layer yet")
             )
             continue
+        # The view is checked before anything is written: one past what a view holds is reported.
+        node_ids = await reads.node_ids(case.id)
+        if len(node_ids) > MAX_VIEW_NODES:
+            report.unplaced.append(
+                (case.label, f"it holds {len(node_ids):,} nodes, more than a view holds "
+                 f"({MAX_VIEW_NODES:,})")
+            )  # fmt: skip
+            continue
+        given = CaseViewInput(
+            name=case.name or "View",
+            node_ids=node_ids,
+            window=case.window,
+            threshold=await reads.threshold(case.id),
+        )
         moved = 0
         if own is not None and target is not None:
             moved = await writes.move_layer(own[0], target[0], case.name or case.id)
-        node_ids = await reads.node_ids(case.id)
-        view = await writes.save_view(
-            case,
-            original.id,
-            CaseViewInput(
-                name=case.name or "View",
-                node_ids=node_ids,
-                window=case.window,
-                threshold=await reads.threshold(case.id),
-            ),
-        )
+        view = await writes.save_view(case, original.id, given)
         await writes.retire(case)
         report.converted.append(
             Converted(
@@ -321,13 +346,31 @@ class DeploymentReads:
         )
 
     async def other_members(self, case_id: str, maker: str) -> list[str]:
+        """Each account granted a level, and the unit when the case gave its whole unit one."""
         rows = await self._conn.fetch(
             "SELECT account_id FROM investigation_grants "
             "WHERE investigation_id = $1 AND account_id <> $2 ORDER BY account_id",
             case_id,
             maker,
         )
-        return [r["account_id"] for r in rows]
+        named = [r["account_id"] for r in rows]
+        unit = await self._conn.fetchrow(
+            "SELECT owning_unit, unit_level FROM investigations WHERE id = $1", case_id
+        )
+        if unit is not None and unit["unit_level"]:
+            named.append(f"everyone in {unit['owning_unit']} (at {unit['unit_level']})")
+        return named
+
+    async def opened_from_an_alert(self, case_id: str) -> bool | None:
+        if not await self._has("audit_log"):
+            return None
+        return bool(
+            await self._conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM audit_log WHERE action = 'alerts_jump' "
+                "AND investigation_id = $1)",
+                case_id,
+            )
+        )
 
     async def node_ids(self, case_id: str) -> list[str]:
         return sorted(await self._working.node_ids(case_id))
@@ -425,6 +468,11 @@ def print_report(report: Report, *, write: bool) -> None:
         print(f"  kept as a case: {label}, opened from an alert since L3.1; origin link dropped")
     for label, why in report.unplaced:
         print(f"  not placed: {label}: {why}")
+    if report.converted:
+        print(
+            "  Each view holds the case's nodes, window and Match strictness; none holds a layout, "
+            "which the Conduit never stored (spec 01 §2.2c)."
+        )
     print(
         f"{len(report.converted)} {'became' if write else 'would become'} views, in "
         f"{len({c.original for c in report.converted})} cases; "

@@ -19,7 +19,8 @@ What a mistake would do, and the case that catches it:
 - a case it cannot place guessed at: `test_what_cannot_be_placed_is_reported_and_left_as_it_was`;
 - a second run changing anything: `test_a_second_run_changes_nothing`.
 
-The same on real Postgres, at `_main`, is in `test_migrate_branches_to_views_store.py`.
+The same through the deployment's own reads and writes, on real Postgres and ArcadeDB, is in
+`test_migrate_branches_to_views_store.py`.
 """
 
 from __future__ import annotations
@@ -30,7 +31,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from scripts import migrate_branches_to_views as script
 from scripts.migrate_branches_to_views import (
     LEGACY_LAYER_MAKER,
     CaseRecord,
@@ -64,6 +64,9 @@ class World:
     #: case id -> the accounts holding a level on it
     members: dict[str, set[str]] = field(default_factory=dict)
     views: list[dict[str, Any]] = field(default_factory=list)
+    #: Cases with an `alerts_jump` audit row; `audit` False is a deployment with no audit to ask.
+    jumps: set[str] = field(default_factory=set)
+    audit: bool = True
 
 
 class Reads:
@@ -100,6 +103,9 @@ class Reads:
 
     async def elements_in(self, layer_id: str) -> int:
         return sum(1 for d in self.w.elements.values() if layer_id in d)
+
+    async def opened_from_an_alert(self, case_id: str) -> bool | None:
+        return (case_id in self.w.jumps) if self.w.audit else None
 
 
 class Writes:
@@ -172,6 +178,12 @@ def seeded() -> World:
             _case("of-gone", "Of the removed one", made_from="gone"),
             # Cannot be placed: it reads no layer at all.
             _case("bare", "No layer", made_from="kestrel"),
+            # Removed by its Author before the upgrade: nothing of it is moved.
+            _case("removed-copy", "Removed copy", made_from="kestrel", removed=True),
+            # Copied before L3.1; its layer was made at its first mark, by Alice, not the script.
+            _case("copy-marked", "Marked copy", made_from="kestrel"),
+            # Past what a view holds.
+            _case("huge", "Huge copy", made_from="kestrel"),
         )
     }
     w.layers = {
@@ -182,13 +194,22 @@ def seeded() -> World:
         "layer-carols": ("carols", LEGACY_LAYER_MAKER),
         "layer-gone": ("gone", LEGACY_LAYER_MAKER),
         "layer-of-gone": ("of-gone", LEGACY_LAYER_MAKER),
+        "layer-removed-copy": ("removed-copy", LEGACY_LAYER_MAKER),
+        "layer-copy-marked": ("copy-marked", "alice"),
+        "layer-huge": ("huge", LEGACY_LAYER_MAKER),
     }
+    w.jumps = {"jump-new"}
     w.links = {"copy-new": "layer-kestrel"}
     w.elements = {
         "mark-1": ["layer-old"], "link-1": ["layer-old"], "kestrels-own": ["layer-kestrel"],
         "bobs-mark": ["layer-copy-of-jump"], "loaded": ["src"], "carols-mark": ["layer-carols"],
+        "removed-mark": ["layer-removed-copy"], "alices-mark": ["layer-copy-marked"],
+        "huge-mark": ["layer-huge"],
     }  # fmt: skip
-    w.working = {"copy-new": ["p1", "p2"], "copy-old": ["p3", "mark-1"], "copy-of-jump": ["p9"]}
+    w.working = {
+        "copy-new": ["p1", "p2"], "copy-old": ["p3", "mark-1"], "copy-of-jump": ["p9"],
+        "huge": [f"n-{i}" for i in range(10_001)],
+    }  # fmt: skip
     w.thresholds = {"copy-new": 0.8}
     w.members = {
         "kestrel": {"alice", "dave"},
@@ -197,6 +218,8 @@ def seeded() -> World:
         "jump-new": {"bob"},
         "copy-of-jump": {"bob"},
         "carols": {"carol"},
+        "copy-marked": {"alice"},
+        "huge": {"alice"},
     }
     return w
 
@@ -218,23 +241,30 @@ async def test_the_dry_run_writes_nothing_and_says_what_the_real_run_does() -> N
     assert dry.unplaced == real.unplaced and dry.kept_as_cases == real.kept_as_cases
 
 
-async def test_the_dry_run_check_fails_with_the_real_writer_handed_in() -> None:
+async def _dry_run_writes_nothing(writer: Any) -> None:
     world = seeded()
     before = copy.deepcopy(world)
     report = Report()
-    await migrate(Reads(world), Writes(world, report.writes), report)  # the plant
-    assert world != before
+    await migrate(Reads(world), writer(world, report.writes), report)
+    assert world == before
+
+
+async def test_the_dry_run_check_fails_with_the_real_writer_handed_in() -> None:
+    """Rule 15: the same assertion the dry run is held to, run with the real writer planted."""
+    await _dry_run_writes_nothing(lambda world, writes: DryRun(Reads(world), writes))
+    with pytest.raises(AssertionError):
+        await _dry_run_writes_nothing(Writes)
 
 
 async def test_the_real_run_leaves_every_seeded_case_with_its_views_and_none_made_from_another(
 ) -> None:  # fmt: skip
     world = seeded()
     report = await _real(world)
-    unplaced = {"carols", "of-gone", "bare"}
+    unplaced = {"carols", "of-gone", "bare", "removed-copy", "huge"}
     left = {c.id for c in world.cases.values() if c.made_from is not None}
     assert left == unplaced
     by_origin = {v["converted_from_case"]: v for v in world.views}
-    assert set(by_origin) == {"copy-new", "copy-old", "copy-of-jump"}
+    assert set(by_origin) == {"copy-new", "copy-old", "copy-of-jump", "copy-marked"}
     assert by_origin["copy-new"]["case_id"] == "kestrel"
     assert by_origin["copy-new"]["node_ids"] == ["p1", "p2"]
     assert by_origin["copy-new"]["window"] == WINDOW
@@ -242,10 +272,10 @@ async def test_the_real_run_leaves_every_seeded_case_with_its_views_and_none_mad
     assert by_origin["copy-new"]["name"] == "Branch of Kestrel"  # its name, the view's default
     assert by_origin["copy-old"]["case_id"] == "kestrel"
     assert by_origin["copy-of-jump"]["case_id"] == "jump-new"  # under the case that stays one
-    for converted in ("copy-new", "copy-old", "copy-of-jump"):
+    for converted in ("copy-new", "copy-old", "copy-of-jump", "copy-marked"):
         assert world.cases[converted].removed
     assert "copy-new" not in world.links
-    assert len(report.converted) == 3
+    assert len(report.converted) == 4
 
 
 async def test_everything_in_a_retired_cases_own_layer_moves_into_the_originals_tagged() -> None:
@@ -258,6 +288,11 @@ async def test_everything_in_a_retired_cases_own_layer_moves_into_the_originals_
     assert world.tags["bobs-mark"] == "Bob's copy"
     assert world.elements["kestrels-own"] == ["layer-kestrel"] and "kestrels-own" not in world.tags
     assert world.elements["loaded"] == ["src"]
+    # A copy whose layer was made at its first mark, not by the old script, is still a copy.
+    assert world.elements["alices-mark"] == ["layer-kestrel"]
+    # Nothing of a removed case, or of one past what a view holds, moves.
+    assert world.elements["removed-mark"] == ["layer-removed-copy"]
+    assert world.elements["huge-mark"] == ["layer-huge"]
     # Nothing of an unplaced case moves.
     assert world.elements["carols-mark"] == ["layer-carols"] and "carols-mark" not in world.tags
 
@@ -286,9 +321,13 @@ async def test_a_case_opened_from_an_alert_since_l3_1_stays_a_case() -> None:
 async def test_the_q3_check_fails_with_every_case_converted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Planted: the maker of a layer is never read, so a case opened from an alert since L3.1 is
-    taken for one made before L3.1. Bob holds a level on Kestrel here, so it is converted."""
-    monkeypatch.setattr(script, "LEGACY_LAYER_MAKER", "bob")
+    """Planted: the jump's audit row never read, so a case opened from an alert since L3.1 is
+    taken for a copy. Bob holds a level on Kestrel here, so it is converted."""
+
+    async def never(self: Reads, case_id: str) -> bool:
+        return False
+
+    monkeypatch.setattr(Reads, "opened_from_an_alert", never)
     world = seeded()
     world.members["kestrel"].add("bob")
     await _real(world)
@@ -312,7 +351,21 @@ async def test_what_cannot_be_placed_is_reported_and_left_as_it_was() -> None:
     assert "holds no level" in reasons["Carol's (carols)"]
     assert "missing or removed" in reasons["Of the removed one (of-gone)"]
     assert "reads no layer" in reasons["No layer (bare)"]
+    assert "removed" in reasons["Removed copy (removed-copy)"]
+    assert "more than a view holds" in reasons["Huge copy (huge)"]
     assert world.cases["carols"].made_from == "kestrel" and not world.cases["carols"].removed
+
+
+async def test_a_case_that_cannot_be_told_apart_is_reported_not_guessed() -> None:
+    """With no audit to ask, a case whose layer the old script did not make might be a copy or a
+    case opened from an alert: it is reported and nothing of it moves."""
+    world = seeded()
+    world.audit = False
+    report = await _real(world)
+    reasons = dict(report.unplaced)
+    assert "no audit record" in reasons["Marked copy (copy-marked)"]
+    assert "no audit record" in reasons["From alert A14 (jump-new)"]
+    assert world.elements["alices-mark"] == ["layer-copy-marked"]
 
 
 async def test_a_second_run_changes_nothing() -> None:
