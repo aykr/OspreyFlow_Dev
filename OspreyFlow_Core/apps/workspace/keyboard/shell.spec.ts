@@ -288,7 +288,7 @@ test("the banner's sections are Case and Boards, Case reached by keyboard and Bo
 });
 
 // ADR-146 decision 6 (rule 13): Home's Needs your attention opens the alert, not its case.
-test("an alert on Home is reached by Tab and opened at its address by keyboard", async ({ page }) => {
+test("an alert on Home, focused, is opened at its address by Enter", async ({ page }) => {
   await page.route("**/*/v1/**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.goto("/keyboard/start-harness.html?figures=1&rights=investigate,triage_alerts,read_alert_queue");
   const row = page.getByRole("region", { name: "Needs your attention" }).getByRole("button", { name: /KYC screening alert/ });

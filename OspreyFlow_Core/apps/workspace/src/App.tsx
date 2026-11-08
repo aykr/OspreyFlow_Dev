@@ -1712,7 +1712,11 @@ export function App() {
               if (!saved.ok) return saved.message;
               // Said on the alert, which stays open at its address, when the view cannot be opened.
               const problem = await openLens(saved.view.id, { alertId, title });
-              if (problem) return `The evidence was saved as the private view “${saved.view.name}”, but it could not be opened: ${problem}`;
+              // Said there alone: the Glass, visited next, must not carry it over its canvas.
+              if (problem) {
+                setViewProblem(null);
+                return `The evidence was saved as the private view “${saved.view.name}”, but it could not be opened: ${problem}`;
+              }
               navigate("/");
               return null;
             }}

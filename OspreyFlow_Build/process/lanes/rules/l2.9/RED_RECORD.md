@@ -270,3 +270,20 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address.py::test_an_ale
     Tests  1 failed | 33 skipped (34)
     FAIL  src/App.test.tsx > the tab the launcher asked for is the tab the Glass opens on > Open the evidence, then Back to the alert, returns to the same alert, still open
 ```
+
+## 8. Review round 3 (resumed session, 8 November 2026)
+
+### App: a failed *Open the evidence* left its problem over the Glass's canvas
+
+`App.test.tsx` › "Open the evidence says so on the alert when the view cannot be opened" gained a step: after the
+failure, *The Glass* from the switcher shows no "That view could not be opened". On the round-2 code (`openLens`
+sets `viewProblem`, which only `showLens`/`closeLens` clear):
+
+    ❯ src/App.test.tsx:653:67  expect(screen.queryByText(/That view could not be opened/)).toBeNull()
+    Received: <p class="view-lens-banner" role="alert">That view could not be opened. It may have been deleted, or not shared with you.</p>
+    Tests  1 failed | 33 skipped (34)
+
+Green with `onOpenEvidence` clearing `viewProblem` when it says the failure on the alert: 34 passed (34).
+
+The keyboard case at `keyboard/shell.spec.ts:291` (§3, "home row") is renamed "an alert on Home, focused, is
+opened at its address by Enter": it focuses the row, it does not Tab to it. Its registry id is unchanged.

@@ -646,6 +646,11 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       expect(window.location.pathname).toBe("/alerts/a1");
       expect(screen.getByRole("region", { name: "You are in Rules and Monitoring" })).toBeTruthy();
       expect(screen.queryByRole("region", { name: "Open view" })).toBeNull();
+      // Round 3: said on the alert only; the Glass, visited next, carries no stale "could not be opened".
+      fireEvent.click(within(await screen.findByRole("navigation", { name: "Places" })).getByRole("button", { name: /^The Glass/ }));
+      await vi.waitFor(() => expect(window.location.pathname).not.toBe("/alerts/a1"));
+      expect(await screen.findByRole("button", { name: "Graph" })).toBeTruthy();
+      expect(screen.queryByText(/That view could not be opened/)).toBeNull();
     } finally {
       window.history.replaceState(null, "", "/");
     }
