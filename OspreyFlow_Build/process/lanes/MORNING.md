@@ -311,6 +311,12 @@ New ones are added at the bottom as they happen.
     (my ruling, strict: count only withdrawn or deleted references, ADR-144's lost-access count); the marking
     ceiling was not enforced through a composite; a withdrawn node's matches stayed live.
 
+63. **Docker's disk filled (310 MB free of 197 GB)**, failing every object-store upload on all stacks. I pruned the
+    build cache and dangling (untagged) images only: 85 GB free now; no tagged image, volume or container was
+    touched, and your deployment's and airbyte's 16 containers kept running. Lanes told to re-run any live test
+    that failed on an upload. Rules' L2.9 merged (`057a10e`); rules is on L2.10, and rules-b opened on sol for
+    L2.12. Platform's P3 held for a map-key exfiltration path and host-check bypasses; being fixed.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
