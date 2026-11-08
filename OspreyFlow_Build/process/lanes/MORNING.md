@@ -182,6 +182,16 @@ New ones are added at the bottom as they happen.
     enabled holder of manage_people; no unknown right, both halves of a decision 7 pair, or a right the
     giver lacks), recorded as ADR-145 Amendment 5; team members are the holders of the team's role.
 
+42. **A dashboard identity stays a case Viewer; no other service account is a member** (admin's L2.5 Q5,
+    reconciling ADR-112 Amendment 5 decision 5, "a service account can't be a case member", with ADR-111
+    decision 7, which has an Author grant a dashboard's identity Viewer so Superset can read its feed).
+    A dashboard at Editor or Author is refused, as is any other service account anywhere; owners, team
+    members and leads refuse every service account.
+43. **Platform's P1 held by its independent review** for two credential defects: an engine's address could
+    be changed to send its key elsewhere (my ruling: changing the address drops the key, which must be
+    entered again), and a failed rotation deleted the old key while reporting it set. Case's L3.2 held for
+    a rule 3 merge path into another case's layer, and for live suites not run on its final tree.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
