@@ -8,12 +8,15 @@ audits, and denies a principal without access.
 
 from __future__ import annotations
 
+from typing import Any
+
 from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 from services.api.app import (
     app,
+    get_alerts_store,
     get_audit,
     get_extraction_candidates,
     get_graph,
@@ -22,6 +25,7 @@ from services.api.app import (
     get_model,
     get_ontology,
     get_principal,
+    get_working_set,
 )
 from services.api.investigations import Investigation, InvestigationNotFoundError
 from services.api.review import (
@@ -32,6 +36,7 @@ from services.api.review import (
 )
 
 from ontology.loader import load_default_ontology
+from tests.services.api.repoint_journal_fakes import Journal, WorkingSets
 from schemas.domain import (
     AuditStub,
     EdgeWrite,
@@ -206,7 +211,9 @@ class _FakeGraphPort:
         found = [await self.get_node(node_id, principal) for node_id in node_ids]
         return [node for node in found if node is not None]
 
-    async def supersede_node(self, node_id: str, replacement: NodeWrite, tx: str) -> str:
+    async def supersede_node(
+        self, node_id: str, replacement: NodeWrite, tx: str, *, on_link_cloned: Any = None
+    ) -> str:
         self.superseded.append((node_id, replacement))
         return replacement.id
 
@@ -271,6 +278,9 @@ def fakes():
     app.dependency_overrides[get_audit] = lambda: audit
     app.dependency_overrides[get_investigations] = lambda: _FakeInvestigations()
     app.dependency_overrides[get_judgements_store] = lambda: _FakeJudgements()
+    # The confirm and retract routes write through the alerts' repoint journal (ADR-109 Am. 11).
+    app.dependency_overrides[get_alerts_store] = Journal
+    app.dependency_overrides[get_working_set] = WorkingSets
 
     client = TestClient(app)
     try:

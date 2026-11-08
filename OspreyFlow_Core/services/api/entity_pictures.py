@@ -53,7 +53,7 @@ from schemas.domain import (
     SourceRef,
 )
 
-from .alerts import AlertStore, repointing_alerts
+from .alerts import AlertStore, purge_copies, repointing_alerts
 from .change_provenance import PICTURE_MARKER, without_link_ids
 from .dataset_scope import refuse_in_a_composite_case
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
@@ -382,7 +382,7 @@ class EntityPictureService:
         # The moved alerts' re-marked nodes leave every working set that stored a copy at the old
         # marking (ADR-109 Amendment 10): a stored copy is served from the store, not read again.
         if repoint.remarked_nodes:
-            await self._working_set.remove_reverted(repoint.remarked_nodes, [])
+            await purge_copies(self._working_set, repoint.remarked_nodes)
             await repoint.purged()
         return _Attached(document=document, link=link, before=before)
 
@@ -555,7 +555,7 @@ class EntityPictureService:
         # The moved alerts' re-marked nodes leave every working set that stored a copy at the old
         # marking (ADR-109 Amendment 10): a stored copy is served from the store, not read again.
         if repoint.remarked_nodes:
-            await self._working_set.remove_reverted(repoint.remarked_nodes, [])
+            await purge_copies(self._working_set, repoint.remarked_nodes)
             await repoint.purged()
         # The successor belongs to every dataset the link did (the store merges them), so what it
         # is sent as is judged against all of them (ADR-130 Amendment 2).

@@ -46,7 +46,9 @@ class _Graph(FakeGraphPort):
     async def suggest_locations(self, name: str, principal: Principal, **_: Any) -> list[Node]:
         return []
 
-    async def supersede_node(self, node_id: str, replacement: NodeWrite, tx: Any) -> str:
+    async def supersede_node(
+        self, node_id: str, replacement: NodeWrite, tx: Any, *, on_link_cloned: Any = None
+    ) -> str:
         assert not replacement.provenance.sources_withheld, "the write guard refuses this"
         self.node_writes.append(replacement)
         return replacement.id
@@ -134,6 +136,9 @@ async def test_a_true_positive_on_a_two_dataset_link_confirms_it_with_its_stored
             if alert_id != alert.id:
                 raise AlertNotFoundError(alert_id)
             return QueueRow(alert, "typology", "medium", "case")
+
+        async def settle_pending(self, graph: Any, *, now: Any = None) -> None:
+            """A journal holding no record: nothing to settle before the close's read."""
 
         repointed: dict[str, str] = {}
 

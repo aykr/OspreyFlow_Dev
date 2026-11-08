@@ -74,3 +74,33 @@ async def test_the_registration_check_fails_with_the_bindings_planted_out(
         await worker._handlers["resolve_entity_type"](  # noqa: SLF001
             {"entity_type": "Person"}, graph=object(), tx="tx"
         )
+
+
+async def test_the_deployed_worker_gives_both_jobs_the_alerts_repoint_journal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR-109 Amendment 11 (L2.8c): the standalone worker is where both jobs run in a deployment,
+    so the alert store `main` connects is bound to the supersede job (each cloned link recorded)
+    and to the resolution job (each split's annotation recorded). Red with `alerts` left out of
+    either job's bindings: that job ran with `alerts=None`, recording nothing."""
+    from services.api import supersede
+
+    seen: dict[str, Any] = {}
+
+    async def supersede_job(payload: Any, **kwargs: Any) -> dict[str, Any]:
+        seen["supersede_node"] = kwargs.get("alerts")
+        return {}
+
+    async def guarded(entity_type_name: str, **kwargs: Any) -> ResolutionRunResult:
+        seen["resolve_entity_type"] = kwargs.get("alerts")
+        return ResolutionRunResult(skipped=True, reason="test")
+
+    monkeypatch.setattr(supersede, "run_supersede_node_job", supersede_job)
+    monkeypatch.setattr(trigger, "try_run_resolution_with_overlap_guard", guarded)
+    alerts, valkey = object(), object()
+    worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
+    worker_main.register_all(worker, ontology=load_default_ontology(), scheme=load_uk_le_scheme(),
+                             valkey=valkey, analyst_layers=_layers, alerts=alerts)  # fmt: skip
+    await worker._handlers["supersede_node"]({}, graph=object(), tx="tx")  # noqa: SLF001
+    await worker._handlers["resolve_entity_type"]({"entity_type": "Person"}, graph=object(), tx="tx")  # noqa: SLF001
+    assert seen == {"supersede_node": alerts, "resolve_entity_type": alerts}

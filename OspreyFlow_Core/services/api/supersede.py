@@ -29,6 +29,7 @@ from pydantic import BaseModel
 from ports.graph import GraphPort
 from schemas.domain import NodeId, NodeWrite, Principal, TxId
 
+from .alerts import AlertStore, journal_outside_commit
 from .assessments import JudgementStore, flag_judgements_citing_superseded_node
 from .jobs import JobQueue
 
@@ -60,16 +61,23 @@ async def submit_supersede_node(
     jobs: JobQueue,
     degree_threshold: int,
     judgement_store: JudgementStore | None = None,
+    alerts: AlertStore | None = None,
 ) -> SupersedeNodeAccepted:
     """`judgement_store` — `01_DOMAIN_MODEL.md` §5's review-flag loop (Phase 8 Stage 4b),
     `GraphPort.supersede_node`'s own docstring already names this module as one of its two
     intended callers. Optional and `None` by default so every existing caller/test of this
     function is unaffected; a caller that wires a real store gets the flag for free on the
     synchronous path only — the job path (`run_supersede_node_job` below) flags separately, since
-    a submitted job has no `judgement_store` reference to carry across the queue boundary."""
+    a submitted job has no `judgement_store` reference to carry across the queue boundary.
+
+    `alerts`: the alerts' repoint journal (ADR-109 Amendment 11). Each link the supersede clones is
+    recorded before the caller commits `tx`, and the next read of alerts settles the record once
+    the graph shows the commit, so an alert citing one follows it to its clone."""
     stats = await graph.neighbourhood_stats(node_id, principal)
     if stats.degree < degree_threshold:
-        new_id = await graph.supersede_node(node_id, replacement, tx)
+        new_id = await graph.supersede_node(
+            node_id, replacement, tx, on_link_cloned=journal_outside_commit(alerts)
+        )
         if judgement_store is not None:
             await flag_judgements_citing_superseded_node(judgement_store, node_id)
         return SupersedeNodeAccepted(mode="sync", result_node_id=new_id)
@@ -92,6 +100,7 @@ async def run_supersede_node_job(
     graph: GraphPort,
     tx: TxId,
     judgement_store: JudgementStore | None = None,
+    alerts: AlertStore | None = None,
 ) -> dict[str, object]:
     """The background half a worker process calls — `services/api/worker.py`'s `JobWorker`, now
     that one exists (`06_DECISIONS.md` ADR-025). Separated from `submit_supersede_node` so that
@@ -101,10 +110,13 @@ async def run_supersede_node_job(
     presents alongside it.
 
     `judgement_store` — the job path's own review-flag hook, the twin of
-    `submit_supersede_node`'s. `None` by default, same reasoning."""
+    `submit_supersede_node`'s. `None` by default, same reasoning. `alerts` as
+    `submit_supersede_node`'s: the worker commits `tx` after this returns."""
     node_id = str(payload["node_id"])
     replacement = NodeWrite.model_validate(payload["replacement"])
-    new_id = await graph.supersede_node(node_id, replacement, tx)
+    new_id = await graph.supersede_node(
+        node_id, replacement, tx, on_link_cloned=journal_outside_commit(alerts)
+    )
     if judgement_store is not None:
         await flag_judgements_citing_superseded_node(judgement_store, node_id)
     return {"result_node_id": new_id}

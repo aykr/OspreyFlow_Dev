@@ -39,6 +39,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from pydantic import ValidationError
+from services.api.alerts import AlertStore, supersede_journalled
 from services.api.review import (
     RECOGNISE_OVERLAP_CHARS,
     RECOGNISE_WINDOW_CHARS,
@@ -69,7 +70,7 @@ from conduit_common.identity import new_node_id
 from knowledge_adapters import REGISTRY
 from ontology.handling import HandlingScheme, sources_in_full
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort
+from ports.graph import GraphPort, LinkCloned
 from ports.media import MediaStore
 from ports.recognise import RecognisePort, RecogniserRefusedError
 from schemas.analytics import GeometryKind, GeometryRecord
@@ -354,8 +355,12 @@ async def _run_enrich_stage(
     scheme: HandlingScheme,
     analytics: AnalyticsPort | None,
     online_geocode: OnlineGeocode | None,
+    alerts: AlertStore | None = None,
 ) -> tuple[EnrichStageReport, list[str]]:
-    """One enrich node's run. Returns the stage report and the `SAME_AS` edge ids it wrote."""
+    """One enrich node's run. Returns the stage report and the `SAME_AS` edge ids it wrote. Its
+    transaction goes through the alerts' repoint journal (`alerts`, ADR-109 Amendment 11): a
+    mention given an online point is superseded, its links cloned, and an alert citing one
+    follows it to its clone."""
     geocoder = str(node.config.get("geocoder", "local_gazetteer"))
     report = EnrichStageReport(node_id=node.id, geocoder=geocoder)
     edge_ids: list[str] = []
@@ -392,8 +397,7 @@ async def _run_enrich_stage(
     run_created = {node_id for branch in branches for node_id in branch.report.created_node_ids}
     to_ref = REGISTRY["geometry_ref"]
 
-    tx = await graph.begin_transaction()
-    try:
+    async def enrich(tx: str, cloned: LinkCloned) -> None:
         for mention in locations:
             name = mention.properties.get("name")
             if not name or mention.properties.get("geometry_ref"):
@@ -410,15 +414,13 @@ async def _run_enrich_stage(
                 coordinates = await online_geocode(str(name))
                 if coordinates is not None:
                     await _persist_online_point(
-                        graph, analytics, mention, coordinates, to_ref, principal, tx
+                        graph, analytics, mention, coordinates, to_ref, principal, tx, cloned
                     )
                     report.matched_online += 1
                     continue
             report.unmatched += 1
-    except Exception:
-        await graph.rollback_transaction(tx)
-        raise
-    await graph.commit_transaction(tx)
+
+    await supersede_journalled(alerts, graph, enrich)
     return report, edge_ids
 
 
@@ -430,6 +432,7 @@ async def _persist_online_point(
     to_ref: Callable[..., str],
     principal: Principal,
     tx: TxId,
+    on_link_cloned: LinkCloned | None = None,
 ) -> None:
     """An online geocode made durable: the point as a geometry-partition row (insert-only, keyed
     by its deterministic ref) and the mention superseded with that `geometry_ref` — a new node
@@ -468,7 +471,7 @@ async def _persist_online_point(
         created_by=principal.id,
         created_at=now,
     )
-    await graph.supersede_node(mention.id, replacement, tx)
+    await graph.supersede_node(mention.id, replacement, tx, on_link_cloned=on_link_cloned)
 
 
 async def run_published_pipeline(
@@ -590,6 +593,7 @@ async def run_published_pipeline(
                 scheme=scheme,
                 analytics=analytics,
                 online_geocode=online_geocode,
+                alerts=None if rules is None else rules.alert_store,
             )
             report.enriches.append(enrich_stage)
             report.touched_edge_ids.extend(edges)

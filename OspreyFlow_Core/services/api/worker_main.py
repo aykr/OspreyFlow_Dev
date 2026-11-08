@@ -78,19 +78,24 @@ def register_all(
     scheme: Any,
     valkey: Any,
     analyst_layers: Callable[[], Awaitable[Collection[str]]],
+    alerts: Any = None,
 ) -> None:
     """Every handler in `registered_job_types` on `worker`, with what each needs bound, as the
     Conduit's own lifespan binds them (`app.py`): the resolution job its ontology, handling scheme,
     Valkey client and the case layers it must not honour a split from (ADR-025 Amendment 1, ADR-143
-    Amendment 1). `main` calls this; `test_worker_registration.py` proves it."""
+    Amendment 1); and both the alerts' repoint journal (`alerts`, ADR-109 Amendment 11), so a link
+    either replaces is followed by the alerts citing it. `main` calls this;
+    `test_worker_registration.py` proves it."""
     from importlib import import_module
 
     bound: dict[str, dict[str, Any]] = {
+        "supersede_node": {"alerts": alerts},
         "resolve_entity_type": {
             "ontology": ontology,
             "scheme": scheme,
             "valkey": valkey,
             "analyst_layers": analyst_layers,
+            "alerts": alerts,
         },
     }
     for job_type, dotted in registered_job_types().items():
@@ -134,6 +139,7 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
     from ontology.handling import load_uk_le_scheme
     from ontology.loader import load_default_ontology
 
+    from .alerts import AlertStore
     from .config import ApiConfig, PostgresConfig
     from .datasets import PostgresDatasetStore
     from .jobs import JobQueue
@@ -152,12 +158,15 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
     worker = JobWorker(client, JobQueue(client), graph, consumer_name=consumer_name())
     # The case layers come from the dataset store, read at each run (a layer made since counts).
     datasets = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
+    # The alerts' repoint journal (ADR-109 Amendment 11): what a job replaces, alerts follow.
+    alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
     register_all(
         worker,
         ontology=load_default_ontology(),
         scheme=load_uk_le_scheme(),
         valkey=client,
         analyst_layers=datasets.layer_ids,
+        alerts=alerts,
     )
 
     stop = asyncio.Event()
@@ -170,6 +179,7 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
     try:
         await run_forever(worker, sorted(registered_job_types()), stop=stop)
     finally:
+        await alerts.close()
         await datasets.close()
     logger.info("worker %s: stopped", consumer_name())
     return 0

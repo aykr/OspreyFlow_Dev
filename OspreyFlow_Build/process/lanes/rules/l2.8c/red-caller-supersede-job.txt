@@ -1,0 +1,5 @@
+# red caller: supersede.py's worker job without its journal — lease rules, stack b, 2026-11-08T12:54:48Z, at 67dbfb3 + working tree
+E       AssertionError: the alert citing the replaced link is withheld from its reader
+E       assert '01M6XKKWTCC84JDZM6FZ0H7E1N' in {}
+E        +  where '01M6XKKWTCC84JDZM6FZ0H7E1N' = Alert(id='01M6XKKWTCC84JDZM6FZ0H7E1N', rule_id='typology:01M6XKKWTCC84JDZM6FZ0H7E1P', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+1 failed in 11.05s

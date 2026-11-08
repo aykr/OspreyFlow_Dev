@@ -44,7 +44,7 @@ import asyncpg
 from conduit_common.identity import new_id, new_node_id
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort, StoredLink
+from ports.graph import GraphPort, LinkCloned, StoredLink
 from schemas.analytics import (
     HOTLISTS_RULE,
     MONITORS_RULE,
@@ -399,6 +399,11 @@ class LinkRepoint:
         id), so the settle reads that type's successor alone."""
         await self._store._add_to_record(self.id, links=[(old, new, old_type)])
         self.pairs[old] = new
+
+    async def cloned(self, old: str, new: str, old_type: str) -> None:
+        """`GraphPort.supersede_node`'s `on_link_cloned`: each link a node's correction clones,
+        recorded as a link change's is (ADR-109 Amendment 11)."""
+        await self.record(old, new, old_type=old_type)
 
     async def record_node(self, old: str, new: str) -> None:
         await self._store._add_to_record(self.id, alert_nodes=[(old, new)])
@@ -756,13 +761,7 @@ class AlertStore:
         settle applies the record while its writer is active (each pair it records keeps it so),
         since one applied part-way would miss the writer's later pairs (L2.8b's D2); a writer gone
         quiet for `STALE_REPOINT_AFTER` is taken to have crashed, and its record settled as any."""
-        record_id = new_id()
-        async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO alert_repoint_records (id, held_open) VALUES ($1, $2)",
-                record_id,
-                held_open,
-            )
+        record_id = await self.open_record(held_open=held_open)
         repoint = LinkRepoint(self, record_id)
         try:
             yield repoint
@@ -782,6 +781,17 @@ class AlertStore:
         except RepointLockBusy:
             # The write has committed and its record is released: a later read settles it (D10).
             _log.warning("repoint record %s left for a later settle", record_id, exc_info=True)
+
+    async def open_record(self, *, held_open: bool = False) -> str:
+        """A new, empty repoint record; its id."""
+        record_id = new_id()
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO alert_repoint_records (id, held_open) VALUES ($1, $2)",
+                record_id,
+                held_open,
+            )
+        return record_id
 
     async def settle_pending(self, graph: GraphPort, *, now: datetime | None = None) -> None:
         """Before every read of alerts: every record whose write has committed is applied, so no
@@ -1448,6 +1458,9 @@ class _NoRepoint:
     async def purged(self) -> None:
         return None
 
+    async def cloned(self, old: str, new: str, old_type: str) -> None:
+        return None
+
 
 @asynccontextmanager
 async def repointing_alerts(
@@ -1463,13 +1476,85 @@ async def repointing_alerts(
         yield repoint
 
 
+class OutsideCommitJournal:
+    """The repoint journal for a writer whose graph transaction another commits (ADR-109 Amendment
+    11): the job worker's `supersede_node` and resolution runs (`NOT_SAME_AS`), whose `tx` the
+    worker commits after the handler returns. Each `old → new` is recorded, before that commit, in
+    one record opened at the first pair (a write that replaces no link leaves none). Its writer
+    never settles it, since the commit is not its own: the next read of alerts settles it once the
+    graph's stored states show the write committed, as any record (`settle_pending`); one whose
+    write never commits is dropped at `STALE_REPOINT_AFTER`. Passed as `on_link_cloned`, or called
+    after a `supersede_edge`, with the old link's type."""
+
+    def __init__(self, store: AlertStore) -> None:
+        self._store = store
+        self.record_id: str | None = None
+
+    async def __call__(self, old: str, new: str, old_type: str) -> None:
+        if self.record_id is None:
+            self.record_id = await self._store.open_record()
+        await self._store._add_to_record(self.record_id, links=[(old, new, old_type)])
+
+
+def journal_outside_commit(alerts: AlertStore | None) -> OutsideCommitJournal | None:
+    """`OutsideCommitJournal` over `alerts`; `None` (nothing recorded) for a writer given no
+    alert store, as `repointing_alerts` answers one."""
+    return None if alerts is None else OutsideCommitJournal(alerts)
+
+
+async def supersede_journalled[T](
+    alerts: AlertStore | None,
+    graph: GraphPort,
+    write: Callable[[str, LinkCloned], Awaitable[T]],
+    *,
+    working_set: Any = None,
+) -> T:
+    """One graph transaction that supersedes what alerts may cite, through the repoint journal
+    (ADR-109 Amendments 10 and 11), for a writer that commits its own transaction (the confirm and
+    retract routes, the pipeline's enrich stage). `write(tx, on_link_cloned)` does the writing and
+    reports each replaced link through `on_link_cloned` before this commits; a write refused before
+    its commit says so (`never_committed`). The moved alerts' re-marked nodes leave `working_set`,
+    where one is held; else the next working-set read purges them (`purge_remarked_copies`)."""
+    async with repointing_alerts(alerts, graph) as repoint:
+        tx = await graph.begin_transaction()
+        try:
+            result = await write(tx, repoint.cloned)
+        except Exception:
+            # Its commit never sent, nothing recorded can land: the record goes with it.
+            repoint.never_committed()
+            await graph.rollback_transaction(tx)
+            raise
+        await graph.commit_transaction(tx)
+    if working_set is not None and repoint.remarked_nodes:
+        await purge_copies(working_set, repoint.remarked_nodes)
+        await repoint.purged()
+    return result
+
+
+async def purge_copies(working_set: Any, nodes: Sequence[str]) -> None:
+    """`nodes`' copies leave every working set that stored one
+    (`WorkingSetService.remove_reverted`), and each case's stored removal is published on its
+    channel at once (`notify.publish_delta`), so a connected canvas drops the copies now,
+    projected for its reader, rather than at its next resynchronisation (ADR-109 Amendment 11,
+    closing Amendment 10 point 6's second gap). Every store is cleared before anything is
+    published, as the revert's own purge does (`working_set_revert.py`). A service built without
+    a client (a test's) publishes nothing."""
+    from .notify import publish_delta
+
+    removals = await working_set.remove_reverted(nodes, [])
+    publisher = working_set.publisher
+    if publisher is not None:
+        for removal in removals:
+            await publish_delta(publisher, removal.investigation_id, removal.delta)
+
+
 async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:
     """Before a working-set read: the nodes a settle re-marked (on a read path, which holds no
     working sets) leave every working set that stored a copy at the old marking
     (`WorkingSetService.remove_reverted`), and their records are closed (ADR-109 Amendment 10;
     L2.8b's R2). A stored copy is served from the store, not read again from the graph."""
     for record_id, nodes in await alerts.applied_purges():
-        await working_set.remove_reverted(nodes, [])
+        await purge_copies(working_set, nodes)
         await alerts.purged(record_id)
 
 

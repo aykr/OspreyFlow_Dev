@@ -170,7 +170,9 @@ class _NodeGraph(FakeGraphPort):
         super().__init__(Subgraph(nodes=list(nodes), edges=[]))
         self.superseded: list[str] = []
 
-    async def supersede_node(self, node_id: str, replacement: NodeWrite, tx: Any) -> str:
+    async def supersede_node(
+        self, node_id: str, replacement: NodeWrite, tx: Any, *, on_link_cloned: Any = None
+    ) -> str:
         self.superseded.append(node_id)
         return replacement.id
 
@@ -202,7 +204,16 @@ async def _http(
     """`path` under a case reading the composite, through the real `get_principal` (so the case is
     in scope as in a deployment). With `member=False` the caller holds no level on the case."""
     from fastapi.testclient import TestClient
-    from services.api.app import app, get_audit, get_graph, get_investigations
+    from services.api.app import (
+        app,
+        get_alerts_store,
+        get_audit,
+        get_graph,
+        get_investigations,
+        get_working_set,
+    )
+
+    from .repoint_journal_fakes import Journal, WorkingSets
 
     from .test_analyst_layer import _Audit, _Investigations
 
@@ -220,6 +231,9 @@ async def _http(
     app.dependency_overrides[get_investigations] = lambda: investigations
     app.dependency_overrides[get_audit] = _Audit
     app.dependency_overrides[get_graph] = lambda: stamping(graph, registry=store)
+    # The confirm and retract routes write through the alerts' repoint journal (ADR-109 Am. 11).
+    app.dependency_overrides[get_alerts_store] = Journal
+    app.dependency_overrides[get_working_set] = WorkingSets
     for dependency, value in overrides.items():
         app.dependency_overrides[dependency] = value
     if without_dependency is not None:
@@ -442,6 +456,9 @@ async def _close(
             self.triaged.append(kwargs)
             return object()
 
+        async def settle_pending(self, graph: object, *, now: object = None) -> None:
+            """A journal holding no record: nothing to settle before the close's read."""
+
         def repointing(self, graph: object) -> Any:
             """`AlertStore.repointing` (ADR-109 Amendment 10), around the close's graph write: what
             the close records, kept; nothing re-marked, so nothing to purge."""
@@ -456,6 +473,9 @@ async def _close(
                     store.recorded.append((old, new))
 
                 async def record_node(self, old: str, new: str) -> None:
+                    store.recorded.append((old, new))
+
+                async def cloned(self, old: str, new: str, old_type: str) -> None:
                     store.recorded.append((old, new))
 
                 def never_committed(self) -> None:

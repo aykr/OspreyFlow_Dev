@@ -1,0 +1,5 @@
+# red caller: supersede.py's synchronous path without its journal — lease rules, stack b, 2026-11-08T12:54:28Z, at 67dbfb3 + working tree
+E       AssertionError: the alert citing the replaced link is withheld from its reader
+E       assert '01M6XKKH9WA589SZ374TX0PFGR' in {}
+E        +  where '01M6XKKH9WA589SZ374TX0PFGR' = Alert(id='01M6XKKH9WA589SZ374TX0PFGR', rule_id='typology:01M6XKKH9WA589SZ374TX0PFGS', owner_id='analyst-rules', mode=<...n=None, decided_by=None, decided_at=None, close_proposed_by=None, close_proposed_at=None, severity='medium', team=None).id
+1 failed in 19.89s
