@@ -665,3 +665,37 @@ def test_the_no_branch_route_check_fails_with_one_put_back(world: _World) -> Non
     finally:
         app.router.routes.pop()
     assert not [r for r in app.routes if "/branch" in getattr(r, "path", "")]
+
+
+def test_a_deleted_views_conversation_and_proposals_are_read_by_no_one(
+    world: _World, proposals: tuple[Any, str, str], conversation: tuple[Any, str]
+) -> None:
+    """Spec 03 §3.1b: once Alice deletes her view, its conversation and its pending proposal stay
+    stored and are read by no route, hers included: the view is gone, so nothing lets a request
+    into it."""
+    candidates, view_id, candidate = proposals
+    questions, conversation_view = conversation
+    # The two fixtures each saved a view; delete both, as their creator.
+    for gone in {view_id, conversation_view}:
+        assert _as("alice").delete(f"{VIEWS}/{gone}").status_code == 204
+    q = f"/v1/investigations/{CASE}/questions"
+    assert _as("alice").get(q, params={"view_id": conversation_view}).status_code == 404
+    assert _ids(_as("alice").get(q)) == ["q-case"]
+    assert _as("alice").get(
+        f"/v1/investigations/{CASE}/ingest/candidates", params={"document_id": "doc-1"}
+    ).json() == []
+    accepted = _as("alice").post(f"{q}/candidates/{candidate}/accept", params={"view_id": view_id})
+    assert accepted.status_code == 404
+    assert candidates.records[candidate].status.value == "pending"
+    assert [e.id for e in questions.store.entries] == ["q-case", "q-view"]  # kept, read by none
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("GET", VIEWS), ("POST", VIEWS), ("GET", f"{VIEWS}/v"), ("POST", f"{VIEWS}/v/share"),
+     ("DELETE", f"{VIEWS}/v")],
+)  # fmt: skip
+def test_a_view_route_without_a_token_is_refused(world: _World, method: str, path: str) -> None:
+    answered = TestClient(app).request(method, path, json={"name": "x", "node_ids": ["a"]})
+    assert answered.status_code in (401, 403)
+    assert world.views.views == {}

@@ -2,7 +2,8 @@
 2026): no route, screen, module or test in the Glass or the Conduit makes, lists or reads a case's
 branch once L3.2 merges. A case is the only container and a view is a saved lens on it.
 
-It scans every source file under `apps/workspace/src` and `services/api` in `OspreyFlow_Core`
+It scans every source file under `apps/workspace/src`, `services/api` and `packages/schemas` (and
+its generated types) in `OspreyFlow_Core`
 for the word *branch* in any case and any form (`branch`, `Branched`, `branchNodes`,
 `BRANCH_CASE`, `/branch-by-filter`), and names each line that holds one. Two other meanings stay,
 as the amendment's decision 4 says:
@@ -31,7 +32,7 @@ from pathlib import Path
 from tools.layout import CORE
 
 #: The trees the amendment names, relative to `OspreyFlow_Core`.
-SCANNED = ("apps/workspace/src", "services/api")
+SCANNED = ("apps/workspace/src", "services/api", "packages/schemas")
 SUFFIXES = frozenset({".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".css", ".html", ".md"})
 
 #: Files where *branch* means a pipeline's branch in the Studio's DAG, each by name.
@@ -48,6 +49,19 @@ PIPELINE_FILES: Mapping[str, str] = {
     "apps/workspace/src/ingest/publish/PublishScreen.test.tsx": "its tests",
     "apps/workspace/src/ingest/publish/PublishScreen.deduplicate.test.tsx": "its tests",
     "services/api/load_records.py": "a pipeline run's records, one per source branch",
+    "packages/schemas/ingest.py": "a pipeline run's report, one per source branch",
+    "packages/schemas/generated/BranchRunReport.ts": "one source branch's report, generated",
+    "packages/schemas/generated/BranchRunReportView.ts": "its view, generated",
+    "packages/schemas/generated/PipelineRunReport.ts": "a pipeline run's report, generated",
+    "packages/schemas/generated/PipelineRunReportView.ts": "its view, generated",
+}
+
+#: Lines naming a pipeline's branch in a file holding other things too, by exact text.
+PIPELINE_LINES: Mapping[str, tuple[str, ...]] = {
+    "packages/schemas/generated/index.ts": (
+        'export type { BranchRunReport } from "./BranchRunReport";',
+        'export type { BranchRunReportView } from "./BranchRunReportView";',
+    ),
 }
 
 #: The git meaning: these exact tokens, anywhere.
@@ -70,6 +84,8 @@ def findings(files: Mapping[str, str]) -> list[tuple[str, int, str]]:
         if path in PIPELINE_FILES:
             continue
         for number, line in enumerate(text.splitlines(), start=1):
+            if line.strip() in PIPELINE_LINES.get(path, ()):
+                continue
             stripped = line
             for token in (*GIT_TOKENS, *STORED_BEFORE_L3_2.get(path, ())):
                 stripped = stripped.replace(token, "")

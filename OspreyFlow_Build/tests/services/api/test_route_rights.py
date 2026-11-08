@@ -408,11 +408,8 @@ def test_every_right_guards_at_least_one_route() -> None:
                # promotion, proposed types, the drawn-dataset merge, Rules and Monitoring).
                "draw_on_boards", "promote_to_dataset", "propose_types", "accept_types",
                "merge_datasets", "author_rules"}  # fmt: skip
-    #: Retired with its routes by L3.2 (ADR-144 Amendment 1); removed from `packages/schemas` by a
-    #: shared commit, after which this set is empty and the test holds it so.
-    retired = {"branch_case"}
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
-    assert {r.value for r in Right} - guarded == not_yet | ({r.value for r in Right} & retired)
+    assert {r.value for r in Right} - guarded == not_yet
 
 
 def _token(key: rsa.RSAPrivateKey, sub: str, roles: list[str]) -> dict[str, str]:

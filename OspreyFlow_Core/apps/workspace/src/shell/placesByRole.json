@@ -4,7 +4,6 @@
    "rights": [
     "add_ingest_files",
     "ask_model",
-    "branch_case",
     "confirm_inferred",
     "create_case",
     "decide_held_rows",
@@ -167,13 +166,6 @@
   "right:author_rules": {
    "rights": [
     "author_rules"
-   ],
-   "places": [],
-   "answered_hidden": []
-  },
-  "right:branch_case": {
-   "rights": [
-    "branch_case"
    ],
    "places": [],
    "answered_hidden": []
@@ -614,7 +606,6 @@
     "add_ingest_files",
     "ask_model",
     "author_rules",
-    "branch_case",
     "confirm_inferred",
     "create_case",
     "decide_held_rows",

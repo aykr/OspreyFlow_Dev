@@ -65,9 +65,18 @@ def test_a_folder_wide_exception_would_have_hidden_a_cases_branch(
     assert findings(planted) == []
 
 
+def test_a_pipeline_line_is_kept_only_as_that_exact_line() -> None:
+    """The generated barrel exports the pipeline report's types beside every other type: only
+    those exact lines are kept, so a case's branch exported there is still found."""
+    index = "packages/schemas/generated/index.ts"
+    kept = 'export type { BranchRunReport } from "./BranchRunReport";'
+    assert findings({index: kept}) == []
+    assert findings({index: 'export type { CaseBranch } from "./CaseBranch";'}) != []
+
+
 def test_the_conduit_names_no_branch() -> None:
-    """L3.2's half: `services/api` holds none."""
-    found = findings(tree_files(scanned=("services/api",)))
+    """L3.2's half: `services/api` and `packages/schemas` hold none."""
+    found = findings(tree_files(scanned=("services/api", "packages/schemas")))
     assert found == [], "\n".join(f"{p}:{n}: {line}" for p, n, line in found[:40])
 
 

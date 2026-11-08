@@ -21,7 +21,7 @@ U = "rule_author"
 
 #: ADR-112's rights table, by right: which of the four roles hold it.
 TABLE: dict[str, set[str]] = {
-    "create_case": {A, D}, "share_case": {A, D, M}, "remove_case": {A, M}, "branch_case": {A},
+    "create_case": {A, D}, "share_case": {A, D, M}, "remove_case": {A, M},
     "export": {A}, "export_override": {A},
     "investigate": {A, D}, "edit_graph": {A}, "confirm_inferred": {A}, "extract_files": {A},
     "resolve_entities": {A}, "record_assessment": {A}, "ask_model": {A}, "run_analysis": {A, D},
@@ -50,8 +50,9 @@ TABLE: dict[str, set[str]] = {
 }  # fmt: skip
 
 
-def test_there_are_fifty_two_rights_and_the_table_names_each_once() -> None:
-    assert len(Right) == 52
+def test_there_are_fifty_one_rights_and_the_table_names_each_once() -> None:
+    """Fifty-two until L3.2 removed `branch_case` with its routes (ADR-144 Amendment 1)."""
+    assert len(Right) == 51
     assert set(TABLE) == {r.value for r in Right}
 
 
