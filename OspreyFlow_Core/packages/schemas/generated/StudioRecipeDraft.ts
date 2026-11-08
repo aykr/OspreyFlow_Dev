@@ -77,7 +77,20 @@ export type Id = string;
  * purpose: rule 8 — no expression or scripting language in the Studio; every node is a declared
  * stage whose transforms remain Knowledge Adapters with golden files.
  */
-export type PipelineNodeKind = "domain_model" | "source" | "profile" | "map" | "extract" | "enrich" | "load";
+export type PipelineNodeKind =
+  | "domain_model"
+  | "source"
+  | "profile"
+  | "map"
+  | "extract"
+  | "enrich"
+  | "load"
+  | "lookup"
+  | "join"
+  | "filter"
+  | "derive"
+  | "union"
+  | "dedupe";
 export type Label1 = string;
 export type Nodes = PipelineNode[];
 export type Source = string;

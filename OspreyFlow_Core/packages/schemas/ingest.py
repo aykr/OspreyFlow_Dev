@@ -21,13 +21,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from schemas.domain import Edge, EdgeId, Handling, Node, NodeId, PrincipalId, Provenance
 from schemas.monitoring import CheckNotJudged, WouldRaise
 
 from .connectors import load_connector_profiles
+from .profile import SourceProfile
 from .staging import StagingStep
 
 # --- Studio roles (09_INGEST_STUDIO.md §8) -------------------------------
@@ -277,6 +278,16 @@ class PipelineNodeKind(StrEnum):
     EXTRACT = "extract"
     ENRICH = "enrich"
     LOAD = "load"
+    #: The staging catalogue (ADR-140 decision 11, Amendments 11 and 12): each node's `config` is
+    #: its step record (`schemas.staging`), less its `id` and `kind`, which are the node's own. The
+    #: recipe's `staging:` list is built from these nodes in run order at save and publish
+    #: (`services/ingest/pipeline.staging_from_pipeline`), never kept beside them.
+    LOOKUP = "lookup"
+    JOIN = "join"
+    FILTER = "filter"
+    DERIVE = "derive"
+    UNION = "union"
+    DEDUPE = "dedupe"
 
 
 class PipelineNode(BaseModel):
@@ -901,6 +912,41 @@ class Recipe(BaseModel):
 # --- Rejections and the load report (09_INGEST_STUDIO.md §5) -------------
 
 
+class RejectionRef(BaseModel):
+    """ADR-140 Amendment 12: a row a rejection came from, in a staged run. The table it is a row of
+    (a source's name, `reference_list:<name>@v<n>`, or a staged step's table), its row number, the
+    load that read it (a source row's; `None` for a list row or a staged table's row) and, for a
+    Join, the side. **No row key, raw or hashed** (rule 7;
+    `tests/schemas/test_staging_report_schemas.py`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    table: str
+    row_index: int = Field(ge=0)
+    load_id: str | None = None
+    side: Literal["left", "right"] | None = None
+
+
+class StagingStepCount(BaseModel):
+    """ADR-140 Amendment 12: what one staging step did in a run, as counts: the rows it read and
+    gave, and every row it did not pass on, by why (rule 2: nothing dropped silently). Counts of
+    the loader's own rows: a route withholds them as it withholds every count (rule 3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step: str
+    kind: str
+    rows_in: int = Field(ge=0)
+    rows_out: int = Field(ge=0)
+    unmatched: int = Field(default=0, ge=0)
+    filtered_out: int = Field(default=0, ge=0)
+    repeats_folded: int = Field(default=0, ge=0)
+    rejected: int = Field(default=0, ge=0)
+    #: A Join's right table: its rows in, and those that met no left row.
+    right_rows_in: int = Field(default=0, ge=0)
+    right_unmatched: int = Field(default=0, ge=0)
+
+
 class RejectionRecord(BaseModel):
     """One rejected row, grouped by cause in the load report — never a
     silent coercion (`01_DOMAIN_MODEL.md` §7)."""
@@ -908,6 +954,9 @@ class RejectionRecord(BaseModel):
     row_index: int
     reason: str
     sample: str
+    #: ADR-140 Amendment 12: in a staged run, the rows the rejection came from (a Join's both
+    #: sides), so the reason's words need not be read to find them. Empty outside a staged run.
+    refs: list[RejectionRef] = Field(default_factory=list)
     #: Rule 3, ADR-127 Amendment 26: the marking of the rejected row, which `sample` (the whole
     #: row) is held at. A route answers a reader who cannot view it with the sample withheld
     #: (`load_records.report_view`), and never returns the marking itself. `None` where nothing of
@@ -1000,8 +1049,9 @@ class SourceWatermark(BaseModel):
 class RunMetering(BaseModel):
     """What a run cost (ADR-110 Amendment 6 point 9, ADR-141 decision 2;
     `services/ingest/metering.py` has how each is counted). `None` is *not measured*, never 0:
-    rows staged and bytes written to Parquet wait for phase 7's staging. Counts of the run's own
-    rows and writes: a route withholds them as it withholds every count (rule 3)."""
+    rows staged and bytes written to Parquet are a staged run's (ADR-140 Amendment 12), `None` for
+    any other. Counts of the run's own rows and writes: a route withholds them as it withholds
+    every count (rule 3)."""
 
     wall_ms: int
     rows_read: int
@@ -1101,6 +1151,45 @@ class LoadReport(BaseModel):
     #: Metering, part 1: set by `run_recipe_as` when the run ends; `None` for a load run any
     #: other way (a release of held rows, a seed's own loader).
     metering: RunMetering | None = None
+    #: ADR-140 Amendment 12: a staged run's steps, in run order, as counts. Empty for a run with
+    #: no staging steps.
+    staging_steps: list[StagingStepCount] = Field(default_factory=list)
+
+
+# --- A staging step's live sample (ADR-140 Amendment 12; Q4 (a)) ---------------------------
+
+
+class StagingPreviewInput(BaseModel):
+    """A drawer's Preview: the pipeline as the drawer holds it (saved or not) and the step whose
+    output to show. Nothing is written."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pipeline: PipelineGraph
+    step: str = Field(min_length=1)
+
+
+class StagingPreview(BaseModel):
+    """The steps up to `step`, run over the first ten rows of each source of the saved pipeline,
+    writing nothing. `problems` are the save gate's refusals for the pipeline the drawer holds, in
+    its own words, with any word of the preview's own (a source not saved, a sample withheld); the
+    sample is still run when the steps up to `step` can be, and is empty when they cannot. Rule 3:
+    a reader who may not view every sampled row, or a Lookup's list rows, is given nothing of the
+    run (`values_masked`, the rest empty). No row key, raw or hashed, is here (rule 7): rows are
+    cells, refs are tables and row numbers. `profile` is the staged table's profile."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step: str
+    problems: list[str] = Field(default_factory=list)
+    columns: list[str] = Field(default_factory=list)
+    rows: list[dict[str, str]] = Field(default_factory=list)
+    values_masked: bool = False
+    #: Of each source, how many rows the sample read (ten at most).
+    rows_sampled: int = 0
+    counts: list[StagingStepCount] = Field(default_factory=list)
+    rejections: list[RejectionRecord] = Field(default_factory=list)
+    profile: SourceProfile | None = None
 
 
 # --- The pipeline run report (06_DECISIONS.md ADR-108 phase C) -------------
@@ -1128,6 +1217,8 @@ class LoadReportView(BaseModel):
     rows_withdrawn: int = 0
     links_kept_an_occurrence: int = 0
     rows_left_in_place: int = 0
+    #: ADR-140 Amendment 12: each staging step's counts, withheld with the other counts.
+    staging_steps: list[StagingStepCount] = Field(default_factory=list)
     refresh_notes: list[str] = Field(default_factory=list)
     #: ADR-110 Amendment 6 point 1: an incremental refresh's rows left unread, and read without a
     #: watermark value. The watermark itself is a value of the source, and never answered.
@@ -1438,6 +1529,10 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     RunRecipeInput,
     VerifyRecipeInput,
     Recipe,
+    RejectionRef,
+    StagingStepCount,
+    StagingPreviewInput,
+    StagingPreview,
     RejectionRecord,
     LoadReport,
     BranchRunReport,

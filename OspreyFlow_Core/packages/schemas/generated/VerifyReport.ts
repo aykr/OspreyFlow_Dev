@@ -13,6 +13,11 @@ export type Count = number;
 export type RowIndex = number;
 export type Reason1 = string;
 export type Sample = string;
+export type Table = string;
+export type RowIndex1 = number;
+export type LoadId = string | null;
+export type Side = ("left" | "right") | null;
+export type Refs = RejectionRef[];
 export type Classification = string;
 export type HandlingCode = string;
 export type ActionCode = string | null;
@@ -45,7 +50,7 @@ export type ManuallySplit = NodeId[];
 export type CreatedAt = string;
 export type Revision = number;
 export type SupersededBy = string | null;
-export type LoadId = string | null;
+export type LoadId1 = string | null;
 export type RecipeId = string | null;
 export type RecipeVersion = number | null;
 export type Reverted = boolean;
@@ -154,9 +159,23 @@ export interface RejectionRecord {
   row_index: RowIndex;
   reason: Reason1;
   sample: Sample;
+  refs?: Refs;
   marking?: Handling | null;
   sample_unreadable?: SampleUnreadable;
   [k: string]: unknown;
+}
+/**
+ * ADR-140 Amendment 12: a row a rejection came from, in a staged run. The table it is a row of
+ * (a source's name, `reference_list:<name>@v<n>`, or a staged step's table), its row number, the
+ * load that read it (a source row's; `None` for a list row or a staged table's row) and, for a
+ * Join, the side. **No row key, raw or hashed** (rule 7;
+ * `tests/schemas/test_staging_report_schemas.py`).
+ */
+export interface RejectionRef {
+  table: Table;
+  row_index: RowIndex1;
+  load_id?: LoadId;
+  side?: Side;
 }
 export interface Handling {
   classification: Classification;
@@ -214,7 +233,7 @@ export interface AuditStub {
   created_by: PrincipalId;
   revision?: Revision;
   superseded_by?: SupersededBy;
-  load_id?: LoadId;
+  load_id?: LoadId1;
   recipe_id?: RecipeId;
   recipe_version?: RecipeVersion;
   reverted?: Reverted;
