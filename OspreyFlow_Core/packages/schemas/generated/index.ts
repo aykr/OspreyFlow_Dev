@@ -436,3 +436,8 @@ export type { KeyInput } from "./KeyInput";
 export type { ConnectionTestResult } from "./ConnectionTestResult";
 export type { ModelAdminEntry } from "./ModelAdminEntry";
 export type { ModelAdminHistory } from "./ModelAdminHistory";
+export type { EngineLimits } from "./EngineLimits";
+export type { LimitsInput } from "./LimitsInput";
+export type { UsageFigures } from "./UsageFigures";
+export type { UsageRow } from "./UsageRow";
+export type { ModelUsageView } from "./ModelUsageView";

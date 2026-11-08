@@ -24,6 +24,10 @@ export type KeyState = "set" | "none" | "lost";
 export type KeySetAt = string | null;
 export type KeySetBy = string | null;
 export type DefaultFor = string[];
+export type RequestsPerMinute = number | null;
+export type TokensPerMinute = number | null;
+export type BudgetTokens = number | null;
+export type BudgetPeriod = ("day" | "month") | null;
 export type Engines = AdminEngine[];
 export type LocalOnly = boolean;
 export type SendableHandlingCodes = string[];
@@ -42,8 +46,8 @@ export interface ModelsAdminView {
   [k: string]: unknown;
 }
 /**
- * One hosted engine as *Admin › Models* shows it: its settings, and its key's state and record
- * — never the key.
+ * One hosted engine as *Admin › Models* shows it: its settings, its limits, and its key's state
+ * and record — never the key.
  */
 export interface AdminEngine {
   provider: ModelProviderConfig;
@@ -51,6 +55,7 @@ export interface AdminEngine {
   key_set_at?: KeySetAt;
   key_set_by?: KeySetBy;
   default_for?: DefaultFor;
+  limits?: EngineLimits;
   [k: string]: unknown;
 }
 /**
@@ -73,6 +78,18 @@ export interface ModelProviderConfig {
  */
 export interface Roles {
   [k: string]: string;
+}
+/**
+ * An engine's limits (ADR-135 Amendment 3), applied by the model gateway to every call the
+ * Conduit sends that engine. Each is optional; none set is no limit. A budget is in tokens (prompt
+ * and completion together) per day or per calendar month, UTC; the call that crosses it is
+ * answered and the next one refused.
+ */
+export interface EngineLimits {
+  requests_per_minute?: RequestsPerMinute;
+  tokens_per_minute?: TokensPerMinute;
+  budget_tokens?: BudgetTokens;
+  budget_period?: BudgetPeriod;
 }
 export interface Defaults {
   [k: string]: string;

@@ -11,7 +11,8 @@ export type Action =
   | "key_rotated"
   | "key_removed"
   | "key_moved"
-  | "connection_tested";
+  | "connection_tested"
+  | "limits_changed";
 export type Engine = string | null;
 export type Outcome = string;
 
