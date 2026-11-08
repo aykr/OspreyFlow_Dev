@@ -195,13 +195,16 @@ def test_a_view_shows_the_rest_and_counts_the_missing(world: _World) -> None:
 
 
 def test_no_listing_names_a_chosen_node(world: _World) -> None:
-    """The case's view list, the saved and the shared view each carry the selection's count, never
-    its ids or their positions: the selection is its creator's (rules 3 and 7)."""
+    """The case's view list, for every member, and the saved and the shared view, each carry the
+    selection's count, never its ids or their positions: the selection is its creator's (rules 3
+    and 7). Red with the stored ids restored to the wire (a33cd65's `CaseView`, sent as stored):
+    `process/lanes/case/L3.2_RED_RECORD.md`."""
     response = _as("alice").post(VIEWS, json={"name": "Mine", "node_ids": CHOSEN, "layout": LAYOUT})
     view_id = response.json()["id"]
     shared = _as("alice").post(f"{VIEWS}/{view_id}/share")
-    listed = _as("bob").get(VIEWS)
-    for answer in (response, shared, listed):
+    listed = [_as(who).get(VIEWS) for who in LEVELS]  # every member: Author, Editor and Viewer
+    assert all(len(answer.json()) == 1 for answer in listed)
+    for answer in (response, shared, *listed):
         for hidden in ("secret", "elsewhere", "never-held"):
             assert hidden not in answer.text
         assert "node_ids" not in answer.text and "layout" not in answer.text
