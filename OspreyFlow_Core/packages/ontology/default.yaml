@@ -212,6 +212,11 @@ entity_types:
       # the graph: `object_ref` names it in the deployment's object store.
       - {name: media_kind, type: enum, values: [text, image, video]}
       - {name: object_ref, type: string}
+      # ADR-143 Amendment 2 decision 2 (the owner's ruling of 8 November 2026, R4 (a)): an image's
+      # file size in bytes, written when a picture is attached, so Admin › Datasets can count a
+      # case's layer's pictures in the store without the file leaving it. Optional, and nothing a
+      # recipe writes, so the version does not change (as ADR-079 gives for `sent_at`).
+      - {name: size_bytes, type: integer}
       # v16, ADR-109 phase F: a verifying document. KYC status is computed from these at read,
       # never stored: expired or marked fraudulent, it no longer verifies anyone.
       - {name: document_kind, type: enum, values: [passport, driving_licence, national_id, utility_bill, bank_statement, certificate_of_incorporation, register_extract, other]}

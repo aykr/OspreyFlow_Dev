@@ -323,7 +323,11 @@ class EntityPictureService:
         document = NodeWrite(
             id=document_id,
             type=DOCUMENT_TYPE,
-            properties={"title": name, "media_kind": "image", "object_ref": ref},
+            # `size_bytes`: so Admin › Datasets counts the picture in its layer's size, taken in
+            # the store (ADR-143 Amendment 2 decision 2; `GraphPort.dataset_footprints`).
+            properties={
+                "title": name, "media_kind": "image", "object_ref": ref, "size_bytes": len(data)
+            },  # fmt: skip
             provenance=provenance,
             handling=handling,
             created_by=principal.id,
