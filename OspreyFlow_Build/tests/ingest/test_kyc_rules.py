@@ -522,3 +522,43 @@ async def test_a_confirmed_screening_match_repoints_the_other_alert_citing_it(st
         assert same_as[0].id not in row.edge_ids, "the second alert follows the confirmed match"
         listed = [q.alert.id for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)]
         assert second.id in listed
+
+
+async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node(
+    stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """L2.8b's B6, through the real screening path, whose alerts have their own node: a second person
+    approves a true positive, which confirms the alert's node and its match in the graph, and the
+    triage write is then refused (another member's at the same moment). The alert's node rename is
+    in the close's own record, so the alert names its confirmed node and stays in the queue. Red
+    with only the match recorded: the alert named a superseded node, hidden from every reader."""
+    from services.api import alert_queue
+    from services.api.alerts import AlertTriageConflict
+
+    case = f"case-{new_id()}"
+    rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+        gate = _gate(stores, graph, [rule], case)
+        await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+        petrov = next(a for a in await _alerts(stores, case) if "Petrov" in (a.words or ""))
+        assert petrov.alert_node_id is not None, "a real screening alert has its own node"
+        proposed = await alert_queue.dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                             disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        assert proposed.status == "closing"
+        real = stores["alerts"].set_queue_triage
+
+        async def taken(alert_id: str, *a: Any, **k: Any) -> Any:
+            if k.get("status") == "closed":
+                raise AlertTriageConflict(alert_id)
+            return await real(alert_id, *a, **k)
+
+        monkeypatch.setattr(stores["alerts"], "set_queue_triage", taken)
+        colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+        with pytest.raises(AlertTriageConflict):
+            await alert_queue.approve_close(stores["alerts"], graph, gate.analytics, case, petrov.id, colleague)
+        monkeypatch.undo()
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, OFFICER) if a.id == petrov.id]
+        assert row.alert_node_id != petrov.alert_node_id, "the alert names its confirmed node"
+        listed = [q.alert.id for q in await alert_queue.queue(stores["alerts"], graph, gate.analytics, case, OFFICER)]
+        assert petrov.id in listed

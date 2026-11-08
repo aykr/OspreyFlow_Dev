@@ -483,6 +483,7 @@ class LinkChangeService:
         # marking (ADR-109 Amendment 10): a stored copy is served from the store, not read again.
         if repoint.remarked_nodes:
             await self._working_set.remove_reverted(repoint.remarked_nodes, [])
+            await repoint.purged()
 
         new = old.model_copy(
             update={

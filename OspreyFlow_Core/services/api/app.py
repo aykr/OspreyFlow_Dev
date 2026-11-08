@@ -335,7 +335,7 @@ from .add_by_identifiers import (
     TooManyIdentifiersError,
     resolve_identifiers,
 )
-from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict
+from .alerts import AlertNotFoundError, AlertStore, AlertTriageConflict, purge_remarked_copies
 from .assessments import (
     AssumptionListResponse,
     AssumptionNotFoundError,
@@ -12933,6 +12933,7 @@ async def _try_again(
     state.buffering = True
     state.overflowed = False
     state.buffer.clear()
+    await purge_remarked_copies(websocket.app.state.alerts_store, working_set)  # as at connect
     deltas = await working_set.sync(investigation_id, principal, last_acknowledged_seq=None)
     snapshot = deltas[0] if deltas else None
     if isinstance(snapshot, DeltaSnapshot):
@@ -13054,6 +13055,9 @@ async def stream(websocket: WebSocket, investigation_id: str) -> None:
         init = await websocket.receive_json()
     except WebSocketDisconnect:
         return
+    # ADR-109 Amendment 10 (L2.8b's R2): a node a settle re-marked leaves every working set's
+    # stored copy before a canvas is sent one.
+    await purge_remarked_copies(websocket.app.state.alerts_store, working_set)
     initial_deltas: list[WorkingSetDeltaSent] = await working_set.sync(
         investigation_id, principal, last_acknowledged_seq=init.get("last_acknowledged_seq")
     )

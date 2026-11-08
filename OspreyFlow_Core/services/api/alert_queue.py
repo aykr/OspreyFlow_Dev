@@ -490,6 +490,9 @@ async def _close(
                 try:
                     if node is not None and node.provenance.state is not ProvenanceState.ASSERTED:
                         confirmed_node = await confirm_node(graph, node.id, member, tx=tx)
+                        # The alert's own node is renamed in the same record, so a triage refused
+                        # after the commit cannot leave it naming a superseded node (B6).
+                        await repoint.record_node(node.id, confirmed_node)
                     for e in matches:
                         await repoint.record(e.id, await confirm_edge(graph, e, member, tx=tx))
                 except Exception:
@@ -500,6 +503,7 @@ async def _close(
             # old marking (ADR-109 Amendment 10).
             if working_set is not None and repoint.remarked_nodes:
                 await working_set.remove_reverted(repoint.remarked_nodes, [])
+                await repoint.purged()
     return await store.set_queue_triage(
         alert_id,
         investigation_id,

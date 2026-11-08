@@ -377,6 +377,7 @@ class EntityPictureService:
         # marking (ADR-109 Amendment 10): a stored copy is served from the store, not read again.
         if repoint.remarked_nodes:
             await self._working_set.remove_reverted(repoint.remarked_nodes, [])
+            await repoint.purged()
         return _Attached(document=document, link=link, before=before)
 
     async def set(
@@ -545,6 +546,7 @@ class EntityPictureService:
         # marking (ADR-109 Amendment 10): a stored copy is served from the store, not read again.
         if repoint.remarked_nodes:
             await self._working_set.remove_reverted(repoint.remarked_nodes, [])
+            await repoint.purged()
         # The successor belongs to every dataset the link did (the store merges them), so what it
         # is sent as is judged against all of them (ADR-130 Amendment 2).
         return await self._working_set.replace_edge(

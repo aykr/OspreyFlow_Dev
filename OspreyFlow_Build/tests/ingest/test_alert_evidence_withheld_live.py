@@ -537,12 +537,28 @@ async def _two_alerts_on_one_secret_match(stores: dict[str, Any], graph: Any, ca
 
 
 async def _pending(stores: dict[str, Any], *old_links: str) -> list[tuple[str, str]]:
-    """The repoint records this test made, by its own links: the table is shared with every other
-    run, so never read whole."""
+    """The repoint records this test made, by its own links (`alert_repoint_writes`): the table is
+    shared with every other run, so never read whole."""
     async with stores["alerts"]._pool.acquire() as conn:
-        rows = await conn.fetch("SELECT old_edge_id, new_edge_id FROM alert_link_repoints "
-                                "WHERE old_edge_id = ANY($1::text[]) ORDER BY 1", list(old_links))  # fmt: skip
-    return [(r["old_edge_id"], r["new_edge_id"]) for r in rows]
+        rows = await conn.fetch("SELECT links FROM alert_repoint_writes WHERE links ?| $1::text[]",
+                                list(old_links))  # fmt: skip
+    pairs = []
+    for row in rows:
+        links = __import__("json").loads(row["links"]) if isinstance(row["links"], str) else row["links"]
+        pairs.extend((old, new) for old, new in links.items() if old in old_links)
+    return sorted(pairs)
+
+
+async def _plant_record(stores: dict[str, Any], links: dict[str, str], *, recorded_at: Any = None) -> str:
+    """A record as `AlertStore.repointing` writes one, its successors with it."""
+    from datetime import UTC, datetime
+
+    record = new_id()
+    async with stores["alerts"]._pool.acquire() as conn:
+        await conn.execute("INSERT INTO alert_repoint_writes (id, recorded_at) VALUES ($1, $2)", record,
+                           recorded_at or datetime.now(UTC))  # fmt: skip
+    await stores["alerts"]._add_to_record(record, links=links)
+    return record
 
 
 async def test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert(
@@ -645,6 +661,7 @@ async def test_a_stale_record_is_dropped_if_its_link_is_live_and_applied_if_supe
     from services.api.alerts import STALE_REPOINT_AFTER
 
     from conduit_common.identity import new_edge_id
+    from schemas.domain import EdgeWrite
 
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
@@ -653,26 +670,26 @@ async def test_a_stale_record_is_dropped_if_its_link_is_live_and_applied_if_supe
         tx = await graph.begin_transaction()
         superseding = old.model_dump(include={"type", "source", "target", "properties", "basis",
                                               "provenance", "handling"})  # fmt: skip
-        from schemas.domain import EdgeWrite
-
         moved = await graph.supersede_edge(link, EdgeWrite(id=new_edge_id(), created_by="t", created_at=T0,
                                                            **superseding), tx)  # fmt: skip
         await graph.commit_transaction(tx)
-        live = f"never-superseded-{new_id()}"
-        fresh_live = f"fresh-{new_id()}"
-        await stores["alerts"]._record_repoints({link: moved, live: f"{live}-new", fresh_live: f"{fresh_live}-new"})
-        async with stores["alerts"]._pool.acquire() as conn:
-            await conn.execute("UPDATE alert_link_repoints SET recorded_at = $1 WHERE old_edge_id = ANY($2::text[])",
-                               datetime.now(UTC) - STALE_REPOINT_AFTER * 2, [link, live])  # fmt: skip
+        (live_link,) = [e for e in await graph.edges_among(first.referent_node_ids, SECRET_LOADER)
+                        if e.id == moved]  # fmt: skip
+        long_ago = datetime.now(UTC) - STALE_REPOINT_AFTER * 2
+        planted = [await _plant_record(stores, {link: moved}, recorded_at=long_ago),
+                   await _plant_record(stores, {live_link.id: f"never-{new_id()}"}, recorded_at=long_ago),
+                   await _plant_record(stores, {live_link.id: f"fresh-{new_id()}"})]  # fmt: skip
         try:
             await stores["alerts"].settle_pending(graph)
-            assert await _pending(stores, link, live, fresh_live) == [(fresh_live, f"{fresh_live}-new")]
+            async with stores["alerts"]._pool.acquire() as conn:
+                left = {r["id"] for r in await conn.fetch(
+                    "SELECT id FROM alert_repoint_writes WHERE id = ANY($1::text[])", planted)}  # fmt: skip
+            assert left == {planted[2]}, "the applied and the stale-and-live are gone; the fresh one waits"
             cited = {a.id: a.edge_ids for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER)}
             assert cited[first.id] == cited[second.id] == [moved]
         finally:  # this test's own records, whatever happened: the table is shared
             async with stores["alerts"]._pool.acquire() as conn:
-                await conn.execute("DELETE FROM alert_link_repoints WHERE old_edge_id = ANY($1::text[])",
-                                   [link, live, fresh_live])  # fmt: skip
+                await conn.execute("DELETE FROM alert_repoint_writes WHERE id = ANY($1::text[])", planted)
 
 
 # ---- L2.8b item 1: the rule audit ---------------------------------------------------------------
@@ -1040,3 +1057,152 @@ async def test_an_evaluations_count_is_withheld_from_a_reader_who_cannot_see_eve
         for entry in given:
             assert "findings" not in entry.detail and entry.detail["findings_withheld"] is True
             assert entry.result_cardinality == 0
+
+
+# ---- L2.8b round 2: the journal redesign (B3–B6, R2) --------------------------------------------
+
+
+async def _changing_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                          tag: str) -> tuple[Alert, Any, Any, Any]:  # fmt: skip
+    """An OFFICIAL alert over a loader-written link, and a link-change service over the real graph and
+    alert store, with the case's working set holding the accounts, the link and the alert's node."""
+    from services.api.link_changes import LinkChangeService
+    from services.api.working_set.service import WorkingSetService
+
+    from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+    from tests.services.api.working_set.fakes import FakeWorkingSetStore
+
+    await _raised(stores, graph, analytics, case, tag)
+    (alert,) = await _case_alerts(stores, ANALYST, case)
+    (link,) = await graph.get_edges(alert.edge_ids, ANALYST)
+    working = FakeWorkingSetStore()
+    await working.add_nodes(case, await graph.get_nodes(alert.referent_node_ids, ANALYST))
+    await working.add_edges(case, [link])
+    await working.add_nodes(case, [await graph.get_node(alert.alert_node_id, ANALYST)])  # type: ignore[arg-type, list-item]
+    service = LinkChangeService(InMemoryChanges(), WorkingSetService(graph, working, SCHEME), graph, ONTOLOGY,
+                                MovedNotes(), scheme=SCHEME, alerts=stores["alerts"])  # fmt: skip
+    return alert, link, service, working
+
+
+def _detail_change(link: Any, amount: float) -> Any:
+    from services.api.link_changes import LinkChangeRequest
+
+    return LinkChangeRequest(reason="the amount was wrong", properties={**link.properties, "amount": amount})
+
+
+@pytest.mark.parametrize("interruption", ["timeout", "cancellation"])
+async def test_a_commit_that_lands_after_the_writer_failed_is_still_repointed(
+    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch, interruption: str
+) -> None:
+    """B3: the graph's commit is reported failed (a timeout; or the request cancelled) and lands
+    afterwards. The writer never drops its record, so the next read finds the link superseded and
+    repoints the alert. A cancellation stays a cancellation. Red with the record dropped on the
+    writer's failure path (it read the link still live and dropped it): the alert stayed on the
+    superseded link, hidden from every reader."""
+    import asyncio
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        alert, link, service, _ = await _changing_world(stores, graph, analytics, case, "AM")
+        real_commit = graph.commit_transaction
+        held: list[Any] = []
+        raised: type[BaseException] = TimeoutError if interruption == "timeout" else asyncio.CancelledError
+
+        async def reported_failed(tx: Any) -> None:
+            held.append(tx)
+            raise raised("the commit's answer never came")
+
+        monkeypatch.setattr(graph, "commit_transaction", reported_failed)
+        with pytest.raises(raised):
+            await service.change(case, link.id, ANALYST, _detail_change(link, 9_700.0))
+        monkeypatch.undo()
+        await real_commit(held[0])  # it lands
+        listed = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics,
+                                                                         case, ANALYST)}  # fmt: skip
+        assert alert.id in listed and listed[alert.id].edge_ids != [link.id]
+
+
+async def test_a_chain_of_writes_brings_the_alert_to_the_newest_revision(
+    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B4: a first change's graph commit lands and its repoint fails; a second change then supersedes
+    the first's revision and applies (moving nothing: the alert still cites the original). The next
+    read follows the recorded successors to the newest revision. Red with one-level renames and no
+    kept successors: the alert was moved onto the first revision, itself superseded, and hidden."""
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        alert, link, service, working = await _changing_world(stores, graph, analytics, case, "CH")
+        real_apply = stores["alerts"].apply_repoints
+
+        async def fails(finals: Any) -> list[str]:
+            raise ConnectionError("Postgres went away after the graph's commit")
+
+        monkeypatch.setattr(stores["alerts"], "apply_repoints", fails)
+        with pytest.raises(ConnectionError):
+            await service.change(case, link.id, ANALYST, _detail_change(link, 9_700.0))
+        monkeypatch.setattr(stores["alerts"], "apply_repoints", real_apply)
+        (first,) = [e for e in await graph.edges_among(alert.referent_node_ids, ANALYST) if e.type == "TRANSACTED"
+                    and e.id != link.id]  # fmt: skip
+        await working.add_edges(case, [first])  # as the case's next read of it would hold it
+        second = await service.change(case, first.id, ANALYST, _detail_change(first, 9_800.0))
+        listed = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics,
+                                                                         case, ANALYST)}  # fmt: skip
+        assert alert.id in listed and listed[alert.id].edge_ids == [second.edge.id]
+
+
+async def test_a_re_mark_that_fails_is_retried_by_the_next_read(
+    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B5: an analyst raises the cited link to SECRET; the repoint applies and the re-mark of the
+    alert's node then fails. The record is not cleared, so the next read re-marks the node, and the
+    OFFICIAL teammate cannot read it. Red with the record cleared before the re-mark: the node stayed
+    OFFICIAL, readable with its words."""
+    from services.api.link_changes import LinkChangeRequest
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        alert, link, service, _ = await _changing_world(stores, graph, analytics, case, "RT")
+        real = stores["alerts"]._remark_citing
+
+        async def fails_once(*args: Any) -> list[str]:
+            monkeypatch.setattr(stores["alerts"], "_remark_citing", real)
+            raise ConnectionError("ArcadeDB went away mid re-mark")
+
+        monkeypatch.setattr(stores["alerts"], "_remark_citing", fails_once)
+        secret = link.handling.model_copy(update={"classification": "SECRET"})
+        with pytest.raises(ConnectionError):
+            await service.change(case, link.id, SECRET_LOADER, LinkChangeRequest(reason="SECRET", handling=secret))
+        await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)  # a read settles
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
+        assert row.alert_node_id != alert.alert_node_id
+        assert await graph.get_node(row.alert_node_id, TEAMMATE) is None  # type: ignore[arg-type]
+
+
+async def test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read(
+    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """R2: the re-mark ran on a read path's settle (the link change's own repoint failed), which holds
+    no working sets; the node's OFFICIAL copy stays in the case's working set until the next
+    working-set read, which purges it (`purge_remarked_copies`) and closes the record. Red with the
+    purge left out: the copy was still stored, served to the teammate."""
+    from services.api.alerts import purge_remarked_copies
+    from services.api.link_changes import LinkChangeRequest
+    from services.api.working_set.service import WorkingSetService
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        alert, link, service, working = await _changing_world(stores, graph, analytics, case, "PG")
+        real_apply = stores["alerts"].apply_repoints
+
+        async def fails_once(finals: Any) -> list[str]:
+            monkeypatch.setattr(stores["alerts"], "apply_repoints", real_apply)
+            raise ConnectionError("Postgres went away after the graph's commit")
+
+        monkeypatch.setattr(stores["alerts"], "apply_repoints", fails_once)
+        secret = link.handling.model_copy(update={"classification": "SECRET"})
+        with pytest.raises(ConnectionError):
+            await service.change(case, link.id, SECRET_LOADER, LinkChangeRequest(reason="SECRET", handling=secret))
+        await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)  # settled, re-marked
+        assert alert.alert_node_id in await working.node_ids(case), "the read path cannot purge"
+        await purge_remarked_copies(stores["alerts"], WorkingSetService(graph, working, SCHEME))
+        assert alert.alert_node_id not in await working.node_ids(case)
