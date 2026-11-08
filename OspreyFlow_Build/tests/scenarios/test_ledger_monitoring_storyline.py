@@ -666,9 +666,9 @@ async def test_the_export_gate_withholds_an_alert_item_whose_link_was_taken_back
     holds only R1's item has nothing within the exporter's reach, and is refused, writing no ledger
     entry. Red with the gate rechecking by the item's nodes alone: R1's item left the Conduit."""
     from services.api.packs import PackExportRefused, PackVersion, export_pack
+    from tests.services.api.test_pack_export_withheld import _Ledger
 
     from schemas.packs import PackExportRequest, ReportPack
-    from tests.services.api.test_pack_export_withheld import _Ledger
 
     await story(scene)
     item = await _r1_item(scene)
