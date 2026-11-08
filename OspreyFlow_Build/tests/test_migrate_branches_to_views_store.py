@@ -38,6 +38,7 @@ from conduit_common.identity import new_id
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.domain import Handling, NodeWrite, Principal, Provenance, ProvenanceState, SourceRef
+from tests.services.api.unconverted import made_before_l3_2_on_postgres
 from tests.services.api.working_set.fakes import FakeWorkingSetStore
 from tests.services.api.working_set.test_visible_link import node
 
@@ -87,11 +88,9 @@ async def _seeded(dsn: str, graph: Any) -> dict[str, str]:
         await datasets.set_for_case(kestrel.id, [src.id], ALICE, case_name="Kestrel")
         original_layer = await datasets.layer_of_case(kestrel.id)
         assert original_layer is not None
-        copied = await investigations.create(
-            ALICE, name="Branch of Kestrel", branched_from=kestrel.id
-        )
-        await datasets.copy_case(kestrel.id, copied.id, case_name="Branch of Kestrel")
-        old = await investigations.create(ALICE, name="Old branch", branched_from=kestrel.id)
+        copied = await investigations.create(ALICE, name="Branch of Kestrel")
+        await made_before_l3_2_on_postgres(datasets, kestrel.id, copied.id)
+        old = await investigations.create(ALICE, name="Old branch")
         old_layer = await datasets.ensure_layer(
             old.id, unit="unit-1", created_by=LEGACY_LAYER_MAKER, case_name="Old branch"
         )
@@ -99,6 +98,19 @@ async def _seeded(dsn: str, graph: Any) -> dict[str, str]:
     finally:
         await investigations.close()
         await datasets.close()
+    # The origin column as a database from before L3.2 holds it; the store no longer writes it.
+    conn = await asyncpg.connect(dsn)
+    try:
+        await conn.execute(
+            "ALTER TABLE investigations ADD COLUMN branched_from TEXT REFERENCES investigations (id)"
+        )
+        await conn.execute(
+            "UPDATE investigations SET branched_from = $1 WHERE id = ANY($2::text[])",
+            kestrel.id,
+            [copied.id, old.id],
+        )
+    finally:
+        await conn.close()
     mark = _marked(old_layer)
     tx = await graph.begin_transaction()
     await graph.upsert_nodes([mark], tx)

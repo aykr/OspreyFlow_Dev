@@ -464,13 +464,12 @@ async def test_an_analyst_of_another_unit_cannot_reject_a_finding_they_cannot_se
     assert candidates.records[extracted.candidates[0].id].status is CandidateStatus.PENDING
 
 
-async def test_an_email_loaded_under_the_original_case_can_be_extracted_from_a_branch() -> None:
-    """ADR-084 Amendment 2: the emails behind a branch's link were loaded under the case it came
-    from; extracting from one on the branch finds it there, and the Document joins the branch."""
-    service, graph, working, _, _ = await _build(investigations=_Cases({"inv-1", "branch-1"}))
-    result = await service.extract("branch-1", "e1", "ev-1", ANALYST)
-    assert result.document_id == email_document_id("ev-1")
-    assert await working.get_node("branch-1", result.document_id) is not None
+async def test_an_email_loaded_under_the_original_case_is_not_read_from_another_case() -> None:
+    """ADR-144 Amendment 1: a case reads its own events alone. An email loaded under `inv-1` is
+    not found from a case made from it, whoever may see `inv-1`."""
+    service, _, _, _, _ = await _build(investigations=_Cases({"inv-1", "branch-1"}))
+    with pytest.raises(EmailNotFoundError):
+        await service.extract("branch-1", "e1", "ev-1", ANALYST)
 
 
 async def test_a_branch_cannot_extract_an_email_from_a_parent_the_analyst_cannot_see() -> None:

@@ -44,6 +44,7 @@ from schemas.domain import KycScreeningParams, Principal, TypologyRule
 from schemas.sentences import RuleSentence, SentenceRuleParams
 
 from .test_screening_refresh import SCHEME, _customer, _Graph, _Queue, _Rules
+from .unconverted import made_before_l3_2
 
 SOURCE = "shared-source"
 OFFICER = Principal(id="kyc-officer", clearance="OFFICIAL", org_unit="verify")
@@ -252,7 +253,7 @@ async def test_a_branch_alert_on_its_originals_layer_withholds_its_node(
     an alert resting on that layer has no place that is not a leak, so its node is withheld and the
     row raised, as for a marking that is not safe."""
     store, graph, layer = await _two_cases()
-    await store.copy_case("case-a", "branch", case_name="Branch")
+    await made_before_l3_2(store, "case-a", "branch")
     assert await store.read_only_layer_of("branch") == layer
     queue = _Queue()
     deployer = await scope_to_case(OFFICER, "branch", store)
@@ -268,7 +269,7 @@ async def test_a_branch_alert_on_its_originals_layer_withholds_its_node(
 
 async def _a_branch_gate() -> tuple[RuleGate, _Queue, _Graph, Principal]:
     store, graph, _layer = await _two_cases()
-    await store.copy_case("case-a", "branch", case_name="Branch")
+    await made_before_l3_2(store, "case-a", "branch")
     queue = _Queue()
     deployer = await scope_to_case(OFFICER, "branch", store)
 

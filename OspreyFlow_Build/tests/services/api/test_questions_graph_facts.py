@@ -656,7 +656,7 @@ async def test_a_brief_past_the_budget_is_refused_with_the_typed_limit_and_never
     body = error.body().model_dump()
     assert body["error"] == "limit_exceeded"
     assert body["cap"] == cap and body["would_be"] == error.would_be
-    assert body["options"] == ["narrow_selection", "narrow_timeline_window", "branch"]
+    assert body["options"] == ["narrow_selection", "narrow_timeline_window", "ask_in_a_view"]
     assert body["documents_chars"] == len(TEXT)
     assert body["evidence_brief_chars"] == brief_alone
 
@@ -706,7 +706,7 @@ async def test_the_route_answers_the_typed_limit_with_its_three_options() -> Non
     assert response.status_code == 409
     body = json.loads(bytes(response.body))
     assert body["error"] == "limit_exceeded"
-    assert body["options"] == ["narrow_selection", "narrow_timeline_window", "branch"]
+    assert body["options"] == ["narrow_selection", "narrow_timeline_window", "ask_in_a_view"]
     assert (body["cap"], body["would_be"]) == (80_000, 120_000)
 
 
@@ -795,7 +795,6 @@ class _Lineage:
                 created_at=datetime(2026, 1, 2, tzinfo=UTC),
                 created_by="alice",
                 owning_unit="unit-1",
-                branched_from="parent-1",
             ),
         }
 
@@ -818,32 +817,29 @@ def _lineage() -> _Lineage:
     return _Lineage({PARENT_VIEWER.id: {"parent-1", "inv-1"}, BRANCH_ONLY.id: {"inv-1"}})
 
 
-async def test_an_answer_counting_a_parents_events_is_not_shown_to_a_branch_only_reader() -> None:
-    """Rule 3: the asker could view the parent, so the parent's events on the shared link were
-    counted. A reader of the branch alone, cleared for every one of those events' handling, could
-    not have counted them by asking, so must not be shown figures that include them."""
+async def test_an_answer_counts_its_own_cases_events_alone() -> None:
+    """ADR-144 Amendment 1: a case reads its own events, and no other case's, whoever asks."""
     service, _, analytics, _, _ = await _case(
         events=[_occurred("2026-03", scope="parent-1"), _occurred("2026-03", scope="inv-1")],
         investigations=_lineage(),
     )
     await service.ask("inv-1", "Who?", PARENT_VIEWER, selected_node_ids=[DANA])
     ((request, _),) = analytics.requests
-    assert request.filter.inherited is not None and request.filter.inherited.scopes == ["parent-1"]
-    assert await service.history("inv-1", BRANCH_ONLY) == []
-    assert len(await service.history("inv-1", PARENT_VIEWER)) == 1
-
-
-async def test_an_answer_counting_only_own_events_is_shown_to_a_branch_only_reader() -> None:
-    """The plant above is able to fail the other way: a branch-only asker counts no parent, and a
-    branch-only reader is shown their answer."""
-    service, _, analytics, _, _ = await _case(
-        events=[_occurred("2026-03", scope="parent-1"), _occurred("2026-03", scope="inv-1")],
-        investigations=_lineage(),
-    )
-    await service.ask("inv-1", "Who?", BRANCH_ONLY, selected_node_ids=[DANA])
-    ((request, _),) = analytics.requests
     assert request.filter.inherited is None
-    assert len(await service.history("inv-1", BRANCH_ONLY)) == 1
+    (entry,) = await service._store.list_for_case("inv-1")
+    assert entry.event_scopes == []
+
+
+async def test_an_answer_once_counted_from_other_cases_events_is_shown_to_no_one() -> None:
+    """Rule 3: an answer kept from before L3.2 whose counts read another case's events. No reader
+    now reads that case's events here, so none is shown it, its author included."""
+    service, _, _, _, _ = await _case(investigations=_lineage())
+    await service._store.add(
+        _stored(events_recorded=True, link_ids=[], author=PARENT_VIEWER.id).model_copy(
+            update={"event_scopes": ["parent-1"]}
+        )
+    )
+    assert await service.history("inv-1", PARENT_VIEWER) == []
 
 
 # --- an entry stored before the events' handling was recorded (rule 3) ------------------------

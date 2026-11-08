@@ -438,7 +438,7 @@ async def test_a_restore_that_would_pass_the_cap_for_the_restorer_is_refused_who
 
     detail = refused.value.detail
     assert (detail.cap_kind, detail.cap, detail.would_be) == ("nodes", small_cap, 4)
-    assert set(detail.options) == {"branch", "filter", "promote_to_batch"}
+    assert set(detail.options) == {"save_as_view", "filter", "promote_to_batch"}
     await _nothing_moved(store, before)
 
 
@@ -512,7 +512,7 @@ async def test_the_restore_route_turns_a_breach_into_the_standard_limit_exceeded
         "nodes",
         4,
     )
-    assert body["options"] == ["branch", "filter", "promote_to_batch"]
+    assert body["options"] == ["save_as_view", "filter", "promote_to_batch"]
     assert recorder.published == [] and recorder.steps == []
     assert await _stored_ids(store) == (set(), set())
 

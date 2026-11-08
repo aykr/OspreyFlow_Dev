@@ -25,6 +25,8 @@ from scripts.migrate_cases_to_one_dataset import migrate
 from scripts.stamp_datasets import CaseRow
 from services.api.datasets import ANALYST_LAYER, COMPOSITE, Dataset, InMemoryDatasetStore
 
+from tests.services.api.unconverted import made_before_l3_2
+
 UNIT = "unit-1"
 
 
@@ -258,7 +260,7 @@ async def test_a_branch_reading_its_originals_layer_is_named_and_given_none(
     goes on; a second run changes nothing."""
     cases = [CaseRow("enron-case", "Enron", UNIT, None)]
     await migrate(store, cases, write=True, say=lambda _: None)
-    await store.copy_case("enron-case", "twig", case_name="Twig")
+    await made_before_l3_2(store, "enron-case", "twig")
     cases.append(CaseRow("twig", "Twig", UNIT, "enron-case"))
     for write in (False, True):
         lines: list[str] = []
@@ -276,7 +278,7 @@ async def test_the_branch_is_refused_a_layer_with_its_link_unread(
     store: InMemoryDatasetStore,
 ) -> None:
     """Rule 15, red: the run as it was, reading no link, asks for the branch's layer and stops."""
-    from services.api.datasets import BranchLayerError
+    from services.api.datasets import ReadOnlyLayerError
 
     class _LinksUnread:
         def __init__(self, inner: InMemoryDatasetStore) -> None:
@@ -289,8 +291,8 @@ async def test_the_branch_is_refused_a_layer_with_its_link_unread(
             return getattr(self._inner, name)
 
     await migrate(store, [CaseRow("enron-case", "Enron", UNIT, None)], write=True, say=print)
-    await store.copy_case("enron-case", "twig", case_name="Twig")
-    with pytest.raises(BranchLayerError):
+    await made_before_l3_2(store, "enron-case", "twig")
+    with pytest.raises(ReadOnlyLayerError):
         await migrate(
             _LinksUnread(store),  # type: ignore[arg-type]
             [CaseRow("twig", "Twig", UNIT, "enron-case")],

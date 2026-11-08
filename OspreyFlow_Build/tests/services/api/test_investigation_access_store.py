@@ -346,59 +346,31 @@ async def test_removing_a_case_twice_is_not_found_the_second_time(
         await store.remove(case.id, by=AUTHOR)
 
 
-async def test_a_case_branched_from_a_removed_case_keeps_working(
-    store: InvestigationStore,
-) -> None:
-    """The branch points at its source; removing the source must not break or remove the branch."""
-    source = await store.create(AUTHOR, name="Source")
-    branch = await store.create(AUTHOR, name="Branch", branched_from=source.id)
-
-    await store.remove(source.id, by=AUTHOR)
-
-    assert (await store.get_authorized(branch.id, AUTHOR, need=AccessLevel.AUTHOR)).id == branch.id
+# --- ADR-144 Amendment 1: a database from before L3.2 keeps its origin and window columns --------
+# The store no longer writes or reads them; the upgrade's migration reads them once.
 
 
-# --- ADR-128 decision 2: the window a branch made from what is lit was made with ----------------
-# Live (Postgres). The route tests use a stand-in store; these show the window is stored with the
-# case and comes back from every read that builds a case, and that a database from before the
-# change gains the columns on start with its cases reading no window.
-
-
-async def test_a_branchs_window_is_stored_and_read_back_by_every_read(
-    store: InvestigationStore,
-) -> None:
-    window = Interval(
-        valid_from=datetime(2026, 1, 5, tzinfo=UTC), valid_to=datetime(2026, 4, 30, tzinfo=UTC)
-    )
-    source = await store.create(AUTHOR, name="Source")
-    held = await store.create(AUTHOR, name="Lit", branched_from=source.id, branch_window=window)
-    plain = await store.create(AUTHOR, name="Plain", branched_from=source.id)
-
-    assert held.branch_window == window
-    assert (await store.get(held.id)).branch_window == window
-    assert (await store.get_authorized(held.id, AUTHOR, need=AccessLevel.VIEWER)).branch_window == (
-        window
-    )
-    listed = {c.id: c.branch_window for c, _ in await store.list_for(AUTHOR)}
-    assert listed[held.id] == window
-    assert listed[plain.id] is None and listed[source.id] is None
-
-
-async def test_a_database_from_before_the_window_gains_the_columns_and_reads_none(
+async def test_a_database_from_before_l3_2_keeps_working_with_its_old_columns(
     schema: str,
 ) -> None:
     dsn = f"{PostgresConfig.from_env().dsn}?search_path={schema}"
     first = await InvestigationStore.connect(dsn)
-    case = await first.create(AUTHOR, name="Old")
+    source = await first.create(AUTHOR, name="Source")
     await first.close()
     conn = await asyncpg.connect(dsn=dsn)
-    await conn.execute("ALTER TABLE investigations DROP COLUMN branch_valid_from")
-    await conn.execute("ALTER TABLE investigations DROP COLUMN branch_valid_to")
+    await conn.execute(
+        "ALTER TABLE investigations ADD COLUMN branched_from TEXT REFERENCES investigations (id)"
+    )
+    await conn.execute("ALTER TABLE investigations ADD COLUMN branch_valid_from TIMESTAMPTZ")
+    await conn.execute("ALTER TABLE investigations ADD COLUMN branch_valid_to TIMESTAMPTZ")
     await conn.close()
 
     reopened = await InvestigationStore.connect(dsn)
     try:
-        assert (await reopened.get(case.id)).branch_window is None
+        made = await reopened.create(AUTHOR, name="After the upgrade")
+        assert (await reopened.get(source.id)).name == "Source"
+        assert (await reopened.get(made.id)).name == "After the upgrade"
+        assert {c.id for c, _ in await reopened.list_for(AUTHOR)} == {source.id, made.id}
     finally:
         await reopened.close()
 
@@ -636,8 +608,7 @@ async def test_a_case_says_whether_anyone_chose_so_a_branch_can_inherit_the_stor
         read = await store.get_authorized(parent.id, AUTHOR, need=AccessLevel.VIEWER)
         branch = await store.create(
             AUTHOR,
-            name=f"Branch of {parent.name}",
-            branched_from=parent.id,
+            name=f"Opened from {parent.name}'s alert",
             domains=read.domains_to_inherit(),
         )
         stored[parent.name] = await _raw_domains(store, branch.id)

@@ -68,6 +68,7 @@ from .test_email_extraction import (
 )
 from .test_questions import ANSWER
 from .test_questions_graph_facts import TrendAnalytics
+from .unconverted import made_before_l3_2
 from .working_set.fakes import FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME, edge, node
 
@@ -100,8 +101,7 @@ async def _a_case_made_from_another() -> tuple[InMemoryDatasetStore, str, Princi
         )
     )
     await store.set_for_case("original", ["src"], ANALYST, case_name="Original")
-    await store.copy_case("original", "made", case_name="Made from the original")
-    layer = await store.layer_of_case("original")
+    layer = await made_before_l3_2(store, "original", "made")
     assert layer is not None
     principal = await scope_to_case(ANALYST, "made", store, holds_a_level=_holds)
     assert layer in (principal.datasets or [])

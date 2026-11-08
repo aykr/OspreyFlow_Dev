@@ -28,6 +28,8 @@ from services.api.investigations import AccessLevel, Investigation, Investigatio
 
 from schemas.domain import Principal
 
+from .unconverted import made_before_l3_2
+
 ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 CAROL = Principal(id="carol", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
 
@@ -193,7 +195,7 @@ def test_the_datasets_listed_are_the_callers_units_only(setup) -> None:  # type:
 async def test_a_branch_reads_what_its_parent_reads(store: InMemoryDatasetStore) -> None:
     """Its parent's dataset; its own layer (ADR-143 decision 1, `test_analyst_layer.py`)."""
     await store.set_for_case("parent", ["fixture"], ALICE)
-    await store.copy_case("parent", "branch")
+    await made_before_l3_2(store, "parent", "branch")
     assert (await store.ids_of_case("branch"))[0] == "fixture"
     assert [d.id for d in await store.of_case("branch", ALICE)] == ["fixture"]
 

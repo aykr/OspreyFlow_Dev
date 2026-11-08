@@ -9,8 +9,8 @@ What a mistake would do, and the case that catches it:
 - an event the reader may not see making a case look as if it holds events —
   `test_an_event_the_reader_may_not_see_makes_no_holder`;
 - a case that shares no dataset named — `test_a_case_reading_another_dataset_is_not_named`;
-- a branch's inherited events missed, so a branch is told it has none —
-  `test_a_branch_counts_the_events_it_inherits_from_its_parent`;
+- a case made from another counting its original's events as its own —
+  `test_a_case_made_from_another_counts_none_of_its_events`;
 - the route read without Viewer or without the investigate right —
   `test_reading_needs_viewer_on_the_case_and_the_investigate_right`.
 """
@@ -60,7 +60,7 @@ def _case(case_id: str, name: str) -> Investigation:
 
 REVIEW, LEDGER, HIDDEN, OTHER = (_case("review", "Ledger review"), _case("ledger", "Ledger (demo)"),
                                  _case("hidden", "Unshared ledger"), _case("other", "Other dataset"))  # fmt: skip
-BRANCH = _case("branch", "Branch of Ledger (demo)").model_copy(update={"branched_from": "ledger"})
+BRANCH = _case("branch", "Branch of Ledger (demo)")  # made from Ledger before L3.2
 
 
 class _Cases:
@@ -189,8 +189,13 @@ async def test_reading_needs_viewer_on_the_case_and_the_investigate_right(world:
     assert world.holders(LEDGER, READER).status_code == 403, "a Reports Viewer has no investigate right"
 
 
-async def test_a_branch_counts_the_events_it_inherits_from_its_parent(world: World) -> None:
+async def test_a_case_made_from_another_counts_none_of_its_events(world: World) -> None:
+    """ADR-144 Amendment 1: a case reads its own events alone. One made from Ledger before L3.2
+    holds none of its own, and is told which case holds its dataset's, as any reading case is."""
     world.grant(LEDGER), world.grant(BRANCH)
     world.reads(LEDGER, "ledger-ds"), world.reads(BRANCH, "ledger-ds")
     await world.event(LEDGER)
-    assert world.holders(BRANCH).json() == {"has_events": True, "held_by": []}
+    assert world.holders(BRANCH).json() == {
+        "has_events": False,
+        "held_by": [{"investigation_id": "ledger", "name": "Ledger (demo)"}],
+    }

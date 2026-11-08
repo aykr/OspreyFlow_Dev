@@ -6,7 +6,9 @@
   `test_a_pipelines_branch_and_a_git_flag_are_kept_only_where_named`;
 - a folder-wide exception would have hidden a case's branch:
   `test_a_folder_wide_exception_would_have_hidden_a_cases_branch`;
-- the real tree holds none: `test_the_tree_names_no_branch`.
+- the Conduit holds none: `test_the_conduit_names_no_branch`;
+- the real tree holds none: `test_the_tree_names_no_branch`, expected to fail until L3.2b removes
+  them from the Glass (strict, so it fails the run once the tree is clean and the mark is stale).
 """
 
 from __future__ import annotations
@@ -43,6 +45,11 @@ def test_a_pipelines_branch_and_a_git_flag_are_kept_only_where_named() -> None:
     assert findings({"services/api/pipeline_new.py": dag}) != []
     # A git branch named any other way is flagged too.
     assert findings({"services/api/x.py": "git checkout -b my-branch"}) != []
+    # A stored label from before L3.2, only in the file that relabels it, only as that literal.
+    old = "UPDATE investigation_history SET label = 'Branched' WHERE label LIKE 'Branched from %';"
+    assert findings({"services/api/history.py": old}) == []
+    assert findings({"services/api/history_labels.py": old}) != []
+    assert findings({"services/api/history.py": 'BRANCHED = "Branched"'}) != []
 
 
 def test_a_folder_wide_exception_would_have_hidden_a_cases_branch(
@@ -58,6 +65,17 @@ def test_a_folder_wide_exception_would_have_hidden_a_cases_branch(
     assert findings(planted) == []
 
 
+def test_the_conduit_names_no_branch() -> None:
+    """L3.2's half: `services/api` holds none."""
+    found = findings(tree_files(scanned=("services/api",)))
+    assert found == [], "\n".join(f"{p}:{n}: {line}" for p, n, line in found[:40])
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="L3.2b removes branches from the Glass (apps/workspace/src); until then only its "
+    "files are found, which test_the_conduit_names_no_branch and the report show",
+)
 def test_the_tree_names_no_branch() -> None:
     found = findings(tree_files())
     assert found == [], "\n".join(f"{p}:{n}: {line}" for p, n, line in found[:40])

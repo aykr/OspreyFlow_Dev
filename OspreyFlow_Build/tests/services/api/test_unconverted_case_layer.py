@@ -1,5 +1,7 @@
-"""A branch reads its original case's layer and writes nothing into it (ADR-144 Amendment 1 decision
-2: the owner, 7 November 2026, no branches anywhere; L3.2 removes them).
+"""A case made from another since L3.1 (a branch, in the words of the time), until the upgrade turns it
+into a view, reads its original case's layer and writes nothing into it (ADR-144 Amendment 1
+decision 2). No route makes one since L3.2; `unconverted.made_before_l3_2` makes one as the data
+holds it.
 
 What a mistake here would do, and the case that catches it:
 
@@ -10,9 +12,6 @@ What a mistake here would do, and the case that catches it:
   check alone removed in `test_the_branch_check_fails_with_it_alone_removed`;
 - the store making the branch a layer of its own when asked:
   `test_the_store_makes_no_layer_for_a_branch`;
-- a branch of an original with no layer yet getting no link, then a layer of its own at its first
-  mark (the final review's 3b):
-  `test_a_branch_of_an_original_with_no_layer_yet_reads_one_made_for_it`;
 - a member of the branch alone, holding no level on the original, reading the original's hand marks
   and manual links (the orchestrator's call, on rule 3, as for the alert jump):
   `test_a_branch_member_with_no_level_on_the_original_reads_none_of_its_layer`, red with the link
@@ -36,13 +35,14 @@ from services.api.dataset_scope import (
     set_case_datasets,
     stamping,
 )
-from services.api.datasets import BranchLayerError, InMemoryDatasetStore
+from services.api.datasets import InMemoryDatasetStore, ReadOnlyLayerError
 from services.api.working_set.service import WorkingSetService
 
 from schemas.domain import Principal, ProvenanceState, Subgraph
 
 from .test_composite_read_only import MEMBER, _composite_store, _member_node, _NodeGraph, _write
 from .test_email_extraction import WritingGraph
+from .unconverted import made_before_l3_2
 from .working_set.fakes import FakeGraphPort, FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME
 
@@ -66,9 +66,7 @@ async def _in_a_branch(
     """A case reading the member, and its branch, scoped as a request under the branch is."""
     store = await _composite_store()
     await store.set_for_case("original", [MEMBER], ANALYST, case_name="Original")
-    await store.copy_case("original", "branch", case_name="Branch")
-    layer = await store.layer_of_case("original")
-    assert layer is not None
+    layer = await made_before_l3_2(store, "original", "branch")
     return store, layer, await scope_to_case(reader, "branch", store, holds_a_level=holds)
 
 
@@ -79,7 +77,7 @@ async def test_a_manual_link_in_a_branch_is_refused_and_nothing_written() -> Non
     inner = FakeGraphPort(Subgraph(nodes=people, edges=[]))
     working = FakeWorkingSetStore()
     await working.add_nodes("branch", people)
-    with pytest.raises(BranchLayerError, match="mark or link in the original case"):
+    with pytest.raises(ReadOnlyLayerError, match="mark or link in that case"):
         await WorkingSetService(stamping(inner, registry=store), working, SCHEME).manual_link(
             "branch", "n1", "n2", principal
         )
@@ -98,7 +96,7 @@ async def _write_into(layer: str, store: InMemoryDatasetStore) -> WritingGraph:
 
 async def test_a_write_into_the_layer_a_branch_reads_is_refused() -> None:
     store, layer, _ = await _in_a_branch()
-    with pytest.raises(BranchLayerError):
+    with pytest.raises(ReadOnlyLayerError):
         await _write_into(layer, store)
 
 
@@ -108,7 +106,7 @@ async def test_a_correction_of_what_is_in_that_layer_is_refused() -> None:
         update={"datasets": [layer]}
     )
     inner = FakeGraphPort(Subgraph(nodes=[theirs], edges=[]))
-    with pytest.raises(BranchLayerError):
+    with pytest.raises(ReadOnlyLayerError):
         await stamping(inner, registry=store).supersede_node("theirs", _write("next"), "tx")
 
 
@@ -129,7 +127,7 @@ async def test_the_branch_check_fails_with_it_alone_removed(
 
 async def test_the_store_makes_no_layer_for_a_branch() -> None:
     store, _layer, _ = await _in_a_branch()
-    with pytest.raises(BranchLayerError):
+    with pytest.raises(ReadOnlyLayerError):
         await store.ensure_layer("branch", unit="unit-1", created_by=ANALYST.id)
     # Choosing another dataset for the branch makes none either.
     await store.set_for_case("branch", [MEMBER], ANALYST)
@@ -153,22 +151,6 @@ async def test_a_correction_of_that_layer_goes_through_with_the_check_alone_remo
     inner = _NodeGraph(theirs)
     await stamping(inner, registry=store).supersede_node("theirs", _write("next"), "tx")
     assert inner.superseded == ["theirs"]
-
-
-async def test_a_branch_of_an_original_with_no_layer_yet_reads_one_made_for_it() -> None:
-    """An original the migration has not reached has no layer. Its branch is linked to one made
-    for the original at branch time, so its first mark is refused, not made a layer of its own."""
-    store = await _composite_store()
-    store.cases["original"] = [MEMBER]  # chosen, as before L3.1: no layer
-    assert await store.layer_of_case("original") is None
-    await store.copy_case("original", "branch", case_name="Branch")
-    layer = await store.layer_of_case("original")
-    assert layer is not None and await store.read_only_layer_of("branch") == layer
-    principal = await scope_to_case(ANALYST, "branch", store, holds_a_level=_holds)
-    assert layer in (principal.datasets or [])
-    with pytest.raises(BranchLayerError):
-        await analyst_writes_into()
-    assert await store.layer_of_case("branch") is None
 
 
 #: A member of the branch who holds no level on the original.
@@ -203,7 +185,7 @@ async def test_a_branch_member_with_no_level_on_the_original_reads_none_of_its_l
     nodes, links = _read(member, _marks_and_links(layer))
     assert "marked" not in nodes and links == []
     # And writes nothing into it, as for every reader of the branch.
-    with pytest.raises(BranchLayerError):
+    with pytest.raises(ReadOnlyLayerError):
         await analyst_writes_into()
     # The original's own analyst, in the same branch, reads it.
     _s, theirs, maker = await _in_a_branch(ANALYST)

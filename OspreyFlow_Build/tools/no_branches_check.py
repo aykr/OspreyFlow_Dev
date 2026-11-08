@@ -11,7 +11,9 @@ as the amendment's decision 4 says:
   in the files listed in `PIPELINE_FILES`, each named with why. A new file using the word in that
   sense is added here by name, so a case's branch can never hide in a folder the Studio owns
   (`ingest/studio/datasets.ts` named a case's `branched_from` beside the DAG's files);
-- **a git branch**: only the exact flags in `GIT_TOKENS`.
+- **a git branch**: only the exact flags in `GIT_TOKENS`;
+- **history written before L3.2**: only the stored labels in `STORED_BEFORE_L3_2`, in the one
+  file that relabels them.
 
 Run as `PYTHONPATH=../OspreyFlow_Build python -m tools.no_branches_check` from `OspreyFlow_Core`;
 exits 1 and names each line. `tests/test_no_branches_check.py` plants a branch word in the shapes
@@ -45,10 +47,18 @@ PIPELINE_FILES: Mapping[str, str] = {
     "apps/workspace/src/ingest/publish/PublishScreen.tsx": "a pipeline run's report per branch",
     "apps/workspace/src/ingest/publish/PublishScreen.test.tsx": "its tests",
     "apps/workspace/src/ingest/publish/PublishScreen.deduplicate.test.tsx": "its tests",
+    "services/api/load_records.py": "a pipeline run's records, one per source branch",
 }
 
 #: The git meaning: these exact tokens, anywhere.
 GIT_TOKENS = ("--initial-branch",)
+
+#: History written before L3.2 (ADR-144 Amendment 1 decision 4 keeps history as written): the
+#: labels case histories stored, which the relabelling SQL still has to recognise, or it would
+#: rewrite those rows. Only these literals, and only in this file.
+STORED_BEFORE_L3_2: Mapping[str, tuple[str, ...]] = {
+    "services/api/history.py": ("'Branched from %'", "'Branched'"),
+}
 
 _WORD = re.compile(r"branch", re.IGNORECASE)
 
@@ -61,7 +71,7 @@ def findings(files: Mapping[str, str]) -> list[tuple[str, int, str]]:
             continue
         for number, line in enumerate(text.splitlines(), start=1):
             stripped = line
-            for token in GIT_TOKENS:
+            for token in (*GIT_TOKENS, *STORED_BEFORE_L3_2.get(path, ())):
                 stripped = stripped.replace(token, "")
             if _WORD.search(stripped):
                 found.append((path, number, line.strip()))

@@ -392,3 +392,112 @@ def test_a_view_shows_one_lens(world: _World) -> None:
     neither = _as("alice").post(VIEWS, json={"name": "Neither"})
     assert (both.status_code, neither.status_code) == (422, 422)
     assert world.views.views == {}
+
+
+# --- a view's conversation (L3.2's Q2, the owner's ruling of 8 November 2026) ------------------
+
+
+class _Questions:
+    """The questions service as the routes call it, over the real in-memory store: one entry in
+    the case's own conversation and one kept with a view."""
+
+    def __init__(self, view_id: str) -> None:
+        from services.api.questions import InMemoryQuestionStore, QuestionEntry
+
+        self.store = InMemoryQuestionStore()
+        for entry_id, kept_with in (("q-case", None), ("q-view", view_id)):
+            self.store.entries.append(
+                QuestionEntry(
+                    id=entry_id, investigation_id=CASE, author="alice", question="Who?",
+                    answer="Dana.", model="local-model", view_id=kept_with,
+                    created_at=datetime(2026, 11, 8, tzinfo=UTC),
+                )  # fmt: skip
+            )
+        self.asked: list[dict[str, Any]] = []
+
+    async def history(
+        self, investigation_id: str, principal: Principal, *, view_id: str | None = None
+    ) -> list[Any]:
+        from services.api.questions import QuestionAnswer
+
+        return [
+            QuestionAnswer(
+                id=e.id, author=e.author, question=e.question, answer=e.answer, citations=[],
+                candidates=[], unplaced=0, created_at=e.created_at,
+            )  # fmt: skip
+            for e in await self.store.list_for_case(investigation_id, view_id)
+        ]
+
+
+@pytest.fixture
+def conversation(world: _World) -> Iterator[tuple[_Questions, str]]:
+    from services.api.app import get_principal_names, get_questions
+
+    view_id = _saved()  # Alice's, private
+    questions = _Questions(view_id)
+
+    class _Names:
+        async def display_names(self, ids: Any) -> dict[str, str]:
+            return {}
+
+    app.dependency_overrides[get_questions] = lambda: questions
+    app.dependency_overrides[get_principal_names] = lambda: _Names()
+    try:
+        yield questions, view_id
+    finally:
+        app.dependency_overrides.pop(get_questions, None)
+        app.dependency_overrides.pop(get_principal_names, None)
+
+
+def _ids(response: Any) -> list[str]:
+    assert response.status_code == 200, response.text
+    return [q["id"] for q in response.json()]
+
+
+def test_a_private_views_conversation_is_read_by_its_creator_alone(
+    world: _World, conversation: tuple[_Questions, str]
+) -> None:
+    """Bob, an Editor of the case, is answered 404 for Alice's private view's conversation, as for
+    a view that does not exist, and the case's own conversation never carries it. Alice reads it;
+    shared, Bob does."""
+    _, view_id = conversation
+    q = f"/v1/investigations/{CASE}/questions"
+    refused = _as("bob").get(q, params={"view_id": view_id})
+    missing = _as("bob").get(q, params={"view_id": "no-such-view"})
+    assert (refused.status_code, refused.json()) == (404, missing.json())
+    assert _ids(_as("bob").get(q)) == ["q-case"]
+    assert _ids(_as("alice").get(q, params={"view_id": view_id})) == ["q-view"]
+    assert _as("alice").post(f"{VIEWS}/{view_id}/share").status_code == 200
+    assert _ids(_as("bob").get(q, params={"view_id": view_id})) == ["q-view"]
+
+
+def test_the_conversation_check_fails_with_the_view_check_removed(
+    world: _World, conversation: tuple[_Questions, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rule 15: the view check (the store's own visibility, which the route asks) planted out, Bob
+    reads Alice's private view's conversation."""
+    _, view_id = conversation
+    monkeypatch.setattr(case_views_module, "visible_to", lambda view, reader: True)
+    q = f"/v1/investigations/{CASE}/questions"
+    assert _ids(_as("bob").get(q, params={"view_id": view_id})) == ["q-view"]
+
+
+def test_asking_in_a_private_view_is_refused_to_another_member(
+    world: _World, conversation: tuple[_Questions, str]
+) -> None:
+    """Asking in Alice's private view is refused to Bob before the model is asked anything."""
+    questions, view_id = conversation
+    asked = _as("bob").post(
+        f"/v1/investigations/{CASE}/questions", json={"question": "Who?", "view_id": view_id}
+    )
+    assert asked.status_code == 404 and asked.json() == {"error": "view_not_found"}
+
+
+async def test_the_store_never_mixes_a_views_conversation_with_the_cases() -> None:
+    from services.api.questions import InMemoryQuestionStore
+
+    store = _Questions("v-1").store
+    assert isinstance(store, InMemoryQuestionStore)
+    assert [e.id for e in await store.list_for_case(CASE)] == ["q-case"]
+    assert [e.id for e in await store.list_for_case(CASE, "v-1")] == ["q-view"]
+    assert await store.list_for_case(CASE, "v-2") == []

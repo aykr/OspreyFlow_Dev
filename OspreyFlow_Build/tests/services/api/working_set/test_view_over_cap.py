@@ -81,7 +81,7 @@ async def test_a_full_snapshot_over_the_node_cap_is_answered_with_the_readers_ow
     over = sent[0]
     assert isinstance(over, DeltaViewOverCap)
     assert (over.would_be.cap_kind, over.would_be.cap, over.would_be.would_be) == ("nodes", 3, 4)
-    assert set(over.would_be.options) == {"branch", "filter", "promote_to_batch"}
+    assert set(over.would_be.options) == {"save_as_view", "filter", "promote_to_batch"}
     assert set(over.model_dump()) == {"seq", "op", "would_be"}
 
 
