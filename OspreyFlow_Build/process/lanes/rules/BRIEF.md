@@ -1,34 +1,39 @@
-# Rules lane · brief L2.8d · a corrected node an alert names, and L2.8c's carries
+# Rules lane · brief L2.9 · four places: Rules and Monitoring, /alerts/<id>, the way back
 
-Written by the orchestrator, 8 November 2026, after L2.8c's merge (`befcf56`), for a **fresh rules session**
-on account `sol`. Read `process/lanes/rules/REPORT.md` (L2.8c, item 11) and ADR-109 Amendment 11 first.
-Rebase onto `main`. Opus, medium. Size S. After it comes L2.9.
+Written by the orchestrator, 8 November 2026, after L2.8d's merge (`7dfb3a1`), for a **fresh rules session**
+on account `sol`. Read `process/lanes/rules/REPORT.md` (L2.8d), ADR-145 Amendment 4 and ADR-146 first.
+Rebase onto `main`. Opus, medium. Size L. After it come L2.10 (one queue, team routing; needs admin's L2.5),
+L2.11 and L2.12. **L2.9 is one of the docs lane's gating steps**, with L2.10, L2.5, P1 and P3.
 
-**The lane, the stacks, the merge rule.** As L2.8c's brief and Prompt L say: rules' ownership map; a test
-stack by `stack_lease.sh acquire rules "<purpose>"`, pinning the ports it prints; before ready-to-merge,
-your own lane-reviewer pass, then make -k ci and make test at a commit rebased onto main, saved under
-`process/lanes/rules/gates/`, with the commit and its tree sent to the orchestrator.
+**The lane, the stacks, the merge rule.** Rules' ownership map (the shell, layout, Home, status bar, theme and
+brand, the GOV.UK header, `alerts/**`, the Rules and Monitoring place and their Conduit modules); a test stack
+by `stack_lease.sh acquire rules "<purpose>" && …` only; Prompt L's rules: never stop on a question (log it
+under "Decisions taken"; only loosening access, real data or contradicting an accepted ADR stops a piece);
+schemas changes ride with the step; before ready-to-merge, your own lane-reviewer, then make -k ci and make
+test at a commit rebased onto main, saved under `process/lanes/rules/gates/`. This step touches access (a
+place's routes refuse who may not enter it), so it gets the orchestrator's independent review too.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 12 and 15 above all); ADR-109 Amendments 10 and 11
-(point 7's finding: the journal renames only an alert's own `Alert` node; a node among its
-`referent_node_ids` keeps naming the superseded revision, so a correction of a node an alert names
-withholds that alert).
+**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 7, 12, 13 and 15 above all); ADR-145 decisions 1–3 and
+Amendments 1 and 4 (four places; the switcher; each place follows the full checks its routes make); ADR-146
+and Amendment 1 (the alerts journey; Rules and Monitoring as a place of its own); ADR-132 Amendments 5 and 6
+(the GOV.UK header and its place switch); ADR-144 (views, for *Open the evidence*: case's L3.2 built the
+view routes, and its L3.2b is building the Glass's views now, so use the views API and coordinate through
+the orchestrator); `spec/02_GLASS_FRONTEND.md`'s shell sections.
 
-**Build:**
-1. **The referent rename:** the same journal mechanism over `referent_node_ids`, so an alert naming a
-   corrected node stays listed for its readers, and is still refused to a reader who may not read the
-   new revision. Record it as an ADR-109 amendment (ask the orchestrator to reserve the number).
-2. **L2.8c's carries** (REPORT.md item 11): (a) a conformance case that another link type holding the
-   same id is never marked; (b) a test that an Alert node carries only `ALERTED_ON` links; (c) one helper
-   for `purge_copies` and `WorkingSetReverter.remove`'s history scrub, and whether history serves old
-   copies; (d) `test_written_back_reads_in_full_stages.py`'s `_Store.repointing` moved to the shared
-   stand-in; (e) the alert store's DDL and pools per worker replica, against Postgres's concurrent-DDL
-   and connection limits; (f) an enrich stage that writes no point opens no record; (g) the review's
-   items 11 and 13 as ruled.
+**Build** (the plan's row L2.9):
+1. **Rules and Monitoring as a fourth place:** in the switcher and in the GOV.UK header, offered only to the
+   rights that open it (N6), its routes refusing anyone else; the place's own shell and tabs.
+2. **Monitoring and its count leave the Glass** (reworking L2.2 and L2.3's rail and banner).
+3. **The workspace router and `/alerts/<id>`:** an alert's own address, refused exactly as a missing alert
+   to anyone who may not read it (rule 3; ADR-124's jump rule as amended); Home opens the alert.
+4. ***Open the evidence*** as a private view of the alert's case with the way back (R5), replacing the alert
+   jump's case-of-its-own (the orchestrator's interim Q1 from L3.2 ends here).
 
-**Tests first, each red by a plant at the real call site:** an alert naming a corrected node is listed for
-a reader of the new revision and refused to one who may not read it, each red without the referent
-rename; each carried item's own test as named above.
+**Tests first, each red by a plant at the real call site:** ADR-145 Amendment 4's switcher test (each role
+sees only its places, and each hidden place's routes refuse it); ADR-146's address, refusal and way-back
+tests; `/alerts/<id>` for an unreadable alert answers exactly as for a missing one; keyboard cases in
+`keyboard/shell.spec.ts` and the place's own spec (rule 13), registry ids as a diff; axe in dark, light and
+GOV.UK.
 
-**Exit.** Make ci and make test green offline; the live cases under a named lease and stack; a friction
-fragment. Report in Prompt L's format, then stop.
+**Exit.** The row's exit; make ci and make test green offline; live cases under a named lease and stack; a
+friction fragment. Report in Prompt L's format, then stop.

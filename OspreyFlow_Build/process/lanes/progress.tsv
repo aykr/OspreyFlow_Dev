@@ -25,8 +25,8 @@ admin	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	done	Alerts: G2, G3 and G9 fixed (access first)
 glass	L2.8b	M	done	Old records under the new check: audit words, held rows, pack items, Alert node re-marking
 rules	L2.8c	S	done	The other link supersedes through the repoint journal
-rules	L2.8d	S	building	An alert naming a corrected node in referent_node_ids is listed again (ADR-109 Am 11 point 7)
-rules	L2.9	L	todo	Four places: Rules and Monitoring; /alerts/<id>; the way back
+rules	L2.8d	S	done	An alert naming a corrected node in referent_node_ids is listed again (ADR-109 Am 11 point 7)
+rules	L2.9	L	building	Four places: Rules and Monitoring; /alerts/<id>; the way back
 rules	L2.10	L	todo	One queue; What raises alerts; watches; team routing; Raise an alert
 rules	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
 rules	L2.12	M	todo	Reporting folded: Figures, Alert monitoring, the Reports Viewer
