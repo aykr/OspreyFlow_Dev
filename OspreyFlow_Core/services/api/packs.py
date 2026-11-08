@@ -427,10 +427,14 @@ def alert_item(
     events: Sequence[EventRecord],
     by: Principal,
     scheme: HandlingScheme,
+    *,
+    raised_over: Sequence[Handling] = (),
 ) -> StoredPackItem:
     """An alert as its adder read it (ADR-134 decision 1) — every part of it read as them already
     (`alert_queue.explain_with_evidence`, all or nothing) — resting on the handling of every node,
-    link and transaction it cites."""
+    link and transaction it cites, and on `raised_over`, the alert's `alerts.raiser_floor` (ADR-109
+    Amendment 12 point 10): its explanation is its words, written over what its raiser read, so a
+    correction that lowered its evidence since never lowers the item below that."""
     alert = explained.alert
     names = {n.id: node_name(n) for n in explained.nodes}
     cited = set(alert.edge_ids)
@@ -474,6 +478,7 @@ def alert_item(
         *(n.handling for n in explained.nodes),
         *(e.handling for e in explained.edges if e.id in cited),
         *(e.handling for e in events),
+        *raised_over,
     ]
     return _item("alert", by, distinct_handlings(handlings), scheme, alert=snapshot)
 

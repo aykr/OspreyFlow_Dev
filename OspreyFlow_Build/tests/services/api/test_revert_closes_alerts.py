@@ -27,8 +27,8 @@ from services.api import alert_queue
 from services.api.alerts import QueueRow, default_severity
 from services.ingest.load_revert import RevertDeps, revert
 
-from ontology.handling import load_uk_le_scheme
 from schemas.domain import Alert, AlertMode, Principal
+from tests.services.api.no_transactions import NO_TRANSACTIONS
 from tests.ingest.test_revert_load import (
     Analytics,
     Audit,
@@ -39,7 +39,7 @@ from tests.ingest.test_revert_load import (
     _record,
     no_caches,
 )
-from tests.services.api.no_transactions import NO_TRANSACTIONS
+from tests.services.api.repoint_journal_fakes import RaiserReads
 
 T0 = datetime(2026, 10, 25, 9, 0, tzinfo=UTC)
 CASE = "case-1"
@@ -94,7 +94,7 @@ class Graph:
         return {}
 
 
-class Store:
+class Store(RaiserReads):
     """`AlertStore.list_case_queue` and `close_for_elements`, with the same matching: an alert not
     already closed is closed when its own node, a node it cites or a link it cites is named."""
 
@@ -105,14 +105,8 @@ class Store:
         """`AlertStore.settle_pending` over a journal holding no record: nothing to settle. Every
         read of alerts calls it (`settle_repoints` refuses a store without it, L2.8c)."""
 
-    #: What each alert's raiser read (`AlertStore.save(handlings=)`), none recorded unless a test
-    #: says so; read by the queue's `raiser_reads_admitting` as the real store answers it.
-    recorded_handlings: dict[str, Any] = {}
-    scheme = load_uk_le_scheme()
-
-    async def handlings_by_id(self, alert_ids: Any) -> dict[str, Any]:
-        """`AlertStore.handlings_by_id`: `None` for an alert whose handlings were not recorded."""
-        return {i: self.recorded_handlings.get(i) for i in alert_ids}
+    def held_alert_ids(self) -> set[str]:
+        return set(self.alerts)
 
     async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
         return [a for a in self.alerts.values() if a.investigation_id == investigation_id]

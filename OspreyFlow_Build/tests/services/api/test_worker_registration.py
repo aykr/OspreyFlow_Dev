@@ -40,7 +40,8 @@ async def test_the_deployed_worker_runs_a_resolution_job_with_the_layers(
     ontology, scheme, valkey = load_default_ontology(), load_uk_le_scheme(), object()
     worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
     worker_main.register_all(
-        worker, ontology=ontology, scheme=scheme, valkey=valkey, analyst_layers=_layers, alerts=None
+        worker, ontology=ontology, scheme=scheme, valkey=valkey, analyst_layers=_layers, alerts=None,
+        judgement_store=None,
     )
     handler = worker._handlers["resolve_entity_type"]  # noqa: SLF001
     result = await handler({"entity_type": "Person"}, graph=object(), tx="tx")
@@ -70,6 +71,7 @@ async def test_the_registration_check_fails_with_the_bindings_planted_out(
         valkey=valkey,
         analyst_layers=_layers,
         alerts=None,
+        judgement_store=None,
     )
     with pytest.raises(TypeError, match="analyst_layers"):
         await worker._handlers["resolve_entity_type"](  # noqa: SLF001
@@ -101,7 +103,8 @@ async def test_the_deployed_worker_gives_both_jobs_the_alerts_repoint_journal(
     alerts, valkey = object(), object()
     worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
     worker_main.register_all(worker, ontology=load_default_ontology(), scheme=load_uk_le_scheme(),
-                             valkey=valkey, analyst_layers=_layers, alerts=alerts)  # fmt: skip
+                             valkey=valkey, analyst_layers=_layers, alerts=alerts,
+                             judgement_store=None)  # fmt: skip
     await worker._handlers["supersede_node"]({}, graph=object(), tx="tx")  # noqa: SLF001
     await worker._handlers["resolve_entity_type"]({"entity_type": "Person"}, graph=object(), tx="tx")  # noqa: SLF001
     assert seen == {"supersede_node": alerts, "resolve_entity_type": alerts}
@@ -187,3 +190,40 @@ def test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its
     for keyword, name in (("alerts", "alerts_store"), ("judgement_store", "judgements_store")):
         value = given.get(keyword)
         assert isinstance(value, ast.Name) and value.id == name, f"{keyword}= is not the Conduit's {name}"
+
+
+def test_the_deployed_worker_connects_the_judgement_store_and_binds_it() -> None:
+    """The L2.8d review's item 6. The standalone worker is where a deployment's supersede jobs run,
+    so `main` connects the judgement store and gives it to `register_all`, as the Conduit gives its
+    own (`01_DOMAIN_MODEL.md` §5: a corrected node's citing judgements are flagged on either path).
+    `judgement_store` is a required keyword, so leaving it out fails the type check; this proves
+    `main` passes the store it connected, not `None`. Red with `main`'s `judgement_store=` given
+    `None`, and with the store not connected."""
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(worker_main.main))
+    connected = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Await)
+        and isinstance(node.value.value, ast.Call)
+        and ast.unparse(node.value.value.func) == "JudgementStore.connect"
+        for target in node.targets if isinstance(target, ast.Name)
+    }  # fmt: skip
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and ast.unparse(n.func) == "register_all"]
+    assert len(calls) == 1
+    given = {k.arg: k.value for k in calls[0].keywords}["judgement_store"]
+    assert isinstance(given, ast.Name) and given.id in connected, ast.unparse(given)
+
+
+def test_a_registration_without_the_judgement_store_is_refused() -> None:
+    """`judgement_store` is required: a registration that forgot it is refused at once, naming it.
+    Red with the keyword given a default again: it registered and flagged nothing."""
+    valkey = object()
+    worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="judgement_store"):
+        worker_main.register_all(  # type: ignore[call-arg]
+            worker, ontology=load_default_ontology(), scheme=load_uk_le_scheme(), valkey=valkey,
+            analyst_layers=_layers, alerts=None,
+        )  # fmt: skip

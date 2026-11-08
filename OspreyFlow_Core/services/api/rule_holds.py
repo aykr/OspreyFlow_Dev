@@ -22,7 +22,13 @@ from ports.media import MediaStore
 from schemas.domain import HeldRow, OntologySchema, Principal, RuleAuditEntry, RuleAuditPage
 from schemas.ingest import LoadReport, Recipe
 
-from .alerts import AlertStore, evidence_node_ids, read_evidence_ids, settle_repoints
+from .alerts import (
+    AlertStore,
+    evidence_node_ids,
+    raiser_reads_admitting,
+    read_evidence_ids,
+    settle_repoints,
+)
 from .audit import AuditWriter
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .studio_publish import LoadSink, load_with_rules, post_commit_notes
@@ -71,11 +77,16 @@ async def readable_rule_audit(
     about = sorted({str(e.detail["alert_id"]) for e in entries
                     if e.action in _ABOUT_AN_ALERT and "alert_id" in e.detail})  # fmt: skip
     current = await alerts.cited_by_ids(about)
+    # An entry about an alert carries its words (a firing's): withheld, as the queue withholds
+    # the alert, from a reader below what the raiser read where the alert has no node (ADR-109
+    # Amendment 12 point 10, `raiser_read_admits`), so a correction lowering what it cites does
+    # not let the audit tell the words the queue refuses.
+    admitted = await raiser_reads_admitting(alerts, list(current.values()), reader)
 
     def cites(entry: RuleAuditEntry) -> tuple[list[str], list[str], list[str]] | None:
         if entry.action in _ABOUT_AN_ALERT and "alert_id" in entry.detail:
             alert = current.get(str(entry.detail["alert_id"]))
-            if alert is None:
+            if alert is None or alert.id not in admitted:
                 return None
             return evidence_node_ids(alert), list(alert.edge_ids), list(alert.event_ids)
         return _ids(entry, "node_ids"), _ids(entry, "edge_ids"), _ids(entry, "event_ids")

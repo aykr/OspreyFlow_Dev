@@ -29245,8 +29245,8 @@ Status: accepted 8 November 2026, the orchestrator's settlement of Amendment 11 
 gap as its own step (L2.8d), and its and the owner's answers of the same day to the rules lane's
 four questions (Q1: each caller records the node, no port change; Q2: the L2.8c review's items 11
 and 13 built here; Q3: this number, reserved in `ADR_RESERVATIONS.md`; Q4: the start-up DDL under an
-advisory lock, the connection ceilings recorded), and the orchestrator's interim ruling (b) on the
-lane reviewer's item 4 (point 10), the owner's question open. Built by the rules lane in L2.8d. Amendments 10
+advisory lock, the connection ceilings recorded), and the owner's ruling (a) of the same day on
+what a lowering correction does to an alert with no node (point 10). Built by the rules lane in L2.8d. Amendments 10
 and 11 are unchanged except where this says so; this closes Amendment 11 point 8's second gap.
 
 **Why.** The journal renamed only an alert's own `Alert` node (`alert_nodes`). A node among an
@@ -29281,9 +29281,8 @@ Amendment 11. It withheld too much rather than too little: nothing leaked meanwh
    referents were renamed are re-marked to their evidence (`_remark_citing`'s `referents`), since a
    correction can raise a referent above the alert's own node (a correction to SECRET), as Amendment
    11 point 4 re-marks over a cited link's ends. The queue still checks every referent as the
-   reader, so a reader who may not read the new revision is still refused (rule 3); and a
-   correction that lowers a referent never admits a reader the alert's raiser's read would not
-   (point 10).
+   reader, so a reader who may not read the new revision is still refused (rule 3); a correction
+   that lowers a referent admits the reader the lower marking admits (point 10, the owner's ruling).
 3. **A record opens at its first pair** (L2.8c's carry (f)). `repointing` and `supersede_journalled`
    open no record until the write records its first pair, still before its commit, and start the
    record's keep-alive then. A write that replaces nothing (an enrich stage whose geocoder finds no
@@ -29329,21 +29328,31 @@ Amendment 11. It withheld too much rather than too little: nothing leaked meanwh
 9. **Another type holding a cloned link's id is never marked** (carry (a)): two graph-port
    conformance cases of Amendment 11 point 1's sentence, one for a link of that type elsewhere in
    the graph, one for both types at the corrected node (each original marked by its own clone).
-10. **A correction never lowers who reads an alert with no node** (the orchestrator's interim
-   ruling (b), 8 November, on the reviewer's item 4; **the owner's question is open**). An alert with
-   no `Alert` node (no single safe marking when it was raised) is guarded only by the queue's check
-   of its evidence. Once the journal follows a correction that lowers a named node's or a cited
-   link's marking, a reader the lower marking admits would be listed words written while the
-   evidence was marked higher, which may describe the revision the correction replaced. So the
-   queue's two read paths (`alert_queue.monitoring_queue` and `_visible_row`, the list and every
-   action on one alert) also refuse a reader below any marking the raiser read (`save(handlings=)`,
-   `alerts.raiser_read_admits`). Handlings not recorded refuse no one. This tightens Amendment 10's
-   lowered-link case too: an analyst lowering a cited link no longer lowers who reads a no-node
-   alert. An alert with its own node needs nothing new: the node, which a re-mark never lowers (its
-   own marking is among what it rests on), keeps the reader out. Should the owner rule that a
-   lowered marking admits its readers (option (a)), `raiser_read_admits` returns `True`, one line.
-   The inbox and watch reads (`get_authorized`, `list_authorized`, `evidence_available`) are an
-   owner's own alerts, read by their raiser, and are unchanged.
+10. **A correction that lowers what an alert rests on admits the lower reader** (the owner's ruling
+   (a), 8 November, on the lane reviewer's item 4; it replaces the orchestrator's interim ruling
+   (b)). Once the journal follows a correction that lowers a named node's marking, an alert with no
+   `Alert` node (no single safe marking when it was raised) follows it, and is listed to the reader
+   the lower marking admits, as Amendments 10 and 11 have an alert follow a lowered link: the
+   analyst's correction is the authorising act. Every path that tells an alert's words reads one
+   function for any floor below which they are withheld (`alerts.raiser_floor`, now none): the
+   queue's two reads (`raiser_read_admits` in `monitoring_queue` and `_visible_row`), the rule
+   audit's firing entry (`rule_holds.readable_rule_audit`) and a pack's alert item (`alert_item`'s
+   `raised_over`), so they agree; a live case shows the queue, the audit and a pack item tell a
+   lowered alert's words to the same readers. An alert with its own node is guarded by the node,
+   which a re-mark never lowers (its own marking is among what it rests on). Under the interim
+   ruling (b), never shipped, the floor was everything the raiser read (`save(handlings=)`) for an
+   alert with no node; it is one line in `raiser_floor`, should the owner rule again. A marking the
+   scheme cannot judge refuses that alert alone, never the whole read.
+11. **The start-up DDL takes one table at a time** (the independent review's item 4). Each table's
+   DDL runs in its own transaction under the start-up lock, the hotlists' then the alerts'. An
+   `ALTER TABLE` takes its table's ACCESS EXCLUSIVE lock even when it changes nothing, and one
+   transaction holding the hotlists' while waiting for the alerts' inverted the order the queue's
+   reads take them in (alerts, then hotlists for `_SHARED_SQL`): a replica starting against a live
+   read could deadlock with it.
+12. **The deployed worker flags judgements** (the independent review's item 6). `register_all`'s
+   `judgement_store` is a required keyword, `None` named where there is none, and `worker_main.main`
+   connects the judgement store and binds it, so a supersede job run by the worker flags the
+   judgements citing the corrected node, as the Conduit's does (`01_DOMAIN_MODEL.md` §5).
 
 **Contention, recorded (rule 14).** While the rules lane held stack a (lease from 15:54:19Z), another
 lane reached its Postgres without a lease for about a minute between 15:54 and 16:00Z (the
@@ -29373,9 +29382,14 @@ linking the node to a document by `MENTIONED_IN`);
 referent pair renaming referents alone),
 `test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_a_node` (red with the
 node's own marking left out of the re-mark),
-`test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_no_node` and
-`test_a_change_lowering_a_cited_link_never_lowers_who_reads_an_alert_with_no_node` (each red with
-option (a)), `test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing`
+`test_a_correction_lowering_a_named_node_admits_the_lower_reader_to_an_alert_with_no_node` and
+`test_a_change_lowering_a_cited_link_admits_the_lower_reader_to_an_alert_with_no_node` (each an alert
+raised through the rule gate's own row, red with the interim ruling (b) in `raiser_floor`),
+`test_the_queue_the_audit_and_a_pack_item_agree_on_a_lowered_no_node_alert` (red with (b): every
+path refused the lower reader together),
+`test_a_store_starting_against_a_live_queue_read_does_not_deadlock` (red with both tables' DDL in one
+transaction: `DeadlockDetectedError`),
+`test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing`
 (red with the hotlist store's DDL outside the lock),
 `test_a_writer_that_has_recorded_nothing_holds_no_record` (red with the record opened before the
 write) and `test_a_stale_record_whose_referent_landed_is_kept` (red with the referent pairs left
@@ -29391,6 +29405,8 @@ publishing anyway; both callers through the helper, red with the purge's own cop
 `test_the_conduit_registers_the_journalled_jobs_through_register_all_with_its_alert_store` (red with
 `app.py`'s `alerts=` removed, and with the supersede job registered by hand again) and
 `test_the_supersede_job_is_given_the_judgement_store_it_is_registered_with` (red without the
-binding), and `test_written_back_reads_in_full_stages.py`'s close recording its link in the shared
+binding), `test_the_deployed_worker_connects_the_judgement_store_and_binds_it` (red with `main`'s
+`judgement_store=None`) and `test_a_registration_without_the_judgement_store_is_refused` (red with a
+default again), and `test_written_back_reads_in_full_stages.py`'s close recording its link in the shared
 stand-in (red with the close's record removed). Each red under the rules lease on stack a, or
 offline (`process/lanes/rules/l2.8d/`).

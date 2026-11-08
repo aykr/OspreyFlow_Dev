@@ -956,40 +956,101 @@ async def test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_aler
         assert alert.id not in await _listed(stores, graph, analytics, case, LOW), "the lowered correction lowered the alert"
 
 
-async def test_a_correction_lowering_a_named_node_never_lowers_who_reads_an_alert_with_no_node(
+async def _raised_without_node(stores: dict[str, Any], graph: Any, analytics: Any, case: str, *,
+                               node_ids: list[str], edge_ids: list[str] | None = None) -> Alert:  # fmt: skip
+    """An alert with no `Alert` node, raised through the rule gate's own row (`RuleGate._raise_row`,
+    as `after_commit` raises one whose node was withheld): the queue row saved with the handlings
+    its deployer read (`save(handlings=)`, `_rests_on`) and the audit's firing entry with its
+    words. The deployer is SECRET in the unit, so it reads the SECRET evidence it rests on."""
+    from services.api.rule_evaluation import Finding
+
+    from tests.ingest.test_typology_rules import SECRET_LOADER, _gate, _structuring
+
+    rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("post_commit"))
+    gate = _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER)
+    tag = new_id()
+    finding = Finding(rule=rule, deployer=SECRET_LOADER, typology="structuring", subject=node_ids[0],
+                      refs=(f"ref-{tag}",), words=f"Words written over SECRET {tag}",
+                      node_ids=list(node_ids), edge_ids=list(edge_ids or []))  # fmt: skip
+    alert = await gate._raise_row(finding, None)
+    assert alert.alert_node_id is None
+    return alert
+
+
+async def _lowered_named_node(stores: dict[str, Any], graph: Any, analytics: Any, case: str) -> tuple[str, Alert]:
+    """A SECRET node and an alert with no node naming it, raised through the gate; then
+    `supersede.py`'s job corrects the node to OFFICIAL, and the alert follows it."""
+    from services.api.supersede import run_supersede_node_job
+
+    tx = await graph.begin_transaction()
+    (p,) = await graph.upsert_nodes([_person(f"N {new_id()}", ProvenanceState.INFERRED).model_copy(update={"handling": SECRET})], tx)
+    await graph.commit_transaction(tx)
+    alert = await _raised_without_node(stores, graph, analytics, case, node_ids=[p])
+    assert await stores["alerts"].handlings_of(alert.id) == [SECRET], "the raiser's read is SECRET"
+    tx = await graph.begin_transaction()
+    await run_supersede_node_job({"node_id": p, "replacement": _person(f"N lowered {new_id()}").model_dump(mode="json")},
+                                 graph=graph, tx=tx, alerts=stores["alerts"])  # fmt: skip
+    await graph.commit_transaction(tx)
+    return p, alert
+
+
+async def test_a_correction_lowering_a_named_node_admits_the_lower_reader_to_an_alert_with_no_node(
     stores: dict[str, Any], analytics: Any
 ) -> None:
-    """The review's item 4, an alert with no node (no single safe marking when it was raised), the
-    orchestrator's interim ruling (b) of Amendment 12, the owner's question open. It names a SECRET
-    node, read so by its raiser; `supersede.py`'s job corrects the node to OFFICIAL. The alert
-    follows it, still listed for its reader, and is still refused to the case's OFFICIAL reader,
-    who is below what the raiser read (`raiser_read_admits`). Red with option (a), the lowered
-    marking admitting its readers: the OFFICIAL reader was given words written over SECRET."""
-    from services.api.supersede import run_supersede_node_job
+    """The owner's ruling (a) of 8 November (ADR-109 Amendment 12 point 10). An alert with no node
+    (raised through the rule gate, its raiser's read SECRET) names a SECRET node; `supersede.py`'s
+    job corrects the node to OFFICIAL. The correction is the authorising act: the alert follows it
+    and is listed to the case's OFFICIAL reader, whom the lower marking admits, as a lowered link's
+    alert is. Red with the interim ruling (b) in `raiser_floor` (the raiser's read as a floor): the
+    OFFICIAL reader was refused it."""
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        p, alert = await _lowered_named_node(stores, graph, analytics, case)
+        row = (await _listed(stores, graph, analytics, case, READER))[alert.id]
+        assert row.referent_node_ids != [p]
+        assert alert.id in await _listed(stores, graph, analytics, case, LOW), "the lower reader was refused"
+        assert alert.id not in await _listed(stores, graph, analytics, f"case-{new_id()}", LOW)
+
+
+async def test_the_queue_the_audit_and_a_pack_item_agree_on_a_lowered_no_node_alert(
+    stores: dict[str, Any], analytics: Any
+) -> None:
+    """The owner's ruling (a), the orchestrator's one test for it: after a lowering correction, every
+    path that tells an alert's words tells them to the same readers. The case's OFFICIAL reader is
+    listed the alert, may explain it, is given its firing entry in the rule audit with its words,
+    and may read a pack item made of it; so is the SECRET reader. Red with the interim ruling (b)
+    in `raiser_floor`: every path refused the OFFICIAL reader together, which is what agreeing
+    means."""
+    from services.api import alert_queue
+    from services.api.alerts import raiser_floor
+    from services.api.packs import alert_item, item_visible
+    from services.api.rule_holds import readable_rule_audit
 
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
-        p, alert = await _named_node(stores, graph, case, p_state=ProvenanceState.INFERRED)
-        async with stores["alerts"]._pool.acquire() as conn:
-            await conn.execute("UPDATE alerts SET handlings = $2 WHERE id = $1", alert.id,
-                               json.dumps([SECRET.model_dump()]))  # fmt: skip
-        tx = await graph.begin_transaction()
-        await run_supersede_node_job({"node_id": p, "replacement": _person(f"N lowered {new_id()}").model_dump(mode="json")},
-                                     graph=graph, tx=tx, alerts=stores["alerts"])  # fmt: skip
-        await graph.commit_transaction(tx)
-        row = (await _listed(stores, graph, analytics, case, READER))[alert.id]
-        assert row.referent_node_ids != [p]
-        assert alert.id not in await _listed(stores, graph, analytics, case, LOW), "the lowered correction lowered the alert"
+        _, alert = await _lowered_named_node(stores, graph, analytics, case)
+        store = stores["alerts"]
+        for reader in (READER, LOW):
+            listed = alert.id in await _listed(stores, graph, analytics, case, reader)
+            explained, events = await alert_queue.explain_with_evidence(store, graph, analytics, case,
+                                                                        alert.id, reader)  # fmt: skip
+            page = await readable_rule_audit(stores["audit"], graph, case, reader, analytics=analytics,
+                                             alerts=store)  # fmt: skip
+            fired = [e for e in page.entries if e.action == "rule_fired" and e.detail.get("alert_id") == alert.id]
+            floor = raiser_floor(explained.alert, await store.handlings_of(alert.id))
+            item = alert_item(explained, events, reader, SCHEME, raised_over=floor)
+            assert listed, reader.id
+            assert len(fired) == 1 and "Words written over SECRET" in str(fired[0].detail.get("words")), reader.id
+            assert item_visible(item.handlings, reader, SCHEME), reader.id
 
 
-async def test_a_change_lowering_a_cited_link_never_lowers_who_reads_an_alert_with_no_node(
+async def test_a_change_lowering_a_cited_link_admits_the_lower_reader_to_an_alert_with_no_node(
     stores: dict[str, Any], analytics: Any
 ) -> None:
-    """The same for a cited link (Amendment 10's lowered-link case, tightened by Amendment 12's
-    interim ruling (b)): an analyst lowers the SECRET link an alert with no node cites to OFFICIAL
-    through the link change service. The alert follows the link, still listed for its reader, and
-    is still refused to the case's OFFICIAL reader, below the SECRET its raiser read. Red with
-    option (a): the OFFICIAL reader was given it."""
+    """The same for a cited link (Amendment 10's lowered-link case, which the owner's ruling (a)
+    keeps): an analyst lowers the SECRET link an alert with no node cites to OFFICIAL through the
+    link change service. The alert follows the link and is listed to the case's OFFICIAL reader.
+    Red with the interim ruling (b) in `raiser_floor`: the OFFICIAL reader was refused it."""
     from services.api.link_changes import LinkChangeRequest, LinkChangeService
     from services.api.working_set.service import WorkingSetService
 
@@ -999,12 +1060,12 @@ async def test_a_change_lowering_a_cited_link_never_lowers_who_reads_an_alert_wi
 
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
-        _, link, alert = await _cited_link(stores, graph, case, p_state=ProvenanceState.ASSERTED)
-        async with stores["alerts"]._pool.acquire() as conn:
-            await conn.execute("UPDATE alerts SET handlings = $2 WHERE id = $1", alert.id,
-                               json.dumps([OFFICIAL.model_dump(), SECRET.model_dump()]))  # fmt: skip
-        working = FakeWorkingSetStore()  # the link change reads the link from the case's canvas
+        p, link, _ = await _cited_link(stores, graph, case, p_state=ProvenanceState.ASSERTED)
         (body,) = await graph.get_edges([link], READER)
+        alert = await _raised_without_node(stores, graph, analytics, case, node_ids=[body.source, body.target],
+                                           edge_ids=[link])  # fmt: skip
+        assert SECRET in (await stores["alerts"].handlings_of(alert.id) or []), "the raiser read the SECRET link"
+        working = FakeWorkingSetStore()  # the link change reads the link from the case's canvas
         await working.add_nodes(case, await graph.get_nodes([body.source, body.target], READER))
         await working.add_edges(case, [body])
         service = LinkChangeService(InMemoryChanges(), WorkingSetService(graph, working, SCHEME),
@@ -1013,7 +1074,7 @@ async def test_a_change_lowering_a_cited_link_never_lowers_who_reads_an_alert_wi
                              is_author=True)  # lowering needs Author access
         row = (await _listed(stores, graph, analytics, case, READER))[alert.id]
         assert row.edge_ids != [link]
-        assert alert.id not in await _listed(stores, graph, analytics, case, LOW), "the lowered change lowered the alert"
+        assert alert.id in await _listed(stores, graph, analytics, case, LOW), "the lower reader was refused"
 
 
 async def test_alert_and_hotlist_stores_starting_together_create_their_tables_without_failing(
@@ -1086,3 +1147,32 @@ async def test_a_stale_record_whose_referent_landed_is_kept(stores: dict[str, An
     async with alerts._pool.acquire() as conn:
         kept = await conn.fetchval("SELECT count(*) FROM alert_repoint_records WHERE id = $1", record)
     assert kept == 1, "a record whose referent's write committed was dropped as stale"
+
+
+async def test_a_store_starting_against_a_live_queue_read_does_not_deadlock(stores: dict[str, Any]) -> None:
+    """The independent review's item 4. A replica's alert store starts while a queue read is open:
+    the read has the alerts table and goes on to the hotlists (`_SHARED_SQL`), as the queue's scope
+    does. The start-up's DDL takes each table's ACCESS EXCLUSIVE lock in its own transaction, so
+    the hotlists' is released before it waits for the alerts', and the read finishes; then the
+    start-up does. Red with both tables' DDL in one transaction: the start-up held the hotlists
+    while it waited for the alerts, the read waited for the hotlists, and Postgres broke the
+    deadlock by killing one (`DeadlockDetectedError`)."""
+    from services.api.alerts import AlertStore
+
+    dsn = PostgresConfig.from_env().dsn
+    reader = await asyncpg.connect(dsn)
+    try:
+        tx = reader.transaction()
+        await tx.start()
+        await reader.execute("SET LOCAL lock_timeout = '20s'")
+        await reader.execute("SELECT 1 FROM alerts LIMIT 1")  # the queue's read has the alerts
+        starting = asyncio.create_task(AlertStore.connect(dsn))
+        await asyncio.sleep(1.5)  # the start-up reaches its wait for the alerts
+        try:
+            await reader.execute("SELECT 1 FROM hotlists LIMIT 1")  # and goes on to the hotlists
+        finally:
+            await tx.commit()
+        store = await asyncio.wait_for(starting, BOUND)
+        await store.close()
+    finally:
+        await reader.close()

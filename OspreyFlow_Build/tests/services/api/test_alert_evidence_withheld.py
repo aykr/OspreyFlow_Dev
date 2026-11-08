@@ -29,7 +29,6 @@ from services.api.alerts import QueueRow
 from services.api.watch_routes import alert_to_view
 
 from conduit_common.identity import new_id
-from ontology.handling import load_uk_le_scheme
 from schemas.analytics import EventListRequest, EventListResult, EventRecord
 from schemas.domain import (
     Alert,
@@ -42,6 +41,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.repoint_journal_fakes import RaiserReads
 
 NOW = datetime(2026, 11, 7, 9, 0, tzinfo=UTC)
 CASE = "case-1"
@@ -146,7 +146,7 @@ class Analytics:
         )
 
 
-class Store:
+class Store(RaiserReads):
     def __init__(self, alerts: list[Alert]) -> None:
         self.alerts = alerts
 
@@ -154,14 +154,8 @@ class Store:
         """`AlertStore.settle_pending` over a journal holding no record: nothing to settle. Every
         read of alerts calls it (`settle_repoints` refuses a store without it, L2.8c)."""
 
-    #: What each alert's raiser read (`AlertStore.save(handlings=)`), none recorded unless a test
-    #: says so; read by the queue's `raiser_reads_admitting` as the real store answers it.
-    recorded_handlings: dict[str, Any] = {}
-    scheme = load_uk_le_scheme()
-
-    async def handlings_by_id(self, alert_ids: Any) -> dict[str, Any]:
-        """`AlertStore.handlings_by_id`: `None` for an alert whose handlings were not recorded."""
-        return {i: self.recorded_handlings.get(i) for i in alert_ids}
+    def held_alert_ids(self) -> set[str]:
+        return {a.id for a in self.alerts}
 
     async def list_queue(
         self, investigation_id: str, reader: Principal, **_: object

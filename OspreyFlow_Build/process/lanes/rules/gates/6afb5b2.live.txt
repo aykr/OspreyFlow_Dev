@@ -3,20 +3,6 @@
 # 1. leased-run-final.txt at a1bfc9e (rebased on main 222b667), 16:46-17:05Z: 595 passed, 16 failed, each explained there.
 # 2. leased-run-packs.txt at ba6f903 (the packs fixture fix), 17:07Z: the five pack files 40/40.
 
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-        the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
 FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
 FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
 FAILED ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py::test_an_alert_trend_goes_into_a_pack_resting_on_what_it_counted

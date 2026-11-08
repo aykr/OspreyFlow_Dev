@@ -367,6 +367,7 @@ from .alerts import (
     AlertStore,
     AlertTriageConflict,
     purge_remarked_copies,
+    raiser_floor,
     supersede_journalled,
 )
 from .assessments import (
@@ -12688,7 +12689,9 @@ async def _build_pack_item(
             )
         except AlertNotFoundError as missing:
             raise HTTPException(status_code=404, detail="no such alert in this case") from missing
-        return alert_item(explained, events, principal, scheme)
+        # ADR-109 Amendment 12 point 10: the item never falls below what the alert's raiser read.
+        floor = raiser_floor(explained.alert, await alerts_store.handlings_of(explained.alert.id))
+        return alert_item(explained, events, principal, scheme, raised_over=floor)
     if body.kind == "trend":
         saved = await trends.get(case.id, body.trend_id) if body.trend_id else None
         if saved is None:

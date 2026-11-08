@@ -29,7 +29,23 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from conduit_common.identity import new_id
 from fastapi.testclient import TestClient
+from ontology.handling import load_uk_le_scheme
+from schemas.analytics import CountedHandling, TrendRequest, TrendResult
+from schemas.domain import (
+    AuditStub,
+    EdgeTypeDef,
+    Handling,
+    Judgement,
+    Node,
+    OntologySchema,
+    Principal,
+    PropertyDef,
+    Provenance,
+    SourceRef,
+)
+from schemas.trends import TrendDefinition
 from services.api.app import (
     app,
     get_alerts_store,
@@ -56,23 +72,6 @@ from services.api.investigations import (
     InvestigationNotFoundError,
 )
 from services.api.packs import PackStore, item_visible, reorder_visible
-
-from conduit_common.identity import new_id
-from ontology.handling import load_uk_le_scheme
-from schemas.analytics import CountedHandling, TrendRequest, TrendResult
-from schemas.domain import (
-    AuditStub,
-    EdgeTypeDef,
-    Handling,
-    Judgement,
-    Node,
-    OntologySchema,
-    Principal,
-    PropertyDef,
-    Provenance,
-    SourceRef,
-)
-from schemas.trends import TrendDefinition
 from tests.services.api.repoint_journal_fakes import Journal
 
 SCHEME = load_uk_le_scheme()

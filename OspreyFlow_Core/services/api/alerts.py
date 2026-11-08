@@ -552,13 +552,20 @@ class AlertStore:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=4)
         # Two at most, opened only when a record is settled (`_settle_record`).
         lock_pool = await asyncpg.create_pool(dsn=dsn, min_size=0, max_size=2)
-        async with pool.acquire() as conn, conn.transaction():
-            await take_bootstrap_lock(conn)  # replicas starting together take turns
-            # The queue's scope reads a hotlist's audience (`_SHARED_SQL`), so the table it reads
-            # exists whichever store connects first — made by the hotlist store's own statement,
-            # never a second copy of it.
-            await conn.execute(_HOTLISTS_BOOTSTRAP_SQL)
-            await conn.execute(_BOOTSTRAP_SQL)
+        async with pool.acquire() as conn:
+            # Each table's DDL in its own transaction, each under the start-up lock, so replicas
+            # starting together take turns (ADR-109 Amendment 12). Never one transaction over both:
+            # an `ALTER TABLE` takes its table's ACCESS EXCLUSIVE lock even when it changes nothing,
+            # and one transaction holding the hotlists' while it waits for the alerts' inverts the
+            # order the queue's reads take them in (alerts, then hotlists for `_SHARED_SQL`), so a
+            # replica starting against live reads could deadlock with one (the L2.8d review's
+            # item 4). The queue's scope reads a hotlist's audience (`_SHARED_SQL`), so the table
+            # it reads exists whichever store connects first — made by the hotlist store's own
+            # statement, never a second copy of it.
+            for ddl in (_HOTLISTS_BOOTSTRAP_SQL, _BOOTSTRAP_SQL):
+                async with conn.transaction():
+                    await take_bootstrap_lock(conn)
+                    await conn.execute(ddl)
         return cls(pool, lock_pool)
 
     async def close(self) -> None:
@@ -1401,21 +1408,29 @@ class AlertStore:
         return len(rows)
 
 
+def raiser_floor(alert: Alert, handlings: Sequence[Handling] | None) -> list[Handling]:
+    """The markings an alert's words are held at whatever its evidence is marked now: none (ADR-109
+    Amendment 12 point 10, the owner's ruling (a), 8 November 2026). A correction that lowers a node
+    an alert names, or a link it cites, is the authorising act: the alert follows it and is listed
+    to the reader the lower marking admits, as Amendments 10 and 11 have a lowered link do. An alert
+    with its own node is still guarded by that node, which a re-mark never lowers. The queue's
+    reads (`raiser_read_admits`), the rule audit and a pack's alert item all read this one
+    function, so they agree; the interim ruling (b), which held an alert with no node at what its
+    raiser read (`save(handlings=)`), would be `[] if alert.alert_node_id is not None else
+    list(handlings or [])` here."""
+    return []
+
+
 def raiser_read_admits(
     alert: Alert, handlings: Sequence[Handling] | None, reader: Principal, scheme: HandlingScheme
 ) -> bool:
-    """Whether a correction may lower who reads an alert with no `Alert` node (ADR-109 Amendment
-    12, the orchestrator's interim ruling (b), the owner's question open): such an alert's words
-    are guarded only by the queue's check of its evidence, and were written over what its raiser
-    read (`save(handlings=)`). A correction that lowers a named node's or a cited link's marking
-    does not make the words lower, since they may describe the revision the correction replaced,
-    so the queue also refuses a reader below any marking the raiser read. An alert with its own
-    node is guarded by the node, which a re-mark never lowers. Handlings not recorded (`None`)
-    refuse no one. Should the owner rule that a lowered marking admits its readers (option (a)),
-    this returns `True`."""
-    if alert.alert_node_id is not None:
-        return True
-    return all(principal_may_view(h, reader, scheme) for h in handlings or [])
+    """`reader` may read every marking of the alert's `raiser_floor`. A marking the scheme cannot
+    judge refuses this alert alone, never the whole read (`principal_may_view` raising)."""
+    try:
+        return all(principal_may_view(h, reader, scheme) for h in raiser_floor(alert, handlings))
+    except Exception:  # noqa: BLE001 - one alert unjudgeable is that alert refused (rule 3)
+        _log.warning("alert %s refused: a marking its raiser read cannot be judged", alert.id)
+        return False
 
 
 async def raiser_reads_admitting(
@@ -1951,6 +1966,7 @@ __all__ = [
     "QueueRow",
     "default_severity",
     "distinct_handlings",
+    "raiser_floor",
     "raiser_read_admits",
     "raiser_reads_admitting",
     "queue_scope",
