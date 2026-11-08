@@ -485,12 +485,17 @@ class _Exclusive:
 
     async def __aenter__(self) -> None:
         await self._lock.acquire()
+        fd: int | None = None
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             fd = os.open(self._path, os.O_RDWR | os.O_CREAT, 0o600)
             await asyncio.to_thread(fcntl.flock, fd, fcntl.LOCK_EX)
             self._fd = fd
         except BaseException:
+            # Cancelled while waiting: the thread may still take the lock later, on this fd, so
+            # the fd is closed, which releases whatever it holds.
+            if fd is not None:
+                os.close(fd)
             self._lock.release()
             raise
 
@@ -630,12 +635,22 @@ class ModelAdmin:
         self._on_change(self.routes())
 
     async def _keep_trying(self) -> None:
+        """Until the gateway answers: each failure waits twice as long as the last, up to ten
+        minutes, and nothing it raises ends the retry unsaid."""
+        wait = self._retry_seconds
         while True:
-            await asyncio.sleep(self._retry_seconds)
-            if await self._start_once():
+            await asyncio.sleep(wait)
+            try:
+                done = await self._start_once()
+            except Exception as failed:  # noqa: BLE001 - logged in words, then tried again
+                log.warning("model engines not reconciled with the gateway: %s",
+                            type(failed).__name__)  # fmt: skip
+                done = False
+            if done:
                 log.info("model engines reconciled with the gateway after a retry")
                 self._on_change(self.routes())
                 return
+            wait = min(wait * 2, 600.0)
 
     async def close(self) -> None:
         """Stops the background retry, if one is running."""
@@ -643,7 +658,7 @@ class ModelAdmin:
             self._retrying.cancel()
             try:
                 await self._retrying
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001 - shutdown goes on
                 pass
             self._retrying = None
 

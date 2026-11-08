@@ -39,6 +39,14 @@ against the code as committed and seen to pass. Offline runs use the port guard'
 | `…::test_every_page_of_the_gateway_s_records_is_counted`, `…refused_in_words_never_cut_short` | the reader stops after its first page | 2 failed |
 | `test_model_admin_routes.py::test_every_models_route_refuses…` (now asserting the gateway saw no request at all) | `manage_models` removed from the usage route | 2 failed |
 
+**After the second review round:**
+
+| Test | Plant | Red |
+| --- | --- | --- |
+| `test_model_usage_and_limits.py::test_a_retry_that_meets_an_unexpected_answer_keeps_trying_and_shutdown_stays_clean` | the retry catching only `OSError` (a 200 that is not JSON then ends it) | 1 failed |
+| `…::test_a_page_that_does_not_say_whether_more_follows_is_refused_in_words` | the page's `has_more` and `total_pages` check removed | 1 failed |
+| `test_model_gateway_live.py::test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway` (live; the case now makes an engine key and names each table rather than reading the list under test) | `LiteLLM_VerificationToken` taken out of the exclusions | first **passed** (the case read its tables from the list it tested, so a table dropped from the list was dropped from the check, the second review's finding); with the tables named, 1 failed (the key's row in the kept dump), then 1 passed |
+
 Live, each under the platform lease on stack a (`stack_lease.sh acquire platform …`; released after each),
 the pinned gateway and a stand-in provider (`fakeprov.py`) on a network of the lane's own,
 `OSPREY_LIVE_GATEWAY_URL=http://127.0.0.1:54400`:
@@ -48,3 +56,7 @@ the pinned gateway and a stand-in provider (`fakeprov.py`) on a network of the l
 - lease taken 19:07:39 UTC (released 19:12:59): the paging and spend-delay measurements, then, on the
   changed key path, the key round trip and the usage case (2 passed, 170 s, 19:09:48–19:12:39) and the
   real `pg_dump` with the key table left out (1 passed, the table holding a row).
+- lease taken 19:19:40 UTC (released 19:22:32): after the second round, the budget with no wait, the key
+  round trip and the `pg_dump` with an engine key made (3 passed, 140 s, 19:19:53–19:22:14);
+- lease taken 19:22:50 UTC (released 19:23:09): the `pg_dump` case with its tables named, red with the key
+  table's exclusion removed, then green.

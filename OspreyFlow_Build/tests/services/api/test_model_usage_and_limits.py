@@ -515,3 +515,52 @@ def test_no_request_to_the_gateway_carries_the_asking_person_s_id(
     for _token, body in world.gateway.received:
         assert "user" not in body and "end_user" not in body
         assert body["metadata"] == {"tags": ["osprey:gemini/extraction"]}
+
+
+async def test_a_retry_that_meets_an_unexpected_answer_keeps_trying_and_shutdown_stays_clean(
+    tmp_path: Path,
+) -> None:
+    first = World(tmp_path)
+    await first.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    fresh = World(tmp_path)
+    state = {"answers": ["down", "garbled"]}
+    real = fresh.gateway.transport()
+
+    async def odd(request: httpx.Request) -> httpx.Response:
+        if state["answers"]:
+            what = state["answers"].pop(0) if request.url.path == "/v2/model/info" else "down"
+            if what == "down":
+                raise httpx.ConnectError("not yet")
+            return httpx.Response(200, content=b"<html>not json</html>")
+        return await real.handle_async_request(request)
+
+    http = httpx.AsyncClient(base_url="http://litellm:4000", transport=httpx.MockTransport(odd),
+                             headers={"Authorization": f"Bearer {MASTER}"})  # fmt: skip
+    admin = ModelAdmin(
+        installed=fresh.admin._installed,
+        settings_file=ModelSettingsFile(tmp_path / "model-settings"),
+        gateway=GatewayAdmin(http), audit=fresh.audit, retry_seconds=0.001,
+    )  # fmt: skip
+    await admin.start()
+    for _ in range(300):
+        if engine_key(MASTER, "gemini") in fresh.gateway.virtual_keys():
+            break
+        await asyncio.sleep(0.01)
+    assert engine_key(MASTER, "gemini") in fresh.gateway.virtual_keys()
+    await admin.close()  # never raises, whatever the retry met
+
+
+def test_a_page_that_does_not_say_whether_more_follows_is_refused_in_words(
+    client: TestClient, world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    world.gateway.record_usage("2026-11-08", "osprey:gemini/extraction", calls=1)
+    real = world.gateway._tag_activity
+
+    def without_has_more(query: Any) -> httpx.Response:
+        body = json.loads(real(query).content)
+        body["metadata"].pop("has_more")
+        return httpx.Response(200, json=body)
+
+    monkeypatch.setattr(world.gateway, "_tag_activity", without_has_more)
+    resp = client.get("/v1/admin/models/usage")
+    assert resp.status_code == 502 and "not shown rather than shown in part" in resp.text

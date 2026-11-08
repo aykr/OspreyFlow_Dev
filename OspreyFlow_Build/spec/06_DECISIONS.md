@@ -29712,6 +29712,12 @@ network of the lane's own and a stand-in provider (no hosted provider was called
   its key's minute and spend over (measured above): its limits are no looser for it.
 - Whether a request refused by a rate limit is recorded as a failure was not measured; no figure
   relies on it.
+- **A changed master key leaves the old engine keys in the gateway**, still valid for whoever holds
+  the old master key (the new ones are derived afresh, and an engine's removal deletes only the
+  current one). No verb rotates the master key (ADR-135 Amendment 2's as-built notes); a future one
+  deletes the old engine keys first, by a further amendment.
+- **A start that cannot reach the gateway** is retried with each wait twice the last, up to ten
+  minutes, and an unexpected answer is logged by its kind and tried again, never ending the retry.
 
 **Tests that would fail if it were broken** (rule 12; each shown red first,
 `process/lanes/platform/P2_RED_RECORD.md`):

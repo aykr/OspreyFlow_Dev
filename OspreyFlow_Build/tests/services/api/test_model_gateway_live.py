@@ -100,10 +100,14 @@ async def test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway(
         name="openai", label="Stand-in", roles={"extraction": "known-model"},
         api_base=PROVIDER_BASE, privacy_contract=False, contract_reference=None,
     )  # fmt: skip
+    from schemas.model_admin import EngineLimits
+
     try:
         await gateway.put_credential("openai", SecretStr(GOOD))
         if entry_id("openai", "known-model") not in await gateway.stored_entries():
             await gateway.add_entry(provider, "known-model")
+        # ADR-135 Amendment 3: the engine's own key, a row of the gateway's key table.
+        await gateway.put_engine_key("openai", EngineLimits(requests_per_minute=100))
 
         def dump(*flags: str) -> str:
             argv = ["docker", "exec", PG_CONTAINER, "pg_dump", *flags, "-U", "osprey", GATEWAY_DB]
@@ -112,10 +116,16 @@ async def test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway(
         planted, kept = dump(), dump(*_without_secrets("litellm"))
         tables = [t.strip('"') for t in GATEWAY_SEALED_TABLES]
         assert _rows(planted, "LiteLLM_CredentialsTable") and _rows(planted, "LiteLLM_ProxyModelTable")
+        assert _rows(planted, "LiteLLM_VerificationToken")  # the plant: the engine key's row
         assert all(_rows(kept, table) == [] for table in tables)
+        # Named, not taken from the list under test: a table dropped from it is still checked.
+        for table in ("LiteLLM_CredentialsTable", "LiteLLM_ProxyModelTable", "LiteLLM_Config",
+                      "LiteLLM_VerificationToken"):  # fmt: skip
+            assert _rows(kept, table) == [], table
         assert GOOD not in kept
         assert 'CREATE TABLE public."LiteLLM_CredentialsTable"' in kept
     finally:
+        await gateway.delete_engine_key("openai")
         await gateway.delete_credential("openai")
         await gateway.delete_entry(entry_id("openai", "known-model"))
         await http.aclose()
@@ -184,9 +194,8 @@ async def test_usage_a_request_rate_and_a_token_budget_against_the_real_gateway(
         await gateway.put_engine_key(
             "openai", EngineLimits(budget_tokens=50, budget_period="day")
         )
-        await asyncio.sleep(12)  # the gateway writes spend in batches (measured: about 10 s)
+        # No wait: the spend counts at once (measured; ADR-135 Amendment 3).
         await ask()  # 44 < 50: answered, and crosses it
-        await asyncio.sleep(12)
         with pytest.raises(ModelLimitReached) as budget:
             await ask()
         assert budget.value.kind == "budget" and "sk-" not in str(budget.value)

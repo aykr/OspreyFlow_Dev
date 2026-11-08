@@ -195,7 +195,14 @@ async def read_usage(http: httpx.AsyncClient, start: date, end: date) -> list[Us
                 for ours, theirs in _FROM_GATEWAY.items():
                     row[ours] += int(metrics.get(theirs) or 0)
         meta = dict(body.get("metadata") or {})
-        if not meta.get("has_more"):
+        pages = int(meta.get("total_pages") or 0)
+        if "has_more" not in meta or bool(meta["has_more"]) != (page < pages):
+            # Both measured; if a later gateway drops or contradicts them, say so, never guess.
+            raise UsageUnavailableError(
+                "The model gateway's usage did not say whether more of it follows, so it is not "
+                "shown rather than shown in part. Run ospreyflow doctor."
+            )
+        if not meta["has_more"]:
             break
         page += 1
         if page > _MAX_PAGES:
