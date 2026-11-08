@@ -526,9 +526,9 @@ async function buildLink(page: Page, edge: MapEdge) {
   await bindHandling(page, edge.handling);
 }
 
-test("the reports pipeline is built from scratch in guided mode by keyboard, into the committed map", async ({ page }) => {
-  test.setTimeout(240_000);
-  page.setDefaultTimeout(8_000);
+/** Chapter 4's from-scratch walk up to the map's save: name, source, Preview, the row key, every
+ * element and link, the ignored columns. Asserts the saved map is the committed one. */
+async function buildTheReportsMap(page: Page) {
   await page.goto(HARNESS);
   await page.getByRole("textbox", { name: "Pipeline name" }).focus();
   await page.keyboard.type("Intelligence reports");
@@ -571,6 +571,12 @@ test("the reports pipeline is built from scratch in guided mode by keyboard, int
   expect(meaning(saved.row_template)).toEqual(meaning(REPORTS_MAP.row_template));
   expect(meaning(saved.unmapped_fields)).toEqual(meaning(REPORTS_MAP.unmapped_fields));
   await expect(page.getByText(/does not bind/)).toHaveCount(0);
+}
+
+test("the reports pipeline is built from scratch in guided mode by keyboard, into the committed map", async ({ page }) => {
+  test.setTimeout(240_000);
+  page.setDefaultTimeout(8_000);
+  await buildTheReportsMap(page);
   await page.getByRole("navigation", { name: "Pipeline strip" }).getByRole("button", { name: "Load: Load" }).focus();
   await page.keyboard.press("Enter");
   // The harness refuses as the routes do: the map's save cleared Test's mark, so Deploy is refused
@@ -589,6 +595,48 @@ test("the reports pipeline is built from scratch in guided mode by keyboard, int
   await expect(page.getByText("Deployed", { exact: true })).toBeVisible();
   expect((await asked(page)).some((a) => a.method === "POST" && a.path.endsWith("/r-new/publish"))).toBe(true);
   registerCovered(REGISTRY, "build-the-reports-pipeline-from-scratch-in-guided-mode-by-keyboard");
+});
+
+// Phase 6's exit, its second half: the reports pipeline, built as above, edited in expert mode. An
+// Extract on the report's text is added on the canvas and set; the save carries it, fed by Map, and
+// leaves the committed map as it was; Test and Deploy as v1 then take the edited pipeline.
+test("the reports pipeline is edited in expert mode by keyboard, and the save carries it", async ({ page }) => {
+  test.setTimeout(240_000);
+  page.setDefaultTimeout(8_000);
+  await buildTheReportsMap(page);
+  const templateSaves = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template")).length;
+  await page.getByRole("navigation", { name: "Pipeline strip" }).getByRole("button", { name: "Load: Load" }).focus();
+  await page.keyboard.press("Enter");
+  await press(page, "Close the drawer");
+  await press(page, "Expert");
+  const canvas = page.getByRole("group", { name: "Pipeline" });
+  await expect(canvas).toBeVisible();
+  await press(page, "+ Extract");
+  await expect(canvas.getByRole("button", { name: "Extract: Extract" })).toBeVisible();
+  await canvas.getByRole("button", { name: "Extract: Extract" }).focus();
+  await page.keyboard.press("Enter");
+  const library = page.getByLabel("Extraction library");
+  await library.focus();
+  await library.selectOption("spacy");
+  await press(page, "Apply extract settings");
+  await expect.poll(async () => (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/pipeline")).length).toBeGreaterThan(1);
+  const put = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/pipeline")).at(-1)!;
+  const graph = JSON.parse(put.body!) as { nodes: { id: string; kind: string; config?: { library?: string } }[]; edges: { source: string; target: string }[] };
+  const extract = graph.nodes.find((n) => n.kind === "extract")!;
+  expect(extract.config!.library).toBe("spacy");
+  const map = graph.nodes.find((n) => n.kind === "map")!;
+  expect(graph.edges).toContainEqual({ source: map.id, target: extract.id });
+  // The edit is the pipeline's; the committed map is not saved again.
+  expect((await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-new/row-template")).length).toBe(templateSaves);
+  await press(page, "Deploy");
+  await press(page, "Deploy as v1");
+  await expect(page.getByText(/hasn't passed Test since its last edit/)).toBeVisible();
+  await press(page, "Test");
+  await press(page, "Run the test");
+  await press(page, "Deploy");
+  await press(page, "Deploy as v1");
+  await expect(page.getByText("Deployed", { exact: true })).toBeVisible();
+  registerCovered(REGISTRY, "edit-the-reports-pipeline-in-expert-mode-by-keyboard");
 });
 
 // Rule 15: the harness refuses a Map save as `check_recipe_rules` does, so the case above could not
