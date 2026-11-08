@@ -157,6 +157,8 @@ from schemas.analytics import (
 from schemas.compute import OwnershipTooComplex, OwnershipView
 from schemas.dataset_model import (
     DatasetModelView,
+    DatasetOwnerSetting,
+    HomeCase,
     MadeLive,
     MakeLiveInput,
     ModelImpact,
@@ -3145,10 +3147,21 @@ async def remove_investigation(
     investigation: InvestigationAccessManagerDep,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
+    datasets: DatasetsDep,
     audit: AuditDep,
 ) -> None:
     """A soft remove (ADR-052 Amendment 7). An Author, or the administrator of the case's own unit
-    through the safety net (a case no Author is left to remove); neither gains any read access."""
+    through the safety net (a case no Author is left to remove); neither gains any read access. A
+    dataset's home case is kept while its dataset exists (ADR-145 Amendment 4 decision 2)."""
+    if await datasets.dataset_of_home_case(investigation.id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "home_case_kept",
+                "message": "this is its dataset's home case, which holds the dataset's reports, "
+                "alerts and promotion reviews, so it is kept while the dataset exists",
+            },
+        )
     await investigations.remove(investigation.id, by=principal)
     await audit.record(
         principal=principal,
@@ -7899,6 +7912,9 @@ async def make_dataset_model_live(
     version previous, and every deployed pipeline writing a changed or retired type is marked as
     needing attention, its schedule paused with the reason. Loaded data is never rewritten."""
     impact, draft = await _model_impact(request, dataset_id, principal, models)
+    datasets = get_datasets(request)
+    first = await datasets.home_case_of(dataset_id) is None
+    owners = await _owners_answered(request, datasets, body, first=first)
     if draft.version != body.version:
         raise TargetModelRefused(
             f"the draft is version {draft.version}, not {body.version}: it changed since it was "
@@ -7909,6 +7925,8 @@ async def make_dataset_model_live(
     await studio_recipes.flag_for_model(dataset_id, list(reasons.items()))
     for recipe_id, reason in reasons.items():
         await studio_recipes.set_paused(recipe_id, paused=True, reason=reason)
+    if owners is not None:
+        await _make_the_home_case(request, dataset_id, owners, principal, audit)
     await _audit_model(
         audit, principal, "make_model_live", dataset_id, live.version,
         flagged=sorted(reasons), changed_types=impact.changed_types,
@@ -7936,6 +7954,89 @@ async def revert_dataset_model(
         audit, principal, "revert_model", dataset_id, draft.version, reverted_from=body.version
     )
     return draft
+
+
+class OwnerNeeded(Exception):
+    """*Make live*'s owner step refused, in words (ADR-145 Amendment 4 decision 4); nothing is made
+    live and no home case is made."""
+
+
+@app.exception_handler(OwnerNeeded)
+async def _owner_needed_handler(request: Request, exc: OwnerNeeded) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"error": "owner_needed", "detail": str(exc)})
+
+
+async def _owners_answered(
+    request: Request, datasets: DatasetStore, body: MakeLiveInput, *, first: bool
+) -> list[str] | None:
+    """At a dataset's first *Make live* in the deployment, who answers for it: people (a team when
+    teams are built, ADR-112 Amendment 5), as Admin › System allows, never a service account, and
+    never no one. `None` on a later *Make live*, which asks nothing."""
+    if not first:
+        if body.owners is not None:
+            raise OwnerNeeded(
+                "this dataset already has its owners: change them in Admin › Datasets (Change "
+                "owner…), not at Make live"
+            )
+        return None
+    if body.owners is None:
+        raise OwnerNeeded(
+            "who answers for this dataset? Name the people who will be its home case's Authors: "
+            "it cannot go live without them"
+        )
+    allowed = await datasets.owner_setting()
+    if body.owners.team is not None:
+        if allowed == "people_only":
+            raise OwnerNeeded("Admin › System allows people only as a dataset's owners")
+        raise OwnerNeeded(
+            "a team cannot own a dataset until teams are built (ADR-112 Amendment 5): name people"
+        )
+    if allowed == "teams_only":
+        raise OwnerNeeded(
+            "Admin › System allows teams only as a dataset's owners, and teams are not built "
+            "yet (ADR-112 Amendment 5)"
+        )
+    named = sorted(set(body.owners.people))
+    people = await get_principal_names(request).people(named)
+    if people is None:
+        raise OwnerNeeded(
+            "who answers for a dataset cannot be checked: this deployment has no identity "
+            "provider directory to say who is a person"
+        )
+    if refused := [p for p in named if p not in people]:
+        raise OwnerNeeded(
+            "only a person may answer for a dataset, never a service account: "
+            + ", ".join(refused)
+            + (" is not one" if len(refused) == 1 else " are not")
+        )
+    return named
+
+
+async def _make_the_home_case(
+    request: Request, dataset_id: str, owners: list[str], maker: Principal, audit: AuditWriter
+) -> None:
+    """The dataset's home case (ADR-145 Amendment 4 decision 2): named for it, of its unit, reading
+    it, its Authors exactly the owners named, audited."""
+    datasets = get_datasets(request)
+    investigations = get_investigations(request)
+    dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
+    home = await investigations.create(maker, name=dataset.name)
+    await datasets.set_for_case(home.id, [dataset_id], maker, case_name=home.name)
+    for owner in owners:
+        await investigations.set_grant(home.id, owner, AccessLevel.AUTHOR, by=maker)
+    if maker.id not in owners:
+        await investigations.remove_grant(home.id, maker.id, by=maker)
+    await datasets.set_home_case(
+        HomeCase(dataset_id=dataset_id, investigation_id=home.id, made_at=home.created_at,
+                 made_by=maker.id)
+    )  # fmt: skip
+    await audit.record(
+        principal=maker,
+        action="make_home_case",
+        investigation_id=home.id,
+        resolved_query={"dataset_id": dataset_id, "owners": owners},
+        result_cardinality=1,
+    )
 
 
 async def _audit_model(
@@ -12908,6 +13009,34 @@ async def case_model_engines_route(
     case_datasets = await datasets.ids_of_case(investigation.id) if named else []
     held = await datasets.egress_of(case_datasets)
     return OfferedEngines(engines=routes.offered(case_datasets, held))
+
+
+@app.get(
+    "/v1/admin/settings/dataset-owners",
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def read_dataset_owner_setting(datasets: DatasetsDep) -> DatasetOwnerSetting:
+    """Admin › System's *Dataset owners may be* (ADR-145 Amendment 4 decision 7): people and teams
+    (the default), people only, or teams only. It governs *Make live*'s owner step."""
+    return DatasetOwnerSetting(owners_may_be=await datasets.owner_setting())
+
+
+@app.put(
+    "/v1/admin/settings/dataset-owners",
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def set_dataset_owner_setting(
+    body: DatasetOwnerSetting, principal: PrincipalDep, datasets: DatasetsDep, audit: AuditDep
+) -> DatasetOwnerSetting:
+    before = await datasets.owner_setting()
+    await datasets.set_owner_setting(body.owners_may_be)
+    await audit.record(
+        principal=principal,
+        action="set_dataset_owner_setting",
+        resolved_query={"before": before, "after": body.owners_may_be},
+        result_cardinality=1,
+    )
+    return body
 
 
 @app.get("/v1/admin/datasets", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])

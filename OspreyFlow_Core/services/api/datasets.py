@@ -68,6 +68,7 @@ from pydantic import BaseModel, Field
 
 from conduit_common.identity import new_id
 from schemas.admin import DatasetEgress
+from schemas.dataset_model import DatasetOwnersMayBe, HomeCase
 from schemas.domain import Principal
 from schemas.rights import rights_for
 
@@ -220,6 +221,16 @@ class DatasetStore(Protocol):
     async def cases_reading(self, dataset_id: str) -> list[str]: ...
     #: The composites that have the dataset as a member.
     async def composites_of(self, dataset_id: str) -> list[Dataset]: ...
+    #: ADR-145 Amendment 4 decision 2: the dataset's home case, `None` before its first *Make
+    #: live* (or `scripts.make_home_cases`).
+    async def home_case_of(self, dataset_id: str) -> HomeCase | None: ...
+    #: The dataset whose home case this case is, `None` for any other case.
+    async def dataset_of_home_case(self, investigation_id: str) -> str | None: ...
+    #: Records the dataset's home case, once: a second is refused (`HomeCaseHeld`).
+    async def set_home_case(self, home: HomeCase) -> None: ...
+    #: Admin › System's *Dataset owners may be* (ADR-145 Amendment 4 decision 7).
+    async def owner_setting(self) -> DatasetOwnersMayBe: ...
+    async def set_owner_setting(self, value: DatasetOwnersMayBe) -> None: ...
     #: ADR-143 decision 1: the case's layer, made if it has none (idempotent), and its id.
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -244,6 +255,14 @@ class DatasetStore(Protocol):
     async def set_egress(
         self, dataset_id: str, egress: DatasetEgress
     ) -> tuple[DatasetEgress, Dataset]: ...
+
+
+class HomeCaseHeld(Exception):
+    """A dataset has one home case (ADR-145 Amendment 4 decision 2), and a case is the home of at
+    most one dataset: a second is refused."""
+
+    def __init__(self, dataset_id: str) -> None:
+        super().__init__(f"the dataset {dataset_id} already has its home case")
 
 
 class BranchLayerError(Exception):
@@ -369,6 +388,9 @@ class InMemoryDatasetStore:
         self.cases: dict[str, list[str]] = {}
         #: A branch's original case's layer, read-only (ADR-144 Amendment 1 decision 2).
         self.layer_reads: dict[str, str] = {}
+        #: Each dataset's home case (ADR-145 Amendment 4 decision 2).
+        self.homes: dict[str, HomeCase] = {}
+        self.owners_may_be: DatasetOwnersMayBe = "people_and_teams"
 
     def add(self, dataset: Dataset) -> Dataset:
         self.datasets[dataset.id] = dataset
@@ -498,6 +520,27 @@ class InMemoryDatasetStore:
     async def cases_reading(self, dataset_id: str) -> list[str]:
         through = {dataset_id, *(d.id for d in await self.composites_of(dataset_id))}
         return sorted(case for case, chosen in self.cases.items() if through & set(chosen))
+
+    async def home_case_of(self, dataset_id: str) -> HomeCase | None:
+        return self.homes.get(dataset_id)
+
+    async def dataset_of_home_case(self, investigation_id: str) -> str | None:
+        return next(
+            (d for d, h in self.homes.items() if h.investigation_id == investigation_id), None
+        )
+
+    async def set_home_case(self, home: HomeCase) -> None:
+        if home.dataset_id in self.homes:
+            raise HomeCaseHeld(home.dataset_id)
+        if await self.dataset_of_home_case(home.investigation_id) is not None:
+            raise HomeCaseHeld(home.dataset_id)
+        self.homes[home.dataset_id] = home
+
+    async def owner_setting(self) -> DatasetOwnersMayBe:
+        return self.owners_may_be
+
+    async def set_owner_setting(self, value: DatasetOwnersMayBe) -> None:
+        self.owners_may_be = value
 
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None
@@ -640,6 +683,18 @@ CREATE TABLE IF NOT EXISTS investigation_datasets (
 CREATE TABLE IF NOT EXISTS case_layer_reads (
     investigation_id TEXT PRIMARY KEY,
     layer_id TEXT NOT NULL REFERENCES datasets (id)
+);
+-- ADR-145 Amendment 4 decision 2: each dataset's one home case, which is no other's.
+CREATE TABLE IF NOT EXISTS home_cases (
+    dataset_id TEXT PRIMARY KEY REFERENCES datasets (id),
+    investigation_id TEXT NOT NULL UNIQUE,
+    made_at TIMESTAMPTZ NOT NULL,
+    made_by TEXT NOT NULL
+);
+-- Decision 7: Admin › System's settings for datasets.
+CREATE TABLE IF NOT EXISTS dataset_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 
@@ -922,6 +977,51 @@ class PostgresDatasetStore:
                 dataset_id,
             )
         return [r["investigation_id"] for r in rows]
+
+    async def home_case_of(self, dataset_id: str) -> HomeCase | None:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT dataset_id, investigation_id, made_at, made_by FROM home_cases "
+                "WHERE dataset_id = $1",
+                dataset_id,
+            )
+        return HomeCase(**dict(row)) if row is not None else None
+
+    async def dataset_of_home_case(self, investigation_id: str) -> str | None:
+        async with self._pool.acquire() as conn:
+            found: str | None = await conn.fetchval(
+                "SELECT dataset_id FROM home_cases WHERE investigation_id = $1", investigation_id
+            )
+        return found
+
+    async def set_home_case(self, home: HomeCase) -> None:
+        async with self._pool.acquire() as conn:
+            try:
+                await conn.execute(
+                    "INSERT INTO home_cases (dataset_id, investigation_id, made_at, made_by) "
+                    "VALUES ($1, $2, $3, $4)",
+                    home.dataset_id,
+                    home.investigation_id,
+                    home.made_at,
+                    home.made_by,
+                )
+            except asyncpg.UniqueViolationError as already:
+                raise HomeCaseHeld(home.dataset_id) from already
+
+    async def owner_setting(self) -> DatasetOwnersMayBe:
+        async with self._pool.acquire() as conn:
+            value = await conn.fetchval(
+                "SELECT value FROM dataset_settings WHERE key = 'owners_may_be'"
+            )
+        return cast(DatasetOwnersMayBe, value or "people_and_teams")
+
+    async def set_owner_setting(self, value: DatasetOwnersMayBe) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO dataset_settings (key, value) VALUES ('owners_may_be', $1) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+                value,
+            )
 
     async def ensure_layer(
         self, investigation_id: str, *, unit: str, created_by: str, case_name: str | None = None

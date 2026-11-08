@@ -318,6 +318,9 @@ ROUTE_RIGHTS = {
     "system_status_route": "administer_system",
     # ADR-136 decision 2: every dataset's egress, set by an administrator alone, audited.
     "admin_datasets_route": "administer_system",
+    # ADR-145 Amendment 4 decision 7: Admin › System's *Dataset owners may be*.
+    "read_dataset_owner_setting": "administer_system",
+    "set_dataset_owner_setting": "administer_system",
     "set_dataset_egress_route": "administer_system",
     "list_schedules_route": "operate_schedules",
     "schedule_runs_route": "operate_schedules",

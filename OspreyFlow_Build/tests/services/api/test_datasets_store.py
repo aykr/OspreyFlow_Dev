@@ -136,3 +136,40 @@ async def test_postgres_answers_the_cases_and_composites_reading_a_dataset(store
     assert await store.cases_reading(partner.id) == [through]
     assert [d.id for d in await store.composites_of(member.id)] == [composite.id]
     assert await store.composites_of(elsewhere.id) == []
+
+
+async def test_postgres_holds_one_home_case_per_dataset_and_the_owner_setting(store) -> None:
+    """ADR-145 Amendment 4 decisions 2 and 7: a dataset's home case, once; a case the home of at
+    most one dataset; the System setting kept, the default until set."""
+    from datetime import UTC, datetime
+
+    from services.api.datasets import HomeCaseHeld
+
+    from schemas.dataset_model import HomeCase
+
+    first = await store.create(ALICE, f"Home A {new_id()}")
+    second = await store.create(ALICE, f"Home B {new_id()}")
+    home, other = new_id(), new_id()
+    made = datetime(2026, 11, 8, tzinfo=UTC)
+    assert await store.home_case_of(first.id) is None
+    await store.set_home_case(
+        HomeCase(dataset_id=first.id, investigation_id=home, made_at=made, made_by="alice")
+    )
+    held = await store.home_case_of(first.id)
+    assert held is not None and held.investigation_id == home
+    assert await store.dataset_of_home_case(home) == first.id
+    assert await store.dataset_of_home_case(other) is None
+    with pytest.raises(HomeCaseHeld):
+        await store.set_home_case(
+            HomeCase(dataset_id=first.id, investigation_id=other, made_at=made, made_by="alice")
+        )
+    with pytest.raises(HomeCaseHeld):
+        await store.set_home_case(
+            HomeCase(dataset_id=second.id, investigation_id=home, made_at=made, made_by="alice")
+        )
+    before = await store.owner_setting()
+    try:
+        await store.set_owner_setting("people_only")
+        assert await store.owner_setting() == "people_only"
+    finally:
+        await store.set_owner_setting(before)

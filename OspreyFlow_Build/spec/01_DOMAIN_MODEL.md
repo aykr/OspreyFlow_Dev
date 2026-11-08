@@ -677,7 +677,13 @@ and only the Conduit's own background work reads so; an empty list sees nothing.
     names no one;
   - a service account is refused where the owners are given, as is an owner kind Admin › System
     forbids: **`DatasetOwnerSetting`**, whose `owners_may_be` is `people_and_teams` (the default),
-    `people_only` or `teams_only` (decision 7).
+    `people_only` or `teams_only` (decision 7);
+  - who is a person is the identity provider's directory's answer, and with no directory to ask,
+    nothing goes live (fail closed): the owners cannot be checked;
+  - until teams are built (ADR-112 Amendment 5, L2.5) a team is refused in words, so the owners
+    are people, and `teams_only` lets no dataset go live;
+  - only the first *Make live* in the deployment asks; a later one naming owners is refused, the
+    owners being changed in Admin › Datasets' *Change owner…* (L2.4 part 2).
 - **`HomeCase`**: a dataset's home case (ADR-145 Amendment 4 decision 2), holding its reports, its
   dataset-wide alerts and its promotion reviews. The owners named at *Make live* are its Authors,
   and it cannot be removed while its dataset exists.

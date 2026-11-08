@@ -35,6 +35,7 @@ from services.api.target_models import CORE_TYPES_FOR_TESTS, InMemoryTargetModel
 
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
+from schemas.dataset_model import HomeCase
 from schemas.domain import Principal
 
 PEOPLE = {
@@ -146,6 +147,12 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     for person in (*CASES.values(), HIDDEN):
         for case, reads in person.items():
             datasets.cases[case] = reads
+    # ds-a has its home case already, so *Make live* asks no owners here (that step is
+    # `test_home_cases.py`'s).
+    datasets.homes["ds-a"] = HomeCase(
+        dataset_id="ds-a", investigation_id="case-a", made_at=datetime(2026, 1, 1, tzinfo=UTC),
+        made_by="eng-1",
+    )  # fmt: skip
     recipes, audit = _Recipes(), _Audit()
     models = InMemoryTargetModelStore(core_types=CORE_TYPES_FOR_TESTS)
     state = {
