@@ -143,7 +143,9 @@ const ONTOLOGY = { version: 1, entity_types: [
     { name: "given_names", type: "string" }, { name: "date_of_birth", type: "date" }] },
   { name: "Location", pole_class: "location", channel: "green", shape: "pin", properties: [{ name: "site_ref", type: "string" }] },
 ], edge_types: [
-  { name: "MENTIONED_IN", from: ["Location", "Person", "Endpoint"], to: ["Document"], properties: [] },
+  // As `packages/ontology/default.yaml` declares it: from any type (`*`), to a Document. The harness
+  // once listed the three types the map uses, which hid that the Map editor read `*` as a type name.
+  { name: "MENTIONED_IN", from: ["*"], to: ["Document"], properties: [] },
 ] };  // prettier-ignore
 const TRANSFORMS = [{ name: "msisdn", arity: 1 }];
 const VERIFY = { rows_read: 3, sample_is_whole_source: true, values_masked: false, rows_deduplicated: 0,

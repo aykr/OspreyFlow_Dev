@@ -2,6 +2,7 @@
 // §4. No component logic lives here so it can be unit-tested directly
 // (this repo has no RTL/jsdom setup — `ConnectScreen.test.ts`'s own
 // docstring — so a screen's *logic* is what gets covered, not its render).
+import { WILDCARD } from "../../canvas/edgeTypeMenu";
 import type {
   EdgeTypeDef,
   EntityTypeDef,
@@ -42,9 +43,12 @@ export function edgeTypesForEndpoints(
   fromType: string,
   toType: string,
 ): EdgeTypeDef[] {
-  return ontology.edge_types.filter(
-    (t) => !t.system && t.from.includes(fromType) && t.to.includes(toType),
-  );
+  // `*` at an end means any entity type, as the canvas reads it (`canvas/edgeTypeMenu.ts`): read as
+  // a type name, every link type declared from `*` (`MENTIONED_IN`, from anything to a Document) was
+  // offered between no two types, so no map could make one. Found walking chapter 4's reports
+  // pipeline from scratch on a running Conduit (8 November 2026).
+  const at = (ends: readonly string[], type: string) => ends.includes(WILDCARD) || ends.includes(type);
+  return ontology.edge_types.filter((t) => !t.system && at(t.from, fromType) && at(t.to, toType));
 }
 
 /** A transform's declared column count — 1 for any transform not in the

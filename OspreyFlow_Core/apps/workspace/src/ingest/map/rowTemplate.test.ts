@@ -58,6 +58,17 @@ describe("entityTypesForPole / edgeTypesForEndpoints", () => {
     const types = edgeTypesForEndpoints(ontology, "Endpoint", "Location").map((t) => t.name);
     expect(types).toEqual(["PRESENT_AT"]);
   });
+
+  it("reads a `*` end as any entity type, at the end it is declared on only", () => {
+    const withWildcard: OntologySchema = {
+      ...ontology,
+      entity_types: [...ontology.entity_types, { name: "Document", pole_class: "object", channel: "violet", shape: "page" }],
+      edge_types: [...ontology.edge_types, { name: "MENTIONED_IN", from: ["*"], to: ["Document"] }],
+    };
+    expect(edgeTypesForEndpoints(withWildcard, "Location", "Document").map((t) => t.name)).toEqual(["MENTIONED_IN"]);
+    expect(edgeTypesForEndpoints(withWildcard, "Endpoint", "Document").map((t) => t.name)).toEqual(["MENTIONED_IN"]);
+    expect(edgeTypesForEndpoints(withWildcard, "Document", "Location").map((t) => t.name)).toEqual([]);
+  });
 });
 
 describe("arityForTransform", () => {
