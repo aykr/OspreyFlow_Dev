@@ -36,6 +36,7 @@ from services.api import investigations as investigations_module
 from services.api.app import (
     app,
     get_alerts_store,
+    get_analytics,
     get_audit,
     get_datasets,
     get_graph,
@@ -514,6 +515,9 @@ def test_an_alert_jump_takes_the_packs_of_its_own_case_not_the_alerts(
     app.dependency_overrides[get_working_set] = lambda: _Delta()
     app.dependency_overrides[get_history] = lambda: _History()
     app.dependency_overrides[get_valkey] = lambda: _Valkey()
+    # The jump checks the alert's evidence is whole (ADR-124 Amendment 17): this alert cites no
+    # event, so the analytics store is never read, and a bare stand-in says so if it were.
+    app.dependency_overrides[get_analytics] = lambda: object()
 
     jumped = client.post("/v1/investigations/inv-2/alerts/al-1/jump")
 
@@ -692,6 +696,9 @@ def test_an_alert_jump_inherits_the_stored_value_exactly(
     app.dependency_overrides[get_working_set] = lambda: _Delta()
     app.dependency_overrides[get_history] = lambda: _History()
     app.dependency_overrides[get_valkey] = lambda: _Valkey()
+    # The jump checks the alert's evidence is whole (ADR-124 Amendment 17): this alert cites no
+    # event, so the analytics store is never read, and a bare stand-in says so if it were.
+    app.dependency_overrides[get_analytics] = lambda: object()
 
     assert client.post("/v1/investigations/inv-2/alerts/al-1/jump").status_code == 201
     assert cases.asked_domains == [inherited]

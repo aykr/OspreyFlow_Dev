@@ -403,6 +403,7 @@ def _jumped_from_bobs_alert(store: InMemoryDatasetStore, monkeypatch: pytest.Mon
     from services.api.app import (
         app,
         get_alerts_store,
+        get_analytics,
         get_datasets,
         get_graph,
         get_history,
@@ -448,6 +449,9 @@ def _jumped_from_bobs_alert(store: InMemoryDatasetStore, monkeypatch: pytest.Mon
     app.dependency_overrides[get_working_set] = lambda: _Delta()
     app.dependency_overrides[get_history] = lambda: _History()
     app.dependency_overrides[get_valkey] = lambda: _Valkey()
+    # The jump checks the alert's evidence is whole (ADR-124 Amendment 17): this alert cites no
+    # event, so the analytics store is never read, and a bare stand-in says so if it were.
+    app.dependency_overrides[get_analytics] = lambda: object()
     try:
         jumped = http.post("/v1/investigations/alices-case/alerts/al-1/jump")
     finally:
