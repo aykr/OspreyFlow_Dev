@@ -1,5 +1,5 @@
 """L1.2c's plants (ADR-110 Amendment 16): each (file, [(old, new)], tests), run, first failure
-printed, restored by md5. O1–O5 need no stack; run them with the closed ports pinned."""
+printed, restored by md5. O1–O5 need no stack (the closed ports are pinned); L0–L3 need the stack lease."""
 import hashlib, os, re, subprocess, sys, time
 from pathlib import Path as _P
 ROOT = _P(__file__).resolve().parents[5]
@@ -30,9 +30,36 @@ PLANTS = {
          "    own_key_merges: list[LinkPriorState] = Field(default_factory=list)\n"),
     ], [TOLD]),
 }
+ADAPTER = f"{CORE}/packages/adapters/graph_arcadedb/adapter.py"
+CONF = "tests/conformance/graph_port/test_suite.py"
+LIVE = "tests/services/api/test_source_refresh_snapshot_live.py"
+LIVE_PLANTS = {
+    "L0": ("the adapter without the two methods (the conformance cases before it)", ADAPTER, [
+        ("    async def read_link_state(\n", "    async def _absent_read_link_state(\n"),
+        ("    async def restore_link_state(self,", "    async def _absent_restore_link_state(self,"),
+    ], [CONF, "-k", "link_state or restored_link"]),
+    "L1": ("the restore without its written-since check", ADAPTER, [
+        ("        if not rows or AuditStub.model_validate(rows[0][\"audit\"]).load_id != written_by:\n",
+         "        if not rows:\n"),
+    ], [CONF, "-k", "link_state or restored_link"]),
+    "L2": ("the restore writing the link at a weaker marking", ADAPTER, [
+        ("        marking = state.handling\n",
+         "        marking = state.handling.model_copy(update={\"classification\": \"OFFICIAL\"})\n"),
+    ], [CONF, "-k", "link_state or restored_link"]),
+    "L3": ("nothing captured, live: the load keeps no prior state", PUB, [
+        ("            report.own_key_merges = _own_key_merges(report, own, priors)\n",
+         "            report.own_key_merges = []\n"),
+    ], [LIVE, "-k", "returning"]),
+}
 env = {k: v for k, v in os.environ.items() if k != "OSPREY_LANE"}
-env.update({"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993",
-            "CLICKHOUSE_HTTP_PORT": "59994"})
+if any(a in LIVE_PLANTS for a in sys.argv[1:]):
+    # Live plants: only under the stack lease, the lane and leased ports set by hand.
+    assert os.environ.get("OSPREY_LANE") and os.environ.get("POSTGRES_PORT") == "55433", "take the lease"
+    env = dict(os.environ)
+else:
+    env.update({"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993",
+                "CLICKHOUSE_HTTP_PORT": "59994"})
+PLANTS.update(LIVE_PLANTS)
 for letter in sys.argv[1:]:
     name, path, pairs, tests = PLANTS[letter]
     orig = open(path).read(); digest = hashlib.md5(orig.encode()).hexdigest()
