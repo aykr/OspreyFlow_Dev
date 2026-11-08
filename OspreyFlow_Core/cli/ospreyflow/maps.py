@@ -9,8 +9,9 @@ are one code, with one audit.
     ospreyflow map build <region> [--planetiler-jar PATH] # the tier-1 basemap, built in the Conduit
 
 `build --planetiler-jar` first copies the planetiler release jar the owner has into the tiles
-folder (`<tiles>/planetiler/planetiler.jar`), where the Conduit's build reads it, and makes the
-tiles folder's writable `built/` door, so Docker does not make it as root. No map key is ever read,
+folder (`<tiles>/planetiler/planetiler.jar`), where the Conduit's build reads it; the build runs in
+the Conduit, which the command says. The tiles folder's writable `built/` door is made and given to
+the Conduit before every `up` (`harness.ingest_uploads.prepare`), so Docker never makes it as root. No map key is ever read,
 asked for or printed here: a key is set in *Admin › Maps*.
 """
 
@@ -59,8 +60,3 @@ def place_jar(jar: Path, tiles: Path) -> Path:
     shutil.copyfile(jar, target)
     return target
 
-
-def make_built_door(tiles: Path) -> Path:
-    built = tiles / BUILT_FOLDER
-    built.mkdir(parents=True, exist_ok=True)
-    return built

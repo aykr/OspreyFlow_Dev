@@ -92,5 +92,9 @@ def test_a_restore_puts_the_maps_file_back_private(
     held.write_text(json.dumps({"areas": []}))
     restore.restore_maps_file(_env(tmp_path / "dep", SALT_HERE), held)
     command, given = sent[0]
-    assert command[-1] == "umask 077 && cat > /run/osprey/map-settings/maps.yaml"
+    # Written beside it and renamed over it, so a Conduit reading the file never meets half of one.
+    assert command[-1] == (
+        "umask 077 && cat > /run/osprey/map-settings/.maps-restored.yaml"
+        " && mv -f /run/osprey/map-settings/.maps-restored.yaml /run/osprey/map-settings/maps.yaml"
+    )
     assert given == held.read_text()

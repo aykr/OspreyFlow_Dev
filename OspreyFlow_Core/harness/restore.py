@@ -659,11 +659,16 @@ def map_providers_with_keys(directory: Path) -> list[str]:
 
 
 def restore_maps_file(compose_file: Path, maps_file: Path) -> None:
-    """The maps file back into the Conduit's own volume (ADR-147 decision 1)."""
+    """The maps file back into the Conduit's own volume (ADR-147 decision 1), written beside it and
+    renamed over it, so a Conduit reading it never meets half a file. A key file left on the
+    volume is not given to the restored providers unless each address is the one its key was
+    entered for (`map_admin.address_of`)."""
     _run(
         _compose(compose_file)
         + ["exec", "-T", "api", "sh", "-c",
-           "umask 077 && cat > /run/osprey/map-settings/maps.yaml"],  # fmt: skip
+           "umask 077 && cat > /run/osprey/map-settings/.maps-restored.yaml"
+           " && mv -f /run/osprey/map-settings/.maps-restored.yaml"
+           " /run/osprey/map-settings/maps.yaml"],  # fmt: skip
         item="maps",
         input=maps_file.read_text(encoding="utf-8"),
     )

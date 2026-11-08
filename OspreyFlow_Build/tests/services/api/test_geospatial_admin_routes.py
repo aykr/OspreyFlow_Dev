@@ -121,11 +121,12 @@ def graph() -> _FakeGraph:
 @pytest.fixture
 def map_admin(tmp_path: Path) -> Iterator[MapAdmin]:
     """ADR-147: the build registers its provider in the maps file, through the app's `MapAdmin`."""
-    (tmp_path / "tiles").mkdir()
+    (tmp_path / "tiles" / "planetiler").mkdir(parents=True)
+    (tmp_path / "tiles" / "planetiler" / "planetiler.jar").write_bytes(b"PK synthetic jar")
     admin = MapAdmin(
         installed=_minimal_map_config(), settings_file=MapSettingsFile(tmp_path / "maps"),
         key_file=MapKeyFile(tmp_path / "maps"), audit=InMemoryMapAdminAudit(),
-        tiles_root=tmp_path / "tiles",
+        tiles_root=tmp_path / "tiles", java=lambda _name: "/usr/bin/java",
     )  # fmt: skip
     app.state.map_admin = admin
     yield admin

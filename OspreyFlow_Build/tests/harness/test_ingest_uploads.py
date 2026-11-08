@@ -67,6 +67,7 @@ class LinuxHost:
         }
         self.docker_refuses: str | None = None
         self.chowns: list[list[str]] = []
+        self.built_chowns: list[list[str]] = []
         #: What the Conduit met writing its first file at `up`: None until then.
         self.conduit_write: str | None = None
 
@@ -117,6 +118,11 @@ class LinuxHost:
     def docker(self, argv: Sequence[str]) -> tuple[int, str]:
         """The one-off container (`compose run … chown`) and `up`; anything else succeeds."""
         argv = list(argv)
+        if "run" in argv and "chown" in argv and argv[-1] == ingest_uploads.BUILT_CONTAINER_PATH:
+            # ADR-147: the tiles folder's `built/` door, given over the same way (its own case
+            # below); recorded apart so each upload case still counts its own.
+            self.built_chowns.append(argv)
+            return 0, ""
         if "run" in argv and "chown" in argv:
             self.chowns.append(argv)
             if self.docker_refuses is not None:
@@ -465,3 +471,38 @@ def test_an_update_whose_folder_cannot_be_given_over_changes_nothing(
     said = capsys.readouterr().err
     assert "cannot write /srv/ospreyflow/ingest/uploaded" in said
     assert "Nothing was changed." in said
+
+
+# --- ADR-147 decision 3: the tiles folder's `built/` door is the same case ---
+
+
+def test_the_tiles_folder_s_built_door_is_given_to_the_conduit_before_up(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A basemap built in the Conduit is written to `<tiles>/built`, bind-mounted writable over the
+    read-only tiles folder (`harness/render.py`). Made by Docker at the first `up`, it is root's and
+    the build is refused, as the upload folder's was; so `prepare` gives it over too."""
+    tiles = tmp_path / "tiles"
+    compose = tmp_path / "deploy" / "compose.yaml"
+    compose.parent.mkdir()
+    (compose.parent / "deployment.env").write_text("X=1\n", encoding="utf-8")
+    api = {"volumes": [
+        f"{tiles}:/data/tiles:ro", f"{tiles}/built:/data/tiles/built",
+    ]}  # fmt: skip
+    compose.write_text(yaml.safe_dump({"services": {"api": api}}), encoding="utf-8")
+    root_owned = os.stat_result((stat.S_IFDIR | 0o755, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+    monkeypatch.setattr(ingest_uploads, "DOCKER_ENFORCES_OWNERSHIP", True)
+    monkeypatch.setattr(ingest_uploads, "_stat", lambda _p: root_owned)
+    made: list[Path] = []
+    monkeypatch.setattr(ingest_uploads, "_make", made.append)
+    ran: list[list[str]] = []
+
+    def run(argv: Sequence[str]) -> tuple[int, str]:
+        ran.append(list(argv))
+        return 0, ""
+
+    said = ingest_uploads.prepare(compose, run=run)
+
+    assert made == [tiles / "built"]
+    assert [a[a.index("chown") + 2 :] for a in ran] == [["10001:10001", "/data/tiles/built"]]
+    assert "given to the Conduit" in said

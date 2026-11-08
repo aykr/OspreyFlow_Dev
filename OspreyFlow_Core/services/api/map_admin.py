@@ -149,6 +149,19 @@ class KeyRecord:
     key: SecretStr
     at: datetime
     by: str
+    #: The address the key was entered for (`address_of`); a key is given to that address alone.
+    address: str = ""
+
+
+def address_of(provider: MapProvider) -> str:
+    """Everything a tile URL is made from, so a key entered for one address is never given to
+    another (ADR-147 decision 2): the source or endpoint, the service and layer, the variables the
+    template is filled with and the WMTS key's parameter."""
+    return json.dumps(
+        [provider.source, provider.endpoint, provider.service, provider.layer,
+         sorted(provider.variables.items()), provider.credential_param],
+        sort_keys=True,
+    )  # fmt: skip
 
 
 class MapKeyFile:
@@ -171,13 +184,19 @@ class MapKeyFile:
                 key=SecretStr(str(r["key"])),
                 at=datetime.fromisoformat(str(r["at"])),
                 by=str(r["by"]),
+                address=str(r.get("address", "")),
             )  # fmt: skip
             for pid, r in dict(raw).items()
         }
 
     def save(self, keys: Mapping[str, KeyRecord]) -> None:
         raw = {
-            pid: {"key": r.key.get_secret_value(), "at": r.at.isoformat(), "by": r.by}
+            pid: {
+                "key": r.key.get_secret_value(),
+                "at": r.at.isoformat(),
+                "by": r.by,
+                "address": r.address,
+            }  # fmt: skip
             for pid, r in keys.items()
         }
         _write_private(self.path, yaml.safe_dump(raw, sort_keys=True), ".map-keys-")
@@ -475,7 +494,17 @@ class MapAdmin:
     def _fresh(self) -> None:
         stamp = self._file.stamp()
         if stamp != self._stamp or stamp is None:
-            self._settings = self._file.load()
+            try:
+                self._settings = self._file.load()
+            except (ValidationError, ValueError, OSError) as unreadable:
+                # A restored or hand-edited maps file that does not validate must not take the map
+                # away from every analyst: `osprey.yaml`'s is served, and the log says why.
+                log.warning(
+                    "the maps file %s cannot be read (%s); serving osprey.yaml's map",
+                    self._file.path,
+                    type(unreadable).__name__,
+                )
+                self._settings = MapSettings()
             self._stamp = stamp
 
     @property
@@ -496,27 +525,41 @@ class MapAdmin:
         return found
 
     def key_for(self, provider_id: str) -> str | None:
-        """The key set in *Admin › Maps* for a provider, for the tile proxy alone."""
+        """The key set in *Admin › Maps* for a provider, for the tile proxy alone, and only while
+        the provider's address is the one it was entered for."""
         record = self._keys.load().get(provider_id)
-        return record.key.get_secret_value() if record is not None else None
+        if record is None:
+            return None
+        provider = next((p for p in self.config().providers if p.id == provider_id), None)
+        if provider is None or record.address != address_of(provider):
+            return None
+        return record.key.get_secret_value()
 
     def _key_state(self, provider: MapProvider, keys: Mapping[str, KeyRecord]) -> MapKeyState:
-        if provider.id in keys:
+        record = keys.get(provider.id)
+        if record is not None and record.address == address_of(provider):
             return "set"
         if provider.credential is not None:
             return "env" if os.environ.get(provider.credential.removeprefix("env:")) else "none"
         return "none"
 
-    def _state(self, provider: MapProvider, key_state: MapKeyState) -> tuple[str, bool]:
+    def _state(
+        self, provider: MapProvider, key_state: MapKeyState, moved: bool = False
+    ) -> tuple[str, bool]:
+        if provider.profile is not None:
+            return (
+                "A ready-made provider profile: the tile proxy does not serve profiles yet.",
+                False,
+            )
         local = _container_file(provider.source)
         if local is not None and provider.proxy == "none":
             if not local.is_file():
                 return "Its local file is not built yet.", False
             return "Ready: a local file on this deployment.", True
         if provider.needs_key and key_state == "none":
+            if moved:
+                return "Its key was entered for another address: enter it again.", False
             return "Needs a key: none is set.", False
-        if provider.profile is not None:
-            return "Ready: from a ready-made provider profile.", True
         if provider.proxy != "none":
             cached = " and cached" if provider.cache is not None else ""
             return f"Ready: fetched through the Conduit{cached}.", True
@@ -575,8 +618,11 @@ class MapAdmin:
         providers = []
         for p in config.providers:
             key_state = self._key_state(p, keys)
-            words, ready = self._state(p, key_state)
             record = keys.get(p.id)
+            words, ready = self._state(
+                p, key_state, moved=record is not None and key_state != "set"
+            )
+            record = record if key_state == "set" else None
             providers.append(AdminMapProvider(
                 provider=p, tier=tier_of(p), key_state=key_state, needs_key=p.needs_key,
                 key_set_at=record.at if record else None, key_set_by=record.by if record else None,
@@ -635,8 +681,10 @@ class MapAdmin:
                 raise MapAdminRefused(f"There is already a map provider {_shown(provider.id)}.")
             admissible(provider, None)
             self._save_map(self._validated(config.default, [*config.providers, provider]))
+            fields = provider.model_dump(mode="json", exclude_none=True)
             await self._record(by, "provider_added", provider.id, {
                 "tier": {"old": None, "new": tier_of(provider)},
+                **{k: {"old": None, "new": v} for k, v in sorted(fields.items())},
             })  # fmt: skip
         return self.view()
 
@@ -658,7 +706,7 @@ class MapAdmin:
                 for k in sorted(set(before) | set(after)) if before.get(k) != after.get(k)
             }  # fmt: skip
             # A changed address never receives the key held for the old one (as *Models* does).
-            moved = (old.source, old.endpoint) != (provider.source, provider.endpoint)
+            moved = address_of(old) != address_of(provider)
             keys = self._keys.load()
             if moved and provider_id in keys:
                 del keys[provider_id]
@@ -714,9 +762,16 @@ class MapAdmin:
                     "This provider takes no key: its address has no {credential}, and it names "
                     "no credential or credential_param. Edit it first if it should."
                 )
+            if provider.profile is not None or provider.proxy == "none":
+                raise MapAdminRefused(
+                    "Only a provider the Conduit fetches takes a key here: this one is fetched by "
+                    "the browser, or comes from a ready-made profile, so a key would never be used."
+                )
             keys = self._keys.load()
             replaced = provider_id in keys
-            keys[provider_id] = KeyRecord(key=key, at=self._now(), by=by)
+            keys[provider_id] = KeyRecord(
+                key=key, at=self._now(), by=by, address=address_of(provider)
+            )
             self._keys.save(keys)
             self._note_keys(keys)
             await self._record(by, "key_set", provider_id, {
@@ -840,7 +895,11 @@ class MapAdmin:
                         )
                         for x, y in tiles_in_range(x0, x1, y0, y1):
                             object_key = cache_key_for(provider.id, zoom, x, y)
-                            if store.read(object_key, provider.cache.ttl_days) is not None:
+                            # The object store is called synchronously: off the event loop.
+                            held = await asyncio.to_thread(
+                                store.read, object_key, provider.cache.ttl_days
+                            )
+                            if held is not None:
                                 cached += 1
                                 continue
                             url = build_upstream_url(provider, zoom, x, y, key=key)
@@ -848,7 +907,7 @@ class MapAdmin:
                                 await fetch_tile(url) if self._http_get is None
                                 else await fetch_tile(url, http_get=self._http_get)
                             )  # fmt: skip
-                            store.write(object_key, data)
+                            await asyncio.to_thread(store.write, object_key, data)
                             fetched += 1
                 except MapAdminRefused as refused:
                     failed = refused.words
@@ -963,15 +1022,22 @@ async def build_basemap(
             f"Known regions: {', '.join(sorted(GEOFABRIK_REGIONS))}.",
             status=422,
         )
+    builder = admin.basemap()
+    if not builder.builder_ready:
+        # Said before anything is fetched: the Conduit's image carries no Java while the owner rules
+        # on its licence (ADR-147 decision 3), and the jar is placed by the command line.
+        raise MapAdminRefused(builder.builder_state, status=409)
     jar = tiles_root / PLANETILER_JAR
     built = tiles_root / BUILT_FOLDER
     pmtiles = built / f"{region}.pmtiles"
-    extract = resolve_extract(
-        region, built / "extracts", existing=None,
+    # The download and planetiler are blocking and long: each runs in a worker thread, so the
+    # Conduit goes on answering, and the progress lines reach the stream as they are said.
+    extract = await asyncio.to_thread(
+        resolve_extract, region, built / "extracts", existing=None,
         downloader=downloader or download_extract, progress=progress,
     )  # fmt: skip
     progress("Running planetiler...")
-    (planetiler_runner or run_planetiler)(extract, pmtiles, jar_path=jar)
+    await asyncio.to_thread(planetiler_runner or run_planetiler, extract, pmtiles, jar_path=jar)
     progress("Loading the OSM-derived gazetteer...")
     created, referenced, rejected = await load_places(extract)
     progress(

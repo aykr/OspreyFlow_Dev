@@ -31,7 +31,8 @@ from typing import Any
 
 import yaml
 
-from harness.render import INGEST_CONTAINER_PATH, INGEST_UPLOAD_SUBDIR
+from harness.render import INGEST_CONTAINER_PATH, INGEST_UPLOAD_SUBDIR, TILES_BUILT_SUBDIR
+from schemas.deployment import TILES_CONTAINER_PATH
 
 #: **The Conduit's user, as `services/api/Dockerfile` makes it**: `useradd --create-home --uid 10001
 #: osprey`, which also makes the group `osprey`, 10001 (checked with `docker exec … id` on the first
@@ -40,6 +41,14 @@ CONDUIT_USER = (10001, 10001)
 
 #: Where the Conduit sees the upload folder.
 UPLOAD_CONTAINER_PATH = f"{INGEST_CONTAINER_PATH}/{INGEST_UPLOAD_SUBDIR}"
+#: ADR-147 decision 3: where a basemap built in the Conduit is written, the tiles folder's one
+#: writable door, the same case as the upload folder.
+BUILT_CONTAINER_PATH = f"{TILES_CONTAINER_PATH}/{TILES_BUILT_SUBDIR}"
+#: Every writable folder the Conduit mounts over a read-only one, with what goes in it.
+WRITABLE_DOORS = {
+    UPLOAD_CONTAINER_PATH: "the Ingest Studio's uploads and the demo packs' files",
+    BUILT_CONTAINER_PATH: "a basemap built in the Conduit",
+}
 
 #: Docker Engine on Linux enforces the host folder's owner and mode on a container's user; Docker
 #: Desktop's file sharing (macOS, Windows) does not, so there nothing is done, as before.
@@ -68,7 +77,7 @@ def _compose_argv(compose_file: Path) -> list[str]:
     ]  # fmt: skip
 
 
-def upload_folder(compose_file: Path) -> Path | None:
+def upload_folder(compose_file: Path, target: str = UPLOAD_CONTAINER_PATH) -> Path | None:
     """The host folder the rendered Conduit mounts at `UPLOAD_CONTAINER_PATH`, read as Compose reads
     a bind source (a relative one from the compose file's folder); `None` when it mounts none, or
     when there is no compose file (the `up` after this then says so by name)."""
@@ -79,8 +88,8 @@ def upload_folder(compose_file: Path) -> Path | None:
     if not isinstance(api, dict):
         return None
     for volume in api.get("volumes") or []:
-        source, target = _bind(volume)
-        if target == UPLOAD_CONTAINER_PATH and source:
+        source, mounted = _bind(volume)
+        if mounted == target and source:
             return Path(os.path.normpath(compose_file.parent / source))
     return None
 
@@ -108,22 +117,29 @@ def conduit_can_write(found: os.stat_result) -> bool:
     return mode & wanted == wanted
 
 
-def give_to_conduit_argv(compose_file: Path) -> list[str]:
+def give_to_conduit_argv(compose_file: Path, target: str = UPLOAD_CONTAINER_PATH) -> list[str]:
     """A one-off container of the deployment's own Conduit image, as root, with the Conduit's own
     mounts, changing the upload folder's owner and nothing else. `--no-deps` starts nothing more."""
     uid, gid = CONDUIT_USER
     return _compose_argv(compose_file) + [
         "run", "--rm", "--no-deps", "--user", "0", "--entrypoint", "chown", "api",
-        f"{uid}:{gid}", UPLOAD_CONTAINER_PATH,
+        f"{uid}:{gid}", target,
     ]  # fmt: skip
 
 
 def prepare(compose_file: Path, *, run: Run) -> str:
-    """Make the upload folder writable by the Conduit, or raise `UploadFolderRefused` saying why and
-    what to do. Returns what was done, for the caller's record."""
-    folder = upload_folder(compose_file)
-    if folder is None:
-        return "the Conduit mounts no upload folder"
+    """Make each writable door the Conduit mounts (`WRITABLE_DOORS`) writable by it, or raise
+    `UploadFolderRefused` saying why and what to do. Returns what was done, for the caller's
+    record."""
+    done = [
+        _prepare_one(compose_file, folder, target, run=run)
+        for target in WRITABLE_DOORS
+        if (folder := upload_folder(compose_file, target)) is not None
+    ]
+    return "; ".join(done) if done else "the Conduit mounts no upload folder"
+
+
+def _prepare_one(compose_file: Path, folder: Path, target: str, *, run: Run) -> str:
     if not DOCKER_ENFORCES_OWNERSHIP:
         return f"{folder}: Docker here lets the Conduit write it whoever owns it"
     try:
@@ -138,12 +154,12 @@ def prepare(compose_file: Path, *, run: Run) -> str:
         found = None
     if found is not None and conduit_can_write(found):
         return f"{folder}: the Conduit can already write it"
-    code, said = run(give_to_conduit_argv(compose_file))
+    code, said = run(give_to_conduit_argv(compose_file, target))
     if code != 0:
         uid, gid = CONDUIT_USER
         raise UploadFolderRefused(
-            f"the Conduit (uid {uid}) cannot write {folder}, where the Ingest Studio's uploads and "
-            f"the demo packs' files go, and giving it to the Conduit failed: "
+            f"the Conduit (uid {uid}) cannot write {folder}, where {WRITABLE_DOORS[target]} "
+            f"go, and giving it to the Conduit failed: "
             f"{said.strip() or f'exit {code}'}. Nothing was started. Give it to the Conduit "
             f"yourself (sudo mkdir -p {folder} && sudo chown {uid}:{gid} {folder}) and run this "
             "again."

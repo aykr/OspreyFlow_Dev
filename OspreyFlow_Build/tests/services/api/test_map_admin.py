@@ -338,6 +338,8 @@ async def test_a_build_on_a_small_synthetic_region_registers_a_tier_1_provider(
     downloaded), planetiler's run writes a PMTiles-headed file, and the places loader counts. Real
     planetiler needs Java and the jar, so its run is the one part stood in (`P3_RED_RECORD.md`)."""
     w = World(tmp_path)
+    (w.tiles_root / PLANETILER_JAR).parent.mkdir()
+    (w.tiles_root / PLANETILER_JAR).write_bytes(b"PK synthetic jar")  # placed, as the CLI does
     progress: list[str] = []
     asked: list[str] = []
 
@@ -372,3 +374,89 @@ async def test_a_build_on_a_small_synthetic_region_registers_a_tier_1_provider(
     with pytest.raises(MapAdminRefused, match="not a region"):
         await build_basemap(w.admin, by="admin-1", region="atlantis", load_places=load_places,
                             tiles_root=w.tiles_root)  # fmt: skip
+
+
+async def test_a_build_with_no_java_or_no_jar_is_refused_before_anything_is_downloaded(
+    tmp_path: Path,
+) -> None:
+    """ADR-147 decision 3, as the orchestrator's interim left it: no Java in the Conduit's image.
+    The build says so in the builder's own words and fetches nothing."""
+    w = World(tmp_path)
+    asked: list[str] = []
+
+    def downloader(region: str, dest: Path) -> Path:
+        asked.append(region)
+        return dest
+
+    async def load_places(extract: Path) -> tuple[int, int, int]:
+        return (0, 0, 0)
+
+    w.admin._java = lambda _name: None  # noqa: SLF001 - this image's Java, absent
+    with pytest.raises(MapAdminRefused, match="Java is not installed in the Conduit"):
+        await build_basemap(w.admin, by="a", region="rutland", load_places=load_places,
+                            downloader=downloader, tiles_root=w.tiles_root)  # fmt: skip
+    w.admin._java = lambda _name: "/usr/bin/java"  # noqa: SLF001 - Java, but no jar placed
+    with pytest.raises(MapAdminRefused, match="planetiler"):
+        await build_basemap(w.admin, by="a", region="rutland", load_places=load_places,
+                            downloader=downloader, tiles_root=w.tiles_root)  # fmt: skip
+    assert asked == []
+
+
+# --- from the lane's own review -----------------------------------------------------------------
+
+
+async def test_a_key_is_given_only_to_the_address_it_was_entered_for(tmp_path: Path) -> None:
+    """ADR-147 decision 2: a key is never sent to an address it was not entered for. The address is
+    the whole of what the tile URL is made from (`source`, `endpoint`, `layer`, `variables`, the
+    parameter), so changing a variable moves the key nowhere; nor does `osprey.yaml` changed under
+    a surviving key file, or a maps file restored over one."""
+    templated = {**HOSTED, "source": "https://{host_part}.example.test/{z}/{x}/{y}?key={credential}",
+                 "variables": {"host_part": "tiles"}}  # fmt: skip
+    w = World(tmp_path, providers=[OSM, templated])
+    await w.admin.set_key("a", "hosted-tiles", SecretStr(PLANTED))
+    assert w.admin.key_for("hosted-tiles") == PLANTED
+
+    # The installer's osprey.yaml points the provider elsewhere; the key file survives.
+    moved = {**templated, "variables": {"host_part": "elsewhere"}}
+    other = MapAdmin(
+        installed=MapConfig.model_validate({"default": "osm-local", "providers": [OSM, moved]}),
+        settings_file=MapSettingsFile(w.folder), key_file=MapKeyFile(w.folder),
+        audit=InMemoryMapAdminAudit(), tiles_root=w.tiles_root,
+    )  # fmt: skip
+    assert other.key_for("hosted-tiles") is None
+    row = next(p for p in other.view().providers if p.provider.id == "hosted-tiles")
+    assert row.key_state == "none" and "another address" in row.state
+
+
+async def test_a_provider_the_conduit_does_not_fetch_refuses_a_key(tmp_path: Path) -> None:
+    browser = {**HOSTED, "id": "browser", "proxy": "none"}
+    profile = {"id": "zoomstack", "label": "OS Open Zoomstack", "kind": "vector",
+               "profile": "os-open-zoomstack", "credential": "env:OS_KEY", "attribution": "OS",
+               "licence": {"id": "OGL-UK-3.0", "redistributable": True,
+                           "client_scope": "open"}}  # fmt: skip
+    w = World(tmp_path, providers=[OSM, browser, profile])
+    for provider_id in ("browser", "zoomstack"):
+        with pytest.raises(MapAdminRefused):
+            await w.admin.set_key("a", provider_id, SecretStr(PLANTED))
+    row = next(p for p in w.admin.view().providers if p.provider.id == "zoomstack")
+    assert not row.ready and "profile" in row.state
+
+
+async def test_a_maps_file_that_cannot_be_read_leaves_the_map_on_osprey_yaml_s(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A restored or hand-edited maps file that does not validate must not take the map away from
+    every analyst: the Conduit serves `osprey.yaml`'s and says why in its log."""
+    w = World(tmp_path)
+    w.folder.mkdir(parents=True, exist_ok=True)
+    (w.folder / "maps.yaml").write_text("map: {default: nowhere, providers: []}\n")
+    assert w.admin.config().default == "osm-local"
+    assert any("maps file" in r.getMessage() for r in caplog.records)
+
+
+async def test_adding_a_provider_records_each_of_its_fields(tmp_path: Path) -> None:
+    w = World(tmp_path)
+    await w.admin.add_provider("a", MapProvider.model_validate({**WMTS, "id": "w2"}))
+    changes = w.audit.entries[-1].changes
+    assert changes["endpoint"] == {"old": None, "new": "https://gis.example.test/wmts"}
+    assert changes["attribution"]["new"] == "Corporate" and "tier" in changes

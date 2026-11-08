@@ -6,8 +6,8 @@ What a mistake would do, and the case that catches it (rule 12):
 - a verb run on the host instead of in the Conduit (a second code, its own files) —
   `test_each_verb_runs_the_conduit_s_own_maps_code_in_its_container`;
 - a refusal inside the Conduit reported as success — `test_a_refusal_in_the_conduit_fails_the_verb`;
-- the jar not where the Conduit's build reads it, or `built/` left for Docker to make as root —
-  `test_build_places_the_jar_and_the_built_door_in_the_tiles_folder`;
+- the jar not where the Conduit's build reads it, or the build not said to run in the Conduit —
+  `test_build_places_the_jar_and_says_where_the_build_runs`;
 - a map extract taken for the jar — `test_build_refuses_a_jar_that_is_not_one`.
 """
 
@@ -66,9 +66,13 @@ def test_a_refusal_in_the_conduit_fails_the_verb(rig: Rig, tmp_path: Path) -> No
     assert rig("map", "verify") != 0
 
 
-def test_build_places_the_jar_and_the_built_door_in_the_tiles_folder(
-    rig: Rig, tmp_path: Path
+def test_build_places_the_jar_and_says_where_the_build_runs(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The jar goes where the Conduit's build reads it; the build itself runs in the Conduit, which
+    the command says, so a refusal there ("Java is not installed in the Conduit") reads as the
+    Conduit's. `built/` is made and given to the Conduit before every `up`
+    (`harness.ingest_uploads.prepare`), not here."""
     tiles = tmp_path / "tiles"
     _installed(rig, tiles)
     jar = tmp_path / "planetiler-0.9.jar"
@@ -77,7 +81,7 @@ def test_build_places_the_jar_and_the_built_door_in_the_tiles_folder(
     assert rig("map", "build", "rutland", "--planetiler-jar", str(jar)) == 0
 
     assert (tiles / "planetiler" / "planetiler.jar").read_bytes() == b"PK jar"
-    assert (tiles / "built").is_dir()
+    assert "built by the Conduit, in its container" in capsys.readouterr().out
 
 
 def test_build_refuses_a_jar_that_is_not_one(
