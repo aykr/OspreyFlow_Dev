@@ -3483,6 +3483,44 @@ async def test_supersede_edge_returns_the_replacements_own_id(
         assert edge.id == wanted
 
 
+async def test_the_stored_states_name_each_superseded_elements_successor(
+    factory: GraphAdapterFactory,
+) -> None:
+    """`stored_link_states` and `stored_writes` say, of a superseded link and a superseded node, which
+    element replaced it (`superseded_by`), whatever the caller may read: the alert store's repoint
+    settle follows that to the newest revision, so what the graph committed is the one truth
+    (`06_DECISIONS.md` ADR-109 Amendment 10). A live element names none."""
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [
+                _node("Person", classification="OFFICIAL", family_name="A"),
+                _node("Person", classification="OFFICIAL", family_name="B"),
+            ],
+            [],
+        )
+        _, (old_link,) = await _write(adapter, [], [_edge("ASSOCIATE_OF", a, b, classification="OFFICIAL")])
+        new_link, new_node = new_edge_id(), new_node_id()
+        tx = await adapter.begin_transaction()
+        await adapter.supersede_edge(
+            old_link,
+            EdgeWrite(id=new_link, type="ASSOCIATE_OF", source=a, target=b, provenance=_provenance(),
+                      handling=_handling("OFFICIAL"), created_by="reviewer-1", created_at=now_utc()),  # type: ignore[arg-type]
+            tx,
+        )  # fmt: skip
+        await adapter.commit_transaction(tx)
+        links = await adapter.stored_link_states([old_link, new_link])
+        assert links[old_link].superseded and links[old_link].superseded_by == new_link
+        assert links[new_link].superseded_by is None
+        tx = await adapter.begin_transaction()
+        replacement = _node("Person", classification="SECRET", family_name="A").model_copy(update={"id": new_node})
+        await adapter.supersede_node(a, replacement, tx)
+        await adapter.commit_transaction(tx)
+        nodes = await adapter.stored_writes([a, b])
+        assert nodes[a].superseded and nodes[a].superseded_by == new_node
+        assert nodes[b].superseded_by is None
+
+
 async def test_supersede_edge_replaces_it_in_default_reads(
     factory: GraphAdapterFactory,
 ) -> None:

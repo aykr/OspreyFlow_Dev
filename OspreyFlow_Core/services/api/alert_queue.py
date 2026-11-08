@@ -514,7 +514,8 @@ async def _close(
         disposition=disposition,
         disposition_reason=reason,
         decided_by=member.id,
-        alert_node_id=confirmed_node,
+        # No node here: the close's record owns the node's rename (to the newest revision the graph
+        # holds, after any re-mark), and writing the confirmed node back would undo it.
         close_proposed_by=proposed_by,
     )
 

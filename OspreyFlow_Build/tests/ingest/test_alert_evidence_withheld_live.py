@@ -538,27 +538,26 @@ async def _two_alerts_on_one_secret_match(stores: dict[str, Any], graph: Any, ca
 
 
 async def _pending(stores: dict[str, Any], *old_links: str) -> list[tuple[str, str]]:
-    """The repoint records this test made, by its own links (`alert_repoint_writes`): the table is
-    shared with every other run, so never read whole."""
+    """The repoint pairs this test's records hold for its own links (`alert_repoint_records`): the
+    table is shared with every other run, so only this test's links are read."""
     async with stores["alerts"]._pool.acquire() as conn:
-        rows = await conn.fetch("SELECT links FROM alert_repoint_writes WHERE links ?| $1::text[]",
-                                list(old_links))  # fmt: skip
+        rows = await conn.fetch("SELECT links FROM alert_repoint_records")
     pairs = []
     for row in rows:
         links = __import__("json").loads(row["links"]) if isinstance(row["links"], str) else row["links"]
-        pairs.extend((old, new) for old, new in links.items() if old in old_links)
+        pairs.extend((old, new) for old, new in links if old in old_links)
     return sorted(pairs)
 
 
 async def _plant_record(stores: dict[str, Any], links: dict[str, str], *, recorded_at: Any = None) -> str:
-    """A record as `AlertStore.repointing` writes one, its successors with it."""
+    """A record as `AlertStore.repointing` writes one."""
     from datetime import UTC, datetime
 
     record = new_id()
     async with stores["alerts"]._pool.acquire() as conn:
-        await conn.execute("INSERT INTO alert_repoint_writes (id, recorded_at) VALUES ($1, $2)", record,
+        await conn.execute("INSERT INTO alert_repoint_records (id, recorded_at) VALUES ($1, $2)", record,
                            recorded_at or datetime.now(UTC))  # fmt: skip
-    await stores["alerts"]._add_to_record(record, links=links)
+    await stores["alerts"]._add_to_record(record, links=list(links.items()))
     return record
 
 
@@ -686,13 +685,13 @@ async def test_a_stale_record_is_dropped_if_its_link_is_live_and_applied_if_supe
             await stores["alerts"].settle_pending(graph)
             async with stores["alerts"]._pool.acquire() as conn:
                 left = {r["id"] for r in await conn.fetch(
-                    "SELECT id FROM alert_repoint_writes WHERE id = ANY($1::text[])", planted)}  # fmt: skip
+                    "SELECT id FROM alert_repoint_records WHERE id = ANY($1::text[])", planted)}  # fmt: skip
             assert left == {planted[2]}, "the applied and the stale-and-live are gone; the fresh one waits"
             cited = {a.id: a.edge_ids for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER)}
             assert cited[first.id] == cited[second.id] == [moved]
         finally:  # this test's own records, whatever happened: the table is shared
             async with stores["alerts"]._pool.acquire() as conn:
-                await conn.execute("DELETE FROM alert_repoint_writes WHERE id = ANY($1::text[])", planted)
+                await conn.execute("DELETE FROM alert_repoint_records WHERE id = ANY($1::text[])", planted)
 
 
 # ---- L2.8b item 1: the rule audit ---------------------------------------------------------------
@@ -1157,28 +1156,31 @@ async def test_a_chain_of_writes_brings_the_alert_to_the_newest_revision(
 async def test_a_re_mark_that_fails_is_retried_by_the_next_read(
     stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """B5: an analyst raises the cited link to SECRET; the repoint applies and the re-mark of the
-    alert's node then fails. The record is not cleared, so the next read re-marks the node, and the
-    OFFICIAL teammate cannot read it. Red with the record cleared before the re-mark: the node stayed
-    OFFICIAL, readable with its words."""
+    """B5: an analyst raises the cited link to SECRET; the repoint applies and the re-mark commits
+    the node's SECRET revision in the graph, and then pointing the alert at it fails. The re-mark was
+    recorded before its commit, so the next read renames the alert's node to the revision the graph
+    holds, which the OFFICIAL teammate cannot read. Red with the re-mark unrecorded (no
+    `on_supersede`): the alert named the superseded OFFICIAL node, gone from every read."""
     from services.api.link_changes import LinkChangeRequest
 
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
         alert, link, service, _ = await _changing_world(stores, graph, analytics, case, "RT")
-        real = stores["alerts"]._remark_citing
+        real = stores["alerts"].set_alert_node
 
-        async def fails_once(*args: Any) -> list[str]:
-            monkeypatch.setattr(stores["alerts"], "_remark_citing", real)
-            raise ConnectionError("ArcadeDB went away mid re-mark")
+        async def fails_once(*args: Any, **kwargs: Any) -> bool:
+            monkeypatch.setattr(stores["alerts"], "set_alert_node", real)
+            raise ConnectionError("Postgres went away after the re-mark's graph commit")
 
-        monkeypatch.setattr(stores["alerts"], "_remark_citing", fails_once)
+        monkeypatch.setattr(stores["alerts"], "set_alert_node", fails_once)
         secret = link.handling.model_copy(update={"classification": "SECRET"})
         with pytest.raises(ConnectionError):
             await service.change(case, link.id, SECRET_LOADER, LinkChangeRequest(reason="SECRET", handling=secret))
         await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)  # a read settles
         (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
         assert row.alert_node_id != alert.alert_node_id
+        revision = await graph.get_node(row.alert_node_id, SECRET_LOADER)  # type: ignore[arg-type]
+        assert revision is not None and revision.handling.classification == "SECRET"
         assert await graph.get_node(row.alert_node_id, TEAMMATE) is None  # type: ignore[arg-type]
 
 
@@ -1239,8 +1241,137 @@ async def test_a_record_another_test_left_never_breaks_an_unrelated_read(
 
             assert await _listed(stores, Refusing(), analytics, case, TEAMMATE) == [alert.id]
         async with stores["alerts"]._pool.acquire() as conn:
-            kept = await conn.fetchval("SELECT count(*) FROM alert_repoint_writes WHERE id = $1", left)
+            kept = await conn.fetchval("SELECT count(*) FROM alert_repoint_records WHERE id = $1", left)
         assert kept == 1, "the leftover waits for the stale threshold, neither applied nor dropped"
     finally:
         async with stores["alerts"]._pool.acquire() as conn:
-            await conn.execute("DELETE FROM alert_repoint_writes WHERE id = $1", left)
+            await conn.execute("DELETE FROM alert_repoint_records WHERE id = $1", left)
+
+
+async def test_a_close_never_puts_back_the_node_its_own_record_re_marked(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """Round 3, item 1: an alert whose link sits above its node (a link superseded outside the
+    journal, as L2.8c's paths still leave it) is closed a true positive. The close confirms the node
+    (N to C) in its record, the record's re-mark raises C to the link's marking (C to R) and points
+    the alert at R; the triage write then names no node, so the alert stays on R. Red with the
+    triage writing the confirmed node back: the alert named C, superseded, hidden from every read."""
+    from conduit_common.identity import new_edge_id
+    from schemas.domain import EdgeWrite
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        await _raised(stores, graph, analytics, case, "PB")
+        (alert,) = await _case_alerts(stores, ANALYST, case)
+        (link,) = await graph.get_edges(alert.edge_ids, ANALYST)
+        secret = link.handling.model_copy(update={"classification": "SECRET"})
+        tx = await graph.begin_transaction()
+        raised = await graph.supersede_edge(link.id, EdgeWrite(
+            id=new_edge_id(), type=link.type, source=link.source, target=link.target, properties=link.properties,
+            interval=link.interval, occurrences=link.occurrences, provenance=link.provenance, handling=secret,
+            created_by="t", created_at=T0), tx)  # fmt: skip
+        await graph.commit_transaction(tx)
+        await stores["alerts"].apply_repoints({link.id: raised})  # cited, its node not re-marked
+        closed = await alert_queue.dispose(stores["alerts"], graph, analytics, case, alert.id, SECRET_LOADER,
+                                           disposition="true_positive", reason="confirmed")  # fmt: skip
+        assert closed.status == "closed"
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
+        node = await graph.get_node(row.alert_node_id, SECRET_LOADER)  # type: ignore[arg-type]
+        assert node is not None, "the alert names a live node"
+        assert node.handling.classification == "SECRET"
+
+
+async def _link_above_node(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                           tag: str) -> tuple[Alert, str, str]:  # fmt: skip
+    """An OFFICIAL alert whose cited link is then superseded at SECRET outside the journal (as
+    L2.8c's paths still do): the alert cites the SECRET revision, its node still OFFICIAL. Returns
+    the alert, the old link and the SECRET revision."""
+    from conduit_common.identity import new_edge_id
+    from schemas.domain import EdgeWrite
+
+    await _raised(stores, graph, analytics, case, tag)
+    (alert,) = await _case_alerts(stores, ANALYST, case)
+    (link,) = await graph.get_edges(alert.edge_ids, ANALYST)
+    tx = await graph.begin_transaction()
+    raised = await graph.supersede_edge(link.id, EdgeWrite(
+        id=new_edge_id(), type=link.type, source=link.source, target=link.target, properties=link.properties,
+        interval=link.interval, occurrences=link.occurrences, provenance=link.provenance,
+        handling=link.handling.model_copy(update={"classification": "SECRET"}), created_by="t",
+        created_at=T0), tx)  # fmt: skip
+    await graph.commit_transaction(tx)
+    return alert, link.id, raised
+
+
+async def _live_alert_nodes(graph: Any, alert_id: str, rule_id: str) -> list[str]:
+    listed: list[str] = []
+    cursor = None
+    while True:
+        page = await graph.list_nodes("Alert", SECRET_LOADER, cursor=cursor)
+        listed.extend(n.id for n in page.nodes if n.properties.get("rule_id") == rule_id)
+        if page.next_cursor is None:
+            return listed
+        cursor = page.next_cursor
+
+
+async def test_a_close_whose_re_mark_fails_is_finished_on_the_graphs_chain_in_any_order(
+    stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Round 3, item 2: a true positive's record holds the confirm (N to C) and the re-mark (C to R);
+    pointing the alert at R fails after the re-mark's graph commit. The next read finds each node's
+    newest revision from the graph's own stored state (`stored_writes`, unfiltered: superseded C is
+    still answered), whatever order the pairs are read in, and the alert names R. Red with the pairs
+    applied as recorded, last first (as an unordered map may): the alert named C, superseded."""
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        alert, _old, raised = await _link_above_node(stores, graph, analytics, case, "OR")
+        await stores["alerts"].apply_repoints({_old: raised})
+        real = stores["alerts"].set_alert_node
+
+        async def fails_once(*args: Any, **kwargs: Any) -> bool:
+            monkeypatch.setattr(stores["alerts"], "set_alert_node", real)
+            raise ConnectionError("Postgres went away after the re-mark's graph commit")
+
+        monkeypatch.setattr(stores["alerts"], "set_alert_node", fails_once)
+        with pytest.raises(ConnectionError):
+            await alert_queue.dispose(stores["alerts"], graph, analytics, case, alert.id, SECRET_LOADER,
+                                      disposition="true_positive", reason="confirmed")  # fmt: skip
+        await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)  # a read settles
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
+        node = await graph.get_node(row.alert_node_id, SECRET_LOADER)  # type: ignore[arg-type]
+        assert node is not None and node.handling.classification == "SECRET"
+
+
+async def test_two_settles_of_one_record_at_once_leave_one_live_alert_node(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """Round 3, item 3: two reads settle the same record at once. The record is settled under a lock
+    (a settle another holds is skipped), so its re-mark runs once: one live revision of the alert's
+    node, the alert naming it. Red with no lock: both re-marked, two live Alert revisions (or the
+    second refused after its graph commit)."""
+    import asyncio
+
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        alert, old, raised = await _link_above_node(stores, graph, analytics, case, "LK")
+        await _plant_record(stores, {old: raised})
+        await asyncio.gather(*(stores["alerts"].settle_pending(graph) for _ in range(4)))
+        await stores["alerts"].settle_pending(graph)
+        live = await _live_alert_nodes(graph, alert.id, alert.rule_id.removeprefix("typology:"))
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
+        assert live == [row.alert_node_id], f"one live revision, named by the alert: {live}"
+
+
+async def test_a_record_follows_what_the_graph_committed_not_what_it_recorded(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """Round 3, item 4: a record names a successor its write never committed (a writer that recorded
+    then failed), while the graph holds the link superseded by another write that did. The settle
+    follows the graph's own `superseded_by`, so the alert cites the revision the graph holds. Red
+    with the recorded successor trusted: the alert cited a link no store holds, hidden from all."""
+    case = f"case-{new_id()}"
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        alert, old, raised = await _link_above_node(stores, graph, analytics, case, "GT")
+        await _plant_record(stores, {old: f"never-committed-{new_id()}"})
+        await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)
+        (row,) = [a for a in await stores["alerts"].list_case_queue(case, SECRET_LOADER) if a.id == alert.id]
+        assert row.edge_ids == [raised]

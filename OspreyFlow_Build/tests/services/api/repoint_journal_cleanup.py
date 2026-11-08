@@ -25,7 +25,7 @@ async def remove_repoint_records() -> AsyncIterator[None]:
         except OSError:
             return  # no store reached: a test that never wrote one
         try:
-            for table in ("alert_repoint_writes", "alert_link_successors"):
+            for table in ("alert_repoint_records",):
                 try:
                     await conn.execute(f"DELETE FROM {table} WHERE recorded_at >= $1", started)
                 except asyncpg.UndefinedTableError:

@@ -116,24 +116,20 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS close_proposed_by TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS close_proposed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS alerts_investigation_idx ON alerts (investigation_id);
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
--- ADR-109 Amendment 10: a write that supersedes links alerts may cite keeps one record here from
--- before the graph's commit until every citing alert cites the newest revision, its node is
--- re-marked and renamed, and its working-set copies are purged; and each link's successor, kept,
--- so a chain of writes is followed to its end whatever became of the records.
-CREATE TABLE IF NOT EXISTS alert_repoint_writes (
+-- ADR-109 Amendment 10: a write that supersedes links (or an alert's node) alerts may cite keeps
+-- one record here, from before the graph's commit until every citing alert cites the newest
+-- revision the graph holds, its node is re-marked and renamed, and its working-set copies are
+-- purged. Pairs are kept as written; what committed is read from the graph's stored states.
+CREATE TABLE IF NOT EXISTS alert_repoint_records (
     id TEXT PRIMARY KEY,
-    links JSONB NOT NULL DEFAULT '{}'::jsonb,
-    alert_nodes JSONB NOT NULL DEFAULT '{}'::jsonb,
+    links JSONB NOT NULL DEFAULT '[]'::jsonb,
+    alert_nodes JSONB NOT NULL DEFAULT '[]'::jsonb,
     purge JSONB NOT NULL DEFAULT '[]'::jsonb,
     applied BOOLEAN NOT NULL DEFAULT false,
     recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS alert_repoint_writes_recorded_idx ON alert_repoint_writes (recorded_at);
-CREATE TABLE IF NOT EXISTS alert_link_successors (
-    old_edge_id TEXT PRIMARY KEY,
-    new_edge_id TEXT NOT NULL,
-    recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+CREATE INDEX IF NOT EXISTS alert_repoint_records_recorded_idx
+    ON alert_repoint_records (recorded_at);
 """
 
 
@@ -383,11 +379,11 @@ class LinkRepoint:
         self.remarked_nodes: list[str] = []
 
     async def record(self, old: str, new: str) -> None:
-        await self._store._add_to_record(self.id, links={old: new})
+        await self._store._add_to_record(self.id, links=[(old, new)])
         self.pairs[old] = new
 
     async def record_node(self, old: str, new: str) -> None:
-        await self._store._add_to_record(self.id, alert_nodes={old: new})
+        await self._store._add_to_record(self.id, alert_nodes=[(old, new)])
         self.nodes[old] = new
 
     async def purged(self) -> None:
@@ -407,6 +403,15 @@ async def _repoint_cited_links(conn: asyncpg.Connection, repoint: Mapping[str, s
         json.dumps(dict(repoint)),
     )
     return [r["id"] for r in rows]
+
+
+def _loaded(raw: Any) -> Any:
+    return json.loads(raw) if isinstance(raw, str) else raw
+
+
+def _pairs(raw: Any) -> list[tuple[str, str]]:
+    """A record's pairs, in the order written."""
+    return [(str(old), str(new)) for old, new in _loaded(raw)]
 
 
 class AlertStore:
@@ -670,14 +675,13 @@ class AlertStore:
         """Around a write that supersedes links (or an `Alert` node) alerts may cite (ADR-109
         Amendments 9 and 10). A record is opened before the write; the caller records each
         `old → new` once the graph has returned it and before the commit. Left normally, the
-        record is applied. Left by an exception (an `Exception`: a cancellation stays one, and its
-        record waits for the next settle), it is settled from the graph's own stored states and
-        applied if the write committed, else left; the writer never drops a record, since a
-        commit can land after any check of it (a timeout, a lost connection). Only the stale
-        threshold drops one (`settle_pending`)."""
+        record is settled. Left by an exception (an `Exception`: a cancellation stays one, and its
+        record waits for the next settle), it is settled too, applied if the graph shows the write
+        committed, else left; the writer never drops a record, since a commit can land after any
+        check of it. Only the stale threshold drops one (`settle_pending`)."""
         record_id = new_id()
         async with self._pool.acquire() as conn:
-            await conn.execute("INSERT INTO alert_repoint_writes (id) VALUES ($1)", record_id)
+            await conn.execute("INSERT INTO alert_repoint_records (id) VALUES ($1)", record_id)
         repoint = LinkRepoint(self, record_id)
         try:
             yield repoint
@@ -690,34 +694,37 @@ class AlertStore:
         """Before every read of alerts: every record whose write has committed is applied, so no
         reader is answered from an alert citing a superseded link or node. Run as a writer: the
         graph's unfiltered stored states (no reader, nothing returned), its own transactions, the
-        id-ordered lock; it changes which revision an alert cites and the marking of its node,
-        nothing a reader is answered beyond that (the queue still checks every revision as the
-        reader). A record older than `STALE_REPOINT_AFTER` whose write never committed has lost
-        its writer and is dropped. A record applied and waiting only for its working-set purge is
-        left for the next working-set read (`purge_remarked_copies`)."""
+        id-ordered lock on the alerts and a lock on the record (a record another settle holds is
+        skipped); it changes which revision an alert cites and the marking of its node, nothing a
+        reader is answered beyond that. A record this read cannot settle is logged and left. A
+        record older than `STALE_REPOINT_AFTER` none of whose links or nodes the graph shows
+        superseded has lost its writer and is dropped. A record applied and waiting only for its
+        working-set purge is left for the next working-set read (`purge_remarked_copies`)."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, links, recorded_at FROM alert_repoint_writes WHERE NOT applied"
+                "SELECT id, links, alert_nodes, recorded_at FROM alert_repoint_records "
+                "WHERE NOT applied"
             )
         cutoff = (now or datetime.now(UTC)) - STALE_REPOINT_AFTER
         for row in rows:
             try:
                 done = await self._settle_record(graph, row["id"])
+                if done is not None or row["recorded_at"] >= cutoff:
+                    continue
+                links = _pairs(row["links"])
+                nodes = _pairs(row["alert_nodes"])
+                link_states = await graph.stored_link_states([o for o, _ in links]) if links else {}
+                node_states = await graph.stored_writes([o for o, _ in nodes]) if nodes else {}
+                superseded = [s.superseded for s in link_states.values()] + [
+                    s.superseded for s in node_states.values()
+                ]
+                if not any(superseded):
+                    await self._close_record(row["id"])  # the write never happened
             except Exception:  # noqa: BLE001 - one record never breaks a read: it waits
                 # A record this read cannot settle (its links in no graph this deployment reads,
                 # a store refusing for the moment) is left for a later settle or the stale
                 # threshold; the read answers as the queue's check finds the alerts now.
                 _log.warning("repoint record %s not settled", row["id"], exc_info=True)
-                continue
-            if done is None and row["recorded_at"] < cutoff:
-                links = json.loads(row["links"]) if isinstance(row["links"], str) else row["links"]
-                try:
-                    states = await graph.stored_link_states(sorted(links)) if links else {}
-                except Exception:  # noqa: BLE001 - as above
-                    _log.warning("repoint record %s not judged stale", row["id"], exc_info=True)
-                    continue
-                if not any(states.get(o) and states[o].superseded for o in links):
-                    await self._close_record(row["id"])  # the write never happened
 
     async def apply_repoints(self, finals: Mapping[str, str]) -> list[str]:
         """Every alert citing a link in `finals` made to cite the link it maps to, in one
@@ -735,128 +742,114 @@ class AlertStore:
         self,
         record_id: str,
         *,
-        links: Mapping[str, str] | None = None,
-        alert_nodes: Mapping[str, str] | None = None,
+        links: Sequence[tuple[str, str]] = (),
+        alert_nodes: Sequence[tuple[str, str]] = (),
     ) -> None:
-        async with self._pool.acquire() as conn, conn.transaction():
+        """Pairs appended to a record, in order, and committed at once (a re-mark's, before its
+        graph commit, so a failure after that commit is repaired by the next settle)."""
+        async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE alert_repoint_writes SET links = links || $2::jsonb, "
+                "UPDATE alert_repoint_records SET links = links || $2::jsonb, "
                 "alert_nodes = alert_nodes || $3::jsonb WHERE id = $1",
                 record_id,
-                json.dumps(dict(links or {})),
-                json.dumps(dict(alert_nodes or {})),
+                json.dumps([list(p) for p in links]),
+                json.dumps([list(p) for p in alert_nodes]),
             )
-            for old, new in (links or {}).items():
-                await conn.execute(
-                    "INSERT INTO alert_link_successors (old_edge_id, new_edge_id) VALUES ($1, $2) "
-                    "ON CONFLICT (old_edge_id) DO UPDATE SET new_edge_id = EXCLUDED.new_edge_id",
-                    old,
-                    new,
-                )
 
     async def _close_record(self, record_id: str) -> None:
         async with self._pool.acquire() as conn:
-            await conn.execute("DELETE FROM alert_repoint_writes WHERE id = $1", record_id)
+            await conn.execute("DELETE FROM alert_repoint_records WHERE id = $1", record_id)
 
-    async def _newest(self, graph: GraphPort, link: str) -> str | None:
-        """The newest stored revision of `link`, following recorded successors while each is
-        superseded; `None` where the chain cannot be followed to a live link."""
+    @staticmethod
+    async def _newest(
+        read: Callable[[list[str]], Awaitable[Mapping[str, Any]]], start: str
+    ) -> str | None:
+        """The newest revision of `start` as the graph holds it, following each element's own
+        `superseded_by` (the graph's stored state, its one truth of what committed); `None` where
+        an element in the chain is not stored."""
         seen: set[str] = set()
-        current = link
-        async with self._pool.acquire() as conn:
-            while current not in seen:
-                seen.add(current)
-                states = await graph.stored_link_states([current])
-                if current not in states:
-                    return None
-                if not states[current].superseded:
-                    return current
-                nxt = await conn.fetchval(
-                    "SELECT new_edge_id FROM alert_link_successors WHERE old_edge_id = $1", current
-                )
-                if nxt is None:
-                    return None
-                current = nxt
+        current = start
+        while current not in seen:
+            seen.add(current)
+            state = (await read([current])).get(current)
+            if state is None:
+                return None
+            if not state.superseded:
+                return current
+            if state.superseded_by is None:
+                return None
+            current = state.superseded_by
         return None
 
     async def _settle_record(
         self, graph: GraphPort, record_id: str, *, writer: bool = False
     ) -> list[str] | None:
-        """One record applied if its write committed, every step idempotent so a failure part-way
-        is retried by the next settle: the citing alerts to each link's newest revision, the
-        renamed `Alert` nodes, the moved alerts' nodes re-marked (each re-mark recorded in the same
-        record before its graph commit), then the record marked applied with the nodes to purge.
-        Returns those nodes; `None` while the write has not committed (or a chain is unresolved)."""
+        """One record applied if its write committed, under a lock on the record (a settle another
+        process holds is skipped: `None`), every step idempotent so a failure part-way is retried:
+        each recorded link's and node's newest revision read from the graph; the citing alerts
+        moved to it; the alerts naming a recorded node renamed to its newest; the moved alerts'
+        nodes re-marked (each supersede recorded first); then the record marked applied with the
+        nodes to purge. Returns those nodes; `None` while the write has not committed."""
+        async with self._pool.acquire() as lock:
+            if not await lock.fetchval("SELECT pg_try_advisory_lock(hashtext($1))", record_id):
+                return None
+            try:
+                return await self._settle_held(graph, record_id, writer=writer)
+            finally:
+                await lock.execute("SELECT pg_advisory_unlock(hashtext($1))", record_id)
+
+    async def _settle_held(
+        self, graph: GraphPort, record_id: str, *, writer: bool
+    ) -> list[str] | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT links, alert_nodes, purge, applied FROM alert_repoint_writes WHERE id = $1",
+                "SELECT links, alert_nodes, purge, applied FROM alert_repoint_records "
+                "WHERE id = $1",
                 record_id,
             )
         if row is None:
             return []
-
-        def load(raw: Any) -> Any:
-            return json.loads(raw) if isinstance(raw, str) else raw
-
-        links: dict[str, str] = load(row["links"])
-        nodes: dict[str, str] = load(row["alert_nodes"])
         if row["applied"]:
-            return list(load(row["purge"]))
+            return list(_loaded(row["purge"]))
+        links, nodes = _pairs(row["links"]), _pairs(row["alert_nodes"])
         if not links and not nodes:
             # Nothing recorded yet: a writer between opening its record and recording its first
-            # link. Only that writer closes it (it recorded nothing); a settle leaves it alone.
+            # pair. Only that writer closes it (it recorded nothing); a settle leaves it alone.
             if writer:
                 await self._close_record(record_id)
                 return []
             return None
-        if links:
-            states = await graph.stored_link_states(sorted(links))
-            if not all(states.get(old) and states[old].superseded for old in links):
-                return None  # the write has not committed (or never will: the stale threshold)
         finals: dict[str, str] = {}
-        for old, new in links.items():
-            newest = await self._newest(graph, new)
-            if newest is None:
-                return None
+        for old, _ in links:
+            newest = await self._newest(graph.stored_link_states, old)
+            if newest is None or newest == old:
+                return None  # not committed (or never: the stale threshold)
             finals[old] = newest
-            finals[new] = newest
-        renamed = await self._renamed_nodes(graph, nodes)
-        if renamed is None:
-            return None
-        await self.apply_repoints({k: v for k, v in finals.items() if k != v})
+        renamed: dict[str, str] = {}
+        for old, _ in nodes:
+            newest = await self._newest(graph.stored_writes, old)
+            if newest is None or newest == old:
+                return None
+            renamed[old] = newest
+        await self.apply_repoints(finals)
         if renamed:
             async with self._pool.acquire() as conn, conn.transaction():
-                for old, new in renamed.items():
+                for old, newest in renamed.items():
                     await conn.execute(
-                        "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, new
+                        "UPDATE alerts SET alert_node_id = $2 WHERE alert_node_id = $1", old, newest
                     )
         remarked = await self._remark_citing(graph, record_id, sorted(set(finals.values())))
         # Every node renamed or re-marked here is superseded: its working-set copies are stale.
         purge = sorted({*renamed, *remarked})
         async with self._pool.acquire() as conn:
             await conn.execute(
-                "UPDATE alert_repoint_writes SET applied = true, purge = $2::jsonb WHERE id = $1",
+                "UPDATE alert_repoint_records SET applied = true, purge = $2::jsonb WHERE id = $1",
                 record_id,
                 json.dumps(purge),
             )
         if not purge:
             await self._close_record(record_id)
         return purge
-
-    async def _renamed_nodes(
-        self, graph: GraphPort, nodes: Mapping[str, str]
-    ) -> dict[str, str] | None:
-        """The recorded `Alert` node renames whose revision the graph holds; `None` while any has
-        not committed."""
-        if not nodes:
-            return {}
-        from services.resolve.trigger import service_principal
-
-        reader = service_principal(self.scheme)
-        found = {n.id for n in await graph.get_nodes(sorted(set(nodes.values())), reader)}
-        if not set(nodes.values()) <= found:
-            return None
-        return dict(nodes)
 
     async def _remark_citing(
         self, graph: GraphPort, record_id: str, links: Sequence[str]
@@ -870,11 +863,10 @@ class AlertStore:
             found = await conn.fetch(
                 f"SELECT id FROM alerts WHERE {_CITES_ANY_SQL} ORDER BY id", list(links)
             )
-        ids = [r["id"] for r in found]
-        rows = list((await self.cited_by_ids(ids)).values())
+        rows = list((await self.cited_by_ids([r["id"] for r in found])).values())
 
         async def recorded(old: str, new: str) -> None:
-            await self._add_to_record(record_id, alert_nodes={old: new})
+            await self._add_to_record(record_id, alert_nodes=[(old, new)])
 
         report = await remark_alerts(graph, self, self.scheme, rows, on_supersede=recorded)
         return report.superseded_nodes
@@ -1280,7 +1272,7 @@ async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:
     L2.8b's R2). A stored copy is served from the store, not read again from the graph."""
     async with alerts._pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, purge FROM alert_repoint_writes WHERE applied AND purge <> '[]'::jsonb"
+            "SELECT id, purge FROM alert_repoint_records WHERE applied AND purge <> '[]'::jsonb"
         )
     for row in rows:
         nodes = json.loads(row["purge"]) if isinstance(row["purge"], str) else row["purge"]

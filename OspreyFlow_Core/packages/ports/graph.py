@@ -74,6 +74,10 @@ class StoredNode:
     reverted: bool
     #: Replaced by a correction (`supersede_node`): the successor is a node of its own.
     superseded: bool = False
+    #: That successor's id, as the store holds it (ADR-109 Amendment 10: the alert store's repoint
+    #: settle follows it to the newest revision). Not part of equality, so what the revert compares
+    #: is unchanged.
+    superseded_by: str | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -93,6 +97,9 @@ class StoredLink:
 
     reverted: bool
     superseded: bool
+    #: The link that replaced it, as the store holds it (ADR-109 Amendment 10). Not part of
+    #: equality, so what the revert compares is unchanged.
+    superseded_by: str | None = field(default=None, compare=False)
 
 
 class RarityTooLarge(Exception):
