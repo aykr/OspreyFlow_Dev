@@ -22,3 +22,9 @@ against the code as committed and seen to pass. Offline runs use the port guard'
 | `…budget…` | the budget refusal's words (naming the key's last four) put into the words | 1 failed |
 | `apps/workspace/keyboard/admin-models.spec.ts` "an engine's limits are set by keyboard" (and the registry's assertion) | the limits form's save made a plain button, never submitting | 2 failed |
 | same, "the usage's period is chosen by keyboard…" (and the registry's assertion) | choosing a period never asks the Conduit again | 2 failed |
+| `tests/services/api/test_model_gateway_live.py::test_usage_a_request_rate_and_a_token_budget_against_the_real_gateway` (live, platform lease, stack a, a freshly started pinned gateway) | hosted entries made without a price (and the price read-back removed) | 1 failed: DID NOT RAISE ModelLimitReached — the real gateway never stops an unpriced budget |
+
+Live, under the platform lease on stack a (released after each run): the pinned gateway and a stand-in
+provider (`fakeprov.py`) on a network of the lane's own, `OSPREY_LIVE_GATEWAY_URL=http://127.0.0.1:54400`.
+`test_model_gateway_live.py`: the key round trip (1 passed, about 140 s) and the usage, rate and budget
+case (1 passed, twice back to back: 32 s and 28 s, at 18:36 and 18:37 UTC).

@@ -283,7 +283,8 @@ def test_limits_are_audited_with_each_change_and_shown(client: TestClient, world
     }
     held = world.gateway.virtual_key(engine_key(MASTER, "gemini"))
     assert held is not None and held.rpm_limit == 20 and held.max_budget is None
-    assert client.get("/v1/admin/models").json()["engines"][0]["limits"]["requests_per_minute"] == 20
+    shown = client.get("/v1/admin/models").json()["engines"][0]["limits"]
+    assert shown["requests_per_minute"] == 20
 
 
 @pytest.mark.parametrize(

@@ -17,10 +17,10 @@ import os
 
 import httpx
 import pytest
-from adapters.model_litellm.connection import check_connection
 from pydantic import SecretStr
 from services.api.model_admin import GatewayAdmin, entry_id
 
+from adapters.model_litellm.connection import check_connection
 from schemas.deployment import ModelProviderConfig
 
 URL = os.environ.get("OSPREY_LIVE_GATEWAY_URL", "")
@@ -118,4 +118,95 @@ async def test_the_real_pg_dump_leaves_out_every_sealed_row_of_the_real_gateway(
     finally:
         await gateway.delete_credential("openai")
         await gateway.delete_entry(entry_id("openai", "known-model"))
+        await http.aclose()
+
+
+async def test_usage_a_request_rate_and_a_token_budget_against_the_real_gateway() -> None:
+    """ADR-135 Amendment 3 against the pinned gateway, through the Conduit's own code: an entry
+    priced a unit a token (and read back as priced), the engine's own key holding its limits, a
+    call tagged by the client inside `calling`, a rate and then a budget each stopping the next
+    call in fixed words, and the gateway's daily records read back as counts with no text."""
+    from datetime import UTC, datetime
+
+    from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
+    from adapters.model_litellm.errors import ModelLimitReached
+    from adapters.model_litellm.usage import calling, engine_key, read_usage
+    from schemas.model_admin import EngineLimits
+
+    # Measured: the gateway keeps a key's minute of requests and its spend by the key's hash, in
+    # its own memory, so a key deleted and made again with the same value carries them over until
+    # the gateway restarts. Each run derives its engine keys from a secret of its own, so no run
+    # starts inside another's minute or budget; the admin calls still use the master key.
+    import secrets
+
+    derived_from = f"{MASTER}-{secrets.token_hex(4)}"
+    http = httpx.AsyncClient(base_url=URL, headers={"Authorization": f"Bearer {MASTER}"})
+    gateway = GatewayAdmin(http, master=derived_from)
+    host, _, port = URL.removeprefix("http://").partition(":")
+    client = LiteLLMClient(LiteLLMConfig(host=host, port=int(port), api_key=derived_from))
+    provider = ModelProviderConfig.model_construct(
+        name="openai", label="Stand-in", roles={"extraction": "known-model"},
+        api_base=PROVIDER_BASE, privacy_contract=False, contract_reference=None,
+    )  # fmt: skip
+    model_id = entry_id("openai", "known-model")
+
+    async def ask() -> None:
+        with calling("openai", "extraction"):
+            await client.extract_json(
+                model="openai/known-model",
+                text="PROMPT-PLANT-LIVE",
+                response_schema={"type": "object"},
+            )
+
+    today = datetime.now(UTC).date()
+
+    async def counted() -> dict[str, int]:
+        records = {(r.engine, r.job): r.figures for r in await read_usage(http, today, today)}
+        return dict(records.get(("openai", "extraction"), {}))
+
+    try:
+        # What today's records held before this run: the run's own calls are the difference.
+        before = await counted()
+        await gateway.put_credential("openai", SecretStr(GOOD))
+        await gateway.delete_entry(model_id)
+        await gateway.add_entry(provider, "known-model")
+        assert (await gateway.entries())[model_id] is True  # priced a unit a token
+        await gateway.put_engine_key("openai", EngineLimits(requests_per_minute=2))
+        await ask()
+        await ask()
+        with pytest.raises(ModelLimitReached) as rate:
+            await ask()
+        key = engine_key(derived_from, "openai")
+        assert rate.value.kind == "requests" and rate.value.resets_at is not None
+        assert "sk-" not in str(rate.value) and key[-4:] not in str(rate.value)
+
+        # The rate cleared, a budget set: 50 tokens a day, 22 a call; 44 spent already.
+        await gateway.put_engine_key(
+            "openai", EngineLimits(budget_tokens=50, budget_period="day")
+        )
+        await asyncio.sleep(12)  # the gateway writes spend in batches (measured: about 10 s)
+        await ask()  # 44 < 50: answered, and crosses it
+        await asyncio.sleep(12)
+        with pytest.raises(ModelLimitReached) as budget:
+            await ask()
+        assert budget.value.kind == "budget" and "sk-" not in str(budget.value)
+
+        # The daily tables are written in batches too: wait for the answered calls to land.
+        figures: dict[str, int] = {}
+        for _ in range(30):
+            now = await counted()
+            figures = {f: now.get(f, 0) - before.get(f, 0) for f in now}
+            if figures.get("succeeded") == 3 and figures.get("failed", 0) >= 1:
+                break
+            await asyncio.sleep(3)
+        assert figures["succeeded"] == 3 and figures["tokens"] == 66
+        assert figures["calls"] >= 4 and figures["failed"] >= 1  # the budget's refusal at least
+        day = today.isoformat()
+        raw = await http.get("/tag/daily/activity", params={"start_date": day, "end_date": day})
+        assert "PROMPT-PLANT-LIVE" not in raw.text and "COMPLETION-PLANT" not in raw.text
+    finally:
+        await gateway.delete_engine_key("openai")
+        await gateway.delete_credential("openai")
+        await gateway.delete_entry(model_id)
+        await client.aclose()
         await http.aclose()
