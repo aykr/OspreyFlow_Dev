@@ -868,8 +868,11 @@ The invariants, each with the test that fails if it is broken (rule 12):
   - `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`.
 - **A match goes with its drawn node**: *Same* and *Not the same* are registered on the board.
   - `test_a_match_goes_with_its_withdrawn_drawn_node`.
-- **A private board's id is told to no one else**, in a locator or in `drawn.board_id`.
-  - `test_a_boards_start_and_its_items_boards_are_as_the_reader_may_know_them`.
+- **A board's id is told to its creator alone**, in no locator, and in `drawn.board_id` only to the
+  item's author (who made the board), on every read path (`withhold_sources`, which the adapter and
+  the working set's projection both apply).
+  - `test_a_private_boards_id_is_on_no_other_members_canvas` (the canvas's own `sync` and
+    `visible_node`); `test_a_boards_start_and_its_items_boards_are_as_the_reader_may_know_them`.
 - **Audited before written**: every picture, chosen or uploaded, and every withdrawal.
   - `test_every_picture_and_withdrawal_is_audited_before_anything_is_written`.
 - **One ceiling for every path**: a declaration, a link, an edit, an upload, a choice and a match;

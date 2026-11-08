@@ -354,7 +354,6 @@ class Boards:
             if held.id not in items and held.provenance.drawn is not None:
                 items[held.id] = held.provenance.drawn.item_id
         ceiling = await self.ceiling(board.case_id)
-        nodes, edges = await self.redacted(board.case_id, principal, nodes, edges)
         return BoardOpened(
             board=await self.wire(board, principal),
             nodes=nodes,
@@ -369,25 +368,6 @@ class Boards:
             ceiling=ceiling,
             may_draw=board.created_by == principal.id,
         )
-
-    async def redacted(
-        self, case_id: str, principal: Principal, nodes: list[Node], edges: list[Edge]
-    ) -> tuple[list[Node], list[Edge]]:
-        """Each drawn element as the reader may know it: the id of a board they may not open (a
-        private board of another member) left out of its provenance, as that board is answered as
-        none (finding 7)."""
-        mine = {b.id for b in await self.views.boards_in(case_id, principal.id)}
-
-        def hide(element: Any) -> Any:
-            drawn = element.provenance.drawn
-            if drawn is None or drawn.board_id in mine:
-                return element
-            provenance = element.provenance.model_copy(
-                update={"drawn": drawn.model_copy(update={"board_id": ""})}
-            )
-            return element.model_copy(update={"provenance": provenance})
-
-        return [hide(n) for n in nodes], [hide(e) for e in edges]
 
     # --- drawing --------------------------------------------------------------------------
 
@@ -411,8 +391,8 @@ class Boards:
                 SourceRef(
                     document_id=given.source_document or f"drawn:{item_id}",
                     # No board id: a private board's is not told to the case (finding 7); the
-                    # board is `drawn.board_id`, which a reader is shown only for a board they
-                    # may open (`Boards.redacted`).
+                    # board is `drawn.board_id`, kept on every read for its author alone
+                    # (`ontology.handling.withhold_sources`).
                     locator="a drawing board of the case",
                     excerpt_hash="",
                 )

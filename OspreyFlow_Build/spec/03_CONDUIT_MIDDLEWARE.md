@@ -147,10 +147,13 @@ only; every element is read through the caller's principal, scoped to the case's
 filtered in the adapter (rule 3). Every route stands behind the case's level check first. Reading
 needs `investigate`; drawing needs Editor, `draw_on_boards` and `investigate` too (a role with
 `draw_on_boards` alone would make a board it could not open), and only a board's creator draws on
-it, moves its items or adds to it (403 `not_the_boards_creator` for a member who can see it). The
-id of a board the caller may not open (another member's private board) is in nothing they read: a
-drawn element's source locator names no board, and its `provenance.drawn.board_id` is given empty
-(`test_a_boards_start_and_its_items_boards_are_as_the_reader_may_know_them`). A *Same* or *Not
+it, moves its items or adds to it (403 `not_the_boards_creator` for a member who can see it). A
+board's id is told to its creator alone, so another member's private board is in nothing anyone
+else reads (rule 3): a drawn element's source locator names no board, and every read path (the
+adapter's serialisation and the working set's projection, through `withhold_sources`) gives its
+`provenance.drawn.board_id` empty to anyone but its author, who made the board. A shared board is
+found by the board routes, not by its items
+(`test_a_private_boards_id_is_on_no_other_members_canvas`, through the canvas's own `sync`). A *Same* or *Not
 the same* is registered on its board (`board_items` kind `match`), so it goes with its drawn node.
 
 ```

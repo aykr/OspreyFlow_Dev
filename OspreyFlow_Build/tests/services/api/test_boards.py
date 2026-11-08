@@ -1457,3 +1457,27 @@ def test_a_boards_start_and_its_items_boards_are_as_the_reader_may_know_them(
     alices = _as("alice").get(f"/v1/investigations/{K}/boards/{private}").json()
     (node_seen,) = [n for n in alices["nodes"] if n["id"] == drawn]
     assert node_seen["provenance"]["drawn"]["board_id"] == private
+
+
+def test_a_private_boards_id_is_on_no_other_members_canvas(world: SimpleNamespace) -> None:
+    """Rule 3, the orchestrator's ruling on the review: through the canvas's own read (the
+    working set's `sync`, what the socket sends on connect), and its `visible_node`, the board
+    of Alice's drawn node is empty for Bob and kept for Alice, who made it."""
+    import asyncio
+
+    private = _board()
+    drawn = world.graph.node(_item(private)["element_id"])
+    service = app.state.working_set
+
+    async def canvas(who: str) -> tuple[list[Any], Any]:
+        await service.add_written(K, [drawn], [], PEOPLE["alice"])
+        sent = await service.sync(K, PEOPLE[who], last_acknowledged_seq=None)
+        nodes = [n for d in sent for n in getattr(d, "nodes", []) if n.id == drawn.id]
+        return nodes, await service.visible_node(K, drawn.id, PEOPLE[who])
+
+    bobs, bobs_one = asyncio.run(canvas("bob"))
+    assert bobs and all(n.provenance.drawn.board_id == "" for n in bobs)
+    assert bobs_one is not None and bobs_one.provenance.drawn.board_id == ""
+    assert private not in str([n.model_dump() for n in bobs])
+    alices, _ = asyncio.run(canvas("alice"))
+    assert alices and all(n.provenance.drawn.board_id == private for n in alices)
