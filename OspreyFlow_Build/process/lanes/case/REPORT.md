@@ -1,47 +1,39 @@
-# Case lane · L3.2b (no branches in the Glass, and the check in make ci) · report, 8 November 2026
+# Case lane · L3.3 (drawing boards) · report, 8 November 2026
 
-**Met, each with its test, each shown red (`L3.2b_RED_RECORD.md`):**
-- **1 Glass without branches:**
-  - *Save as a view* on the selection bar, a node's menu and the over-cap dialog (`save_as_view`; `keyboard.spec.ts`, `view-over-cap.spec.ts`).
-  - *Views in this case*, with share and delete for the creator alone, a GOV.UK list, and the Cases list showing every case's views (`ViewsPanel.test.tsx`, `CaseList.test.tsx`, `keyboard/views.spec.ts`).
-  - *Ask the model about these* in a private view with `view_id` (`selection.spec.ts`, `questions.spec.ts`).
-  - An opened view is a read-only lens (the owner's ruling).
-  - `branchNodes.ts` and `branchByFilter.ts` are gone.
-- **2** A view opens collapsed at its own threshold (`test_a_view_opens_collapsed_at_its_threshold`). A hidden match collapses nothing (`test_a_match_the_reader_may_not_see_…`).
-- **3 G:** no case branch in spec 00–09. B14 has no origin link (Q1).
-- **4 H:** target-size on variant c, reproduced red and fixed.
-- **5** `no_branches_check` with no xfail, and red on one planted word. Its wiring is `ci-wiring-L3.2b.patch`.
-- **6** ADR-144 Amendment 2.
-- **Axe** in dark, light and GOV.UK: 446 passed.
+**Exit, each with its proof (each red by a plant at its call site: `L3.3_RED_RECORD.md`):**
+- **1 Boards:** declare, link by handle, Alt-drag, right-click and form; move; marking, grading and source (a note, a document, or both) on every drawn item; an icon; *Same* merges nothing (rule 6); pictures uploaded or chosen, in the layer. `test_boards.py` (36); `keyboard/boards.spec.ts`: 26 keyboard cases (`BOARD_ACTIONS`, 24 ids, in `registry-L3.3.patch`) and 4 pointer cases.
+- **2 A drawing with no case:** its dataset, home case and board; its items go to the drawn dataset. `test_a_drawing_with_no_case_makes_its_dataset_case_and_board`.
+- **3 Watch:** drawing sets it, withdrawing ends it, and it is withheld whole from a reader who may not see the item. `test_drawing_sets_a_watch_and_withdrawing_ends_it`, `test_a_watch_on_an_item_the_reader_may_not_see_is_withheld_whole`. Its queue case is L3.6's.
+- **4 Ceiling:** refused in words naming it. `test_an_item_above_the_ceiling_is_refused_in_words`.
+- **5 Restore:** `test_a_drawn_item_and_its_picture_come_back_in_their_cases_layer` (live).
+- **Rule 3/4:** 16 routes refuse another case's member as a missing case. A drawn item is never readable outside its case: red with K's layer in B's read set; red on real Postgres with the case clause made true.
+- **Axe:** dark, light and GOV.UK: GATES_AXE.
+- **Gates:** GATES_LINE. **Live:** LIVE_LINE.
 
-**Exit:**
-- No branch word where the gate scans (1312 files).
-- Gates at `e8f4a9e` (tree `3df33e79aaa98ba1f7f04553e78b85fff8d5425f`), on main `91335b9`:
-  - `make -k ci`: only the seven trivy scans failed (Docker Hub 429).
-  - `make test`: 8457 passed; only this machine's four failed.
-  - test-js: only the timing budget failed, and it passes alone.
-- Live: lease case, stack a, 48 passed (`gates/`).
-- Friction fragment: `friction/2026-11-08-case-views-in-the-glass.md`.
+**Lane review:** REVIEW_LINE
 
-**Lane review:** two rounds.
-- Round 1 found 17 items, two of them blockers (the over-cap dialog over the opened view; the lens unguarded and untested).
-- Round 2 found the dialog hidden off the Graph, focus lost, and spec drift.
-- All are fixed, except that four invariants have no test at their call site yet: the address losing `case_view`, the window coming back, the form closing on a new selection, and the race guard. They are carried to the next step.
+**Decisions taken** (the owner may overrule each):
+- Only a board's creator draws on it; others read a shared board.
+- A match is suggested at a score of 0.75 or more.
+- Grading is 5x5x5 until L3.7 makes it a deployment setting.
+- The type's required properties are on the form, a required name filled from the label until changed.
+- An edit is made in place. A marking is never lowered, and a drawn link's marking is never changed.
+- Watches live in `drawn_watches`, with no expiry yet (for L2.10 and L3.6).
+- A duplicate drawn link is refused.
+- A picture's Document id is the layer's own.
+- The documents offered as a source or picture are those on the board, since no route lists a case's documents.
+- The restore test runs on a throwaway database.
+- **Open question 4** (moving versus linking): built as C7 says (drag moves; the handle, Alt-drag or the menu links), for one field analyst's check.
 
-**Decisions taken:** an opened view is a read-only lens. That was put to the owner, who chose it (Am 2 decision 4).
-
-**Commits:** `git log main..lane/case`, from 07372b7.
-
+**Commits:** `git log main..lane/case`.
 **For the orchestrator:**
-- Apply `registry-L3.2b.patch` and `ci-wiring-L3.2b.patch` at the merge.
-- Mark Am 2 written in `ADR_RESERVATIONS.md`.
-- Ratify, branch words only:
-  - rules: `home/tips.tsx:12-13`, `statusbar/tips.ts:9`, `shell/icons.tsx:6`, `alerts/AlertsPlace.tsx:33`, `case-screen-options-harness.tsx` (H).
-  - platform: `map/geometries.ts:24` and its test.
-  - studio: `ingest/studio/datasets.ts:39,46-48` (the ranking lost its branch key) and its test.
-  - docs: `welcome/WorkspaceWelcome.test.tsx:18,47,69`.
-  - In no lane's map: App, questions, workingset, search, strength, watches, auth, crossfilter, linktypes, timeline, primitives.css, `a11y/every-harness.spec.ts`, `live/pid-capture.spec.ts` (CAP-A2-C7, not run: it targets your deployment).
-- Docs lane: the guides, site and deck still name branches.
-- Port 5185 is shared across worktrees.
+- Apply `registry-L3.3.patch` and `ci-wiring-L3.3.patch`.
+- Ratify these, if outside case's map:
+  - `App.tsx` and `App.chrome.test.tsx` (the Boards place);
+  - `canvas/{GlassCanvas,nodeAttributes}` and `color/palette.ts` (dashed amber);
+  - `a11y/every-harness.spec.ts`;
+  - `dataset_scope.py`, `entity_pictures.py` and `link_changes.py` (`drawn_on_its_board`);
+  - the board rows in `test_route_rights.py`, `test_investigation_levels.py` and `test_no_corpus_counts_on_the_wire.py`.
+- Run the independent review (the brief).
 
-**Running:** nothing. The stack is down and the lease released.
+**Running:** RUNNING_LINE
