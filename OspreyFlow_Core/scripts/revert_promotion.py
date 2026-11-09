@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("load_id", help="the promotion's load id (promotion-…)")
     parser.add_argument("--reverted-by", required=True, help="the principal doing this")
-    parser.add_argument("--dry-run", action="store_true", help="say what it would do, write nothing")
+    parser.add_argument("--dry-run", action="store_true", help="report only; write nothing")
     return parser
 
 
