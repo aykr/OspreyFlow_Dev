@@ -30504,12 +30504,27 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    deployment's, `OSPREY_CONNECTION_SECRET_<NAME>` in `deployment.env`, read only when a read needs it.
    It is never stored, audited, logged or answered, and the schema refuses a field that would carry it.
    A source on such a connection carries its **read** (`SqlRead`: a table and columns; `ApiRead`: a
-   path and a records path; `JsonRead`: a file pattern and a records path). **Every part is a name,
-   never an expression** (rule 8); a sandboxed SELECT remains expert mode's (L1.5).
-2. **SQL: a read-only login over TLS**, checked twice. *Test connection* and every read refuse a
+   path and a records path; `JsonRead`: a file pattern, never climbing or matching a hidden file, and
+   a records path). **Every part is a name, never an expression** (rule 8); a sandboxed SELECT remains
+   expert mode's (L1.5).
+   **Where a connection may reach** (the orchestrator's review, with ADR-147 decision 2a's rule and
+   `map_admin`'s own lookups): never this machine, a dotless name of the deployment's own
+   (`postgres`, `keycloak`), or an address that is loopback, private, link-local (a cloud's metadata
+   service), reserved, unspecified or multicast, written in any form (`127.1`, `0x7f.1`,
+   `2130706433`, `::ffff:127.0.0.1`) or resolved to now. The schema refuses the written forms; the
+   Conduit refuses a name resolving inside when an administrator names the connection, and again
+   before every connection or request, since DNS can change in between. A host must also be on the
+   egress allow-list at each read. This applies to SQL as well as API connections, so a client
+   database on a private network cannot be reached; whether an operator may admit one is put to the
+   owner.
+2. **SQL: a read-only login over TLS, within named schemas**, checked twice. The connection names the
+   schemas its sources may read (`public` by default; never the server's own catalogue), and a
+   source's table is always schema-qualified in one of them. *Test connection* and every read refuse a
    superuser, a login owning a table, or one with a write privilege on any table it can see (its own
-   grants and `PUBLIC`'s), and the read runs in a `READ ONLY` transaction. TLS is always asked for; a
-   server without it is refused. Incremental reads take rows past the source's **cursor**, compared in
+   grants and `PUBLIC`'s), and the read runs in a `READ ONLY` transaction, in a session made read-only
+   from its first statement with each statement bounded (`statement_timeout`, 60 seconds). TLS is
+   always asked for, and by default the server's certificate and name are verified (`verify-full`);
+   a server without it is refused. Incremental reads take rows past the source's **cursor**, compared in
    the column's own type from the server's catalogue, its value bound.
 3. **API: behind the egress allow-list.** An HTTPS base URL, a bearer secret or none, paging by `page`
    (until an empty page) or by a next link at a dotted path, which must keep the base URL's scheme,
@@ -30528,7 +30543,7 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    have been loaded yet (a paused watch, a failed run), and leaves the file as it was when it finds
    nothing; each run's own watermark (ADR-110 Amendment 6) then reads only what that pipeline has not
    loaded, so nothing is dropped and nothing loads twice. A read, or a file, past 500,000 rows, or an
-   API past 1,000 pages, is refused whole (rule 2). The two settings the connectors read
+   API past 1,000 pages, or more than 256 MiB taken in or written, is refused whole (rule 2). The two settings the connectors read
    (`OSPREY_CONNECTION_SECRET_<NAME>`, `OSPREY_CONNECTOR_EGRESS`) reach the Conduit as every
    `deployment.env` line does (each owned service's `env_file`, `harness/render.py`).
 5. **The screening-list connector** (`services/api/list_connector.py`). A list is **imported once for
@@ -30583,6 +30598,7 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
 | `tests/services/api/test_list_connector_routes.py` | rule 4 on every list route: `load_screening_lists`, the dataset's own gate, subscription by id, own-list import from its own files |
 | `tests/services/api/test_list_connector_store.py` (live) | the Postgres store refuses what its twin refuses |
 | `tests/connectors/test_api_and_json_connectors.py` | egress; the API's refusals in words; every page; a next link off the host; the cap; JSON at its records path; a read landing whole |
+| `tests/services/api/test_connector_hosts.py` | no connection reaches inside the deployment, in any written form or by resolution, at save and before every read or page; a table outside the connection's schemas; each session bounded and read-only; the byte caps |
 | `tests/services/api/test_connector_routes.py` | a secret never answered or audited; only an administrator names or tests a connection; a refused first read registers nothing; *Refresh now* behind the dataset's gate |
 | `tests/connectors/test_sql_connector_live.py` (live) | **the phase's exit**: `visit_bookings` registered and refreshed through the routes over the Postgres source store and its cursor; a SQL source's file loaded through the source-refresh path into ArcadeDB, the refresh loading only the new row; a writing login refused; refusals in words; a server without TLS refused |
 | `tests/services/api/test_list_rows_parquet_live.py` (live) | the real keeper keeps and refuses what its twin does: blank cells, never replaced, another list's file |

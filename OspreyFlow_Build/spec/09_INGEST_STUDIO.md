@@ -272,8 +272,10 @@ An administrator names a **SQL**, **API** or **JSON** connection (*Admin › Con
 value**: the value is the deployment's, `OSPREY_CONNECTION_SECRET_<NAME>` in `deployment.env`, read only
 when a read needs it and never stored, audited or answered.
 
-- **SQL** (PostgreSQL): host, port, database, a login and its secret, TLS (`require` or `verify-full`;
-  a server without TLS is refused). The login must be **read-only**: *Test connection* and every read
+- **SQL** (PostgreSQL): host, port, database, a login and its secret, the schemas its sources may
+  read (never the server's catalogue), and TLS (`verify-full` by default, or `require`; a server
+  without TLS is refused). Each session is read-only from its first statement, and each statement is
+  bounded at 60 seconds. The login must be **read-only**: *Test connection* and every read
   refuse a superuser, a login owning a table, or one with a write privilege on any table it can see,
   and the read runs in a `READ ONLY` transaction. A source names a table or view and, optionally, its
   columns; never an expression (a sandboxed SELECT is expert mode's, L1.5).
@@ -281,6 +283,10 @@ when a read needs it and never stored, audited or answered.
   named at a dotted path (which must keep the base URL's scheme, host and port). Its host must be on the deployment's
   egress allow-list, `OSPREY_CONNECTOR_EGRESS`, which only an operator sets.
 - **JSON**: files in the dataset's folder whose names match a pattern, their records at a dotted path.
+
+**No connection reaches inside the deployment:** not this machine, the deployment's own services
+(a dotless name), a cloud's metadata service or any private address, written in any form or resolved
+to now. This is checked when the connection is named and again before every connection or request.
 
 **Each read lands as the source's one file**, `uploaded/<dataset>/<source>.csv`, written to a
 temporary name and renamed into place. Registration checks everything first, then reads once into a
@@ -290,7 +296,7 @@ watch runs its deployed pipelines on each new read, a run keeps what it read as 
 and the watermark, the confinement and the rule gate apply as built. An incremental SQL source reads
 only rows past its **cursor** (the highest watermark value it has read) and adds them to its file,
 whose earlier rows may not have been loaded yet; a read that finds nothing leaves the file. Each run's
-own watermark then reads only what that pipeline has not loaded. A read holding more than 500,000 rows, or an API giving more than
+own watermark then reads only what that pipeline has not loaded. A read holding more than 500,000 rows or 256 MiB, or an API giving more than
 1,000 pages, is refused whole (rule 2). *Refresh now* on the source page reads again; a scheduled poll
 of a SQL or API source waits on the poll floor (R17) and is not built.
 
