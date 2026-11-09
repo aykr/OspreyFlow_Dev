@@ -8,9 +8,12 @@ the promotion source (case's L3.4 has not recorded promotions yet; the stand-in 
 Protocol) and the identity provider's list of people, which the test stack has no provider for.
 
 What a mistake would do, and the case that fails: the job never started, or started on the source
-the Conduit held at start-up rather than the one on `app.state` at each tick (no alert); the alert
-raised on every tick (two rows, or a second raise); the proposer, an Author without
-`review_promotions`, or another unit's administrator alerted; an alert before N days.
+the Conduit held at start-up rather than the one on `app.state` at each tick (no alert); the
+proposer, an Author without `review_promotions`, or another unit's administrator alerted; an alert
+before N days. Not this test's: the alert raised on every tick, which the table's primary key
+refuses and which `test_promotion_ageing.py::test_the_alert_fires_once` (A2) and the store test's
+U5 catch. Each run leaves its own dataset, home case, grants and alert rows on the stack, named by
+its run so a second run never meets them.
 """
 
 from __future__ import annotations

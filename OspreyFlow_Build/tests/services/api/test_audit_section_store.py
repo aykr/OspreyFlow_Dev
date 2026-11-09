@@ -449,7 +449,8 @@ async def test_the_build_survives_any_failure_and_close_still_closes(
     world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Item 8: an `InterfaceError` mid-build (asyncpg's "connection is closed", which is no
-    `PostgresError`, unlike `ConnectionDoesNotExistError`) is logged and tried again; and a build that only ever fails never stops `close` closing the pool."""
+    `PostgresError`, unlike `ConnectionDoesNotExistError`) is logged and tried again; and a build
+    that only ever fails never stops `close` closing the pool."""
     await world.raw.execute("DROP INDEX CONCURRENTLY audit_log_org_unit_idx")
     real = audit_module.build_indexes
     calls: list[int] = []
