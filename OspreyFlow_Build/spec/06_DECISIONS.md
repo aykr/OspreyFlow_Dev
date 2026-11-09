@@ -32231,7 +32231,10 @@ owner to overrule. ADR-146 and its Amendments 1 and 2 are unchanged except where
 6. **What raises alerts (decision 5).** `GET …/alert-sources`: the case's rules and the reader's own
    hotlists and watched patterns (another's watch is its owner's), each with its maker, dataset, owner,
    state, expiry, last fired, alerts in 30 days and the share closed as not of interest, counted from
-   the reader's own queue (rule 7), and its alerts suppressed today beside it.
+   the reader's own queue (rule 7), and its alerts suppressed today beside it. Each person it shows
+   (maker, owner, suppressor) is served by name (ADR-106 and its Amendment 1's shape:
+   `owner_name`, `by_name`, read time, never stored), the directory asked only for the ids of the
+   rows served; a routed rule's owner is its team, by name.
 7. **Watches made in the Glass and run on a schedule (decision 4, G16).** *Watch for this* (the
    Inspector, on an entity carrying an identifier: a hotlist entry, reviewed in 90 days) and *Save as
    a watch* (the query builder, on a saved pattern: a watched pattern), offered where the place is.
@@ -32239,7 +32242,15 @@ owner to overrule. ADR-146 and its Amendments 1 and 2 are unchanged except where
    weekly, or never; `PUT …/monitors/{id}/schedule`, its owner alone), one replica per slot, as its
    owner resolved afresh and confined to its dataset (`monitor_schedule.MonitorScheduleExecutor`,
    through the same guarded match a load uses, `evaluation.match_monitor_guarded`); an owner who can
-   no longer sign in stops it.
+   no longer sign in stops it. **A watch is matched within its dataset only while its owner still
+   reaches it** (the orchestrator's L2.10 review, item 4): a level, by the case's own Viewer check,
+   on a case reading the dataset (`app.owner_reaches_dataset_in`), asked of the owner as resolved
+   for the run, on the schedule and on a load alike (`MonitorScheduleExecutor.reaches_dataset`,
+   `evaluate_monitors_for_entry`'s `reaches_dataset`). Narrowing the owner to the dataset alone would
+   give back one they had lost. An owner who has lost it is matched over nothing and the slot is
+   spent, the watch kept (a case given back runs it again); a load path given no check matches no
+   watch with a dataset (fail closed), which is the command-line load's case (`run_resources.py`
+   holds no case store), until it is given one.
 8. **The carries.** A settle on a read path purges what it re-marked at once, published to the
    connected canvases (`alerts.settle_repoints` with `AlertStore.working_set`). Outside a load
    (`raise_committed`), a node that cannot be written in a read-only dataset or marked leaves the row
@@ -32264,7 +32275,7 @@ reader's case (a later step). The selection bar's and a question's answer's *Rai
 case and questions surfaces' (requests).
 
 **Tests that would fail (rule 12), each shown red first** (`process/lanes/rules/l2.10/RED_RECORD.md`):
-`test_monitoring_queue.py`'s four routing cases on Postgres (red with the routed check opened at
+`test_monitoring_queue.py`'s three routing cases on Postgres (red with the routed check opened at
 `_routed_sql`'s own clause, its parameters kept, and with the Authors' clause read for any dataset);
 `test_pack_alert_item.py::test_an_alert_routed_to_a_team_is_withheld_in_a_pack_from_a_reader_outside_it`
 (red with the pack's check removed); the analytics suite's
@@ -32280,5 +32291,11 @@ node written); `test_raise_an_alert.py` (red with the drawn-item check and the d
 `test_read_path_purge.py`, `test_composite_monitors.py::test_one_failing_rule_never_stops_the_daily_sweep_whole`
 and `test_alert_node_marking.py::test_after_a_commit_an_unreadable_referent_node_raises_the_row_without_its_node`;
 `alerts/OneQueue.test.tsx` and `RulesPlaceQueue.test.tsx`; `keyboard/alerts.spec.ts` and
-`keyboard/watch-panels.spec.ts`, each new case red with its handler removed; axe over the routed,
+`keyboard/watch-panels.spec.ts`, each new case driven by keys alone (a native select by typing its
+option's label, a date by its segments) and red with its handler removed (RED_RECORD §4 and §8);
+from the orchestrator's review: `test_monitoring_queue.py::test_what_raises_alerts_lists_only_the_readers_watches_and_counts_only_what_they_may_see`
+(another's watch, a routed rule's count, a hidden alert's count, the names), and in
+`test_team_lead_and_watches.py` the teams a rule may go to, the names asked for, a routed alert's
+explained team, and a watch whose owner has lost its dataset on the schedule and on a load;
+`test_monitors.py::test_a_watchs_schedule_is_set_by_its_owner_alone`; axe over the routed,
 suppressed and taken-back alerts and the Glass's watch actions in dark, light and GOV.UK.

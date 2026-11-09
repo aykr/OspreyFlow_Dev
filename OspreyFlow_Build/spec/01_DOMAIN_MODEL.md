@@ -2737,10 +2737,11 @@ class RaiseAlertInput(BaseModel):    # Raise an alert…: to the case, or the ca
 class AlertTeam(BaseModel):          # a team a rule may route to; its members to its lead alone
     role_id: str; display_name: str; lead: bool; members: list[str]
 class SuppressedAlert(BaseModel):    # beside its rule or watch in What raises alerts
-    alert_id: str; until: date; reason: str; by: str
+    alert_id: str; until: date; reason: str; by: str; by_name: str | None   # ADR-106, read time
 class AlertSource(BaseModel):        # one row of What raises alerts, counted from the reader's queue
     id: str; rule_id: str; name: str; source: Literal["rule", "watch"]; kind: AlertSourceKind
-    maker: str; maker_name: str | None; dataset_id: str | None; owner: str
+    maker: str; maker_name: str | None; dataset_id: str | None
+    owner: str; owner_name: str | None   # a person's id or a team's; by name at read time (ADR-106)
     state: Literal["draft", "live", "stopped"]; expires_on: date | None
     last_fired_at: datetime | None; alerts_30_days: int; not_of_interest: float | None
     suppressed: list[SuppressedAlert]
