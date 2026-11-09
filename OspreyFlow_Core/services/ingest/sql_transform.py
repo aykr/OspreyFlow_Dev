@@ -33,8 +33,9 @@ with rows must reach the output through one. Tokens are drawn at random per row,
 row's place or where a withheld row was.
 
 **Never another row's values, never a lower marking** (the orchestrator's review of L1.5): a
-window function, a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, a
-recursive CTE and any table read twice in one SELECT are refused always, so no row is given another
+window function, a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, more
+than one grouping set (GROUPING SETS, ROLLUP, CUBE), a recursive CTE and any table read twice in
+one SELECT are refused always, so no row is given another
 row's values or its `_ref`; `* REPLACE`, `* RENAME` and a qualified `EXCLUDE` may not touch
 `_ref`; a `_ref` column is read only as a bare select item, a GROUP BY key or the sole argument
 of `list`/`array_agg`, never inside an expression; and every row's token is drawn at random for
@@ -448,6 +449,14 @@ def sql_gate_problems(step: SqlStep, *, marked: Collection[str]) -> list[str]:
             name = str(node.get("function_name", "")).casefold()
             if name in _DENIED_FUNCTIONS:
                 problems.append(f"step {step.id!r} calls {name}, which a SQL step may not")
+        if kind == "SELECT_NODE" and len(node.get("group_sets") or []) > 1:
+            # Each grouping set folds rows the others' `_ref` columns do not name (the
+            # orchestrator's last look: a GROUPING SETS row carries values of rows it never names).
+            problems.append(
+                f"step {step.id!r} groups by more than one set (GROUPING SETS, ROLLUP, CUBE), "
+                "which a SQL step may not: group by one list of columns, so each row names the "
+                "rows it folds"
+            )
         if kind == "SELECT_NODE":
             for name in _one_for_many(node):
                 problems.append(

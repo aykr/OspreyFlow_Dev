@@ -775,3 +775,27 @@ async def test_test_and_the_run_read_the_recipe_s_marked_columns() -> None:
             scheme=SCHEME,
         )  # fmt: skip
     assert any("binds a marking to a column" in p for p in refused.value.problems)
+
+
+GROUPING_SETS = (
+    "SELECT v._ref, c._ref AS _ref_c, string_agg(c.called, ';') AS calls FROM visits v "
+    "JOIN pin_calls c ON c.pin = v.pin GROUP BY GROUPING SETS ((v._ref), (c._ref))"
+)
+
+
+@pytest.mark.parametrize(
+    "select",
+    [
+        GROUPING_SETS,
+        "SELECT pin, count(*) AS n, list(_ref) AS _ref FROM pin_calls GROUP BY ROLLUP (pin)",
+        "SELECT pin, count(*) AS n, list(_ref) AS _ref FROM pin_calls GROUP BY CUBE (pin, called)",
+    ],
+)
+def test_more_than_one_grouping_set_is_refused_at_run_staging(select: str) -> None:
+    """The orchestrator's last look (R15): a GROUPING SETS row folds rows it does not name (each
+    `(v._ref)` row carries calls of pin_calls rows whose refs it never holds). Refused as a rule at
+    the real call site, `run_staging`, not left to the token check. Red with the rule out: the run
+    passes and gives the unnamed fold."""
+    with pytest.raises(StagingError) as refused:
+        _run(_step(select))
+    assert any("more than one set" in p for p in refused.value.problems), refused.value.problems
