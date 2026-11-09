@@ -597,3 +597,17 @@ def test_a_deployment_installed_by_a_profiles_name_before_is_still_reached(
     machine("stop", "--name", "small")
     said = capsys.readouterr().err
     assert "the name of a profile" not in said and "no deployment called" not in said, said
+
+
+def test_the_checkouts_own_deployment_name_is_refused_for_a_named_one(
+    machine: Machine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The checkout's own deployment goes by `deployment.name` when its osprey.yaml gives one
+    (ADR-132 Amendment 1), so a deployment installed by that name would share its backups
+    subfolder (second lane-reviewer pass; ADR-114 Amendment 38 decision 6)."""
+    config = machine.product / "osprey.yaml"
+    raw = yaml.safe_load(config.read_text()) if config.is_file() else {}
+    config.write_text(yaml.safe_dump({**(raw or {}), "deployment": {"name": "acme"}}))
+    assert machine("install", "--mode", "lite", "--yes", "--name", "acme") == 1
+    assert "the checkout's own deployment" in capsys.readouterr().err
+    assert not (machine.root / "acme").exists()

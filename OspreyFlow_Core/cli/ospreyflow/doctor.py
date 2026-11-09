@@ -1006,26 +1006,28 @@ def backups_folder_of(config: Mapping[str, object], *, home: Path) -> Path:
         _section(config, "external").values()
     )
     text = str(value or "").strip()
-    if text and (text != LEGACY_BACKUPS_PLACEHOLDER or own_server):
+    placeholder = bool(text) and Path(text) == Path(LEGACY_BACKUPS_PLACEHOLDER)
+    if text and (not placeholder or own_server):
         if text == "~" or text.startswith("~/"):
             return home / text[2:]
         return Path(text).expanduser()
     return home / "OspreyFlow" / "backups"
 
 
-def _git_checkout(product: Path) -> Path:
-    """`harness.backup.checkout_root`: the folder above the product holding `.git`, else it."""
+def _git_checkout(product: Path) -> Path | None:
+    """`harness.backup.checkout_root`: the product, or the folder above it, that holds `.git`.
+    None where neither does: the doctor may run where there is no checkout at all."""
     for candidate in (product, product.parent):
         if (candidate / ".git").exists():
             return candidate
-    return product
+    return None
 
 
 def _is_inside(folder: Path, root: Path, *, ignore_case: bool = False) -> bool:
     """`harness.backup.is_inside`: compared by the folder each existing ancestor is, so a link, a
     bind mount or another letter case on a disk that ignores case is the folder it shows; a root
     that does not exist yet is compared by spelling, without case where the disk has none."""
-    target = Path(os.path.abspath(folder.expanduser())).resolve()
+    target = folder.expanduser().resolve()
     if root.exists():
         for candidate in (target, *target.parents):
             try:
@@ -1123,7 +1125,12 @@ def backups_checks(
     `backups/`, a named deployment's old `backups/` or the top of the backups folder, and a backups
     folder a sync client copies. Warnings only."""
     checks: list[Check] = []
-    folders = {name: backups_folder_of(config, home=home) for name, config in deployments}
+    # A relative folder is the product's: `ospreyflow backup` runs the harness there.
+    folders = {
+        name: product / folder if not folder.is_absolute() else folder
+        for name, config in deployments
+        for folder in (backups_folder_of(config, home=home),)
+    }
     fallback = home / "OspreyFlow" / "backups"
 
     def home_of(set_name: str) -> Path:
@@ -1140,7 +1147,8 @@ def backups_checks(
         checks += [_left_behind(where, sets, to) for to, sets in grouped.items()]
     checkout = _git_checkout(product)
     for folder in dict.fromkeys(folders.values()):
-        if _is_inside(folder, checkout, ignore_case=probes.system() == "Darwin"):
+        darwin = probes.system() == "Darwin"
+        if checkout is not None and _is_inside(folder, checkout, ignore_case=darwin):
             checks.append(
                 Check(
                     "backups-in-checkout",

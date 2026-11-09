@@ -162,6 +162,18 @@ def resolve(
             f"'{name}' is the name of a profile, which the checkout's own deployment goes by (its "
             "backups are kept under that name); give the new one a name of its own."
         )
+    if creating and name not in installed and (product / "osprey.yaml").is_file():
+        own = read_config(product)
+        section = own.get("deployment")
+        checkouts = (section.get("name") if isinstance(section, dict) else None) or own.get("profile")
+        if checkouts == name:
+            # Amendment 38 decision 6: the checkout's own deployment goes by `deployment.name`
+            # when it gives one (ADR-132 Amendment 1), and its backups by that name.
+            raise CommandRefused(
+                f"'{name}' is the checkout's own deployment's name (deployment.name in "
+                f"{product / 'osprey.yaml'}), under which its backups are kept; give the new one "
+                "a name of its own."
+            )
     if name not in installed and not creating:
         known = ", ".join([DEFAULT, *installed])
         raise CommandRefused(

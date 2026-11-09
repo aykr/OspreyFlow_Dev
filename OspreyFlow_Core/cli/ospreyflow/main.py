@@ -441,11 +441,21 @@ def _backups_checks(
     deployments: list[tuple[str, Mapping[str, object]]] = []
     if base:
         deployments.append((deployment_name_of(base), base))
+    unread: list[Check] = []
     for name in named.named(env):
-        own = read_config(named.named_target(env, name).folder)
+        try:
+            own = read_config(named.named_target(env, name).folder)
+        except (OSError, yaml.YAMLError) as failed:
+            unread.append(Check(
+                "backups-unread", True,
+                f"The deployment {name}'s osprey.yaml could not be read, so its backups were not "
+                f"checked ({type(failed).__name__})",
+                f"fix {named.named_target(env, name).folder / 'osprey.yaml'}", warn=True,
+            ))  # fmt: skip
+            continue
         deployments.append((deployment_name_of(own), own))
     home = Path(env["HOME"]) if env.get("HOME") else Path.home()
-    return backups_checks(probes, product, deployments, home=home)
+    return unread + backups_checks(probes, product, deployments, home=home)
 
 
 def _product_config(product: Path) -> dict[str, object]:
