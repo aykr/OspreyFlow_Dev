@@ -253,9 +253,9 @@ async def test_the_case_s_own_searches_match_a_gazetteer_place_on_its_name_alone
         assert hits.nodes == [] and hits.more is False, options
     named = await graph.suggest_nodes("Marlow", WITH_GAZETTEER, limit=10)
     assert len(named.nodes) == 10 and named.more is True
-    assert await graph.search_nodes("node/551203", WITH_GAZETTEER) == []
+    assert await graph.search_nodes("node/5512003", WITH_GAZETTEER) == []
     assert [n.properties["name"] for n in await graph.search_nodes("Marlow 3", WITH_GAZETTEER)] == [
         "Marlow 3"
     ]
     unlimited = WITH_GAZETTEER.model_copy(update={"datasets": None})
-    assert [n.id for n in await graph.search_nodes("node/551203", unlimited)] == ["prefix-3"]
+    assert [n.id for n in await graph.search_nodes("node/5512003", unlimited)] == ["prefix-3"]

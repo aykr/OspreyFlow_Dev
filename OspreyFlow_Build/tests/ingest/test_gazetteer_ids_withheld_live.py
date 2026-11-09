@@ -103,7 +103,7 @@ async def _graph() -> tuple[ArcadeDBClient, GraphArcadeDBAdapter]:
     return client, graph
 
 
-async def _plant() -> tuple[str, str, str]:
+async def _plant() -> tuple[str, str, str, dict[str, Any]]:
     """A gazetteer place carrying its identifiers, and a person present at it."""
     client, graph = await _graph()
     place = NodeWrite(
@@ -136,8 +136,14 @@ async def _plant() -> tuple[str, str, str]:
     await graph.upsert_nodes([place, neighbour, *alike], tx)
     await graph.upsert_edges([link], tx)
     await graph.commit_transaction(tx)
+    # The person's stored record, to put on the second case's canvas: a person in a gazetteer
+    # dataset is found by name alone, and a person has no `name` (decision 3b), so it is not
+    # searched for.
+    unlimited = UNIT.model_copy(update={"datasets": None})
+    stored = await graph.get_node(neighbour.id, unlimited)
     await client.aclose()
-    return place.id, neighbour.id, link.id
+    assert stored is not None
+    return place.id, neighbour.id, link.id, stored.model_dump(mode="json")
 
 
 async def _remove(ids: list[str]) -> None:
@@ -202,7 +208,7 @@ def test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifie
 ) -> None:
     private_key, _ = keypair
     headers = {"Authorization": f"Bearer {sign_token(private_key, default_claims())}"}
-    place_id, neighbour_id, link_id = _run(_plant())
+    place_id, neighbour_id, link_id, person_body = _run(_plant())
     cases: list[str] = []
 
     from services.api.app import app
@@ -251,15 +257,12 @@ def test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifie
             other_id = other.json()["id"]
             cases.append(other_id)
             _run(_give_case(other_id))
-            person = client.post(
-                f"/v1/investigations/{other_id}/search", headers=headers, json={"query": PERSON}
-            )
-            assert [n["id"] for n in person.json()["nodes"]] == [neighbour_id], person.text
-            client.post(
+            put = client.post(
                 f"/v1/investigations/{other_id}/seed",
                 headers=headers,
-                json={"nodes": person.json()["nodes"], "edges": []},
+                json={"nodes": [person_body], "edges": []},
             )
+            assert put.status_code == 200, put.text
             expanded = client.post(
                 f"/v1/investigations/{other_id}/expand",
                 headers=headers,
