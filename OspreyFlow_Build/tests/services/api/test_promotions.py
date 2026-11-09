@@ -1089,11 +1089,12 @@ def test_the_board_composite_check_fails_with_the_check_removed(
     made = _item(board)
     assert _sheet(board).get("refused") is None
     # Through the route itself (round 2's minor): with `_target`'s check gone, a second, separate
-    # guard still refuses it, the composite case's own read-only write gate, so nothing is
-    # recorded and the composite's refusal holds in depth.
+    # guard still refuses it at the write, the composite case's own read-only gate: the load is
+    # refused and recorded rejected, and nothing is promoted (the refusal holds in depth).
     answer = _promote(board, made["item_id"])
     assert answer.status_code == 409 and answer.json()["error"] == "composite_read_only"
-    assert not pw.store.records and pw.graph.promotions == 0
+    assert [r.status for r in pw.store.records.values()] == ["rejected"]
+    assert pw.graph.promotions == 0
 
 
 def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace) -> None:
