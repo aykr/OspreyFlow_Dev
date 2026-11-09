@@ -60,6 +60,8 @@ a person at the prompts and CI install the same way.
       organisation: Example Department
       phase: beta                  #   alpha | beta | live | none
     demo_accounts: true            # false for no demo accounts (the blank starter's answer)
+    grading:                       # ADR-143 decision 11 (grading.* in osprey.yaml)
+      scheme: 5x5x5                #   5x5x5 | 3x5x2 | a scheme file (ospreyflow grading change)
 
 Unknown keys are refused by name, as `osprey.yaml`'s are, so a typo never silently means the
 default. This module depends on nothing but PyYAML: the command is small, and the deployment's own
@@ -89,7 +91,7 @@ PROFILES = {"lite": "local-lite", "small": "small", "enterprise": "cluster"}
 _TOP = {
     "mode", "components", "folders", "models", "demo_packs", "paysim_file", "cloud", "config",
     "mail", "external", "cluster", "starter", "appearance", "demo_accounts", "server",
-    "admin_email", "sign_in",
+    "admin_email", "sign_in", "grading",
 }  # fmt: skip
 #: ADR-114 Amendment 33: `server:` (drop 1), with `backups` and `memory_gib` (drop 2, units 5–6),
 #: and ADR-135 Amendment 1's `gpu`.
@@ -119,6 +121,7 @@ _SECTIONS = {
     "mail": {"host", "port", "from", "starttls", "username"},
     "cluster": {"namespace", "storage_class", "shared_storage_class"},
     "appearance": {"brand", "service_name", "organisation", "phase"},
+    "grading": {"scheme"},
 }
 #: The sections a named `config:` replaces; giving both is refused rather than one silently winning.
 _CONFIG_SECTIONS = ("components", "folders", "models")
@@ -170,6 +173,21 @@ class Answers:
     #: Amendment 33 decision 4: the organisation's identity provider — alias, label, issuer and
     #: client id, as `governance` takes them. Empty without `sign_in.organisation`.
     organisation: dict[str, str] = field(default_factory=dict)
+    #: ADR-143 decision 11: `grading.scheme`, when the answers choose one; None leaves the
+    #: product's default.
+    grading_scheme: str | None = None
+
+
+def _grading_scheme(section: Mapping[str, Any]) -> str | None:
+    """`grading.scheme` as given: a built-in scheme's name or a scheme file's path. Which ones are
+    schemes is the deployment schema's to say (`schemas.domain.GRADING_PARTS`, the one list), when
+    the result is rendered, as for every other setting this module passes on."""
+    scheme = section.get("scheme")
+    if scheme in (None, ""):
+        return None
+    if not isinstance(scheme, str):
+        raise AnswersRefused(f"grading.scheme is a scheme's name or a scheme file, not {scheme!r}")
+    return scheme
 
 
 def _appearance(section: Mapping[str, Any], starter: starters.Starter | None) -> dict[str, str]:
@@ -546,6 +564,7 @@ def load_answers(
         memory_gib=server.get("memory_gib"),
         gpu=server.get("gpu", "none"),
         organisation=organisation,
+        grading_scheme=_grading_scheme(sections["grading"]),
     )
 
 
@@ -559,6 +578,8 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         if answers.appearance:
             # ADR-138: the guided page installs from its draft; the look is a Mode-screen answer.
             loaded["appearance"] = {**(loaded.get("appearance") or {}), **answers.appearance}
+        if answers.grading_scheme is not None:
+            loaded["grading"] = {**(loaded.get("grading") or {}), "scheme": answers.grading_scheme}
         return _resolution_off_for_the_packs(loaded, answers.demo_packs, own_file=answers.config)
     config = copy.deepcopy(dict(base))
     config["profile"] = PROFILES[answers.mode]
@@ -580,6 +601,9 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
     if answers.appearance:
         # ADR-138: only what the answers say; the rest of the section stays as the base has it.
         config["appearance"] = {**(config.get("appearance") or {}), **answers.appearance}
+    if answers.grading_scheme is not None:
+        # ADR-143 decision 11: chosen at install; changed later only by the grading command.
+        config["grading"] = {**(config.get("grading") or {}), "scheme": answers.grading_scheme}
     if answers.mode == "enterprise":
         # 05 §3b: a cluster's Conduits share ClickHouse; DuckDB would give each its own events.
         config.setdefault("components", {})["analytics_engine"] = "clickhouse"

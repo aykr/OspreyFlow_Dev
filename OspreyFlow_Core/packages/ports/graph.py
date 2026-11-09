@@ -19,6 +19,7 @@ from schemas.domain import (
     EdgeId,
     EdgeWrite,
     ExpandRequest,
+    Grading,
     ListNodesPage,
     NeighbourhoodStats,
     Node,
@@ -852,6 +853,21 @@ class GraphPort(Protocol):
         The write is to the state's own type alone, never another type holding the same id. The
         link keeps `state.handling`, never a weaker marking. A write: the stamping wrapper's
         guards and after-write hooks run."""
+        ...
+
+    async def regrade_drawn(self, element_id: str, grading: Grading, original: Grading) -> bool:
+        """Sets one live drawn node's or link's grade and its original (`provenance.drawn.grading`
+        and `original_grading`) in place, and nothing else: no second write merges into it, so a
+        link's occurrences, weight (ADR-120) and audit are left as they are, and a node keeps its
+        resolution state (`06_DECISIONS.md` ADR-143 Amendment 6). Returns True when exactly that
+        element was changed; False, writing nothing, when `element_id` names no live element
+        (none, reverted or superseded) or one with no drawn assertion. An id held by two types
+        raises `AmbiguousElementId`. `scripts/grading_change.py` is the only caller.
+
+        No `principal` argument, like `strip_provenance_references`: an operator's write on the
+        stored body, never a read, never routed through the Conduit. The named exception to
+        ADR-080's "every change is a supersede": nothing is superseded, and the change is recorded
+        in the audit trail by the command, with the original kept beside the new grade."""
         ...
 
     async def strip_provenance_references(self, prefix: str) -> int:

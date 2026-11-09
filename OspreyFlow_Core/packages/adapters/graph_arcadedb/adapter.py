@@ -56,6 +56,7 @@ from schemas.domain import (
     EdgeId,
     EdgeWrite,
     ExpandRequest,
+    Grading,
     Handling,
     Interval,
     ListNodesPage,
@@ -133,7 +134,7 @@ from .builders import (
     suggestion_scope,
 )
 from .bulk import BulkEdgeLoader, BulkTransport, GremlinBulkTransport
-from .client import ArcadeDBClient
+from .client import ArcadeDBClient, ArcadeDBError
 from .gremlin_literals import (
     groovy_identifier,
     groovy_string_list_literal,
@@ -2101,6 +2102,53 @@ class GraphArcadeDBAdapter:
                     break
         return changed
 
+    async def regrade_drawn(self, element_id: str, grading: Grading, original: Grading) -> bool:
+        """ADR-143 Amendment 6: `GraphPort.regrade_drawn`. The element's stored type is found from
+        its unique `id` index, vertex or edge (`_holders`); its stored `provenance` is read whole,
+        with no access step (an operator's write, not a reader's read), and written back with the
+        drawn grade and original alone changed. Nothing else in the record is written: not the
+        audit, not a link's occurrences or weight, not a node's resolution."""
+        held = [
+            type_name
+            for kind in ("vertex", "edge")
+            for type_name, ids in await self._holders(kind, [element_id])
+            if element_id in ids
+        ]
+        if not held:
+            return False
+        if len(held) > 1:
+            raise AmbiguousElementId("element", len(held))
+        quoted = groovy_identifier(held[0])
+        rows = await self._client.sql(
+            f"SELECT provenance, reverted, superseded_by FROM `{quoted}` WHERE id = :id",
+            params={"id": element_id},
+        )
+        if len(rows) != 1:
+            return False
+        row = rows[0]
+        provenance = row.get("provenance")
+        if not isinstance(provenance, dict):
+            return False
+        drawn = provenance.get("drawn")
+        if row.get("reverted") is True or row.get("superseded_by") or not isinstance(drawn, dict):
+            return False
+        changed = {
+            **provenance,
+            "drawn": {
+                **drawn,
+                "grading": grading.model_dump(mode="json"),
+                "original_grading": original.model_dump(mode="json"),
+            },
+        }
+        # Guarded in the write itself, not only by the read before it: a record reverted or
+        # superseded between the two is not changed, and the count says so.
+        written = await self._client.sql(
+            f"UPDATE `{quoted}` SET provenance = :provenance WHERE id = :id "
+            "AND (reverted IS NULL OR reverted = false) AND superseded_by IS NULL",
+            params={"provenance": changed, "id": element_id},
+        )
+        return _updated_count(written) == 1
+
     # --- supersession --------------------------------------------------------
 
     async def supersede_node(
@@ -2440,3 +2488,12 @@ def _logical_counts(results: list[Any]) -> dict[str, int]:
         name = logical_type_name(label)
         counts[name] = counts.get(name, 0) + int(count)
     return counts
+
+
+def _updated_count(rows: Any) -> int:
+    """How many records an ArcadeDB `UPDATE` changed, from its answer (`[{"count": n}]`)."""
+    if isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict):
+        count = rows[0].get("count")
+        if isinstance(count, int):
+            return count
+    raise ArcadeDBError(f"an UPDATE answered {rows!r}, not its count")

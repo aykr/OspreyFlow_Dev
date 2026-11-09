@@ -26,10 +26,11 @@ export type DrawnItemId = string;
 export type DrawnBoardId = string;
 export type DrawnCaseId = string;
 export type DrawnLabel = string;
-export type GradingSchemeName = "5x5x5" | "3x5x2";
+export type GradingSchemeName = string;
 export type GradeSource = string;
 export type GradeIntelligence = string;
 export type GradeHandling = string;
+export type DrawnOriginalGrading = Grading | null;
 export type DrawnSourceNote = string | null;
 export type DrawnIcon = string | null;
 export type Classification = string;
@@ -76,7 +77,59 @@ export type NodeTypes = string[];
 export type LinkTypes = string[];
 export type Markings = string[];
 export type Ceiling = string | null;
-export type GradingScheme = "5x5x5" | "3x5x2";
+export type GradingScheme = string;
+export type GradingSchemeName1 = string;
+/**
+ * @minItems 1
+ * @maxItems 12
+ */
+export type GradeSources =
+  | [string]
+  | [string, string]
+  | [string, string, string]
+  | [string, string, string, string]
+  | [string, string, string, string, string]
+  | [string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string, string, string];
+/**
+ * @minItems 1
+ * @maxItems 12
+ */
+export type GradeIntelligences =
+  | [string]
+  | [string, string]
+  | [string, string, string]
+  | [string, string, string, string]
+  | [string, string, string, string, string]
+  | [string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string, string, string];
+/**
+ * @minItems 1
+ * @maxItems 12
+ */
+export type GradeHandlings =
+  | [string]
+  | [string, string]
+  | [string, string, string]
+  | [string, string, string, string]
+  | [string, string, string, string, string]
+  | [string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string, string]
+  | [string, string, string, string, string, string, string, string, string, string, string, string];
 export type MayDraw = boolean;
 
 /**
@@ -97,6 +150,7 @@ export interface BoardOpened {
   markings?: Markings;
   ceiling?: Ceiling;
   grading_scheme?: GradingScheme;
+  grading_grades?: GradingSchemeAnswer | null;
   may_draw?: MayDraw;
   [k: string]: unknown;
 }
@@ -160,6 +214,7 @@ export interface DrawnAssertion {
   case_id: DrawnCaseId;
   label: DrawnLabel;
   grading: Grading;
+  original_grading?: DrawnOriginalGrading;
   source_note?: DrawnSourceNote;
   source_document?: DocumentId | null;
   icon?: DrawnIcon;
@@ -167,6 +222,11 @@ export interface DrawnAssertion {
 /**
  * A grade in one scheme, kept with its scheme so a later change of scheme (L3.7) keeps the
  * original beside the new one (C13).
+ *
+ * A grade of a built-in scheme is checked against its parts here. A grade of a scheme file's
+ * scheme (Amendment 6) is checked where a grade enters, against the deployment's scheme: the
+ * board routes and the grading change. A stored one is read as stored, since an original may be of
+ * a scheme the deployment no longer has.
  */
 export interface Grading {
   scheme?: GradingSchemeName;
@@ -253,4 +313,16 @@ export interface Items {
 }
 export interface Layout {
   [k: string]: unknown;
+}
+/**
+ * A grading scheme and each of its parts' grades: `GET /v1/grading-scheme`'s answer (for
+ * Admin's read-only display and the boards' grade fields), and the shape of a scheme file
+ * (`grading.scheme` naming a YAML file, ADR-143 decision 11 and Amendment 6). A scheme file may
+ * not take a built-in scheme's name.
+ */
+export interface GradingSchemeAnswer {
+  scheme: GradingSchemeName1;
+  source: GradeSources;
+  intelligence: GradeIntelligences;
+  handling: GradeHandlings;
 }

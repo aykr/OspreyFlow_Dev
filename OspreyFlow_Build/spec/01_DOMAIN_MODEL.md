@@ -807,8 +807,15 @@ a source. It carries `provenance.drawn` (`DrawnAssertion`, `schemas/domain.py`),
 - `label`, what the analyst calls it (a type of the model may declare no name of its own, so the
   type's required properties are given beside it; the Glass fills a required name from the label
   until the analyst changes it);
-- `grading` (`Grading`: the scheme, then the source's, the intelligence's and the handling grade;
-  `5x5x5` until L3.7 makes the scheme a deployment setting, the grade always kept with its scheme);
+- `grading` (`Grading`: the scheme, then the source's, the intelligence's and the handling grade,
+  the grade always kept with its scheme), in the deployment's one scheme (`grading.scheme`, ADR-143
+  decision 11: `5x5x5` by default, `3x5x2`, whose handling code P or C is part of the grade and
+  never merged with the marking, or a scheme file's scheme, ADR-143 Amendment 6 decision 4; an unknown one
+  stops the Conduit's start). `GET /v1/grading-scheme`
+  answers `GradingSchemeAnswer`: the scheme and each part's grades, for Admin's read-only display. An opened board offers that scheme's grades, and a drawn node,
+  link or edit graded in any other is refused (422 `grading_scheme`) before anything is written;
+- `original_grading`, absent until the scheme is first changed, then the grade and scheme the item
+  had before that change, kept for good through every later one;
 - `source_note`, `source_document`, or both, never neither;
 - `icon`, a display choice only (C17 c).
 
@@ -819,7 +826,9 @@ amber wherever it appears, on a board and on the analysis canvas.
 
 The board's registry (`board_items`, `services/api/board_store.py`) holds ids only: which element was
 drawn on which board of which case, by whom, into which dataset, a link's ends, and whether it was
-withdrawn. Every read of it names its case.
+withdrawn. Every read of it names its case, but one: the grading command (below) reads every case's
+live drawn nodes and links, as an operator outside the Conduit, answered to no reader (ADR-143 Amendment 6
+decision 7).
 
 The invariants, each with the test that fails if it is broken (rule 12):
 - **Never readable outside its case** (rule 3; ADR-143 decision 3). Another case reading the same
@@ -828,6 +837,17 @@ The invariants, each with the test that fails if it is broken (rule 12):
     set; the graph port's own case is `test_a_link_in_case_as_layer_leaves_the_loaded_node_unchanged_under_case_b`.
 - **In the layer, attributed and graded** (decision 4).
   - `test_a_drawn_item_is_attributed_graded_and_in_the_layer`, red with the writer aimed at the source.
+- **Graded in the deployment's scheme, changed only by the command, the original kept** (decision
+  11, C13; as built, ADR-143 Amendment 6). `ospreyflow grading change` changes every live drawn item's grade by
+  a mapping, a dry run first and its token after, with the Conduit stopped, then the setting; each
+  grade is changed in place (`GraphPort.regrade_drawn`), its original kept for good, nothing else of the
+  item written. What it refuses, what it leaves alone and why are Amendment 6's.
+  - `test_the_dry_run_writes_nothing_and_counts_each_mapping_line`,
+    `test_the_change_is_refused_without_its_dry_runs_token_for_this_state`,
+    `test_every_item_keeps_its_original_grade_and_scheme_through_two_changes`,
+    `test_the_change_is_the_grade_alone_in_place` (`test_grading_change.py`); the port's
+    `test_regrade_drawn_changes_the_grade_and_original_alone`; live, through the command,
+    `test_the_command_changes_every_drawn_grade_in_the_real_stores`.
 - **Within the case's ceiling** (Amendment 2 decision 3): nothing drawn above the strictest highest
   marking its datasets set, nor above the drawer's clearance, refused in words naming it.
   - `test_an_item_above_the_ceiling_is_refused_in_words`, red with the ceiling bypassed.

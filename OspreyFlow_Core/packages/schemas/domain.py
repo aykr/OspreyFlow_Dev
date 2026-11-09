@@ -22,6 +22,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StringConstraints,
     field_validator,
     model_serializer,
     model_validator,
@@ -283,39 +284,98 @@ class SourceRef(BaseModel):
 
 # --- A drawn item's assertion (ADR-143 decision 4; `schemas/boards.py`) --------------------
 
-GradingScheme = Literal["5x5x5", "3x5x2"]
+#: A grading scheme's name: one of `GRADING_PARTS`, or the name a scheme file gives its own
+#: (`grading.scheme`, ADR-143 decision 11 and Amendment 6).
+GradingScheme = Annotated[str, StringConstraints(pattern=r"^[0-9a-z][0-9a-z-]{0,39}$")]
 
-#: Each scheme's three parts (decision 11): the source's reliability, the intelligence's assessment
-#: and the handling code. Under 3x5x2 the handling code (P or C) is part of the grade and is never
-#: merged with the protective marking.
+#: Each built-in scheme's three parts (decision 11): the source's reliability, the intelligence's
+#: assessment and the handling code. Under 3x5x2 the handling code (P or C) is part of the grade and
+#: is never merged with the protective marking. The one list of the built-in schemes' names.
 GRADING_PARTS: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
     "5x5x5": (("A", "B", "C", "D", "E"), ("1", "2", "3", "4", "5"), ("1", "2", "3", "4", "5")),
     "3x5x2": (("A", "B", "C"), ("1", "2", "3", "4", "5"), ("P", "C")),
 }
+BUILT_IN_GRADING_SCHEMES: tuple[str, ...] = tuple(GRADING_PARTS)
 
 
 class Grading(BaseModel):
     """A grade in one scheme, kept with its scheme so a later change of scheme (L3.7) keeps the
-    original beside the new one (C13)."""
+    original beside the new one (C13).
+
+    A grade of a built-in scheme is checked against its parts here. A grade of a scheme file's
+    scheme (Amendment 6) is checked where a grade enters, against the deployment's scheme: the
+    board routes and the grading change. A stored one is read as stored, since an original may be of
+    a scheme the deployment no longer has."""
 
     model_config = ConfigDict(extra="forbid")
 
     # Titled, so the generated TypeScript's aliases never shadow `Handling` or `Source`.
     scheme: GradingScheme = Field(default="5x5x5", title="GradingSchemeName")
-    source: str = Field(title="GradeSource")
-    intelligence: str = Field(title="GradeIntelligence")
-    handling: str = Field(title="GradeHandling")
+    source: str = Field(min_length=1, max_length=16, title="GradeSource")
+    intelligence: str = Field(min_length=1, max_length=16, title="GradeIntelligence")
+    handling: str = Field(min_length=1, max_length=16, title="GradeHandling")
 
     @model_validator(mode="after")
     def _in_its_scheme(self) -> Grading:
-        sources, intelligence, handling = GRADING_PARTS[self.scheme]
-        if self.source not in sources:
-            raise ValueError(f"source {self.source!r} is not a grade of {self.scheme}")
-        if self.intelligence not in intelligence:
-            raise ValueError(f"intelligence {self.intelligence!r} is not a grade of {self.scheme}")
-        if self.handling not in handling:
-            raise ValueError(f"handling {self.handling!r} is not a grade of {self.scheme}")
+        if self.scheme in GRADING_PARTS:
+            GradingSchemeAnswer.of(self.scheme).check(self)
         return self
+
+
+_GRADE = re.compile(r"[A-Za-z0-9-]{1,16}")
+
+
+class GradingSchemeAnswer(BaseModel):
+    """A grading scheme and each of its parts' grades: `GET /v1/grading-scheme`'s answer (for
+    Admin's read-only display and the boards' grade fields), and the shape of a scheme file
+    (`grading.scheme` naming a YAML file, ADR-143 decision 11 and Amendment 6). A scheme file may
+    not take a built-in scheme's name."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scheme: GradingScheme = Field(title="GradingSchemeName")
+    source: list[str] = Field(min_length=1, max_length=12, title="GradeSources")
+    intelligence: list[str] = Field(min_length=1, max_length=12, title="GradeIntelligences")
+    handling: list[str] = Field(min_length=1, max_length=12, title="GradeHandlings")
+
+    @model_validator(mode="after")
+    def _a_scheme(self) -> GradingSchemeAnswer:
+        for part in ("source", "intelligence", "handling"):
+            grades = getattr(self, part)
+            # Letters, digits and hyphens only: a grade is written into `deployment.env`, which
+            # Compose also reads for interpolation (`$`, ` #` and quotes would change it).
+            if any(not _GRADE.fullmatch(g) for g in grades):
+                raise ValueError(f"{part}: each grade is 1 to 16 letters, digits or hyphens")
+            if len(set(grades)) != len(grades):
+                raise ValueError(f"{part}: a grade is given twice")
+        if self.scheme in GRADING_PARTS and self.parts() != GRADING_PARTS[self.scheme]:
+            raise ValueError(
+                f"{self.scheme} is a built-in scheme: a scheme file gives a name of its own"
+            )
+        return self
+
+    def parts(self) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        return tuple(self.source), tuple(self.intelligence), tuple(self.handling)
+
+    def check(self, grading: Grading) -> None:
+        """Refuses a grade that is not of this scheme, naming the part and the grade."""
+        if grading.scheme != self.scheme:
+            raise ValueError(f"a grade in {grading.scheme} is not a grade of {self.scheme}")
+        for part, grades in zip(("source", "intelligence", "handling"), self.parts(), strict=True):
+            if getattr(grading, part) not in grades:
+                given = getattr(grading, part)
+                raise ValueError(f"{part} {given!r} is not a grade of {self.scheme}")
+
+    @classmethod
+    def of(cls, scheme: str) -> GradingSchemeAnswer:
+        """A built-in scheme."""
+        sources, intelligence, handling = GRADING_PARTS[scheme]
+        return cls.model_construct(
+            scheme=scheme,
+            source=list(sources),
+            intelligence=list(intelligence),
+            handling=list(handling),
+        )
 
 
 class DrawnAssertion(BaseModel):
@@ -334,6 +394,10 @@ class DrawnAssertion(BaseModel):
     #: What the analyst calls it ("Unknown male “Tall”"): a type of the model may declare no name.
     label: str = Field(min_length=1, max_length=200, title="DrawnLabel")
     grading: Grading
+    #: ADR-143 decision 11 (C13; L3.7): the grade, in its scheme, this item had before the
+    #: deployment's grading scheme was first changed, kept beside `grading` for good. `None` for
+    #: an item whose grade no change has rewritten.
+    original_grading: Grading | None = Field(default=None, title="DrawnOriginalGrading")
     #: Free text, a document the case already holds, or both; never neither.
     source_note: str | None = Field(default=None, max_length=2000, title="DrawnSourceNote")
     source_document: DocumentId | None = None
@@ -1750,6 +1814,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Handling,
     SourceRef,
     Grading,
+    GradingSchemeAnswer,
     DrawnAssertion,
     Provenance,
     ResolutionState,

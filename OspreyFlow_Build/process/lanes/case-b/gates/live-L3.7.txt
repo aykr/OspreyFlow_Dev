@@ -1,0 +1,40 @@
+# L3.7's live record. The whole live set ran once at 71ca2fc, alone on stack a under lease case-b: 384 passed, and the
+# 9 live plants were each red. Since then the code changed only in harness/render.py (605cc87: one grading line), which no
+# live file reads; at the orchestrator's word the run at 052f1c1 is that delta alone, on stack c: the two grading live
+# files, 2 passed. Both stacks were brought down and their leases released.
+
+# One run at 71ca2fc, alone on stack a under lease case-b (nothing else used the stack; the offline make test ran on this
+# machine meanwhile). 384 passed: route rights, the grading registry and change live, the whole graph-port conformance
+# suite (regrade_drawn's case among it), the board store, the drawn layer's restore, the datasets and link-type stores.
+# The stack was brought down and the lease released after the live plants (below the run).
+# the live set at 71ca2fc (tree 6fa3815bc7985320a3ef9f41432759d91b915554), lease case-b on stack a, one run, alone
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+........................................................................ [ 56%]
+........................................................................ [ 75%]
+........................................................................ [ 93%]
+........................                                                 [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+384 passed, 1 warning in 3433.84s (0:57:13)
+exit 0
+
+# --- the live plants, same lease ---
+Unplanted: 3 passed in 34.93s
+| the store's regrade writes no original | `packages/adapters/graph_arcadedb/adapter.py` | test_regrade_drawn_changes_the_grade_and_original_alone | 1 failed in 17.86s |
+| the store's regrade takes a superseded element (both guards) | `packages/adapters/graph_arcadedb/adapter.py` | test_regrade_drawn_changes_the_grade_and_original_alone | 1 failed in 19.26s |
+| the store's regrade takes a reverted element (both guards) | `packages/adapters/graph_arcadedb/adapter.py` | test_regrade_drawn_changes_the_grade_and_original_alone | 1 failed in 6.26s |
+| the dry run makes the audit's table | `scripts/grading_change.py` | test_the_command_changes_every_drawn_grade_in_the_real_stores | 1 failed in 10.10s |
+| the audit not saying who changed it is as typed | `scripts/grading_change.py` | test_the_command_changes_every_drawn_grade_in_the_real_stores | 1 failed in 14.13s |
+| the dry run writes as the change does, against the stores | `services/api/grading.py` | test_the_command_changes_every_drawn_grade_in_the_real_stores | 1 failed in 14.60s |
+| a second change overwrites the original, against the stores | `services/api/grading.py` | test_the_command_changes_every_drawn_grade_in_the_real_stores | 1 failed in 28.11s |
+| the registry read includes withdrawn items | `scripts/grading_change.py` | test_the_registry_read_is_every_cases_live_drawn_nodes_and_links | 1 failed in 1.47s |
+| the registry read includes pictures and match links | `scripts/grading_change.py` | test_the_registry_read_is_every_cases_live_drawn_nodes_and_links | 1 failed in 1.39s |
+
+# the delta since the record run at 71ca2fc (harness/render.py alone, which no live file reads): the two grading live files at 052f1c1, lease case-b on stack c
+..                                                                       [100%]
+2 passed in 12.46s

@@ -37,8 +37,10 @@ from ports.graph import (
 )
 from schemas.ingest import LinkPriorState, stored_digest
 from schemas.domain import (
+    DrawnAssertion,
     Edge,
     EdgeWrite,
+    Grading,
     ExpandRequest,
     Interval,
     NodeWrite,
@@ -7738,3 +7740,86 @@ async def test_client_parity_scores_equal_a_transcription_of_the_clients_r_funct
         for row, pair in zip(dup_rows, rarity.pairs, strict=True):
             ours[row] = pair.parity_raw
         assert {r: ours[r] for r in TABLE} == pytest.approx(client, abs=1e-12)
+
+
+# --- regrade_drawn (ADR-143 Amendment 6, L3.7) ------------------------------------------------
+
+
+def _drawn(grade: Grading, item: str) -> Provenance:
+    return Provenance(
+        state=ProvenanceState.ASSERTED,
+        sources=[SourceRef(document_id=f"drawn:{item}", locator="drawn", excerpt_hash="")],
+        first_seen=now_utc(),
+        drawn=DrawnAssertion(
+            item_id=item, asserted_by="analyst-1", board_id="board-1", case_id="case-k",
+            label="Tall", grading=grade, source_note="Wing officer report",
+        ),
+    )  # fmt: skip
+
+
+async def test_regrade_drawn_changes_the_grade_and_original_alone(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Violation caught: a grading change (`scripts/grading_change.py`) that rewrites a drawn link
+    by a second write, which merges into it (ADR-102): its occurrences counted again, its weight
+    worked out again (ADR-120), its audit's revision and load moved; or a node rewritten with a fresh
+    resolution state. Only `provenance.drawn.grading` and `original_grading` change, in place, on a
+    live drawn element; anything else (an undrawn element, a reverted one, an id held by none) is
+    left and answered False, so the caller can refuse rather than report a change it did not make."""
+    old = Grading(source="B", intelligence="2", handling="1")
+    new = Grading(scheme="3x5x2", source="A", intelligence="2", handling="P")
+    async with factory.context() as adapter:
+        a, b, c, gone = (
+            _node("Person", classification="OFFICIAL", family_name=n).model_copy(
+                update={"provenance": _drawn(old, f"item-{n}")}
+            )
+            for n in "ABCD"
+        )
+        plain = _node("Person", classification="OFFICIAL", family_name="Plain")
+        (a_id, b_id, c_id, gone_id, plain_id), _ = await _write(adapter, [a, b, c, gone, plain], [])
+        link = _edge("ASSOCIATE_OF", a_id, b_id, classification="OFFICIAL").model_copy(
+            update={"provenance": _drawn(old, "item-link"), "occurrences": 3}
+        )
+        _, (link_id,) = await _write(adapter, [], [link])
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([gone_id], [], tx)
+        await adapter.commit_transaction(tx)
+        before_link = (await adapter.get_edges([link_id], CLEARED))[0]
+        before_a = (await adapter.get_nodes([a_id], CLEARED))[0]
+
+        assert await adapter.regrade_drawn(a_id, new, old) is True
+        assert await adapter.regrade_drawn(link_id, new, old) is True
+        assert await adapter.regrade_drawn(plain_id, new, old) is False, "not drawn"
+        assert await adapter.regrade_drawn(gone_id, new, old) is False, "reverted"
+        assert await adapter.regrade_drawn("no-such-id", new, old) is False
+
+        after_link = (await adapter.get_edges([link_id], CLEARED))[0]
+        after_a, after_c = await adapter.get_nodes([a_id, c_id], CLEARED)
+        for before, after in ((before_link, after_link), (before_a, after_a)):
+            assert after.provenance.drawn is not None and before.provenance.drawn is not None
+            assert after.provenance.drawn.grading == new
+            assert after.provenance.drawn.original_grading == old
+            assert after.provenance.drawn.model_dump(
+                exclude={"grading", "original_grading"}
+            ) == before.provenance.drawn.model_dump(exclude={"grading", "original_grading"})
+            assert after.provenance.model_dump(exclude={"drawn"}) == before.provenance.model_dump(
+                exclude={"drawn"}
+            )
+            assert after.audit == before.audit, "no revision, no load moved"
+            assert after.handling == before.handling and after.datasets == before.datasets
+            assert after.properties == before.properties
+        assert after_link.occurrences == before_link.occurrences == 3
+        assert after_link.weight == before_link.weight, "not weighed again"
+        assert after_a.resolution == before_a.resolution
+        assert after_c.provenance.drawn is not None and after_c.provenance.drawn.grading == old
+        plain_after = (await adapter.get_nodes([plain_id], CLEARED))[0]
+        assert plain_after.provenance.drawn is None
+
+        # A superseded element (an older revision) is not regraded: only the live one is.
+        tx = await adapter.begin_transaction()
+        successor = await adapter.supersede_node(
+            c_id, c.model_copy(update={"id": new_node_id()}), tx
+        )
+        await adapter.commit_transaction(tx)
+        assert await adapter.regrade_drawn(c_id, new, old) is False, "superseded"
+        assert await adapter.regrade_drawn(successor, new, old) is True

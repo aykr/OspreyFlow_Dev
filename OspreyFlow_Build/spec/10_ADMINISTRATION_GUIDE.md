@@ -759,6 +759,7 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `starter` | A starter, `<theme>-<domain>` (section 1a): fills in the answers below that are not given |
 | `appearance.brand`, `appearance.service_name`, `appearance.organisation`, `appearance.phase` | The look (appendix A's `appearance`); `govuk` needs `service_name`, which names the whole service |
 | `demo_accounts` | `true` (default) makes the demo accounts; `false` makes none (the `blank` starter's answer) |
+| `grading.scheme` | `5x5x5` (default), `3x5x2`, or a scheme file (`.yaml`, beside `osprey.yaml`): the scheme drawn items are graded in. Changed later only by `ospreyflow grading change` (§8), which changes the items and this setting together |
 
 The answers become `osprey.yaml` (appendix A): `mode` sets `profile`, `components.dashboards` sets
 both `reporting.sync` and `reporting.superset`, and the address is `http://ospreyflow.localhost` for
@@ -785,6 +786,8 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
+| `ospreyflow grading change --to <scheme> --mapping <file> --dry-run` | Says how many drawn items each line of the mapping (every grade of the old scheme to one of the new) would move, writes nothing, and gives the token the change needs. `--to` is `5x5x5`, `3x5x2` or a scheme file: a YAML file with `scheme` (a name of its own), `source`, `intelligence` and `handling`, each its list of grades. Runs beside a running deployment |
+| `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
 | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
 | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
 | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
@@ -1460,6 +1463,8 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `appearance.service_name` | str or none | none | The service's name, in the page title. |
 | `appearance.organisation` | str or none | none | The organisation in the GOV.UK footer and the page title. |
 | `appearance.phase` | `alpha` \| `beta` \| `live` \| `none` | `none` | The phase banner shows at alpha or beta. |
+| `grading` | section | — | The scheme every drawn node and link is graded in (ADR-143 decision 11); changed only by `ospreyflow grading change`. |
+| `grading.scheme` | str | `5x5x5` | The scheme drawn items are graded in: 5x5x5; 3x5x2, whose handling code (P or C) is part of the grade and never merged with the marking; or the path of a scheme file (.yaml, beside this file unless absolute) naming its own scheme and each part's grades. |
 | `external` | section | — | What a cloud runs for the deployment instead of a container (Small). |
 | `external.postgres` | section or none | none | A cloud's managed PostgreSQL; its password arrives at install. |
 | `external.postgres.host` | str | required | The managed server's address |

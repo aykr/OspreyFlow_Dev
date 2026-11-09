@@ -2,7 +2,7 @@
 // sits, and how far an arrow key moves it, never off the board.
 import { describe, expect, it } from "vitest";
 
-import { clamp, itemLabel, linkLabel, moved, nextPlace, placed } from "./boardModel";
+import { clamp, gradesOf, itemLabel, linkLabel, moved, nextPlace, offerGrades, placed } from "./boardModel";
 import type { BoardOpened } from "./boardsApi";
 
 const at = "2026-11-08T10:00:00Z";
@@ -73,5 +73,16 @@ describe("placing and moving", () => {
   it("puts a new item beside the last, or the middle of an empty board", () => {
     expect(nextPlace({})).toEqual({ x: 0.5, y: 0.5 });
     expect(nextPlace({ a: { x: 0.3, y: 0.3 } })).toEqual({ x: 0.42, y: 0.3 });
+  });
+});
+
+describe("the grades a board offers (ADR-143 Amendment 6)", () => {
+  it("a scheme's grades are the opened board's, and none before one is open", () => {
+    expect(gradesOf("force-4x3")).toBeUndefined();
+    expect(gradesOf("5x5x5")).toBeUndefined();
+    offerGrades({ scheme: "force-4x3", source: ["W", "X"], intelligence: ["1"], handling: ["H"] });
+    expect(gradesOf("force-4x3")).toEqual({ source: ["W", "X"], intelligence: ["1"], handling: ["H"] });
+    offerGrades(null);
+    expect(gradesOf("force-4x3")).toEqual({ source: ["W", "X"], intelligence: ["1"], handling: ["H"] });
   });
 });

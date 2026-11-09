@@ -29,6 +29,7 @@ import yaml
 
 from . import demo, starters
 from . import deployments as named
+from . import grading as grading_verb
 from . import maps as map_verbs
 from . import models as engine_keys
 from .answers import (
@@ -76,7 +77,7 @@ from .run import (
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
     "update", "uninstall", "repair-sign-in", "switch", "models", "apply", "deployments",
-    "starters", "map",
+    "starters", "map", "grading",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
@@ -349,9 +350,7 @@ def _parser() -> argparse.ArgumentParser:
         parents=[common],
     )
     set_key.add_argument("name", help="the provider, as osprey.yaml names it (gemini, openai, …)")
-    remove = key_actions.add_parser(
-        "remove-key", help="remove a provider's key", parents=[common]
-    )
+    remove = key_actions.add_parser("remove-key", help="remove a provider's key", parents=[common])
     remove.add_argument("name")
 
     # ADR-147 decision 6: the basemap providers and the local basemap, for headless use.
@@ -366,6 +365,21 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("region", help="a named region (rutland, great-britain, …)")
     build.add_argument(
         "--planetiler-jar", type=Path, help="planetiler's release jar, copied into the tiles folder"
+    )
+
+    # ADR-143 decision 11 and Amendment 6: the grading scheme, the drawn items and the setting.
+    grading = verbs.add_parser("grading", help="change the grading scheme of every drawn item")
+    grading_actions = grading.add_subparsers(dest="action", metavar="ACTION", required=True)
+    regrade = grading_actions.add_parser(
+        "change", help="a dry run, then the change with its token: items and setting together"
+    )
+    regrade.add_argument("--to", required=True, help="5x5x5, 3x5x2, or a scheme file (.yaml)")
+    regrade.add_argument("--mapping", required=True, type=Path, help="the old-to-new mapping")
+    first = regrade.add_mutually_exclusive_group(required=True)
+    first.add_argument("--dry-run", action="store_true", help="what it would change; no writes")
+    first.add_argument("--confirm", help="the token the dry run of this mapping gave")
+    regrade.add_argument(
+        "--stop-api", action="store_true", help="stop the Conduit for the change, start it after"
     )
 
     uninstall = verbs.add_parser("uninstall", help="remove the deployment")
@@ -448,7 +462,10 @@ def _govuk_flags(args: argparse.Namespace) -> dict[str, str]:
 
 
 def _prompted_answers(
-    ctx: _Context, mode: str, packs: Sequence[str], starter: starters.Starter | None = None,
+    ctx: _Context,
+    mode: str,
+    packs: Sequence[str],
+    starter: starters.Starter | None = None,
     flags: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     raw: dict[str, Any] = {"mode": mode}
@@ -770,7 +787,7 @@ def _say_resolution_off(answers: Answers) -> None:
     if packs:
         print(
             f"Post-ingest resolution is off (components.post_ingest_resolution: false), because "
-            f"{', '.join(packs)} needs it off: its live loads must not add automatic \"same as\" "
+            f'{", ".join(packs)} needs it off: its live loads must not add automatic "same as" '
             "links. An analyst's own Resolve now still works (section 11 of the administration "
             "guide)."
         )
@@ -1256,6 +1273,94 @@ def _map(args: argparse.Namespace, ctx: _Context) -> int:
     return 0
 
 
+def _conduit_running(ctx: _Context, directory: Path) -> bool:
+    code, output = ctx.capture(
+        [*compose(directory), "ps", "--format", "json", "api"], cwd=ctx.product
+    )
+    if code != 0:
+        raise CommandRefused("Could not ask Docker about the Conduit. Is Docker running?")
+    # Anything but stopped (restarting, paused, starting) may draw: only these are stopped.
+    stopped = {"exited", "created", "dead", ""}
+    return any(str(row.get("State", "")) not in stopped for row in _services(output))
+
+
+def _grading(args: argparse.Namespace, ctx: _Context) -> int:
+    """ADR-143 Amendment 6: `scripts.grading_change` in a one-shot from the Conduit's image, then,
+    after a change, the setting, the render and the start (`cli/ospreyflow/grading.py`)."""
+    directory = ctx.deployed()
+    mapping = args.mapping.resolve()
+    if not mapping.is_file():
+        raise CommandRefused(f"There is no mapping file at {mapping}. Nothing was changed.")
+    mounts = ["-v", f"{mapping}:{grading_verb.IN_CONTAINER}/mapping.yaml:ro"]
+    to = args.to
+    scheme_file = None
+    if grading_verb.is_scheme_file(to):
+        scheme_file = Path(to).resolve()
+        if not scheme_file.is_file():
+            raise CommandRefused(f"There is no scheme file at {scheme_file}. Nothing was changed.")
+        mounts += ["-v", f"{scheme_file}:{grading_verb.IN_CONTAINER}/scheme.yaml:ro"]
+        to = f"{grading_verb.IN_CONTAINER}/scheme.yaml"
+    running = _conduit_running(ctx, directory)
+    if not args.dry_run and running and not args.stop_api:
+        raise CommandRefused(
+            "The Conduit is running, and the change needs it stopped: a drawing made during the "
+            "change, or before the deployment starts again in the new scheme, would be in the old "
+            "one. Run again with --stop-api to stop it for the change and start it after; "
+            "stopping it is your choice, so it is not done for you. Nothing was changed."
+        )
+    argv = [
+        *compose(directory), "run", "--rm", "--no-deps", "--entrypoint", "python", *mounts,
+        "api", *grading_verb.GRADING_PATH, "--to", to,
+        "--mapping", f"{grading_verb.IN_CONTAINER}/mapping.yaml",
+        *(["--dry-run"] if args.dry_run else ["--confirm", args.confirm]),
+        "--changed-by", f"cli:{getpass.getuser()}",
+    ]  # fmt: skip
+    if args.dry_run:
+        return ctx.run(argv, cwd=ctx.product)
+    if running:
+        ctx.step("stop the Conduit", [*compose(directory), "stop", "api"])
+    code = ctx.run(argv, cwd=ctx.product)
+    if code in grading_verb.NOTHING_CHANGED:
+        if running:
+            ctx.step("start the Conduit again", [*compose(directory), "up", "-d", "--wait", "api"])
+        return code
+    if code != 0:
+        # A stop part way, an unforeseen failure, a killed one-shot: some items may be changed.
+        print(
+            f"The change did not finish (exit {code}), and the Conduit is left stopped: run the "
+            "dry run and the same change again to finish it. grading.scheme is not changed yet."
+        )
+        return code
+    value = (
+        grading_verb.scheme_file_beside(ctx.config_path, scheme_file) if scheme_file else args.to
+    )
+    config = ctx.config_path
+    text = config.read_text(encoding="utf-8") if config.exists() else ""
+    config.write_text(grading_verb.with_grading_scheme(text, value), encoding="utf-8")
+    if grading_verb.scheme_set(config.read_text(encoding="utf-8")) != value:
+        raise CommandRefused(
+            f"The items are changed, but grading.scheme in {config} could not be set to {value}: "
+            "set it by hand, then run ospreyflow apply and ospreyflow start. The Conduit is "
+            "left stopped."
+        )
+    print(f"grading.scheme is {value} in {config}.")
+    try:
+        ctx.step(
+            "render the deployment in the new scheme",
+            [*ctx.python, "-m", "harness.apply", "--reapply",
+             "--config", str(config), "--out-root", str(directory.parent)],
+        )  # fmt: skip
+        ctx.step("start the Conduit", [*compose(directory), "up", "-d", "--wait", "api"])
+    except StepFailed:
+        print(
+            "The items and grading.scheme are changed, but the deployment did not start again: "
+            "the Conduit is stopped. Run ospreyflow apply, then ospreyflow start."
+        )
+        raise
+    print("The Conduit is started in the new scheme; the boards offer its grades.")
+    return 0
+
+
 def _models(args: argparse.Namespace, ctx: _Context) -> int:
     """ADR-135 decision 3, Amendment 2 decision 8: through the Conduit's own key path inside its
     container, so the gateway, the models file and the audit are *Admin › Models*' own. The key is
@@ -1345,6 +1450,8 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return _models(args, ctx)
     if verb == "map":
         return _map(args, ctx)
+    if verb == "grading":
+        return _grading(args, ctx)
     if verb == "apply":
         return _apply_settings(ctx)
     raise AssertionError(verb)  # pragma: no cover - argparse refuses any other verb

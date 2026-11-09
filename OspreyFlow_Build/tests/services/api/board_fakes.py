@@ -59,6 +59,50 @@ class BoardGraph(FakeGraphPort):
         self._pending: dict[str, tuple[list[NodeWrite], list[Any], list[Any], list[Any]]] = {}
         self.node_writes: list[NodeWrite] = []
         self.edge_writes: list[EdgeWrite] = []
+        #: Each element `regrade_drawn` changed, in order.
+        self.regrades: list[str] = []
+
+    # --- the grading change's in-place regrade (ADR-143 Amendment 6) ---------------------------
+
+    async def regrade_drawn(self, element_id: str, grading: Any, original: Any) -> bool:
+        """As the adapter's: the drawn grade and original alone, in place, on a live drawn element
+        (not reverted, not superseded); False, writing nothing, for anything else. No second write
+        merges into it, so occurrences, weight, audit and resolution are as they were."""
+
+        def regraded(element: Any) -> Any:
+            drawn = element.provenance.drawn
+            return element.model_copy(
+                update={
+                    "provenance": element.provenance.model_copy(
+                        update={"drawn": drawn.model_copy(
+                            update={"grading": grading, "original_grading": original}
+                        )}
+                    )
+                }
+            )  # fmt: skip
+
+        def live_drawn(element: Any) -> bool:
+            return (
+                not element.audit.reverted
+                and element.audit.superseded_by is None
+                and element.provenance.drawn is not None
+            )
+
+        held = self._graph_nodes.get(element_id)
+        if held is not None:
+            if not live_drawn(held):
+                return False
+            self._graph_nodes[element_id] = regraded(held)
+            self.regrades.append(element_id)
+            return True
+        for index, edge in enumerate(self._graph_edges):
+            if edge.id == element_id:
+                if not live_drawn(edge):
+                    return False
+                self._graph_edges[index] = regraded(edge)
+                self.regrades.append(element_id)
+                return True
+        return False
 
     # --- reads -------------------------------------------------------------------------------
 

@@ -455,6 +455,7 @@ POST   /v1/admin/schedules/{rid}/resume resume it; 409 `composite_read_only` for
 POST   /v1/ingest/connector/{name}/run  trigger a configured connector
 GET    /v1/handling-scheme              the active deployment's classification/handling-code vocabulary
 GET    /v1/yardstick                    the active deployment's probability yardstick (01_DOMAIN_MODEL.md §5)
+GET    /v1/grading-scheme               the deployment's grading scheme (`grading.scheme`, ADR-143 decision 11) and each part's grades, for Admin's read-only display; any signed-in person, as the yardstick
 GET    /v1/documents/{id}               metadata, provenance, extraction results
 GET    /v1/documents/{id}/content       original bytes, access-checked, audited
 POST   /v1/documents/{id}/reextract     re-run with a different model version

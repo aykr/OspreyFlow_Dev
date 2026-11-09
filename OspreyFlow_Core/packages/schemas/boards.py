@@ -7,8 +7,8 @@ never into a source. Each drawn node and link carries a `DrawnAssertion` on its 
 asserted it, on which board of which case, its grading and its source note (decision 4). That is
 the provenance class `analyst_drawn`, drawn dashed in amber everywhere it appears.
 
-- **`Grading`**: a grade in the deployment's scheme (decision 11; the scheme setting itself is
-  L3.7's, and until it is built every board grades in `5x5x5`).
+- **`Grading`**: a grade in the deployment's scheme (decision 11 and Amendment 6, `grading.scheme`),
+  which an opened board offers with its grades (`BoardOpened.grading_grades`).
 - **`DrawnItemInput`**, **`DrawnLinkInput`**, **`DrawnItemEdit`**: declaring, linking, editing.
 - **`BoardInput`**, **`Board`**, **`BoardOpened`**: making, listing and opening a board.
 - **`MatchSuggestion`**, **`MatchDecision`**: *Looks like a loaded item* (decision 6). A
@@ -32,6 +32,7 @@ from schemas.domain import (
     EdgeId,
     Grading,
     GradingScheme,
+    GradingSchemeAnswer,
     Node,
     NodeId,
     PrincipalId,
@@ -171,6 +172,8 @@ class BoardOpened(BaseModel):
     markings: list[str] = Field(default_factory=list)
     ceiling: str | None = None
     grading_scheme: GradingScheme = "5x5x5"
+    #: Its parts' grades (ADR-143 Amendment 6: a scheme file's are known only from here).
+    grading_grades: GradingSchemeAnswer | None = None
     #: Whether this reader may draw on it (its creator, holding `draw_on_boards`).
     may_draw: bool = False
 

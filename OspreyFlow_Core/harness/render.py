@@ -1498,6 +1498,14 @@ def release_version(config: OspreyConfig) -> str:
     return checkout_version(Path(source) if source is not None else REPO_ROOT)
 
 
+def _grading_env(config: OspreyConfig) -> list[str]:
+    scheme = config.grading.resolved()
+    lines = [f"OSPREY_GRADING_SCHEME={scheme.scheme}"]
+    if config.grading.names_a_file:
+        lines.append(f"OSPREY_GRADING_GRADES={scheme.model_dump_json()}")
+    return lines
+
+
 def _render_env(config: OspreyConfig) -> str:
     lines = [
         f"OSPREY_PROFILE={config.profile.value}",
@@ -1593,6 +1601,9 @@ def _render_env(config: OspreyConfig) -> str:
             if config.connectors.secrets
             else []
         ),
+        # ADR-143 decision 11 and Amendment 6: the scheme drawn items are graded in, by name, and a
+        # scheme file's grades beside it (the Conduit never reads the file itself).
+        *_grading_env(config),
         "",
         "# Ports published besides the front proxy's: the Conduit only when network.expose_conduit",
         "# asks, ArcadeDB on loopback only (ADR-114 Amendment 4 decision 3). Each is overridable.",
@@ -1864,7 +1875,10 @@ def load_config(path: Path) -> OspreyConfig:
     if not path.exists():
         return OspreyConfig()
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return OspreyConfig.model_validate(raw)
+    config = OspreyConfig.model_validate(raw)
+    # ADR-143 Amendment 6: a scheme file named by `grading.scheme` is read beside this file.
+    config.grading.read_file(path.parent)
+    return config
 
 
 def find_drift(result: RenderResult, out_dir: Path) -> list[str]:
@@ -1978,6 +1992,20 @@ def write_config_copy(config_path: Path, out_dir: Path) -> Path:
         )
     # The Conduit mounts it, and it holds no secret (05_DEPLOYMENT.md §7: never in osprey.yaml).
     write_shared(target, content)
+    # ADR-143 Amendment 6: a scheme file it names beside it goes with it, so the copy reads as the
+    # original does (every later `load_config` of the copy, `harness.apply`'s among them).
+    scheme = (yaml.safe_load(content) or {}).get("grading", {}) if content else {}
+    named = scheme.get("scheme") if isinstance(scheme, dict) else None
+    if (
+        isinstance(named, str)
+        and named.endswith((".yaml", ".yml"))
+        and not Path(named).is_absolute()
+    ):
+        source = config_path.parent / named
+        if source.is_file():
+            kept = out_dir / named
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            write_shared(kept, source.read_text(encoding="utf-8"))
     return target
 
 

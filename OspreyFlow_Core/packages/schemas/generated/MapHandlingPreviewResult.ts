@@ -24,10 +24,11 @@ export type DrawnItemId = string;
 export type DrawnBoardId = string;
 export type DrawnCaseId = string;
 export type DrawnLabel = string;
-export type GradingSchemeName = "5x5x5" | "3x5x2";
+export type GradingSchemeName = string;
 export type GradeSource = string;
 export type GradeIntelligence = string;
 export type GradeHandling = string;
+export type DrawnOriginalGrading = Grading | null;
 export type DrawnSourceNote = string | null;
 export type DrawnIcon = string | null;
 
@@ -79,6 +80,7 @@ export interface DrawnAssertion {
   case_id: DrawnCaseId;
   label: DrawnLabel;
   grading: Grading;
+  original_grading?: DrawnOriginalGrading;
   source_note?: DrawnSourceNote;
   source_document?: DocumentId | null;
   icon?: DrawnIcon;
@@ -86,6 +88,11 @@ export interface DrawnAssertion {
 /**
  * A grade in one scheme, kept with its scheme so a later change of scheme (L3.7) keeps the
  * original beside the new one (C13).
+ *
+ * A grade of a built-in scheme is checked against its parts here. A grade of a scheme file's
+ * scheme (Amendment 6) is checked where a grade enters, against the deployment's scheme: the
+ * board routes and the grading change. A stored one is read as stored, since an original may be of
+ * a scheme the deployment no longer has.
  */
 export interface Grading {
   scheme?: GradingSchemeName;
