@@ -235,13 +235,25 @@ ClickHouse refuses a RANGE window offset of 2^31 or more ("Frame start offset fo
 32-bit integer, '2592000000' of type 'UInt64' given"). So `event_frequency` failed in a ClickHouse deployment for any
 span past about 24.9 days (ADR-133's frequency conditions allow 366).
 
-- **The fix** (`analytics_clickhouse/adapter.py`): each event's span is a self-join of the same rows,
-  `b.at BETWEEN a.at - span_ms AND a.at` within a subject. It is exact to the millisecond and counts ties as
-  DuckDB's `RANGE … CURRENT ROW` does, at any span.
-- **The new case:** `test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_millisecond`. Events
-  exactly 90 days apart are in one span; one 90 days and 1 ms later is not (largest total 12, never 18).
-- **Red, each on c's ClickHouse through `stack_lease.sh remote`:**
-  - The old RANGE window: both cases red, refused by ClickHouse.
-  - A plant by whole seconds (`toUnixTimestamp`, the span in seconds), the obvious fix that keeps the window:
-    the new case alone red, `assert 18.0 == 12.0`.
-  - The fix: 14 passed, both adapters.
+- **The first fix (1f04c2c), withdrawn after my lane-reviewer's round.** It was a self-join, `b.at BETWEEN a.at - span_ms AND a.at`,
+  with two defects:
+  - it paired every two events of a subject, n² with no bound;
+  - it kept the old window's milliseconds against a column of microseconds (`DateTime64(6)`), so an event up to 999 µs
+    outside the span was counted, where DuckDB does not count it.
+- **The fix** (`analytics_clickhouse/adapter.py`): each event's running count, non-null amounts and Decimal sum up to and
+  with its instant, read through a RANGE frame with no offset (UNBOUNDED PRECEDING to CURRENT ROW, ties included).
+  - It subtracts the running figures of the last instant strictly before `at - INTERVAL N DAY`, by an ASOF JOIN on the
+    `DateTime64` itself. That is exact to the microsecond, and sorting rather than pairing, so n log n.
+  - Amounts are summed as `Decimal128(9)` from their shortest text, so the subtraction is exact (0.1 + 0.2 sums to 0.3).
+    An amount of 10^29 or more reads as no amount.
+  - No per-row key is needed (the review's third item).
+- **The case**, at the real call site, the span 90 days:
+  `test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_microsecond[±1]`. A third event 1 µs more
+  than 90 days after day 90 is in no span with it (largest total 12); 1 µs less, it is (18).
+- **Red, each on c's ClickHouse, the rules lease, through `stack_lease.sh remote`:**
+  - Plant 1, the RANGE window on milliseconds (8e8b9ff's): three cases red, each refused by ClickHouse
+    (offsets 2592000000 and 7776000000).
+  - Plant 2, the self-join on milliseconds (1f04c2c's): `[1-12.0]` red, `assert 18.0 == 12.0`.
+  - The fix: 16 passed, both adapters.
+- **Green, the whole analytics suite on both adapters:** `gates/<the fix's commit>.live.txt`. It includes
+  `test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first`, the rule 3 case on this read.

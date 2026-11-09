@@ -774,27 +774,35 @@ class AnalyticsClickHouseAdapter:
         )
         # Each event once per subject it touches: an event to itself is one event, not two.
         touched = (
-            f"SELECT source_id AS node, toUnixTimestamp64Milli(occurred_at) AS at, "
-            f"{amount} AS amount FROM events WHERE {predicate.where} AND source_id IN ({marks}) "
+            f"SELECT source_id AS node, occurred_at AS at, {amount} AS amount "
+            f"FROM events WHERE {predicate.where} AND source_id IN ({marks}) "
             "UNION ALL "
-            f"SELECT target_id AS node, toUnixTimestamp64Milli(occurred_at) AS at, "
-            f"{amount} AS amount FROM events "
+            f"SELECT target_id AS node, occurred_at AS at, {amount} AS amount FROM events "
             f"WHERE {predicate.where} AND target_id IN ({marks}) AND target_id != source_id"
         )
-        span_ms = int(req.span_days) * 86_400_000
-        # Each event's span is every event of the same subject from span_ms before it up to and
-        # including its own instant (ties included), as DuckDB's RANGE … CURRENT ROW counts it. A
-        # self-join, not a RANGE window: ClickHouse refuses a RANGE offset of 2^31 or more, and 25
-        # days in milliseconds is already past it (L2.10's live run, ClickHouse 25.8).
+        # An event's span is every event of its subject from span_days before it up to and including
+        # its own instant, ties included, as DuckDB's RANGE … CURRENT ROW counts it. ClickHouse
+        # refuses a RANGE offset of 2^31 or more (25 days in milliseconds is past it; L2.10's live
+        # run, ClickHouse 25.8), so: each event's running count, non-null amounts and sum up to and
+        # with its instant (a RANGE frame with no offset), less the running figures of the last
+        # instant strictly before `at - span_days` (an ASOF JOIN on the DateTime64 itself, exact to
+        # the microsecond the column holds). Sorting, not pairing: n log n per subject. The sums are
+        # Decimal, so the subtraction is exact; an amount is read as its shortest decimal text.
+        days = int(req.span_days)
         rows = await self._ch.rows(
-            f"WITH touched AS ({touched}) "
-            "SELECT node, max(n), max(total) FROM ("
-            "  SELECT a.node AS node, a.k AS k, count() AS n, sum(b.amount) AS total "
-            "  FROM (SELECT node, at, rowNumberInAllBlocks() AS k FROM touched) AS a "
-            "  INNER JOIN touched AS b ON a.node = b.node "
-            f"  WHERE b.at BETWEEN a.at - {span_ms} AND a.at "
-            "  GROUP BY a.node, a.k"
-            ") GROUP BY node",
+            f"WITH touched AS ({touched}), "
+            "running AS ("
+            "  SELECT node, at, count() OVER w AS c, count(amount) OVER w AS nn, sum(ifNull("
+            "  toDecimal128OrNull(toString(amount), 9), toDecimal128(0, 9))) OVER w AS s "
+            "  FROM touched "
+            "  WINDOW w AS (PARTITION BY node ORDER BY at "
+            "  RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"
+            ") "
+            "SELECT a.node, max(a.c - b.c), "
+            "max(if(a.nn = b.nn, CAST(NULL AS Nullable(Float64)), toFloat64(a.s - b.s))) "
+            f"FROM (SELECT node, at - INTERVAL {days} DAY AS cut, c, nn, s FROM running) AS a "
+            "ASOF LEFT JOIN running AS b ON a.node = b.node AND a.cut > b.at "
+            "GROUP BY a.node",
             [*predicate.params, *subjects, *predicate.params, *subjects],
         )
         window = req.filter.window
