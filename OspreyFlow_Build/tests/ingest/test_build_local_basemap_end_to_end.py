@@ -55,6 +55,7 @@ async def test_build_local_basemap_loads_the_gazetteer_and_registers_the_provide
             progress=lambda _msg: None,
             downloader=fake_downloader,
             planetiler_runner=fake_planetiler,
+            gazetteer_dataset="gazetteer-osm-great-britain",
         )
         await graph.commit_transaction(tx)
 
@@ -64,6 +65,11 @@ async def test_build_local_basemap_loads_the_gazetteer_and_registers_the_provide
         node = await graph.find_node("Location", "osm_id", "1", CLEARED)
         assert node is not None
         assert node.properties["name"] == "Cranford"
+        # ADR-147 Amendment 1: in the region's gazetteer dataset, which a case adds to read it.
+        in_it = CLEARED.model_copy(update={"datasets": ["gazetteer-osm-great-britain"]})
+        elsewhere = CLEARED.model_copy(update={"datasets": ["another-dataset"]})
+        assert await graph.find_node("Location", "osm_id", "1", in_it) is not None
+        assert await graph.find_node("Location", "osm_id", "1", elsewhere) is None
 
     config = load_map_config(config_path)
     assert config.default == "osm-local-great-britain"
