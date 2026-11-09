@@ -367,6 +367,9 @@ ROUTE_RIGHTS = {
     "reject_held_rows": "decide_held_rows",
     "issue_ws_ticket": None,
     "my_rights_route": None,
+    # L2.7 (ADR-145 decision 11, A2): the reader's own Needs you; each half gated by what it lists
+    # (`needs_you.py`), its access cases in `test_needs_you.py`.
+    "my_needs_you_route": None,
     # ADR-135 decision 5: the engines an analyst may choose; any signed-in person, never a key.
     "model_engines_route": None,
     # ADR-136: the same within a case (its datasets' egress), the case's Viewer level applying.
@@ -630,7 +633,9 @@ REFERENCE_CATALOGUES = frozenset({
 })  # fmt: skip
 #: Read routes any signed-in person may call that hold the deployment's data — its cases, its
 #: datasets and the person's own rights — and answer this person with none.
-EMPTY_FOR_NO_ROLE = frozenset({"list_investigations", "list_datasets_route", "my_rights_route"})
+EMPTY_FOR_NO_ROLE = frozenset({
+    "list_investigations", "list_datasets_route", "my_rights_route", "my_needs_you_route",
+})  # fmt: skip
 
 
 def _holds_nothing(body: object) -> bool:

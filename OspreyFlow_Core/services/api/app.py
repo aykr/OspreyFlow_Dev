@@ -150,6 +150,8 @@ from schemas.admin import (
     InviteInput,
     LayerAction,
     LayerDryRun,
+    NeedsYou,
+    NeedsYouProposals,
     OperationsAgeing,
     OrganisationArrival,
     OrganisationLinkInput,
@@ -450,6 +452,7 @@ from . import kyc as kyc_module
 from . import map_admin as map_admin_module
 from . import model_admin as model_admin_module
 from . import model_usage as model_usage_module
+from . import needs_you as needs_you_module
 from . import ownership as ownership_module
 from . import promotion_ageing as promotion_ageing_module
 from . import readiness as readiness_module
@@ -16744,6 +16747,44 @@ async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
     """ADR-112: what the signed-in person may do, so the Glass and the Studio leave out what they
     would only refuse. Not a gate — every route still checks its own right."""
     return RightsResponse(rights=sorted(rights_for(principal.roles)))
+
+
+@app.get("/v1/me/needs-you")
+async def my_needs_you_route(
+    request: Request,
+    principal: PrincipalDep,
+    ageing: PromotionAgeingDep,
+    investigations: InvestigationsDep,
+    datasets: DatasetsDep,
+    link_types: LinkTypesDep,
+    scheme: HandlingSchemeDep,
+) -> NeedsYou:
+    """The reader's *Needs you* (ADR-145 decision 11, A2; L2.7; `needs_you.py` says what each
+    half reads). It names no right because each half is gated by what it lists, as the reader. The
+    overdue promotions are served only while the reader is still a recipient (`alerts_for` asks
+    `_promotion_recipients` again now). The proposed link types are counted only for a holder of
+    `accept_types`, only in the datasets their own cases load into, and without any proposal they
+    may not read."""
+    app_ = request.app
+    overdue = await ageing.alerts_for(principal.id, lambda p: _promotion_recipients(app_, p))
+    proposals: list[NeedsYouProposals] = []
+    if Right.ACCEPT_TYPES in rights_for(principal.roles):
+        reached = await needs_you_module.reached_datasets(
+            principal, investigations.list_for, datasets.ids_of_case
+        )
+        held = await datasets.egress_of(reached) if reached else {}
+        names = {d: held[d].name for d in reached if d in held}
+
+        async def views(dataset_id: str, words: bool) -> Sequence[object]:
+            return await link_types.dataset_proposal_views(dataset_id, may_read_words=words)
+
+        async def words(dataset_id: str) -> bool:
+            return await _reads_proposal_words(dataset_id, principal, datasets, scheme)
+
+        proposals = await needs_you_module.proposals_to_decide(
+            [d for d in reached if d in held], names, views, words
+        )
+    return NeedsYou(promotions_overdue=overdue, proposals=proposals)
 
 
 # --- Admin › Models (ADR-135 Amendment 2, ADR-112 Amendment 7) ----------------------------------
