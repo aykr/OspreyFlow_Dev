@@ -1,7 +1,7 @@
 // The top bar's *Needs you · n* on its own (ADR-145 decision 11, A2; L2.7): for `needs-you.spec.ts`
 // (rule 13) and the every-harness axe scan, in both themes and under GOV.UK (`?brand=govuk`). The page
 // serves `GET /v1/me/needs-you` itself, synthetic (rule 9): an overdue promotion, proposals to decide
-// in one dataset and one above the reader's clearance in another. Where an entry opens is recorded on
+// in one dataset. Where an entry opens is recorded on
 // `window.__opened`. `?open=1` draws the panel open, for the scan.
 import { createRoot } from "react-dom/client";
 
