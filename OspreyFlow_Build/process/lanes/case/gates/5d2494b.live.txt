@@ -1,0 +1,8 @@
+# L3.3 live run at 5d2494b (rebased on main 3603baa, rules' L2.9), lease case on stack c (ArcadeDB 2493, Postgres 55435, Valkey 6381, MinIO 9004; OSPREY_LANE=case)
+# Tests: test_board_store.py, harness/test_restore_drawn_layer.py, test_route_rights.py, test_investigation_levels.py, test_boards.py, schemas/test_boards.py.
+# Run 1, on stack c's own ospreyflow database: 4 failed. 3 of them read two link_type_proposals rows with status 'accepted', which only the case-b worktree's code writes (its CHECK constraint is on that database). They were left by another lane's run, and neither this branch nor main can read them. The 4th is main's own table gap below.
+# Run 2, below, on a fresh database made and dropped under this lease (POSTGRES_DB=case_l33_live):
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+1 failed, 310 passed, 1 warning in 40.80s
+# 2026-11-08T23:37:42Z to 2026-11-08T23:38:23Z
+# The one failure is main's own: test_every_route_names_the_right_the_table_gives_it lists models_admin_limits_route and models_admin_usage_route (platform P2, 66009ab) as in the app and not in the table. No board route is involved.

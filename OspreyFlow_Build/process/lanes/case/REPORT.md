@@ -17,13 +17,17 @@
   - All 17 routes answer another case's member as for a missing case.
   - Nothing of a drawn item reaches another case. The test goes red with K's layer in B's read set, and on real Postgres with the SQL's case clause made true.
   - A lower-cleared member of the same case is told nothing of what they may not see, on any board read or by a withdrawal.
-- **Axe:** 48 passed (dark, light and GOV.UK).
-- **Gates at `3a6f21a`** (tree `e7a0a9957e88`; `gates/3a6f21a.notes.md`): `make -k ci` green but test-file-coverage (the CI patch); `make test` 8803 passed, failing only on this machine's own and the CI patch's tests; npm test 2693 passed, the matrix timing budget failing at load average 72.
-- **Live at `c409fb2`:** lease case on stack b, 21:42–21:43Z, 79 passed. The 1 failure is main's own (P2's two model routes missing from the route-rights table). `gates/c409fb2.live.txt` has the run. Since then only a docstring and `places.json` have changed.
+- **Axe:** 56 passed (dark, light and GOV.UK).
+- **Gates** (`gates/b9c4ffa.notes.md`), at `b9c4ffa` (tree `b2c1544928d4`) on main `057a10e`, rules' L2.9:
+  - make -k ci and make test fail only on this machine's own tests, the network, trivy's cache lock and the CI patch's wiring.
+  - npm test: 2727 passed. The Matrix timing and main's rules registry check fail.
+  - The boards keyboard spec (33) and axe (56) passed.
+- **Live:** lease case on stack c, on a fresh database: 310 passed. The 1 failure is main's own (P2's model routes missing from the route-rights table).
 
 **Lane review (lane-reviewer):** two rounds.
 - Round 1 found 14 items; all are fixed.
 - Round 2 found 23 items, with two blockers: the restore test could not run, and a withdrawal's watch count told of a link the withdrawer could not see. Both blockers and every must-fix item are fixed.
+- The orchestrator's independent review found one blocker (`missing` counted hidden items) and must-fix items 2-4. All are fixed, with its minors and the canvas board-id gap.
 - Minors left: `POST /v1/drawings` is not atomic (a failed board leaves a usable empty case); the link-change test calls the service directly, not the route; a view-started board reports `start: selection` (spec 03 says so).
 
 **Decisions taken** (the owner may overrule each):
@@ -36,12 +40,11 @@
 - A duplicate link is refused.
 - The documents offered as a source or picture are those on the board.
 - An unseen promoted link is left to L3.4. The orchestrator ruled (a): the node goes, the link stays, and the withdrawer is told nothing.
-- `draw_on_boards` opens the Glass.
+- Drawing needs `investigate` too, and a board's id is told to its creator alone on every read path.
 - **Open question 4** (moving versus linking): built as C7 says, for a field analyst's check.
 
 **For the orchestrator:**
 - Apply `registry-L3.3.patch` and `ci-wiring-L3.3.patch`. Without the second, test-file-coverage fails and `make test` errors on `test_board_store.py`.
-- Ratify these files outside case's map: `App.tsx`, `App.chrome.test.tsx`, `shell/places{,ByRole}.json`, `canvas/`, `color/palette.ts`, `a11y/every-harness.spec.ts`, `dataset_scope.py`, `entity_pictures.py`, `link_changes.py`, and the board rows in three shared route tests.
-- Run your independent review.
+- Ratify these files outside case's map: `App.tsx` (merged with L2.9 as agreed), `App.chrome.test.tsx`, `packages/ontology/handling.py`, `canvas/`, `color/palette.ts`, `a11y/every-harness.spec.ts`, `dataset_scope.py`, `entity_pictures.py`, `link_changes.py`, and the board rows in three shared route tests.
 
-**Commits:** `git log main..lane/case`. **Before the merge:** a rebase onto rules' L2.9, as the orchestrator asked (App.tsx's Boards), with the gates run again. **Running:** nothing; the stack is down and the lease released.
+**Commits:** `git log main..lane/case`. **Running:** nothing; the stack is down and the lease released.

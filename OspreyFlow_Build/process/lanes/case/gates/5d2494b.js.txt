@@ -1,0 +1,68 @@
+
+> ospreyflow@0.0.0 test
+> npm run test --workspace apps/workspace && npm run test --workspace apps/harness
+
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace
+
+ ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 5316ms
+   ❯ MatrixView at 50,000 nodes and 250,000 links (1)
+     × opens inside §5's first-frame budget, drawing one page of each table and saying so 5315ms
+ ❯ keyboard/registryCoverage.test.ts (47 tests | 1 failed) 13ms
+   ❯ every declared keyboard action registry has a proving assertAllCovered call (47)
+     × RULES_PLACE_ACTIONS is asserted by some *.spec.ts in this directory 6ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  keyboard/registryCoverage.test.ts > every declared keyboard action registry has a proving assertAllCovered call > RULES_PLACE_ACTIONS is asserted by some *.spec.ts in this directory
+AssertionError: RULES_PLACE_ACTIONS is declared in actionRegistry.ts but no *.spec.ts file under keyboard/ calls assertAllCovered("RULES_PLACE_ACTIONS", ...) — its own coverage gate never runs, so it is silently proving nothing (the exact gap this test exists to catch).: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ keyboard/registryCoverage.test.ts:45:9
+     43|           `assertAllCovered("${name}", ...) — its own coverage gate ne…
+     44|           `silently proving nothing (the exact gap this test exists to…
+     45|       ).toBe(true);
+       |         ^
+     46|     },
+     47|   );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+AssertionError: opened in 2968 ms: expected 2967.7962919999995 to be less than 2500
+ ❯ src/matrix/MatrixView.budget.test.tsx:50:60
+     48|     expect(entities.querySelector("caption")?.textContent).toContain("…
+     49|     expect(links.querySelector("caption")?.textContent).toContain("Row…
+     50|     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+       |                                                            ^
+     51|   }, 60_000);
+     52| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 324 passed (326)
+      Tests  2 failed | 2727 passed (2729)
+   Start at  00:17:28
+   Duration  28.54s (environment 51%, tests 36%, import 10%, transform 2%, setup 1%)
+
+    Isolate  326 workers spawned · ~524ms startup each (spawn + environment, per file)
+             at least ~15.00s faster with isolate: false — reuses workers across files instead of one per file
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run
+js exit 1
