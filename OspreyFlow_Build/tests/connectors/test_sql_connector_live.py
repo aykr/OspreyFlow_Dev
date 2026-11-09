@@ -26,7 +26,9 @@ What a mistake would do, and the case that catches it:
 - an incremental refresh reading every row again, or skipping one —
   `test_visit_bookings_is_read_incrementally_and_a_refresh_reads_only_new_rows` (the exit);
 - a refused sign-in or a missing table read as no rows — `test_refusals_are_refused_in_words`;
-- a server without TLS accepted — `test_a_server_without_tls_is_refused`.
+- a server without TLS accepted — `test_a_server_without_tls_is_refused`;
+- the byte cap counted in characters, or checked only after a row past it is held —
+  `test_the_byte_cap_counts_bytes_not_characters`, `test_a_row_past_the_byte_cap_is_never_held`.
 """
 
 from __future__ import annotations
@@ -199,6 +201,96 @@ async def test_a_watermark_on_a_time_reads_past_its_value(nomis: asyncpg.Connect
         connect=_no_tls,
     )
     assert [r["booking_id"] for r in got.rows] == ["3"]
+
+
+# --- The byte cap (the independent review of L1.6, carried into L1.8) ---------------------------
+# A read is capped at `reads.MAX_BYTES`, counted in bytes (UTF-8), not characters, and checked before
+# a row is held: the server keeps the running count, so a row past the cap is never sent, and the
+# row that crosses it is sent without its values. Shown red at main
+# (`process/lanes/studio-b/l1.8/red-carry-byte-cap.txt`).
+
+NOTES = SqlRead(table="nomis_replica_fixture.case_notes")
+
+
+async def _notes(conn: asyncpg.Connection, notes: list[str]) -> None:
+    """A synthetic notes table the fixture's reader may read; dropped with the fixture's schema."""
+    await conn.execute(f"""
+        CREATE TABLE nomis_replica_fixture.case_notes (note_id integer PRIMARY KEY, note text NOT NULL);
+        GRANT SELECT ON nomis_replica_fixture.case_notes TO {READER};
+    """)
+    await conn.executemany(
+        "INSERT INTO nomis_replica_fixture.case_notes VALUES ($1, $2)", list(enumerate(notes, 1))
+    )
+
+
+class _Counted:
+    """The connection a read is given, counting the bytes of every value its cursors hand over: what
+    the read came to hold. Everything else passes through."""
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+        self.received = 0
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+    def cursor(self, *args: Any, **kwargs: Any) -> Any:
+        rows = self._conn.cursor(*args, **kwargs)
+        counted = self
+
+        class _Rows:
+            def __aiter__(self) -> Any:
+                self._inner = rows.__aiter__()
+                return self
+
+            async def __anext__(self) -> Any:
+                record = await self._inner.__anext__()
+                counted.received += sum(
+                    len(str(v).encode("utf-8")) for v in record.values() if v is not None
+                )
+                return record
+
+        return _Rows()
+
+
+async def test_the_byte_cap_counts_bytes_not_characters(
+    nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """600 characters of `é` are 1,200 bytes: over a 1,000-byte cap, though under it in characters."""
+    from services.ingest.connectors import reads
+
+    await _notes(nomis, ["é" * 600])
+    monkeypatch.setattr(reads, "MAX_BYTES", 1000)
+    with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
+        await read_sql(_settings(), NOTES, secret=PASSWORD, connect=_no_tls)
+    monkeypatch.setattr(reads, "MAX_BYTES", 1300)
+    got = await read_sql(_settings(), NOTES, secret=PASSWORD, connect=_no_tls)
+    assert [r["note"] for r in got.rows] == ["é" * 600]
+
+
+@pytest.mark.parametrize("watermark", [None, "note_id"], ids=["whole", "incremental"])
+async def test_a_row_past_the_byte_cap_is_never_held(
+    nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch, watermark: str | None
+) -> None:
+    """Three short notes, then three of 100 KB, under a 1,000-byte cap: refused, and the read never
+    holds more than the cap, however the rows after the cap are sized."""
+    from services.ingest.connectors import reads
+
+    await _notes(nomis, ["short note"] * 3 + ["x" * 100_000] * 3)
+    monkeypatch.setattr(reads, "MAX_BYTES", 1000)
+    held: list[_Counted] = []
+
+    async def counted(**kw: Any) -> Any:
+        held.append(_Counted(await _no_tls(**kw)))
+        return held[-1]
+
+    with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
+        await read_sql(_settings(), NOTES, secret=PASSWORD, watermark=watermark, connect=counted)
+    assert held and held[0].received <= 1000, held[0].received
+    monkeypatch.setattr(reads, "MAX_BYTES", 400_000)
+    got = await read_sql(_settings(), NOTES, secret=PASSWORD, watermark=watermark, connect=_no_tls)
+    assert [r["note_id"] for r in got.rows] == ["1", "2", "3", "4", "5", "6"]
+    assert got.columns == ["note_id", "note"]
 
 
 async def test_refusals_are_refused_in_words(nomis: asyncpg.Connection) -> None:
