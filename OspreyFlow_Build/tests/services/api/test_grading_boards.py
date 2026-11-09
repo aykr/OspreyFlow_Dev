@@ -14,6 +14,8 @@ import pytest
 from services.api.app import app
 from services.api.config import GradingSettings
 
+from schemas.domain import GradingSchemeAnswer
+
 from .test_boards import GRADE, K, _as, _board, _item, _link, world  # noqa: F401  (a fixture)
 
 THREE = {"scheme": "3x5x2", "source": "A", "intelligence": "1", "handling": "P"}
@@ -25,7 +27,7 @@ def _writes(world: SimpleNamespace) -> int:
 
 @pytest.fixture
 def three_by_five(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    monkeypatch.setattr(app.state, "grading", GradingSettings(scheme="3x5x2"), raising=False)
+    monkeypatch.setattr(app.state, "grading", GradingSettings.of("3x5x2"), raising=False)
     return world
 
 
@@ -90,3 +92,32 @@ def test_an_edit_to_a_grade_in_another_scheme_is_refused_before_anything_is_writ
     assert _as("alice").patch(
         f"/v1/investigations/{K}/board-items/{item}", json={"label": "y"}
     ).status_code == 200
+
+
+FORCE = GradingSchemeAnswer(
+    scheme="force-4x3", source=["W", "X", "Y", "Z"], intelligence=["1", "2", "3"], handling=["H"]
+)
+
+
+def test_a_scheme_files_grades_are_offered_and_checked(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Amendment 6: a scheme file's scheme is known only from the setting, so the board says its
+    grades, and a grade that is not one of them is refused though `Grading` alone accepts it."""
+    monkeypatch.setattr(app.state, "grading", GradingSettings(grades=FORCE), raising=False)
+    board = _board(start="blank")
+    opened = _as("alice").get(f"/v1/investigations/{K}/boards/{board}").json()
+    assert opened["grading_scheme"] == "force-4x3"
+    assert opened["grading_grades"] == FORCE.model_dump(mode="json")
+    before = _writes(world)
+    refused = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/items",
+        json={"type": "Person", "label": "x", "marking": "OFFICIAL", "source_note": "n",
+              "grading": {"scheme": "force-4x3", "source": "Q", "intelligence": "1",
+                          "handling": "H"}},
+    )  # fmt: skip
+    assert refused.status_code == 422, refused.text
+    assert "source 'Q' is not a grade of force-4x3" in refused.json()["detail"]
+    assert _writes(world) == before
+    _item(board, grading={"scheme": "force-4x3", "source": "W", "intelligence": "3",
+                          "handling": "H"})  # fmt: skip

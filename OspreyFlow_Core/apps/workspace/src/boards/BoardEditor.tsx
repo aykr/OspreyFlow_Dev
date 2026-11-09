@@ -14,6 +14,8 @@ import { currentBrand } from "../brand/brand";
 import { GLYPH_NAMES } from "../color/nodeGlyphs";
 import {
   GRADES,
+  gradesOf,
+  offerGrades,
   clamp,
   isDrawn,
   itemLabel,
@@ -73,7 +75,7 @@ interface Menu {
 }
 
 const EMPTY_GRADE = (scheme: string): Grading => {
-  const parts = GRADES[scheme] ?? GRADES["5x5x5"]!;
+  const parts = gradesOf(scheme) ?? GRADES["5x5x5"]!;
   return { scheme: scheme as Grading["scheme"], source: parts.source[1] ?? "B", intelligence: parts.intelligence[1] ?? "2", handling: parts.handling[0] ?? "1" };
 };
 
@@ -116,6 +118,8 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
   const drawnIds = useMemo(() => new Set(opened?.drawn ?? []), [opened]);
   const mayDraw = opened?.may_draw ?? false;
   const scheme = opened?.grading_scheme ?? "5x5x5";
+  // Before the forms below read it: a scheme file's grades are known only from the opened board.
+  useMemo(() => offerGrades(opened?.grading_grades), [opened]);
   // A source document or a picture is chosen from the Documents on the board: no route lists a
   // case's documents, and these are the ones this reader may already see.
   const documents = useMemo(() => (opened?.nodes ?? []).filter((n) => n.type === "Document"), [opened]);
@@ -780,7 +784,7 @@ const NO_SOURCE = "Give a source note or choose a document of the case: where th
 const hasSource = (form: AssertedForm) => Boolean(form.sourceNote.trim() || form.sourceDocument);
 
 function GradingFields({ grading, scheme, govuk, onChange, idPrefix }: { grading: Grading; scheme: string; govuk: boolean; onChange: (g: Grading) => void; idPrefix: string }) {
-  const parts = GRADES[scheme] ?? GRADES["5x5x5"]!;
+  const parts = gradesOf(scheme) ?? GRADES["5x5x5"]!;
   const field = (key: "source" | "intelligence" | "handling", label: string, values: string[]) => (
     <div className={govuk ? "govuk-form-group board__grade" : "board__grade"}>
       <label htmlFor={`${idPrefix}-grade-${key}`} className={govuk ? "govuk-label" : "label"}>

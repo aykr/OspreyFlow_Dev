@@ -61,7 +61,7 @@ a person at the prompts and CI install the same way.
       phase: beta                  #   alpha | beta | live | none
     demo_accounts: true            # false for no demo accounts (the blank starter's answer)
     grading:                       # ADR-143 decision 11 (grading.* in osprey.yaml)
-      scheme: 5x5x5                #   5x5x5 | 3x5x2; changed later only by the grading command
+      scheme: 5x5x5                #   5x5x5 | 3x5x2 | a scheme file (ospreyflow grading change)
 
 Unknown keys are refused by name, as `osprey.yaml`'s are, so a typo never silently means the
 default. This module depends on nothing but PyYAML: the command is small, and the deployment's own
@@ -178,19 +178,16 @@ class Answers:
     grading_scheme: str | None = None
 
 
-#: The grading schemes `grading.scheme` may name (`schemas.domain.GRADING_PARTS`).
-GRADING_SCHEMES = ("5x5x5", "3x5x2")
-
-
 def _grading_scheme(section: Mapping[str, Any]) -> str | None:
+    """`grading.scheme` as given: a built-in scheme's name or a scheme file's path. Which ones are
+    schemes is the deployment schema's to say (`schemas.domain.GRADING_PARTS`, the one list), when
+    the result is rendered, as for every other setting this module passes on."""
     scheme = section.get("scheme")
     if scheme in (None, ""):
         return None
-    if str(scheme) not in GRADING_SCHEMES:
-        raise AnswersRefused(
-            f"grading.scheme is one of {', '.join(GRADING_SCHEMES)}, not {scheme!r}"
-        )
-    return str(scheme)
+    if not isinstance(scheme, str):
+        raise AnswersRefused(f"grading.scheme is a scheme's name or a scheme file, not {scheme!r}")
+    return scheme
 
 
 def _appearance(section: Mapping[str, Any], starter: starters.Starter | None) -> dict[str, str]:

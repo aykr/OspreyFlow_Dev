@@ -7,7 +7,10 @@ read), and to nobody signed out."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 from harness.render import _render_env
 from pydantic import ValidationError
@@ -15,7 +18,7 @@ from services.api.app import app
 from services.api.config import GradingSchemeUnknown, GradingSettings
 
 from schemas.deployment import OspreyConfig
-from schemas.domain import Principal
+from schemas.domain import GradingSchemeAnswer, Principal
 
 
 def test_the_scheme_defaults_to_5x5x5_and_another_is_refused_at_validation() -> None:
@@ -61,7 +64,7 @@ def test_the_route_answers_the_scheme_and_its_grades_to_anyone_signed_in(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(app.state, "principal_resolver", _Resolver(), raising=False)
-    monkeypatch.setattr(app.state, "grading", GradingSettings(scheme="3x5x2"), raising=False)
+    monkeypatch.setattr(app.state, "grading", GradingSettings.of("3x5x2"), raising=False)
     answer = TestClient(app, headers={"Authorization": "Bearer nobody"}).get("/v1/grading-scheme")
     assert answer.status_code == 200, answer.text
     assert answer.json() == {
@@ -110,16 +113,71 @@ def test_the_route_never_answers_a_default_for_a_scheme_it_cannot_read(
     assert client.get("/v1/grading-scheme").json()["scheme"] == "3x5x2"
 
 
-def test_every_list_of_the_scheme_names_is_the_schemes_of_grading_parts() -> None:
-    """The names are written out where a module may not import the schemas (the install answers
-    depend on PyYAML alone): each copy must be exactly `GRADING_PARTS`'s."""
-    import typing
+def test_the_built_in_schemes_names_are_listed_once() -> None:
+    """Finding 8 of the orchestrator's review: `GRADING_PARTS` (`schemas/domain.py`) is the one
+    list of the built-in schemes. No module of the product writes a list of the names of its own,
+    as `config.py` and `answers.py` once did (`("5x5x5", "3x5x2")`)."""
+    import re
 
-    from cli.ospreyflow.answers import GRADING_SCHEMES as ANSWERS
-    from services.api.config import GRADING_SCHEMES as CONDUIT
+    core = Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
+    names = r"""["'](?:5x5x5|3x5x2)["']"""
+    a_list = re.compile(rf"[(\[{{]\s*{names}\s*,\s*{names}")
+    owners = [
+        str(path.relative_to(core))
+        for folder in ("packages", "services", "scripts", "cli", "harness")
+        for path in (core / folder).rglob("*.py")
+        if a_list.search(path.read_text(encoding="utf-8"))
+    ]
+    assert owners == [], owners
 
-    from schemas.deployment import GradingConfig
-    from schemas.domain import GRADING_PARTS
 
-    setting = typing.get_args(GradingConfig.model_fields["scheme"].annotation)
-    assert set(ANSWERS) == set(CONDUIT) == set(setting) == set(GRADING_PARTS)
+FORCE = {"scheme": "force-4x3", "source": ["W", "X", "Y", "Z"], "intelligence": ["1", "2", "3"],
+         "handling": ["H"]}  # fmt: skip
+
+
+def test_a_scheme_file_is_read_beside_osprey_yaml_and_rendered_with_its_grades(
+    tmp_path: Path,
+) -> None:
+    from harness.render import load_config
+
+    (tmp_path / "grading-scheme.yaml").write_text(yaml.safe_dump(FORCE), encoding="utf-8")
+    (tmp_path / "osprey.yaml").write_text("grading:\n  scheme: grading-scheme.yaml\n", "utf-8")
+    config = load_config(tmp_path / "osprey.yaml")
+    assert config.grading.resolved().model_dump() == FORCE
+    env = _render_env(config)
+    assert "OSPREY_GRADING_SCHEME=force-4x3\n" in env
+    assert f"OSPREY_GRADING_GRADES={GradingSchemeAnswer(**FORCE).model_dump_json()}\n" in env  # type: ignore[arg-type]
+
+
+def test_a_scheme_file_that_cannot_be_read_or_is_no_scheme_is_refused_naming_it(
+    tmp_path: Path,
+) -> None:
+    from harness.render import load_config
+
+    (tmp_path / "osprey.yaml").write_text("grading:\n  scheme: absent.yaml\n", "utf-8")
+    with pytest.raises(ValueError, match="absent.yaml cannot be read"):
+        load_config(tmp_path / "osprey.yaml")
+    (tmp_path / "absent.yaml").write_text("scheme: force-4x3\nsource: [A, A]\n", "utf-8")
+    with pytest.raises(ValueError, match="is not a grading scheme"):
+        load_config(tmp_path / "osprey.yaml")
+    # A config not read through `load_config` cannot be rendered with a file it never read.
+    with pytest.raises(ValueError, match="has not been read"):
+        _render_env(OspreyConfig.model_validate({"grading": {"scheme": "absent.yaml"}}))
+
+
+def test_the_conduit_reads_a_scheme_files_grades_and_fails_closed_without_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OSPREY_GRADING_SCHEME", "force-4x3")
+    monkeypatch.delenv("OSPREY_GRADING_GRADES", raising=False)
+    with pytest.raises(GradingSchemeUnknown, match="OSPREY_GRADING_GRADES is unset"):
+        GradingSettings.from_env()
+    monkeypatch.setenv("OSPREY_GRADING_GRADES", GradingSchemeAnswer(**FORCE).model_dump_json())  # type: ignore[arg-type]
+    assert GradingSettings.from_env().grades.model_dump() == FORCE
+    monkeypatch.setenv("OSPREY_GRADING_SCHEME", "other-scheme")
+    with pytest.raises(GradingSchemeUnknown, match="not other-scheme's"):
+        GradingSettings.from_env()
+    monkeypatch.setenv("OSPREY_GRADING_SCHEME", "force-4x3")
+    monkeypatch.setenv("OSPREY_GRADING_GRADES", '{"scheme": "force-4x3"}')
+    with pytest.raises(GradingSchemeUnknown, match="not a scheme"):
+        GradingSettings.from_env()

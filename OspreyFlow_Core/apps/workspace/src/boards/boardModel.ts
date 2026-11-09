@@ -17,6 +17,20 @@ export const GRADES: Record<string, { source: string[]; intelligence: string[]; 
   "3x5x2": { source: ["A", "B", "C"], intelligence: ["1", "2", "3", "4", "5"], handling: ["P", "C"] },
 };
 
+type SchemeGrades = { source: string[]; intelligence: string[]; handling: string[] };
+const offered: Record<string, SchemeGrades> = {};
+
+/** ADR-143 Amendment 6: the grades an opened board offers (`grading_grades`). A scheme file's are
+ * known only from here; a built-in scheme's are the same as `GRADES`. */
+export function offerGrades(grades: ({ scheme: string } & SchemeGrades) | null | undefined): void {
+  if (grades) offered[grades.scheme] = { source: grades.source, intelligence: grades.intelligence, handling: grades.handling };
+}
+
+/** A scheme's grades: those an opened board offered, else a built-in scheme's. */
+export function gradesOf(scheme: string): SchemeGrades | undefined {
+  return offered[scheme] ?? GRADES[scheme];
+}
+
 const NAME_KEYS = ["name", "family_name", "value_normalised", "account_number", "title"] as const;
 
 /** What the board calls an item: a drawn one by the analyst's own label, a loaded one by its name. */

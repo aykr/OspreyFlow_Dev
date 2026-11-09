@@ -17,6 +17,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 from schemas.deployment import ModelsConfig
+from schemas.domain import GRADING_PARTS, GradingSchemeAnswer
 
 from .alerts import DisclosurePolicy, disclosure_policy_from_value
 from .export import ExportManifestPolicy, export_manifest_policy_from_value
@@ -143,35 +144,52 @@ class MonitoringSettings:
         )
 
 
-#: The grading schemes (`schemas.domain.GRADING_PARTS`), by name.
-GRADING_SCHEMES = ("5x5x5", "3x5x2")
-
-
 class GradingSchemeUnknown(ValueError):
-    """`OSPREY_GRADING_SCHEME` names no scheme: the Conduit does not start, rather than offer
-    grades of a scheme the deployment did not choose."""
+    """`OSPREY_GRADING_SCHEME` names no scheme, or a scheme file's without its grades: the Conduit
+    does not start, rather than offer grades of a scheme the deployment did not choose."""
 
 
 @dataclass(frozen=True)
 class GradingSettings:
-    """`osprey.yaml`'s `grading.scheme` as the Conduit reads it (ADR-143 decision 11), from the
-    rendered `deployment.env`. Nothing set is the schema's default, 5x5x5 (a deployment rendered
-    before the setting existed graded in it). Anything else that is not exactly a scheme's name
-    fails closed: refused, and the Conduit does not start, since a guessed scheme would grade
-    every new drawn item wrongly."""
+    """`osprey.yaml`'s `grading.scheme` as the Conduit reads it (ADR-143 decision 11 and Amendment
+    6), from the rendered `deployment.env`: a built-in scheme by name (`GRADING_PARTS`, the one
+    list), or a scheme file's name with its grades in `OSPREY_GRADING_GRADES`, which the render
+    writes from the file. Nothing set is the schema's default, 5x5x5 (a deployment rendered before
+    the setting existed graded in it). Anything else fails closed: refused, and the Conduit does
+    not start, since a guessed scheme would grade every new drawn item wrongly."""
 
-    scheme: Literal["5x5x5", "3x5x2"] = "5x5x5"
+    grades: GradingSchemeAnswer = field(default_factory=lambda: GradingSchemeAnswer.of("5x5x5"))
+
+    @property
+    def scheme(self) -> str:
+        return self.grades.scheme
+
+    @classmethod
+    def of(cls, scheme: str) -> GradingSettings:
+        return cls(grades=GradingSchemeAnswer.of(scheme))
 
     @classmethod
     def from_env(cls) -> GradingSettings:
         raw = os.environ.get("OSPREY_GRADING_SCHEME")
         if raw is None:
             return cls()
-        if raw not in GRADING_SCHEMES:
+        if raw in GRADING_PARTS:
+            return cls.of(raw)
+        given = os.environ.get("OSPREY_GRADING_GRADES")
+        if not given:
             raise GradingSchemeUnknown(
-                f"OSPREY_GRADING_SCHEME is {raw!r}, not one of {', '.join(GRADING_SCHEMES)}"
+                f"OSPREY_GRADING_SCHEME is {raw!r}: neither a built-in scheme "
+                f"({', '.join(GRADING_PARTS)}) nor a scheme file's (OSPREY_GRADING_GRADES is unset)"
             )
-        return cls(scheme=raw)  # type: ignore[arg-type]
+        try:
+            grades = GradingSchemeAnswer.model_validate_json(given)
+        except ValueError as bad:
+            raise GradingSchemeUnknown(f"OSPREY_GRADING_GRADES is not a scheme: {bad}") from None
+        if grades.scheme != raw:
+            raise GradingSchemeUnknown(
+                f"OSPREY_GRADING_GRADES is {grades.scheme}'s, not {raw}'s, the scheme named"
+            )
+        return cls(grades=grades)
 
 
 @dataclass(frozen=True)

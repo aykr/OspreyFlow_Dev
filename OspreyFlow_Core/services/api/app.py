@@ -4072,6 +4072,7 @@ async def open_board(
         update={
             "may_draw": opened.may_draw and _may_draw(principal),
             "grading_scheme": grading.scheme,
+            "grading_grades": grading.grades,
         }
     )
 
@@ -4079,12 +4080,14 @@ async def open_board(
 def _graded_in_the_deployments_scheme(given: Grading | None, grading: GradingSettings) -> None:
     """ADR-143 decision 11: every drawn item is graded in the deployment's one scheme, so the
     change command's mapping covers them all; a grade in another is refused before any write."""
-    if given is not None and given.scheme != grading.scheme:
+    if given is None:
+        return
+    try:
+        grading.grades.check(given)
+    except ValueError as refused:
         raise DrawingRefused(
-            "grading_scheme",
-            f"this deployment grades in {grading.scheme}; a grade in {given.scheme} is not taken",
-            status=422,
-        )
+            "grading_scheme", f"this deployment grades in {grading.scheme}: {refused}", status=422
+        ) from None
 
 
 def _may_draw(principal: Principal) -> bool:
@@ -10384,7 +10387,7 @@ async def get_grading_scheme_route(
     """ADR-143 decision 11: the deployment's grading scheme and its parts' grades, for Admin's
     read-only display and a board's grade fields. Same treatment as `GET /v1/yardstick`: the
     deployment's own reference settings, not a disclosure of any record's content."""
-    return GradingSchemeAnswer.of(grading.scheme)
+    return grading.grades
 
 
 @app.get(
