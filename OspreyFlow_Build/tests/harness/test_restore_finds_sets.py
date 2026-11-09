@@ -123,10 +123,12 @@ def test_another_deployments_set_in_a_shared_old_place_is_not_offered(
     this one's are offered (by the name each set carries), and a name not found says where it
     looked."""
     other = _set(rig["checkout"] / "backups", "20261101T000000Z-beta-abc1234")
+    # A failed backup's set is never a set (`harness.backup` names it `<set>.incomplete`).
+    _set(rig["folder"] / "alpha", "20261103T000000Z-alpha-abc1234.incomplete")
     _set(rig["folder"], "20261102T000000Z-local-lite-abc1234")
     assert _main(rig) == 0
     listing = capsys.readouterr().out
-    assert "beta" not in listing and "local-lite" not in listing
+    assert "beta" not in listing and "local-lite" not in listing and "incomplete" not in listing
     assert _main(rig, other.name) == 2
     assert restored == []
     said = capsys.readouterr().err

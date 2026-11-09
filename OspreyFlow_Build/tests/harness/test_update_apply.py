@@ -764,6 +764,18 @@ def test_a_superset_container_on_another_digest_than_the_lock_is_a_failed_update
 # ---- ADR-114 Amendment 33 decision 5 (drop 2, unit 6): update on Small on a server of your own ---
 
 
+def _backup_refuses(out: Path, checkout: Path | None = None) -> str:
+    """What the real `harness.backup` says of `--out-root` inside the checkout (ADR-114
+    Amendment 37: it exits 1 and writes nothing), so a fake backup refuses what it refuses (rule
+    15): the real checkout always, and the test's stand-in checkout when there is one."""
+    from harness import backup
+
+    for root in (backup.checkout_root(), checkout):
+        if root is not None and backup.is_inside(out, root):
+            return f"backup: REFUSED\n  {out} is inside the checkout ({root})"
+    return ""
+
+
 def test_update_moves_a_self_contained_small(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -786,6 +798,9 @@ def test_update_moves_a_self_contained_small(
         ran.append(list(argv))
         if "harness.backup" in argv:
             out = Path(argv[argv.index("--out-root") + 1])
+            refused = _backup_refuses(out)
+            if refused:
+                return 1, refused
             (out / "20261103T000000Z-small-abc").mkdir(parents=True)
         return 0, ""
 
@@ -815,6 +830,9 @@ def test_an_updates_backup_is_never_written_inside_the_checkout(
         ran.append(list(argv))
         if "harness.backup" in argv:
             out = Path(argv[argv.index("--out-root") + 1])
+            refused = _backup_refuses(out, checkout=repo)
+            if refused:
+                return 1, refused
             (out / f"2026110{len(ran)}T000000Z-local-lite-abc").mkdir(parents=True)
         return 0, ""
 

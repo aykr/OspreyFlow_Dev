@@ -626,18 +626,18 @@ def _subprocess(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]
     return done.returncode, (done.stdout + done.stderr).strip()
 
 
-def _backup_root(directory: Path, repo: Path) -> Path:
-    """Where the update's backup is written: the deployment's own subfolder of its backups folder,
-    read from the deployment's own `osprey.yaml` copy (`harness.backup`'s rule, ADR-114 Amendment
-    37), never inside the checkout (`repo`), which `harness.backup` refuses."""
-    from harness.backup import backups_folder, fallback_backups_folder
+def _backup_root(directory: Path) -> Path:
+    """Where the update's backup is written: `harness.backup.default_out_root` for the deployment's
+    own `osprey.yaml` copy and its folder's name (ADR-114 Amendment 37), so never inside the
+    checkout, which `harness.backup` refuses."""
+    from harness.backup import default_out_root, fallback_backups_folder
 
     copy = directory / "osprey.yaml"
     if copy.is_file():
         from schemas.deployment import OspreyConfig
 
         config = OspreyConfig.model_validate(yaml.safe_load(copy.read_text(encoding="utf-8")) or {})
-        return backups_folder(config)[0] / directory.name
+        return default_out_root(config, directory.name)
     return fallback_backups_folder() / directory.name
 
 
@@ -650,7 +650,7 @@ def real_host(
         return _subprocess(argv, cwd=repo)
 
     def backup() -> Path:
-        root = _backup_root(directory, repo)
+        root = _backup_root(directory)
         before = set(root.iterdir()) if root.is_dir() else set()
         _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name,
                        "--out-root", str(root)], "back up every store")  # fmt: skip

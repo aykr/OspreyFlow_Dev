@@ -78,7 +78,9 @@ def test_a_config_without_a_backups_folder_falls_back_and_says_so(
     so in its output."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     fallback = tmp_path / "home" / "OspreyFlow" / "backups"
-    for raw in ({}, {"components": {"storage": {"backups": backup.LEGACY_PLACEHOLDER}}}):
+    assert backup.LEGACY_PLACEHOLDER == "/var/lib/osprey/backups"
+    for raw in ({}, {"components": {"storage": {"backups": backup.LEGACY_PLACEHOLDER}}},
+                {"components": {"storage": {"backups": " "}}}):  # fmt: skip
         config = OspreyConfig.model_validate(raw)
         root, notice = backup.backups_folder(config)
         assert root == fallback
@@ -126,6 +128,46 @@ def test_no_backup_is_written_inside_the_checkout(
     assert not (stand_in / "backups").exists()
 
 
+def test_a_folder_anywhere_in_the_git_checkout_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The checkout is the git checkout, `OspreyFlow_Core`'s parent when that holds `.git` (a file
+    in a worktree): its root and `OspreyFlow_Build/` are as much the checkout as `OspreyFlow_Core/`,
+    and only `OspreyFlow_Core/backups/` was ever gitignored. Found by the lane-reviewer."""
+    root = tmp_path / "checkout"
+    core = root / "OspreyFlow_Core"
+    (root / "OspreyFlow_Build").mkdir(parents=True)
+    core.mkdir()
+    (root / ".git").write_text("gitdir: elsewhere\n")
+    monkeypatch.setattr(backup, "REPO_ROOT", core)
+    assert backup.checkout_root() == root
+    for inside in (root / "backups", root / "OspreyFlow_Build" / "sets", root, core / "backups"):
+        with pytest.raises(backup.BackupFailed, match="inside the checkout"):
+            backup.new_set_folder(inside / "local-lite", "local-lite")
+    assert sorted(p.name for p in root.iterdir()) == [".git", "OspreyFlow_Build", "OspreyFlow_Core"]
+    made = backup.new_set_folder(tmp_path / "elsewhere" / "local-lite", "local-lite")
+    assert made.parent == tmp_path / "elsewhere" / "local-lite"
+
+
+def test_the_checkout_spelt_another_way_is_still_the_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Compared by the folder it is, not its spelling: through a link to it, and, on a disk that
+    ignores letter case (macOS's default), in another case. Found by the lane-reviewer."""
+    stand_in = tmp_path / "Checkout"
+    stand_in.mkdir()
+    monkeypatch.setattr(backup, "REPO_ROOT", stand_in)
+    (tmp_path / "link").symlink_to(stand_in)
+    with pytest.raises(backup.BackupFailed, match="inside the checkout"):
+        backup.new_set_folder(tmp_path / "link" / "backups", "local-lite")
+    other_case = tmp_path / "checkout"
+    if not other_case.exists():
+        pytest.skip("this disk tells letter cases apart, so the other spelling is another folder")
+    with pytest.raises(backup.BackupFailed, match="inside the checkout"):
+        backup.new_set_folder(other_case / "backups", "local-lite")
+    assert not (stand_in / "backups").exists()
+
+
 def test_an_out_root_inside_the_checkout_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -142,7 +184,7 @@ def test_an_out_root_inside_the_checkout_is_refused(
     for inside in (str(backup.REPO_ROOT / "backups"), "backups", "deploy/../backups"):
         assert backup.main([*common, "--out-root", inside]) == 1
         said = capsys.readouterr().err
-        assert "inside the checkout" in said and str(backup.REPO_ROOT.resolve()) in said
+        assert "inside the checkout" in said and str(backup.checkout_root().resolve()) in said
     assert ran == []
     # Outside it, the folder given is used as it is.
     def run_backup(**kwargs: object) -> Path:
