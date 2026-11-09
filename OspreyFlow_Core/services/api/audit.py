@@ -68,6 +68,7 @@ async def add_org_unit(conn: asyncpg.Connection) -> None:
     if have is None:
         await conn.execute("ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS org_unit TEXT")
 
+
 #: Admin › Audit's indexes, each built `CONCURRENTLY` in a statement of its own (it cannot run in a
 #: transaction, and a script of several statements is one): a plain `CREATE INDEX` on a large
 #: `audit_log` would block every insert while it builds, and an audit write that cannot complete
@@ -91,18 +92,30 @@ def recorded_unit(org_unit: str | None) -> str | None:
     return org_unit
 
 
+#: The session lock a start holds while it builds Audit's indexes, keyed by the schema it builds in.
+#: An index another start is building reads `indisvalid = false` exactly as a crashed build's does;
+#: only the builder holds this lock, and a crashed builder's session lets it go, so a start that
+#: cannot take it leaves the indexes to the start that holds it (ADR-145 Amendment 6).
+_INDEX_LOCK_SQL = "hashtext(current_schema() || ':audit_log indexes')"
+
+
 async def build_indexes(conn: asyncpg.Connection) -> None:
-    for name, on in _CONCURRENT_INDEXES:
-        valid = await conn.fetchval(
-            "SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
-            "WHERE c.relname = $1 AND pg_table_is_visible(c.oid)",
-            name,
-        )
-        if valid is True:
-            continue  # built: nothing to take a lock for
-        if valid is False:
-            await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {name}")
-        await conn.execute(f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {name} ON {on}")
+    if not await conn.fetchval(f"SELECT pg_try_advisory_lock({_INDEX_LOCK_SQL})"):
+        return  # another start is building them: never drop its build
+    try:
+        for name, on in _CONCURRENT_INDEXES:
+            valid = await conn.fetchval(
+                "SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+                "WHERE c.relname = $1 AND pg_table_is_visible(c.oid)",
+                name,
+            )
+            if valid is True:
+                continue  # built: nothing to take a lock for
+            if valid is False:  # no other start holds the lock, so a crash left it
+                await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {name}")
+            await conn.execute(f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {name} ON {on}")
+    finally:
+        await conn.execute(f"SELECT pg_advisory_unlock({_INDEX_LOCK_SQL})")
 
 
 class AuditWriteError(Exception):

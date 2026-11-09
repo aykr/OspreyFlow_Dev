@@ -17,9 +17,11 @@ What a mistake would do, and the case that catches it (each shown red at its rea
   `test_no_case_entry_without_the_safety_net`;
 - a system principal's unit (`operator`) read by a real unit of that name, or the writer's unit not
   recorded at all: `test_a_system_unit_is_never_a_real_units`;
-- the indexes built inside the bootstrap's transaction: `test_the_indexes_are_built_concurrently_and_valid`;
-  one left invalid by a crashed build kept: `test_an_index_left_invalid_by_a_crashed_build_is_built_again`
-  (a plain build outside the transaction is not told apart from a concurrent one: ADR-145 Am. 6);
+- the indexes left unbuilt or invalid: `test_the_indexes_are_built_concurrently_and_valid`; built plainly
+  (not `CONCURRENTLY`), so audit writes queue behind the build:
+  `test_audit_writes_go_on_while_the_indexes_build`; one left invalid by a crashed build kept:
+  `test_an_index_left_invalid_by_a_crashed_build_is_built_again`; another start's build in progress
+  dropped: `test_a_start_never_drops_an_index_another_start_is_building`;
 - `org_unit` added by an unconditional `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, which takes
   `ACCESS EXCLUSIVE` even when the column is there, so a second Conduit starting waits behind every
   read of `audit_log` (and in one process deadlocks):
@@ -38,6 +40,7 @@ from types import SimpleNamespace
 
 import asyncpg
 import pytest
+from services.api import audit as audit_module
 from services.api.audit import AuditWriter
 from services.api.audit_section import AuditSectionReader, StreamFilters
 from services.api.config import PostgresConfig
@@ -277,3 +280,76 @@ async def test_an_index_left_invalid_by_a_crashed_build_is_built_again(world: Si
         "SELECT i.indisvalid, i.indisunique FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
         "WHERE c.relname = 'audit_log_org_unit_idx' AND pg_table_is_visible(c.oid)")  # fmt: skip
     assert (valid, unique) == (True, False)
+
+
+async def test_audit_writes_go_on_while_the_indexes_build(world: SimpleNamespace) -> None:
+    """The invariant the concurrent build exists for. An audit write left open holds `ROW EXCLUSIVE`
+    on `audit_log`; a plain `CREATE INDEX` waits for it holding a queued `SHARE`, and every later
+    audit write queues behind that, so every route is refused until the open one ends. A concurrent
+    build waits for it too, but under `SHARE UPDATE EXCLUSIVE`, which a write does not wait for."""
+    for name, _ in audit_module._CONCURRENT_INDEXES:
+        await world.raw.execute(f"DROP INDEX CONCURRENTLY {name}")
+    held = await asyncpg.connect(dsn=world.dsn)
+    builder = await asyncpg.connect(dsn=world.dsn)
+    later = await asyncpg.connect(dsn=world.dsn)
+    building: asyncio.Task[None] | None = None
+    try:
+        open_write = held.transaction()
+        await open_write.start()
+        await held.execute(
+            "INSERT INTO audit_log (recorded_at, principal_id, action, resolved_query, "
+            "result_cardinality) VALUES (now(), 'ana-a', 'probe', '{}', 1)")  # fmt: skip
+        building = asyncio.create_task(audit_module.build_indexes(builder))
+        pid = builder.get_server_pid()
+        for _ in range(200):  # until the build is waiting on the open write
+            if await world.raw.fetchval(
+                "SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = $1", pid):  # fmt: skip
+                break
+            await asyncio.sleep(0.05)
+        else:
+            raise AssertionError("the build never waited on the open write")
+        await later.execute("SET lock_timeout = '2s'")
+        await later.execute(
+            "INSERT INTO audit_log (recorded_at, principal_id, action, resolved_query, "
+            "result_cardinality) VALUES (now(), 'ana-b', 'probe', '{}', 1)")  # fmt: skip
+        await open_write.commit()
+        await asyncio.wait_for(building, 30)
+    finally:
+        if building is not None and not building.done():
+            building.cancel()
+        for conn in (held, builder, later):
+            await conn.close()
+    valid = dict(await world.raw.fetch(
+        "SELECT c.relname, i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+        "WHERE c.relname IN ('audit_log_org_unit_idx', 'audit_log_recorded_at_idx') "
+        "AND pg_table_is_visible(c.oid)"))  # fmt: skip
+    assert valid == {"audit_log_org_unit_idx": True, "audit_log_recorded_at_idx": True}
+
+
+async def test_a_start_never_drops_an_index_another_start_is_building(world: SimpleNamespace) -> None:
+    """An index being built reads invalid exactly as a crashed one does. While another start holds
+    the build's lock (its build under way), a start leaves the invalid index alone and returns;
+    once the lock is let go (the builder gone), the next start rebuilds it."""
+    await _record(world, A, "set_person_roles", None, {"user_id": "ana-a"})
+    await _record(world, A, "set_person_roles", None, {"user_id": "ana-b"})
+    await world.raw.execute("DROP INDEX CONCURRENTLY audit_log_org_unit_idx")
+    with pytest.raises(asyncpg.UniqueViolationError):
+        await world.raw.execute(
+            "CREATE UNIQUE INDEX CONCURRENTLY audit_log_org_unit_idx ON audit_log (action)")
+    other = await asyncpg.connect(dsn=world.dsn)
+    try:
+        await other.execute(f"SELECT pg_advisory_lock({audit_module._INDEX_LOCK_SQL})")
+        second = await asyncio.wait_for(AuditWriter.connect(world.dsn), 10)
+        await second.close()
+        kept = await world.raw.fetchrow(
+            "SELECT i.indisvalid, i.indisunique FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+            "WHERE c.relname = 'audit_log_org_unit_idx' AND pg_table_is_visible(c.oid)")  # fmt: skip
+        assert tuple(kept) == (False, True)  # left to the start that holds the lock
+    finally:
+        await other.close()
+    third = await AuditWriter.connect(world.dsn)
+    await third.close()
+    rebuilt = await world.raw.fetchrow(
+        "SELECT i.indisvalid, i.indisunique FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+        "WHERE c.relname = 'audit_log_org_unit_idx' AND pg_table_is_visible(c.oid)")  # fmt: skip
+    assert tuple(rebuilt) == (True, False)
