@@ -7,11 +7,14 @@ pass."""
 
 from __future__ import annotations
 
+import contextlib
+import io
 from pathlib import Path
 
 import yaml
 from fastapi.testclient import TestClient
 from harness.webapp import create_app
+from services.api.map_admin import command_parser
 
 
 def _client(config_path: Path) -> TestClient:
@@ -94,6 +97,16 @@ class _Runner:
 
     def __call__(self, argv: list[str]) -> tuple[int, str]:
         self.calls.append(argv)
+        # Rule 15: refuse what the Conduit's own command line refuses (a build without `--unit`),
+        # by its own parser, as the container would, before answering.
+        if "services.api.map_admin" in argv:
+            words = argv[argv.index("services.api.map_admin") + 1 :]
+            refused = io.StringIO()
+            try:
+                with contextlib.redirect_stderr(refused):
+                    command_parser().parse_args(words)
+            except SystemExit as exit_:
+                return int(exit_.code or 2), refused.getvalue()
         return self.code, self.out
 
 
@@ -119,7 +132,9 @@ def test_build_basemap_runs_the_conduit_s_own_build_in_its_container(tmp_path: P
     runner = _Runner(0, "Built rutland.pmtiles: 3 places created, 1 already known, 0 rejected.\n")
     client, folder = _deployed(tmp_path, runner)
 
-    response = client.post("/api/geospatial/build-basemap", json={"region": "rutland"})
+    response = client.post(
+        "/api/geospatial/build-basemap", json={"region": "rutland", "unit": "unit-7"}
+    )
 
     assert response.status_code == 200, response.text
     assert response.json() == {"returncode": 0, "lines": [
@@ -127,8 +142,33 @@ def test_build_basemap_runs_the_conduit_s_own_build_in_its_container(tmp_path: P
     assert runner.calls == [[
         "docker", "compose", "--env-file", str(folder / "deployment.env"),
         "-f", str(folder / "compose.yaml"), "exec", "-T", "api",
-        "python", "-m", "services.api.map_admin", "build", "rutland", "--by", "setup-console",
+        "python", "-m", "services.api.map_admin", "build", "rutland", "--unit", "unit-7",
+        "--by", "setup-console",
     ]]  # fmt: skip
+
+
+def test_build_basemap_without_a_unit_is_refused_in_words_and_runs_nothing(tmp_path: Path) -> None:
+    """ADR-147 Amendment 2, ruling 8: the build's unit is its setting, required by the Conduit's
+    command line; the console refuses a build without one in words before running anything, and
+    the fake runner refuses the argv the real command line refuses (rule 15)."""
+    runner = _Runner(0, "Built.\n")
+    client, _folder = _deployed(tmp_path, runner)
+
+    for body in ({"region": "rutland"}, {"region": "rutland", "unit": ""},
+                 {"region": "rutland", "unit": "unit 7; rm"}):  # fmt: skip
+        response = client.post("/api/geospatial/build-basemap", json=body)
+        assert response.status_code == 422, response.text
+        assert "name the unit" in response.json()["detail"]
+    assert runner.calls == []
+
+
+def test_the_fake_runner_refuses_a_build_without_a_unit_as_the_conduit_does() -> None:
+    """Rule 15: the stand-in for the container refuses what the Conduit's own parser refuses."""
+    code, said = _Runner(0, "Built.\n")(
+        ["docker", "compose", "exec", "-T", "api", "python", "-m", "services.api.map_admin",
+         "build", "rutland", "--by", "setup-console"]  # fmt: skip
+    )
+    assert code == 2 and "--unit" in said
 
 
 def test_verify_runs_the_conduit_s_own_verify_and_says_its_answer(tmp_path: Path) -> None:
@@ -152,7 +192,7 @@ def test_before_launch_build_and_verify_say_so_in_words(tmp_path: Path) -> None:
         create_app(config_path=config, out_root=tmp_path / "out", map_runner=runner),
         client=("127.0.0.1", 51000),
     )
-    for path, body in (("build-basemap", {"region": "rutland"}), ("verify", {})):
+    for path, body in (("build-basemap", {"region": "rutland", "unit": "unit-7"}), ("verify", {})):
         response = client.post(f"/api/geospatial/{path}", json=body)
         assert response.status_code == 409
         assert "Launch" in response.json()["detail"]

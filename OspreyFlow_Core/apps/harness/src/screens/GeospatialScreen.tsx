@@ -15,6 +15,7 @@ export function GeospatialScreen() {
   const [registerResult, setRegisterResult] = useState<string | null>(null);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [region, setRegion] = useState("rutland");
+  const [unit, setUnit] = useState("");
   const [buildResult, setBuildResult] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -40,7 +41,7 @@ export function GeospatialScreen() {
   async function handleBuild() {
     setBuildResult("Building… this can take many minutes for a large region.");
     try {
-      setBuildResult(said(await buildLocalBasemap(region), "Built.", "The build did not finish."));
+      setBuildResult(said(await buildLocalBasemap(region, unit), "Built.", "The build did not finish."));
     } catch (exc) {
       setBuildResult(exc instanceof ApiError ? exc.body : String(exc));
     }
@@ -105,6 +106,18 @@ export function GeospatialScreen() {
         className="input"
         value={region}
         onChange={(event) => setRegion(event.target.value)}
+      />
+      <label htmlFor="geo-unit">Unit that holds the place names</label>
+      <p id="geo-unit-help">
+        The unit whose cases may add this region&apos;s places: one that already holds a case or a
+        dataset here. The same as <code>ospreyflow map build --unit</code>.
+      </p>
+      <input
+        id="geo-unit"
+        className="input"
+        aria-describedby="geo-unit-help"
+        value={unit}
+        onChange={(event) => setUnit(event.target.value)}
       />
       {buildResult && (
         <p role="status" style={{ whiteSpace: "pre-line" }}>

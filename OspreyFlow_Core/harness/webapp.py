@@ -475,7 +475,9 @@ def create_app(
     @app.post("/api/geospatial/build-basemap")
     def post_build_basemap(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
         try:
-            code, lines = build_basemap_step(_out_dir(), str(body.get("region", "")), **runner_kw)
+            code, lines = build_basemap_step(
+                _out_dir(), str(body.get("region", "")), str(body.get("unit", "")), **runner_kw
+            )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except GeospatialError as exc:

@@ -16,7 +16,7 @@ file beside the maps file), each change reading the file afresh under it, as *Mo
     python -m services.api.map_admin list                 # each provider, its tier and state
     python -m services.api.map_admin verify --by <who>
     python -m services.api.map_admin prefetch --by <who>
-    python -m services.api.map_admin build <region> --by <who>
+    python -m services.api.map_admin build <region> --unit <unit> --by <who>
 
 These are what `ospreyflow map list|verify|prefetch|build` run inside the Conduit's container, so
 the command line, the set-up console and *Admin › Maps* are one code. Every answer is in fixed
@@ -1229,7 +1229,10 @@ def list_lines(view: MapsAdminView) -> list[str]:
     return lines
 
 
-async def _main(argv: Sequence[str]) -> int:
+def command_parser() -> argparse.ArgumentParser:
+    """The command line every caller's argv meets (`ospreyflow map`, the set-up console): a build
+    without `--unit` is refused here (ruling 8), so a test standing in for the container parses
+    with this parser and refuses what it refuses (rule 15)."""
     parser = argparse.ArgumentParser(prog="python -m services.api.map_admin")
     sub = parser.add_subparsers(dest="verb", required=True)
     sub.add_parser("list")
@@ -1239,7 +1242,11 @@ async def _main(argv: Sequence[str]) -> int:
     build.add_argument("region")
     build.add_argument("--by", required=True)
     build.add_argument("--unit", required=True)
-    args = parser.parse_args(argv)
+    return parser
+
+
+async def _main(argv: Sequence[str]) -> int:
+    args = command_parser().parse_args(argv)
     admin, close = await open_admin()
     try:
         if args.verb == "list":

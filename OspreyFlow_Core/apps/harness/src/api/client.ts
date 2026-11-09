@@ -127,7 +127,9 @@ async function mapStep(path: string, body: object): Promise<MapStepResult> {
   return (await response.json()) as MapStepResult;
 }
 
-export const buildLocalBasemap = (region: string) => mapStep("/api/geospatial/build-basemap", { region });
+// ADR-147 Amendment 2, ruling 8: the unit the gazetteer's places are held by is the build's setting.
+export const buildLocalBasemap = (region: string, unit: string) =>
+  mapStep("/api/geospatial/build-basemap", { region, unit });
 export const verifyMap = () => mapStep("/api/geospatial/verify", {});
 
 // `harness/preflight/__main__.py`'s own `run_streaming` — one `EventSource` per stream, since a

@@ -82,6 +82,8 @@ MAP_PATH = ("python", "-m", "services.api.map_admin")
 #: Who the set-up console's changes are recorded as in the maps' history.
 BY = "setup-console"
 _REGION = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+# A unit as the Conduit names one (`org_unit`); whether it holds anything here is the Conduit's.
+_UNIT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 MapRunner = Callable[[list[str]], tuple[int, str]]
 
@@ -105,13 +107,20 @@ def _in_conduit(deployment: Path, *words: str) -> list[str]:
 
 
 def build_basemap_step(
-    deployment: Path, region: str, *, runner: MapRunner = run_captured
+    deployment: Path, region: str, unit: str, *, runner: MapRunner = run_captured
 ) -> tuple[int, list[str]]:
     """ADR-147 decision 6: the Conduit's own build, in its container, as `ospreyflow map build`
-    runs it; the exit status and the Conduit's own printed lines (fixed words, never a key)."""
+    runs it; the exit status and the Conduit's own printed lines (fixed words, never a key).
+    **The unit the gazetteer's places are held by** is the build's setting (ADR-147 Amendment 2,
+    ruling 8), required here as `--unit` is by the Conduit's command line; a unit that holds nothing
+    here is refused in the Conduit's own words."""
     if not _REGION.fullmatch(region):
         raise ValueError("a region is a short lower-case name, such as rutland")
-    code, out = runner(_in_conduit(deployment, "build", region))
+    if not _UNIT.fullmatch(unit):
+        raise ValueError(
+            "name the unit the gazetteer's places are held by: one that holds a case or a dataset"
+        )
+    code, out = runner(_in_conduit(deployment, "build", region, "--unit", unit))
     return code, [line for line in out.splitlines() if line.strip()]
 
 
