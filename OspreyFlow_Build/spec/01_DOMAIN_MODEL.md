@@ -810,7 +810,8 @@ a source. It carries `provenance.drawn` (`DrawnAssertion`, `schemas/domain.py`),
 - `grading` (`Grading`: the scheme, then the source's, the intelligence's and the handling grade,
   the grade always kept with its scheme), in the deployment's one scheme (`grading.scheme`, ADR-143
   decision 11: `5x5x5` by default, or `3x5x2`, whose handling code P or C is part of the grade and
-  never merged with the marking). An opened board offers that scheme's grades, and a drawn node,
+  never merged with the marking; decision 11's third form, a scheme file, is not built: the setting
+  takes the two names alone, and an unknown one stops the Conduit's start). An opened board offers that scheme's grades, and a drawn node,
   link or edit graded in any other is refused (422 `grading_scheme`) before anything is written;
 - `original_grading`, absent until the scheme is first changed, then the grade and scheme the item
   had before that change, kept for good through every later one;
@@ -824,7 +825,8 @@ amber wherever it appears, on a board and on the analysis canvas.
 
 The board's registry (`board_items`, `services/api/board_store.py`) holds ids only: which element was
 drawn on which board of which case, by whom, into which dataset, a link's ends, and whether it was
-withdrawn. Every read of it names its case.
+withdrawn. Every read of it names its case, but one: the grading command (below) reads every case's
+live drawn nodes and links, as an operator outside the Conduit, answered to no reader.
 
 The invariants, each with the test that fails if it is broken (rule 12):
 - **Never readable outside its case** (rule 3; ADR-143 decision 3). Another case reading the same
@@ -836,21 +838,31 @@ The invariants, each with the test that fails if it is broken (rule 12):
 - **Graded in the deployment's scheme, changed only by the command, the original kept** (decision
   11, C13). `python -m scripts.grading_change --to <scheme> --mapping <file> [--dry-run]
   --changed-by <id>` (`services/api/grading.py`), run inside the deployment with the Conduit quiet,
-  maps every grade of each part of the old scheme to one of the new. It says first how many live
-  drawn items each mapping line moves; a dry run stops there and writes nothing. Otherwise it
-  rewrites each live drawn node's and link's grade under its own id, setting `original_grading` at
-  its first change and never after, and records one audit entry (`grading_change`) with the counts.
-  It is refused whole, before any write, for a mapping that does not cover the old scheme, one from
-  another scheme than `grading.scheme`, an item graded in another scheme, or a registered item it
-  cannot read back (rule 2). A withdrawn item keeps the grade it was drawn with. A run stopped part
-  way is finished by running it again. The operator then sets `grading.scheme` and starts the
-  deployment again. (`ospreyflow grading change`, the verb decision 11 names, is to wrap both.)
+  maps every grade of each part of the old scheme to one of the new. It writes under the ontology
+  the Conduit runs with (the deployment's composed with every link-type proposal). It says first how
+  many live drawn items each mapping line moves; a dry run stops there and writes nothing.
+  Otherwise it rewrites each live drawn node's and link's grade under its own id, setting
+  `original_grading` at its first change and never after, keeping its marking, datasets,
+  properties, resolution state and load, and a link's occurrences. It records an audit entry
+  (`grading_change`) before the first write and another after the last. It is refused whole, before
+  any write and on a dry run too, for a mapping that does not cover the old scheme, one from another
+  scheme than `grading.scheme`, an item graded in another scheme, a registered item it cannot read
+  back (rule 2), or an item its write would be refused for (a type no longer in the ontology, a
+  property it no longer allows, a link whose end cannot be read). A withdrawn item keeps the grade
+  it was drawn with. A run stopped by a store failure is finished by running it again. The operator
+  then sets `grading.scheme` and starts the deployment again; a drawing made before that is in the
+  old scheme and is changed by running the same change again. (`ospreyflow grading change`, the verb
+  decision 11 names, is to wrap the command, the setting and the restart in one step.)
   - `test_the_dry_run_writes_nothing_and_counts_each_mapping_line`, red with a write planted at the
     dry-run branch; `test_every_item_keeps_its_original_grade_and_scheme_through_two_changes`, red
     with the original overwritten at the second change;
-    `test_an_item_in_another_scheme_refuses_the_whole_change_before_any_write` and
-    `test_a_registered_item_that_cannot_be_read_back_refuses_the_whole_change`
-    (`test_grading_change.py`); `test_a_drawn_item_in_another_scheme_is_refused_before_anything_is_written`
+    `test_an_item_in_another_scheme_refuses_the_whole_change_before_any_write`,
+    `test_a_registered_item_that_cannot_be_read_back_refuses_the_whole_change`,
+    `test_an_item_whose_rewrite_would_be_refused_refuses_the_whole_change_first` and
+    `test_the_plan_is_said_and_audited_before_the_first_write` (`test_grading_change.py`); against
+    ArcadeDB, through the command's own adapter,
+    `test_the_change_rewrites_each_grade_in_the_store_keeping_its_original_and_the_rest`
+    (`test_grading_change_live.py`); `test_a_drawn_item_in_another_scheme_is_refused_before_anything_is_written`
     (`test_grading_boards.py`).
 - **Within the case's ceiling** (Amendment 2 decision 3): nothing drawn above the strictest highest
   marking its datasets set, nor above the drawer's clearance, refused in words naming it.
