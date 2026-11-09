@@ -8,12 +8,12 @@
 // comment has the full reasoning, identical here.
 import { useEffect, useState } from "react";
 
-import type { Monitor, SavedPattern } from "../../../../packages/schemas/generated";
+import type { Monitor, MonitorScheduleInput, SavedPattern } from "../../../../packages/schemas/generated";
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { listPatterns } from "../patterns/api";
-import { createMonitor, listMonitors } from "./api";
+import { createMonitor, listMonitors, setMonitorSchedule } from "./api";
 import { StatusBadge } from "./StatusBadge";
 
 export interface MonitorPanelProps {
@@ -39,6 +39,20 @@ export function MonitorPanel({ apiBaseUrl, bearerToken, investigationId }: Monit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function handleSchedule(monitor: Monitor, every: MonitorScheduleInput["every"]): Promise<void> {
+    setError(null);
+    try {
+      const changed = await setMonitorSchedule(apiBaseUrl, bearerToken, investigationId, monitor.id, {
+        every,
+        hour: monitor.hour ?? 6,
+        weekday: every === "weekly" ? (monitor.weekday ?? 1) : null,
+      });
+      setMonitors((all) => all.map((m) => (m.id === changed.id ? changed : m)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function handleCreate(): Promise<void> {
     if (!selectedPatternId) return;
     setError(null);
@@ -51,7 +65,7 @@ export function MonitorPanel({ apiBaseUrl, bearerToken, investigationId }: Monit
   }
 
   return (
-    <Panel title="Saved-pattern monitors" className="monitor-panel">
+    <Panel title="Watched patterns" className="monitor-panel">
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
           <Select
@@ -95,7 +109,19 @@ export function MonitorPanel({ apiBaseUrl, bearerToken, investigationId }: Monit
                 {patterns.find((p) => p.pattern_id === monitor.pattern_id)?.name ??
                   monitor.pattern_id}
               </span>
-              <StatusBadge status={monitor.status ?? "active"} />
+              <span style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+                {/* ADR-146 decision 4 (G16): run on its own schedule too, daily by default. */}
+                <Select
+                  aria-label={`How often ${patterns.find((p) => p.pattern_id === monitor.pattern_id)?.name ?? "this watch"} runs on its own`}
+                  value={monitor.every ?? "daily"}
+                  onChange={(e) => void handleSchedule(monitor, e.target.value as MonitorScheduleInput["every"])}
+                >
+                  <option value="daily">{`Daily at ${String(monitor.hour ?? 6).padStart(2, "0")}:00, and as data loads`}</option>
+                  <option value="weekly">Weekly, and as data loads</option>
+                  <option value="never">Only as data loads</option>
+                </Select>
+                <StatusBadge status={monitor.status ?? "active"} />
+              </span>
             </li>
           ))}
         </ul>

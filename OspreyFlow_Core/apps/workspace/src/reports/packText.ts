@@ -105,7 +105,12 @@ export function periodsOf(figures: TrendFigures): string[] {
 // --- an alert in a pack (ADR-134 decision 1) -------------------------------------------------------
 
 const SEVERITY_WORD: Record<AlertSnapshot["severity"], string> = { high: "High", medium: "Medium", low: "Low" };
-const KIND_WORD: Record<AlertSnapshot["kind"], string> = { typology: "Typology alert", hotlist: "Hotlist match", monitor: "Monitor match" };
+const KIND_WORD: Record<AlertSnapshot["kind"], string> = {
+  typology: "Typology alert",
+  hotlist: "Hotlist match",
+  monitor: "Monitor match",
+  analyst: "Raised by an analyst",
+};
 
 /** "Typology alert (Rapid movement) · High severity · raised 29 September 2026": the typology by its
  * label, as the queue names it, never its stored key (build order step 18c, D10). */

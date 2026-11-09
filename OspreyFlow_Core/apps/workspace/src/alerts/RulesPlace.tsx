@@ -1,9 +1,9 @@
 // Rules and Monitoring, a place of its own (`06_DECISIONS.md` ADR-146 decision 2; ADR-145
 // Amendment 4 decision 1): Monitoring left the Glass. Its tabs are the owner's M1 ruling:
-// - *Alerts*: the one queue, every kind the reader may see, with an alert's detail beside it, and the
-//   reader's own watches' alerts until L2.10 merges them into the queue;
-// - *What raises alerts*: the rules and their templates, the hotlists and watched patterns, and the
-//   screening lists the rules read (the inventory proper is L2.10's);
+// - *Alerts*: the one queue, every kind the reader may see, with an alert's detail beside it (the
+//   Watches inbox went in L2.10: what fired a watch's alert is on its detail);
+// - *What raises alerts*: the inventory of every rule and watch (decision 5), then the rules and
+//   their templates, the hotlists and watched patterns, and the screening lists the rules read;
 // - *Held rows*: the rows a failing rule held;
 // - *Changes*: the rule audit.
 // Connection strength is not alerts: it stays in the Glass (ADR-139).
@@ -20,12 +20,12 @@ import { Tabs } from "../design/primitives";
 import { listCases, type AccessLevel } from "../investigation/cases";
 import { NO_SUCH_ALERT, type AlertAtAddressState } from "./address";
 import { AlertQueue, type AlertEvidence } from "./AlertQueue";
+import { AlertSourcesPanel } from "./AlertSourcesPanel";
 import type { CanvasOutcome } from "./api";
 import { HeldRowsPanel } from "./HeldRowsPanel";
 import { ListsPanel } from "./ListsPanel";
 import { RuleAuditPanel } from "./RuleAuditPanel";
 import { RulesPanel } from "./RulesPanel";
-import { AlertInbox } from "../watches/AlertInbox";
 import { HotlistPanel } from "../watches/HotlistPanel";
 import { MonitorPanel } from "../watches/MonitorPanel";
 
@@ -115,23 +115,19 @@ export function RulesPlace(props: RulesPlaceProps) {
     <>
       <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as RulesTab)} />
       {tab === "alerts" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-16)" }}>
-          <AlertQueue
-            {...api}
-            level={level}
-            accountId={props.accountId}
-            onCanvas={props.onCanvas}
-            openAlertId={addressedId}
-            onOpenAlert={props.onOpenAlert}
-            onOpenEvidence={props.onOpenEvidence}
-          />
-          <div style={{ maxWidth: 640 }}>
-            <AlertInbox {...api} onOpenAlert={(id) => props.onOpenAlert?.(id)} />
-          </div>
-        </div>
+        <AlertQueue
+          {...api}
+          level={level}
+          accountId={props.accountId}
+          onCanvas={props.onCanvas}
+          openAlertId={addressedId}
+          onOpenAlert={props.onOpenAlert}
+          onOpenEvidence={props.onOpenEvidence}
+        />
       )}
       {tab === "raises" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)" }}>
+          <AlertSourcesPanel {...api} />
           <RulesPanel {...api} level={level} isAdministrator={props.isAdministrator} accountId={props.accountId} />
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", maxWidth: 640 }}>
             <HotlistPanel {...api} />

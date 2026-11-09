@@ -6,6 +6,12 @@
 // the reason — one of the owner's closed list (`closingReasons.ts`) and words. A true match confirms
 // the alert's node (rule 5); the server says which. The kind,
 // severity and status filters are the server's: the Glass never hides a row it was sent.
+//
+// ADR-146 (L2.10): the one queue — the Watches inbox is gone, and *what fired it* (the identifier,
+// the file, the row) is on every watch alert's detail. Its filters *Mine*, *Team*, *Unassigned*,
+// *Older than N days* and *All* are the server's too, *All* holding the suppressed alerts
+// (Amendment 1). A team's lead (or cover) gives one of the team's alerts to a member and suppresses
+// one until a date; a suppressed alert, and one taken back by a revert (G12), are marked apart.
 import { useCallback, useEffect, useState } from "react";
 import type { Alert, AlertAssignee, AlertExplanation, QueuedAlert } from "../../../../packages/schemas/generated";
 import { Button, RadioGroup, Select } from "../design/primitives";
@@ -20,11 +26,14 @@ import {
   listAssignees,
   listQueue,
   releaseAlert,
+  listAlertTeams,
   sendBackClose,
+  suppressAlert,
   type AlertsApi,
   type CanvasOutcome,
   type KindFilter,
   type QueueFilter,
+  type QueueShow,
   type SeverityFilter,
 } from "./api";
 import { CLOSING_REASONS, closingReasonLabel, type ClosingReason } from "./closingReasons";
@@ -62,7 +71,7 @@ export function closeNeedsSecondPerson(severity: string, audience: string): bool
 }
 const SEVERITY_WORDS: Record<string, string> = { high: "High", medium: "Medium", low: "Low" };
 
-type Kind = "typology" | "hotlist" | "monitor";
+type Kind = "typology" | "hotlist" | "monitor" | "analyst";
 type Audience = "case" | "team" | "owner";
 
 /** A row's kind, severity and audience; a row from before ADR-133 is a medium case alert. */
@@ -79,14 +88,25 @@ function facts(row: Pick<QueuedAlert, "kind" | "severity" | "audience" | "team">
 export function alertTitle(alert: Alert, kind: Kind): string {
   if (kind === "hotlist") return "Hotlist";
   if (kind === "monitor") return "Watched pattern";
+  if (kind === "analyst") return alert.rule_id.startsWith("analyst:dataset:") ? "Dataset alert" : "Raised by an analyst";
   return typologyLabel(alert.typology);
 }
 
-/** Who may see it, in words (ADR-133 decision 5 and ruling 3). */
-export function audienceWords(audience: Audience, team: string | null): string {
+/** Who may see it, in words (ADR-133 decision 5 and ruling 3; ADR-146 decision 8: a rule's alert
+ * routed to a named team is that team's alone, and the home case's Authors'). */
+export function audienceWords(audience: Audience, team: string | null, routed = false): string {
   if (audience === "case") return "The case team";
+  if (routed) return team ? `Team ${team} only` : "Its team only";
   if (audience === "team") return team ? `Shared with team ${team}` : "Shared with the owner's team";
   return "Only its owner";
+}
+
+/** ADR-146 Amendment 1 and G12: what marks an alert apart in the queue, in words; `null` for none.
+ * A suppressed alert is still open, and counted open everywhere. */
+export function markWords(alert: Alert, suppressed: boolean): string | null {
+  if (alert.status === "closed" && !alert.disposition) return "Taken back: the load that raised it was reverted";
+  if (suppressed && alert.suppressed_until) return `Suppressed until ${when(alert.suppressed_until)}: ${alert.suppress_reason ?? ""}`;
+  return null;
 }
 
 /** How long it has waited, in words. */
@@ -124,6 +144,8 @@ export function AlertQueue(props: AlertQueueProps) {
   const [filter, setFilter] = useState<QueueFilter>("active");
   const [kind, setKind] = useState<KindFilter>("all");
   const [severity, setSeverity] = useState<SeverityFilter>("all");
+  const [show, setShow] = useState<QueueShow>("all");
+  const [olderThan, setOlderThan] = useState("");
   const [rows, setRows] = useState<QueuedAlert[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(props.openAlertId ?? null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -138,10 +160,11 @@ export function AlertQueue(props: AlertQueueProps) {
 
   const reload = useCallback(() => {
     setProblem(null);
-    listQueue({ apiBaseUrl, bearerToken, investigationId }, { status: filter, kind, severity })
+    const days = Number.parseInt(olderThan, 10);
+    listQueue({ apiBaseUrl, bearerToken, investigationId }, { status: filter, kind, severity, show, olderThanDays: days > 0 ? days : null })
       .then(setRows)
       .catch((e: Error) => setProblem(e.message));
-  }, [apiBaseUrl, bearerToken, investigationId, filter, kind, severity]);
+  }, [apiBaseUrl, bearerToken, investigationId, filter, kind, severity, show, olderThan]);
 
   useEffect(reload, [reload]);
 
@@ -149,6 +172,30 @@ export function AlertQueue(props: AlertQueueProps) {
     <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) 2fr", gap: "var(--sp-16)", minHeight: 0 }}>
       <section aria-label="Alert queue" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-8)", minHeight: 0 }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
+          <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+            Whose
+            <Select aria-label="Whose alerts" value={show} onChange={(e) => setShow(e.target.value as QueueShow)}>
+              <option value="all">All, suppressed included</option>
+              <option value="mine">Mine</option>
+              <option value="team">My teams&apos;</option>
+              <option value="unassigned">Unassigned</option>
+            </Select>
+          </label>
+          <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+            Older than
+            <input
+              className="input"
+              type="number"
+              min={1}
+              inputMode="numeric"
+              aria-label="Older than this many days"
+              placeholder="any"
+              value={olderThan}
+              onChange={(e) => setOlderThan(e.target.value)}
+              style={{ width: "6ch" }}
+            />
+            days
+          </label>
           <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
             Show
             <Select aria-label="Show which alerts" value={filter} onChange={(e) => setFilter(e.target.value as QueueFilter)}>
@@ -164,6 +211,7 @@ export function AlertQueue(props: AlertQueueProps) {
               <option value="typology">Rules</option>
               <option value="hotlist">Hotlists</option>
               <option value="monitor">Watched patterns</option>
+              <option value="analyst">Raised by an analyst</option>
             </Select>
           </label>
           <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
@@ -187,6 +235,9 @@ export function AlertQueue(props: AlertQueueProps) {
           {(rows ?? []).map((row) => {
             const f = facts(row);
             const title = alertTitle(row.alert, f.kind);
+            const mark = markWords(row.alert, row.suppressed ?? false);
+            const team = row.team_name ?? f.team;
+            const routed = Boolean(row.alert.routed_team);
             return (
               <li key={row.alert.id} style={{ borderBottom: "1px solid var(--border-subtle)", padding: "var(--sp-4) 0" }}>
                 {/* The button's name is its own visible words, with the hidden words that make them a
@@ -209,8 +260,13 @@ export function AlertQueue(props: AlertQueueProps) {
                 <p className="label" style={{ margin: 0, padding: "0 var(--sp-8)" }}>
                   {STATUS_WORDS[row.alert.status ?? "open"]}
                   {row.alert.assignee ? ` · ${row.alert.assignee === props.accountId ? "you" : (row.assignee_name ?? row.alert.assignee)}` : ""}
-                  {` · ${audienceWords(f.audience, f.team)} · ${ageWords(row.alert.created_at)} · ${when(row.alert.created_at)}`}
+                  {` · ${audienceWords(f.audience, team, routed)} · ${ageWords(row.alert.created_at)} · ${when(row.alert.created_at)}`}
                 </p>
+                {mark && (
+                  <p className="label" style={{ margin: 0, padding: "0 var(--sp-8)", color: "var(--warning)" }}>
+                    {mark}
+                  </p>
+                )}
               </li>
             );
           })}
@@ -276,6 +332,9 @@ function AlertDetail(props: AlertDetailProps) {
   const names = new Map(nodes.map((n) => [n.id, nodeName(n)]));
   const alert = why.alert;
   const f = facts(why);
+  const routed = Boolean(alert.routed_team);
+  const team = why.team_name ?? f.team;
+  const mark = markWords(alert, why.suppressed ?? false);
   const canTriage = level === "editor" || level === "author";
   // A close waiting for a second person (stage (d)) is settled for claiming, giving and closing.
   const closed = alert.status === "closed" || alert.status === "closing";
@@ -293,9 +352,15 @@ function AlertDetail(props: AlertDetailProps) {
     <section aria-label="What fired this alert" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", overflowY: "auto" }}>
       <h3 className="value" style={{ margin: 0 }}>{alertTitle(alert, f.kind)}</h3>
       <p className="label" style={{ margin: 0 }}>
-        {`${alertTitle(alert, f.kind)} · ${SEVERITY_WORDS[f.severity]} severity · ${audienceWords(f.audience, f.team)}`}
+        {`${alertTitle(alert, f.kind)} · ${SEVERITY_WORDS[f.severity]} severity · ${audienceWords(f.audience, team, routed)}`}
       </p>
+      {mark && (
+        <p className="label" style={{ margin: 0, color: "var(--warning)" }}>
+          {mark}
+        </p>
+      )}
       <p style={{ margin: 0 }}>{why.summary}</p>
+      <WhatFiredIt explanation={why} />
       {f.kind === "typology" && (
         <p className="label" style={{ margin: 0 }}>
           {`Raised ${alert.trigger === "pre_commit" ? "as the data loaded (before it was committed)" : "after the data loaded"}`}
@@ -405,7 +470,10 @@ function AlertDetail(props: AlertDetailProps) {
       {canTriage && !closed && f.audience === "case" && (
         <GiveTo api={api} alertId={alertId} busy={busy} act={act} />
       )}
-      {canTriage && !closed && f.audience !== "case" && (
+      {canTriage && !closed && routed && why.lead && (
+        <LeadTools api={api} alertId={alertId} team={alert.routed_team ?? ""} busy={busy} act={act} />
+      )}
+      {canTriage && !closed && f.audience !== "case" && !(routed && why.lead) && (
         <p className="label" style={{ margin: 0 }}>
           An alert shared with a team, or its owner&apos;s alone, is claimed by someone who can see it; it is not given to another person.
         </p>
@@ -492,6 +560,108 @@ function AlertDetail(props: AlertDetailProps) {
         </fieldset>
       )}
     </section>
+  );
+}
+
+/** ADR-146 decision 1 (ADR-130 decision 1): *what fired it* on a watch alert — the hotlist's own
+ * entry (to its owner alone), and each matched item's files and rows — as the inbox said it. */
+export function WhatFiredIt({ explanation }: { explanation: AlertExplanation }) {
+  const fired = explanation.fired_on ?? [];
+  const hotlist = explanation.hotlist ?? null;
+  if (!hotlist && fired.length === 0) return null;
+  return (
+    <section aria-label="What fired it" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)" }}>
+      <h4 className="label" style={{ margin: 0 }}>What fired it</h4>
+      {hotlist && (
+        <p style={{ margin: 0 }}>
+          {`Your hotlist entry ${hotlist.identifier}${hotlist.kept_as_written ? " (kept as written)" : ""}, reviewed by ${when(hotlist.review_date)}`}
+        </p>
+      )}
+      <ul style={{ margin: 0, paddingLeft: "var(--sp-16)" }}>
+        {fired.map((f, i) => (
+          <li key={`${f.label}-${i}`}>
+            {`${f.label} (${f.type})`}
+            {f.sources_withheld
+              ? ": read from data this case does not read"
+              : f.files.length > 0
+                ? `: ${f.files
+                    .map((file) =>
+                      file.row !== null && file.row !== undefined
+                        ? `${file.name}, row ${file.row + 1}`
+                        : `${file.name}${file.rows ? `, ${file.rows} rows` : ""}${file.records ? `, ${file.records} records` : ""}`,
+                    )
+                    .join("; ")}${f.more_files ? `; and ${f.more_files} more file${f.more_files === 1 ? "" : "s"}` : ""}`
+                : ""}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** ADR-146 Amendment 1: the team lead's (or cover's) tools on one of the team's alerts: give it to a
+ * member of the team who holds the case, and *Suppress until…* a day at most 90 days ahead. */
+function LeadTools(props: {
+  api: AlertsApi;
+  alertId: string;
+  team: string;
+  busy: boolean;
+  act: (what: () => Promise<unknown>, words: string) => Promise<void>;
+}) {
+  const { api, alertId } = props;
+  const [members, setMembers] = useState<string[]>([]);
+  const [chosen, setChosen] = useState("");
+  const [until, setUntil] = useState("");
+  const [why, setWhy] = useState("");
+  useEffect(() => {
+    listAlertTeams(api)
+      .then((teams) => setMembers(teams.find((t) => t.role_id === props.team)?.members ?? []))
+      .catch(() => setMembers([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api.apiBaseUrl, api.bearerToken, api.investigationId, props.team]);
+  const latest = new Date(Date.now() + 90 * 86_400_000).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    <fieldset style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "flex", flexDirection: "column", gap: "var(--sp-8)" }}>
+      <legend className="label">As the team&apos;s lead</legend>
+      {members.length > 0 && (
+        <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "flex-end", flexWrap: "wrap" }}>
+          <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
+            Give to
+            <Select aria-label="Give to (a member of the team)" value={chosen} onChange={(e) => setChosen(e.target.value)}>
+              <option value="">Choose a member…</option>
+              {members.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <Button disabled={props.busy || !chosen} onClick={() => void props.act(() => assignAlert(api, alertId, chosen), `Given to ${chosen}.`)}>
+            Give to the member
+          </Button>
+        </div>
+      )}
+      <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
+        Suppress until
+        <input className="input" type="date" min={today} max={latest} value={until} onChange={(e) => setUntil(e.target.value)} aria-label="Suppress until (at most 90 days ahead)" />
+      </label>
+      <label className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
+        Why, in words (required)
+        <textarea className="input" rows={2} value={why} onChange={(e) => setWhy(e.target.value)} aria-label="Why, in words: the reason for suppressing it" />
+      </label>
+      <Button
+        disabled={props.busy || !until || !why.trim()}
+        onClick={() =>
+          void props.act(
+            () => suppressAlert(api, alertId, { until, reason: why.trim() }),
+            `Suppressed until ${when(until)}. It stays open, in All, and counted open; it ends by itself on that day.`,
+          )
+        }
+      >
+        Suppress until…
+      </Button>
+    </fieldset>
   );
 }
 
