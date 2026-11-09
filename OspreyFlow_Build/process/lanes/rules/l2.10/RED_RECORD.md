@@ -108,3 +108,14 @@ Postgres runs (§1) were under the rules lease on stack b.
   answering something else, which stopped the Studio's Checks on load. Fixed (`221d489`), and the spec
   is green alone (46).
 - **Axe.** 650 passed.
+
+## 7. The live run at faf47b4, after the rebase (rules lease, stack a, 06:07–07:07Z)
+
+- `test_alert_evidence_withheld_live.py`'s `_pending` read every record in the shared table and unpacked
+  each link pair as two, but since the journal's D3 round a pair is `(old, new, old_type)`. It passed
+  only while no other run's pair was in the table. Its fix reads a pair's first two fields. Plant:
+  `AlertStore._close_record` a no-op, so the settle applies the repoint (the queue's assertions hold)
+  and keeps the record. Red at the last assertion alone (`[(link, revision)] == []`), green with the
+  plant removed, and the file whole green alone (38).
+- The address's timing case was red beside `test-js` and keyboard on a newly recreated stack (hidden
+  median 1,415 ms). It was green re-taken alone under the same lease; this is the Q3 residual as ruled.
