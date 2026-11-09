@@ -119,3 +119,49 @@ Postgres runs (§1) were under the rules lease on stack b.
   plant removed, and the file whole green alone (38).
 - The address's timing case was red beside `test-js` and keyboard on a newly recreated stack (hidden
   median 1,415 ms). It was green re-taken alone under the same lease; this is the Q3 residual as ruled.
+
+## 8. The orchestrator's review round (9 November 2026)
+
+Each case was green, red with one plant at its real call site, and green again with the plant removed.
+Offline runs used the closed ports; the live ones ran under the rules lease on stack c, 07:39–07:40Z, at
+e79271b.
+
+- **Item 1, `GET …/alert-sources` (live).** One case:
+  `test_monitoring_queue.py::test_what_raises_alerts_lists_only_the_readers_watches_and_counts_only_what_they_may_see`,
+  through `read_alert_sources` over the real stores. Its plants, and what each turned red:
+  - `HotlistStore.list_authorized`'s owner clause read as `$1::text IS NOT NULL`: another's hotlists were listed;
+  - `_routed_sql`'s first clause read as `true`, its parameters kept: the routed rule counted 2 for the non-member;
+  - the route counting from `list_queue`'s rows, not the reader's queue: the alert citing a hidden node was counted (2 == 1).
+- **Item 2, `GET …/alert-teams` (offline).** One case:
+  `test_team_lead_and_watches.py::test_the_teams_a_rule_may_go_to_list_members_to_the_lead_alone`.
+  - The members' lead check read as true: team-7's lead was told team-8's member.
+  - The no-right guard removed: the Reports Viewer was told both teams.
+- **Item 3, names (offline).**
+  - `test_what_raises_alerts_names_its_people_and_asks_for_no_one_else`: red with `people_named`
+    leaving the suppressors out.
+  - `OneQueue.test.tsx` "names the owner and the suppressor…": red with the panel showing `owner`
+    (the id), 2 == 3.
+- **Item 4, a watch whose owner has lost its dataset (offline, through the app's own
+  `owner_reaches_dataset_in`).**
+  - The schedule's reach check removed: the owner, narrowed to ds-1, alerted on n-mine.
+  - The load path's reach check removed: the owner was matched in all three evaluations.
+- **Item 5 (live).** `test_monitors.py::test_a_watchs_schedule_is_set_by_its_owner_alone`, red with
+  `set_schedule`'s owner clause read as `$2::text IS NOT NULL` (DID NOT RAISE).
+- **Item 6, keyboard.** Each new case drives a select by typing its label and a date by its segments.
+  Each was red with its handler removed. Where a plant made a controlled select a no-op, the first red
+  was the value check, so the send was also planted:
+  - the tab's hotlists panel removed: the Hotlists heading was not found;
+  - the whose filter's `onChange` a no-op: the value check; with `show` dropped from the request: the request assertion;
+  - the hand-off's `onClick` a no-op: the assign request;
+  - the column filter's `onChange` a no-op: Deposits still shown;
+  - the team choice's change dropped: the value check; with `team_id` dropped from the sentence: the sentence assertion;
+  - the schedule's `onChange` a no-op: the value check; with the schedule sent as daily: the value check again, since the select shows the server's answer;
+  - *Watch for this*'s call removed: the hotlist request;
+  - *Save as a watch*'s call removed: the monitor request.
+  - The suppress and raise cases are §4's.
+- **Item 7 (live).** The kyc true positive is now proposed by one person and approved by another.
+  Red with `approve_close` closing through `set_queue_triage` without `_close`: the match stayed
+  inferred. The case's first green run errored with an `httpx.ReadError` while the stack's ArcadeDB
+  was still coming up; it passed in the plant run and in the green run after.
+- **Item 9 (offline).** `test_a_routed_alerts_explanation_names_the_team_it_was_routed_to`, red with
+  the explanation reading `alert.team` (unit-1).
