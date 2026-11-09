@@ -52,3 +52,10 @@ closed ports (59991–59994), no lease.
 - Plant: *← Back to your alerts* not returning Home → `… and Back goes Home` FAILED.
 - Restored: green. Found red on main too, not this step's: `layout/PanelFrames.test.tsx` (6) and
   `App.chrome.test.tsx`'s Inspector case, also red in a clean checkout of main at 24e2c8e.
+
+## 7. One set of words (`help/roles.test.ts`, `help/RolesHelpPage.test.tsx`) and the canvas badge
+- Plant in `roles.ts`: `manage_models` left unsaid → `say every right rights.py declares` and the
+  planted-right case FAILED, and `tsc` refused it (TS2741). The planted-right case also plants
+  `approve_releases` into a copy of `rights.py` and asserts it is found missing.
+- Plant in `alertBadges.tsx`: closed alerts marked too → `marks each item an open alert concerns`
+  FAILED.
