@@ -1,12 +1,14 @@
 # rules-b · L2.12 · patches for other lanes' files (the orchestrator's ruling of 8 November)
 
-Each was built and tested in this worktree, saved with `git diff`, then reverted. Each applies to the
-branch's head alone (`git apply --check`); together, apply them in this order with `git apply --3way`
+Each was built and tested in this worktree, saved with `git diff`, then reverted. **They apply after this
+branch lands, not to `main` alone:** each is made against the branch's own files (`help/roles.ts`,
+`reports/alertBadges.tsx`, the board, the registry's L2.12 ids), so each applies to the branch's head on
+its own (`git apply --check`), and to `main` once L2.12 is merged; the orchestrator passes the three to
+their owners then (the orchestrator's review, 9 November). Together, apply them in this order with `git apply --3way`
 (the badge's and the trend's `App.tsx` hunks are neighbours): `see-the-trend`, `canvas-badge`,
 `admin-tips`, `registry-L2.12`. All four applied: 850 unit cases (App, alerts, admin, canvas, reports,
 home, help) and 87 keyboard cases (rules-place, admin, alert-figures, reports, shell) passed, after review
-round 1. Pass each to its owner's next step,
-or apply it at the merge if the owner has finished with those files.
+round 1. `registry-L2.12.patch` goes in with the merge itself (the branch's keyboard coverage needs it).
 
 | Patch | Owner | What | Its test, red first |
 | --- | --- | --- | --- |

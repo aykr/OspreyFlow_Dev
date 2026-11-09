@@ -122,3 +122,73 @@ closed ports (59991–59994), no lease.
   its identity. That is the real call site's shape: a fresh object per render, as App passes it.
 - The rule-group table had two Glass copies (`AlertsPanel.groupOf`, `homeData.ruleGroupOf`); now one,
   `figureParts.alertRuleGroup`, which both read (the Conduit's `_RULE_GROUP` is its counterpart).
+
+## 12. The orchestrator's review (9 November): its fix round, each red at the real call site
+
+**Item 1, the audience (`test_monitoring_dashboard.py`, real Postgres, rules-b lease on stack c).** The only-me
+case now also holds `open_by_source` and `team` for the colleague and the other unit's reader; a new case,
+`test_the_panel_and_the_team_view_reach_only_each_alert_s_audience`, adds an "only me" alert claimed by its
+owner (in the owner's panel and team view as *mine*, in no one else's) and a reader of another case on the
+same dataset. Green on first run (the code was there), so red by plants in `alerts.py`'s queue scope:
+- the "only me" audience check dropped (`h.audience = 'team'`) → the only-me case and the new case FAILED
+  (2 failed, 4 passed);
+- the case dropped from a typology alert's scope → 6 failed, the new case among them (the broader reds are
+  rows other tests left in the shared database, read once the case no longer bounds them);
+- the unit dropped from a shared alert's scope → 6 failed, the new case among them.
+- Restored: 6 passed.
+
+**Item 3, the journey's reached half (`test_reports_viewer_journey.py`).** It counted any non-403 as reached.
+Now each destination is asked through the real case gate (`_authorized_at`, a case store that answers as the
+real one: a Viewer's level on `case-1` for the viewer, `InvestigationNotFoundError` otherwise) and the report
+and queue behind it, and must answer 200; another case is asserted 404. Red: the case store refusing the
+viewer → `test_the_reached_half_sees_the_case_s_refusal` asserts the three case routes answer 404, which the
+reached case reports (before, a 404 passed it). Home's queue counts joined `REACHED`; the guest token left
+it: the Alert monitoring board asks Superset for nothing.
+
+**Item 10, "nothing else" over every route.** `test_a_reports_viewer_is_refused_every_route_beyond_its_rights`
+asks every route that names a right (`test_route_rights.py`'s table, over 200) whose right is not on decision
+10's list, written in the test; each must refuse by `right_required`/`place_required`. Red twice: planted
+where roles get their rights (the Reports Viewer given `triage_alerts`) → the triage routes answered
+(`test_the_sweep_finds_a_right_given_beyond_the_list`); and in `app.py`, `share_case` taken off
+`rename_investigation` (no alert in its path) → the sweep FAILED with `{'rename_investigation': 500}`;
+restored, 8 passed.
+
+**Item 5, the Alerts panel's and the board's cases, each planted now** (a script per plant: edit, run the one
+case with `-t`, restore):
+- panel: the open total from the rows given, not the Conduit's count → `counts only what the Conduit
+  counted` FAILED;
+- panel: closed alerts kept among the newest (`api.ts`) → `lists the newest few` FAILED;
+- panel: the newest listed oldest first → the same case FAILED;
+- panel: a 403 on the rows taken as a failure → `refused the queue's rows` FAILED;
+- panel: every row a button whatever the reader → `opens an alert at its address only` FAILED;
+- panel: the newest rows not filtered to the group → `shows only the rule group` FAILED;
+- panel: never outlined → the same case FAILED;
+- panel: the newest few cut before the filter → `are the group's own newest` FAILED;
+- panel: analyst alerts named as an unknown typology → `is its own for every kind` FAILED;
+- board: the team view drawn short → `draws every section` FAILED;
+- board: the rule filter ignored by the weekly figures → `opens filtered to an alert's rule` FAILED;
+- board: the alert's period ignored → the same case FAILED;
+- board: the way back doing nothing → `says so and goes back` FAILED;
+- board: the way back not focused on opening → the same case FAILED;
+- board: focused on every redraw (keyed on `fromAlert`'s identity) → `keeps the reader's focus` FAILED;
+- board: a Superset board under the Glass's slug kept → `is left out, never shadowing` FAILED;
+- **board: the `drawsItself` guard in the embed effect removed alone → `is the first board …` PASSED, not
+  red.** §5's record of that plant does not hold at this head: the Superset mount is rendered only when the
+  Glass does not draw the board, so the effect finds no mount and asks for no token either way. Two guards,
+  each enough; the case is red with both removed (`expected true to be false`: a guest token asked for) and
+  green with either kept. The case is right; §5's plant proved less than it claimed (rule 15).
+- Restored: 13 passed.
+
+**Item 6, `roles.test.ts`.** It held `RIGHT_WORDS` equal to `rights.py`'s list, so a right another lane adds
+turned it red (and `Record<Right, string>` turned the type check red). Shown with `RAISE_ALERTS` planted in
+the real `rights.py`: both cases FAILED. Now the words are a subset of the list read at test time (a stale
+word is red: `are found stale …`, planted by taking `CREATE_CASE` out of the source read), and a right
+without words yet is said by its name (`rightSays`); with the plant in `rights.py`, 5 passed. Restored.
+
+**Item 7, distinct group names.** `groupName` folded every non-typology kind but hotlists and monitors into
+the typology fallback, so L2.10's `analyst` and any later kind read alike: the new case FAILED (4 distinct
+names of 6) before the change; `analyst` is *Raised by an analyst*, a later kind its own name.
+
+**Item 8, `team_mine` out of the feed.** `test_the_feed_carries_the_panel_sections_as_figures_only` now asserts
+no `team_mine` row: FAILED before the change, green after. The feed is pulled by a board as its dashboard
+identity (`report_sync` reads the CSV), and a reader's own claims mean nothing there; spec 03 says so.
