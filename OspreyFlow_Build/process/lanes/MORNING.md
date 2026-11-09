@@ -517,6 +517,12 @@ New ones are added at the bottom as they happen.
     overdue alerts' reader is matched by stored id alone. The picker's `writers` read has no live test. Three
     figures have no gate file, and some files are unlisted for ratification. **My calls:** the strict reading of
     the accepted ADR for each, so none comes to you. A seam contract test is left for L3.4's promotion store.
+78. **Rules-b's L2.12 sent back after my independent review, and reopened on `ayan` (about 15:45).** A blocker:
+    main's new `GET /v1/grading-scheme` (L3.7) turns the branch's open-routes pin red, so it rebases first. Also:
+    `make test` never ran its vitest half; Admin's tips cover Roles only, where the carry says Roles, People
+    and Datasets; and there is no ratification list. My earlier review's items 2 and 4 went unrecorded, their
+    text lost with the previous orchestrator session; this review stands in for them. No rule 7 or fixture
+    defect was found.
 
 ## Evening, 7 November: your records of 7 November applied
 
