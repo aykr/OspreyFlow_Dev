@@ -236,7 +236,12 @@ class Boards:
         chosen = await self.datasets.chosen_of_case(case_id)
         if not chosen:
             return None
-        live = await self.models.live(chosen[0].id)
+        return await self._packs_of(chosen[0].id)
+
+    async def _packs_of(self, dataset_id: str) -> set[str] | None:
+        if self.models is None:
+            return None
+        live = await self.models.live(dataset_id)
         return set(live.packs) if live is not None else None
 
     def _in_packs(self, name: str, packs: set[str] | None) -> bool:
@@ -246,7 +251,18 @@ class Boards:
     async def node_types(self, case_id: str) -> list[str]:
         """C14: a board's node types come only from the case's model: the core and the live
         model's packs; the deployment's whole ontology while the case's dataset has no model yet."""
-        packs = await self._live_packs(case_id)
+        return self._node_types_in(await self._live_packs(case_id))
+
+    async def dataset_node_types(self, dataset_id: str) -> list[str]:
+        """C14 against one dataset's own live model: a drawn dataset merged into another is checked
+        against the target's model, not the case's (Amendment 2 decision 6; L3.9)."""
+        return self._node_types_in(await self._packs_of(dataset_id))
+
+    async def dataset_link_types(self, dataset_id: str) -> list[str]:
+        packs = await self._packs_of(dataset_id)
+        return [name for name in self.link_types() if self._in_packs(name, packs)]
+
+    def _node_types_in(self, packs: set[str] | None) -> list[str]:
         names = []
         for t in self.ontology.entity_types:
             if t.name in _NOT_DRAWN_NODE_TYPES:
@@ -822,6 +838,16 @@ class Boards:
             if i.kind == "node" and i.withdrawn_at is None
         ]  # fmt: skip
         drawn_nodes = await self.graph.get_nodes([i.element_id for i in live], principal)
+        return await self.alike(drawn_nodes, principal, principal)
+
+    async def alike(
+        self, drawn_nodes: Sequence[Node], candidates: Principal, decided: Principal
+    ) -> MatchSuggestions:
+        """The matching itself: loaded nodes read through `candidates` alone (the adapter filters
+        each by marking and dataset, so one the reader may not see is never a candidate, never
+        counted, never ordered: rule 7), less a pair already decided, read through `decided`. A
+        merge of a drawn dataset passes the merger scoped to the target alone (L3.9)."""
+        principal = candidates
         found: list[MatchSuggestion] = []
         more = False
         for drawn in drawn_nodes:
@@ -857,12 +883,12 @@ class Boards:
             ]  # fmt: skip
             if not loaded:
                 continue
-            decided = await self.graph.edges_among(
-                [drawn.id, *[c[0].id for c in loaded]], principal, edge_types=[SAME_AS, NOT_SAME_AS]
+            settled_links = await self.graph.edges_among(
+                [drawn.id, *[c[0].id for c in loaded]], decided, edge_types=[SAME_AS, NOT_SAME_AS]
             )
             settled = {
                 e.target if e.source == drawn.id else e.source
-                for e in decided
+                for e in settled_links
                 if drawn.id in (e.source, e.target)
             }
             for node, score, why in sorted(loaded, key=lambda c: (-c[1], c[0].id)):

@@ -42,7 +42,7 @@ import asyncpg
 logger = logging.getLogger(__name__)
 
 Status = Literal["awaiting_review", "committed", "rejected", "reverted"]
-Trigger = Literal["analyst_promotion", "layer_merge"]
+Trigger = Literal["analyst_promotion", "layer_merge", "drawn_merge"]
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,19 @@ class PromotionRecord:
     reason: str | None = None
     #: A layer merge's grant, closed with it.
     grant_id: str | None = None
+
+
+@dataclass(frozen=True)
+class MergeMatchRow:
+    """A drawn dataset's merge (L3.9): one chosen match, written with the load as a scored,
+    `inferred` `SAME_AS` (rule 5). `handling` is the stricter of its two ends' as read when it was
+    chosen (JSON), checked again at an approval. `edge_id` is the link the load wrote."""
+
+    drawn: str
+    loaded: str
+    score: float
+    handling: str
+    edge_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -130,6 +143,10 @@ class PromotionStore(Protocol):
     #: Closes an open grant; True only for the call that closed it, so a merge claims its grant
     #: once (of two at once, one wins), as `decide` does a decision.
     async def close_grant(self, grant_id: str, at: datetime) -> bool: ...
+    #: A drawn dataset's merge (L3.9): its chosen matches, and the links its load wrote for them.
+    async def add_matches(self, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None: ...
+    async def matches_of(self, promotion_id: str) -> list[MergeMatchRow]: ...
+    async def set_match_edges(self, promotion_id: str, edge_ids: Sequence[str]) -> None: ...
 
 
 class InMemoryPromotionStore:
@@ -137,6 +154,7 @@ class InMemoryPromotionStore:
         self.records: dict[str, PromotionRecord] = {}
         self.grants: dict[str, LayerGrant] = {}
         self.deleted_layers: dict[str, datetime] = {}
+        self.matches: dict[str, list[MergeMatchRow]] = {}
 
     async def mark_layer_deleted(self, layer_id: str, at: datetime) -> None:
         self.deleted_layers.setdefault(layer_id, at)
@@ -265,6 +283,18 @@ class InMemoryPromotionStore:
         self.grants[grant_id] = replace(held, closed_at=at)
         return True
 
+    async def add_matches(self, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None:
+        self.matches[promotion_id] = list(rows)
+
+    async def matches_of(self, promotion_id: str) -> list[MergeMatchRow]:
+        return list(self.matches.get(promotion_id, []))
+
+    async def set_match_edges(self, promotion_id: str, edge_ids: Sequence[str]) -> None:
+        held = self.matches.get(promotion_id, [])
+        if len(held) != len(edge_ids):
+            raise ValueError("one link for each match")
+        self.matches[promotion_id] = [replace(r, edge_id=e) for r, e in zip(held, edge_ids)]
+
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS promotions (
@@ -306,6 +336,31 @@ CREATE TABLE IF NOT EXISTS promotion_layer_grants (
 CREATE TABLE IF NOT EXISTS promotion_deleted_layers (
     layer_id TEXT PRIMARY KEY,
     deleted_at TIMESTAMPTZ NOT NULL
+);
+-- ADR-143 Amendment 2 decision 6 (L3.9): the trigger `drawn_merge`, allowed once. The catalogue is
+-- read first, so a start with it in place takes no lock on the table (CARRIES row 22's lesson).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+        WHERE t.relname = 'promotions' AND t.relnamespace = current_schema()::regnamespace
+        AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%drawn_merge%'
+    ) THEN
+        ALTER TABLE promotions DROP CONSTRAINT IF EXISTS promotions_trigger_check;
+        ALTER TABLE promotions ADD CONSTRAINT promotions_trigger_check
+            CHECK (trigger IN ('analyst_promotion', 'layer_merge', 'drawn_merge'));
+    END IF;
+END $$;
+-- A drawn dataset's merge: its chosen matches, in the order chosen, and the link each became.
+CREATE TABLE IF NOT EXISTS promotion_matches (
+    promotion_id TEXT NOT NULL REFERENCES promotions (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    drawn TEXT NOT NULL,
+    loaded TEXT NOT NULL,
+    score DOUBLE PRECISION NOT NULL,
+    handling JSONB NOT NULL,
+    edge_id TEXT,
+    PRIMARY KEY (promotion_id, position)
 );
 """
 
@@ -536,6 +591,37 @@ class PostgresPromotionStore:
                 at,
             )
         return bool(done == "UPDATE 1")
+
+    async def add_matches(self, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.executemany(
+                "INSERT INTO promotion_matches (promotion_id, position, drawn, loaded, score, "
+                "handling) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
+                [(promotion_id, n, r.drawn, r.loaded, r.score, r.handling)
+                 for n, r in enumerate(rows)],
+            )  # fmt: skip
+
+    async def matches_of(self, promotion_id: str) -> list[MergeMatchRow]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT drawn, loaded, score, handling::text AS handling, edge_id "
+                "FROM promotion_matches WHERE promotion_id = $1 ORDER BY position",
+                promotion_id,
+            )
+        return [MergeMatchRow(**dict(r)) for r in rows]
+
+    async def set_match_edges(self, promotion_id: str, edge_ids: Sequence[str]) -> None:
+        async with self._pool.acquire() as conn, conn.transaction():
+            held = await conn.fetchval(
+                "SELECT count(*) FROM promotion_matches WHERE promotion_id = $1", promotion_id
+            )
+            if held != len(edge_ids):
+                raise ValueError("one link for each match")
+            await conn.executemany(
+                "UPDATE promotion_matches SET edge_id = $3 WHERE promotion_id = $1 "
+                "AND position = $2",
+                [(promotion_id, n, e) for n, e in enumerate(edge_ids)],
+            )
 
 
 # --- admin's ageing seam (ADR-145 Amendment 6) ---------------------------------------------------
