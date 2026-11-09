@@ -1593,6 +1593,8 @@ def _render_env(config: OspreyConfig) -> str:
             if config.connectors.secrets
             else []
         ),
+        # ADR-143 decision 11: the scheme drawn items are graded in (`grading.scheme`).
+        f"OSPREY_GRADING_SCHEME={config.grading.scheme}",
         "",
         "# Ports published besides the front proxy's: the Conduit only when network.expose_conduit",
         "# asks, ArcadeDB on loopback only (ADR-114 Amendment 4 decision 3). Each is overridable.",

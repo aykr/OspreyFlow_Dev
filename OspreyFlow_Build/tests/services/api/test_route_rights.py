@@ -218,6 +218,8 @@ ROUTE_RIGHTS = {
     "list_domain_packs": None,
     "get_handling_scheme_route": None,
     "get_yardstick_route": None,
+    # ADR-143 decision 11: the deployment's grading scheme, as the yardstick.
+    "get_grading_scheme_route": None,
     "list_ingest_source_files": "add_ingest_files",
     # ADR-140 Amendment 4: connections and registered sources, on dataset routes.
     "list_ingest_connections": "add_ingest_files",
@@ -592,11 +594,12 @@ def test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route(
 
 #: Read routes any signed-in person may call (`ROUTE_RIGHTS` `None`, ADR-112) that hold the
 #: product's own reference catalogues — the handling scheme, the ontology, the yardstick, the
-#: basemaps, the connectors, domain packs and transforms offered, the model engines, the API's own
-#: description, liveness and readiness — and nothing of any case.
+#: grading scheme, the basemaps, the connectors, domain packs and transforms offered, the model
+#: engines, the API's own description, liveness and readiness — and nothing of any case.
 REFERENCE_CATALOGUES = frozenset({
     "get_handling_scheme_route", "get_map_providers_route", "get_ontology_route",
-    "get_yardstick_route", "list_connectors", "list_domain_packs", "list_transforms",
+    "get_yardstick_route", "get_grading_scheme_route", "list_connectors", "list_domain_packs",
+    "list_transforms",
     "model_engines_route", "openapi_document_route", "liveness_route", "readiness_route",
 })  # fmt: skip
 #: Read routes any signed-in person may call that hold the deployment's data — its cases, its

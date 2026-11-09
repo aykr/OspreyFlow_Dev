@@ -143,6 +143,37 @@ class MonitoringSettings:
         )
 
 
+#: The grading schemes (`schemas.domain.GRADING_PARTS`), by name.
+GRADING_SCHEMES = ("5x5x5", "3x5x2")
+
+
+class GradingSchemeUnknown(ValueError):
+    """`OSPREY_GRADING_SCHEME` names no scheme: the Conduit does not start, rather than offer
+    grades of a scheme the deployment did not choose."""
+
+
+@dataclass(frozen=True)
+class GradingSettings:
+    """`osprey.yaml`'s `grading.scheme` as the Conduit reads it (ADR-143 decision 11), from the
+    rendered `deployment.env`. Nothing set is the schema's default, 5x5x5 (a deployment rendered
+    before the setting existed graded in it). Anything else that is not exactly a scheme's name
+    fails closed: refused, and the Conduit does not start, since a guessed scheme would grade
+    every new drawn item wrongly."""
+
+    scheme: Literal["5x5x5", "3x5x2"] = "5x5x5"
+
+    @classmethod
+    def from_env(cls) -> GradingSettings:
+        raw = os.environ.get("OSPREY_GRADING_SCHEME")
+        if raw is None:
+            return cls()
+        if raw not in GRADING_SCHEMES:
+            raise GradingSchemeUnknown(
+                f"OSPREY_GRADING_SCHEME is {raw!r}, not one of {', '.join(GRADING_SCHEMES)}"
+            )
+        return cls(scheme=raw)  # type: ignore[arg-type]
+
+
 @dataclass(frozen=True)
 class ApiConfig:
     valkey: ValkeyConfig

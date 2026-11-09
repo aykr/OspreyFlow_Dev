@@ -234,6 +234,8 @@ from schemas.domain import (
     Edge,
     EdgeWrite,
     ExpandRequest,
+    Grading,
+    GradingSchemeAnswer,
     Handling,
     HeldRow,
     HeldRowDecision,
@@ -504,7 +506,7 @@ from .compute_routes import (
     ComputeMetricRequest,
     run_compute_metric_job,
 )
-from .config import ApiConfig, DeploymentModels, MonitoringSettings
+from .config import ApiConfig, DeploymentModels, GradingSettings, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
 from .connector_reads import (
     Readers,
@@ -1106,6 +1108,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.config = config
     # ADR-133 ruling 3: `osprey.yaml`'s `monitoring` section, read once.
     app.state.monitoring = MonitoringSettings.from_env()
+    # ADR-143 decision 11: `grading.scheme`, read once; an unknown scheme stops the start.
+    app.state.grading = GradingSettings.from_env()
     app.state.graph = graph
     app.state.ontology = ontology
     app.state.valkey = valkey
@@ -1747,6 +1751,10 @@ def get_handling_scheme(request: Request) -> HandlingScheme:
     return request.app.state.handling_scheme  # type: ignore[no-any-return]
 
 
+def get_grading_settings(request: Request) -> GradingSettings:
+    return getattr(request.app.state, "grading", None) or GradingSettings()
+
+
 def get_yardstick(request: Request) -> Yardstick:
     return request.app.state.yardstick  # type: ignore[no-any-return]
 
@@ -2020,6 +2028,7 @@ ComputeDep = Annotated[ComputePort, Depends(get_compute)]
 RecipesRepoRootDep = Annotated[Path, Depends(get_recipes_repo_root)]
 HandlingSchemeDep = Annotated[HandlingScheme, Depends(get_handling_scheme)]
 YardstickDep = Annotated[Yardstick, Depends(get_yardstick)]
+GradingSettingsDep = Annotated[GradingSettings, Depends(get_grading_settings)]
 JobsDep = Annotated[JobQueue, Depends(get_jobs)]
 ValkeyDep = Annotated[Valkey, Depends(get_valkey)]
 ModelRoutesDep = Annotated[ModelRoutes, Depends(get_model_routes)]
@@ -4048,11 +4057,29 @@ async def open_board(
     board_id: str,
     principal: PrincipalDep,
     boards: BoardsDep,
+    grading: GradingSettingsDep,
 ) -> BoardOpened:
-    """The board now, as this reader may see it; `missing` counts what it could not show."""
+    """The board now, as this reader may see it; `missing` counts what it could not show. It
+    offers the deployment's grading scheme (`grading.scheme`, ADR-143 decision 11)."""
     board = await boards.board(investigation.id, board_id, principal.id)
     opened = await boards.open(board, principal)
-    return opened.model_copy(update={"may_draw": opened.may_draw and _may_draw(principal)})
+    return opened.model_copy(
+        update={
+            "may_draw": opened.may_draw and _may_draw(principal),
+            "grading_scheme": grading.scheme,
+        }
+    )
+
+
+def _graded_in_the_deployments_scheme(given: Grading | None, grading: GradingSettings) -> None:
+    """ADR-143 decision 11: every drawn item is graded in the deployment's one scheme, so the
+    change command's mapping covers them all; a grade in another is refused before any write."""
+    if given is not None and given.scheme != grading.scheme:
+        raise DrawingRefused(
+            "grading_scheme",
+            f"this deployment grades in {grading.scheme}; a grade in {given.scheme} is not taken",
+            status=422,
+        )
 
 
 def _may_draw(principal: Principal) -> bool:
@@ -4104,10 +4131,12 @@ async def declare_drawn_item(
     principal: PrincipalDep,
     boards: BoardsDep,
     audit: AuditDep,
+    grading: GradingSettingsDep,
 ) -> DrawnItemMade:
     """*Add to board*: a node of the case's model, marked within the case's ceiling, graded and
     sourced (decision 4; Amendment 2 decision 3), with its watch (decision 8)."""
     board = await boards.own_board(investigation.id, board_id, principal.id)
+    _graded_in_the_deployments_scheme(body.grading, grading)
     made = await boards.declare(board, body, principal)
     await _audit_board(audit, principal, "draw_item", investigation.id, board_id=board_id,
                        item_id=made.item_id, node_id=made.element_id, type=body.type,
@@ -4127,9 +4156,11 @@ async def draw_link(
     principal: PrincipalDep,
     boards: BoardsDep,
     audit: AuditDep,
+    grading: GradingSettingsDep,
 ) -> DrawnItemMade:
     """A link between two items on the board (by the handle, Alt-drag, the menu or the form)."""
     board = await boards.own_board(investigation.id, board_id, principal.id)
+    _graded_in_the_deployments_scheme(body.grading, grading)
     made = await boards.link(board, body, principal)
     await _audit_board(audit, principal, "draw_link", investigation.id, board_id=board_id,
                        item_id=made.item_id, edge_id=made.element_id, type=body.type,
@@ -4162,8 +4193,10 @@ async def edit_drawn_item(
     principal: PrincipalDep,
     boards: BoardsDep,
     audit: AuditDep,
+    grading: GradingSettingsDep,
 ) -> DrawnItemMade:
     """The author edits their own item; a marking is never lowered (decision 5)."""
+    _graded_in_the_deployments_scheme(body.grading, grading)
     made = await boards.edit(investigation.id, item_id, body, principal)
     await _audit_board(audit, principal, "edit_drawn_item", investigation.id, item_id=item_id,
                        changed=sorted(body.model_dump(exclude_none=True)))  # fmt: skip
@@ -10337,6 +10370,16 @@ async def get_yardstick_route(principal: PrincipalDep, yardstick: YardstickDep) 
     from the loaded yardstick file, not hardcoded"). Same treatment as `GET /v1/handling-scheme`:
     schema/config metadata, not a disclosure of any record's own content."""
     return yardstick
+
+
+@app.get("/v1/grading-scheme")
+async def get_grading_scheme_route(
+    principal: PrincipalDep, grading: GradingSettingsDep
+) -> GradingSchemeAnswer:
+    """ADR-143 decision 11: the deployment's grading scheme and its parts' grades, for Admin's
+    read-only display and a board's grade fields. Same treatment as `GET /v1/yardstick`: the
+    deployment's own reference settings, not a disclosure of any record's content."""
+    return GradingSchemeAnswer.of(grading.scheme)
 
 
 @app.get(
