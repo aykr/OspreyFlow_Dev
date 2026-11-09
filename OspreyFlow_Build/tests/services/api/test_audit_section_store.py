@@ -19,6 +19,10 @@ What a mistake would do, and the case that catches it (each shown red at its rea
   recorded at all: `test_a_system_unit_is_never_a_real_units`;
 - the indexes built inside the bootstrap's transaction, or left invalid:
   `test_the_indexes_are_built_concurrently_and_valid`;
+- `org_unit` added by an unconditional `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, which takes
+  `ACCESS EXCLUSIVE` even when the column is there, so a second Conduit starting waits behind every
+  read of `audit_log` (and in one process deadlocks):
+  `test_a_second_start_does_not_wait_behind_a_read_of_the_audit`;
 - the engines' history truncated at its own read's 200: `test_the_engines_history_pages_with_its_true_total`;
 - "once" left to the caller: `test_an_overdue_alert_is_raised_once_by_the_database`.
 """
@@ -235,3 +239,18 @@ async def test_the_indexes_are_built_concurrently_and_valid(world: SimpleNamespa
     # A second start finds them and builds nothing again.
     again = await AuditWriter.connect(world.dsn)
     await again.close()
+
+
+async def test_a_second_start_does_not_wait_behind_a_read_of_the_audit(world: SimpleNamespace) -> None:
+    """A Conduit replica starting while another serves reads (or a second store in the same process,
+    as a live run found on 9 November 2026) must not queue for a lock behind them."""
+    reading = await asyncpg.connect(dsn=world.dsn)
+    held = reading.transaction()
+    await held.start()
+    try:
+        await reading.fetch("SELECT id FROM audit_log LIMIT 1")  # holds ACCESS SHARE until rollback
+        again = await asyncio.wait_for(AuditWriter.connect(world.dsn), timeout=10)
+        await again.close()
+    finally:
+        await held.rollback()
+        await reading.close()

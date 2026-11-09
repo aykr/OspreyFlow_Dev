@@ -50,11 +50,23 @@ CREATE INDEX IF NOT EXISTS audit_log_investigation_id_idx
     ON audit_log (investigation_id);
 CREATE INDEX IF NOT EXISTS audit_log_principal_id_idx
     ON audit_log (principal_id);
--- ADR-145 decision 10 (L2.6): the acting principal's unit, so Admin › Audit can read an entry that
--- names no case by unit (a reader of one unit sees that unit's entries alone). An entry written
--- before this column has none, and Audit leaves it out unless it names a case, saying so.
-ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS org_unit TEXT;
 """
+
+
+async def add_org_unit(conn: asyncpg.Connection) -> None:
+    """ADR-145 decision 10 (L2.6): the acting principal's unit, so Admin › Audit can read an entry
+    that names no case by unit (a reader of one unit sees that unit's entries alone). An entry
+    written before this column has none, and Audit leaves it out unless it names a case, saying so.
+
+    Asked of the catalogue first: `ALTER TABLE … ADD COLUMN IF NOT EXISTS` takes `ACCESS EXCLUSIVE`
+    even when the column is already there, so every start would queue behind every open read of
+    `audit_log`, and every audit write behind the start (ADR-145 Amendment 6)."""
+    have = await conn.fetchval(
+        "SELECT 1 FROM pg_attribute WHERE attrelid = 'audit_log'::regclass "
+        "AND attname = 'org_unit' AND NOT attisdropped"
+    )
+    if have is None:
+        await conn.execute("ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS org_unit TEXT")
 
 #: Admin › Audit's indexes, each built `CONCURRENTLY` in a statement of its own (it cannot run in a
 #: transaction, and a script of several statements is one): a plain `CREATE INDEX` on a large
@@ -86,6 +98,8 @@ async def build_indexes(conn: asyncpg.Connection) -> None:
             "WHERE c.relname = $1 AND pg_table_is_visible(c.oid)",
             name,
         )
+        if valid is True:
+            continue  # built: nothing to take a lock for
         if valid is False:
             await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {name}")
         await conn.execute(f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {name} ON {on}")
@@ -123,6 +137,7 @@ class AuditWriter:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
+            await add_org_unit(conn)
             await build_indexes(conn)
         return cls(pool)
 
