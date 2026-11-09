@@ -1,42 +1,47 @@
-"""Changes the deployment's grading scheme: `python -m scripts.grading_change --to <scheme>
---mapping <file> [--dry-run] --changed-by <principal id>` (`06_DECISIONS.md` ADR-143 decision 11 and
-C13; ADR-145 O1; the logic is `services/api/grading.py`).
+"""Changes the deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and Amendment 6;
+the owner's ruling C13; ADR-145 O1; the logic is `services/api/grading.py`). Run through
+`ospreyflow grading change`, which runs this inside the deployment with the Conduit stopped and
+then sets `grading.scheme` and starts the deployment again; run directly it does only the items:
+
+    python -m scripts.grading_change --to <scheme or scheme file> --mapping <file> --dry-run \
+        --changed-by <id>
+    python -m scripts.grading_change --to <scheme or scheme file> --mapping <file> \
+        --confirm <the dry run's token> --changed-by <id>
 
 The mapping file names `from`, `to` and, for each part of a grade (`source`, `intelligence`,
-`handling`), every grade of the old scheme and the one of the new it becomes. The command first says
-how many drawn items each mapping line moves; with `--dry-run` it stops there and writes nothing.
-Otherwise it rewrites each drawn node's and link's grade, keeping the grade and scheme the item had
-before its first change beside the new one for good, and records the change in the audit trail with
-its counts. It is refused whole, before anything is written, for a mapping that does not cover the
-old scheme, a mapping from another scheme than the deployment's (`OSPREY_GRADING_SCHEME`), an item
-in another scheme, or a drawn item it cannot read back.
+`handling`), every grade of the old scheme and the one of the new it becomes. `--to` is a built-in
+scheme (5x5x5, 3x5x2) or a scheme file (`scheme`, `source`, `intelligence`, `handling`).
+
+**A dry run first** (C13). The dry run says how many drawn items each mapping line moves, writes
+nothing (no audit record, no table made) and gives a token. The change itself is refused without
+that token, or when the drawn items have changed since (another drawing, an edit), or for another
+mapping. It then regrades each drawn node and link in place, keeping the grade and scheme the item
+had before its first change beside the new one for good, and records the change in the audit trail
+before the first write and after the last. Refused whole, before anything is written, for a mapping
+that does not cover the old scheme, a mapping from another scheme than the deployment's
+(`OSPREY_GRADING_SCHEME`), an item in a third scheme, or a drawn item it cannot read back, naming
+the items.
+
+**The Conduit stopped.** The change is refused while the Conduit answers at `--conduit-url`
+(default `http://api:8000`, its name on the deployment's network): a drawing or an edit made during
+the run, or between the run and the restart in the new scheme, would be in the old scheme.
+`ospreyflow grading change --stop-api` stops it, and starts it again in the new scheme.
 
 **Who it reads as.** The deployment's top clearance with every handling code and every dataset,
 as `--changed-by` in the unit `--org-unit` (default `operator`). A restricted handling code is also
 scoped to the reader's unit, so an item under another unit's restricted code is unreadable, and the
-change is then refused, naming the count, rather than run past it (rule 2). The clearance is the
-command's, not a person's: like `revert_load`, it must never be routed through the Conduit.
+change is then refused, naming it (rule 2). `--changed-by` is recorded in the audit trail as typed,
+and said to be (`changed_by_as_typed`): this command runs outside the Conduit, where no sign-in
+says who someone is. The verb passes `cli:<the operator's account>`.
 
-**Run it inside the deployment, with the Conduit quiet**, as `revert_load` is: it needs ArcadeDB and
-Postgres (`ARCADEDB_HOST` or `ARCADEDB_HTTP_PORT` set; with neither it refuses rather than reach
-whatever answers on localhost:2480). A drawing made while it runs could be left in the old scheme.
-
-**Then the setting.** The command changes the items, not `osprey.yaml`: set `grading.scheme` to the
-new scheme there and start the deployment again (`ospreyflow start`), so the boards offer the new
-scheme's grades. Until then a run of the same change finds every item already changed and writes
-nothing. (`ospreyflow grading change`, the verb decision 11 names, is to wrap both steps.)
-
-**The ontology it writes under** is the one the Conduit runs with: the deployment's, composed with
-every link-type proposal (`services/api/link_types.compose_ontology`), taken in memory only
-(`use_schema`: no DDL, no backfill), so the graph adapter checks each rewrite as the Conduit's own
-writes are checked. Every such check is made for every item before the first write.
-
-**What it reads.** The board registry of every case (`board_store`'s own columns), the one read of
-`board_items` that names no case: an operator's change of the whole deployment's scheme, outside
-the Conduit, never answered to any reader.
+**The ontology it reads under** is the one the Conduit runs with: the deployment's, composed with
+every link-type proposal (`services/api/link_types.compose_ontology`), taken in memory only, so a
+link of a proposed type is read under its own name. It reads every case's board registry
+(`board_store`'s own columns), the one read of `board_items` that names no case: an operator's
+change of the whole deployment, outside the Conduit, answered to no reader.
 
 Exit codes: 0 changed, or the dry run's plan; 1 refused (nothing was changed); 2 stopped part way
-(run it again to finish it); 64 a usage error, or no store settings.
+(the dry run and the same change again finish it); 64 a usage error, or no store settings.
 """
 
 from __future__ import annotations
@@ -44,15 +49,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from services.api.audit import AuditWriter
-from services.api.board_store import _ITEM_COLUMNS, BoardItem, _item
+import httpx
+import yaml
+from pydantic import ValidationError
+from services.api.board_store import _ITEM_COLUMNS, _item
 from services.api.config import GradingSchemeUnknown, GradingSettings, PostgresConfig
 from services.api.grading import (
-    SCHEMES,
     BoardGradedItems,
     GradedItems,
     GradingIncomplete,
@@ -60,12 +66,13 @@ from services.api.grading import (
     GradingRefused,
     MappingRefused,
     Registered,
+    built_in_schemes,
     change,
     operator_reader,
     parse_mapping,
 )
 
-from schemas.domain import OntologySchema, Principal
+from schemas.domain import GRADING_PARTS, GradingSchemeAnswer, OntologySchema, Principal
 
 if TYPE_CHECKING:
     from adapters.graph_arcadedb.client import ArcadeDBClient
@@ -77,39 +84,75 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m scripts.grading_change",
         description="Change the grading scheme of every drawn item, keeping each one's original.",
     )
-    parser.add_argument("--to", required=True, choices=SCHEMES, help="the new scheme")
-    parser.add_argument("--mapping", required=True, type=Path, help="the old-to-new mapping file")
     parser.add_argument(
+        "--to", required=True, help="the new scheme: 5x5x5, 3x5x2, or a scheme file (.yaml)"
+    )
+    parser.add_argument("--mapping", required=True, type=Path, help="the old-to-new mapping file")
+    first = parser.add_mutually_exclusive_group(required=True)
+    first.add_argument(
         "--dry-run", action="store_true", help="say what each mapping line moves; write nothing"
     )
+    first.add_argument("--confirm", help="the token the dry run of this mapping gave")
     parser.add_argument(
-        "--changed-by", required=True, help="the principal id to record as having changed it"
+        "--changed-by", required=True, help="the id recorded as having changed it, as typed"
     )
     parser.add_argument(
         "--org-unit", default="operator", help="the unit the command reads as (default operator)"
     )
+    parser.add_argument(
+        "--conduit-url",
+        default=os.environ.get("OSPREY_CONDUIT_URL", "http://api:8000"),
+        help="where the Conduit would answer if running (default http://api:8000)",
+    )
     return parser
+
+
+class TargetRefused(Exception):
+    """`--to` names no scheme and no readable scheme file."""
+
+
+def target_scheme(to: str, read: Callable[[Path], str] | None = None) -> GradingSchemeAnswer:
+    """`--to`: a built-in scheme by name, or a scheme file, read and checked."""
+    if to in GRADING_PARTS:
+        return GradingSchemeAnswer.of(to)
+    if not to.endswith((".yaml", ".yml")):
+        raise TargetRefused(
+            f"--to {to!r} is neither a grading scheme ({', '.join(GRADING_PARTS)}) nor a scheme "
+            "file (.yaml)"
+        )
+    try:
+        text = (read or (lambda p: p.read_text(encoding="utf-8")))(Path(to))
+        return GradingSchemeAnswer.model_validate(yaml.safe_load(text))
+    except (OSError, yaml.YAMLError) as unread:
+        raise TargetRefused(f"the scheme file {to} cannot be read: {unread}") from None
+    except ValidationError as bad:
+        raise TargetRefused(f"{to} is not a grading scheme: {bad}") from None
 
 
 async def run(
     *,
-    to: str,
+    target: GradingSchemeAnswer,
     mapping_text: str,
-    current: str,
+    current: GradingSchemeAnswer,
     dry_run: bool,
     items: GradedItems,
-    audit: Callable[[GradingPlan], object],
+    audit: Callable[[GradingPlan], Awaitable[None]],
+    confirm: str | None = None,
     say: Callable[[str], None] = print,
 ) -> int:
     """The change and what to say of it; the exit code. The port and the audit are given, so a
     test needs no store."""
+    schemes = {**built_in_schemes(), current.scheme: current, target.scheme: target}
     try:
-        mapping = parse_mapping(mapping_text)
+        mapping = parse_mapping(mapping_text, schemes)
     except MappingRefused as refused:
         say(f"The mapping is refused: {refused}. Nothing was changed.")
         return 1
-    if mapping.to_scheme != to:
-        say(f"--to is {to}, but the mapping is to {mapping.to_scheme}. Nothing was changed.")
+    if mapping.to_scheme != target.scheme:
+        say(
+            f"--to is {target.scheme}, but the mapping is to {mapping.to_scheme}. "
+            "Nothing was changed."
+        )
         return 1
 
     def announce(plan: GradingPlan) -> None:
@@ -122,8 +165,10 @@ async def run(
             items,
             mapping,
             current=current,
+            target=target,
             dry_run=dry_run,
-            audit=audit,  # type: ignore[arg-type]
+            confirm=confirm,
+            audit=audit,
             announce=announce,
         )
     except GradingRefused as refused:
@@ -133,13 +178,11 @@ async def run(
         say(str(stopped))
         return 2
     if dry_run:
-        say("A dry run: nothing was written.")
+        say(
+            f"A dry run: nothing was written. To make this change, add --confirm {plan.token}"
+        )
         return 0
     say(f"Changed {plan.written} item(s) to {plan.to_scheme}, each keeping its original grade.")
-    say(
-        f"Now set grading.scheme: {plan.to_scheme} in osprey.yaml and start the deployment again "
-        "(ospreyflow start), so the boards offer its grades."
-    )
     return 0
 
 
@@ -148,7 +191,8 @@ STORE_SETTINGS = ("ARCADEDB_HOST", "ARCADEDB_HTTP_PORT")
 
 NO_STORE_SETTINGS = (
     "No store settings: nothing says where this deployment's stores are, and the defaults would "
-    "reach whatever answers on localhost:2480. Run the change inside the deployment."
+    "reach whatever answers on localhost:2480. Run the change inside the deployment "
+    "(ospreyflow grading change)."
 )
 
 #: The board registry's live drawn nodes and links (`board_store`): a withdrawn item keeps the grade
@@ -160,11 +204,16 @@ REGISTERED_SQL = (
 
 
 def registry_reader(pool: Any) -> Registered:
-    """Every live drawn node and link the board registry holds, of every case."""
+    """Every live drawn node and link the board registry holds, of every case: none where nothing
+    was ever drawn (no table: this read never makes one)."""
+    import asyncpg
 
-    async def registered() -> list[BoardItem]:
+    async def registered() -> list[Any]:
         async with pool.acquire() as conn:
-            rows = await conn.fetch(REGISTERED_SQL)
+            try:
+                rows = await conn.fetch(REGISTERED_SQL)
+            except asyncpg.UndefinedTableError:
+                return []
         return [_item(row) for row in rows]
 
     return registered
@@ -176,50 +225,81 @@ def graded_items(
     ontology: OntologySchema,
     registered: Registered,
     reader: Principal,
-    written_by: str,
 ) -> BoardGradedItems:
-    """The command's port: the bare graph adapter, holding the ontology in force in memory (a
-    write with none is refused by the adapter), over the board registry."""
+    """The command's port: the bare graph adapter, holding the ontology in force in memory (no
+    DDL; a proposed type's links read under their own name), over the board registry."""
     from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 
     adapter = GraphArcadeDBAdapter(client, scheme)
     adapter.use_schema(ontology)
-    return BoardGradedItems(adapter, registered, reader, written_by=written_by, ontology=ontology)
+    return BoardGradedItems(adapter, registered, reader)
 
 
-async def ontology_in_force(dsn: str) -> OntologySchema:
+async def ontology_in_force(pool: Any) -> OntologySchema:
     """The deployment's ontology composed with every link-type proposal, as the Conduit's start
-    composes it (`LinkTypeService.refresh`)."""
+    composes it (`LinkTypeService.refresh`), read without `connect()`'s table-making: no
+    proposals where none was ever made."""
+    import asyncpg
     from services.api.link_type_store import LinkTypeProposalStore
     from services.api.link_types import compose_ontology
 
     from ontology.packs import load_deployment_ontology
 
-    store = await LinkTypeProposalStore.connect(dsn)
+    store = LinkTypeProposalStore(pool)
     try:
-        return compose_ontology(
-            load_deployment_ontology(), await store.all(), revision=await store.revision()
-        )
-    finally:
-        await store.close()
+        proposals, revision = await store.all(), await store.revision()
+    except asyncpg.UndefinedTableError:
+        proposals, revision = [], 0
+    return compose_ontology(load_deployment_ontology(), proposals, revision=revision)
 
 
-async def _main(args: argparse.Namespace) -> int:
+async def conduit_answers(url: str) -> bool:
+    """Whether a Conduit answers its liveness route at `url`."""
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            answer = await client.get(f"{url.rstrip('/')}/healthz")
+    except httpx.HTTPError:
+        return False
+    return answer.status_code == 200
+
+
+CONDUIT_RUNNING = (
+    "Refused: the Conduit is running at {url}. A drawing or an edit during the change, or before "
+    "the deployment starts again in the new scheme, would be in the old one. Stop it first "
+    "(ospreyflow grading change --stop-api stops it, and starts it again after). Nothing was "
+    "changed."
+)
+
+
+async def _main(
+    args: argparse.Namespace,
+    *,
+    answers: Callable[[str], Awaitable[bool]] = conduit_answers,
+) -> int:
     try:
         mapping_text = args.mapping.read_text(encoding="utf-8")
     except OSError as unread:
         print(f"The mapping file cannot be read: {unread}")
         return 64
     try:
-        current = GradingSettings.from_env().scheme
+        current = GradingSettings.from_env().grades
     except GradingSchemeUnknown as unknown:
         print(str(unknown))
+        return 64
+    try:
+        target = target_scheme(args.to)
+    except TargetRefused as refused:
+        print(f"{refused}. Nothing was changed.")
         return 64
     if not any(os.environ.get(name) for name in STORE_SETTINGS):
         print(NO_STORE_SETTINGS)
         return 64  # before any store is opened
+    if not args.dry_run and await answers(args.conduit_url):
+        print(CONDUIT_RUNNING.format(url=args.conduit_url))
+        return 1
 
     import asyncpg
+    from services.api.audit import AuditWriter
 
     from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
     from ontology.handling import load_uk_le_scheme
@@ -230,15 +310,16 @@ async def _main(args: argparse.Namespace) -> int:
         ArcadeDBConfig.from_env(os.environ.get("ARCADEDB_DATABASE", "ospreyflow"))
     )
     pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=2)
-    audit_writer = await AuditWriter.connect(dsn)
-
+    # The audit's table is made by its `connect()`: a dry run writes nothing, so opens none.
+    audit_writer = None if args.dry_run else await AuditWriter.connect(dsn)
     operator = Principal(id=args.changed_by, clearance="OFFICIAL", org_unit=args.org_unit)
 
     async def audit(plan: GradingPlan) -> None:
+        assert audit_writer is not None, "a dry run is never audited"
         await audit_writer.record(
             principal=operator,
             action="grading_change",
-            resolved_query=plan.record(),
+            resolved_query={**plan.record(), "changed_by_as_typed": True},
             result_cardinality=plan.written,
         )
 
@@ -246,23 +327,24 @@ async def _main(args: argparse.Namespace) -> int:
         items = graded_items(
             client,
             scheme,
-            await ontology_in_force(dsn),
+            await ontology_in_force(pool),
             registry_reader(pool),
             operator_reader(scheme, org_unit=args.org_unit, by=args.changed_by),
-            args.changed_by,
         )
         return await run(
-            to=args.to,
+            target=target,
             mapping_text=mapping_text,
             current=current,
             dry_run=args.dry_run,
+            confirm=args.confirm,
             items=items,
             audit=audit,
         )
     finally:
         await client.aclose()
         await pool.close()
-        await audit_writer.close()
+        if audit_writer is not None:
+            await audit_writer.close()
 
 
 def main(argv: list[str] | None = None) -> int:

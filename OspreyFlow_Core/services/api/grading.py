@@ -1,9 +1,10 @@
-"""Changing the deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and C13; ADR-145
-O1; L3.7).
+"""Changing the deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and Amendment 6;
+the owner's ruling C13; ADR-145 O1; L3.7).
 
-Every drawn node and link carries a grade in the deployment's scheme (`DrawnAssertion.grading`).
-The scheme changes only by the operator's command (`scripts/grading_change.py`), with a mapping of
-every grade of each part of the old scheme to one of the new:
+Every drawn node and link carries a grade in the deployment's scheme (`DrawnAssertion.grading`):
+a built-in one (5x5x5, 3x5x2) or a scheme file's. The scheme changes only by the operator's
+command (`ospreyflow grading change`, over `scripts/grading_change.py`), with a mapping of every
+grade of each part of the old scheme to one of the new:
 
     from: 5x5x5
     to: 3x5x2
@@ -11,19 +12,24 @@ every grade of each part of the old scheme to one of the new:
     intelligence: {"1": "1", "2": "2", "3": "3", "4": "4", "5": "5"}
     handling: {"1": P, "2": P, "3": P, "4": C, "5": C}
 
-`change` first reports how many items each mapping line moves (the plan; a dry run stops there and
-writes nothing), then rewrites each grade, keeping the grade and scheme the item had before its
-first change (`DrawnAssertion.original_grading`) for good. It is audited before the first write
-(the plan) and after the last (what was written). It is refused whole, before anything is written
-and on a dry run too, for a mapping that does not cover the old scheme, a mapping from another
-scheme than the deployment's, an item in another scheme, a registered item that cannot be read
-back (rule 2: an item is never skipped silently), or an item its rewrite would be refused for (a
-type not in the ontology in force, a property it no longer allows, a link whose end is gone, a body
-read with its sources or board withheld): every check a write would make is made first.
+**A dry run first** (C13). A dry run reports how many items each mapping line moves, writes
+nothing, and gives a token naming that mapping on that state of the drawn items. A real run is
+refused unless it is given that token and the state is still the same: another drawing, an edit
+or a different mapping since the dry run gives another token.
 
-A change stopped part way (`GradingIncomplete`, a store failure mid-run) is finished by running it
-again: an item already in the new scheme with an original kept is counted as already changed and
-left.
+Then each grade is changed in place (`GraphPort.regrade_drawn`): the grade and the grade and
+scheme the item had before its first change (`original_grading`), kept for good, and nothing else
+of the item. The change is audited before the first write (the plan) and after the last (what was
+written).
+
+It is refused whole, before anything is written and on a dry run too, for a mapping that does not
+cover the old scheme, a mapping from another scheme than the deployment's, an item graded in a
+third scheme, or a registered item that cannot be read back (rule 2: an item is never skipped
+silently); each refusal names the items' ids (the first ten, and how many more). An item already
+in the new scheme with no original (drawn in it, so it needs no mapping) is left and counted.
+
+A run stopped by a store failure (`GradingIncomplete`) is finished by its dry run and the same
+change again: an item already changed is counted and left.
 
 Withdrawn items are not changed: they are kept as they were drawn, in the audit's sense (decision
 5), and are never shown as live. Under 3x5x2 the handling code (P or C) is part of the grade and is
@@ -32,33 +38,31 @@ never merged with the protective marking: the marking is not touched.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import Counter
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import yaml
 
-from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, sources_in_full
-from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import GraphPort
 from schemas.domain import (
     GRADING_PARTS,
     Edge,
-    EdgeWrite,
     Grading,
+    GradingSchemeAnswer,
     Node,
-    NodeWrite,
-    OntologySchema,
     Principal,
 )
 
 from .board_store import BoardItem
 
 PARTS = ("source", "intelligence", "handling")
-SCHEMES = tuple(GRADING_PARTS)
+#: How many ids a refusal names before it counts the rest.
+SHOWN_IDS = 10
 
 
 class MappingRefused(Exception):
@@ -70,16 +74,27 @@ class GradingRefused(Exception):
 
 
 class GradingIncomplete(Exception):
-    """A rewrite failed part way: `done` of `total` items carry the new grade. Running the same
-    change again finishes it."""
+    """A rewrite failed part way: `done` of `total` items carry the new grade. A dry run and the
+    same change again finish it."""
 
     def __init__(self, done: int, total: int, cause: BaseException) -> None:
         super().__init__(
-            f"stopped after {done} of {total} item(s): {cause}. Run the same change again to "
-            "finish it; the items already changed are left as they are."
+            f"stopped after {done} of {total} item(s): {cause}. Run the dry run and the same "
+            "change again to finish it; the items already changed are left as they are."
         )
         self.done = done
         self.total = total
+
+
+def named(ids: Sequence[str]) -> str:
+    """The first `SHOWN_IDS` ids, and how many more."""
+    shown = ", ".join(ids[:SHOWN_IDS])
+    more = len(ids) - SHOWN_IDS
+    return shown + (f" and {more} more" if more > 0 else "")
+
+
+def built_in_schemes() -> dict[str, GradingSchemeAnswer]:
+    return {name: GradingSchemeAnswer.of(name) for name in GRADING_PARTS}
 
 
 @dataclass(frozen=True)
@@ -91,14 +106,22 @@ class GradingMapping:
 
     def apply(self, grading: Grading) -> Grading:
         return Grading(
-            scheme=self.to_scheme,  # type: ignore[arg-type]
+            scheme=self.to_scheme,
             **{part: self.parts[part][getattr(grading, part)] for part in PARTS},
         )
 
+    def canonical(self) -> dict[str, Any]:
+        return {
+            "from": self.from_scheme,
+            "to": self.to_scheme,
+            "parts": {p: dict(sorted(self.parts[p].items())) for p in PARTS},
+        }
 
-def parse_mapping(text: str) -> GradingMapping:
-    """The mapping file, checked: both schemes known and different, and each part's mapping
-    covering exactly the old scheme's grades, onto the new scheme's."""
+
+def parse_mapping(text: str, schemes: Mapping[str, GradingSchemeAnswer]) -> GradingMapping:
+    """The mapping file, checked against `schemes` (the built-in ones, the deployment's and the
+    target's): both schemes known and different, and each part's mapping covering exactly the old
+    scheme's grades, onto the new scheme's."""
     try:
         raw = yaml.safe_load(text)
     except yaml.YAMLError as bad:
@@ -112,9 +135,10 @@ def parse_mapping(text: str) -> GradingMapping:
         )
     old, new = str(raw.get("from", "")), str(raw.get("to", ""))
     for name, scheme in (("from", old), ("to", new)):
-        if scheme not in GRADING_PARTS:
+        if scheme not in schemes:
             raise MappingRefused(
-                f"{name}: {scheme!r} is not a grading scheme; the schemes are {', '.join(SCHEMES)}"
+                f"{name}: {scheme!r} is not a grading scheme; the schemes are "
+                f"{', '.join(sorted(schemes))}"
             )
     if old == new:
         raise MappingRefused(f"from and to are the same scheme, {old}: there is nothing to change")
@@ -124,7 +148,7 @@ def parse_mapping(text: str) -> GradingMapping:
         if not isinstance(given, dict):
             raise MappingRefused(f"{part}: the mapping gives no {part} grades")
         lines = {str(k): str(v) for k, v in given.items()}
-        olds, news = GRADING_PARTS[old][index], GRADING_PARTS[new][index]
+        olds, news = schemes[old].parts()[index], schemes[new].parts()[index]
         for grade in olds:
             if grade not in lines:
                 raise MappingRefused(f"{part} {grade} of {old} is not mapped")
@@ -142,23 +166,36 @@ def parse_mapping(text: str) -> GradingMapping:
 
 @dataclass(frozen=True)
 class GradedItem:
-    #: The port's own reference to the item; opaque to `change`.
-    ref: Any
+    #: The element as read (a `Node` or an `Edge`); `id` is what the port rewrites.
+    element: Any
     grading: Grading
     original: Grading | None
+
+    @property
+    def id(self) -> str:
+        return str(self.element.id)
+
+    def state(self) -> list[Any]:
+        """What the dry run's token names of this item: its id, its grade, its original and its
+        revision (an edit since the dry run is another state)."""
+        audit = getattr(self.element, "audit", None)
+        return [
+            self.id,
+            self.grading.model_dump(mode="json"),
+            self.original.model_dump(mode="json") if self.original else None,
+            getattr(audit, "revision", None),
+        ]
 
 
 @dataclass(frozen=True)
 class Inventory:
     items: list[GradedItem]
-    #: Registered live items the port could not read back.
-    unread: int
+    #: The registry's ids of live items the port could not read back.
+    unread: list[str] = field(default_factory=list)
 
 
 class GradedItems(Protocol):
     async def inventory(self) -> Inventory: ...
-    #: What a rewrite of each item would be refused for, found before any is written.
-    async def check(self, items: Sequence[GradedItem]) -> list[str]: ...
     async def rewrite(self, item: GradedItem, grading: Grading, original: Grading) -> None: ...
 
 
@@ -167,7 +204,7 @@ def operator_reader(
 ) -> Principal:
     """Who the command reads as: the scheme's top clearance, every handling code, every dataset.
     A restricted code is also scoped to the reader's unit, so an item of another unit's may still
-    be unreadable, and then the change is refused whole rather than run past it."""
+    be unreadable, and then the change is refused whole, naming it, rather than run past it."""
     return Principal(
         id=by,
         clearance=scheme.classification[-1],
@@ -180,17 +217,19 @@ def operator_reader(
 Registered = Callable[[], Awaitable[Sequence[BoardItem]]]
 
 
+class ChangedUnderneath(Exception):
+    """`regrade_drawn` found the element gone or no longer drawn since it was read."""
+
+
 @dataclass
 class BoardGradedItems:
-    """The drawn nodes and links the board registry holds (`board_store`), read and rewritten in the
-    graph. A live item is one not withdrawn; pictures and match links carry no grade."""
+    """The drawn nodes and links the board registry holds (`board_store`), read in the graph and
+    regraded in place there (`GraphPort.regrade_drawn`). A live item is one not withdrawn; pictures
+    and match links carry no grade."""
 
     graph: GraphPort
     registered: Registered
     reader: Principal
-    written_by: str
-    #: The ontology in force, as the graph adapter holds it: the one every write is checked against.
-    ontology: OntologySchema
 
     async def inventory(self) -> Inventory:
         live = [
@@ -201,117 +240,29 @@ class BoardGradedItems:
         node_ids = [i.element_id for i in live if i.kind == "node"]
         edge_ids = [i.element_id for i in live if i.kind == "link"]
         found: dict[str, Node | Edge] = {}
-        # A read that is written back (ADR-130 Amendment 2): the body whole, its sources and its
-        # board kept, or the rewrite would store what a reader is shown in their place.
+        # The drawn assertion whole (ADR-130 Amendment 2), as stored, not as a reader is shown it.
         with sources_in_full():
             if node_ids:
                 found.update((n.id, n) for n in await self.graph.get_nodes(node_ids, self.reader))
             if edge_ids:
                 found.update((e.id, e) for e in await self.graph.get_edges(edge_ids, self.reader))
         items: list[GradedItem] = []
-        unread = 0
+        unread: list[str] = []
         for registered in live:
             element = found.get(registered.element_id)
             drawn = element.provenance.drawn if element is not None else None
             if element is None or drawn is None:
-                unread += 1
+                unread.append(registered.item_id)
                 continue
             items.append(GradedItem(element, drawn.grading, drawn.original_grading))
         return Inventory(items=items, unread=unread)
 
-    async def check(self, items: Sequence[GradedItem]) -> list[str]:
-        """Every refusal the rewrite's own write would meet, found for all the items before any is
-        written: a body read as a reader is shown it, a type the ontology in force no longer holds
-        or properties it no longer allows, a link whose end cannot be read or no longer fits."""
-        problems: list[str] = []
-        ends: set[str] = set()
-        for item in items:
-            element: Node | Edge = item.ref
-            if isinstance(element, Edge):
-                ends.update((element.source, element.target))
-        end_types: dict[str, str] = {}
-        if ends:
-            with sources_in_full():
-                found = await self.graph.get_nodes(sorted(ends), self.reader)
-            end_types = {n.id: n.type for n in found}
-        for item in items:
-            element = item.ref
-            drawn = element.provenance.drawn
-            said = drawn.item_id if drawn is not None else element.id
-            if drawn is None or element.provenance.sources_withheld or not drawn.board_id:
-                # Read as a reader is shown it, not as stored: written back, it would lose them.
-                problems.append(f"{said}: read with its sources or board withheld")
-                continue
-            if isinstance(element, Node):
-                type_def: Any = self.ontology.entity_type(element.type)
-            else:
-                type_def = self.ontology.edge_type(element.type)
-            if type_def is None:
-                problems.append(f"{said}: {element.type} is not a type in the ontology in force")
-                continue
-            try:
-                validate_properties(type_def, element.properties)
-                if isinstance(element, Edge):
-                    source, target = end_types.get(element.source), end_types.get(element.target)
-                    if source is None or target is None:
-                        problems.append(f"{said}: an end of the link cannot be read")
-                        continue
-                    validate_edge_endpoints(type_def, source_type=source, target_type=target)
-            except OntologyError as refused:
-                problems.append(f"{said}: {refused}")
-        return problems
-
     async def rewrite(self, item: GradedItem, grading: Grading, original: Grading) -> None:
-        """The element written again under its own id: only its drawn grade and original change.
-        Its marking, datasets, properties, resolution state and load are its own, and a link's
-        occurrences are not counted again (the write adds none). Called only after `check`."""
-        element: Node | Edge = item.ref
-        drawn = element.provenance.drawn
-        assert drawn is not None
-        if element.provenance.sources_withheld or not drawn.board_id:
-            raise GradingRefused(
-                f"a drawn item ({drawn.item_id}) was read with its sources or board withheld; "
-                "it is not written back so"
-            )
-        audit = element.audit
-        provenance = element.provenance.model_copy(
-            update={
-                "drawn": drawn.model_copy(update={"grading": grading, "original_grading": original})
-            }
-        )
-        now = datetime.now(UTC)
-        tx = await self.graph.begin_transaction()
-        try:
-            if isinstance(element, Node):
-                await self.graph.upsert_nodes(
-                    [NodeWrite(
-                        id=element.id, type=element.type, properties=element.properties,
-                        provenance=provenance, handling=element.handling,
-                        created_by=self.written_by, created_at=now, datasets=element.datasets,
-                        resolution=element.resolution, load_id=audit.load_id,
-                        recipe_id=audit.recipe_id, recipe_version=audit.recipe_version,
-                    )],
-                    tx,
-                )  # fmt: skip
-            else:
-                # A link's second write of the same pair and audience merges into it (ADR-102),
-                # its body the latest write's: the change lands on the same link.
-                await self.graph.upsert_edges(
-                    [EdgeWrite(
-                        id=element.id, type=element.type, source=element.source,
-                        target=element.target, properties=element.properties,
-                        interval=element.interval, basis=element.basis,
-                        provenance=provenance, handling=element.handling,
-                        created_by=self.written_by, created_at=now, datasets=element.datasets,
-                        occurrences=0, load_id=audit.load_id, recipe_id=audit.recipe_id,
-                        recipe_version=audit.recipe_version,
-                    )],
-                    tx,
-                )  # fmt: skip
-        except Exception:
-            await self.graph.rollback_transaction(tx)
-            raise
-        await self.graph.commit_transaction(tx)
+        """The grade and original alone, in place: nothing else of the item is written, so a
+        link is not weighed again (ADR-120) and a node keeps its resolution state. The port says
+        whether it changed exactly that element; anything else stops the run."""
+        if not await self.graph.regrade_drawn(item.id, grading, original):
+            raise ChangedUnderneath(f"{item.id} is no longer a live drawn item; it was not changed")
 
 
 # --- the change -----------------------------------------------------------------------------
@@ -326,8 +277,12 @@ class GradingPlan:
     to_change: int = 0
     #: Items a stopped earlier run already changed (in the new scheme, their original kept).
     already_changed: int = 0
+    #: Items drawn in the new scheme (no original): they need no mapping and are left.
+    already_in_new: int = 0
     written: int = 0
     dry_run: bool = True
+    #: The dry run's token: this mapping on this state of the drawn items.
+    token: str = ""
     #: The audit's two records: `started` before the first write, then `finished` or `stopped`.
     stage: str = "planned"
 
@@ -335,6 +290,11 @@ class GradingPlan:
         said = [
             f"{self.from_scheme} to {self.to_scheme}: {self.to_change} item(s) to change"
             + (f", {self.already_changed} already changed" if self.already_changed else "")
+            + (
+                f", {self.already_in_new} drawn in {self.to_scheme} and left as they are"
+                if self.already_in_new
+                else ""
+            )
             + "."
         ]
         for part in PARTS:
@@ -354,9 +314,29 @@ class GradingPlan:
             ],
             "to_change": self.to_change,
             "already_changed": self.already_changed,
+            "already_in_new": self.already_in_new,
             "written": self.written,
+            "dry_run_token": self.token,
             "stage": self.stage,
         }
+
+
+def dry_run_token(
+    mapping: GradingMapping,
+    current: GradingSchemeAnswer,
+    target: GradingSchemeAnswer,
+    items: Sequence[GradedItem],
+) -> str:
+    """Names this mapping, these two schemes and this state of the drawn items: any drawing, edit
+    or regrade since gives another."""
+    named_state = {
+        "mapping": mapping.canonical(),
+        "current": current.model_dump(mode="json"),
+        "target": target.model_dump(mode="json"),
+        "items": sorted(item.state() for item in items),
+    }
+    digest = hashlib.sha256(json.dumps(named_state, sort_keys=True).encode("utf-8"))
+    return digest.hexdigest()[:20]
 
 
 Audit = Callable[[GradingPlan], Awaitable[None]]
@@ -367,55 +347,77 @@ async def change(
     items: GradedItems,
     mapping: GradingMapping,
     *,
-    current: str,
+    current: GradingSchemeAnswer,
+    target: GradingSchemeAnswer,
     dry_run: bool,
     audit: Audit,
+    confirm: str | None = None,
     announce: Announce | None = None,
 ) -> GradingPlan:
     """The plan, and unless `dry_run` the change itself. `current` is the deployment's scheme
-    (`grading.scheme`). `announce` is told the plan once every check has passed and before the
-    first write; the audit is written before the first write and after the last."""
-    if mapping.from_scheme != current:
+    (`grading.scheme`), `target` the one changed to. A real run needs `confirm`, the token its dry
+    run gave, for this state. `announce` is told the plan once every check has passed and before
+    the first write; the audit is written before the first write and after the last."""
+    if mapping.from_scheme != current.scheme:
         raise GradingRefused(
-            f"the mapping is from {mapping.from_scheme}, but this deployment grades in {current}"
+            f"the mapping is from {mapping.from_scheme}, but this deployment grades in "
+            f"{current.scheme}"
         )
+    if mapping.to_scheme != target.scheme:
+        raise GradingRefused(f"the mapping is to {mapping.to_scheme}, not to {target.scheme}")
     inventory = await items.inventory()
     if inventory.unread:
         raise GradingRefused(
-            f"{inventory.unread} drawn item(s) could not be read back, so their grades are "
-            "unknown. Nothing was changed."
+            f"{len(inventory.unread)} drawn item(s) could not be read back, so their grades are "
+            f"unknown: {named(inventory.unread)}. Nothing was changed."
         )
     plan = GradingPlan(
         from_scheme=mapping.from_scheme, to_scheme=mapping.to_scheme, dry_run=dry_run
     )
     pending: list[GradedItem] = []
-    elsewhere: Counter[str] = Counter()
+    elsewhere: dict[str, list[str]] = {}
+    off_scheme: list[str] = []
     for item in inventory.items:
         scheme = item.grading.scheme
         if scheme == mapping.from_scheme:
+            try:
+                current.check(item.grading)
+            except ValueError:
+                off_scheme.append(item.id)
+                continue
             pending.append(item)
             for part in PARTS:
                 old = getattr(item.grading, part)
                 plan.moves[(part, old, mapping.parts[part][old])] += 1
         elif scheme == mapping.to_scheme and item.original is not None:
             plan.already_changed += 1
+        elif scheme == mapping.to_scheme:
+            plan.already_in_new += 1
         else:
-            elsewhere[scheme] += 1
+            elsewhere.setdefault(scheme, []).append(item.id)
     if elsewhere:
-        said = ", ".join(f"{n} item(s) graded in {s}" for s, n in sorted(elsewhere.items()))
+        said = "; ".join(
+            f"{len(ids)} item(s) graded in {s}: {named(ids)}"
+            for s, ids in sorted(elsewhere.items())
+        )
         raise GradingRefused(
-            f"{said}, not in {mapping.from_scheme}: the mapping does not say what they become. "
-            "Nothing was changed."
+            f"{said}. They are in neither {mapping.from_scheme} nor {mapping.to_scheme}, and the "
+            "mapping does not say what they become. Nothing was changed."
+        )
+    if off_scheme:
+        raise GradingRefused(
+            f"{len(off_scheme)} item(s) carry a grade that is not one of {current.scheme}'s: "
+            f"{named(off_scheme)}. Nothing was changed."
         )
     plan.to_change = len(pending)
-    problems = await items.check(pending)
-    if problems:
-        more = len(problems) - 5
-        shown = "; ".join(problems[:5]) + (f"; and {more} more" if more > 0 else "")
+    plan.token = dry_run_token(mapping, current, target, inventory.items)
+    if not dry_run and confirm != plan.token:
         raise GradingRefused(
-            f"{len(problems)} drawn item(s) could not be written back: {shown}. "
-            "Nothing was changed."
-        )
+            "a dry run of this mapping on the drawn items as they are now comes first (C13): "
+            + ("none was given. " if not confirm else "the token given is of another mapping or "
+               "of the items as they were before a drawing or edit since. ")
+            + "Run the dry run, then this change with the token it gives. Nothing was changed."
+        )  # fmt: skip
     if announce is not None:
         announce(plan)
     if dry_run:
