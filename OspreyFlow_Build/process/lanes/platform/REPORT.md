@@ -33,7 +33,11 @@ rebased onto main `3be89a7` (one conflict, both amendments kept), then gated and
   - `make test`: 9498 passed. The known six failed, and every other failure is at the Docker socket.
   - test-js: 2765 + 45 passed. The Matrix timing case failed under load and passed alone.
 
-  **Live:** LIVE_LINE
+  **Live:** platform lease on stack d, run on the server (`stack_lease.sh remote`, detached), 16:08–17:35 UTC
+  at `957ef5d`: **702 passed, 0 failed, 0 skipped**, `test_route_rights.py` and the whole graph-port suite
+  included; no case needs Java. Round 2 item 5's red was taken at its call site under the same lease. Two
+  earlier attempts are recorded and not counted: over the tunnel (withdrawn at the owner's stop, 0.7 s a call)
+  and through `remote` (ssh dropped). Released 17:40.
 - **Decisions taken** (in ADR-147 Amendment 2):
   - adding a gazetteer is a dataset-level action, under `run_pipelines`;
   - the gazetteer must be of the dataset's unit, and another unit's is answered as none;

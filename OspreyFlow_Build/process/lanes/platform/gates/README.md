@@ -88,3 +88,22 @@ three failures whose names `-q` had not yet printed). At the owner's ruling, thr
 was stopped and the run is recorded as **withdrawn and unmeasured**: what it measured is the tunnel's speed. Its
 three failures are not read as the branch's or as not the branch's. The lease on d was kept and the stack left up
 for the rerun on the server (`stack_lease.sh remote`).
+
+**Live, second attempt: dropped** (its output not kept: the scratch copy was lost in the restart; the figures are from the session transcript). Through `stack_lease.sh remote` on stack d,
+14:45–16:02 UTC: 367 passed, 0 failed, then the ssh session dropped (`Timeout, server … not responding`) and the
+pytest with it. Not counted.
+
+**Live, the gated run: 702 passed, 0 failed, 0 skipped** (`957ef5d.live.txt`). Platform lease on stack d, run on
+ospreyflow-test beside its containers (`stack_lease.sh remote`, the pytest detached with `nohup setsid` so a dropped
+ssh session could not end it), 16:08:55–17:34:57 UTC at `957ef5d`. It survived this Mac's restart at 17:09. The
+server was shared with three other lanes' runs (load average about 4.5), and nothing else of this lane's ran. It
+covered `test_route_rights.py`, the whole graph-port conformance suite, both case-gazetteer live files, the
+gazetteer, identifier and recipe live files, both sources-withheld files, `test_tile_cache.py`, `test_prefetch.py`,
+`test_statelessness.py`, `tests/geocoder/test_match_live.py` and `tests/services/api/working_set/`. The tunnel
+run's three unnamed failures did not recur. **No case needs Java** (none skipped; planetiler is not run in tests).
+
+**The red outstanding from round 2, item 5** (`957ef5d.live-plant.txt`), under the same lease. Plant:
+`copy_places` reads the case's copies as unit `system`, not the dataset's own.
+`test_a_restricted_case_load_on_a_copy_is_still_the_case_s_at_a_rebuild` went red at its assertion: the re-build
+wrote the gazetteer's `Ashwell` over the case's `Ashwell (restricted)`. Restored, the whole copies file had 9 passed.
+The stack was brought down and released at 17:40:03 UTC.
