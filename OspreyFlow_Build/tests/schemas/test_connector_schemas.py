@@ -105,7 +105,8 @@ def test_a_blank_mapping_says_one_way_to_tell_a_person_from_an_organisation() ->
 
 # --- the orchestrator's review of L1.6 (items 4, 6, 7, 8 and 9) ---------------------------------
 
-INSIDE = ["localhost", "db.localhost", "127.0.0.1", "127.1", "0x7f.1", "2130706433", "::1",
+INSIDE = ["100.64.1.1", "64:ff9b::7f00:1", "2002:7f00:1::1",
+          "localhost", "db.localhost", "127.0.0.1", "127.1", "0x7f.1", "2130706433", "::1",
           "169.254.169.254", "10.0.0.5", "192.168.1.9", "0.0.0.0", "postgres",
           "keycloak."]  # fmt: skip
 

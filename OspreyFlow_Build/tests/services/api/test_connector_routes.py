@@ -114,7 +114,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNam
     monkeypatch.setattr(
         connector_reads,
         "resolve_host",
-        lambda host: ["10.1.2.3"] if host == "sneaky.example" else [],
+        lambda host: ["10.1.2.3"] if host == "sneaky.example" else ["93.184.215.14"],
     )
     datasets = InMemoryDatasetStore()
     for d, unit in (("ds-a", "unit-1"), ("ds-s", "unit-2"), ("ds-x", "unit-1")):

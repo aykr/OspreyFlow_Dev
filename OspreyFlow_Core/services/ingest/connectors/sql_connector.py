@@ -28,7 +28,7 @@ from typing import Any
 
 import asyncpg
 
-from schemas.sources import ConnectionTest, SqlConnectionSettings, SqlRead
+from schemas.sources import SQL_COLUMN, ConnectionTest, SqlConnectionSettings, SqlRead
 
 from . import reads
 from .reads import ConnectorRefused, ReadRows, as_text
@@ -55,7 +55,9 @@ SELECT
 
 
 def _quoted(name: str) -> str:
-    return ".".join(f'"{part}"' for part in name.split("."))
+    """Each part of a name as a quoted identifier, any `"` in it doubled (the schema already
+    refuses one; this holds whatever the caller passes)."""
+    return ".".join('"' + part.replace('"', '""') + '"' for part in name.split("."))
 
 
 def _tls(settings: SqlConnectionSettings) -> ssl.SSLContext | str:
@@ -129,6 +131,10 @@ async def read_sql(
     connect: Connect = asyncpg.connect,
 ) -> ReadRows:
     """The table's rows (past `cursor` on `watermark`, in its order, when incremental), as text."""
+    if watermark is not None and not re.fullmatch(SQL_COLUMN, watermark):
+        raise ConnectorRefused(
+            "the watermark column is not a plain column name; nothing was read"
+        )
     conn = await _open(settings, secret, connect)
     try:
         await _refuse_a_writing_login(conn)
@@ -165,14 +171,29 @@ async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | N
             args.append(cursor)
         sql += f" ORDER BY {_quoted(watermark)}"
     sql += f" LIMIT {reads.MAX_ROWS + 1}"
-    records = await conn.fetch(sql, *args)
-    if len(records) > reads.MAX_ROWS:
-        raise ConnectorRefused(
-            f"the table holds more than {reads.MAX_ROWS} rows to read, more than one read may "
-            "hold; nothing was written (rule 2)"
-        )
-    names = list(records[0].keys()) if records else await _columns(conn, table, read)
-    rows = [{n: as_text(_plain(r[n])) for n in names} for r in records]
+    # Taken through a cursor and stopped at either cap as it is passed, so a table over the cap is
+    # never fetched whole (rule 2; the orchestrator's second review).
+    names: list[str] = []
+    rows: list[dict[str, str | None]] = []
+    taken = 0
+    async for record in conn.cursor(sql, *args, prefetch=500):
+        if not names:
+            names = list(record.keys())
+        row = {n: as_text(_plain(record[n])) for n in names}
+        taken += sum(len(v) for v in row.values() if v)
+        rows.append(row)
+        if len(rows) > reads.MAX_ROWS:
+            raise ConnectorRefused(
+                f"the table holds more than {reads.MAX_ROWS} rows to read, more than one read "
+                "may hold; nothing was written (rule 2)"
+            )
+        if taken > reads.MAX_BYTES:
+            raise ConnectorRefused(
+                f"the table's rows come to more than {reads.MAX_BYTES} bytes, more than one read "
+                "may take; nothing was written (rule 2)"
+            )
+    if not names:
+        names = await _columns(conn, table, read)
     reached = cursor
     if watermark is not None and rows:
         reached = rows[-1][watermark]

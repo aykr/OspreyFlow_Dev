@@ -154,7 +154,9 @@ async def read_api(
     secret: str | None,
     allowed_hosts: Collection[str],
     transport: httpx.AsyncBaseTransport | None = None,
-    before_request: Callable[[str], None] | None = None,
+    #: Called before each request with its URL: refuses in words, or names the address to send it
+    #: to (the host's checked address, so DNS cannot change between the check and the connection).
+    before_request: Callable[[str], str | None] | None = None,
 ) -> ReadRows:
     """Every page of the endpoint's records. A refusal, an error or records missing where the read
     says they are is refused in words: never read as no rows."""
@@ -174,9 +176,10 @@ async def read_api(
         page, next_url = 1, url
         for _ in range(MAX_PAGES):
             params = {settings.page_param: str(page)} if settings.pagination == "page" else None
-            if before_request is not None:
-                before_request(next_url)  # the host looked up again before every request
-            document, size = await _get(client, next_url, params)
+            pinned = before_request(next_url) if before_request is not None else None
+            document, size = await _get(
+                client, next_url, params, room=MAX_BYTES - taken, address=pinned
+            )
             taken += size
             if taken > MAX_BYTES:
                 raise ConnectorRefused(
@@ -229,25 +232,49 @@ def _next_link(document: Any, path: str | None) -> str | None:
 
 
 async def _get(
-    client: httpx.AsyncClient, url: str, params: dict[str, str] | None
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict[str, str] | None,
+    *,
+    room: int,
+    address: str | None = None,
 ) -> tuple[Any, int]:
+    """One page, streamed: reading stops as soon as the body passes `room` bytes, the cap less
+    what earlier pages took, so a body over the cap is never read whole (rule 2)."""
     try:
-        response = await client.get(url, params=params)
+        target, headers, extensions = httpx.URL(url), {}, {}
+        if address is not None:
+            # Sent to the checked address; the name is kept for the Host header and for TLS (SNI
+            # and the certificate's name), so the server is verified as the host named.
+            headers = {"Host": target.netloc.decode()}
+            extensions = {"sni_hostname": target.host}
+            target = target.copy_with(host=address)
+        async with client.stream(
+            "GET", target, params=params, headers=headers, extensions=extensions
+        ) as response:
+            if response.status_code in (401, 403):
+                raise ConnectorRefused(
+                    f"the API refused the sign-in ({response.status_code}): check the "
+                    "connection's secret; nothing was read"
+                )
+            if response.status_code != 200:
+                raise ConnectorRefused(
+                    f"the API answered {response.status_code}, not 200; nothing was written"
+                )
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                body += chunk
+                if len(body) > room:
+                    raise ConnectorRefused(
+                        f"the API's answers came to more than {MAX_BYTES} bytes, more than one "
+                        "read may take; nothing was written (rule 2)"
+                    )
     except httpx.HTTPError as exc:
         raise ConnectorRefused(
             f"the API could not be reached ({type(exc).__name__}); nothing was read"
         ) from exc
-    if response.status_code in (401, 403):
-        raise ConnectorRefused(
-            f"the API refused the sign-in ({response.status_code}): check the connection's secret; "
-            "nothing was read"
-        )
-    if response.status_code != 200:
-        raise ConnectorRefused(
-            f"the API answered {response.status_code}, not 200; nothing was written"
-        )
     try:
-        return response.json(), len(response.content)
+        return json.loads(bytes(body)), len(body)
     except ValueError as exc:
         raise ConnectorRefused("the API's answer is not JSON; nothing was written") from exc
 

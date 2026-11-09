@@ -25,6 +25,7 @@ from urllib.parse import urlsplit
 
 import asyncpg
 import httpx
+from services.ingest.connectors import reads
 from services.ingest.connectors.reads import (
     ConnectorRefused,
     ReadRows,
@@ -45,11 +46,13 @@ from schemas.sources import (
     SourceTable,
     SqlConnectionSettings,
     SqlRead,
+    address_is_inside,
+    literal_ip,
     refuse_inside_host,
 )
 
 from .ingest_sources import UPLOAD_SUBDIR, ingest_root, is_inside
-from .map_admin import _is_inside, _literal_ip, resolve_host
+from .map_admin import resolve_host
 
 #: A non-file source's own name for its file: plain, lower case, no path.
 SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
@@ -70,7 +73,7 @@ class Readers:
     allowed_hosts: Collection[str] | None = None
     #: Where a connection may reach (`refuse_host`). A fixture on this machine (the leased stack's
     #: Postgres) stands one in that admits it; that is named wherever it is used.
-    host_check: Callable[[str, str, Collection[str]], None] | None = None
+    host_check: Callable[[str, str, Collection[str]], object] | None = None
 
     def hosts(self) -> Collection[str]:
         return egress_allow_list() if self.allowed_hosts is None else self.allowed_hosts
@@ -78,8 +81,22 @@ class Readers:
     def check(self, kind: str, host: str) -> None:
         (self.host_check or _refuse_host_with_list)(kind, host, self.hosts())
 
+    def pin(self, url: str) -> str | None:
+        """The address an API request goes to, looked up and checked now; the request is sent to
+        that address, the name kept for its Host header and TLS, so DNS cannot change between the
+        check and the connection (the orchestrator's second review of L1.6). A fixture's own check
+        pins nothing."""
+        host = urlsplit(url).hostname or ""
+        if self.host_check is not None:
+            self.host_check("api", host, self.hosts())
+            return None
+        addresses = refuse_host("api", host, allowed_hosts=self.hosts())
+        if not addresses:
+            raise ConnectorRefused(f"{host} does not resolve; nothing was read")
+        return addresses[0]
 
-def refuse_host(kind: str, host: str, *, allowed_hosts: Collection[str] | None) -> None:
+
+def refuse_host(kind: str, host: str, *, allowed_hosts: Collection[str] | None) -> list[str]:
     """Where a SQL or API connection may reach (ADR-147 decision 2a's rule, with `map_admin`'s own
     lookups; the orchestrator's review of L1.6): never this machine, a dotless name of the
     deployment's own (`postgres`, `keycloak`), or an address that is loopback, private, link-local
@@ -99,14 +116,16 @@ def refuse_host(kind: str, host: str, *, allowed_hosts: Collection[str] | None) 
                 f"{bare} is not on this deployment's egress allow-list: ask an operator to add it "
                 f"(OSPREY_CONNECTOR_EGRESS); nothing was read ({kind} connection)"
             )
-    if _literal_ip(bare) is not None:
-        return
-    for address in resolve_host(bare):
-        ip = _literal_ip(address)
-        if ip is not None and _is_inside(ip):
+    if literal_ip(bare) is not None:
+        return [bare]
+    addresses = resolve_host(bare)
+    for address in addresses:
+        ip = literal_ip(address)
+        if ip is None or address_is_inside(ip):
             raise ConnectorRefused(
                 f"{bare} resolves inside this deployment or its network; nothing was read"
             )
+    return addresses
 
 
 def _refuse_host_with_list(kind: str, host: str, allowed: Collection[str]) -> None:
@@ -142,18 +161,29 @@ def source_file(dataset_id: str, name: str, root: Path | None = None) -> Path:
 
 
 def _json_files(dataset_id: str, pattern: str, root: Path) -> list[tuple[str, bytes]]:
-    found: list[tuple[str, bytes]] = []
+    """The dataset's files matching `pattern`, in name order. A dot-name is never read (`*`
+    matches one in `fnmatch`, and a read's half-written `.read-*.tmp` is one), and the files' sizes
+    are added up before any is opened, so a read past the byte cap opens none (rule 2)."""
+    matched: list[tuple[str, Path]] = []
     for folder in (root / dataset_id, root / UPLOAD_SUBDIR / dataset_id):
         if not folder.is_dir():
             continue
         for candidate in sorted(folder.iterdir(), key=lambda p: p.name):
+            if candidate.name.startswith("."):
+                continue
             resolved = candidate.resolve()
             if (
                 fnmatch.fnmatchcase(candidate.name, pattern)
                 and is_inside(folder, resolved)
                 and resolved.is_file()
             ):
-                found.append((candidate.name, resolved.read_bytes()))
+                matched.append((candidate.name, resolved))
+    if sum(path.stat().st_size for _name, path in matched) > reads.MAX_BYTES:
+        raise ConnectorRefused(
+            f"the JSON files come to more than {reads.MAX_BYTES} bytes, more than one read may "
+            "take; nothing was read (rule 2)"
+        )
+    found = [(name, path.read_bytes()) for name, path in matched]
     if not found:
         raise ConnectorRefused(
             f"no file in the dataset's folder matches {pattern!r}; nothing was written"
@@ -193,7 +223,7 @@ async def read_rows(
         return await read_api(
             settings, read, secret=secret_of(settings.secret), allowed_hosts=readers.hosts(),
             transport=readers.http_transport,
-            before_request=lambda url: readers.check("api", urlsplit(url).hostname or ""),
+            before_request=readers.pin,
         )  # fmt: skip
     if connection.kind == "json" and isinstance(read, JsonRead):
         return read_json(_json_files(dataset_id, read.pattern, root), read)

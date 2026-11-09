@@ -41,6 +41,10 @@ from schemas.sources import (
 )
 
 INSIDE_FORMS = [
+    "100.64.1.1",
+    "nat64.example",
+    "sixtofour.example",
+    "shared.example",
     "localhost",
     "db.localhost",
     "127.0.0.1",
@@ -64,6 +68,9 @@ def dns(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
     answers: dict[str, list[str]] = {
         "telco.example": ["93.184.215.14"],
         "sneaky.example": ["127.0.0.1"],
+        "nat64.example": ["64:ff9b::7f00:1"],
+        "sixtofour.example": ["2002:a00:1::1"],
+        "shared.example": ["100.64.0.9"],
         "nomis.client.example": ["10.20.30.40"],
         "db.client.example": ["93.184.215.15"],
     }
@@ -264,3 +271,112 @@ def test_a_read_past_the_byte_cap_is_refused_whole(
     rows = reads.ReadRows(columns=["n"], rows=[{"n": "x" * 80}])
     with pytest.raises(ConnectorRefused, match="bytes"):
         reads.write_snapshot(rows, tmp_path, "big")
+
+
+# --- the orchestrator's second review: hidden files, and caps that stop reading ------------------
+
+
+def test_a_json_pattern_never_reads_a_hidden_file(tmp_path: __import__("pathlib").Path) -> None:
+    """`*` matches a dotfile in `fnmatch`, so a half-written `.read-*.tmp` beside the source's file
+    would have been read. Every dot-name is left out."""
+    from services.api.connector_reads import _json_files
+
+    folder = tmp_path / "uploaded" / "ds-a"
+    folder.mkdir(parents=True)
+    (folder / "bookings.json").write_text('{"records": [{"id": 1}]}')
+    (folder / ".read-1234.tmp").write_text("half written")
+    (folder / ".hidden.json").write_text('{"records": [{"id": 2}]}')
+    assert [name for name, _ in _json_files("ds-a", "*", tmp_path)] == ["bookings.json"]
+
+
+def test_an_api_body_over_the_cap_is_stopped_not_read_whole(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services.ingest.connectors import reads
+
+    monkeypatch.setattr(reads, "MAX_BYTES", 100)
+    sent: list[int] = []
+
+    async def body():  # type: ignore[no-untyped-def]
+        yield b'{"items": ['
+        for n in range(1000):
+            sent.append(n)
+            yield b'{"n": "' + b"x" * 40 + b'"},'
+        yield b'{"n": "end"}]}'
+
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, content=body()))
+    settings = ApiConnectionSettings(base_url="https://telco.example")
+    with pytest.raises(ConnectorRefused, match="bytes"):
+        asyncio.run(reads.read_api(settings, ApiRead(path="/v1/n", records_at="items"),
+                                   secret=None, allowed_hosts=["telco.example"],
+                                   transport=transport))  # fmt: skip
+    assert len(sent) < 10, f"{len(sent)} chunks were read past the cap"
+
+
+def test_json_files_over_the_cap_are_never_opened(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: __import__("pathlib").Path
+) -> None:
+    from pathlib import Path
+
+    from services.api.connector_reads import _json_files
+    from services.ingest.connectors import reads
+
+    monkeypatch.setattr(reads, "MAX_BYTES", 100)
+    folder = tmp_path / "ds-a"
+    folder.mkdir()
+    (folder / "big.json").write_text('{"r": [' + '"y",' * 200 + '"z"]}')
+    opened: list[str] = []
+    real = Path.read_bytes
+
+    def spy(self: Path) -> bytes:
+        opened.append(self.name)
+        return real(self)
+
+    monkeypatch.setattr(Path, "read_bytes", spy)
+    with pytest.raises(ConnectorRefused, match="bytes"):
+        _json_files("ds-a", "*.json", tmp_path)
+    assert opened == []
+
+
+
+def test_a_watermark_is_a_column_name_and_a_quoted_name_holds() -> None:
+    from services.ingest.connectors.sql_connector import _quoted, read_sql
+
+    from schemas.sources import SqlRead
+
+    async def connect(**kw: object) -> object:
+        raise AssertionError("never reached")
+
+    settings = SqlConnectionSettings(host="db.client.example", database="nomis", user="r",
+                                     secret="X")  # fmt: skip
+    with pytest.raises(ConnectorRefused, match="plain column name"):
+        asyncio.run(read_sql(settings, SqlRead(table="public.t"), secret="pw",
+                             watermark='id" > 0 OR "1', connect=connect))  # fmt: skip
+    assert _quoted('public.we"ird') == '"public"."we""ird"'
+
+
+def test_an_api_request_goes_to_the_address_that_was_checked(dns: dict[str, list[str]]) -> None:
+    """The orchestrator's second review (item 6): the request is sent to the address looked up and
+    checked, the name kept for its Host header and TLS, so a rebinding between the check and the
+    connection cannot redirect it."""
+    seen: list[httpx.Request] = []
+
+    def telco(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"items": [{"n": "1"}]})
+
+    connection = Connection(
+        id="c", kind="api", name="Telco", created_by="adm", created_at=datetime.now(UTC),
+        settings=ApiConnectionSettings(base_url="https://telco.example"),
+    )  # fmt: skip
+    readers = Readers(http_transport=httpx.MockTransport(telco), allowed_hosts=["telco.example"])
+    source = type("S", (), {"read": ApiRead(path="/v1/n", records_at="items"), "refresh": None})()
+    asyncio.run(read_rows(source, connection, dataset_id="ds-a", cursor=None, readers=readers,
+                          root=__import__("pathlib").Path("/nonexistent")))  # fmt: skip
+    assert seen[0].url.host == "93.184.215.14"
+    assert seen[0].headers["host"] == "telco.example"
+    assert seen[0].extensions["sni_hostname"] == "telco.example"
+    dns["telco.example"] = []
+    with pytest.raises(ConnectorRefused, match="does not resolve"):
+        asyncio.run(read_rows(source, connection, dataset_id="ds-a", cursor=None,
+                              readers=readers, root=__import__("pathlib").Path("/x")))  # fmt: skip

@@ -424,3 +424,25 @@ async def test_a_sql_sources_refreshed_file_loads_only_new_rows(
         assert second.rows_read == 1 and second.rows_below_watermark == 2  # type: ignore[attr-defined]
         assert second.nodes_created == 2  # type: ignore[attr-defined]
         assert await refresh.values() == {"SYN-1", "SYN-2", "SYN-3", "SYN-4", "SYN-5", "SYN-6"}
+
+
+async def test_a_write_in_the_connectors_session_is_refused_by_the_server(
+    nomis: asyncpg.Connection,
+) -> None:
+    """The orchestrator's second review (item 7): even a login that may write (refused before any
+    read by `read_sql`) cannot write in a session the connector opens, since the server holds it
+    read-only from its first statement."""
+    from services.ingest.connectors.sql_connector import _open
+
+    conn = await _open(_settings(WRITER), PASSWORD, _no_tls)
+    try:
+        with pytest.raises(asyncpg.ReadOnlySQLTransactionError):
+            await conn.execute(
+                "INSERT INTO nomis_replica_fixture.visit_bookings VALUES "
+                "(99, 'SYN-P-0099', 'HMP Synthetic Two', now())"
+            )
+        assert await conn.fetchval("SHOW statement_timeout") == "1min"
+    finally:
+        await conn.close()
+    count = await nomis.fetchval("SELECT count(*) FROM nomis_replica_fixture.visit_bookings")
+    assert count == len(BOOKINGS)

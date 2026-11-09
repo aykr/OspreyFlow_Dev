@@ -91,7 +91,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNam
         (root / "uploaded" / d).mkdir(parents=True)
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(root))
     monkeypatch.setenv("OSPREY_CONNECTION_SECRET_TELCO_A", TOKEN)
-    monkeypatch.setattr(connector_reads, "resolve_host", lambda host: [])
+    monkeypatch.setattr(connector_reads, "resolve_host", lambda host: ["93.184.215.14"])
     datasets = InMemoryDatasetStore()
     for d in ("ds-a", "ds-b"):
         datasets.add(Dataset(id=d, name=d, owning_unit="unit-1", created_by="s",

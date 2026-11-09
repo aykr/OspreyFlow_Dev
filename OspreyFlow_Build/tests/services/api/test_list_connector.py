@@ -353,3 +353,24 @@ async def test_a_name_two_readable_lists_share_is_offered_as_neither(root: Path)
     own_same_name = OWN_A.model_copy(update={"name": "Client list"})
     offered = await offered_lists("ds-a", store=store, own=[own_same_name])
     assert "Client list" not in {o.name for o in offered}
+
+
+async def test_an_own_list_past_the_row_or_byte_cap_is_refused_whole(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The orchestrator's second review (item 15): a dataset's own list is held to the same caps as
+    a connector's read, refused whole and in words (rule 2)."""
+    from services.ingest.connectors import reads
+
+    rows = InMemoryListRows()
+    body = b"estab_id,name\n" + b"".join(f"E{n},HMP {n}\n".encode() for n in range(10))
+    monkeypatch.setattr(reads, "MAX_ROWS", 5)
+    with pytest.raises(ListConnectorRefused, match="rows"):
+        import_own_list("ds-a", "rl-a", body, rows_kept=rows, named=["rl-a"], name="e",
+                        key_column="estab_id")  # fmt: skip
+    monkeypatch.setattr(reads, "MAX_ROWS", 500_000)
+    monkeypatch.setattr(reads, "MAX_BYTES", 40)
+    with pytest.raises(ListConnectorRefused, match="bytes"):
+        import_own_list("ds-a", "rl-a", body, rows_kept=rows, named=["rl-a"], name="e",
+                        key_column="estab_id")  # fmt: skip
+    assert rows.files == {}

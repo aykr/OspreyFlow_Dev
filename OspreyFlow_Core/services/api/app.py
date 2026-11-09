@@ -65,6 +65,7 @@ from services.extract.writer import (
     confirm_node,
     retract_node,
 )
+from services.ingest.connectors import reads as connector_reads_module
 from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.connectors.reads import ConnectorRefused
 from services.ingest.engine import RowKeyDefinitionChanged, RowKeyRunInProgress, run_recipe
@@ -9313,6 +9314,12 @@ async def import_dataset_own_list(
         )
     live = await models.live(dataset_id)
     try:
+        # Sized before it is read, so a file past the cap is never read whole (rule 2).
+        if Path(body.location).stat().st_size > connector_reads_module.MAX_BYTES:
+            raise ListConnectorRefused(
+                f"the file is more than {connector_reads_module.MAX_BYTES} bytes, more than one "
+                "import may take; nothing was kept (rule 2)"
+            )
         reference, outcome = import_own_list(
             dataset_id, list_id, Path(body.location).read_bytes(), rows_kept=rows_kept,
             named=live.reference_lists if live is not None else [],

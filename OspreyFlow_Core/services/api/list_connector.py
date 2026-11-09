@@ -41,6 +41,7 @@ from typing import Any, Protocol
 from urllib.parse import quote
 
 import asyncpg
+from services.ingest.connectors import reads
 from services.ingest.connectors.screening_templates import (
     TemplateRefused,
     screening_rows,
@@ -831,10 +832,20 @@ def import_own_list(
     if latest is None and not (name and key_column):
         raise ListConnectorRefused("a list's first import needs its name and its key column")
     try:
+        if len(csv_bytes) > reads.MAX_BYTES:
+            raise ListConnectorRefused(
+                f"the file is more than {reads.MAX_BYTES} bytes, more than one import may take; "
+                "nothing was kept (rule 2)"
+            )
         text = csv_bytes.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
         raise ListConnectorRefused("the file is not UTF-8 text; nothing was kept") from exc
     rows: list[dict[str, object]] = [dict(r) for r in csv.DictReader(io.StringIO(text))]
+    if len(rows) > reads.MAX_ROWS:
+        raise ListConnectorRefused(
+            f"the file holds more than {reads.MAX_ROWS} rows, more than one import may take; "
+            "nothing was kept (rule 2)"
+        )
     base = latest or ReferenceList(
         id=list_id, dataset_id=dataset_id, name=name or "", kind="reference",
         key_column=key_column or "", version=1,
