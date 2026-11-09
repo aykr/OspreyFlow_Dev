@@ -39,6 +39,7 @@ from schemas.model_admin import ALL_MODELS as MODEL_ADMIN_MODELS  # noqa: E402
 from schemas.monitoring import ALL_MODELS as MONITORING_MODELS  # noqa: E402
 from schemas.packs import ALL_MODELS as PACK_MODELS  # noqa: E402
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
+from schemas.promotions import ALL_MODELS as PROMOTION_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
 from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
 from schemas.screening import ALL_MODELS as SCREENING_MODELS  # noqa: E402
@@ -79,6 +80,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *DATASET_MODEL_MODELS,
     *CASE_VIEW_MODELS,
     *BOARD_MODELS,
+    *PROMOTION_MODELS,
     *MODEL_ADMIN_MODELS,
     *MAP_ADMIN_MODELS,
 )
