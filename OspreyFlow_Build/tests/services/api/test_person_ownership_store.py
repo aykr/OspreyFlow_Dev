@@ -32,7 +32,13 @@ from services.api.config import PostgresConfig
 from services.api.datasets import PostgresDatasetStore
 from services.api.investigations import InvestigationStore
 from services.api.link_type_store import LinkTypeProposalStore
-from services.api.person_ownership import PROMOTION_KINDS, PostgresOwnershipStore
+from services.api.person_ownership import (
+    PROMOTION_KINDS,
+    WITHHELD_ERROR,
+    PostgresOwnershipStore,
+    WithheldRefused,
+    refuse_if_withheld,
+)
 
 from conduit_common.identity import new_id
 from ontology.handling import load_uk_le_scheme
@@ -315,3 +321,28 @@ async def test_labels_name_the_case_and_never_what_the_analyst_wrote(
         "A proposed link type in the case Kestrel, waiting for a decision",
         "A watch on an item they drew in the case Kestrel",
     }
+
+
+async def test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld(
+    conn: asyncpg.Connection, ownership: PostgresOwnershipStore
+) -> None:
+    """The strict default, provisional (`person_ownership.WITHHELD_ERROR`): L2.5b's *Transfer and
+    disable* calls `refuse_if_withheld` in its transaction; refused while an item is withheld."""
+    await _case(conn, "c-k", "Kestrel")
+    await _dataset(conn, "ds-off", "OFFICIAL")
+    await _dataset(conn, "ds-top", "TOP SECRET")
+    await _view(conn, "c-k", "ana-1")
+    await _proposal(conn, "c-k", "ana-2", dataset="ds-top")
+    # Only what the administrator can see: nothing refused.
+    await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
+
+    hidden = await _proposal(conn, "c-k", "ana-1", dataset="ds-top")
+    with pytest.raises(WithheldRefused) as refused:
+        await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
+    assert refused.value.error == WITHHELD_ERROR == "withheld_items"
+    words = refused.value.words
+    assert hidden not in words and "Kestrel" not in words and "proposal" not in words
+    assert "link type" not in words and "1" not in words
+    # An administrator who may see it is not refused.
+    top = ADMIN.model_copy(update={"clearance": "TOP SECRET"})
+    await refuse_if_withheld(conn, "ana-1", admin=top, scheme=SCHEME)

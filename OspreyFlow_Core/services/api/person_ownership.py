@@ -97,6 +97,42 @@ async def withheld(
     return bool(await conn.fetchval(_WITHHELD_SQL, person, admin_unit, cleared, top))
 
 
+#: *Transfer and disable* refused while any item is withheld from the administrator (provisional,
+#: the orchestrator's strict default of 9 November 2026, pending the owner's ruling on who transfers
+#: an item above an administrator's clearance in their own unit): a code of its own, not
+#: `other_unit`, and words that name nothing of the items, not even their kind.
+WITHHELD_ERROR = "withheld_items"
+WITHHELD_WORDS = (
+    "they still own items you may not see: an administrator who may see them transfers them, "
+    "and then you can disable them"
+)
+
+
+class WithheldRefused(Exception):
+    """409 `withheld_items`: raised by `refuse_if_withheld`, carrying only its code and words."""
+
+    def __init__(self) -> None:
+        super().__init__(WITHHELD_WORDS)
+        self.error = WITHHELD_ERROR
+        self.words = WITHHELD_WORDS
+
+
+async def refuse_if_withheld(
+    conn: asyncpg.Connection, person: str, *, admin: Principal, scheme: HandlingScheme
+) -> None:
+    """For *Transfer and disable* (L2.5b), inside its own transaction before the identity provider
+    is asked: refused while the person owns any item of these kinds the administrator may not
+    see."""
+    if await withheld(
+        conn,
+        person,
+        admin_unit=admin.org_unit,
+        cleared=cleared_markings(admin, scheme),
+        top=scheme.classification[-1],
+    ):
+        raise WithheldRefused
+
+
 def cleared_markings(admin: Principal, scheme: HandlingScheme) -> list[str]:
     """The markings the administrator clears; none for a clearance the scheme does not know."""
     return [m for m in scheme.classification if scheme.clears(admin.clearance, m)]
@@ -200,10 +236,14 @@ class PostgresOwnershipStore:
 
 __all__ = [
     "PROMOTION_KINDS",
+    "WITHHELD_ERROR",
+    "WITHHELD_WORDS",
+    "WithheldRefused",
     "PostgresOwnershipStore",
     "cleared_markings",
     "owned_items",
     "ownership_of",
     "promotion_items",
+    "refuse_if_withheld",
     "withheld",
 ]
