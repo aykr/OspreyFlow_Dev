@@ -139,4 +139,21 @@ describe("Needs you", () => {
     expect(proposedIn(NEEDS, "ds-top")).toBe(0);
     expect(proposedIn(NEEDS, null)).toBe(0);
   });
+
+  it("says why the Studio did not open, and drops a count a later read could not confirm", async () => {
+    let answer: Needs | Error = NEEDS;
+    const read = vi.fn(async () => {
+      if (answer instanceof Error) throw answer;
+      return answer;
+    });
+    const onOpenModel = vi.fn(async () => {
+      throw new Error("None of your cases loads into that dataset now, so the Studio cannot open on it.");
+    });
+    render(<NeedsYou {...API} read={read} onOpenModel={onOpenModel} every={30} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Needs you · 3/ }));
+    fireEvent.click(screen.getByRole("button", { name: NEEDS_YOU_WORDS.proposals(2, "Prison records") }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/None of your cases loads into that dataset/);
+    answer = new Error("503");
+    await screen.findByRole("button", { name: /Needs you · \?/ });
+  });
 });

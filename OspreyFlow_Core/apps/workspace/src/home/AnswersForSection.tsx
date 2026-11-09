@@ -14,7 +14,7 @@ export interface AnswersForProps {
   rights: ReadonlySet<string>;
   roles: readonly string[];
   onOpenCase: (id: string) => void;
-  onOpenModel?: (datasetId: string) => void;
+  onOpenModel?: (datasetId: string) => void | Promise<void>;
   onOpenOperations?: () => void;
   /** For tests: the reads, otherwise the Conduit's. */
   read?: { cases: () => Promise<CaseListing[]>; needs: () => Promise<NeedsYou> };
@@ -24,6 +24,8 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
   const [cases, setCases] = useState<CaseListing[] | null>(null);
   const [needs, setNeeds] = useState<NeedsYou | null>(null);
   const [unread, setUnread] = useState<string[]>([]);
+  const [needsRead, setNeedsRead] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,7 +37,8 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
     reads
       .needs()
       .then((n) => !cancelled && setNeeds(n))
-      .catch(() => !cancelled && setUnread((u) => [...u, "what waits for you"]));
+      .catch(() => !cancelled && setUnread((u) => [...u, "what waits for you"]))
+      .finally(() => !cancelled && setNeedsRead(true));
     return () => {
       cancelled = true;
     };
@@ -44,7 +47,13 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
   const shown = answersFor({ rights, roles, cases: cases ?? [], needs });
   const open = (opens: Opens): (() => void) | null => {
     if (opens.to === "case") return () => onOpenCase(opens.caseId);
-    if (opens.to === "model" && onOpenModel) return () => onOpenModel(opens.datasetId);
+    if (opens.to === "model" && onOpenModel)
+      return () => {
+        setProblem(null);
+        void Promise.resolve(onOpenModel(opens.datasetId)).catch((e: unknown) =>
+          setProblem(e instanceof Error ? e.message : "The Studio could not be opened on that dataset."),
+        );
+      };
     if (opens.to === "operations" && onOpenOperations) return onOpenOperations;
     return null;
   };
@@ -54,6 +63,7 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
       <div className="home-section__head">
         <h2 id="answers-for">What you can do, and what you answer for</h2>
       </div>
+      {problem && <p role="alert">{problem}</p>}
       {unread.length > 0 && <p role="alert">{`Could not read ${unread.join(" or ")}; what is shown may be short.`}</p>}
       <h3 className="label">Places you can open</h3>
       <ul className="home-facts">
@@ -66,7 +76,8 @@ export function AnswersForSection({ apiBaseUrl, bearerToken, rights, roles, onOp
       </ul>
       <h3 className="label">What you answer for</h3>
       <ul className="home-facts">
-        {shown.answers.length === 0 && <li>Nothing waits for you.</li>}
+        {(!needsRead || cases === null) && <li>Reading…</li>}
+        {needsRead && cases !== null && shown.answers.length === 0 && unread.length === 0 && <li>Nothing waits for you.</li>}
         {shown.answers.map((a, i) => {
           const act = open(a.opens);
           const tip = `answer-why-${i}`;

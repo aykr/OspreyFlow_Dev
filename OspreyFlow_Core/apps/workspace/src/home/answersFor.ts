@@ -75,7 +75,8 @@ export function answersFor(input: {
   for (const p of needs?.promotions_overdue ?? []) {
     answers.push({
       text: `Reviewer of promotions: ${p.words}`,
-      why: whyHeld("review_promotions", roles),
+      // An Author holding Review promotions, or the dataset's unit's administrator (decision 11).
+      why: whyHeld(rights.has("review_promotions") ? "review_promotions" : "administer_system", roles),
       opens: rights.has("operate_schedules") ? { to: "operations" } : { to: "none" },
     });
   }
@@ -91,7 +92,7 @@ export function answersFor(input: {
     if (p.above_clearance) {
       answers.push({
         text: `Data engineer of ${p.dataset_name}: a proposed link type above your clearance`,
-        why: "Someone cleared to its case's marking decides it; you are told only that it exists.",
+        why: "Someone cleared to its dataset's highest marking decides it; you are told only that it waits.",
         opens: { to: "none" },
       });
     }

@@ -84,4 +84,26 @@ describe("the Home section", () => {
     ); // prettier-ignore
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Could not read what waits for you/));
   });
+
+  it("says it is reading, then why a line did not open", async () => {
+    let release: (n: NeedsYou) => void = () => undefined;
+    const pending = new Promise<NeedsYou>((r) => (release = r));
+    const onOpenModel = vi.fn(async () => {
+      throw new Error("None of your cases loads into that dataset now, so the Studio cannot open on it.");
+    });
+    render(
+      <AnswersForSection apiBaseUrl="x" bearerToken="t" rights={ENGINEER} roles={["data_engineer"]} onOpenCase={vi.fn()}
+        onOpenModel={onOpenModel} read={{ cases: async () => [], needs: () => pending }} />,
+    ); // prettier-ignore
+    expect(await screen.findByText("Reading…")).toBeTruthy();
+    expect(screen.queryByText("Nothing waits for you.")).toBeNull();
+    release(NEEDS);
+    fireEvent.click(await screen.findByRole("button", { name: /2 proposed link types to decide/ }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/None of your cases loads into that dataset/);
+  });
+
+  it("says why an administrator answers for a promotion by their Administrator role", () => {
+    const shown = answersFor({ rights: new Set(["administer_system"]), roles: ["osprey-admin"], cases: [], needs: NEEDS });
+    expect(shown.answers.find((a) => a.text.startsWith("Reviewer"))?.why).toBe("Given by your Administrator role.");
+  });
 });

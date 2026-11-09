@@ -59,12 +59,13 @@ export const NEEDS_YOU_WORDS = {
   aboveClearance: (dataset: string) =>
     `A proposed link type in ${dataset} is above your clearance`,
   aboveClearanceTip:
-    "It was proposed in a case marked above your clearance, so you are told only that it exists. Someone cleared to that marking decides it.",
+    "Its dataset may hold material marked above your clearance, so you are told only that it waits. Someone cleared to the dataset's highest marking decides it.",
   promotionTip:
-    "A promotion has waited past the days your administrator set. Review it, or ask its dataset's other reviewers; you are told once, and it stays here while you may still review it.",
+    "A promotion has waited past the days your administrator set. Review it, or ask its dataset's other reviewers. It stays here while it still waits and you may still review it.",
   reminder: (n: number) =>
     `${plural(n, "proposed link type waits", "proposed link types wait")} for you on the Model tab.`,
   reminderTip:
     "Analysts proposed new link types for this dataset. Decide them on 1 Model: added to the draft model, a type is made live with the next model version.",
   unread: "Needs you could not be read",
+  unreadProposals: "The proposed link types waiting for you could not be counted; the Model tab lists them.",
 };

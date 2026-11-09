@@ -1422,23 +1422,26 @@ export function App() {
   // overdue promotion opens Admin › Operations for a reader who holds `operate_schedules`; proposed
   // link types open the Studio's Model tab on their dataset, through a case of the reader's that
   // loads into it (`ingest/studio/datasets.ts`), as the Studio's own switcher does.
-  const openModelFor = (datasetId: string) => {
+  const openModelFor = async (datasetId: string): Promise<void> => {
     requestOpening({ kind: "studio", tab: "model", datasetId });
-    void listCases(API_BASE_URL, bearerToken ?? "")
-      .then((cases) => {
-        const caseId = caseForDataset(cases, datasetId, investigationId);
-        if (!caseId) {
-          takeOpening("studio"); // no case of theirs loads into it now: nothing to open
-          return;
-        }
-        if (caseId === investigationId) {
-          setStartChoice(null);
-          setView("ingest");
-        } else {
-          openCase(caseId, "ingest");
-        }
-      })
-      .catch(() => undefined);
+    let cases;
+    try {
+      cases = await listCases(API_BASE_URL, bearerToken ?? "");
+    } catch {
+      takeOpening("studio");
+      throw new Error("Your cases could not be read, so the Studio was not opened. Try again.");
+    }
+    const caseId = caseForDataset(cases, datasetId, investigationId);
+    if (!caseId) {
+      takeOpening("studio"); // no case of theirs loads into it now: nothing to open
+      throw new Error("None of your cases loads into that dataset now, so the Studio cannot open on it.");
+    }
+    if (caseId === investigationId) {
+      setStartChoice(null);
+      setView("ingest");
+    } else {
+      openCase(caseId, "ingest");
+    }
   };
   const openOperations = () => {
     requestOpening({ kind: "admin", section: "operations" });

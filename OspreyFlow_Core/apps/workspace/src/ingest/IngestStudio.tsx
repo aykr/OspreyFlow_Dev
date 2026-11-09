@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 
 import { NEEDS_YOU_WORDS, proposedIn, readNeedsYou, type NeedsYou } from "../admin/needsYou/needsYouApi";
-import { onOpening, takeOpening } from "../admin/needsYou/openings";
+import { onOpening, peekOpening, takeOpening } from "../admin/needsYou/openings";
 
 import { Select } from "../design/primitives/Select";
 import { Tabs } from "../design/primitives/Tabs";
@@ -99,12 +99,21 @@ function Studio({
   // ADR-145 decision 11 (A2), ADR-090 Amendment 4 (L2.7): the proposed link types this person may
   // decide in this dataset, as the Conduit counted them for them (never one above their clearance).
   const [needs, setNeeds] = useState<NeedsYou | null>(null);
+  const [needsUnread, setNeedsUnread] = useState(false);
   const [decisions, setDecisions] = useState(0);
   useEffect(() => {
     let cancelled = false;
     readNeedsYou(apiBaseUrl, bearerToken)
-      .then((found) => !cancelled && setNeeds(found))
-      .catch(() => !cancelled && setNeeds(null));
+      .then((found) => {
+        if (cancelled) return;
+        setNeeds(found);
+        setNeedsUnread(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setNeeds(null);
+        setNeedsUnread(true); // said, never shown as none to decide (rule 2)
+      });
     return () => {
       cancelled = true;
     };
@@ -115,8 +124,10 @@ function Studio({
   useEffect(() => {
     if (datasetId === null) return;
     const take = () => {
-      const opening = takeOpening("studio");
-      if (opening && opening.datasetId === datasetId) setPlace("model");
+      // Taken only when it is this dataset's: one for another is left for the reload into it.
+      if (peekOpening("studio")?.datasetId !== datasetId) return;
+      takeOpening("studio");
+      setPlace("model");
     };
     take();
     return onOpening(take);
@@ -167,6 +178,11 @@ function Studio({
             {NEEDS_YOU_WORDS.reminder(proposed)}
           </button>{" "}
           <span id="studio-proposals-tip" role="note">{NEEDS_YOU_WORDS.reminderTip}</span>
+        </p>
+      )}
+      {needsUnread && (
+        <p className="caption" role="status" style={{ margin: 0, padding: "var(--sp-4) var(--sp-16)" }}>
+          {NEEDS_YOU_WORDS.unreadProposals}
         </p>
       )}
       <Tabs tabs={tabs} activeId={place} onChange={(id) => setPlace(id as StudioPlace)} />

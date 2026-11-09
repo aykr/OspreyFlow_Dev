@@ -36,6 +36,12 @@ export function requestOpening(opening: Opening): void {
   for (const listener of listeners) listener();
 }
 
+/** The waiting request of this kind, left waiting: a place takes it only when it is the one asked
+ * for (the Studio open on another dataset leaves it for the reload into the right one). */
+export function peekOpening<K extends Opening["kind"]>(kind: K): Extract<Opening, { kind: K }> | null {
+  return (waiting.find((w) => w.kind === kind) as Extract<Opening, { kind: K }> | undefined) ?? null;
+}
+
 /** Takes the waiting request of this kind, if any (so it opens once). */
 export function takeOpening<K extends Opening["kind"]>(
   kind: K,

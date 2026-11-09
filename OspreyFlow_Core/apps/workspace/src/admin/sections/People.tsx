@@ -15,7 +15,7 @@ import type {
   SignInDelivery,
 } from "../../../../../packages/schemas/generated";
 import { PLACE_NAME, placesFor } from "../../shell/places";
-import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTipId } from "../tips";
+import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
 import { Button, Input, Select } from "../../design/primitives";
 import {
   disablePlan,
@@ -415,7 +415,7 @@ function PersonRow({
             <input
               type="checkbox"
               aria-label={`${role.label} for ${person.username}`}
-              aria-describedby={roleTipId(role.id)}
+              aria-describedby={roleTip(role.id) ? roleTipId(role.id) : undefined}
               checked={chosen.has(role.id)}
               onChange={(e) => {
                 const next = new Set(chosen);

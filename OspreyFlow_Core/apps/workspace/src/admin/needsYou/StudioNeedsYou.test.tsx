@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { IngestStudio } from "../../ingest/IngestStudio";
 import { NEEDS_YOU_WORDS } from "./needsYouApi";
-import { requestOpening } from "./openings";
+import { peekOpening, requestOpening, takeOpening } from "./openings";
 
 vi.mock("../../ingest/map/MapScreen", () => ({ MapScreen: () => null }));
 vi.mock("../../ingest/verify/VerifyScreen", () => ({
@@ -164,5 +164,31 @@ describe("the Studio's proposals count", () => {
           .getAttribute("aria-selected"),
       ).toBe("true"),
     );
+  });
+
+  it("leaves a request for another dataset waiting for the reload into it", async () => {
+    serve([{ dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 1, above_clearance: false }]);
+    requestOpening({ kind: "studio", tab: "model", datasetId: "ds-other" });
+    open();
+    await screen.findByRole("tab", { name: "1 Model · 1 proposed" });
+    expect(screen.getByRole("tab", { name: "3 Pipelines" }).getAttribute("aria-selected")).toBe("true");
+    expect(peekOpening("studio")).toEqual({ kind: "studio", tab: "model", datasetId: "ds-other" });
+    takeOpening("studio");
+  });
+
+  it("says a count it could not read, never none to decide", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path = String(url);
+        const json = (status: number, payload: unknown) => ({ ok: status < 400, status, json: async () => payload }) as Response;
+        if (path.endsWith("/v1/me/needs-you")) return json(503, {});
+        if (path.endsWith("/v1/investigations")) return json(200, CASES);
+        if (path.endsWith("/screening-subscriptions")) return json(200, { lists: [], subscribed: [] });
+        return json(200, []);
+      }),
+    );
+    open();
+    expect((await screen.findByText(NEEDS_YOU_WORDS.unreadProposals)).getAttribute("role")).toBe("status");
   });
 });

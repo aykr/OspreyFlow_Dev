@@ -17,8 +17,9 @@ import {
 export interface NeedsYouProps {
   apiBaseUrl: string;
   bearerToken: string;
-  /** Opens the Studio's Model tab on a dataset; without it, the entry is said but not a button. */
-  onOpenModel?: (datasetId: string) => void;
+  /** Opens the Studio's Model tab on a dataset; without it, the entry is said but not a button. A
+   * refusal (no case of theirs loads into it, their cases unread) is said beside the control. */
+  onOpenModel?: (datasetId: string) => void | Promise<void>;
   /** Opens Admin › Operations, for a reader who holds `operate_schedules`. */
   onOpenOperations?: () => void;
   /** Read again when this changes (a decision on the Model tab, say). */
@@ -39,12 +40,14 @@ export function NeedsYou({
 }: NeedsYouProps) {
   const [needs, setNeeds] = useState<Needs | null>(null);
   const [failed, setFailed] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setNeeds(await read(apiBaseUrl, bearerToken));
       setFailed(false);
     } catch {
+      setNeeds(null); // a count read earlier is not shown as if it still stood (rule 2)
       setFailed(true);
     }
   }, [apiBaseUrl, bearerToken, read]);
@@ -57,7 +60,13 @@ export function NeedsYou({
 
   const count = needs ? needsYouCount(needs) : 0;
   const hidden = needs ? needs.proposals.filter((p) => p.above_clearance) : [];
-  if (!failed && count === 0 && hidden.length === 0) return null;
+  if (!failed && !problem && count === 0 && hidden.length === 0) return null;
+  const opening = (datasetId: string) => () => {
+    setProblem(null);
+    void Promise.resolve(onOpenModel?.(datasetId)).catch((e: unknown) =>
+      setProblem(e instanceof Error ? e.message : "The Studio could not be opened on that dataset."),
+    );
+  };
 
   const entry = (
     key: string,
@@ -98,6 +107,12 @@ export function NeedsYou({
   };
 
   return (
+    <>
+    {problem && (
+      <span role="alert" className="caption">
+        {problem}
+      </span>
+    )}
     <DropdownPanel
       label={failed && !needs ? "Needs you · ?" : `Needs you · ${count}`}
       panelLabel="Needs you"
@@ -133,7 +148,7 @@ export function NeedsYou({
                 `proposals-${p.dataset_id}`,
                 WORDS.proposals(p.to_decide, p.dataset_name),
                 WORDS.proposalsTip,
-                onOpenModel ? () => onOpenModel(p.dataset_id) : undefined,
+                onOpenModel ? opening(p.dataset_id) : undefined,
                 close,
               ),
             )}
@@ -147,5 +162,6 @@ export function NeedsYou({
         </ul>
       )}
     </DropdownPanel>
+    </>
   );
 }

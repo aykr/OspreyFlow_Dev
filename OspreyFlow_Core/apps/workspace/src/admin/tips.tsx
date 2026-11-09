@@ -23,7 +23,8 @@ export function roleTip(role: string): string | null {
 
 /** A role by its name, never its id (a preset's roles, a grant). */
 export function roleName(role: string): string {
-  return ROLE_WORDS[role]?.name ?? role;
+  // A role these words do not name yet is said in words made from its id, never the id itself.
+  return ROLE_WORDS[role]?.name ?? rightName(role.replace(/-/g, "_"));
 }
 
 /** A grant as People shows it: a single right by its name, a built-in role by its name; never the
@@ -48,14 +49,16 @@ export function RoleAndLevelTips({ roles }: { roles: readonly { id: string; labe
     <details className="admin-tips">
       <summary className="label">What each role and level lets a person do</summary>
       <dl style={{ margin: 0, display: "grid", gap: "var(--sp-4)" }}>
-        {roles.map((r) => (
-          <div key={r.id}>
-            <dt className="value">{r.label}</dt>
-            <dd id={roleTipId(r.id)} className="caption" style={{ margin: 0 }}>
-              {roleTip(r.id) ?? ""}
-            </dd>
-          </div>
-        ))}
+        {roles
+          .filter((r) => roleTip(r.id))
+          .map((r) => (
+            <div key={r.id}>
+              <dt className="value">{r.label}</dt>
+              <dd id={roleTipId(r.id)} className="caption" style={{ margin: 0 }}>
+                {roleTip(r.id)}
+              </dd>
+            </div>
+          ))}
         <div>
           <dt className="value">Levels in a case</dt>
           <dd id={LEVELS_TIP_ID} className="caption" style={{ margin: 0 }}>

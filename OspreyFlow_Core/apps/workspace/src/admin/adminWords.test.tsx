@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RIGHT_WORDS } from "../help/roles";
 import { AdminPlace } from "./AdminPlace";
+import { NeedsYou } from "./needsYou/NeedsYou";
 
 afterEach(() => {
   cleanup();
@@ -59,7 +60,21 @@ function serve() {
       if (path === "datasets") return json(200, [DATASET]);
       if (path === "datasets/ds-a/authors") return json(200, AUTHORS);
       if (path === "datasets/ds-a/cases") return json(200, { dataset_id: "ds-a", cases: [] });
-      if (path === "connections") return json(200, []);
+      if (path === "connections")
+        return json(200, [{ id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "adm-1", created_at: "",
+                            datasets: ["ds-a"], settings: { kind: "api", base_url: "https://telco.example", auth: "bearer",
+                                                            secret: "TELCO", pagination: "none" } }]); // prettier-ignore
+      if (path === "connections/c-api/test") return json(403, { detail: { error: "right_required", right: "administer_system" } });
+      if (path === "/v1/grading-scheme") return json(200, { scheme: "admiralty", source: ["A", "B"], intelligence: ["1", "2"], handling: ["P"] });
+      if (path === "operations/ageing")
+        return json(200, { alert_after_days: 3, promotions_recorded: true,
+                           rules: [{ what: "A promotion waiting for review", after_days: 3, then: "After 3 days it is flagged overdue." }],
+                           waiting: [{ promotion_id: "p1", load_id: "load-7", dataset_id: "ds-a", dataset_name: "Prison records",
+                                       proposed_by_name: "Bea Engineer", proposed_at: "2026-11-01T09:00:00Z", age_days: 7, overdue: true }] }); // prettier-ignore
+      if (path === "/v1/me/needs-you")
+        return json(200, { promotions_overdue: [{ promotion_id: "p1", load_id: "load-7", dataset_id: "ds-a", raised_at: "",
+                                                  words: "Promotion load-7 into Prison records has waited 7 days for review." }],
+                           proposals: [{ dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 1, above_clearance: true }] }); // prettier-ignore
       return json(200, []);
     }),
   );
@@ -120,5 +135,36 @@ describe("Admin's words: roles by name, never people or ids", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Change owner of Prison records" })).toBeTruthy());
     expect(screen.getByRole("button", { name: "Change owner of Prison records" }).getAttribute("aria-describedby")).toBeTruthy();
     check("Datasets");
+  });
+
+  it("in Connections: its fields' tips and a refusal by the roles that hold the right", async () => {
+    serve();
+    open(["administer_system"]);
+    section("Connections");
+    fireEvent.click(await screen.findByRole("button", { name: "Test connection: Telco lookup (synthetic)" }));
+    await screen.findByText(/the Administrator role has it/);
+    fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "sql" } });
+    fireEvent.click(screen.getByRole("button", { name: "Name the connection" }));
+    await screen.findByRole("alert");
+    check("Connections");
+  });
+
+  it("in Grading scheme and Operations", async () => {
+    serve();
+    open(["administer_system", "operate_schedules"]);
+    section("Grading scheme");
+    await screen.findByRole("table", { name: "The grades of admiralty" });
+    fireEvent.click(screen.getByRole("button", { name: "Copy the grading change command" }));
+    section("Operations");
+    await screen.findByText("Prison records");
+    // Operations names the proposer as the screen should; no role or right is said by its id.
+    for (const id of IDS) expect(document.body.textContent, id).not.toMatch(word(id));
+  });
+
+  it("in Needs you: every entry's tip names no person and no id", async () => {
+    serve();
+    render(<NeedsYou apiBaseUrl="http://x" bearerToken="t" onOpenModel={() => undefined} onOpenOperations={() => undefined} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Needs you · 2/ }));
+    check("Needs you");
   });
 });
