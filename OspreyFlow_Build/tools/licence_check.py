@@ -170,6 +170,60 @@ def is_allowed(license_text: str, package: str | None = None) -> bool:
     return result and position == len(tokens)
 
 
+#: `00_ARCHITECTURE.md` §7's recorded Classpath exceptions: a runtime carried in an image, by the
+#: name its Dockerfile's label gives it -> where it was assessed. An exception admits exactly
+#: `GPL-2.0(-only) WITH Classpath-exception-2.0` for that runtime, and nothing else.
+RECORDED_CLASSPATH_EXCEPTIONS: dict[str, str] = {
+    "java": "ADR-147 Amendment 2, the owner's ruling 1 of 9 November 2026: Temurin 21, jlinked, "
+    "in the Conduit's image",
+}
+
+_CLASSPATH = re.compile(r"^gpl-2\.0(-only)?\s+with\s+classpath-exception-2\.0$")
+#: A runtime an image declares: `LABEL org.ospreyflow.runtime.<name>.licence="<SPDX expression>"`.
+_RUNTIME_LABEL = re.compile(
+    r'^LABEL\s+org\.ospreyflow\.runtime\.([a-z0-9-]+)\.licence="([^"]+)"\s*$', re.M
+)
+#: A Java runtime in an image, however it got there: a JDK or JRE stage, or a jlinked runtime.
+_JAVA_IN_IMAGE = re.compile(
+    r"^FROM\s+\S*(temurin|openjdk|jdk|jre|corretto|zulu)\S*|\bjlink\b|/opt/java", re.M | re.I
+)
+
+
+def runtime_allowed(licence: str, runtime: str) -> bool:
+    """A runtime's licence: the allowlist's, or the Classpath exception for a recorded runtime."""
+    if _CLASSPATH.match(" ".join(licence.lower().split())):
+        return runtime in RECORDED_CLASSPATH_EXCEPTIONS
+    return is_allowed(licence)
+
+
+def _dockerfiles(root: Path = CORE) -> dict[str, str]:
+    return {
+        str(path.relative_to(root)): path.read_text(encoding="utf-8")
+        for path in sorted(root.rglob("Dockerfile*"))
+        if not {"node_modules", ".venv"} & set(path.parts)
+    }
+
+
+def find_runtime_offenders(
+    dockerfiles: dict[str, str] | None = None,
+) -> list[tuple[str, str, str]]:
+    """The image leg (ADR-147 Amendment 2): `(dockerfile, runtime, licence)` for every runtime an
+    image declares whose licence is not allowed, and for a Java runtime an image carries without
+    declaring it (`undeclared`). Neither pip-licenses nor license-checker sees a runtime copied
+    into an image, so the image says what it carries, and this reads it."""
+    offenders: list[tuple[str, str, str]] = []
+    for name, text in (_dockerfiles() if dockerfiles is None else dockerfiles).items():
+        declared = dict(_RUNTIME_LABEL.findall(text))
+        offenders += [
+            (name, runtime, licence)
+            for runtime, licence in declared.items()
+            if not runtime_allowed(licence, runtime)
+        ]
+        if _JAVA_IN_IMAGE.search(text) and "java" not in declared:
+            offenders.append((name, "java", "undeclared"))
+    return offenders
+
+
 def run_pip_licenses(extra_pythonpath: str | None) -> list[dict[str, str]]:
     env = os.environ.copy()
     if extra_pythonpath:
@@ -274,7 +328,15 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    if offenders or data_offenders or own_violations:
+    runtime_offenders = find_runtime_offenders()
+    for dockerfile, runtime, licence in runtime_offenders:
+        print(
+            f"licence-check: {dockerfile} carries the runtime {runtime!r} under {licence!r}, which "
+            "is not on the spec/00_ARCHITECTURE.md §7 allowlist nor a recorded exception",
+            file=sys.stderr,
+        )
+
+    if offenders or data_offenders or own_violations or runtime_offenders:
         return 1
     print(
         f"licence-check: {len(packages)} packages, all allowed "

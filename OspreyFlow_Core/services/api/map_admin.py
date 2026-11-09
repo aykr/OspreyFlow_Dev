@@ -1159,8 +1159,8 @@ async def build_basemap(
         )
     builder = admin.basemap()
     if not builder.builder_ready:
-        # Said before anything is fetched: the Conduit's image carries no Java while the owner rules
-        # on its licence (ADR-147 decision 3), and the jar is placed by the command line.
+        # Said before anything is fetched: Java is in the Conduit image (ADR-147 Amendment 2), but a
+        # deployment built without it, or with no jar placed by the command line, says so here.
         raise MapAdminRefused(builder.builder_state, status=409)
     jar = tiles_root / PLANETILER_JAR
     built = tiles_root / BUILT_FOLDER

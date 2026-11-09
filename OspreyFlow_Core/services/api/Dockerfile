@@ -35,10 +35,18 @@ COPY scripts ./scripts
 COPY connectors ./connectors
 COPY recipes ./recipes
 
-# ADR-147 decision 3: the tier-1 basemap build (planetiler) needs Java 21, which is **not** in this
-# image while the owner rules on its licence: the Temurin runtime is GPL-2.0 with the Classpath
-# exception, and the licence register (`00_ARCHITECTURE.md` §7) passes no GPL. Until then *Build*
-# says in words that Java is not installed in the Conduit (`map_admin.MapAdmin.basemap`).
+# ADR-147 Amendment 2 (the owner's ruling 1 of 9 November 2026, option A): the tier-1 basemap build
+# (planetiler) runs in the Conduit, so the image carries a Java 21 runtime: Eclipse Temurin, under
+# GPL-2.0 with the Classpath exception, the licence register's one recorded runtime exception
+# (`00_ARCHITECTURE.md` §7; `make licence-check` reads the label below). jlinked to the modules a JVM
+# program such as planetiler uses, without its tools, debug symbols or headers; the official image
+# pinned by its digest (the multi-architecture index, so arm64 and amd64 build alike).
+FROM eclipse-temurin:21-jdk@sha256:f9bf7e9fe2f9bc4657537c1a7e20c768f0c3bafca41598263be4714783dd62eb AS java
+RUN jlink \
+      --add-modules java.base,java.compiler,java.desktop,java.instrument,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.security.jgss,java.sql,java.xml,jdk.crypto.ec,jdk.jfr,jdk.management,jdk.unsupported,jdk.zipfs \
+      --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
+      --output /opt/jre
+
 FROM python:3.12-slim
 
 # Base-image OS packages lag the upstream image's own last-published point
@@ -61,6 +69,9 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=java /opt/jre /opt/java
+LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
+
 RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app
 COPY --from=builder /app/.venv ./.venv
@@ -70,7 +81,8 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/connectors ./connectors
 COPY --from=builder /app/recipes ./recipes
 
-ENV PATH="/app/.venv/bin:${PATH}" \
+ENV PATH="/app/.venv/bin:/opt/java/bin:${PATH}" \
+    JAVA_HOME="/opt/java" \
     PYTHONPATH="/app:/app/packages" \
     PYTHONUNBUFFERED=1 \
     HOME="/app"
