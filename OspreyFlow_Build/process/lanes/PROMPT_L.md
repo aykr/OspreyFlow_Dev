@@ -54,6 +54,9 @@ Every live test removes what it writes to a test stack, in teardown, even when i
 shared, and a row your branch's schema allows but main's does not (a new status, say) stops other lanes' runs
 until you merge (8 November 2026: a lane's leftover link-type proposals stopped the Conduit on two stacks).
 
+Once you send ready-to-merge, leave the branch exactly as gated (no rebase, no commit) until the orchestrator
+answers: its independent review reads the worktree, and a rebase under it leaves the review reading half a branch.
+
 Every question for the owner, every request (a reservation, a shared commit, a ratification) and your
 ready-to-merge go to the orchestrator's session by cross-session message (send to `uds:/tmp/cc-socks/8906.sock`: a
 session on another account cannot find it by its name, ospreyflow-7e), never only in
