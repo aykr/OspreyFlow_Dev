@@ -148,6 +148,16 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     return json(201, wire(b));
   }
   if (rest === "drawn-watches") return json(200, []);
+  // The boards' Alerts panel (ADR-146 decision 9): the case's figures and its queue, as the Conduit
+  // answers them for this reader (synthetic, rule 9).
+  if (rest === "reports" && method === "GET") {
+    return json(200, { monitoring: { raised_by_rule: [], closed_by_outcome: [], time_to_close: [], hotlist_matches: [], team: [],
+      open_by_source: [{ label: "typology", typology: "structuring", age: "under a day", count: 1 }] } });  // prettier-ignore
+  }
+  if (rest === "alert-queue" && method === "GET") {
+    return json(200, [{ alert: { id: "a1", rule_id: "typology:r", owner_id: "o", mode: "full", referent_node_ids: [], created_at: at, status: "open", typology: "structuring" },
+      summary: "Visits to Wing B", kind: "typology" }]);  // prettier-ignore
+  }
   if (rest === "views" && method === "GET") {
     return json(200, [{ id: "v-visits", case_id: "c1", name: "Visits", created_by: reader, created_at: at, shared: false, chosen: 2, threshold: 0.9, drawing: false }]);
   }

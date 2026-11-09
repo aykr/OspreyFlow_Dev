@@ -400,6 +400,15 @@ test("a drawing is started with no case by keyboard: its dataset, its case and i
   registerCovered("BOARD_ACTIONS", "start-a-drawing-with-no-case-by-keyboard");
 });
 
+test("an open board shows the case's Alerts panel, its rows words with nothing to open", async ({ page }) => {
+  // ADR-146 decision 9 (rules-b's panel, mounted on a board at L3.4). Not an action: the board
+  // never works an alert, so nothing here is reached by keyboard but the panel's own text.
+  await open(page, "?board=b-wing");
+  await expect(page.getByRole("table", { name: "Open alerts by source and age" })).toBeVisible();
+  await expect(page.getByText(/Visits to Wing B/)).toBeVisible();
+  expect((await sent(page)).some((s) => s.path === "/v1/investigations/c1/reports?weeks=12")).toBe(true);
+});
+
 test("Back to the boards is reached from a board by keyboard", async ({ page }) => {
   await open(page, "?board=b-wing");
   await press(page, "Back to the boards");

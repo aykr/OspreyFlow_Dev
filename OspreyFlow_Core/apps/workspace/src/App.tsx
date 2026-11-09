@@ -129,6 +129,7 @@ import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
 import { ReportsPlace } from "./reports/ReportsPlace";
 import { ALERT_MONITORING, AlertMonitoringBoard } from "./reports/AlertMonitoringBoard";
 import { journeyWords, startJourney, takeJourney, weeksFor, type AlertJourney } from "./reports/journey";
+import { useAlertBadges } from "./reports/alertBadges";
 import {
   canDownloadFeed,
   landingView,
@@ -776,6 +777,10 @@ export function App() {
     ? { words: journeyWords(alertJourney), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
     : null;
   const openAlertFromPanel = opensRules ? (alertId: string) => navigate(alertPath(alertId)) : undefined;
+  // ADR-146 decision 9: the canvas's alert badge, from the reader's own queue of the open case.
+  const alertBadges = useAlertBadges(
+    investigationId && bearerToken && rights?.has("read_alert_queue") ? { apiBaseUrl: API_BASE_URL, bearerToken, investigationId } : null,
+  );
   useEffect(() => {
     if (!investigationId || !bearerToken || !opensRules) {
       setAlertCount(undefined);
@@ -1888,6 +1893,7 @@ export function App() {
                 strengthLegend={strengthLegend}
                 onGroupedCountChange={setGroupedCount}
                 judgementCounts={judgementCounts}
+                alertBadges={alertBadges}
                 degreeMarks={degreeMarks}
                 communityHulls={communityHulls}
                 onEdgeSelect={setSelectedLink}

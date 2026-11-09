@@ -1325,7 +1325,10 @@ never a partial chart. First among its panels is the ***Alerts* panel** (ADR-146
 report's `monitoring.open_by_source`, the panel adding up only what the Conduit counted for the reader
 (rule 7); and the newest five still in the queue, from the queue's own rows, only for a reader the Conduit
 gives the rows to (ADR-146 Amendment 2 point 3; anyone else sees the counts alone). A row opens the alert at
-its address only for someone Rules and Monitoring is offered to; for anyone else it is words. A *Drawing*
+its address only for someone Rules and Monitoring is offered to; for anyone else it is words. The same
+panel is on every drawing board (`boards/BoardAlerts.tsx`, L3.4): the case's figures read for that reader,
+its rows words there and never a way to open an alert, and no panel at all for a reader the case's figures
+are not for (`boards/BoardAlerts.test.tsx`; `keyboard/boards.spec.ts`). A *Drawing*
 panel (drawn, promoted, awaiting review, withdrawn) is drawn only when the report carries `drawing`, which
 it does not until promotions are built (L3.4). Opened from an alert (the Reports Viewer's journey, below),
 the tab says "From alert: ‹the alert's title on Home› · ← Back to your alerts" (decision 10's "From alert

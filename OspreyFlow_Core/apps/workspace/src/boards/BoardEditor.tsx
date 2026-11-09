@@ -45,6 +45,7 @@ import {
   type MatchSuggestions,
 } from "./boardsApi";
 import "./boards.css";
+import { BoardAlerts } from "./BoardAlerts";
 import { BoardPromotionsList, PromoteSheet } from "./PromoteSheet";
 import { boardPromotions, type Promotion } from "./promotionsApi";
 
@@ -648,6 +649,7 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
             />
           )}
           {promotions.length > 0 && <BoardPromotionsList promotions={promotions} govuk={govuk} />}
+          <BoardAlerts api={{ apiBaseUrl, bearerToken, investigationId: caseId }} />
           <MatchesPanel
             matches={matches}
             byId={byId}
