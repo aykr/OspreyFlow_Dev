@@ -1,0 +1,80 @@
+# Live at bcc2bba, stack f on the owner's server, admin lease "L2.7 live set at bcc2bba", run by stack_lease.sh remote, 9 Nov 2026 ~20:10Z: test_route_rights.py, test_link_type_store.py, test_promotion_sweep_live.py, test_audit_section_store.py, test_person_ownership_store.py, connectors/test_sql_connector_live.py, and test_needs_you.py, test_admin_sections.py, test_admin_connection_fields.py, test_link_type_routes.py, test_analyst_link_types.py: 159 passed.
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261109T201036Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_link_type_store.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py ../OspreyFlow_Build/tests/services/api/test_needs_you.py ../OspreyFlow_Build/tests/services/api/test_admin_sections.py ../OspreyFlow_Build/tests/services/api/test_admin_connection_fields.py ../OspreyFlow_Build/tests/services/api/test_link_type_routes.py ../OspreyFlow_Build/tests/services/api/test_analyst_link_types.py
+........................................................................ [ 45%]
+........................................................................ [ 90%]
+...............                                                          [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+159 passed, 1 warning in 86.47s (0:01:26)
+
+# Plant, same lease: link_type_store.list_authorized's 'AND dataset_id IS NULL' removed; red (the narrowing's store case), file restored.
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261109T201226Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_link_type_store.py -k own_units_proposals
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_an_administrator_reads_only_their_own_units_proposals __________
+
+store = <services.api.link_type_store.LinkTypeProposalStore object at 0x700c8dd08530>
+
+    async def test_an_administrator_reads_only_their_own_units_proposals(
+        store: LinkTypeProposalStore,
+    ) -> None:
+        mine, theirs = _proposal("unit-1"), _proposal("unit-2")
+        await store.create(mine)
+        await store.create(theirs)
+        assert (await store.get_authorized(mine.id, ADMIN_1)).id == mine.id
+        with pytest.raises(ProposalNotFoundError):
+            await store.get_authorized(theirs.id, ADMIN_1)
+        with pytest.raises(ProposalNotFoundError):
+            await store.get_authorized("no-such-proposal", ADMIN_1)
+        listed = {p.id for p in await store.list_authorized(ADMIN_1)}
+        assert mine.id in listed and theirs.id not in listed
+        assert theirs.id in {p.id for p in await store.list_authorized(ADMIN_2)}
+        # L2.7: the administrator's list keeps to proposals naming no dataset, in the query itself.
+        bound = _proposal("unit-1").model_copy(update={"dataset_id": "ds-a"})
+        await store.create(bound)
+        legacy = {p.id for p in await store.list_authorized(ADMIN_1, without_dataset=True)}
+>       assert bound.id not in legacy and bound.id in {p.id for p in await store.list_authorized(ADMIN_1)}
+E       AssertionError: assert ('01M70Z1M9VT49726EEQ6GEQGWA' not in {'01M70YYQJ41WYW0S3ZST89GZD4', '01M70YYQK3RZ32NMSGF8K4KD7N', '01M70YYQKQP8E402FAEBN5WRTP', '01M70YYQMPQBGFXTC23JTVD5WK', '01M70YYQPXTX4T9RTV1WT80PCB', '01M70YYQPXTX4T9RTV1WT80PCD', ...})
+E        +  where '01M70Z1M9VT49726EEQ6GEQGWA' = LinkTypeProposal(id='01M70Z1M9VT49726EEQ6GEQGWA', name='KNOWN_TO', label=None, from_types=['Person'], to_types=['Perso...d_by=None, decided_at=None, decision_reason=None, basis=None, promoted_name=None, direct_since=None, dataset_id='ds-a').id
+
+../OspreyFlow_Build/tests/services/api/test_link_type_store.py:98: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_link_type_store.py::test_an_administrator_reads_only_their_own_units_proposals
+1 failed, 6 deselected in 0.72s
+
+# Teardown: the narrowing's case at bcc2bba wrote to the shared link_type_proposals table (the file's 'store' fixture keeps no schema of its own). Its two rows (dataset_id ds-a, KNOWN_TO, analyst-1, unit-1) were deleted from stack f's database under the same lease (DELETE 2), and the case moved to the file's own_store fixture, which drops its schema, at bb3e50c.
+# At bb3e50c, same lease: test_link_type_store.py 8 passed; the plant again red (1 failed), file restored.
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261109T201346Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_link_type_store.py
+........                                                                 [100%]
+8 passed in 1.33s
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261109T201400Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_link_type_store.py -k naming_no_dataset
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_the_administrators_list_keeps_to_proposals_naming_no_dataset _______
+
+own_store = <services.api.link_type_store.LinkTypeProposalStore object at 0x714065b372c0>
+
+    async def test_the_administrators_list_keeps_to_proposals_naming_no_dataset(
+        own_store: LinkTypeProposalStore,
+    ) -> None:
+        """L2.7: `without_dataset` keeps the administrator's list to the proposals made before ADR-099
+        Amendment 3, in the query itself; a proposal naming a dataset is decided on its Model tab. Over a
+        schema of its own, dropped afterwards, so nothing is left in the shared table. Red with the
+        query's `AND dataset_id IS NULL` removed."""
+        legacy, bound = _proposal("unit-1"), _proposal("unit-1").model_copy(update={"dataset_id": "ds-a"})
+        await own_store.create(legacy)
+        await own_store.create(bound)
+        listed = {p.id for p in await own_store.list_authorized(ADMIN_1, without_dataset=True)}
+>       assert legacy.id in listed and bound.id not in listed
+E       AssertionError: assert ('01M70Z4GW8DPSTG4C0NZ6C9CV2' in {'01M70Z4GW8DPSTG4C0NZ6C9CV2', '01M70Z4GW946MN782MQR6WFGRN'} and '01M70Z4GW946MN782MQR6WFGRN' not in {'01M70Z4GW8DPSTG4C0NZ6C9CV2', '01M70Z4GW946MN782MQR6WFGRN'})
+E        +  where '01M70Z4GW8DPSTG4C0NZ6C9CV2' = LinkTypeProposal(id='01M70Z4GW8DPSTG4C0NZ6C9CV2', name='KNOWN_TO', label=None, from_types=['Person'], to_types=['Perso...ded_by=None, decided_at=None, decision_reason=None, basis=None, promoted_name=None, direct_since=None, dataset_id=None).id
+E        +  and   '01M70Z4GW946MN782MQR6WFGRN' = LinkTypeProposal(id='01M70Z4GW946MN782MQR6WFGRN', name='KNOWN_TO', label=None, from_types=['Person'], to_types=['Perso...d_by=None, decided_at=None, decision_reason=None, basis=None, promoted_name=None, direct_since=None, dataset_id='ds-a').id
+
+../OspreyFlow_Build/tests/services/api/test_link_type_store.py:107: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_link_type_store.py::test_the_administrators_list_keeps_to_proposals_naming_no_dataset
+1 failed, 7 deselected in 1.11s
