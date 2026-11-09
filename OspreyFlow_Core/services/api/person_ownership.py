@@ -97,14 +97,15 @@ async def withheld(
     return bool(await conn.fetchval(_WITHHELD_SQL, person, admin_unit, cleared, top))
 
 
-#: *Transfer and disable* refused while any item is withheld from the administrator (provisional,
-#: the orchestrator's strict default of 9 November 2026, pending the owner's ruling on who transfers
-#: an item above an administrator's clearance in their own unit): a code of its own, not
-#: `other_unit`, and words that name nothing of the items, not even their kind.
+#: *Transfer and disable* refused while any item is withheld from the administrator: the owner's
+#: ruling of 9 November 2026, through the orchestrator. Refused until an administrator of that unit
+#: cleared to the item's marking, or the item's case's Authors, transfers it; nothing is moved by
+#: anyone who cannot see it. A code of its own, not `other_unit`, and words naming nothing of the
+#: items, not even their kind.
 WITHHELD_ERROR = "withheld_items"
 WITHHELD_WORDS = (
-    "they still own items you may not see: an administrator who may see them transfers them, "
-    "and then you can disable them"
+    "they still own items you may not see: an administrator who may see them, or an Author of "
+    "their case, transfers them, and then you can disable them"
 )
 
 

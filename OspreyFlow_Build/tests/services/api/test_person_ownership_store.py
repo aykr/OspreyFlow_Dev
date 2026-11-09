@@ -333,7 +333,7 @@ async def test_labels_name_the_case_and_never_what_the_analyst_wrote(
 async def test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld(
     conn: asyncpg.Connection, ownership: PostgresOwnershipStore
 ) -> None:
-    """The strict default, provisional (`person_ownership.WITHHELD_ERROR`): L2.5b's *Transfer and
+    """The owner's ruling (`person_ownership.WITHHELD_ERROR`): L2.5b's *Transfer and
     disable* calls `refuse_if_withheld` in its transaction; refused while an item is withheld."""
     await _case(conn, "c-k", "Kestrel")
     await _dataset(conn, "ds-off", "OFFICIAL")
