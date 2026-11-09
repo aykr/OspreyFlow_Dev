@@ -182,6 +182,12 @@ SINGLE_RIGHT_PREFIX = "right:"
 #: current version's, read from the Conduit's store on each request (the owner's ruling of
 #: 8 November 2026, L2.5 Q1 (a)) and passed here as `custom`.
 CUSTOM_ROLE_PREFIX = "role:"
+
+
+def teams_of(roles: Iterable[str]) -> list[str]:
+    """The teams a principal is in: each custom role (`role:<id>`) their token carries, sorted
+    (ADR-145 Amendment 5 point 5). Read from the request each time, never kept."""
+    return sorted(r[len(CUSTOM_ROLE_PREFIX) :] for r in roles if r.startswith(CUSTOM_ROLE_PREFIX))
 _BY_VALUE = {r.value: r for r in Right}
 
 

@@ -9,6 +9,7 @@ export type Maker = string;
 export type MakerName = string | null;
 export type DatasetId = string | null;
 export type Owner = string;
+export type OwnerName = string | null;
 export type State = "draft" | "live" | "stopped";
 export type ExpiresOn = string | null;
 export type LastFiredAt = string | null;
@@ -18,6 +19,7 @@ export type AlertId = string;
 export type Until = string;
 export type Reason = string;
 export type By = string;
+export type ByName = string | null;
 export type Suppressed = SuppressedAlert[];
 export type Sources = AlertSource[];
 
@@ -39,6 +41,7 @@ export interface AlertSource {
   maker_name?: MakerName;
   dataset_id?: DatasetId;
   owner: Owner;
+  owner_name?: OwnerName;
   state: State;
   expires_on?: ExpiresOn;
   last_fired_at?: LastFiredAt;
@@ -52,5 +55,6 @@ export interface SuppressedAlert {
   until: Until;
   reason: Reason;
   by: By;
+  by_name?: ByName;
   [k: string]: unknown;
 }

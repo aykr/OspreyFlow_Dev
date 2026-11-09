@@ -1793,6 +1793,8 @@ class SuppressedAlert(BaseModel):
     until: date
     reason: str
     by: str
+    #: ADR-106: who suppressed it, by name, resolved at read time for the rows served; never stored.
+    by_name: str | None = None
 
 
 class AlertSource(BaseModel):
@@ -1808,8 +1810,11 @@ class AlertSource(BaseModel):
     maker: str
     maker_name: str | None = None
     dataset_id: str | None = None
-    #: A person's id, or a team's display name for a rule routed to a team.
+    #: A person's id, or a team's id for a rule routed to a team.
     owner: str
+    #: ADR-106: the owner by name, resolved at read time for the rows served (a team's display
+    #: name for a routed rule); never stored. The Glass shows this, never `owner`.
+    owner_name: str | None = None
     state: Literal["draft", "live", "stopped"]
     expires_on: date | None = None
     last_fired_at: datetime | None = None
