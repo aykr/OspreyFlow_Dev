@@ -29,8 +29,8 @@ and never named through a list of column names (`c(pin, _ref)` renames by positi
 of them from `list(_ref)`), so each output row names every input row it came from and the element
 Map writes from it lists them all. A `_ref` item is a `_ref` column (in a grouped SELECT, one it
 groups on) or `list(_ref)`. At the run, the output must hold such a column, and each input table
-with rows must reach the output through one. Tokens are numbered over the rows the reader may read,
-so none tells where a withheld row was.
+with rows must reach the output through one. Tokens are drawn at random per row, so none tells a
+row's place or where a withheld row was.
 
 **Never another row's values, never a lower marking** (the orchestrator's review of L1.5): a
 window function, a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, a
