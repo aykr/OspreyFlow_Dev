@@ -177,6 +177,25 @@ from schemas.analytics import (
     Sighting,
     SightingRequest,
 )
+from schemas.boards import (
+    Board,
+    BoardInput,
+    BoardMove,
+    BoardOpened,
+    BoardPictures,
+    DrawingInput,
+    DrawnItemEdit,
+    DrawnItemInput,
+    DrawnItemMade,
+    DrawnLinkInput,
+    DrawnWatch,
+    MatchDecided,
+    MatchDecision,
+    MatchSuggestions,
+    NewDrawing,
+    PictureChoice,
+    Withdrawn,
+)
 from schemas.case_views import CaseView, CaseViewInput, CaseViewOpened
 from schemas.compute import OwnershipTooComplex, OwnershipView
 from schemas.dataset_model import (
@@ -428,6 +447,8 @@ from .assessments import (
 )
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
+from .board_store import BoardItemStore, InMemoryBoardItemStore, PostgresBoardItemStore
+from .boards import BoardNotFound, Boards, DrawingRefused, ItemNotFound, NotTheBoardsCreator
 from .case_brief import (
     AttachmentKind,
     BriefAttachmentBody,
@@ -466,11 +487,13 @@ from .custom_roles import (
 )
 from .dataset_scope import (
     CompositeReadOnlyError,
+    DrawnOnItsBoard,
     NoAnalystLayerError,
     UnknownDatasetError,
     made_in,
     outside_any_case,
     read_in_view,
+    refuse_correcting_a_drawn_node,
     refuse_in_a_composite_case,
     refuse_writing_a_node_in_a_composite_case,
     scope_to_case,
@@ -979,6 +1002,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
     # ADR-144: the saved views of each case, holding no data.
     case_view_store = await PostgresCaseViewStore.connect(config.postgres.dsn)
+    # ADR-143 decisions 4 and 5: what each board holds, by id, and the watches drawing sets.
+    board_item_store = await PostgresBoardItemStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
@@ -1152,6 +1177,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.sources = source_store
     app.state.target_models = target_model_store
     app.state.case_views = case_view_store
+    app.state.board_items = board_item_store
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
     # ADR-135 Amendment 2: *Admin › Models*. The engines it holds route the next request, with no
@@ -1278,6 +1304,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await source_store.close()
         await case_view_store.close()
         app.state.case_views = None
+        await board_item_store.close()
+        app.state.board_items = None
         # Every case's level check reads it (its packs, ADR-126 Amendment 2): a closed store left
         # on the state would answer a later app (a test's, with no lifespan) "pool is closed".
         app.state.target_models = None
@@ -1441,6 +1469,19 @@ def get_case_views(request: Request) -> CaseViewStore:
 
 
 CaseViewsDep = Annotated[CaseViewStore, Depends(get_case_views)]
+
+
+def get_board_items(request: Request) -> BoardItemStore:
+    """ADR-143 decision 5. The lifespan sets the Postgres store; a test app with no lifespan gets
+    an in-memory one."""
+    store = getattr(request.app.state, "board_items", None)
+    if store is None:
+        store = InMemoryBoardItemStore()
+        request.app.state.board_items = store
+    return store
+
+
+BoardItemsDep = Annotated[BoardItemStore, Depends(get_board_items)]
 
 
 def get_ontology(request: Request) -> OntologySchema:
@@ -2270,6 +2311,50 @@ async def _not_the_views_creator_handler(request: Request, exc: NotTheViewsCreat
             "detail": "Only the person who saved this view can share or delete it.",
         },
     )
+
+
+@app.exception_handler(BoardNotFound)
+async def _board_not_found_handler(request: Request, exc: BoardNotFound) -> JSONResponse:
+    """ADR-143 decision 5: someone else's private board, another case's, and none at all alike."""
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "board_not_found"})
+
+
+@app.exception_handler(ItemNotFound)
+async def _drawn_item_not_found_handler(request: Request, exc: ItemNotFound) -> JSONResponse:
+    """An item of another case, one the reader may not see, and none at all alike (rule 3)."""
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "item_not_found"})
+
+
+@app.exception_handler(NotTheBoardsCreator)
+async def _not_the_boards_creator_handler(
+    request: Request, exc: NotTheBoardsCreator
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_403_FORBIDDEN,
+        content={
+            "error": "not_the_boards_creator",
+            "detail": "Only the person who made this board draws on it. Make a board of your own "
+            "from this one's view to draw.",
+        },
+    )
+
+
+@app.exception_handler(DrawnOnItsBoard)
+async def _drawn_on_its_board_handler(request: Request, exc: DrawnOnItsBoard) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "error": "drawn_on_its_board",
+            "detail": "This was drawn on a board: only the person who drew it changes or "
+            "withdraws it, there (Edit on board).",
+        },
+    )
+
+
+@app.exception_handler(DrawingRefused)
+async def _drawing_refused_handler(request: Request, exc: DrawingRefused) -> JSONResponse:
+    """A drawing refused in words, before anything was written (ADR-143 Amendment 2 decision 3)."""
+    return JSONResponse(status_code=exc.status, content={"error": exc.code, "detail": exc.message})
 
 
 @app.exception_handler(TypologyRuleNotFoundError)
@@ -3752,6 +3837,391 @@ async def delete_case_view(
     )
 
 
+# --- drawing boards (ADR-143 decisions 4 to 7; Amendments 2 and 3; spec 03 §3.1c; L3.3) ---------
+#
+# A board is a case view with drawing on. Every route stands behind the case's own level check
+# first, so a reader with no level on the case is refused as for a case that does not exist; the
+# registry and the views store answer only by case, and every element is read through the
+# reader's principal, scoped to the case's read set and filtered in the adapter (rule 3). Reading a
+# board needs the case's level and `investigate`; drawing needs Editor and `draw_on_boards`.
+
+#: Drawing needs reading too: a role holding `draw_on_boards` without `investigate` would make a
+#: board it could not open (the orchestrator's review of L3.3, finding 6).
+_DRAWS = [Depends(require_right(Right.DRAW_ON_BOARDS)), Depends(require_right(Right.INVESTIGATE))]
+_READS_BOARDS = [Depends(require_right(Right.INVESTIGATE))]
+
+
+def get_boards(
+    request: Request,
+    graph: GraphDep,
+    views: CaseViewsDep,
+    items: BoardItemsDep,
+    datasets: DatasetsDep,
+    ontology: OntologyDep,
+    scheme: HandlingSchemeDep,
+    models: TargetModelsDep,
+) -> Boards:
+    return Boards(
+        graph=graph,
+        views=views,
+        items=items,
+        datasets=datasets,
+        ontology=ontology,
+        scheme=scheme,
+        models=models,
+        media=getattr(request.app.state, "media", None),
+        cap_breach=_cap_breach,
+    )
+
+
+BoardsDep = Annotated[Boards, Depends(get_boards)]
+
+
+async def _audit_board(
+    audit: AuditWriter, principal: Principal, action: str, case_id: str, **query: Any
+) -> None:
+    await audit.record(
+        principal=principal,
+        action=action,
+        investigation_id=case_id,
+        resolved_query=query,
+        result_cardinality=1,
+    )
+
+
+@app.get("/v1/investigations/{investigation_id}/boards", dependencies=_READS_BOARDS)
+async def list_boards(
+    investigation: InvestigationViewerDep, principal: PrincipalDep, boards: BoardsDep
+) -> list[Board]:
+    """The case's boards this reader may see: their own, and those shared with the case."""
+    held = await boards.views.boards_in(investigation.id, principal.id)
+    return [await boards.wire(b, principal) for b in held]
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/boards",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_DRAWS,
+)
+async def make_board(
+    investigation: InvestigationEditorDep,
+    body: BoardInput,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+) -> Board:
+    """*New drawing board* in this case: blank, from a view, or from a selection (decision 5)."""
+    made = await boards.make(investigation.id, body, principal, projection=working_set)
+    await _audit_board(audit, principal, "make_board", investigation.id, board_id=made.id,
+                       start=body.start)  # fmt: skip
+    return await boards.wire(made, principal)
+
+
+@app.get("/v1/investigations/{investigation_id}/boards/{board_id}", dependencies=_READS_BOARDS)
+async def open_board(
+    investigation: InvestigationViewerDep,
+    board_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+) -> BoardOpened:
+    """The board now, as this reader may see it; `missing` counts what it could not show."""
+    board = await boards.board(investigation.id, board_id, principal.id)
+    opened = await boards.open(board, principal)
+    return opened.model_copy(update={"may_draw": opened.may_draw and _may_draw(principal)})
+
+
+def _may_draw(principal: Principal) -> bool:
+    return Right.DRAW_ON_BOARDS in rights_for(principal.roles)
+
+
+@app.post("/v1/investigations/{investigation_id}/boards/{board_id}/share", dependencies=_DRAWS)
+async def share_board(
+    investigation: InvestigationEditorDep,
+    board_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> Board:
+    """*Share with the case*: every member then sees the board, and what is on it at their level."""
+    await boards.own_board(investigation.id, board_id, principal.id)
+    shared = await boards.views.share(investigation.id, board_id, principal.id)
+    await _audit_board(audit, principal, "share_board", investigation.id, board_id=board_id)
+    return await boards.wire(shared, principal)
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/boards/{board_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=_DRAWS,
+)
+async def delete_board(
+    investigation: InvestigationEditorDep,
+    board_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> None:
+    """Deleting a board never deletes what was drawn on it: that stays in the case's layer."""
+    await boards.own_board(investigation.id, board_id, principal.id)
+    await boards.views.delete(investigation.id, board_id, principal.id)
+    await _audit_board(audit, principal, "delete_board", investigation.id, board_id=board_id)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/items",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_DRAWS,
+)
+async def declare_drawn_item(
+    investigation: InvestigationEditorDep,
+    board_id: str,
+    body: DrawnItemInput,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> DrawnItemMade:
+    """*Add to board*: a node of the case's model, marked within the case's ceiling, graded and
+    sourced (decision 4; Amendment 2 decision 3), with its watch (decision 8)."""
+    board = await boards.own_board(investigation.id, board_id, principal.id)
+    made = await boards.declare(board, body, principal)
+    await _audit_board(audit, principal, "draw_item", investigation.id, board_id=board_id,
+                       item_id=made.item_id, node_id=made.element_id, type=body.type,
+                       classification=body.marking)  # fmt: skip
+    return made
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/links",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_DRAWS,
+)
+async def draw_link(
+    investigation: InvestigationEditorDep,
+    board_id: str,
+    body: DrawnLinkInput,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> DrawnItemMade:
+    """A link between two items on the board (by the handle, Alt-drag, the menu or the form)."""
+    board = await boards.own_board(investigation.id, board_id, principal.id)
+    made = await boards.link(board, body, principal)
+    await _audit_board(audit, principal, "draw_link", investigation.id, board_id=board_id,
+                       item_id=made.item_id, edge_id=made.element_id, type=body.type,
+                       classification=body.marking)  # fmt: skip
+    return made
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/layout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=_DRAWS,
+)
+async def move_board_items(
+    investigation: InvestigationEditorDep,
+    board_id: str,
+    body: BoardMove,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+) -> None:
+    """Moving items is the board's own layout, not data (C7: dragging an item moves it)."""
+    board = await boards.own_board(investigation.id, board_id, principal.id)
+    await boards.move(board, body.positions, principal)
+
+
+@app.patch("/v1/investigations/{investigation_id}/board-items/{item_id}", dependencies=_DRAWS)
+async def edit_drawn_item(
+    investigation: InvestigationEditorDep,
+    item_id: str,
+    body: DrawnItemEdit,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> DrawnItemMade:
+    """The author edits their own item; a marking is never lowered (decision 5)."""
+    made = await boards.edit(investigation.id, item_id, body, principal)
+    await _audit_board(audit, principal, "edit_drawn_item", investigation.id, item_id=item_id,
+                       changed=sorted(body.model_dump(exclude_none=True)))  # fmt: skip
+    return made
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/board-items/{item_id}/withdraw", dependencies=_DRAWS
+)
+async def withdraw_drawn_item(
+    investigation: InvestigationEditorDep,
+    item_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> Withdrawn:
+    """The author withdraws their own item: out of every read, never deleted; its watch ends."""
+
+    async def audited(nodes: list[str], links: list[str]) -> None:
+        # Every element withdrawn, seen by the caller or not: the audit is read under its own right.
+        await _audit_board(audit, principal, "withdraw_drawn_item", investigation.id,
+                           item_id=item_id, nodes=nodes, links=links)  # fmt: skip
+
+    return await boards.withdraw(investigation.id, item_id, principal, before_write=audited)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/matches",
+    dependencies=_READS_BOARDS,
+)
+async def board_match_suggestions(
+    investigation: InvestigationViewerDep,
+    board_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+) -> MatchSuggestions:
+    """*Looks like a loaded item* (decision 6): `inferred` suggestions, which act on nothing."""
+    board = await boards.board(investigation.id, board_id, principal.id)
+    return await boards.suggestions(board, principal)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/matches",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_DRAWS,
+)
+async def decide_board_match(
+    investigation: InvestigationEditorDep,
+    board_id: str,
+    body: MatchDecision,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> MatchDecided:
+    """*Same* or *Not the same*: one link in the layer; neither item changed (rule 6)."""
+    board = await boards.own_board(investigation.id, board_id, principal.id)
+    edge_id = await boards.decide(board, body, principal)
+    await _audit_board(audit, principal, "decide_board_match", investigation.id,
+                       board_id=board_id, drawn=body.drawn, loaded=body.loaded,
+                       same=body.same, edge_id=edge_id)  # fmt: skip
+    return MatchDecided(edge_id=edge_id)
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/nodes/{node_id}/picture",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_DRAWS,
+)
+async def upload_drawn_picture(
+    investigation: InvestigationEditorDep,
+    board_id: str,
+    node_id: str,
+    request: Request,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+    name: str = Query(min_length=1),
+    marking: str = Query(min_length=1),
+    source_note: str = Query(min_length=1, max_length=2000),
+) -> DrawnItemMade:
+    """C17 (a): an uploaded picture of a drawn node, held in the layer with its own marking and
+    source note; a new one supersedes the one before. Audited after every refusal, before the
+    file or the graph is written."""
+    limit = max_upload_bytes()
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > limit:
+        raise HTTPException(status_code=413, detail="That file is larger than the upload limit.")
+    try:
+        filename = validate_upload_name(name, PICTURE_EXTENSIONS)
+    except UploadRefused as refusal:
+        raise HTTPException(
+            status_code=_UPLOAD_REFUSAL_STATUS[refusal.code], detail=refusal.message
+        ) from refusal
+    board = await boards.own_board(investigation.id, board_id, principal.id)
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > limit:
+            raise HTTPException(
+                status_code=413, detail="That file is larger than the upload limit."
+            )
+
+    async def audited() -> None:
+        await _audit_board(audit, principal, "set_drawn_picture", investigation.id,
+                           board_id=board_id, node_id=node_id, name=filename, size=len(data),
+                           classification=marking)  # fmt: skip
+
+    return await boards.upload_picture(
+        board, node_id, principal, name=filename, data=bytes(data), marking=marking,
+        source_note=source_note, before_write=audited,
+    )  # fmt: skip
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/nodes/{node_id}/picture",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_DRAWS,
+)
+async def choose_drawn_picture(
+    investigation: InvestigationEditorDep,
+    board_id: str,
+    node_id: str,
+    body: PictureChoice,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> DrawnItemMade:
+    """C17 (b): a picture the case already holds, linked in the layer; the image stays put.
+    Audited after every refusal and before the link is written, as the upload is."""
+    board = await boards.own_board(investigation.id, board_id, principal.id)
+
+    async def audited(marking: str) -> None:
+        await _audit_board(
+            audit, principal, "choose_drawn_picture", investigation.id,
+            board_id=board_id, node_id=node_id, document_id=body.document_id,
+            classification=marking,
+        )  # fmt: skip
+
+    return await boards.choose_picture(board, node_id, body, principal, before_write=audited)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/pictures",
+    dependencies=_READS_BOARDS,
+)
+async def board_pictures(
+    investigation: InvestigationViewerDep,
+    board_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+) -> BoardPictures:
+    """Each drawn node's picture on the board that this reader may see."""
+    board = await boards.board(investigation.id, board_id, principal.id)
+    return BoardPictures(pictures=await boards.pictures(board, principal))
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/nodes/{node_id}/picture",
+    dependencies=_READS_BOARDS,
+)
+async def board_picture_file(
+    investigation: InvestigationViewerDep,
+    board_id: str,
+    node_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+) -> Response:
+    """The picture's file, to someone who may see it; one they may not answers as none."""
+    board = await boards.board(investigation.id, board_id, principal.id)
+    data, content_type = await boards.picture_file(board, node_id, principal)
+    return Response(content=data, media_type=content_type)
+
+
+@app.get("/v1/investigations/{investigation_id}/drawn-watches", dependencies=_READS_BOARDS)
+async def list_drawn_watches(
+    investigation: InvestigationViewerDep, principal: PrincipalDep, boards: BoardsDep
+) -> list[DrawnWatch]:
+    """The watches drawing set in this case (Amendment 2 decision 8): one withheld whole from a
+    reader who may not see its item."""
+    return await boards.watches(investigation.id, principal)
+
+
 async def _record_history_step(
     working_set: WorkingSetService | None,
     history: InvestigationHistoryStore,
@@ -4534,6 +5004,8 @@ async def retract_node_route(
 ) -> NodeIdResponse:
     # ADR-099 Amendment 15: a composite is read-only (a node the caller cannot read stays 404).
     await refuse_writing_a_node_in_a_composite_case(graph, node_id, principal)
+    # ADR-143 decision 5 (C15): a drawn node is withdrawn on its board, by whoever drew it.
+    await refuse_correcting_a_drawn_node(graph, node_id, principal)
     # ADR-109 Amendment 11: each link the retract clones goes through the alerts' repoint journal,
     # so an alert citing one follows it to its clone.
     new_node_id = await supersede_journalled(
@@ -8181,6 +8653,23 @@ async def make_drawn_dataset(
     case, its maker its Author. Its highest marking is the maker's choice within their own
     clearance. The board itself is L3.3's. No other case may choose it, no pipeline loads into it,
     and no rule runs on it until it is merged."""
+    return await _make_drawn(
+        body, principal, investigations, datasets, models, scheme, ontology, audit
+    )
+
+
+async def _make_drawn(
+    body: DrawnDatasetInput,
+    principal: Principal,
+    investigations: Any,
+    datasets: DatasetStore,
+    models: TargetModelStore,
+    scheme: HandlingScheme,
+    ontology: OntologySchema,
+    audit: AuditWriter,
+) -> HomeCase:
+    """The drawn dataset, its live model and its home case, as `POST /v1/datasets/drawn` and
+    `POST /v1/drawings` both make them."""
     if body.highest_marking not in scheme.classification:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -8224,6 +8713,41 @@ async def make_drawn_dataset(
         result_cardinality=1,
     )  # fmt: skip
     return made
+
+
+@app.post(
+    "/v1/drawings",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_right(Right.CREATE_CASE)), *_DRAWS],
+)
+async def start_a_drawing(
+    body: DrawingInput,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    datasets: DatasetsDep,
+    models: TargetModelsDep,
+    scheme: HandlingSchemeDep,
+    ontology: OntologyDep,
+    boards: BoardsDep,
+    audit: AuditDep,
+) -> NewDrawing:
+    """*New drawing board* with no case (ADR-143 Amendment 2 decision 5): in one step, a drawn
+    dataset named after the drawing, its home case with the maker as its Author, and the board.
+    What is drawn on it is written to the drawn dataset itself (Amendment 3 decision 1)."""
+    home = await _make_drawn(
+        DrawnDatasetInput(name=body.name, pack=body.pack, highest_marking=body.highest_marking),
+        principal, investigations, datasets, models, scheme, ontology, audit,
+    )  # fmt: skip
+    board = await boards.views.save_board(
+        home.investigation_id, body.name, principal.id, node_ids=[]
+    )
+    await _audit_board(audit, principal, "make_board", home.investigation_id, board_id=board.id,
+                       start="drawing", dataset_id=home.dataset_id)  # fmt: skip
+    return NewDrawing(
+        dataset_id=home.dataset_id,
+        investigation_id=home.investigation_id,
+        board=await boards.wire(board, principal),
+    )
 
 
 # --- ingest studio: a dataset's domain model (ADR-140 decisions 4 and 5, R12; L3.1b) ------------

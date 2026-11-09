@@ -100,6 +100,23 @@ describe("computeNodeGraphAttributes", () => {
     expect(decodeSvg(attrs.image)).toContain('stroke-dasharray="4 3"');
   });
 
+  it("a node drawn on a board is dashed amber, though it is asserted (ADR-143 decision 4)", () => {
+    const drawn = {
+      item_id: "i", asserted_by: "a", board_id: "b", case_id: "c", label: "Tall",
+      grading: { scheme: "5x5x5" as const, source: "B", intelligence: "2", handling: "1" },
+    };
+    const node = makeNode("n1", {
+      provenance: { state: "asserted", sources: [], first_seen: "2026-01-01T00:00:00Z", drawn },
+    });
+    const svg = decodeSvg(computeNodeGraphAttributes(node, PERSON_VISUAL, baseState()).image);
+    expect(svg).toContain('stroke-dasharray="4 3"');
+    expect(svg.toLowerCase()).toContain("#d9a63f");
+    // Not drawn: the asserted node's solid border, no amber.
+    const plain = decodeSvg(computeNodeGraphAttributes(makeNode("n2"), PERSON_VISUAL, baseState()).image);
+    expect(plain).not.toContain('stroke-dasharray="4 3"');
+    expect(plain.toLowerCase()).not.toContain("#d9a63f");
+  });
+
   it("unresolved provenance renders a dotted stroke, distinct from dashed", () => {
     const node = makeNode("n1", {
       provenance: {
@@ -597,6 +614,12 @@ describe("edgeProgramFor and the link's provenance (ADR-097 step 2)", () => {
     { name: "KNOWS", directed: false, basis: "direct" as const },
     { name: "LIKELY_KNOWS", directed: false, basis: "probabilistic" as const },
   ];
+
+  it("draws a link drawn on a board dashed, whatever its basis (ADR-143 decision 4)", () => {
+    expect(edgeProgramFor("KNOWS", types, null, "asserted", 1, true)).toBe("glass-edge-dashed");
+    expect(edgeProgramFor("OWNS", types, null, "asserted", 1, true)).toBe("glass-arrow-dashed");
+    expect(edgeProgramFor("KNOWS", types, null, "asserted", 1, false)).toBe("glass-edge");
+  });
 
   it("draws an inferred link dashed, with its arrowhead where the type is directed", () => {
     expect(edgeProgramFor("KNOWS", types, null, "inferred")).toBe("glass-edge-dashed");

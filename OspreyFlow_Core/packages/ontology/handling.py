@@ -331,7 +331,26 @@ def withhold_sources[Element: (Node, Edge)](element: Element, principal: Princip
     """`element` as `principal` may be sent it: where its sources are not within the case, a copy
     with them emptied and `provenance.sources_withheld` set. Otherwise `element` itself. Nothing
     stored is changed; the working set holds the full body and projects this for each reader."""
-    if _SOURCES_IN_FULL.get() or sources_within_case(element.datasets, principal):
+    if _SOURCES_IN_FULL.get():
+        return element
+    element = _board_as_known(element, principal)
+    if sources_within_case(element.datasets, principal):
         return element
     provenance = element.provenance.model_copy(update={"sources": [], "sources_withheld": True})
+    return element.model_copy(update={"provenance": provenance})
+
+
+def _board_as_known[Element: (Node, Edge)](element: Element, principal: Principal) -> Element:
+    """ADR-143 decision 4's board, as `principal` may know it (rule 3; the orchestrator's review of
+    L3.3): a drawn element's `board_id` is kept for its author alone. Only a board's creator draws
+    on it, so its author made the board; to anyone else it is given empty, so the id of a private
+    board tells no other member of the case it exists. A shared board's id is not needed to read
+    what was drawn: the board routes list the boards a reader may open. Every read path is sent
+    elements through here: the adapter's serialisation and the working set's projection."""
+    drawn = element.provenance.drawn
+    if drawn is None or drawn.asserted_by == principal.id or not drawn.board_id:
+        return element
+    provenance = element.provenance.model_copy(
+        update={"drawn": drawn.model_copy(update={"board_id": ""})}
+    )
     return element.model_copy(update={"provenance": provenance})

@@ -12,7 +12,7 @@
 // hidden only by CSS would be counted, and one with a positive `tabindex` (reached out of document
 // order) would be counted in the wrong place. Neither is used in the chrome today. A true Tab walk on
 // the real `App` needs a browser and the Conduit behind it — the dev stack — which this tier has not.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { App as AppComponent } from "./App";
@@ -119,11 +119,23 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
       "Osprey, go to Home", "The Glass", "Ingest Studio", "Rules and Monitoring 3 open", "Admin",
       expect.stringMatching(/Search entities/), "Add many from a list", "Filters",
       "Graph", "Map", "More views▾", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
-      "Case", "Boards (coming)", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
+      "Case", "Boards", expect.stringMatching(/^Case: Kestrel/), "Open Prison intel in the Ingest Studio ↗",
       // The rail, then the Graph's own toolbar over the canvas.
       "Cases", "Explore", "More", "Help", "Show names",
       "Match strictness",
     ]); // prettier-ignore
+  });
+
+  test("the banner's Boards opens the case's drawing boards and is the current section (ADR-143, L3.3)", async () => {
+    render(<App />);
+    const sections = await screen.findByRole("navigation", { name: "In the Glass" });
+    const boards = await within(sections).findByRole("button", { name: "Boards" });
+    expect(boards.getAttribute("aria-disabled")).toBeNull();
+    boards.focus();
+    fireEvent.click(boards);
+    await screen.findByRole("heading", { name: /^Drawing boards in case/ });
+    expect(boards.getAttribute("aria-current")).toBe("page");
+    expect(within(sections).getByRole("button", { name: "Case" }).getAttribute("aria-current")).toBeNull();
   });
 
   test("the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name", async () => {

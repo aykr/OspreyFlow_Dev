@@ -1662,6 +1662,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               data.data.basis,
               data.data.provenance?.state,
               isSelected ? Math.max(attrs.size * 2, 4) : attrs.size,
+              Boolean(data.data.provenance?.drawn),
             ),
           };
         },

@@ -1,0 +1,10 @@
+# L3.3 live run at c409fb2 (rebased on main 0d0af77), lease case on stack b, 2026-11-08T21:42:57Z to 21:43:42Z
+# ARCADEDB 2492, Postgres 55434, Valkey 6380, MinIO 9002 (stack b); OSPREY_LANE=case
+# tests: test_board_store.py, harness/test_restore_drawn_layer.py, test_route_rights.py, test_boards.py, schemas/test_boards.py
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+1 failed, 79 passed, 1 warning in 43.94s
+# The one failure is main's own: test_every_route_names_the_right_the_table_gives_it lists models_admin_limits_route and models_admin_usage_route (platform P2, merged at 66009ab) as in the app and not in the route-rights table. No board route is involved.

@@ -1,0 +1,43 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index bce4d1f..48f0141 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -475,6 +475,38 @@ export const VIEW_ACTIONS = defineActionRegistry("VIEW_ACTIONS", [
+   "go-back-to-the-case-from-an-open-view-by-keyboard",
+ ] as const);
+ 
++/** Drawing boards (ADR-143 decisions 4 to 7; Amendment 2 decision 5; L3.3): a board opened, made
++ * blank, from a view or from the selection, and shared; an item declared (with a source document and
++ * an icon of its own), inspected, moved by the arrow keys, edited and withdrawn after asking once,
++ * each also from its menu; the link form opened from the selected item and from an item's menu; a
++ * picture added or chosen on the board; *Same* and *Not the same* decided; a drawing started with no case;
++ * and back to the boards. `keyboard/boards.spec.ts`. */
++export const BOARD_ACTIONS = defineActionRegistry("BOARD_ACTIONS", [
++  "open-a-board-from-the-boards-list-by-keyboard",
++  "make-a-blank-board-by-keyboard",
++  "make-a-board-from-a-view-by-keyboard",
++  "make-a-board-from-the-selection-by-keyboard",
++  "share-a-board-with-the-case-by-keyboard",
++  "declare-an-item-by-keyboard",
++  "declare-an-item-with-a-source-document-by-keyboard",
++  "choose-an-items-icon-by-keyboard",
++  "inspect-an-item-by-keyboard",
++  "inspect-an-item-from-its-menu-by-keyboard",
++  "move-an-item-by-the-arrow-keys",
++  "draw-a-link-from-the-selected-item-by-keyboard",
++  "draw-a-link-from-an-items-menu-by-keyboard",
++  "edit-an-item-by-keyboard",
++  "edit-an-item-from-its-menu-by-keyboard",
++  "withdraw-an-item-after-asking-once-by-keyboard",
++  "withdraw-an-item-from-its-menu-by-keyboard",
++  "add-a-picture-to-a-drawn-item-by-keyboard",
++  "choose-a-picture-on-the-board-by-keyboard",
++  "decide-same-on-a-suggested-match-by-keyboard",
++  "decide-not-the-same-on-a-suggested-match-by-keyboard",
++  "start-a-drawing-with-no-case-by-keyboard",
++  "go-back-to-the-boards-by-keyboard",
++] as const);
++
+ /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's
+  * most connected, put on the canvas; a ranking paged. `keyboard/explore.spec.ts`. */
+ export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [

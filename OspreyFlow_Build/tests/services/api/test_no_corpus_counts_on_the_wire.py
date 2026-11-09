@@ -621,6 +621,10 @@ NON_JSON_ROUTES: dict[str, str] = {
     "PUT /v1/investigations/{investigation_id}/access/grants/{account_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/access/grants/{account_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/views/{view_id}": "204, no body",
+    # ADR-143 (L3.3): a board deleted and items moved answer nothing; a picture's file is bytes.
+    "DELETE /v1/investigations/{investigation_id}/boards/{board_id}": "204, no body",
+    "PUT /v1/investigations/{investigation_id}/boards/{board_id}/layout": "204, no body",
+    "GET /v1/investigations/{investigation_id}/boards/{board_id}/nodes/{node_id}/picture": "an image's bytes",
     "DELETE /v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}": "204, no body",
     "DELETE /v1/admin/dashboards/{client_id}": "204, no body",
     # L2.5 (ADR-145 Amendment 5 point 9): Name an Author.

@@ -229,6 +229,21 @@ async def refuse_writing_a_node_in_a_composite_case(
         await refuse_in_a_composite_case()
 
 
+class DrawnOnItsBoard(Exception):
+    """A drawn node or link (ADR-143 decision 5; C15): changed, withdrawn or given a picture only on
+    its board, by the person who drew it; on the analysis canvas it is read-only."""
+
+
+async def refuse_correcting_a_drawn_node(
+    graph: GraphPort, node_id: NodeId, principal: Principal
+) -> None:
+    """A canvas correction (a retract) of a node drawn on a board is refused: one the caller cannot
+    read is left to the writer, which answers it as not found."""
+    found = await graph.get_nodes([node_id], principal)
+    if found and found[0].provenance.drawn is not None:
+        raise DrawnOnItsBoard
+
+
 #: Whether a principal holds any level on a case (its Viewer check, answered as a yes or no).
 HoldsALevel = Callable[[Principal, str], Awaitable[bool]]
 
@@ -468,8 +483,6 @@ class DatasetStampingGraph:
         if read_only is not None and read_only in datasets:
             raise ReadOnlyLayerError
 
-
-
     async def _refuse_into_a_composite(self, datasets: set[str]) -> None:
         """The last word on ADR-099 Amendment 15: in a case reading a composite, only a write wholly
         into the case's own analyst layer goes ahead; and no write names a composite's id, under a
@@ -571,6 +584,19 @@ class DatasetStampingGraph:
     ) -> None:
         await self._refuse_loading_here()
         await self._inner.withdraw_elements(node_ids, edge_ids, load_id, tx)
+        await self._written()
+
+    async def withdraw_drawn(
+        self, node_ids: Sequence[NodeId], edge_ids: Sequence[str], withdrawal: str, tx: Any
+    ) -> None:
+        """A drawn item's withdrawal from a board (ADR-143 decision 5): its elements, each wholly
+        the case's layer's or drawn dataset's (the board service checks that first), reverted for
+        every reader under `withdrawal`. Unlike a load's withdrawal it is a write into the layer, so
+        it goes ahead in a case reading a composite (ADR-099 Amendment 15 item 2); it is refused in
+        a case not yet converted, as every write there is; and the kept figures are cleared."""
+        if self._dataset is None:
+            await refuse_writing_in_an_unconverted_case()
+        await self._inner.withdraw_elements(node_ids, edge_ids, withdrawal, tx)
         await self._written()
 
     async def restore_withdrawn(self, load_id: str, tx: Any) -> Any:

@@ -123,6 +123,7 @@ import { RulesPlace } from "./alerts/RulesPlace";
 import { evidenceCase, openAlertInItsCase, openRulesOnCase, useAlertAtAddress } from "./alerts/address";
 import { StrengthPanel } from "./strength/StrengthPanel";
 import { alertPath, navigate, noteAddress, takeNotedAddress, useAddress } from "./shell/router";
+import { BoardsPlace } from "./boards/BoardsPlace";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
 import { ReportsPlace } from "./reports/ReportsPlace";
 import {
@@ -729,8 +730,10 @@ export function App() {
   }, [counts, classificationOrder]);
 
   const [view, setView] = useState<
-    "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership" | "strength"
+    "graph" | "map" | "matrix" | "reports" | "dashboards" | "ingest" | "dossier" | "alerts" | "ownership" | "strength" | "boards"
   >(handoff.view === "ingest" ? "ingest" : address.kind !== "none" ? "alerts" : "graph");
+  // ADR-143 decision 5 (L3.3): a board opened at once, after a drawing with no case made its case.
+  const [boardToOpen, setBoardToOpen] = useState<string | null>(null);
   // ADR-115 E6: the canvas toolbar's "Last change", read again as the working set changes.
   const [lastChange, setLastChange] = useState<string | null>(null);
   useEffect(() => {
@@ -1570,13 +1573,21 @@ export function App() {
           cross-link between the Glass and the Studio for a person who holds both. */}
       <ContextBanner
         place={app}
-        // ADR-145 decision 1: the Glass's sections; Boards is coming (Lane 3's board screens).
+        // ADR-145 decision 1: the Glass's sections; Boards is ADR-143's drawing boards (L3.3).
         // Monitoring left for Rules and Monitoring (ADR-146 decision 2), its count with it.
         sections={
           app === "glass"
             ? [
-                { id: "case", label: "Case", current: true, onSelect: () => setView(landingView(rights)) },
-                { id: "boards", label: "Boards", current: false },
+                { id: "case", label: "Case", current: view !== "boards", onSelect: () => setView(landingView(rights)) },
+                {
+                  id: "boards",
+                  label: "Boards",
+                  current: view === "boards",
+                  onSelect: () => {
+                    setBoardToOpen(null);
+                    setView("boards");
+                  },
+                },
               ]
             : []
         }
@@ -1764,7 +1775,25 @@ export function App() {
             }}
           />
         )}
-        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "strength" && view !== "ownership" && view !== "reports" && view !== "dashboards" && (
+        {view === "boards" && (
+          <BoardsPlace
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            caseId={investigationId}
+            caseName={caseContext.name}
+            selection={selectedNodeIds}
+            entityTypes={ontologySchema?.entity_types ?? []}
+            markings={classificationOrder}
+            mayDraw={(rights?.has("draw_on_boards") && rights?.has("investigate")) ?? false}
+            initialBoard={boardToOpen}
+            onCaseMade={(newInvestigationId, boardId) => {
+              sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, newInvestigationId);
+              setInvestigationId(newInvestigationId);
+              setBoardToOpen(boardId);
+            }}
+          />
+        )}
+        {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "strength" && view !== "ownership" && view !== "reports" && view !== "dashboards" && view !== "boards" && (
           <div style={{ flex: 1, position: "relative" }}>
             {view === "graph" && lens && (
               <ViewLensBanner

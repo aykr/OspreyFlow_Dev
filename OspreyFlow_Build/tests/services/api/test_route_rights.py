@@ -59,6 +59,27 @@ ROUTE_RIGHTS = {
     "open_case_view": None,
     "share_case_view": "investigate",
     "delete_case_view": "investigate",
+    # ADR-143 decisions 4 to 7 (L3.3): boards, behind the case's level; reading needs investigate,
+    # drawing needs draw_on_boards at Editor. A drawing with no case also needs create_case, which
+    # it names first.
+    "list_boards": "investigate",
+    "make_board": "draw_on_boards",
+    "open_board": "investigate",
+    "share_board": "draw_on_boards",
+    "delete_board": "draw_on_boards",
+    "declare_drawn_item": "draw_on_boards",
+    "draw_link": "draw_on_boards",
+    "move_board_items": "draw_on_boards",
+    "edit_drawn_item": "draw_on_boards",
+    "withdraw_drawn_item": "draw_on_boards",
+    "board_match_suggestions": "investigate",
+    "decide_board_match": "draw_on_boards",
+    "upload_drawn_picture": "draw_on_boards",
+    "choose_drawn_picture": "draw_on_boards",
+    "board_pictures": "investigate",
+    "board_picture_file": "investigate",
+    "list_drawn_watches": "investigate",
+    "start_a_drawing": "create_case",
     "seed": "investigate",
     "expand": "investigate",
     "links_among_route": "investigate",
@@ -424,12 +445,13 @@ def test_every_right_guards_at_least_one_route() -> None:
     lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b. A
     promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
     dataset's approvers in Admin › Datasets; its review route arrives with the promotion (L3.4).
-    `manage_models` (ADR-112 Amendment 7) guards *Admin › Models*' routes (platform's P1)."""
+    `manage_models` (ADR-112 Amendment 7) guards *Admin › Models*' routes (platform's P1).
+    `draw_on_boards` guards the boards' routes (L3.3)."""
     not_yet = {"revert_loads", "read_audit",
                "export_override", "review_promotions",
                # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (boards,
                # promotion, proposed types, the drawn-dataset merge, Rules and Monitoring).
-               "draw_on_boards", "promote_to_dataset", "propose_types", "accept_types",
+               "promote_to_dataset", "propose_types", "accept_types",
                "merge_datasets", "author_rules"}  # fmt: skip
     guarded = {r for r in ROUTE_RIGHTS.values() if r}
     assert {r.value for r in Right} - guarded == not_yet

@@ -55,7 +55,7 @@ from schemas.domain import (
 
 from .alerts import AlertStore, purge_copies, repointing_alerts
 from .change_provenance import PICTURE_MARKER, without_link_ids
-from .dataset_scope import refuse_in_a_composite_case
+from .dataset_scope import DrawnOnItsBoard, refuse_in_a_composite_case
 from .document_content import DOCUMENT_TYPE, UploadRefusedError
 from .email_extraction import _node_from_write
 from .link_ids import as_stored
@@ -289,6 +289,10 @@ class EntityPictureService:
                 f"the marking {handling.classification} is one you could not read yourself"
             )
         entity = await entity_of()
+        if entity.provenance.drawn is not None:
+            # ADR-105 Amendment 3: a drawn node's picture is given on its board, where the Document
+            # and its link are written into the case's layer, never stamped into the source.
+            raise DrawnOnItsBoard
         depicts = self._ontology.edge_type(DEPICTS)
         if depicts is None or entity.type not in depicts.to_types:
             raise UploadRefusedError(f"a {entity.type} cannot have a picture of its own")
@@ -326,7 +330,10 @@ class EntityPictureService:
             # `size_bytes`: so Admin › Datasets counts the picture in its layer's size, taken in
             # the store (ADR-143 Amendment 2 decision 2; `GraphPort.dataset_footprints`).
             properties={
-                "title": name, "media_kind": "image", "object_ref": ref, "size_bytes": len(data)
+                "title": name,
+                "media_kind": "image",
+                "object_ref": ref,
+                "size_bytes": len(data),
             },  # fmt: skip
             provenance=provenance,
             handling=handling,
@@ -504,8 +511,10 @@ class EntityPictureService:
         self, investigation_id: str, node_id: str, principal: Principal
     ) -> DeltaReplaceEdge:
         """Supersedes the entity's picture with a copy whose `shown` is false; the Document and the
-        old link stay, as evidence and in the link's history."""
-        await self._entity(investigation_id, node_id, principal)
+        old link stay, as evidence and in the link's history. A drawn node's picture is removed
+        on its board, never here (ADR-105 Amendment 3)."""
+        if (await self._entity(investigation_id, node_id, principal)).provenance.drawn is not None:
+            raise DrawnOnItsBoard
         # Read in full: the successor is built from this link's own sources (ADR-130 Amendment 2,
         # "a read that is written back"). Still read for `principal`, so the access filter applies.
         with sources_in_full():

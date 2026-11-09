@@ -18,7 +18,14 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from schemas.sentences import RuleSentence, SentenceRuleParams
 
@@ -274,6 +281,72 @@ class SourceRef(BaseModel):
         return data
 
 
+# --- A drawn item's assertion (ADR-143 decision 4; `schemas/boards.py`) --------------------
+
+GradingScheme = Literal["5x5x5", "3x5x2"]
+
+#: Each scheme's three parts (decision 11): the source's reliability, the intelligence's assessment
+#: and the handling code. Under 3x5x2 the handling code (P or C) is part of the grade and is never
+#: merged with the protective marking.
+GRADING_PARTS: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
+    "5x5x5": (("A", "B", "C", "D", "E"), ("1", "2", "3", "4", "5"), ("1", "2", "3", "4", "5")),
+    "3x5x2": (("A", "B", "C"), ("1", "2", "3", "4", "5"), ("P", "C")),
+}
+
+
+class Grading(BaseModel):
+    """A grade in one scheme, kept with its scheme so a later change of scheme (L3.7) keeps the
+    original beside the new one (C13)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Titled, so the generated TypeScript's aliases never shadow `Handling` or `Source`.
+    scheme: GradingScheme = Field(default="5x5x5", title="GradingSchemeName")
+    source: str = Field(title="GradeSource")
+    intelligence: str = Field(title="GradeIntelligence")
+    handling: str = Field(title="GradeHandling")
+
+    @model_validator(mode="after")
+    def _in_its_scheme(self) -> Grading:
+        sources, intelligence, handling = GRADING_PARTS[self.scheme]
+        if self.source not in sources:
+            raise ValueError(f"source {self.source!r} is not a grade of {self.scheme}")
+        if self.intelligence not in intelligence:
+            raise ValueError(f"intelligence {self.intelligence!r} is not a grade of {self.scheme}")
+        if self.handling not in handling:
+            raise ValueError(f"handling {self.handling!r} is not a grade of {self.scheme}")
+        return self
+
+
+class DrawnAssertion(BaseModel):
+    """ADR-143 decision 4: on the provenance of every drawn node and link. A drawn item is asserted
+    by its author, not model-derived: rule 5's `inferred` is for the matches it raises, not for
+    it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provenance_class: Literal["analyst_drawn"] = "analyst_drawn"
+    #: The board's own id for the item, kept when the item is edited.
+    item_id: str = Field(title="DrawnItemId")
+    asserted_by: PrincipalId
+    board_id: str = Field(title="DrawnBoardId")
+    case_id: str = Field(title="DrawnCaseId")
+    #: What the analyst calls it ("Unknown male “Tall”"): a type of the model may declare no name.
+    label: str = Field(min_length=1, max_length=200, title="DrawnLabel")
+    grading: Grading
+    #: Free text, a document the case already holds, or both; never neither.
+    source_note: str | None = Field(default=None, max_length=2000, title="DrawnSourceNote")
+    source_document: DocumentId | None = None
+    #: An icon chosen as a display setting only (C17 c): not evidence.
+    icon: str | None = Field(default=None, title="DrawnIcon")
+
+    @model_validator(mode="after")
+    def _has_a_source(self) -> DrawnAssertion:
+        if not (self.source_note and self.source_note.strip()) and not self.source_document:
+            raise ValueError("a drawn item needs a source note, a document of the case, or both")
+        return self
+
+
 class Provenance(BaseModel):
     state: ProvenanceState
     sources: list[SourceRef]
@@ -286,6 +359,17 @@ class Provenance(BaseModel):
     first_seen: datetime
     last_confirmed: datetime | None = None
     confirmed_by: PrincipalId | None = None
+    #: ADR-143 decision 4: set on a node or link drawn on a board (the provenance class
+    #: `analyst_drawn`), and kept for good, promoted or not. `None` for everything else, and then
+    #: left out of what is stored, so an element not drawn is stored exactly as before.
+    drawn: DrawnAssertion | None = None
+
+    @model_serializer(mode="wrap")
+    def _leave_out_undrawn(self, handler: Any) -> dict[str, Any]:
+        data: dict[str, Any] = handler(self)
+        if data.get("drawn") is None:
+            data.pop("drawn", None)
+        return data
 
     @model_validator(mode="after")
     def _invariants(self) -> Provenance:
@@ -1665,6 +1749,8 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     SchemaReport,
     Handling,
     SourceRef,
+    Grading,
+    DrawnAssertion,
     Provenance,
     ResolutionState,
     AuditStub,

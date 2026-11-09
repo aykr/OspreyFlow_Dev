@@ -1,0 +1,85 @@
+/* Drawing boards (ADR-143 decisions 4 to 7). Tokens only (`design/tokens.css`). A drawn item is dashed
+   amber (`--warning`) everywhere it appears; a loaded item is a solid grey live reference. Under the
+   GOV.UK brand the forms use the package's own govuk-* classes; these rules only lay them out. Every
+   control is at least 24 by 24 pixels (axe target-size). */
+.boards, .board { display: grid; gap: var(--sp-12); padding: var(--sp-16); min-width: 0; flex: 1; overflow: auto; background: var(--surface-app); color: var(--text-primary); }
+.board__title { margin: 0; font-size: var(--fs-16); line-height: var(--lh-16); font-weight: 600; }
+.boards__columns { display: flex; flex-wrap: wrap; gap: var(--sp-16); align-items: flex-start; }
+.boards__list-column { flex: 999 1 420px; min-width: 0; }
+.boards__new { flex: 1 1 280px; max-width: 360px; display: grid; gap: var(--sp-12); }
+.boards__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-12); }
+.boards__card { display: grid; gap: var(--sp-6); padding: var(--sp-12); border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface-panel); }
+
+.board__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
+.board__spacer { flex: 1; }
+.board__note { margin: 0; }
+.board__button { min-height: var(--h-control-24); min-width: var(--h-control-24); margin-bottom: 0; }
+.board__row { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center; }
+.board__body { display: flex; flex-wrap: wrap; gap: var(--sp-12); align-items: flex-start; min-height: 0; }
+.board__palette { flex: 0 1 200px; display: grid; gap: var(--sp-8); }
+.board__side { flex: 1 1 280px; max-width: 360px; display: grid; gap: var(--sp-12); }
+.board__panel { display: grid; gap: var(--sp-8); padding: var(--sp-12); border: 1px solid var(--border); border-radius: var(--r-panel); background: var(--surface-panel); }
+.board__panel h3 { margin: 0; }
+.board__field, .board__grade { display: grid; gap: var(--sp-4); }
+.board__grades { display: flex; flex-wrap: wrap; gap: var(--sp-8); }
+.board__fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
+.board__radios { display: grid; gap: var(--sp-4); }
+.board__radio { display: flex; align-items: center; gap: var(--sp-6); min-height: var(--h-control-24); }
+.board__radio input { width: var(--h-control-24); height: var(--h-control-24); margin: 0; }
+.board__textarea { min-height: 48px; resize: vertical; }
+.board__problem { margin: 0; color: var(--error); font-size: var(--fs-13); }
+.board__problem-box { display: grid; gap: var(--sp-6); padding: var(--sp-8); border: 1px solid var(--error); border-radius: var(--r-panel); }
+.board__danger { color: var(--error); }
+.board__facts { display: grid; gap: var(--sp-4); margin: 0; }
+.board__fact { display: grid; grid-template-columns: 96px 1fr; gap: var(--sp-8); }
+.board__fact-value { margin: 0; }
+.board__matches { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-8); }
+.board__match { display: grid; gap: var(--sp-6); padding-bottom: var(--sp-8); border-bottom: 1px solid var(--border-subtle); }
+.board__picture { display: grid; gap: var(--sp-8); }
+
+.board-tag {
+  justify-self: start; padding: 0 var(--sp-6); border-radius: var(--r-chip); border: 1px solid var(--border);
+  font-size: var(--fs-11); line-height: var(--lh-11); color: var(--text-secondary);
+}
+.board-tag--drawn { border-style: dashed; border-color: var(--warning); color: var(--text-primary); }
+
+/* The surface: items placed by fraction of its width and height; lines in a 100 by 100 box. */
+.board__surface {
+  position: relative; flex: 999 1 520px; min-width: 0; height: 480px; overflow: hidden;
+  background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--r-panel);
+  touch-action: none;
+}
+.board__lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.board__line { stroke: var(--border-strong); stroke-width: 1.5; }
+.board__line--drawn { stroke: var(--warning); stroke-width: 2; stroke-dasharray: 6 4; }
+.board__line--rubber { stroke: var(--brass); stroke-width: 2; stroke-dasharray: 4 4; }
+.board__link-label {
+  position: absolute; transform: translate(-50%, -50%); pointer-events: none; padding: 0 var(--sp-4);
+  font-size: var(--fs-11); line-height: var(--lh-11); color: var(--text-secondary); background: var(--surface-sunken);
+}
+.board__empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; }
+
+.board-item { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: var(--sp-2); }
+.board-item__body {
+  display: grid; justify-items: start; gap: 0; min-height: var(--h-control-24); max-width: 180px; cursor: grab;
+  padding: var(--sp-4) var(--sp-8); border-radius: var(--r-panel); text-align: left;
+  background: var(--surface-panel); color: var(--text-primary); border: 1px solid var(--border-strong);
+}
+.board-item__body--drawn { border: 2px dashed var(--warning); }
+.board-item__body--selected { box-shadow: 0 0 0 2px var(--brass); }
+.board-item__kind { font-size: var(--fs-11); line-height: var(--lh-11); color: var(--text-secondary); }
+.board-item__label { font-size: var(--fs-13); line-height: var(--lh-13); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.board-item__picture { width: 32px; height: 32px; object-fit: cover; border-radius: var(--r-panel); }
+.board-item__handle {
+  display: grid; place-items: center; width: var(--h-control-24); height: var(--h-control-24); cursor: crosshair;
+  color: var(--brass); font-size: var(--fs-13); user-select: none;
+}
+
+.board-menu {
+  position: absolute; z-index: 20; display: grid; min-width: 180px; padding: var(--sp-4) 0;
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-panel); box-shadow: var(--overlay-shadow);
+}
+.board-menu__item {
+  min-height: var(--h-control-28); padding: 0 var(--sp-12); text-align: left; border: 0; background: transparent; color: var(--text-primary); cursor: pointer;
+}
+.board-menu__item:hover, .board-menu__item:focus-visible { background: var(--surface-menu-hover); }

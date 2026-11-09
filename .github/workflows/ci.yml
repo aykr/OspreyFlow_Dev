@@ -448,6 +448,9 @@ jobs:
       ARCADEDB_HOST: localhost
       ARCADEDB_HTTP_PORT: "2480"
       ARCADEDB_ROOT_PASSWORD: playwithdata123
+      # ADR-143 Amendment 2 decision 4: the restore test that names a layer backs up and restores
+      # inside this job's ArcadeDB service (`tests/harness/test_restore_drawn_layer.py`).
+      OSPREY_TEST_ARCADEDB_CONTAINER: ${{ job.services.arcadedb.id }}
       MINIO_ENDPOINT: "localhost:9000"
       CLICKHOUSE_HTTP_PORT: "8123"
       CLICKHOUSE_USER: osprey
@@ -689,6 +692,8 @@ jobs:
           ../OspreyFlow_Build/tests/test_seed_target_models_store.py
           ../OspreyFlow_Build/tests/test_make_home_cases_store.py
           ../OspreyFlow_Build/tests/services/api/test_case_views_store.py
+          ../OspreyFlow_Build/tests/services/api/test_board_store.py
+          ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
           ../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py
           ../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py
           ../OspreyFlow_Build/tests/resolve/test_trigger_layers.py
@@ -1053,6 +1058,8 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/test_seed_target_models_store.py
           --ignore=../OspreyFlow_Build/tests/test_make_home_cases_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_case_views_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_board_store.py
+          --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
           --ignore=../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py
           --ignore=../OspreyFlow_Build/tests/resolve/test_trigger_layers.py

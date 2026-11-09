@@ -1,0 +1,38 @@
+
+Running 33 tests using 1 worker
+
+[1/33] keyboard/boards.spec.ts:38:1 › a board is opened from the boards list by keyboard
+[2/33] keyboard/boards.spec.ts:47:1 › a blank board is made by keyboard
+[3/33] keyboard/boards.spec.ts:57:1 › a board is made from the selection by keyboard
+[4/33] keyboard/boards.spec.ts:72:1 › a board is made from a view of the case by keyboard
+[5/33] keyboard/boards.spec.ts:87:1 › a private board is shared with the case by keyboard
+[6/33] keyboard/boards.spec.ts:95:1 › an item is declared by keyboard: marked, graded and sourced, its type's name filled from its label
+[7/33] keyboard/boards.spec.ts:129:1 › an item is declared by keyboard with a document of the case as its source and an icon of its own
+[8/33] keyboard/boards.spec.ts:147:1 › an item with neither a source note nor a document is refused before it is sent
+[9/33] keyboard/boards.spec.ts:157:1 › a refusal is said in the Conduit's own words, naming the ceiling
+[10/33] keyboard/boards.spec.ts:167:1 › an item is inspected by keyboard
+[11/33] keyboard/boards.spec.ts:178:1 › an item is moved by the arrow keys, and the board keeps where it is
+[12/33] keyboard/boards.spec.ts:198:1 › a link is drawn from the selected item by keyboard
+[13/33] keyboard/boards.spec.ts:211:1 › a link is drawn from an item's menu, opened by Shift+F10
+[14/33] keyboard/boards.spec.ts:225:1 › an item is edited by keyboard
+[15/33] keyboard/boards.spec.ts:242:1 › an item is withdrawn by keyboard after asking once, with the links drawn to it named
+[16/33] keyboard/boards.spec.ts:282:1 › an item is inspected from its menu by keyboard
+[17/33] keyboard/boards.spec.ts:289:1 › an item is edited from its menu by keyboard
+[18/33] keyboard/boards.spec.ts:301:1 › an item is withdrawn from its menu by keyboard after asking once
+[19/33] keyboard/boards.spec.ts:311:1 › the menu key opens an item's menu too
+[20/33] keyboard/boards.spec.ts:320:1 › another member's drawn item on one's own board offers no Edit, Withdraw or picture
+[21/33] keyboard/boards.spec.ts:332:1 › a loaded item's menu offers no Edit or Withdraw
+[22/33] keyboard/boards.spec.ts:340:1 › a picture is added to a drawn item by keyboard
+[23/33] keyboard/boards.spec.ts:359:1 › a picture on the board is chosen for a drawn item by keyboard
+[24/33] keyboard/boards.spec.ts:372:1 › Same is decided on a suggested match by keyboard, writing one decision and merging nothing
+[25/33] keyboard/boards.spec.ts:383:1 › Not the same is decided on a suggested match by keyboard
+[26/33] keyboard/boards.spec.ts:391:1 › a drawing is started with no case by keyboard: its dataset, its case and its board
+[27/33] keyboard/boards.spec.ts:402:1 › Back to the boards is reached from a board by keyboard
+[28/33] keyboard/boards.spec.ts:409:1 › another member sees a shared board read-only: nothing to declare, edit or withdraw
+[29/33] keyboard/boards.spec.ts:423:1 › every registered board action has its own proving test case above
+[30/33] keyboard/boards.spec.ts:435:1 › pointer: dragging an item moves it
+[31/33] keyboard/boards.spec.ts:447:1 › pointer: dragging the link handle onto another item opens the link form between them
+[32/33] keyboard/boards.spec.ts:460:1 › pointer: Alt-dragging an item draws a link instead of moving it
+[33/33] keyboard/boards.spec.ts:474:1 › pointer: right-click offers Draw a link from here
+  33 passed (8.2s)
+kb exit 0

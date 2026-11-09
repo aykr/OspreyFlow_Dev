@@ -159,6 +159,8 @@ function provenanceStroke(
   node: Node,
   channelHex: string,
 ): { style: StrokeStyle; hex: string } {
+  // ADR-143 decision 4: a node drawn on a board is dashed amber wherever it appears.
+  if (node.provenance.drawn) return { style: "dashed", hex: activePalette().warning };
   const state = node.provenance.state;
   if (state === "asserted")
     return { style: "solid", hex: activePalette().borderStrong };
@@ -340,7 +342,8 @@ export function computeEdgeAttributes(
   }
 
   const crowd = crowdingScale(context.viewEdgeCount);
-  const lit = declaredColour(context.declared?.colour, palette);
+  // ADR-143 decision 4: a link drawn on a board is amber (and dashed: `edgeProgramFor`).
+  const lit = edge.provenance?.drawn ? palette.warning : declaredColour(context.declared?.colour, palette);
   const colour = context.dimmed ? mixOklab(lit, palette.surfacePanel, 32) : lit;
   if (band === "overview") {
     return {
@@ -460,13 +463,15 @@ export function edgeProgramFor(
   /** The width it is drawn at: above one pixel a plain link needs the program that honours width;
    * at one pixel or less the cheaper line program draws it exactly (250,000 links at the overview). */
   size?: number,
+  /** ADR-143 decision 4: drawn on a board, so dashed whatever its basis. */
+  drawn?: boolean,
 ): EdgeProgramName {
   const def = edgeTypes.find((t) => t.name === edgeType);
   const directed = def?.directed === true;
   // ADR-097 step 2, DESIGN.md §3.8: an inferred link (model-derived, not yet confirmed by a person:
   // rule 5) is dashed and an unresolved one dotted, before the basis is considered; an asserted
   // link is drawn by its basis as ADR-081 says.
-  if (provenance === "inferred") return directed ? "glass-arrow-dashed" : "glass-edge-dashed";
+  if (provenance === "inferred" || drawn) return directed ? "glass-arrow-dashed" : "glass-edge-dashed";
   if (provenance === "unresolved" || effectiveBasis(linkBasis, def) === "probabilistic") {
     return directed ? "glass-arrow-dotted" : "glass-edge-dotted";
   }
