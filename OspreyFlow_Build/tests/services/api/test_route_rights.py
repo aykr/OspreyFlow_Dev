@@ -98,6 +98,12 @@ ROUTE_RIGHTS = {
     "delete_removed_case_layer": "investigate",
     "dry_run_delete_removed_case_layer": "investigate",
     "admin_delete_removed_case_layer": "administer_system",
+    # ADR-143 Amendment 3 decision 2 (L3.9): a drawn dataset merged into another by an Author of the
+    # target holding merge_datasets, every step of it; the target's Author level asked by the route.
+    "drawn_merge_targets": "merge_datasets",
+    "drawn_merge_sheet": "merge_datasets",
+    "drawn_merge_dry_run": "merge_datasets",
+    "merge_drawn_dataset": "merge_datasets",
     "start_a_drawing": "create_case",
     "seed": "investigate",
     "expand": "investigate",
