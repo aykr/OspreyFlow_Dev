@@ -4509,6 +4509,11 @@ _PROMOTES = [
     Depends(require_right(Right.INVESTIGATE)),
 ]
 _REVIEWS = [Depends(require_right(Right.REVIEW_PROMOTIONS))]
+#: A removed case's layer merged or deleted by one of the dataset's Authors: a write, so it names
+#: a right every Author holds and a Reports Viewer does not (ADR-112: a Reports Viewer is refused
+#: every write; ADR-146 decision 10), the dataset's gate and Author level asked as before. The
+#: owner's open question (Amendment 5): whether owning alone (ADR-145 Amendment 4 decision 3) does.
+_LAYER_WRITES = [Depends(require_right(Right.INVESTIGATE))]
 
 
 def get_promotions(
@@ -10005,7 +10010,9 @@ async def removed_case_layers(
     )  # fmt: skip
 
 
-@app.post("/v1/datasets/{dataset_id}/removed-cases/{case_id}/merge-sheet")
+@app.post(
+    "/v1/datasets/{dataset_id}/removed-cases/{case_id}/merge-sheet", dependencies=_LAYER_WRITES
+)
 async def open_layer_merge(
     dataset_id: StudioDatasetDep,
     case_id: str,
@@ -10065,7 +10072,11 @@ async def read_layer_merge(
     return sheet
 
 
-@app.post("/v1/datasets/{dataset_id}/layer-merges/{grant_id}", status_code=status.HTTP_201_CREATED)
+@app.post(
+    "/v1/datasets/{dataset_id}/layer-merges/{grant_id}",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_LAYER_WRITES,
+)
 async def merge_removed_case_layer(
     dataset_id: StudioDatasetDep,
     grant_id: str,
@@ -10100,7 +10111,9 @@ async def merge_removed_case_layer(
     return await promotions.view(record, principal, show_case=True)  # one of its Authors
 
 
-@app.post("/v1/datasets/{dataset_id}/removed-cases/{case_id}/delete/dry-run")
+@app.post(
+    "/v1/datasets/{dataset_id}/removed-cases/{case_id}/delete/dry-run", dependencies=_LAYER_WRITES
+)
 async def dry_run_delete_removed_case_layer(
     dataset_id: StudioDatasetDep,
     case_id: str,
@@ -10132,7 +10145,9 @@ async def dry_run_delete_removed_case_layer(
 
 
 @app.delete(
-    "/v1/datasets/{dataset_id}/layer-merges/{grant_id}", status_code=status.HTTP_204_NO_CONTENT
+    "/v1/datasets/{dataset_id}/layer-merges/{grant_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=_LAYER_WRITES,
 )
 async def cancel_layer_merge(
     dataset_id: StudioDatasetDep,
@@ -10172,7 +10187,7 @@ async def _delete_layer(
     return await promotions.delete_layer(investigation_id, layer)
 
 
-@app.delete("/v1/datasets/{dataset_id}/removed-cases/{case_id}/layer")
+@app.delete("/v1/datasets/{dataset_id}/removed-cases/{case_id}/layer", dependencies=_LAYER_WRITES)
 async def delete_removed_case_layer(
     dataset_id: StudioDatasetDep,
     case_id: str,

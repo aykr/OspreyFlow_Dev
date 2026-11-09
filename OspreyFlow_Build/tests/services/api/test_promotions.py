@@ -960,6 +960,33 @@ def test_an_open_cases_layer_is_never_deleted_from_the_studio(pw: SimpleNamespac
     assert "open_layer_merge" not in [r["action"] for r in pw.audit.records]
 
 
+def test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer(
+    pw: SimpleNamespace,
+) -> None:
+    """ADR-112 (a Reports Viewer is refused every write) and ADR-146 decision 10 (read-only): one
+    of the dataset's Authors holding only `reports_viewer` opens no merge, merges, cancels, deletes
+    nor runs the delete's dry run (403 `right_required`, before anything is read or granted). The
+    round 2 review's item 2; whether owning alone should do is the owner's open question."""
+    PEOPLE["vic"] = Principal(id="vic", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"])
+    pw.cases.grants[HOME]["vic"] = AccessLevel.AUTHOR
+    try:
+        first, _ = _removed_with_items(pw)
+        for method, path in (
+            ("post", f"/v1/datasets/src/removed-cases/{K}/merge-sheet"),
+            ("post", f"/v1/datasets/src/removed-cases/{K}/delete/dry-run"),
+            ("delete", f"/v1/datasets/src/removed-cases/{K}/layer"),
+            ("post", "/v1/datasets/src/layer-merges/any-grant"),
+            ("delete", "/v1/datasets/src/layer-merges/any-grant"),
+        ):
+            kwargs = {"json": {"item_ids": []}} if method == "post" and "layer-merges" in path else {}
+            answer = getattr(_as("vic"), method)(path, **kwargs)
+            assert answer.status_code == 403, (method, path, answer.text)
+        assert not pw.store.grants
+        assert not pw.graph.node(first["element_id"]).audit.reverted
+    finally:
+        del PEOPLE["vic"]
+
+
 def _composite(pw: SimpleNamespace, case: str) -> None:
     """`mix`, a composite of `src` with its own home case (Dana an Author of both), read by `case`."""
     pw.datasets.add(
