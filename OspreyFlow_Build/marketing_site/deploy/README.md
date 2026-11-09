@@ -8,8 +8,8 @@ The site is seven pages and a folder:
 | `intro-video.html` | The animated overview, shown in the home page's video carousel. Keep it next to `index.html`. |
 | `public-sector.html` | The UK public sector option: the GOV.UK theme for gov.uk services, designed to meet the GDS Service Standard, for every UK department (build order step 12). Hand-written, no external requests. |
 | `monitoring.html` | Monitoring and alerting (build order step 12). Hand-written, no external requests. |
-| `drawing-boards.html` | Drawing boards (7 November 2026): ADR-143's design, every section marked **Coming**. Hand-written, no screenshots, no external requests. |
-| `three-places.html` | Three places (7 November 2026): ADR-145's design, every section marked **Coming**. Hand-written, no screenshots, no external requests. |
+| `drawing-boards.html` | Drawing boards (ADR-143): built since L3.3 merged, each section marked **Built** or **Coming** (promotion, the alert on new data, drawn items on the analysis canvas), 9 November 2026. Hand-written, no screenshots yet, no external requests. |
+| `three-places.html` | Four places (ADR-145, its Amendment 4): built since L2.2 and L2.9 merged, each section marked **Built** or **Coming**, 9 November 2026. The file keeps its name so its address does not change. Hand-written, no screenshots yet, no external requests. |
 | `assets/` | The screenshots of `public-sector.html` and `monitoring.html` (about 1.2 MB, ten JPEGs, 1440 × 900, no metadata), taken from synthetic demonstration cases only. |
 | `.nojekyll` | Tells GitHub Pages to serve the files as they are. |
 
@@ -62,13 +62,15 @@ commands run together on one line. Both are for the design source.
 
 ## Pages that describe what is not built
 
-`drawing-boards.html` and `three-places.html` describe accepted design (ADR-143 to ADR-145), not a release.
-Each section carries a **Coming** mark, the home page's `#coming` section and navigation links say
-"(coming)", and neither page has a screenshot. When a part is merged and checked, change its mark and
-sentence to the built form and add a capture; never mark a section built before its merge. The home page's
-`#coming` section and the two navigation links were added to the template the same way as step 12's edit
+`drawing-boards.html` and `three-places.html` (its title now *Four places*) mark each section **Built**
+(merged on `main`) or **Coming** (accepted design, still to be built), and say which in a note at the top;
+neither has a screenshot yet. When a coming part is merged and checked, change its mark and sentence to the
+built form at once, text only (the owner's ruling), and add a capture once a deployment shows it; never mark
+a section built before its merge. The home page's `#coming` section, now headed *New: drawing boards, and
+four places*, and its two navigation links were edited in the template the same way as step 12's edit
 (decode, edit, re-encode with the export's own encoding), so the design source needs them too before its
-next export.
+next export. `monitoring.html` waits for the alerts journey (L2.10 and L2.11) to be brought up to date; on
+9 November only its place name and *Open the evidence* were corrected.
 
 ## The wording rule
 

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Drawing boards (coming) · OspreyFlow</title>
-<meta name="description" content="Coming to OspreyFlow: drawing boards where field analysts declare nodes and draw links on a case, graded and sourced, kept apart from loaded data and promoted into a dataset as one load, reviewed where the dataset requires it.">
+<title>Drawing boards · OspreyFlow</title>
+<meta name="description" content="Drawing boards in OspreyFlow: declare a node, draw a link, each item marked, graded and sourced, in a case's own analyst layer. Promotion into a dataset is coming.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M4 6L25 11L45 26L25.5 30L9 42Z' fill='%23c08a34'/%3E%3C/svg%3E">
 <style>
@@ -94,6 +94,7 @@ footer.site .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space
 footer.site ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 18px}
 footer.site a{color:var(--text-secondary)}
 footer.site p{margin:0}
+.built{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text-primary);border:1px solid var(--brass);border-radius:2px;padding:0 7px;margin:0 8px 0 0;vertical-align:middle}
 .coming{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--brass-ink);background:var(--brass);border-radius:2px;padding:1px 8px;margin:0 8px 0 0;vertical-align:middle}
 </style>
 </head>
@@ -111,8 +112,8 @@ footer.site p{margin:0}
         <li><a href="index.html">Home</a></li>
         <li><a href="public-sector.html">UK public sector</a></li>
         <li><a href="monitoring.html">Monitoring and alerting</a></li>
-        <li><a href="drawing-boards.html" aria-current="page">Drawing boards (coming)</a></li>
-        <li><a href="three-places.html">Three places (coming)</a></li>
+        <li><a href="drawing-boards.html" aria-current="page">Drawing boards</a></li>
+        <li><a href="three-places.html">Four places</a></li>
         <li><a href="index.html#start">Get started</a></li>
       </ul>
     </nav>
@@ -120,125 +121,119 @@ footer.site p{margin:0}
 </header>
 
 <main id="main" tabindex="-1">
-  <div class="wrap hero">
-    <p class="eyebrow">Drawing boards · coming</p>
-    <h1>Drawing boards: declare a node, draw a link</h1>
-    <p class="lead">Field analysts build a network by declaring a person, an account or a place and drawing the links between them. OspreyFlow is adding an explicit drawing board for this, kept apart from loaded data, with every drawn item attributed, graded and sourced.</p>
-    <div class="note">
-      <p><strong>Coming, not yet built.</strong> Everything on this page describes accepted design that is still to be built. Nothing here can be used in a release today. Each section is marked <span class="coming">Coming</span>, and this page will change as each part is built and checked.</p>
-    </div>
-    <nav aria-label="On this page">
-      <ul class="points">
-        <li><a href="#why">Why a board, and not the analysis canvas</a></li>
-        <li><a href="#draw">Declare, draw and move</a></li>
-        <li><a href="#layer">A case's own analyst layer</a></li>
-        <li><a href="#grade">Marked, graded and sourced</a></li>
-        <li><a href="#match">Looks like a loaded item</a></li>
-        <li><a href="#types">Your own link types</a></li>
-        <li><a href="#promote">Promotion into a dataset, as a load</a></li>
-        <li><a href="#alert">An alert when new data meets a drawn item</a></li>
-      </ul>
-    </nav>
-  </div>
-
-  <section class="band" id="why" aria-labelledby="why-h">
-    <div class="wrap">
-      <h2 id="why-h"><span class="coming">Coming</span>Why a board, and not the analysis canvas</h2>
-      <p>The analysis canvas shows what the data says. A drawing board is where an analyst writes down what they know that the data does not yet say. The two are kept apart on purpose.</p>
-      <ul class="points">
-        <li><span class="label">Open it blank, or from a view.</span> A board starts empty, from a case view (its loaded items shown as grey references that cannot be edited there) or from a selection.</li>
-        <li><span class="label">Always inside a case.</span> A board belongs to a case. Starting one with no case open asks which case, or offers to make one.</li>
-        <li><span class="label">The analysis canvas never draws.</span> Items drawn on a board appear on the case's analysis canvas as dashed, read-only items with an <em>Edit on board</em> action.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band alt" id="draw" aria-labelledby="draw-h">
-    <div class="wrap">
-      <h2 id="draw-h"><span class="coming">Coming</span>Declare, draw and move</h2>
-      <p>Moving and linking are different gestures, so neither is done by accident.</p>
-      <ul class="points">
-        <li><span class="label">Declare a node.</span> Its type comes from the dataset's model. If the type you need is missing, <em>Need another type? Ask a data engineer</em>.</li>
-        <li><span class="label">Dragging an item moves it.</span></li>
-        <li><span class="label">Drawing a link</span> is done by dragging an item's link handle onto another item, by holding Alt and dragging the item, or by right-clicking and choosing <em>Draw a link from here</em>.</li>
-        <li><span class="label">By keyboard.</span> A <em>Draw a link</em> button stays as the keyboard route. Declaring, drawing a link, moving by arrow keys, inspecting, withdrawing and promoting are each designed to work without a pointer.</li>
-        <li><span class="label">Withdraw, never delete.</span> You edit your own items and withdraw them. A withdrawn item is kept in the audit record, not erased.</li>
-        <li><span class="label">Pictures.</span> Attach an uploaded image, an image the case already holds, or an icon. An uploaded image carries its own marking and source, and a reader not cleared for it sees no picture.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band" id="layer" aria-labelledby="layer-h">
-    <div class="wrap">
-      <h2 id="layer-h"><span class="coming">Coming</span>A case's own analyst layer</h2>
-      <p>What you draw is not written into the source dataset. Each case gets its own analyst layer, read together with the case's source data.</p>
-      <ul class="points">
-        <li><span class="label">Source data stays clean.</span> A drawn link can join a drawn item to a loaded one. The link lives in the analyst layer, and the loaded item is untouched.</li>
-        <li><span class="label">Nothing leaks to other cases.</span> No other case is designed to see a drawn item, and none to infer it from a degree, a path length, a count or a chart bar. Access is designed to be applied in the store, as for any dataset, with an access test on each read path.</li>
-        <li><span class="label">Nothing is merged.</span> A drawn item that resembles a loaded one is never merged with it.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band alt" id="grade" aria-labelledby="grade-h">
-    <div class="wrap">
-      <h2 id="grade-h"><span class="coming">Coming</span>Marked, graded and sourced</h2>
-      <p>A drawn item is a person's assertion, and it says so everywhere it appears: dashed and in amber.</p>
-      <ul class="points">
-        <li><span class="label">Who, where and how sure.</span> Each item records who drew it, on which board and case, its handling marking, a grading in your deployment's scheme, and a source note (free text, a document the case holds, or both).</li>
-        <li><span class="label">The grading scheme.</span> One setting for the deployment, such as 5x5x5 or 3x5x2. Changing it is a deliberate command with a dry run first; every item keeps its original grade beside the new one.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band" id="match" aria-labelledby="match-h">
-    <div class="wrap">
-      <h2 id="match-h"><span class="coming">Coming</span>Looks like a loaded item</h2>
-      <p>When a drawn item resembles something already loaded, the board offers the pair.</p>
-      <ul class="points">
-        <li><span class="label">The analyst decides.</span> <em>Same</em> records a confirmed match in the analyst layer; <em>Not the same</em> records the opposite. Neither changes the loaded item.</li>
-        <li><span class="label">A suggestion stays a suggestion.</span> The offer is designed to stay inferred and never act on its own. There is no automatic face matching.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band alt" id="types" aria-labelledby="types-h">
-    <div class="wrap">
-      <h2 id="types-h"><span class="coming">Coming</span>Your own link types</h2>
-      <p>An analyst can define a new link type as a verb phrase, with a sentence on what it means and whether it has a direction.</p>
-      <ul class="points">
-        <li><span class="label">Usable at once, marked proposed,</span> on that case's boards.</li>
-        <li><span class="label">A data engineer decides.</span> The proposal goes to the Ingest Studio's Model tab, where it is added to the draft model or declined. Links of a proposed or declined type cannot be promoted.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band" id="promote" aria-labelledby="promote-h">
-    <div class="wrap">
-      <h2 id="promote-h"><span class="coming">Coming</span>Promotion into a dataset, as a load</h2>
-      <p>When drawn items are ready to join the shared data, <em>Promote…</em> lists them, you tick what goes, and the whole set goes as one load.</p>
-      <ul class="points">
-        <li><span class="label">Checked before it goes.</span> The sheet checks each marking against the dataset's highest allowed marking, each type against its model, and that each item has a grade and a source. A link goes only when both its ends will be in the dataset. Anything left out is named, with the reason.</li>
-        <li><span class="label">Per dataset, author promotes or a second person reviews.</span> A reviewer is a data engineer of the dataset or an Author of the case, never the person who proposed it. Every promotion is to be listed under <em>Ingest Studio › Runs › Analyst promotions</em>; where review is required, a reviewer approves it or rejects it with a reason, and a data engineer can revert any of them.</li>
-        <li><span class="label">Still marked as drawn.</span> A promoted item keeps its drawn-by-an-analyst mark for good, and the audit record names the board, the case and the person.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band alt" id="alert" aria-labelledby="alert-h">
-    <div class="wrap">
-      <h2 id="alert-h"><span class="coming">Coming</span>An alert when new data meets a drawn item</h2>
-      <p>After a load into a source dataset, anything that resembles a drawn item in a case reading that dataset is designed to raise one alert in that case, with an <em>Open the board</em> action. Nothing is merged. This is to be a rule kind in <a href="monitoring.html">monitoring and alerting</a>.</p>
-      <ul class="points">
-        <li><span class="label">First release.</span> Declaring nodes and drawing links, editing and withdrawing your own items, and attaching a source are in the first release's design, and importing a chart from another tool is planned. It is to be piloted first on a synthetic case.</li>
-        <li><span class="label">Every theme.</span> Each board screen is designed for the dark, light and GOV.UK themes, with the GOV.UK forms under the GOV.UK theme, and is to be checked with automated accessibility scans in all three.</li>
-      </ul>
-      <div class="next" style="margin-top:24px">
-        <a href="three-places.html"><strong>Three places</strong><span>Coming: the Glass, the Ingest Studio and Admin as separate places, each with only what its people need.</span></a>
-        <a href="monitoring.html"><strong>Monitoring and alerting</strong><span>Rules written as sentences, hotlists, screening lists and one alert queue.</span></a>
-      </div>
-    </div>
-  </section>
+<div class="wrap hero">
+<p class="eyebrow">Drawing boards</p>
+<h1>Drawing boards: declare a node, draw a link</h1>
+<p class="lead">Field analysts build a network by declaring a person, an account or a place and drawing the links between them. OspreyFlow has a drawing board for this, kept apart from loaded data, with every drawn item attributed, marked, graded and sourced.</p>
+<div class="note">
+<p><strong>Built, with parts still coming.</strong> Boards, drawing, the case's analyst layer, grading, pictures, matches and your own link types are built. Promotion into a dataset, and an alert when new data meets a drawn item, are still to come. Each section is marked <span class="built">Built</span> or <span class="coming">Coming</span>. Screenshots follow.</p>
+</div>
+<nav aria-label="On this page">
+<ul class="points">
+<li><a href="#why">Why a board, and not the analysis canvas</a></li>
+<li><a href="#draw">Declare, draw and move</a></li>
+<li><a href="#layer">A case's own analyst layer</a></li>
+<li><a href="#grade">Marked, graded and sourced</a></li>
+<li><a href="#match">Looks like a loaded item</a></li>
+<li><a href="#types">Your own link types</a></li>
+<li><a href="#promote">Promotion into a dataset, as a load</a></li>
+<li><a href="#alert">An alert when new data meets a drawn item</a></li>
+</ul>
+</nav>
+</div>
+<section class="band" id="why" aria-labelledby="why-h">
+<div class="wrap">
+<h2 id="why-h"><span class="built">Built</span>Why a board, and not the analysis canvas</h2>
+<p>The analysis canvas shows what the data says. A drawing board is where an analyst writes down what they know that the data does not yet say. The two are kept apart on purpose, and the analysis canvas never draws.</p>
+<ul class="points">
+<li><span class="label">Open it blank, from a view, or from a selection.</span> A board starts empty, from a view of the case, or from the items you selected, which come as live references to the loaded data.</li>
+<li><span class="label">Always inside a case.</span> A board belongs to a case. A drawing begun as a case of its own makes its own dataset, its case and its board.</li>
+<li><span class="label">Yours until you share it.</span> A new board is its creator's alone until shared with the case, and only its creator draws on it.</li>
+<li><span class="coming">Coming</span><span class="label">Drawn items on the analysis canvas,</span> dashed and read-only, with an <em>Edit on board</em> action.</li>
+</ul>
+</div>
+</section>
+<section class="band alt" id="draw" aria-labelledby="draw-h">
+<div class="wrap">
+<h2 id="draw-h"><span class="built">Built</span>Declare, draw and move</h2>
+<p>Moving and linking are different gestures, so neither is done by accident.</p>
+<ul class="points">
+<li><span class="label">Declare a node.</span> Its type comes from the dataset's domain model. If the type you need is missing: <em>Need another type? Ask a data engineer.</em></li>
+<li><span class="label">Dragging an item moves it,</span> and so do the arrow keys.</li>
+<li><span class="label">Drawing a link</span> is done by dragging an item's link handle onto another item, by holding Alt and dragging the item, or by right-clicking and choosing <em>Draw a link from here</em>.</li>
+<li><span class="label">By keyboard.</span> A <em>Draw a link</em> button is the keyboard route. Every board action works without a pointer, and a keyboard test proves each one.</li>
+<li><span class="label">Withdraw, never delete.</span> You edit your own items and withdraw them. A withdrawn item is kept in the record, not erased.</li>
+<li><span class="label">Pictures.</span> Attach an uploaded image or an image document already on the board. An uploaded image carries its own marking and source, and a reader not cleared for it sees no picture.</li>
+</ul>
+</div>
+</section>
+<section class="band" id="layer" aria-labelledby="layer-h">
+<div class="wrap">
+<h2 id="layer-h"><span class="built">Built</span>A case's own analyst layer</h2>
+<p>What you draw is not written into the source dataset. Each case has its own analyst layer, read together with the case's source data.</p>
+<ul class="points">
+<li><span class="label">Source data stays clean.</span> A drawn link can join a drawn item to a loaded one. The link lives in the analyst layer, and the loaded item is untouched.</li>
+<li><span class="label">Nothing leaks to other cases.</span> No other case sees a drawn item, and none can infer it from a degree, a path length, a count or a chart bar. Access is applied in the store, as for any dataset, with an access test on each read path.</li>
+<li><span class="label">Nothing is merged.</span> A drawn item that resembles a loaded one is never merged with it.</li>
+<li><span class="label">Watched.</span> Drawing an item sets a watch on it, and withdrawing the item ends the watch.</li>
+</ul>
+</div>
+</section>
+<section class="band alt" id="grade" aria-labelledby="grade-h">
+<div class="wrap">
+<h2 id="grade-h"><span class="built">Built</span>Marked, graded and sourced</h2>
+<p>A drawn item is a person's assertion, and it says so: drawn dashed and in amber on the board.</p>
+<ul class="points">
+<li><span class="label">Who, where and how sure.</span> Each item records who drew it, on which board and case, its handling marking, a grading in your deployment's scheme, and a source note (free text, a document the case holds, or both).</li>
+<li><span class="label">A marking ceiling.</span> Each dataset has a highest allowed marking. An item, an edit or a picture marked above it is refused, in words.</li>
+<li><span class="label">The grading scheme.</span> One setting for the deployment, 5x5x5 by default or 3x5x2. Changing it is a deliberate command with a dry run first; every item keeps its original grade beside the new one.</li>
+</ul>
+</div>
+</section>
+<section class="band" id="match" aria-labelledby="match-h">
+<div class="wrap">
+<h2 id="match-h"><span class="built">Built</span>Looks like a loaded item</h2>
+<p>When a drawn item resembles something already loaded, the board offers the pair.</p>
+<ul class="points">
+<li><span class="label">The analyst decides.</span> <em>Same</em> keeps a link in the case's analyst layer; <em>Not the same</em> records the opposite. Neither changes the loaded item.</li>
+<li><span class="label">A suggestion stays a suggestion.</span> The offer never acts on its own. There is no automatic face matching.</li>
+</ul>
+</div>
+</section>
+<section class="band alt" id="types" aria-labelledby="types-h">
+<div class="wrap">
+<h2 id="types-h"><span class="built">Built</span>Your own link types</h2>
+<p>When no link type fits, an analyst can define a new one, saying why none fits.</p>
+<ul class="points">
+<li><span class="label">Usable at once, marked proposed,</span> in that case.</li>
+<li><span class="label">A data engineer decides.</span> The proposal goes to the Ingest Studio's Model tab, where a data engineer of the dataset adds it to the draft domain model or declines it. Its proposer never decides it.</li>
+</ul>
+</div>
+</section>
+<section class="band" id="promote" aria-labelledby="promote-h">
+<div class="wrap">
+<h2 id="promote-h"><span class="coming">Coming</span>Promotion into a dataset, as a load</h2>
+<p>When drawn items are ready to join the shared data, <em>Promote…</em> is to list them, you tick what goes, and the whole set goes as one load.</p>
+<ul class="points">
+<li><span class="label">Checked before it goes.</span> Each marking against the dataset's highest allowed marking, each type against its model, and each item for a grade and a source. A link goes only when both its ends will be in the dataset. Anything left out is to be named, with the reason.</li>
+<li><span class="label">Per dataset, author promotes or a second person reviews.</span> This setting is built in Admin, with a warning when fewer than two people could approve. A reviewer is never the person who proposed it, and promotions waiting too long are to be flagged to the dataset's Authors and administrators.</li>
+<li><span class="label">Still marked as drawn.</span> A promoted item is to keep its drawn-by-an-analyst mark for good, and the audit record to name the board, the case and the person.</li>
+</ul>
+</div>
+</section>
+<section class="band alt" id="alert" aria-labelledby="alert-h">
+<div class="wrap">
+<h2 id="alert-h"><span class="coming">Coming</span>An alert when new data meets a drawn item</h2>
+<p>After a load into a source dataset, anything that resembles a drawn item in a case reading that dataset is designed to raise one alert in that case, with an <em>Open the board</em> action, in the one alert queue of <a href="monitoring.html">monitoring and alerting</a>. Nothing is merged. The watch each drawn item sets is built; its alerts are still to come.</p>
+<ul class="points">
+<li><span class="label">Every theme.</span> Each board screen is built for the dark, light and GOV.UK themes, and checked with automated accessibility scans in all three.</li>
+</ul>
+<div class="next" style="margin-top:24px">
+<a href="three-places.html"><strong>Four places</strong><span>The Glass, the Ingest Studio, Rules and Monitoring and Admin, each with only what its people need.</span></a>
+<a href="monitoring.html"><strong>Monitoring and alerting</strong><span>Rules written as sentences, hotlists, screening lists and the alert queue.</span></a>
+</div>
+</div>
+</section>
 </main>
 
 <footer class="site">
@@ -249,8 +244,8 @@ footer.site p{margin:0}
         <li><a href="index.html">Home</a></li>
         <li><a href="public-sector.html">UK public sector</a></li>
         <li><a href="monitoring.html">Monitoring and alerting</a></li>
-        <li><a href="drawing-boards.html" aria-current="page">Drawing boards (coming)</a></li>
-        <li><a href="three-places.html">Three places (coming)</a></li>
+        <li><a href="drawing-boards.html" aria-current="page">Drawing boards</a></li>
+        <li><a href="three-places.html">Four places</a></li>
         <li><a href="intro-video.html">Animated overview</a></li>
       </ul>
     </nav>

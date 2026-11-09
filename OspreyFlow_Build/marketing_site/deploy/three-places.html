@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Three places (coming) · OspreyFlow</title>
-<meta name="description" content="Coming to OspreyFlow: the Glass, the Ingest Studio and Admin as three places, a context banner, a regrouped Admin and roles an administrator can define.">
+<title>Four places · OspreyFlow</title>
+<meta name="description" content="OspreyFlow's four places: the Glass, the Ingest Studio, Rules and Monitoring and Admin, with a context banner, Admin in sections and roles an administrator can define.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M4 6L25 11L45 26L25.5 30L9 42Z' fill='%23c08a34'/%3E%3C/svg%3E">
 <style>
@@ -94,6 +94,7 @@ footer.site .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space
 footer.site ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 18px}
 footer.site a{color:var(--text-secondary)}
 footer.site p{margin:0}
+.built{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text-primary);border:1px solid var(--brass);border-radius:2px;padding:0 7px;margin:0 8px 0 0;vertical-align:middle}
 .coming{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--brass-ink);background:var(--brass);border-radius:2px;padding:1px 8px;margin:0 8px 0 0;vertical-align:middle}
 </style>
 </head>
@@ -111,8 +112,8 @@ footer.site p{margin:0}
         <li><a href="index.html">Home</a></li>
         <li><a href="public-sector.html">UK public sector</a></li>
         <li><a href="monitoring.html">Monitoring and alerting</a></li>
-        <li><a href="drawing-boards.html">Drawing boards (coming)</a></li>
-        <li><a href="three-places.html" aria-current="page">Three places (coming)</a></li>
+        <li><a href="drawing-boards.html">Drawing boards</a></li>
+        <li><a href="three-places.html" aria-current="page">Four places</a></li>
         <li><a href="index.html#start">Get started</a></li>
       </ul>
     </nav>
@@ -120,92 +121,90 @@ footer.site p{margin:0}
 </header>
 
 <main id="main" tabindex="-1">
-  <div class="wrap hero">
-    <p class="eyebrow">Three places · coming</p>
-    <h1>Three places, each with one job</h1>
-    <p class="lead">OspreyFlow is being reorganised into three places: the Glass for analysis, the Ingest Studio for data, and Admin for running the deployment. You see only the places your roles open, and a banner always says where you are and what you are working on.</p>
-    <div class="note">
-      <p><strong>Coming, not yet built.</strong> Everything on this page is accepted design that is still to be built. Today the Ingest Studio and Admin are reached from the Glass's side rail. Each section below is marked <span class="coming">Coming</span>.</p>
-    </div>
-    <nav aria-label="On this page">
-      <ul class="points">
-        <li><a href="#places">The three places</a></li>
-        <li><a href="#banner">The context banner and cross-links</a></li>
-        <li><a href="#admin">Admin, regrouped</a></li>
-        <li><a href="#roles">Roles you can define</a></li>
-        <li><a href="#govuk">Under the GOV.UK theme</a></li>
-      </ul>
-    </nav>
-  </div>
-
-  <section class="band" id="places" aria-labelledby="places-h">
-    <div class="wrap">
-      <h2 id="places-h"><span class="coming">Coming</span>The three places</h2>
-      <div class="table-wrap"><table>
-        <thead><tr><th scope="col">Place</th><th scope="col">For</th><th scope="col">Holds</th></tr></thead>
-        <tbody>
-          <tr><th scope="row">The Glass</th><td>Analysis</td><td>Case · Boards · Monitoring</td></tr>
-          <tr><th scope="row">Ingest Studio</th><td>Data mapping and ingestion</td><td>1 Model · 2 Sources · 3 Pipelines · 4 Runs</td></tr>
-          <tr><th scope="row">Admin</th><td>Running the deployment</td><td>People, data, running, policies, audit, demo packs</td></tr>
-        </tbody>
-      </table></div>
-      <ul class="points">
-        <li><span class="label">A switcher in the top bar</span> lists the places your roles open. Home shows the same places as cards.</li>
-        <li><span class="label">A cleaner Glass.</span> The side rail loses the Ingest Studio, Admin and proposed types, so the Glass stays focused on analysis.</li>
-        <li><span class="label">Hiding is not the control.</span> A place hidden from you is designed to refuse you at its routes as well.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band alt" id="banner" aria-labelledby="banner-h">
-    <div class="wrap">
-      <h2 id="banner-h"><span class="coming">Coming</span>The context banner and cross-links</h2>
-      <p>Under the top bar, one line says where you are and what you are working on, for example: <em>You are in the Glass · Case Kestrel · reads Prison intel plus Kestrel analyst layer</em>. The names are from a synthetic example.</p>
-      <ul class="points">
-        <li><span class="label">Cross-links keep your place.</span> Someone who holds both the Glass and the Studio can open the case's dataset in the Studio, and come back to the same case.</li>
-        <li><span class="label">A lighter case screen.</span> The right-hand column opens with the Inspector only; Metrics and the Query builder are one click away.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band" id="admin" aria-labelledby="admin-h">
-    <div class="wrap">
-      <h2 id="admin-h"><span class="coming">Coming</span>Admin, regrouped</h2>
-      <p>Admin becomes a place of its own, with a side list of sections, each shown only to someone holding its right.</p>
-      <ul class="points">
-        <li><span class="label">People:</span> people and roles, roles, dashboard identities.</li>
-        <li><span class="label">Data:</span> datasets, connections. Each dataset sets its highest allowed marking and whether drawn items are promoted by their author or reviewed by a second person.</li>
-        <li><span class="label">Running:</span> operations, system. Operations shows promotions waiting for review, flagged and alerted after a number of days you choose.</li>
-        <li><span class="label">Policies:</span> grading scheme, approval rights, uploads.</li>
-        <li><span class="label">Demo packs:</span> the synthetic demonstration packs, addable later.</li>
-        <li><span class="label">Audit:</span> one filtered view over the records that already exist, to be read with the administrator's own access.</li>
-        <li><span class="label">Disabling a person</span> first lists everything they own and asks who receives each item. Nothing is to be deleted, and every transfer is to be audited.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band alt" id="roles" aria-labelledby="roles-h">
-    <div class="wrap">
-      <h2 id="roles-h"><span class="coming">Coming</span>Roles you can define</h2>
-      <ul class="points">
-        <li><span class="label">Built-in roles stay as they are,</span> and can be copied into a new role.</li>
-        <li><span class="label">Custom roles</span> are a name and a set of existing rights. No one can give more than they hold.</li>
-        <li><span class="label">No role both proposes and approves.</span> A role is designed not to hold both the right to promote and the right to review promotions, or both the right to propose types and to accept them.</li>
-        <li><span class="label">Each person's row</span> shows their roles, the places they open and their case levels.</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="band" id="govuk" aria-labelledby="govuk-h">
-    <div class="wrap">
-      <h2 id="govuk-h"><span class="coming">Coming</span>Under the GOV.UK theme</h2>
-      <p>With the <a href="public-sector.html">GOV.UK theme</a>, the switch between places sits inside the GOV.UK header and the banner is a GOV.UK notification banner. Admin's sections become a GOV.UK side navigation, with GOV.UK tables, tags, forms and error summaries. Every new screen is to be checked with automated accessibility scans in the dark, light and GOV.UK themes.</p>
-      <div class="next" style="margin-top:24px">
-        <a href="drawing-boards.html"><strong>Drawing boards</strong><span>Coming: declare nodes and draw links on a case, graded and sourced.</span></a>
-        <a href="index.html#start"><strong>Get started</strong><span>Install the command, check the prerequisites, and choose a mode and a starter.</span></a>
-      </div>
-    </div>
-  </section>
+<div class="wrap hero">
+<p class="eyebrow">Four places</p>
+<h1>Four places, each with one job</h1>
+<p class="lead">OspreyFlow is organised into four places: the Glass for analysis, the Ingest Studio for data, Rules and Monitoring for alerts, and Admin for running the deployment. You see only the places your roles open, and a banner always says where you are and what you are working on.</p>
+<div class="note">
+<p><strong>Built, with parts still coming.</strong> The four places, the banner, Admin's sections and roles an administrator can define are built. Where a part is still to come, it is marked <span class="coming">Coming</span>; a built section is marked <span class="built">Built</span>. Screenshots follow.</p>
+</div>
+<nav aria-label="On this page">
+<ul class="points">
+<li><a href="#places">The four places</a></li>
+<li><a href="#banner">The context banner and cross-links</a></li>
+<li><a href="#admin">Admin, in sections</a></li>
+<li><a href="#roles">Roles you can define</a></li>
+<li><a href="#govuk">Under the GOV.UK theme</a></li>
+</ul>
+</nav>
+</div>
+<section class="band" id="places" aria-labelledby="places-h">
+<div class="wrap">
+<h2 id="places-h"><span class="built">Built</span>The four places</h2>
+<div class="table-wrap"><table>
+<thead><tr><th scope="col">Place</th><th scope="col">For</th><th scope="col">Holds</th></tr></thead>
+<tbody>
+<tr><th scope="row">The Glass</th><td>Investigating a case</td><td>Case · Boards</td></tr>
+<tr><th scope="row">Ingest Studio</th><td>Bringing data in</td><td>1 Model · 2 Sources · 3 Pipelines · 4 Runs</td></tr>
+<tr><th scope="row">Rules and Monitoring</th><td>Working alerts, and seeing what raises them</td><td>Alerts · What raises alerts · Held rows · Changes</td></tr>
+<tr><th scope="row">Admin</th><td>Running the deployment</td><td>People, data, running, policies, audit, demo packs</td></tr>
+</tbody>
+</table></div>
+<ul class="points">
+<li><span class="label">A switcher in the top bar</span> lists the places your roles open, each with a key (G, I, R and A). Home shows the same places as cards.</li>
+<li><span class="label">A cleaner Glass.</span> The side rail no longer holds the Ingest Studio, Admin or monitoring, so the Glass stays on analysis.</li>
+<li><span class="label">Hiding is not the control.</span> A place hidden from you refuses you at its routes as well, and a test holds every place to its routes.</li>
+<li><span class="label">An alert has its own address.</span> <em>Open the evidence</em> opens a private view of the case, with a way back to the alert.</li>
+</ul>
+</div>
+</section>
+<section class="band alt" id="banner" aria-labelledby="banner-h">
+<div class="wrap">
+<h2 id="banner-h"><span class="built">Built</span>The context banner and cross-links</h2>
+<p>Under the top bar, one line says where you are and what you are working on: in the Glass, <em>You are in the Glass · Case · Boards</em>, with the case and the dataset it reads; elsewhere <em>You are in the Ingest Studio</em>, <em>You are in Rules and Monitoring</em> or <em>You are in Admin</em>.</p>
+<ul class="points">
+<li><span class="label">Cross-links keep your place.</span> Someone who holds both the Glass and the Studio can open the case's dataset in the Studio, and come back to the same case and view.</li>
+<li><span class="label">A lighter case screen.</span> The view switch shows the graph and the map, with the Matrix and the case's figures one click away.</li>
+</ul>
+</div>
+</section>
+<section class="band" id="admin" aria-labelledby="admin-h">
+<div class="wrap">
+<h2 id="admin-h"><span class="built">Built</span>Admin, in sections</h2>
+<p>Admin is a place of its own, with a side list of sections, each shown only to someone holding its right.</p>
+<ul class="points">
+<li><span class="label">People:</span> people and roles, roles and teams, dashboard identities.</li>
+<li><span class="label">Data:</span> datasets, connections, proposed types. Each dataset shows its kind, unit, highest allowed marking, its Authors, its linked cases, and whether drawn items are promoted by their author or reviewed by a second person.</li>
+<li><span class="label">Running:</span> operations, system, models and maps. Model and map keys are write-only: never shown back.</li>
+<li><span class="label">Audit:</span> one filtered view over the records that already exist, read with the administrator's own access.</li>
+<li><span class="label">Demo packs:</span> the synthetic demonstration packs, addable later.</li>
+<li><span class="label">Disabling a person</span> first lists what they answer for and asks who receives each item. Nothing is deleted, and every transfer is audited.</li>
+<li><span class="coming">Coming</span><span class="label">Policies:</span> the grading scheme on screen (a command changes it today), approval rights and uploads; promotions waiting for review, which Operations will list once promotion is built; and the rest of what a person owns (views, boards) in the Disable list.</li>
+</ul>
+</div>
+</section>
+<section class="band alt" id="roles" aria-labelledby="roles-h">
+<div class="wrap">
+<h2 id="roles-h"><span class="built">Built</span>Roles you can define</h2>
+<ul class="points">
+<li><span class="label">Built-in roles</span> (Analyst, Data Engineer, Administrator, Reports Viewer and Rule author) stay as they are, and can be copied into a new role.</li>
+<li><span class="label">Custom roles</span> are a name and a set of existing rights. No one can give more than they hold.</li>
+<li><span class="label">A Super user preset</span> gives Analyst, Data Engineer and Rule author together, and is still never the second person on their own work.</li>
+<li><span class="label">Teams and leads.</span> A team has a lead, who may name someone to cover until a date. A dataset's owners may be people, a team, or both, as the deployment allows.</li>
+<li><span class="coming">Coming</span><span class="label">Tips and who-can.</span> A short tip beside every role and right, and an action you cannot take saying which roles can.</li>
+</ul>
+</div>
+</section>
+<section class="band" id="govuk" aria-labelledby="govuk-h">
+<div class="wrap">
+<h2 id="govuk-h"><span class="built">Built</span>Under the GOV.UK theme</h2>
+<p>With the <a href="public-sector.html">GOV.UK theme</a>, the switch between the four places sits inside the GOV.UK header and the banner is a GOV.UK notification banner. Admin's sections are a GOV.UK side navigation. Every new screen is checked with automated accessibility scans in the dark, light and GOV.UK themes.</p>
+<div class="next" style="margin-top:24px">
+<a href="drawing-boards.html"><strong>Drawing boards</strong><span>Declare nodes and draw links on a case, marked, graded and sourced.</span></a>
+<a href="index.html#start"><strong>Get started</strong><span>Install the command, check the prerequisites, and choose a mode and a starter.</span></a>
+</div>
+</div>
+</section>
 </main>
 
 <footer class="site">
@@ -216,8 +215,8 @@ footer.site p{margin:0}
         <li><a href="index.html">Home</a></li>
         <li><a href="public-sector.html">UK public sector</a></li>
         <li><a href="monitoring.html">Monitoring and alerting</a></li>
-        <li><a href="drawing-boards.html">Drawing boards (coming)</a></li>
-        <li><a href="three-places.html" aria-current="page">Three places (coming)</a></li>
+        <li><a href="drawing-boards.html">Drawing boards</a></li>
+        <li><a href="three-places.html" aria-current="page">Four places</a></li>
         <li><a href="intro-video.html">Animated overview</a></li>
       </ul>
     </nav>
