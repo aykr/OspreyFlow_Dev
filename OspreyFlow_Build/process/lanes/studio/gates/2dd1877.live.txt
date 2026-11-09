@@ -1,0 +1,179 @@
+lease studio, stack b (ospreyflow-test), run on the server by stack_lease.sh remote (detached), worktree 2dd1877 (code 4e42681), main 80f26b5, started 21:11:11Z
+command: /Users/ayankar/Documents/MyProjects/IntelAnalysis_and_NetworkDiscovery_Platform/ospreyflow/OspreyFlow_Build/scripts/stack_lease.sh remote studio -- sh -c 'cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py ../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py ../OspreyFlow_Build/tests/services/api/test_recipe_runs.py'
+files: ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py ../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py ../OspreyFlow_Build/tests/services/api/test_recipe_runs.py
+Running on ospreyflow-test (stack b, osprey-runs/studio/OspreyFlow_Build/), logged at osprey-runs/studio.meta/runs/20261109T211121Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py ../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py ../OspreyFlow_Build/tests/services/api/test_recipe_runs.py
+.................F...................................................... [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 15%]
+..........................................F............................. [ 18%]
+............s........................................................... [ 22%]
+.............ss......................................................... [ 26%]
+........................................................................ [ 30%]
+........................................................................ [ 34%]
+........................................................................ [ 37%]
+...............................................................ssss..... [ 41%]
+...................sss.................................................. [ 45%]
+........................................................................ [ 49%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 60%]
+..............................................................F......... [ 64%]
+........................................................................ [ 68%]
+...............................................................F........ [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 94%]
+........................................................................ [ 98%]
+............................                                             [100%]
+=================================== FAILURES ===================================
+____ test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert ____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x7c5d053bf4d0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x7c5cfc1b8bc0>, 'audit': <services.api.audit.AuditWriter object at 0x7c5d04307140>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x7c5d040eb8f0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c5cfe63df70>
+
+    async def test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Item 6, the hard part. The graph commits the confirmed match and then the Postgres repoint
+        fails (here, on purpose, once). The close is refused; the repoint is recorded, so the very next
+        read settles it from the graph's own stored states: the second alert is listed to the cleared
+        reader citing the new revision, the record is cleared, and the OFFICIAL teammate, who may not
+        read the match, is still not given it (the settle changes which revision is cited, nothing a
+        reader is answered). Red with no record (the repoint inside the triage write, as in L2.8): the
+        second alert was gone from the queue for every reader."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            first, second, link = await _two_alerts_on_one_secret_match(stores, graph, case)
+            real = stores["alerts"].apply_repoints
+            failed: list[bool] = []
+    
+            async def fails_once(pairs: Any) -> list[str]:
+                if pairs and not failed:
+                    failed.append(True)
+                    raise ConnectionError("Postgres went away between the two stores")
+                return await real(pairs)
+    
+            monkeypatch.setattr(stores["alerts"], "apply_repoints", fails_once)
+            with pytest.raises(ConnectionError):
+                await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
+                                          disposition="true_positive", reason="matches")  # fmt: skip
+            (now,) = await graph.get_edges([e.id for e in await graph.edges_among(first.referent_node_ids, SECRET_LOADER)
+                                            if e.type == "SAME_AS"], SECRET_LOADER)  # fmt: skip
+            assert now.id != link, "the graph committed the confirmed revision"
+            queued = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics,
+                                                                             case, SECRET_LOADER)}  # fmt: skip
+            assert second.id in queued and queued[second.id].edge_ids == [now.id]
+>           assert await _pending(stores, link) == []
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:600: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:548: in _pending
+    pairs.extend((old, new) for old, new in links if old in old_links)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <list_iterator object at 0x7c5cde935ea0>
+
+>   pairs.extend((old, new) for old, new in links if old in old_links)
+                                ^^^^^^^^
+E   ValueError: too many values to unpack (expected 2)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:548: ValueError
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x7c5cdcbb84a0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x7c5d6d0c70b0>, 'audit': <services.api.audit.AuditWriter object at 0x7c5d053bdfd0>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...tetime.datetime(2026, 11, 9, 21, 40, 22, 679672, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...tetime.datetime(2026, 11, 9, 21, 40, 22, 679672, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None) = Edge(id='01M7142M0W04REAT82MSA2H74K', type='SAME_AS', source='01M7142HWT6S5BM47CAE60T70Z', target='01M7142M0QCJP1BN805...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+________ test_a_hundred_million_rows_are_refused_at_the_limit_in_words _________
+
+    def test_a_hundred_million_rows_are_refused_at_the_limit_in_words() -> None:
+        """The review's own shape, at the real limits: refused promptly, before the rows become
+        Python values."""
+        with pytest.raises(StagingError) as refused:
+            run_sql_step(
+                _step("SELECT unnest(range(100000000)) AS n, _ref FROM visits", ("visits",)),
+                [_tables()["visits"]], marked=(),
+            )  # fmt: skip
+        words = " ".join(refused.value.problems)
+>       assert "never cut short" in words or "memory limit" in words, words
+E       AssertionError: step 'calls' ran past its time limit of 30 seconds and was stopped
+E       assert ('never cut short' in "step 'calls' ran past its time limit of 30 seconds and was stopped" or 'memory limit' in "step 'calls' ran past its time limit of 30 seconds and was stopped")
+
+../OspreyFlow_Build/tests/ingest/test_sql_transform.py:670: AssertionError
+____________ test_the_rule_list_is_the_case_teams_and_nobody_elses _____________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x7c5cdc958130>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x7c5cdc95a010>)
+
+    def test_the_rule_list_is_the_case_teams_and_nobody_elses(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        other_case = asyncio.run(_case())
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+            listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
+>           assert listed.status_code == 200 and len(listed.json()) == 1
+E           AssertionError: assert (200 == 200 and 5 == 1)
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   5 = len([{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'... 'relationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}])
+E            +    where [{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'... 'relationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}] = json()
+E            +      where json = <Response [200 OK]>.json
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:142: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 22:39:00] "GET /jwks.json HTTP/1.1" 200 -
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/ingest/test_optional_bindings.py::test_a_run_refuses_a_list_valued_transform_as_a_deduplicate_key_or_a_match
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/pydantic/main.py:520: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `DeduplicateConfig` - serialized value may not be as expected [field_name='deduplicate', input_value={'key': [{'field': 'alias... 'transform': 'split'}]}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_sql_transform.py::test_a_hundred_million_rows_are_refused_at_the_limit_in_words
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+4 failed, 1886 passed, 10 skipped, 2 warnings in 8759.87s (2:25:59)
+exit 1 ended 23:37:25Z
