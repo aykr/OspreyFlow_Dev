@@ -41,3 +41,14 @@ closed ports (59991–59994), no lease.
 - Plant in `AlertMonitoringBoard.tsx`: the rule filter ignored → `opens filtered to an alert's rule and
   period, and every figure follows the filter` FAILED.
 - Restored: 4 passed.
+
+## 6. The Reports Viewer's journey (`reports/journey.test.ts`, `home/HomePage.test.tsx`, `App.test.tsx`)
+- Plant in `journey.ts`: a noted journey taken for any case → `is taken once, for its own case alone` FAILED.
+- Plant in `HomePage.tsx`: a third way, *Open the alert*, on the Viewer's row → `offers a Reports Viewer
+  … its case's Figures and its dashboard and nothing else` FAILED.
+- Plant: the journey offered to a reader the place is offered to → `keeps the alert's own address …`
+  FAILED.
+- Plant in `App.tsx`: the noted journey never taken → both App journey cases FAILED.
+- Plant: *← Back to your alerts* not returning Home → `… and Back goes Home` FAILED.
+- Restored: green. Found red on main too, not this step's: `layout/PanelFrames.test.tsx` (6) and
+  `App.chrome.test.tsx`'s Inspector case, also red in a clean checkout of main at 24e2c8e.

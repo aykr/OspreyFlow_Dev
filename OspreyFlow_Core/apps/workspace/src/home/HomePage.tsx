@@ -13,7 +13,7 @@ import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { PLACE_KEY, PLACE_NAME } from "../shell/places";
 import { startPlaces } from "../rights/visibility";
 import type { StartPlace } from "../rights/visibility";
-import { whenLabel, type Fact, type HomeSummary, type Place } from "./homeData";
+import { whenLabel, type AttentionRow, type Fact, type HomeSummary, type Place } from "./homeData";
 import { TIPS, TipPicture } from "./tips";
 import "./home.css";
 
@@ -37,6 +37,10 @@ export interface HomePageProps {
   /** Opens an alert at its address, in Rules and Monitoring (ADR-146 decision 6: Home opens the
    * alert, not the case). */
   onOpenAlert?: (alertId: string) => void;
+  /** The Reports Viewer's journey (ADR-145 Amendment 4 decision 10): for a reader Rules and Monitoring
+   * is not offered to, an alert's row offers *Open in its case* (its Figures) and *Open the dashboard*
+   * (the Alert monitoring board), never the alert itself. */
+  onAlertJourney?: (alert: AlertJourneyStart, to: "figures" | "board") => void;
   account: ReactNode;
   marking: string | null;
   now?: Date;
@@ -151,7 +155,37 @@ function RulesPicture({ open }: { open: number | null }) {
   );
 }
 
-export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, account, marking, now = new Date() }: HomePageProps) {
+/** Where an alert row on the Reports Viewer's Home leads from (ADR-145 Amendment 4 decision 10). */
+export interface AlertJourneyStart {
+  caseId: string;
+  alertId: string;
+  rule: { label: string; typology: string };
+  at: string;
+}
+
+/** A Reports Viewer's alert row: the alert in words, and the two ways on, to the case's Figures and
+ * to the board behind it. It never opens the alert. */
+function JourneyRow({ row, now, onJourney }: { row: AttentionRow; now: Date; onJourney: (to: "figures" | "board") => void }) {
+  return (
+    <div className="home-attention__row" role="group" aria-label={row.title}>
+      <span className={`home-glyph home-glyph--${row.tone}`} aria-hidden="true">{GLYPH[row.tone]}</span>
+      <span className="home-attention__text">
+        <span className="home-attention__title">{row.title}</span>
+        <span className="home-attention__detail">{row.detail}</span>
+        <span style={{ display: "flex", gap: "var(--sp-8)", marginTop: "var(--sp-4)", flexWrap: "wrap" }}>
+          <button type="button" className="btn" onClick={() => onJourney("figures")}>Open in its case</button>
+          <button type="button" className="btn" onClick={() => onJourney("board")}>Open the dashboard</button>
+        </span>
+      </span>
+      <span className="home-attention__meta">
+        <span className="home-tag">{APP[row.place]}</span>
+        <span className="value">{whenLabel(row.at, now)}</span>
+      </span>
+    </div>
+  );
+}
+
+export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date() }: HomePageProps) {
   const panels = useMemo(() => startPlaces(rights), [rights]);
   const allowed = useMemo(() => new Set(panels), [panels]);
   const primary = panels[0];
@@ -184,7 +218,7 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
       : null;
   const attention = summary
     ? summary.attention
-        .map((a) => (a.place === "rules" && alertsInGlass ? { ...a, place: "glass" as const, alertId: undefined } : a))
+        .map((a) => (a.place === "rules" && alertsInGlass ? { ...a, place: "glass" as const, alertId: undefined, journeyAlertId: a.alertId } : a))
         .filter((a) => allowed.has(a.place))
     : [];
   const noCases = summary !== null && summary.recent.length === 0;
@@ -263,6 +297,10 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
               <ul className="home-attention">
                 {attention.map((a) => (
                   <li key={`${a.place}-${a.title}-${a.at}`}>
+                    {"journeyAlertId" in a && a.journeyAlertId && a.caseId && a.alertRule && onAlertJourney ? (
+                      <JourneyRow row={a} now={now} onJourney={(to) =>
+                        onAlertJourney({ caseId: a.caseId!, alertId: a.journeyAlertId!, rule: a.alertRule!, at: a.at }, to)} />
+                    ) : (
                     <button type="button" className="home-attention__row"
                             onClick={() =>
                               a.alertId && onOpenAlert
@@ -281,6 +319,7 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
                         <span className="value">{whenLabel(a.at, now)}</span>
                       </span>
                     </button>
+                    )}
                   </li>
                 ))}
               </ul>

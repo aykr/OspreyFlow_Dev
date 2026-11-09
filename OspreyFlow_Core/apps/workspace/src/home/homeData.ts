@@ -13,6 +13,8 @@ export type Place = "glass" | "ingest" | "rules" | "admin";
 export interface QueuedAlertLite {
   alert: { id: string; status: string; assignee: string | null; typology?: string | null; created_at: string };
   summary: string;
+  /** ADR-133 stage (a): typology, hotlist or monitor. */
+  kind?: string;
 }
 export interface AlertQueueCountsLite {
   open: number;
@@ -68,6 +70,17 @@ export interface AttentionRow {
   caseId?: string;
   /** An alert's row opens the alert at its address (ADR-146 decision 6), not its case. */
   alertId?: string;
+  /** The rule group the alert is counted under in the figures (ADR-134 decision 2), for the Reports
+   * Viewer's *Open the dashboard* (ADR-145 Amendment 4 decision 10). */
+  alertRule?: { label: string; typology: string };
+}
+
+const RULE_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors" };
+
+/** The rule group a queued alert is counted under, as the Conduit's report labels it. */
+export function ruleGroupOf(row: Pick<QueuedAlertLite, "alert" | "kind">): { label: string; typology: string } {
+  const kind = row.kind ?? "typology";
+  return { label: RULE_GROUP[kind] ?? kind, typology: kind === "typology" ? (row.alert.typology ?? "") : "" };
 }
 export interface RecentCase {
   id: string;
@@ -127,7 +140,8 @@ export function summariseHome(input: HomeInputs): HomeSummary {
         unread += 1;
         continue;
       }
-      for (const { alert, summary } of f.alerts) {
+      for (const row of f.alerts) {
+        const { alert, summary } = row;
         const open = alert.status === "open";
         const claimed = alert.status === "claimed";
         if (isOpenInQueue(alert.status)) inQueue += 1;
@@ -135,7 +149,7 @@ export function summariseHome(input: HomeInputs): HomeSummary {
         if (own) mine += 1;
         if (open || own) {
           attention.push({
-            place: "rules", tone: "warn", at: alert.created_at, caseId: f.id, alertId: alert.id,
+            place: "rules", tone: "warn", at: alert.created_at, caseId: f.id, alertId: alert.id, alertRule: ruleGroupOf(row),
             title: `${typologyLabel(alert.typology)} alert in ${names.get(f.id)}`,
             detail: own ? `${summary} Claimed by you.` : summary,
           }); // prettier-ignore
