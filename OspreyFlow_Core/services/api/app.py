@@ -370,6 +370,7 @@ from schemas.packs import (
     PublishedPackSummary,
     ReportPack,
 )
+from schemas.person_ownership import PersonOwnership
 from schemas.profile import SourceProfile
 from schemas.rights import (
     CUSTOM_ROLE_PREFIX,
@@ -772,6 +773,7 @@ from .patterns import (
     run_pattern,
     run_pattern_match_job,
 )
+from .person_ownership import PostgresOwnershipStore
 from .pipeline_run import (
     OnlineGeocode,
     RecogniserFor,
@@ -1053,6 +1055,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     promotion_ageing = await promotion_ageing_module.PromotionAgeingStore.connect(
         config.postgres.dsn
     )
+    # L3.8: what a person owns that the case lane keeps, which Disable… lists (ADR-145 A4).
+    person_ownership = await PostgresOwnershipStore.connect(config.postgres.dsn)
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
@@ -1141,6 +1145,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.promotion_ageing = promotion_ageing
     # The seam case's L3.4 fills with the promotion record (`promotion_ageing.WaitingPromotions`).
     app.state.waiting_promotions = promotion_ageing_module.NoPromotionsYet()
+    app.state.ownership = person_ownership
     app.state.history = history
     app.state.sites = sites
     app.state.patterns_store = patterns_store
@@ -1415,6 +1420,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await admin_people.close()
         await audit_section.close()
         await promotion_ageing.close()
+        await person_ownership.close()
+        app.state.ownership = None
         # A closed store must not outlive the app: a request's custom roles are read through it.
         app.state.custom_roles = None
         await history.close()
@@ -1975,6 +1982,13 @@ WaitingPromotionsDep = Annotated[
     promotion_ageing_module.WaitingPromotions, Depends(get_waiting_promotions)
 ]
 AdminPeopleDep = Annotated[AdminPeopleStore, Depends(get_admin_people)]
+
+
+def get_ownership(request: Request) -> PostgresOwnershipStore:
+    return request.app.state.ownership  # type: ignore[no-any-return]
+
+
+OwnershipDep = Annotated[PostgresOwnershipStore, Depends(get_ownership)]
 
 
 def get_superset_embedder(request: Request) -> SupersetEmbedder | None:
@@ -14063,6 +14077,31 @@ async def disable_plan_route(
         result_cardinality=len(plan.items),
     )
     return plan
+
+
+@app.get(
+    "/v1/admin/people/{user_id}/ownership",
+    dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))],
+)
+async def person_ownership_route(
+    user_id: str,
+    principal: PrincipalDep,
+    ownership: OwnershipDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> PersonOwnership:
+    """*Disable…*'s second list (ADR-145 decision 6 and A4; L3.8): the views, boards, link-type
+    proposals and drawn-item watches the person owns, read in the administrator's own unit and
+    within their own clearance (`person_ownership.py`, rule 3), by kind and case name only (rule 7);
+    the kinds not built yet in `not_yet_listed`. Admin's L2.5b reads it with the plan."""
+    owned = await ownership.owned_by(user_id, admin=principal, scheme=scheme)
+    await audit.record(
+        principal=principal,
+        action="read_person_ownership",
+        resolved_query={"user_id": user_id, "items": len(owned.items)},
+        result_cardinality=len(owned.items),
+    )
+    return owned
 
 
 def _within_your_reach(
