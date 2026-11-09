@@ -601,6 +601,48 @@ class DatasetStampingGraph:
         await self._inner.withdraw_elements(node_ids, edge_ids, withdrawal, tx)
         await self._written()
 
+    async def promote_elements(
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[str],
+        dataset_id: str,
+        load_id: str,
+        tx: Any,
+    ) -> None:
+        """A promotion's one load (ADR-143 decision 8): a write into `dataset_id`, so refused into
+        a composite or in a case reading one (ADR-099 Amendment 15), and in a case not converted;
+        the kept figures are cleared after it."""
+        await self._refuse_into_a_composite({dataset_id})
+        await self._checked_ids([dataset_id])
+        await self._inner.promote_elements(node_ids, edge_ids, dataset_id, load_id, tx)
+        await self._written()
+
+    async def revert_promotion(self, load_id: str, dataset_id: str, tx: Any) -> Any:
+        await self._refuse_into_a_composite({dataset_id})
+        taken = await self._inner.revert_promotion(load_id, dataset_id, tx)
+        await self._written()
+        return taken
+
+    async def withdraw_layer(self, dataset_id: str, withdrawal: str, tx: Any) -> Any:
+        """A removed case's layer deleted (ADR-143 Amendment 2 decision 1). Run outside any case's
+        scope (Admin's or the Studio's route), so only the unconverted-case refusal applies."""
+        if self._dataset is None:
+            await refuse_writing_in_an_unconverted_case()
+        gone = await self._inner.withdraw_layer(dataset_id, withdrawal, tx)
+        await self._written()
+        return gone
+
+    async def _checked_ids(self, dataset_ids: Sequence[str]) -> None:
+        if self._registry is None:
+            return
+        wanted = set(dataset_ids) - self._confirmed
+        if not wanted:
+            return
+        held = await self._registry.known(sorted(wanted))
+        self._confirmed |= held
+        if missing := wanted - held:
+            raise UnknownDatasetError(sorted(missing))
+
     async def restore_withdrawn(self, load_id: str, tx: Any) -> Any:
         await self._refuse_loading_here()
         restored = await self._inner.restore_withdrawn(load_id, tx)

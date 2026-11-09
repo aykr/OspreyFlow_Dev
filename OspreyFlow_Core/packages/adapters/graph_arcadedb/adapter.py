@@ -42,6 +42,8 @@ from ports.graph import (
     FindLimitExceeded,
     LinkCloned,
     NodeSuggestions,
+    NotPromotable,
+    PromotionReverted,
     RarityTooLarge,
     RestoredElements,
     StoredLink,
@@ -1773,6 +1775,94 @@ class GraphArcadeDBAdapter:
                 params={"ids": ids, "load": load_id},
                 session_id=tx,
             )
+
+    async def promote_elements(
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId],
+        dataset_id: str,
+        load_id: str,
+        tx: TxId,
+    ) -> None:
+        # Resolved and checked first, written after (all or nothing, ADR-143 decision 8): every id
+        # must be held by exactly one type of its kind and be live, or nothing is written.
+        wanted = len(set(node_ids)) + len(set(edge_ids))
+        plan = [
+            *(await self._holders("vertex", sorted(set(node_ids)), tx)),
+            *(await self._holders("edge", sorted(set(edge_ids)), tx)),
+        ]
+        rows: list[tuple[str, dict[str, Any]]] = []
+        for type_name, ids in plan:
+            found = await self._client.sql(
+                f"SELECT id, datasets, reverted, superseded_by FROM "
+                f"`{groovy_identifier(type_name)}` WHERE id IN :ids",
+                params={"ids": ids},
+                session_id=tx,
+            )
+            rows += [(type_name, r) for r in found]
+        live = [
+            (t, r) for t, r in rows if r.get("reverted") is not True and not r.get("superseded_by")
+        ]
+        if len(live) != wanted:
+            raise NotPromotable(wanted - len(live))
+        for type_name, row in live:
+            await self._client.sql(
+                f"UPDATE `{groovy_identifier(type_name)}` SET datasets = :datasets, "
+                "promoted_by_load = :load WHERE id = :id",
+                params={
+                    "id": row["id"],
+                    "load": load_id,
+                    "datasets": merge_datasets(row.get("datasets"), [dataset_id]),
+                },
+                session_id=tx,
+            )
+
+    async def revert_promotion(self, load_id: str, dataset_id: str, tx: TxId) -> PromotionReverted:
+        counts = {"vertex": 0, "edge": 0}
+        for kind in counts:
+            for type_name in await self._types_with_unique_id(kind):
+                name = groovy_identifier(type_name)
+                found = await self._client.sql(
+                    f"SELECT id, datasets FROM `{name}` WHERE promoted_by_load = :load",
+                    params={"load": load_id},
+                    session_id=tx,
+                )
+                for row in found:
+                    kept = sorted(set(row.get("datasets") or []) - {dataset_id})
+                    await self._client.sql(
+                        f"UPDATE `{name}` SET datasets = :datasets, promoted_by_load = null "
+                        "WHERE id = :id",
+                        params={"id": row["id"], "datasets": kept},
+                        session_id=tx,
+                    )
+                counts[kind] += len(found)
+        return PromotionReverted(nodes=counts["vertex"], edges=counts["edge"])
+
+    async def withdraw_layer(
+        self, dataset_id: str, withdrawal: str, tx: TxId
+    ) -> PromotionReverted:
+        # By the `datasets BY ITEM` index, then only an element wholly the layer's: one promoted
+        # from it holds the source too and is left (Amendment 2 decision 1).
+        counts = {"vertex": 0, "edge": 0}
+        for kind in counts:
+            for type_name in await self._types_with_unique_id(kind):
+                name = groovy_identifier(type_name)
+                found = await self._client.sql(
+                    f"SELECT id, datasets FROM `{name}` WHERE datasets CONTAINS :ds "
+                    "AND reverted = false",
+                    params={"ds": dataset_id},
+                    session_id=tx,
+                )
+                ids = [str(r["id"]) for r in found if list(r.get("datasets") or []) == [dataset_id]]
+                for chunk in _id_chunks(ids):
+                    await self._client.sql(
+                        f"UPDATE `{name}` SET reverted = true, withdrawn_by_load = :w "
+                        "WHERE id IN :ids AND reverted = false",
+                        params={"ids": chunk, "w": withdrawal},
+                        session_id=tx,
+                    )
+                counts[kind] += len(ids)
+        return PromotionReverted(nodes=counts["vertex"], edges=counts["edge"])
 
     async def restore_withdrawn(self, load_id: str, tx: TxId) -> RestoredElements:
         nodes: list[NodeId] = []

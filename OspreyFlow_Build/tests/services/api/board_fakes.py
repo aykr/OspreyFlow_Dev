@@ -13,6 +13,10 @@ as the ArcadeDB adapter does it (`adapters/graph_arcadedb/adapter.py`):
   loaded one; otherwise it is a new link;
 - a write's provenance with its sources withheld is refused, as `serialization.py` refuses it;
 - `withdraw_elements`: each live element set reverted, so every read leaves it out;
+- `promote_elements` (L3.4): each live element gains the dataset, the same element; any id not live
+  (missing, reverted, superseded) refuses the whole call before anything lands, as the adapter does;
+  `revert_promotion` takes the dataset back from exactly that load's elements; `withdraw_layer`
+  reverts every live element wholly the layer's and leaves one holding another dataset;
 - `search_nodes` (an exact identifier) and `suggest_nodes` (`contains`, case ignored, by type),
   both filtered like every read.
 
@@ -29,7 +33,7 @@ from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
 from ontology.handling import audience_of, load_uk_le_scheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
-from ports.graph import NodeSuggestions, SuggestOptions
+from ports.graph import NodeSuggestions, NotPromotable, PromotionReverted, SuggestOptions
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -61,6 +65,12 @@ class BoardGraph(FakeGraphPort):
         self.edge_writes: list[EdgeWrite] = []
         #: Each element `regrade_drawn` changed, in order.
         self.regrades: list[str] = []
+
+        #: L3.4: each element a promotion stamped, by its load (the adapter's `promoted_by_load`).
+        self.promoted_by: dict[str, str] = {}
+        self._later: dict[str, list[Any]] = {}
+        #: How many `promote_elements` calls were made: one per promotion (one load).
+        self.promotions: int = 0
 
     # --- the grading change's in-place regrade (ADR-143 Amendment 6) ---------------------------
 
@@ -175,10 +185,13 @@ class BoardGraph(FakeGraphPort):
             self._land_edge(replacement, new_id)
         for node_ids, edge_ids, load_id in withdrawals:
             self._land_withdrawal(node_ids, edge_ids, load_id)
+        for later in self._later.pop(tx, []):
+            later()
 
     async def rollback_transaction(self, tx: str) -> None:
         await super().rollback_transaction(tx)
         self._pending.pop(tx, None)
+        self._later.pop(tx, None)
 
     async def upsert_nodes(self, nodes: Sequence[NodeWrite], tx: str) -> list[str]:
         for write in nodes:
@@ -235,6 +248,77 @@ class BoardGraph(FakeGraphPort):
         self, node_ids: Sequence[str], edge_ids: Sequence[str], load_id: str, tx: str
     ) -> None:
         self._pending[tx][2].append((list(node_ids), list(edge_ids), load_id))
+
+    # --- promotion (L3.4) ----------------------------------------------------------------------
+
+    def _live_node(self, node_id: str) -> Node | None:
+        held = self._graph_nodes.get(node_id)
+        if held is None or held.audit.reverted or held.audit.superseded_by:
+            return None
+        return held
+
+    def _live_edge(self, edge_id: str) -> Edge | None:
+        for edge in self._graph_edges:
+            if edge.id == edge_id and not edge.audit.reverted and not edge.audit.superseded_by:
+                return edge
+        return None
+
+    def _set_datasets(self, element_id: str, datasets: list[str]) -> None:
+        if element_id in self._graph_nodes:
+            held = self._graph_nodes[element_id]
+            self._graph_nodes[element_id] = held.model_copy(update={"datasets": datasets})
+        self._graph_edges = [
+            e.model_copy(update={"datasets": datasets}) if e.id == element_id else e
+            for e in self._graph_edges
+        ]
+
+    async def promote_elements(
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], dataset_id: str, load_id: str,
+        tx: str,
+    ) -> None:  # fmt: skip
+        self.promotions += 1
+        nodes = [self._live_node(n) for n in set(node_ids)]
+        edges = [self._live_edge(e) for e in set(edge_ids)]
+        missing = sum(1 for x in [*nodes, *edges] if x is None)
+        if missing:
+            raise NotPromotable(missing)
+
+        def land() -> None:
+            for element in [*nodes, *edges]:
+                assert element is not None
+                self._set_datasets(element.id, merge_datasets(element.datasets, [dataset_id]))
+                self.promoted_by[element.id] = load_id
+
+        self._later.setdefault(tx, []).append(land)
+
+    async def revert_promotion(self, load_id: str, dataset_id: str, tx: str) -> PromotionReverted:
+        mine = [k for k, v in self.promoted_by.items() if v == load_id]
+        node_ids = [k for k in mine if k in self._graph_nodes]
+        edge_ids = [k for k in mine if k not in self._graph_nodes]
+
+        def land() -> None:
+            for element_id in mine:
+                held: Any = self._graph_nodes.get(element_id) or next(
+                    e for e in self._graph_edges if e.id == element_id
+                )
+                self._set_datasets(element_id, sorted(set(held.datasets) - {dataset_id}))
+                del self.promoted_by[element_id]
+
+        self._later.setdefault(tx, []).append(land)
+        return PromotionReverted(nodes=len(node_ids), edges=len(edge_ids))
+
+    async def withdraw_layer(self, dataset_id: str, withdrawal: str, tx: str) -> PromotionReverted:
+        nodes = [
+            n.id for n in self._graph_nodes.values()
+            if not n.audit.reverted and list(n.datasets) == [dataset_id]
+        ]  # fmt: skip
+        edges = [
+            e.id for e in self._graph_edges
+            if not e.audit.reverted and list(e.datasets) == [dataset_id]
+        ]  # fmt: skip
+        self._pending[tx][2].append((nodes, edges, withdrawal))
+        return PromotionReverted(nodes=len(nodes), edges=len(edges))
+
 
     def _merge_target(self, write: EdgeWrite) -> Edge | None:
         key = audience_of(write.handling, write.datasets, SCHEME)

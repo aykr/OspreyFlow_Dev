@@ -91,6 +91,24 @@ class RestoredElements:
     edge_ids: tuple[EdgeId, ...] = ()
 
 
+class NotPromotable(Exception):
+    """`GraphPort.promote_elements` refused whole, before anything is written: one of the ids is
+    not a live element (missing, reverted, withdrawn or superseded). Says how many, never which."""
+
+    def __init__(self, count: int) -> None:
+        super().__init__(f"{count} element(s) cannot be promoted: not live")
+        self.count = count
+
+
+@dataclass(frozen=True)
+class PromotionReverted:
+    """What `GraphPort.revert_promotion` took the dataset back from, or `withdraw_layer`
+    withdrew."""
+
+    nodes: int = 0
+    edges: int = 0
+
+
 #: `supersede_node`'s report of one cloned link: the original's id, its clone's, and the original's
 #: type (two types may hold one id, ADR-110 Amendment 18), awaited before the transaction commits.
 LinkCloned = Callable[[str, str, str], Awaitable[None]]
@@ -769,6 +787,37 @@ class GraphPort(Protocol):
         reason (the revert of the load that made it clears `withdrawn_by_load`, so it is not found
         here), and never a link whose pair (type and ends) has a live link written since: each link
         is written once, so that one stays withdrawn. Running it again restores nothing."""
+        ...
+
+    async def promote_elements(
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId],
+        dataset_id: str,
+        load_id: str,
+        tx: TxId,
+    ) -> None:
+        """ADR-143 decision 8: a promotion's one load. Each element gains `dataset_id` in its
+        `datasets` (ADR-099 decision 2's union: the same element, never a copy, never a merge of
+        two) and is stamped `promoted_by_load = load_id`; nothing else of it changes (its marking,
+        its provenance, its `analyst_drawn` class). Every id must be a live element, or the call
+        raises `NotPromotable` before anything is written (all or nothing). A backend write, as
+        `revert_elements` is: no principal; the caller checks what the proposer may promote."""
+        ...
+
+    async def revert_promotion(self, load_id: str, dataset_id: str, tx: TxId) -> PromotionReverted:
+        """The revert of promotion `load_id`: `dataset_id` taken back from exactly the elements
+        that load promoted, and their stamp cleared, so each is in the analyst layer only again.
+        Nothing else is touched; running it again takes back nothing."""
+        ...
+
+    async def withdraw_layer(
+        self, dataset_id: str, withdrawal: str, tx: TxId
+    ) -> PromotionReverted:
+        """A removed case's layer deleted (ADR-143 Amendment 2 decision 1): every live element
+        whose `datasets` is exactly `[dataset_id]` is set reverted (`withdrawn_by_load =
+        withdrawal`), never deleted, so the audit keeps it. An element holding another dataset too
+        (one promoted from the layer) is never touched."""
         ...
 
     async def live_edges_touching(self, node_ids: Sequence[NodeId]) -> set[EdgeId]:
