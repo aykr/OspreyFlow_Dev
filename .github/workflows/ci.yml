@@ -708,6 +708,7 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_case_views_store.py
           ../OspreyFlow_Build/tests/services/api/test_board_store.py
           ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py
+          ../OspreyFlow_Build/tests/services/api/test_promotion_store.py
           ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
           ../OspreyFlow_Build/tests/services/api/test_grading_registry.py
           ../OspreyFlow_Build/tests/services/api/test_grading_change_live.py
@@ -1083,6 +1084,7 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_case_views_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_board_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py
+          --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_store.py
           --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_grading_registry.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_grading_change_live.py

@@ -1,0 +1,166 @@
+# L3.4's keyboard red records (the independent review's must-fix 7): each action's handler cut at its call site, its one keyboard case run, then restored; local, on the orchestrator's go, at 40bf58e with the hand-off patches applied.
+## plant in src/boards/PromoteSheet.tsx ('drawn items are promoted from the sheet by keyboard'):
+#   - 'onClick={() => void send()}'
+#   + 'onClick={() => undefined}'
+Running 1 test using 1 worker
+[1/1] keyboard/boards.spec.ts:435:1 › drawn items are promoted from the sheet by keyboard
+  1) keyboard/boards.spec.ts:435:1 › drawn items are promoted from the sheet by keyboard ───────────
+    Error: expect(locator).toBeFocused() failed
+    Locator: getByRole('heading', { name: 'Promotion sent' })
+    Expected: focused
+    Timeout: 5000ms
+    Error: element(s) not found
+    Call log:
+      - Expect "toBeFocused" getByRole('heading', { name: 'Promotion sent' }) with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Promotion sent' })
+      448 |   await expect(mercer).not.toBeChecked();
+      449 |   await press(page, "Promote");
+    > 450 |   await expect(page.getByRole("heading", { name: "Promotion sent" })).toBeFocused();
+          |                                                                       ^
+      451 |   const posted = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/promotions"));
+      452 |   expect((posted?.body as { item_ids: string[] }).item_ids).toContain("i-tall");
+      453 |   expect((posted?.body as { item_ids: string[] }).item_ids).not.toContain("i-ms");
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/boards.spec.ts:450:71
+    Error Context: test-results/boards-drawn-items-are-promoted-from-the-sheet-by-keyboard/error-context.md
+  1 failed
+    keyboard/boards.spec.ts:435:1 › drawn items are promoted from the sheet by keyboard ────────────
+playwright exit 1
+# restored: True 
+
+## plant in src/ingest/runs/promotions.tsx ('a promotion is reviewed and approved by keyboard'):
+#   - 'open.promotion.id, approve, approve ? undefined : reason.trim()'
+#   + 'open.promotion.id, false, approve ? undefined : reason.trim()'
+Running 1 test using 1 worker
+[1/1] keyboard/promotions.spec.ts:23:1 › a promotion is reviewed and approved by keyboard
+  1) keyboard/promotions.spec.ts:23:1 › a promotion is reviewed and approved by keyboard ───────────
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 1
+    + Received  + 1
+      Object {
+    -   "approve": true,
+    +   "approve": false,
+      }
+      28 |   await press(page, "Approve and commit");
+      29 |   const decided = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/p-1/decision"));
+    > 30 |   expect(decided?.body).toEqual({ approve: true });
+         |                         ^
+      31 |   await expect(page.getByRole("dialog")).toHaveCount(0);
+      32 |   await expect(page.getByRole("status")).toContainText("Approved and committed");
+      33 |   registerCovered("PROMOTION_ACTIONS", "review-and-approve-a-promotion-by-keyboard");
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/promotions.spec.ts:30:25
+    Error Context: test-results/promotions-a-promotion-is-reviewed-and-approved-by-keyboard/error-context.md
+  1 failed
+    keyboard/promotions.spec.ts:23:1 › a promotion is reviewed and approved by keyboard ────────────
+playwright exit 1
+# restored: True 
+
+## plant in src/ingest/runs/promotions.tsx ('rejected with a reason'):
+#   - 'open.promotion.id, approve, approve ? undefined : reason.trim()'
+#   + 'open.promotion.id, approve, undefined'
+Running 1 test using 1 worker
+[1/1] keyboard/promotions.spec.ts:36:1 › a promotion is rejected with a reason by keyboard
+  1) keyboard/promotions.spec.ts:36:1 › a promotion is rejected with a reason by keyboard ──────────
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 1
+    + Received  + 0
+      Object {
+        "approve": false,
+    -   "reason": "Source note too thin",
+      }
+      46 |   await press(page, "Reject");
+      47 |   const decided = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/p-1/decision"));
+    > 48 |   expect(decided?.body).toEqual({ approve: false, reason: "Source note too thin" });
+         |                         ^
+      49 |   registerCovered("PROMOTION_ACTIONS", "reject-a-promotion-with-a-reason-by-keyboard");
+      50 | });
+      51 |
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/promotions.spec.ts:48:25
+    Error Context: test-results/promotions-a-promotion-is-rejected-with-a-reason-by-keyboard/error-context.md
+  1 failed
+    keyboard/promotions.spec.ts:36:1 › a promotion is rejected with a reason by keyboard ───────────
+playwright exit 1
+# restored: True 
+
+## plant in src/ingest/runs/promotions.tsx ('layer is merged by keyboard'):
+#   - '  async function merge(): Promise<void> {\n    if (!sheet) return;'
+#   + '  async function merge(): Promise<void> {\n    return;'
+Error: No tests found.
+Make sure that arguments are regular expressions matching test files.
+You may need to escape symbols like "$" or "*" and quote the arguments.
+playwright exit 1
+# restored: True 
+
+## plant in src/ingest/runs/promotions.tsx ('cancelled by keyboard'):
+#   - '    if (sheet && !merged) await cancelLayerMerge('
+#   + '    if (false) await cancelLayerMerge('
+Running 1 test using 1 worker
+[1/1] keyboard/promotions.spec.ts:91:1 › a merge sheet is cancelled by keyboard, its grant closed
+  1) keyboard/promotions.spec.ts:91:1 › a merge sheet is cancelled by keyboard, its grant closed ───
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: true
+    Received: false
+    Call Log:
+    - Timeout 5000ms exceeded while waiting on the predicate
+       95 |   await page.keyboard.press("Escape");
+       96 |   await expect(page.getByRole("dialog", { name: /Merge Old wing's layer/ })).toHaveCount(0);
+    >  97 |   await expect.poll(async () => (await sent(page)).some((s) => s.method === "DELETE" && s.path.endsWith("/layer-merges/g-1"))).toBe(true);
+          |                                                                                                                                ^
+       98 |   registerCovered("PROMOTION_ACTIONS", "cancel-a-layer-merge-by-keyboard");
+       99 | });
+      100 |
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/promotions.spec.ts:97:128
+    Error Context: test-results/promotions-a-merge-sheet-i-095f4-y-keyboard-its-grant-closed/error-context.md
+  1 failed
+    keyboard/promotions.spec.ts:91:1 › a merge sheet is cancelled by keyboard, its grant closed ────
+playwright exit 1
+# restored: True 
+
+## plant in src/ingest/runs/promotions.tsx ('deleted'):
+#   - '    const answer = await deleteLayer(apiBaseUrl, bearerToken, datasetId, caseId);'
+#   + '    return; const answer = await deleteLayer(apiBaseUrl, bearerToken, datasetId, caseId);'
+Running 1 test using 1 worker
+[1/1] keyboard/promotions.spec.ts:101:1 › a removed case's layer is deleted after asking once, by keyboard
+  1) keyboard/promotions.spec.ts:101:1 › a removed case's layer is deleted after asking once, by keyboard 
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: true
+    Received: false
+    Call Log:
+    - Timeout 5000ms exceeded while waiting on the predicate
+      109 |   expect((await sent(page)).some((s) => s.method === "DELETE" && s.path.endsWith("/layer"))).toBe(false);
+      110 |   await press(page, "Delete the layer");
+    > 111 |   await expect.poll(async () => (await sent(page)).some((s) => s.method === "DELETE" && s.path.endsWith("/removed-cases/c-old/layer"))).toBe(true);
+          |                                                                                                                                         ^
+      112 |   await expect(page.getByRole("status")).toContainText("Promoted items were not touched");
+      113 |   registerCovered("PROMOTION_ACTIONS", "delete-a-removed-cases-layer-after-asking-once-by-keyboard");
+      114 | });
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/promotions.spec.ts:111:137
+    Error Context: test-results/promotions-a-removed-case--9f538-ter-asking-once-by-keyboard/error-context.md
+  1 failed
+    keyboard/promotions.spec.ts:101:1 › a removed case's layer is deleted after asking once, by keyboard 
+playwright exit 1
+# restored: True 
+
+## (the merge plant above matched no test by its words; run again with the case's own title)
+## plant in src/ingest/runs/promotions.tsx ('merged through its sheet by keyboard'):
+#   - '  async function merge(): Promise<void> {\n    if (!sheet) return;'
+#   + '  async function merge(): Promise<void> {\n    return;'
+Running 1 test using 1 worker
+[1/1] keyboard/promotions.spec.ts:69:1 › a removed case's layer is merged through its sheet by keyboard
+  1) keyboard/promotions.spec.ts:69:1 › a removed case's layer is merged through its sheet by keyboard 
+    Error: expect(received).toEqual(expected) // deep equality
+    Expected: {"item_ids": ["i-a"]}
+    Received: undefined
+      80 |   await press(page, "Merge");
+      81 |   const merged = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/layer-merges/g-1"));
+    > 82 |   expect(merged?.body).toEqual({ item_ids: ["i-a"] });
+         |                        ^
+      83 |   await expect(page.getByRole("dialog", { name: "Merge sent" })).toContainText("Left out, and why");
+      84 |   await press(page, "Close");
+      85 |   // A sent merge closed its own grant (committed or sent for review: one grant, one merge), so
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/promotions.spec.ts:82:24
+    Error Context: test-results/promotions-a-removed-case--bccdd-rough-its-sheet-by-keyboard/error-context.md
+  1 failed
+    keyboard/promotions.spec.ts:69:1 › a removed case's layer is merged through its sheet by keyboard 
+playwright exit 1
+# restored: True 
+

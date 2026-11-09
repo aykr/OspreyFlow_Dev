@@ -1,0 +1,67 @@
+# Plant: the lifespan's seam put back to NoPromotionsYet() (app.py), test_promotion_sweep_live.py's real-store case run alone, lease case on stack e held throughout, detached on the server by stack_lease.sh remote, from 2026-11-09T19:10:05Z; app.py restored after
+Running on ospreyflow-test (stack e, osprey-runs/case/OspreyFlow_Build/), logged at osprey-runs/case.meta/runs/20261109T191014Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py -k real_promotion_record
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2 items / 1 deselected / 1 selected
+
+../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py F    [100%]
+
+=================================== FAILURES ===================================
+_ test_the_lifespans_own_seam_over_the_real_promotion_record_raises_the_alert __
+
+api_env = None
+
+    def test_the_lifespans_own_seam_over_the_real_promotion_record_raises_the_alert(
+        api_env: None,
+    ) -> None:
+        """The same sweep with nothing stood in for the source: the lifespan's own
+        `app.state.waiting_promotions` (`app.waiting_promotions_seam`, L3.4) over promotions written
+        to the real `promotions` table. Red with `NoPromotionsYet()` still in the lifespan (no
+        alert)."""
+        tag = "swr" + uuid.uuid4().hex[:8]
+        dataset_id = f"ds-{tag}"
+        case_id = asyncio.run(_home_case())
+        days_before = asyncio.run(_home(dataset_id, case_id))
+        from services.api.app import app
+    
+        try:
+            with TestClient(app):
+                held = app.state.identity_admin
+                app.state.identity_admin = _People()
+                try:
+                    asyncio.run(_record_promotions(dataset_id, tag))
+                    deadline = time.monotonic() + 20
+                    rows: list[asyncpg.Record] = []
+                    while time.monotonic() < deadline and not rows:
+                        time.sleep(0.5)
+                        rows = asyncio.run(_alerts(tag))
+                    time.sleep(2)
+                    rows = asyncio.run(_alerts(tag))
+                finally:
+                    app.state.identity_admin = held
+        finally:
+            asyncio.run(_forget(tag))
+            asyncio.run(_restore(days_before))
+>       assert [r["promotion_id"] for r in rows] == [f"{tag}-old"]
+E       AssertionError: assert [] == ['swr89098d3f-old']
+E         
+E         Right contains one more item: 'swr89098d3f-old'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py:256: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py::test_the_lifespans_own_seam_over_the_real_promotion_record_raises_the_alert
+================= 1 failed, 1 deselected, 1 warning in 29.38s ==================
+remote exit 1
+# restored: True

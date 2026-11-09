@@ -562,6 +562,37 @@ Every action is proved by keyboard in `keyboard/boards.spec.ts` (`BOARD_ACTIONS`
 gestures are cases of their own there. `a11y/every-harness.spec.ts` scans the board, its forms and its
 question in dark, light and GOV.UK.
 
+**Promotion** (ADR-143 decisions 8 and 10; Amendment 2 decision 1; L3.4). The board's creator has
+*Promote…* (`boards/PromoteSheet.tsx`): the sheet says which dataset, its highest allowed marking and
+whether the Author promotes or a second person reviews; lists each drawn item not yet promoted as a
+checkbox, ticked when it may go; an item failing a check is not tickable and says why beneath it; a
+link, picture or match decision says it goes when its ends go; then the checks (passed or not, in the
+Conduit's words), the undecided matches as warnings, and how it is recorded. *Promote* (or *Send for
+review*) sends what is ticked; the sheet then says the outcome, the load and *Left out, and why*. A
+board that promotes into nothing (a drawing that is its own dataset, a case reading a composite or a
+gazetteer dataset) says why and offers no button. Escape or *Cancel* closes it, back to *Promote…*. *Promotions from this
+board* lists each one the reader may see, its status, what it added and, when rejected, the reason;
+what was left out is shown to its proposer alone.
+
+The Ingest Studio's **4 Runs** shows ***Analyst promotions*** under the grid (`ingest/runs/promotions.tsx`,
+by agreement with the Studio lane): each promotion's load, what it adds, who and when, the case, its
+status (and reviewer, and reason); *Review* for one this person may decide, *Details* otherwise, with
+why they cannot decide ("You sent this promotion: a second person must review it", "… you are not one
+of its Authors"); the details as a summary list of its items (type, marking, grading, source note),
+*Approve and commit* (not offered when an item is withheld from this reader) and *Reject with a
+reason* (a reason is required); for a holder of `revert_loads`, the revert command as text, never a
+button. A reader without `review_promotions` is told who has it. Below it, for one of the dataset's
+Authors only, ***Removed cases' layers***: each removed case's layer as a count, *Merge into the
+dataset* (its sheet says the read grant is for this merge alone; a composite case's layer says it is
+never merged) and *Delete…*, which shows its dry run's words (what would go, nothing written) and
+asks once; the delete then says it in words, with no count. Under the GOV.UK brand the lists are summary lists, the ticks
+GOV.UK checkboxes, statuses GOV.UK tags, the table a GOV.UK table and a refusal an error summary.
+
+Proved by keyboard in `keyboard/boards.spec.ts` (`promote-drawn-items-by-keyboard`,
+`close-the-promotion-sheet-by-escape`) and `keyboard/promotions.spec.ts` (`PROMOTION_ACTIONS`); axe
+scans the sheet, the Studio list, its details and rejection, the merge sheet and the delete question in
+dark, light and GOV.UK.
+
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
 **Built (ADR-052 Amendments 5 and 12):** the Glass shows a picker of the cases the account holds a
@@ -1294,7 +1325,10 @@ never a partial chart. First among its panels is the ***Alerts* panel** (ADR-146
 report's `monitoring.open_by_source`, the panel adding up only what the Conduit counted for the reader
 (rule 7); and the newest five still in the queue, from the queue's own rows, only for a reader the Conduit
 gives the rows to (ADR-146 Amendment 2 point 3; anyone else sees the counts alone). A row opens the alert at
-its address only for someone Rules and Monitoring is offered to; for anyone else it is words. A *Drawing*
+its address only for someone Rules and Monitoring is offered to; for anyone else it is words. The same
+panel is on every drawing board (`boards/BoardAlerts.tsx`, L3.4): the case's figures read for that reader,
+its rows words there and never a way to open an alert, and no panel at all for a reader the case's figures
+are not for (`boards/BoardAlerts.test.tsx`; `keyboard/boards.spec.ts`). A *Drawing*
 panel (drawn, promoted, awaiting review, withdrawn) is drawn only when the report carries `drawing`, which
 it does not until promotions are built (L3.4). Opened from an alert (the Reports Viewer's journey, below),
 the tab says "From alert: ‹the alert's title on Home› · ← Back to your alerts" (decision 10's "From alert

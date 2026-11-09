@@ -1,0 +1,38 @@
+# L3.4 live run at dcd105d (tree 1f3abe19c10ca6bc56ebb4e41f800547cc04c522) with the four patches and placesByRole.json applied, uncommitted (git status below), under lease case on stack c (ArcadeDB 2493, Postgres 55435), OSPREY_LANE=case, from 2026-11-09T09:33:39Z
+#  M ../.github/workflows/ci.yml
+#  M Makefile
+#  M spec/03_CONDUIT_MIDDLEWARE.md
+#  M tests/services/api/test_admin_sections.py
+#  M tests/services/api/test_analyst_link_types.py
+#  M tests/services/api/test_investigation_levels.py
+#  M tests/services/api/test_promotions.py
+#  M tests/services/api/test_route_rights.py
+#  M ../OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+#  M ../OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
+#  M ../OspreyFlow_Core/services/api/app.py
+# ?? process/lanes/case/gates/dcd105d.ci.txt
+# ?? process/lanes/case/gates/dcd105d.live.txt
+# files: ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_promotion_store.py ../OspreyFlow_Build/tests/services/api/test_board_store.py ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py ../OspreyFlow_Build/tests/services/api/test_case_writes_store.py ../OspreyFlow_Build/tests/services/api/test_composite_writes_live.py ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 406 items
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_analyst_layer.py . [  0%]
+.                                                                        [  0%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_bulk_loader.py ... [  1%]
+...........................................                              [ 11%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_composite_write_to_member_node.py . [ 12%]
+...                                                                      [ 12%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_dataset_footprints.py . [ 13%]
+.......                                                                  [ 14%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_guard.py ...       [ 15%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py ..... [ 16%]
+....                                                                     [ 17%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py ......... [ 19%]
+........................................................................ [ 37%]
+.................................# 2026-11-09T10:02:18Z: stopped on the orchestrator's word (swap at 27.9 of 28 GB with three live runs); stack c brought down and released. Not a result.

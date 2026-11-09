@@ -1,0 +1,42 @@
+# Round 2's item 1: Admin's Delete's unit check removed, offline, over d567733 with admin-delete-L3.4.patch applied; restored after.
+# plant in services/api/app.py:
+#   - '    if principal.org_unit is None or dataset.owning_unit != principal.org_unit:\n        raise UnknownDatasetEgressError(dataset_id)\n'
+#   + ''
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______________ test_admin_delete_is_scoped_to_the_datasets_unit _______________
+
+pw = namespace(datasets=<services.api.datasets.InMemoryDatasetStore object at 0x136af4c80>, cases=<tests.services.api.test_...at 0x136a9be00>, store=<services.api.promotion_store.InMemoryPromotionStore object at 0x136b880e0>, removed={'case-k'})
+
+    def test_admin_delete_is_scoped_to_the_datasets_unit(pw: SimpleNamespace) -> None:
+        """Rule 4 at the unit boundary (the independent review's round 2, item 1; provisional, the
+        strict default): Admin's Delete is a destructive write with no undo, so only an administrator
+        of the dataset's current unit makes it. Another unit's administrator is answered exactly as
+        for a dataset that does not exist, and nothing is withdrawn; another unit's person without
+        `administer_system` is refused by the right first."""
+        PEOPLE["ada9"] = Principal(id="ada9", clearance="SECRET", org_unit="unit-2", roles=["osprey-admin"])
+        try:
+            board = _board()
+            drawn = _item(board)
+            pw.removed.add(K)
+            assert _as("zed").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 403
+            other = _as("ada9").post(f"/v1/admin/datasets/src/cases/{K}/delete")
+            unknown = _as("ada9").post(f"/v1/admin/datasets/no-such/cases/{K}/delete")
+>           assert other.status_code == unknown.status_code == 404
+E           assert 200 == 404
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   404 = <Response [404 Not Found]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_promotions.py:1143: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotions.py::test_admin_delete_is_scoped_to_the_datasets_unit
+1 failed, 100 deselected, 1 warning in 1.75s
+
+pytest exit 1
+# restored: True

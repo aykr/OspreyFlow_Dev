@@ -182,6 +182,10 @@ async def _apply_common_indexes(client: ArcadeDBClient, type_name: str) -> list[
     # its revert restores them.
     await _create_property(client, type_name, "withdrawn_by_load", "STRING")
     await _create_index(client, type_name, "withdrawn_by_load", unique=False)
+    # `promoted_by_load` — sparse (ADR-143 decision 8): present only on an element a promotion
+    # added a dataset to, looked up by that promotion's load id when it is reverted.
+    await _create_property(client, type_name, "promoted_by_load", "STRING")
+    await _create_index(client, type_name, "promoted_by_load", unique=False)
     # `datasets` (ADR-099 decision 2, Amendment 6): a list, indexed by each of its items, so a read
     # by dataset (`WHERE datasets CONTAINS ...`) is answered from the index. The access step's
     # Gremlin filter tests the list itself (`AccessFilter.gremlin_dataset_step`).
@@ -192,6 +196,7 @@ async def _apply_common_indexes(client: ArcadeDBClient, type_name: str) -> list[
         f"{type_name}.reverted",
         f"{type_name}.superseded_by",
         f"{type_name}.withdrawn_by_load",
+        f"{type_name}.promoted_by_load",
         f"{type_name}.datasets",
     ]
 

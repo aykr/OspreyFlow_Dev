@@ -1,50 +1,63 @@
-# Case lane · L3.3 (drawing boards) · report, 8 November 2026
+# Case lane · L3.4 (promotion; a removed case's layer merged or deleted) · report after round 2, 9 November 2026
 
-**Exit criteria, each red by a plant at its call site (`L3.3_RED_RECORD.md`):**
+Gated head: **`2ce2377`**, on `lane/case`, rebased onto main `9db2051` (not rebased again once gated). After it,
+records only: `d90f94e` (ADR-143 Amendment 5 to the owner's rulings, and the two comments naming them) and
+`09683c2` (the gate files), then the commit adding this report. Round 2 answers the orchestrator's independent
+review of `d577c14`; the earlier reports are in git history.
 
-- **1 Boards: met.**
-  - What a board does: declare an item, link it (by the handle, Alt-drag, the menu or the form) and move it.
-  - Every drawn item carries a marking, a grading and a source (a note, a document, or both), and may have an icon.
-  - *Same* merges nothing (rule 6). Pictures, uploaded or chosen, are kept in the layer.
-  - Tests: `test_boards.py` (44). `keyboard/boards.spec.ts` (33): 28 keyboard cases covering all 23 `BOARD_ACTIONS` ids, and 4 pointer cases.
-- **2 A drawing with no case: met.** It makes its drawn dataset, a home case and a board. `test_a_drawing_with_no_case_makes_its_dataset_case_and_board`.
-- **3 Watch: met.** Drawing an item sets its watch, and withdrawing the item ends it. A reader who may not see the item sees no watch.
-  - Tests: `test_drawing_sets_a_watch_and_withdrawing_ends_it`, `…_withheld_whole`.
-  - The watch's queue is left to L3.6.
-- **4 Ceiling: met** on every path, refused in words. `test_an_item_above_the_ceiling_is_refused_in_words`, `test_an_edit_an_upload_and_a_choice_above_the_ceiling_are_refused_in_words`.
-- **5 Restore: met.** `test_a_drawn_item_and_its_picture_come_back_in_their_cases_layer` (live).
-- **Rules 3 and 4: met.**
-  - All 17 routes answer another case's member as for a missing case.
-  - Nothing of a drawn item reaches another case. The test goes red with K's layer in B's read set, and on real Postgres with the SQL's case clause made true.
-  - A lower-cleared member of the same case is told nothing of what they may not see, on any board read or by a withdrawal.
-- **Axe:** 56 passed (dark, light and GOV.UK).
-- **Gates** (`gates/b9c4ffa.notes.md`), at `b9c4ffa` (tree `b2c1544928d4`) on main `057a10e`, rules' L2.9:
-  - make -k ci and make test fail only on this machine's own tests, the network, trivy's cache lock and the CI patch's wiring.
-  - npm test: 2727 passed. The Matrix timing and main's rules registry check fail.
-  - The boards keyboard spec (33) and axe (56) passed.
-- **Live:** lease case on stack c, on a fresh database: 310 passed. The 1 failure is main's own (P2's model routes missing from the route-rights table).
+| Brief item | State | Proving test |
+| --- | --- | --- |
+| 1. Promotion: sheet, one load, the dataset's policy and highest marking, review by its approvers | **Met** | `test_promotions.py`, conformance `test_promotion.py`, `test_promotion_store.py` (live) |
+| 1. *Promotions overdue* (admin's L2.6 seam) | **Met** | the lifespan's own seam (`app.waiting_promotions_seam`), the case store in `test_waiting_promotions_contract.py`'s `STORES` (nine readers, `p-item-high` among the waiting), `test_promotion_sweep_live.py`'s real-store case (live; red with `NoPromotionsYet()`) |
+| 2. The Studio's *Analyst promotions* in `ingest/runs/` | **Met** | `promotions.test.tsx`, `keyboard/promotions.spec.ts`, axe |
+| 3. A removed case's layer merged (one grant, one merge, claimed atomically) or deleted, by an Author holding `investigate`; Admin's Delete within the dataset's unit; a composite's never merged | **Met** | `test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_when_it_is_sent`, `test_a_merge_whose_grant_another_merge_closed_meanwhile_records_nothing`, `test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer`, `test_admin_delete_is_scoped_to_the_datasets_unit` (in `admin-delete-L3.4.patch`); the composite cases and their plants |
+| 4. `promoted_at`; an unseen promoted link stays, the withdrawer told nothing (`CARRIES.md` row 13) | **Met** | `test_promotions.py`; spec 03 |
+| 4. Rules-b's alert badge and the boards' Alerts panel (`CARRIES.md` row 17) | **Met** | `canvas-badge.patch` applied; `boards/BoardAlerts.test.tsx`; `keyboard/boards.spec.ts`'s panel case |
+| Open question 2 (online revert) | **Settled (a)** | the operator command alone |
+| Keyboard ids as a diff; rule 4 on every route; each check red by a plant | **Met** | `registry-L3.4.patch`; `test_route_rights.py`; `L3.4_RED_RECORD.md`; `gates/keyboard-plants-L3.4.txt` |
 
-**Lane review (lane-reviewer):** two rounds.
-- Round 1 found 14 items; all are fixed.
-- Round 2 found 23 items, with two blockers: the restore test could not run, and a withdrawal's watch count told of a link the withdrawer could not see. Both blockers and every must-fix item are fixed.
-- The orchestrator's independent review found one blocker (`missing` counted hidden items) and must-fix items 2-4. All are fixed, with its minors and the canvas board-id gap.
-- Minors left: `POST /v1/drawings` is not atomic (a failed board leaves a usable empty case); the link-change test calls the service directly, not the route; a view-started board reports `start: selection` (spec 03 says so).
+## Round 2's findings, as fixed
 
-**Decisions taken** (the owner may overrule each):
-- Only a board's creator draws on it.
-- A match is suggested at a score of 0.75 or more.
-- Grading is 5x5x5 until L3.7.
-- The form asks for the type's required properties.
-- An edit is made in place; a marking is never lowered, and a drawn link's marking is never changed.
-- Watches live in `drawn_watches`, with no expiry yet.
-- A duplicate link is refused.
-- The documents offered as a source or picture are those on the board.
-- An unseen promoted link is left to L3.4. The orchestrator ruled (a): the node goes, the link stays, and the withdrawer is told nothing.
-- Drawing needs `investigate` too, and a board's id is told to its creator alone on every read path.
-- **Open question 4** (moving versus linking): built as C7 says, for a field analyst's check.
+- **1** (`b47708a`): Admin's Delete of a removed case's layer within the dataset's current unit; another unit's
+  administrator, or one with none, answered 404 as for no dataset, before anything is read. Red with the check
+  removed (`gates/admin-delete-unit-plant.txt`). In `admin-delete-L3.4.patch` with spec 03's line. **The owner
+  ruled this way on 9 November**; Amendment 5 says so (`d90f94e`).
+- **2** (`d567733`): the five removed-case writes name `investigate` (every Author role holds it, a Reports
+  Viewer does not); a Reports Viewer who is an Author writes nothing, 403 before anything is read. Red with the
+  right removed (`gates/layer-writes-right-plant.txt`). `test_route_rights.py`'s five rows; the census patch now
+  weighs only the two reads. **The owner ruled this way on 9 November; ADR-112 stands.**
+- **3** (`f63d4d8`): the seam's `waiting()` also filters `marking = ANY(the markings the reader clears)` in the
+  store's WHERE; the contract gains `p-item-high` (items marked above the dataset's highest), red for the case
+  store with the filter planted out (`gates/waiting-seam-plants.txt`, round 2 section); `promotion_store.py`'s
+  comment names `waiting(markings=…)`.
+- **4** (`2ce2377`): the friction fragment is one row.
+- **5**: one green live run at `2ce2377` of the whole set through one remote call: **409 passed**
+  (`gates/2ce2377.live.txt`).
+- **Minors:** the grant claimed atomically before anything is recorded, `close_grant` answering whether this call
+  closed it, a merge losing the race refused 403 `no_open_grant` with nothing recorded (`c2b1b18`, red in
+  `gates/grant-claim-plant.txt`); the seam's dataset-marking branch planted (`gates/waiting-seam-plants.txt`); the
+  board composite plant carried through the promote route (`cd30250`, `3d1df6e`: refused 409
+  `composite_read_only` at the write, recorded rejected, nothing promoted); one gated head named here.
 
-**For the orchestrator:**
-- Apply `registry-L3.3.patch` and `ci-wiring-L3.3.patch`. Without the second, test-file-coverage fails and `make test` errors on `test_board_store.py`.
-- Ratify these files outside case's map: `App.tsx` (merged with L2.9 as agreed), `App.chrome.test.tsx`, `packages/ontology/handling.py`, `canvas/`, `color/palette.ts`, `a11y/every-harness.spec.ts`, `dataset_scope.py`, `entity_pictures.py`, `link_changes.py`, and the board rows in three shared route tests.
+## A defect on main fixed here (not in L3.4's brief)
 
-**Commits:** `git log main..lane/case`. **Running:** nothing; the stack is down and the lease released.
+L3.7's Glass takes its grades only from the opened board's `grading_grades`; the boards keyboard harness gave
+none, so *an item is edited by keyboard* hung. Fixed in `7ef5b50`: red `gates/701c027.kb-red.txt`, green 45
+(`gates/40bf58e.kb.txt`).
+
+**Gates at `2ce2377`** (`gates/2ce2377.notes.md`, every failure explained), with the six patches applied and
+`placesByRole.json` regenerated, uncommitted, reversed after: `make -k test SKIP_JS=1` and `make test-js` on the
+server (`2ce2377.test.txt`): pytest 9751 passed, 2 failed (main's `test_valkey_config`; the server's GPU), vitest
+341 files, 1 failed (the matrix budget on the shared server); none this branch's. `make -k ci` here
+(`2ce2377.ci.txt`): red only for Docker (off on this Mac). Live (`2ce2377.live.txt`): 409 passed, lease case on
+stack e, acquired before and down and released after. No screen changed this round, so keyboard 45 and axe 776
+(round 1) stand.
+
+**Requests to the orchestrator:** apply `ci-wiring-L3.4.patch`, `registry-L3.4.patch`, `admin-delete-L3.4.patch`,
+`audit-census-L3.4.patch` (admin's), `case-b-writer-gate-L3.4.patch` (case-b's) and
+`reports-viewer-census-L3.4.patch` (rules-b's); regenerate `placesByRole.json` (`places-regeneration-L3.4.md`);
+ADR-143 Amendment 5 to *written* (the owner's rulings now in it). **Pending, another lane's:** admin's
+`PendingPromotion.items_marking` (`lane/admin` `b2a9cc2`, not on main): when it lands, `_as_pending` passes
+`items_marking=r.marking` and the probe asks it, and the contract's `p-item`/`p-item-high` are reconciled. **Left,
+not in this lane's path:** `CARRIES.md`'s `test_valkey_store.py` branch case and the DatasetStore bootstrap lock.
+**Questions for the owner:** none. **Running:** nothing; stack e down and released.

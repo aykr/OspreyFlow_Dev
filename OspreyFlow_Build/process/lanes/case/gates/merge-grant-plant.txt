@@ -1,0 +1,41 @@
+# Blocker 2's plant at the call site (Promotions.merge), offline, over 7ca6891; restored after.
+# plant in services/api/promotions.py:
+#   - '        await self.store.close_grant(grant.id, datetime.now(UTC))\n        return record\n'
+#   + '        return record\n'
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_when_it_is_sent _
+
+pw = namespace(datasets=<services.api.datasets.InMemoryDatasetStore object at 0x11650f0b0>, cases=<tests.services.api.test_...at 0x11650f080>, store=<services.api.promotion_store.InMemoryPromotionStore object at 0x11650c3e0>, removed={'case-k'})
+
+    def test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_when_it_is_sent(
+        pw: SimpleNamespace,
+    ) -> None:
+        """One grant, one merge (spec 03, Amendment 5 decision 7): sent for review, the grant is
+        closed to a second merge and to reading the layer through it; the reviewer approves as a
+        reviewer reads."""
+        _policy(pw, "second_person_reviews")
+        first, second = _removed_with_items(pw)
+        grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+        merged = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                                  json={"item_ids": [first["item_id"]]}).json()  # fmt: skip
+        assert merged["status"] == "awaiting_review" and not _carol_sees_it_from_b(first["element_id"])
+        again = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                                 json={"item_ids": [second["item_id"]]})  # fmt: skip
+>       assert again.status_code == 403 and again.json()["error"] == "no_open_grant"
+E       assert (201 == 403)
+E        +  where 201 = <Response [201 Created]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_promotions.py:911: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotions.py::test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_when_it_is_sent
+1 failed, 92 deselected, 1 warning in 1.37s
+
+pytest exit 1
+# restored: True

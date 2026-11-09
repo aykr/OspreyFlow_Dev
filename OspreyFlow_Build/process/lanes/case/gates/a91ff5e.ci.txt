@@ -1,0 +1,1037 @@
+/Applications/Xcode.app/Contents/Developer/usr/bin/make -C ../OspreyFlow_Core check
+.venv/bin/ruff check .
+All checks passed!
+npm run lint
+
+> ospreyflow@0.0.0 lint
+> eslint .
+
+.venv/bin/mypy packages services harness
+services/api/promotions.py:554: error: Argument "was" to "decide" of "PromotionStore" has incompatible type "str"; expected "Literal['awaiting_review', 'committed', 'rejected', 'reverted']"  [arg-type]
+services/api/promotions.py:558: error: Unused "type: ignore" comment  [unused-ignore]
+services/api/promotions.py:685: error: Argument 1 to "tuple" has incompatible type "list[str] | None"; expected "Iterable[str]"  [arg-type]
+Found 3 errors in 1 file (checked 403 source files)
+make[1]: *** [typecheck] Error 1
+trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .
+2026-11-09T05:43:54Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T05:43:54Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T05:43:54Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T05:43:54Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T05:43:59Z	INFO	[npm] Run "npm install" to collect the license information of packages	dir="node_modules"
+2026-11-09T05:43:59Z	INFO	Number of language-specific files	num=3
+2026-11-09T05:43:59Z	INFO	[npm] Detecting vulnerabilities...
+2026-11-09T05:43:59Z	INFO	[pip] Detecting vulnerabilities...
+2026-11-09T05:43:59Z	INFO	[uv] Detecting vulnerabilities...
+2026-11-09T05:43:59Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌───────────────────────────────┬──────┬─────────────────┬─────────┐
+│            Target             │ Type │ Vulnerabilities │ Secrets │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ package-lock.json             │ npm  │        0        │    -    │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ services/ner/requirements.txt │ pip  │        0        │    -    │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ uv.lock                       │  uv  │        0        │    -    │
+└───────────────────────────────┴──────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.40kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:9
+--------------------
+   7 |     # lane) — one container run loads one recipe against one source file, then
+   8 |     # exits. Not a persistent server.
+   9 | >>> FROM python:3.12-slim AS builder
+  10 |     
+  11 |     RUN pip install --no-cache-dir uv==0.5.14
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-ingest] Error 1
+docker build --pull -f services/api/Dockerfile -t ospreyflow/api:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 6.85kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:42
+--------------------
+  40 |     # exception, and the licence register (`00_ARCHITECTURE.md` §7) passes no GPL. Until then *Build*
+  41 |     # says in words that Java is not installed in the Conduit (`map_admin.MapAdmin.basemap`).
+  42 | >>> FROM python:3.12-slim
+  43 |     
+  44 |     # Base-image OS packages lag the upstream image's own last-published point
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-api] Error 1
+docker build --pull -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.96kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:22-slim
+#2 ...
+
+#3 [internal] load metadata for docker.io/library/nginx:1.30-alpine
+#3 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests
+
+#2 [internal] load metadata for docker.io/library/node:22-slim
+#2 CANCELED
+------
+ > [internal] load metadata for docker.io/library/nginx:1.30-alpine:
+------
+Dockerfile:52
+--------------------
+  50 |     RUN npm run build --workspace apps/workspace
+  51 |     
+  52 | >>> FROM nginx:1.30-alpine
+  53 |     
+  54 |     # Base-image OS packages lag the upstream image's own last-published point
+--------------------
+ERROR: failed to build: failed to solve: nginx:1.30-alpine: failed to resolve source metadata for docker.io/library/nginx:1.30-alpine: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests
+make[1]: *** [trivy-image-workspace] Error 1
+docker build --pull -f harness/Dockerfile -t ospreyflow/harness:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 13.79kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/docker:29-cli
+#2 ...
+
+#3 [internal] load metadata for docker.io/library/python:3.12-slim
+#3 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+
+#2 [internal] load metadata for docker.io/library/docker:29-cli
+#2 CANCELED
+
+#4 [internal] load metadata for docker.io/library/node:22-slim
+#4 CANCELED
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:43
+--------------------
+  41 |     # console mode after Launch has handed off. Never faked with an in-image flag pretending the socket
+  42 |     # or the writable root are gone when the container was actually started with them.
+  43 | >>> FROM python:3.12-slim AS builder
+  44 |     
+  45 |     RUN pip install --no-cache-dir uv==0.5.14
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-harness] Error 1
+docker build --pull -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.39kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:3
+--------------------
+   1 |     # The fast recogniser (ADR-098 decision 2): Stanza's English named-entity recogniser on the CPU.
+   2 |     # The model is downloaded here, at build, so a deployment recognises without network access.
+   3 | >>> FROM python:3.12-slim
+   4 |     
+   5 |     ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1 STANZA_RESOURCES_DIR=/models
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-ner] Error 1
+docker build --pull -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.56kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:7
+--------------------
+   5 |     # connector profiles, no recipes, no `git`. Replicas are safe: each takes its consumer name from its
+   6 |     # own hostname (`worker_main.consumer_name`).
+   7 | >>> FROM python:3.12-slim AS builder
+   8 |     
+   9 |     RUN pip install --no-cache-dir uv==0.5.14
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-worker] Error 1
+docker build --pull -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.47kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 ERROR: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+------
+ > [internal] load metadata for docker.io/library/python:3.12-slim:
+------
+Dockerfile:16
+--------------------
+  14 |     COPY services ./services
+  15 |     
+  16 | >>> FROM python:3.12-slim
+  17 |     
+  18 |     # Current Debian security patches at build time, so `trivy image` stays a real gate.
+--------------------
+ERROR: failed to build: failed to solve: python:3.12-slim: failed to resolve source metadata for docker.io/library/python:3.12-slim: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/python/manifests/3.12-slim: 429 Too Many Requests
+make[1]: *** [trivy-image-report-sync] Error 1
+docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.00kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/10] FROM docker.io/apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 31.57kB done
+#5 DONE 0.0s
+
+#6 [ 7/10] COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
+#6 CACHED
+
+#7 [ 4/10] RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 uv==0.13.4
+#7 CACHED
+
+#8 [ 5/10] COPY superset_config.py osprey_theme.json /app/pythonpath/
+#8 CACHED
+
+#9 [ 9/10] COPY osprey_entrypoint.py /app/osprey_entrypoint.py
+#9 CACHED
+
+#10 [ 3/10] RUN uv pip install --no-cache --python /app/.venv/bin/python psycopg2-binary==2.9.6     authlib==1.9.1 mako==1.3.12 pyjwt==2.14.0 pillow==12.3.0 urllib3==2.8.0 pyasn1==0.6.5     jaraco.context==6.1.0 wheel==0.46.2 setuptools==84.0.0 brotli==1.2.1 certifi==2026.10.18
+#10 CACHED
+
+#11 [ 8/10] COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
+#11 CACHED
+
+#12 [ 2/10] RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+#12 CACHED
+
+#13 [ 6/10] COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/images/
+#13 CACHED
+
+#14 [10/10] COPY osprey_setup.py osprey_palette.py /app/
+#14 CACHED
+
+#15 exporting to image
+#15 exporting layers done
+#15 writing image sha256:19bc179996936c95a88c3ce899c0e9cacd62826dc9a0c33b1528ae70145f6254 done
+#15 naming to docker.io/ospreyflow/superset:ci done
+#15 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/superset:ci
+2026-11-09T05:44:13Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T05:44:13Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T05:44:13Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T05:44:13Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T05:44:13Z	INFO	Detected OS	family="debian" version="12.15"
+2026-11-09T05:44:13Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=134
+2026-11-09T05:44:13Z	INFO	Number of language-specific files	num=4
+2026-11-09T05:44:13Z	INFO	[node-pkg] Detecting vulnerabilities...
+2026-11-09T05:44:13Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-09T05:44:13Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-09T05:44:13Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+2026-11-09T05:44:13Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/superset:ci (debian 12.15)                                            │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset-frontend/package.json                                               │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset/mcp_service/package.json                                            │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset/static/assets/package.json                                          │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Deprecated-1.2.18.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Caching-2.3.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Compress-1.17.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_JWT_Extended-4.7.1.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Login-0.6.3.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Migrate-3.1.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_SQLAlchemy-2.5.1.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/MarkupSafe-3.0.2.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/PySocks-1.7.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/PyYAML-6.0.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/SQLAlchemy-1.4.54.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/XlsxWriter-3.0.9.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/alembic-1.15.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/amqp-5.3.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/annotated_types-0.7.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apache_superset-6.1.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apache_superset_core-0.1.0rc3.dist-info/- │ python-pkg │        0        │    -    │
+│ METADATA                                                                         │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apispec-6.6.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apsw-3.50.1.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/async_timeout-4.0.3.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/attrs-25.3.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/authlib-1.9.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/babel-2.17.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/backoff-2.2.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/backports.tarfile-1.2.0.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/bcrypt-4.3.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/billiard-4.2.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/blinker-1.9.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/bottleneck-1.5.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/brotli-1.2.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cachelib-0.13.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cachetools-6.2.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cattrs-25.1.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/celery-5.5.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/certifi-2026.10.18.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cffi-2.0.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/charset_normalizer-3.4.2.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click-8.2.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_didyoumean-0.3.1.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_option_group-0.5.7.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_plugins-1.1.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_repl-0.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/colorama-0.4.6.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cron_descriptor-1.4.5.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/croniter-6.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cryptography-46.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/defusedxml-0.7.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/deprecation-2.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/dnspython-2.7.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/email_validator-2.2.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/et_xmlfile-2.0.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/exceptiongroup-1.3.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/filelock-3.20.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask-2.3.3.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_appbuilder-5.0.2.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_babel-3.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_cors-6.0.2.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_limiter-3.12.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_session-0.8.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_talisman-1.1.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_wtf-1.2.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/geographiclib-2.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/geopy-2.4.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/google_auth-2.43.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/greenlet-3.1.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/gunicorn-23.0.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/hashids-1.3.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/holidays-0.82.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/humanize-4.12.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/idna-3.10.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/isodate-0.7.2.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/itsdangerous-2.2.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jaraco_context-6.1.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/joserfc-1.7.7.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonpath_ng-1.7.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonschema-4.23.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonschema_specifications-2025.4.1.dist-- │ python-pkg │        0        │    -    │
+│ info/METADATA                                                                    │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/kombu-5.5.3.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/limits-5.1.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/mako-1.3.12.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/markdown-3.8.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/markdown_it_py-3.0.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow-3.26.2.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow_sqlalchemy-1.4.0.dist-info/M- │ python-pkg │        0        │    -    │
+│ ETADATA                                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow_union-0.1.15.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/mdurl-0.1.2.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/msgpack-1.0.8.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/msgspec-0.19.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/nh3-0.2.21.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/numexpr-2.10.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/numpy-1.26.4.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/odfpy-1.4.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/openapi_schema_validator-0.6.3.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/openpyxl-3.1.5.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/ordered_set-4.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/outcome-1.3.0.post0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/packaging-25.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pandas-2.1.4.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/paramiko-3.5.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/parsedatetime-2.6.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pgsanity-0.2.9.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pillow-12.3.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/platformdirs-4.3.8.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/ply-3.11.dist-info/METADATA               │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/polyline-2.0.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/prison-0.2.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/prompt_toolkit-3.0.51.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/psycopg2_binary-2.9.6.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyarrow-16.1.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyasn1-0.6.5.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyasn1_modules-0.4.2.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pycparser-2.22.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pydantic-2.11.7.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pydantic_core-2.33.2.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pygeohash-3.2.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pygments-2.19.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyjwt-2.14.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pynacl-1.6.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyopenssl-25.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyparsing-3.2.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/python_dateutil-2.9.0.post0.dist-info/ME- │ python-pkg │        0        │    -    │
+│ TADATA                                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/python_dotenv-1.1.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pytz-2025.2.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyxlsb-1.0.10.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/redis-5.3.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/referencing-0.36.2.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/requests-2.32.4.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/requests_cache-1.2.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rfc3339_validator-0.1.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rich-13.9.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rpds_py-0.25.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rsa-4.9.1.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/selenium-4.32.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools-84.0.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/autocommand-2.2.2.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/backports.tarfile-1.2- │ python-pkg │        0        │    -    │
+│ .0.dist-info/METADATA                                                            │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/importlib_metadata-8.- │ python-pkg │        0        │    -    │
+│ 7.1.dist-info/METADATA                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco.text-4.0.0.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco_context-6.1.0.- │ python-pkg │        0        │    -    │
+│ dist-info/METADATA                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco_functools-4.4.- │ python-pkg │        0        │    -    │
+│ 0.dist-info/METADATA                                                             │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/more_itertools-10.8.0- │ python-pkg │        0        │    -    │
+│ .dist-info/METADATA                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/packaging-26.0.dist-i- │ python-pkg │        0        │    -    │
+│ nfo/METADATA                                                                     │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/platformdirs-4.4.0.di- │ python-pkg │        0        │    -    │
+│ st-info/METADATA                                                                 │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/tomli-2.4.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/wheel-0.46.3.dist-inf- │ python-pkg │        0        │    -    │
+│ o/METADATA                                                                       │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/zipp-3.23.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/shillelagh-1.4.3.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/simplejson-3.20.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/slack_sdk-3.35.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sniffio-1.3.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sortedcontainers-2.4.0.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sqlalchemy_utils-0.42.0.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sqlglot-28.10.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sshtunnel-0.4.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/tabulate-0.9.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/trio-0.30.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/trio_websocket-0.12.2.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/typing_extensions-4.15.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/typing_inspection-0.4.1.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/tzdata-2025.2.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/url_normalize-2.2.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/urllib3-2.8.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/vine-5.1.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/watchdog-6.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wcwidth-0.2.13.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/websocket_client-1.8.0.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/werkzeug-3.1.6.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wheel-0.46.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wrapt-1.17.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wsproto-1.2.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wtforms-3.2.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wtforms_json-0.3.5.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/xlrd-2.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/zstandard-0.23.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/apache_superset.egg-info/PKG-INFO                                            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset-core/src/apache_superset_core.egg-info/PKG-INFO                     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/packaging-26.3.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/pip-23.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools-84.0.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/autocommand-2.2.2.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/backports.tarfile-1.2- │ python-pkg │        0        │    -    │
+│ .0.dist-info/METADATA                                                            │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/importlib_metadata-8.- │ python-pkg │        0        │    -    │
+│ 7.1.dist-info/METADATA                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco.text-4.0.0.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco_context-6.1.0.- │ python-pkg │        0        │    -    │
+│ dist-info/METADATA                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco_functools-4.4.- │ python-pkg │        0        │    -    │
+│ 0.dist-info/METADATA                                                             │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/more_itertools-10.8.0- │ python-pkg │        0        │    -    │
+│ .dist-info/METADATA                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/packaging-26.0.dist-i- │ python-pkg │        0        │    -    │
+│ nfo/METADATA                                                                     │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/platformdirs-4.4.0.di- │ python-pkg │        0        │    -    │
+│ st-info/METADATA                                                                 │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/tomli-2.4.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/wheel-0.46.3.dist-inf- │ python-pkg │        0        │    -    │
+│ o/METADATA                                                                       │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/zipp-3.23.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/uv-0.13.4.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/wheel-0.46.3.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/bin/uv                                                                 │ rustbinary │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/bin/uvx                                                                │ rustbinary │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+npm run test:a11y --workspace apps/harness
+
+> @ospreyflow/harness@0.0.0 test:a11y
+> playwright test --config a11y/playwright.config.ts
+
+Error: http://localhost:5193 is already used, make sure that nothing is running on the port/url or set reuseExistingServer:true in config.webServer.
+
+npm error Lifecycle script `test:a11y` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness
+npm error workspace @ospreyflow/harness@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/harness
+npm error command failed
+npm error command sh -c playwright test --config a11y/playwright.config.ts
+make[1]: *** [harness-a11y] Error 1
+make[1]: Target `check' not remade because of errors.
+make: *** [core-check] Error 2
+../OspreyFlow_Core/node_modules/.bin/eslint -c ../OspreyFlow_Core/eslint.config.js tools
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.licence_check
+licence-check: 74 packages, all allowed (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+cd ../OspreyFlow_Core && node /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/tools/licence_check.mjs
+licence-check: 354 packages, all allowed.
+cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/tests/licence_check/*.test.mjs
+✔ a GPL-3.0 licence is rejected (2.170792ms)
+✔ a GNU General Public License, spelled out, is rejected (0.469917ms)
+✔ an MIT licence is allowed (0.2155ms)
+✔ an Apache-2.0 licence is allowed (0.229084ms)
+✔ LGPL-3.0 is refused for a package with no recorded exception (0.188542ms)
+✔ an LGPL term never carries an AGPL one through (0.163125ms)
+✔ an OR is a choice, so one allowed alternative is enough, but AND needs every term (0.296583ms)
+✔ terms match by whole words, and CC-BY-SA is not CC-BY (0.960791ms)
+✔ the four licences added on 19 October 2026 pass (0.2675ms)
+✔ a dual-licensed package naming both an allowed licence and GPL is rejected -- the real shape main() produces via licenses.join(" AND "), where an allowed marker elsewhere in the string must not let a GPL term slip through (0.146834ms)
+✔ an OFL-1.1 licence, by its SPDX short form, is allowed (0.062125ms)
+✔ OFL-1.1 beside GPL is still rejected (0.0515ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 121.664833
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.design_check
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.colour_drift_check
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+cd ../OspreyFlow_Core && node --test /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/tests/keycloak_theme/*.test.mjs
+✔ under GOV.UK the page is light whatever was chosen, with no theme button (133.20675ms)
+✔ without a brand the saved choice and the button are as before (34.474875ms)
+✔ the GOV.UK header, skip link and footer are added in reading order (141.618459ms)
+✔ no service-name band is drawn, and the page title names the service (25.722958ms)
+✔ without a service name the title falls back as the Glass's does (29.246458ms)
+✔ the skip link's target is the page's main content, focusable (13.935834ms)
+✔ a service name is text, never markup (42.039166ms)
+✔ under GOV.UK the card's words name no product; without it they say OspreyFlow (125.962667ms)
+✔ the sign-in page is marked English (ospreyflow brand) (17.007166ms)
+✔ the sign-in page is marked English (govuk brand) (24.516667ms)
+✔ a lang Keycloak wrote is kept (10.911375ms)
+﹣ without a mail server: the card's words, no reset link, the administrator named, validation before any request (0.459375ms) # needs throwaway Keycloaks (see the file's header)
+﹣ with a mail server: reset your password, then check your email, and the mail is sent (0.058834ms) # needs throwaway Keycloaks (see the file's header)
+✔ an empty form says what each field needs, and is not sent (241.999958ms)
+✔ an address that is not one, and a username with a space, are named as such (23.132334ms)
+✔ a well-formed address or username and a password are sent, and earlier errors cleared (38.581666ms)
+✔ nothing is said while typing, only on submit (11.169583ms)
+✔ with no mail server, the way back is the administrator, said where the link would be (52.973709ms)
+✔ the card ends with how accounts are made (18.1865ms)
+✔ the reset page checks the address or username, and its button says what it sends (54.260583ms)
+✔ after a reset is sent, the card says to check your email, with a way back to sign in (94.297292ms)
+✔ a refused submit gives Keycloak's button back, so the corrected form can be sent (27.255334ms)
+✔ a field's error sits directly under the field, before any help beneath it (18.830334ms)
+✔ the reset page's instruction leads the card, under its title, as the handoff has it (12.8405ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 2208.05425
+docker run --rm -v "/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/../OspreyFlow_Core/deploy/opentofu:/w" ghcr.io/opentofu/opentofu:1.10.6 -chdir=/w fmt -check -recursive
+Success! The configuration is valid.
+tests/small.tftest.hcl... pass
+  run "only_the_web_ports_are_open_to_the_world"... pass
+  run "the_database_is_private_encrypted_backed_up_and_guarded"... pass
+  run "the_object_store_is_private_and_encrypted"... pass
+  run "the_first_boot_installs_onto_rds_and_s3_with_no_secret_in_it"... pass
+  run "without_a_zone_no_name_is_made"... pass
+  run "with_a_zone_the_name_and_its_id_and_bi_names_are_made"... pass
+  run "the_server_recovers_itself_and_is_backed_up"... pass
+  run "an_unknown_size_is_refused"... pass
+  run "a_domain_that_is_not_a_name_is_refused"... pass
+
+Success! 9 passed, 0 failed.
+Success! The configuration is valid.
+tests/small.tftest.hcl... pass
+  run "only_the_web_ports_are_open_to_the_world"... pass
+  run "the_database_is_private_backed_up_and_guarded"... pass
+  run "the_object_store_is_private_and_encrypted_in_transit"... pass
+  run "secrets_are_kept_in_a_vault_that_cannot_be_purged_early"... pass
+  run "the_server_is_backed_up"... pass
+  run "an_unknown_size_is_refused"... pass
+  run "a_domain_that_is_not_a_name_is_refused"... pass
+  run "the_first_boot_installs_onto_the_managed_database_and_blob_with_no_secret_in_it"... pass
+  run "the_server_may_write_the_first_administrators_code_and_no_other_secret"... pass
+  run "with_a_zone_the_name_and_its_id_and_bi_names_are_made"... pass
+  run "without_a_zone_no_name_is_made"... pass
+
+Success! 11 passed, 0 failed.
+Success! The configuration is valid.
+tests/cluster.tftest.hcl... pass
+  run "the_api_answers_only_the_operators_addresses"... pass
+  run "the_whole_internet_is_refused_as_an_api_address"... pass
+  run "the_nodes_are_private_and_pods_reach_s3_as_the_node"... pass
+  run "the_charts_network_policies_are_enforced"... pass
+  run "kubernetes_secrets_are_encrypted_with_a_key_of_their_own"... pass
+  run "the_database_is_private_encrypted_replicated_backed_up_and_guarded"... pass
+  run "valkey_is_reached_over_tls_with_a_token_and_fails_over"... pass
+  run "the_stores_take_only_the_clusters_traffic"... pass
+  run "the_buckets_are_private_and_encrypted"... pass
+  run "the_chart_finds_both_storage_classes"... pass
+  run "the_install_answers_name_everything_and_hold_no_secret"... pass
+  run "without_search_there_is_no_domain_and_no_search_answer"... pass
+
+Success! 12 passed, 0 failed.
+Success! The configuration is valid.
+tests/cluster.tftest.hcl... pass
+  run "the_api_answers_only_the_operators_addresses"... pass
+  run "the_whole_internet_is_refused_as_an_api_address"... pass
+  run "every_sign_in_to_the_cluster_is_an_entra_id_one"... pass
+  run "the_nodes_have_no_public_addresses_and_the_deployment_has_its_own_pool"... pass
+  run "the_charts_network_policies_are_enforced"... pass
+  run "the_database_is_private_replicated_backed_up_and_guarded"... pass
+  run "the_cache_is_reached_only_over_tls_and_only_through_the_network"... pass
+  run "media_is_private"... pass
+  run "the_secrets_are_read_from_the_operators_network_only"... pass
+  run "the_chart_finds_both_storage_classes"... pass
+  run "the_install_answers_name_everything_and_hold_no_secret"... pass
+
+Success! 11 passed, 0 failed.
+docker run --rm -v "/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/../OspreyFlow_Core/deploy/helm/ospreyflow:/chart:ro" alpine/helm:3.16.3 lint /chart
+==> Linting /chart
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/harness/test_helm_chart.py ../OspreyFlow_Build/tests/harness/test_cluster_render.py ../OspreyFlow_Build/tests/harness/test_release_matrix.py ../OspreyFlow_Build/tests/harness/test_proxy_health.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 52 items
+
+../OspreyFlow_Build/tests/harness/test_helm_chart.py ................... [ 36%]
+                                                                         [ 36%]
+../OspreyFlow_Build/tests/harness/test_cluster_render.py ............... [ 65%]
+............                                                             [ 88%]
+../OspreyFlow_Build/tests/harness/test_release_matrix.py ....            [ 96%]
+../OspreyFlow_Build/tests/harness/test_proxy_health.py ..                [100%]
+
+============================= 52 passed in 53.56s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.schemas_check
+schemas-check: 500 generated types match committed output.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.authorized_query_check
+authorized-query-check: 138 files under services/api, no offenders.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.demo_guide_check
+demo-guide-check: 12 registered demo(s), all documented.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.domain_model_coverage_check
+domain-model-coverage-check: 90 class(es), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.route_coverage_check
+route-coverage-check: 365 route(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.product_tree_link_check
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.decision_log_publication_check
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.provenance_annotation_check
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
+test-file-coverage-check: live-service test file(s) not correctly wired (need both a `test`-job ignore and a live-service-job listing): tests/services/api/test_promotion_store.py: in neither the `test` job's ignore list nor any live-service job
+make: *** [test-file-coverage-check] Error 1
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
+doc-citations-check: 2083 file(s) scanned, every cited path exists.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance -k test_guard
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 704 items / 690 deselected / 14 selected
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_guard.py ..    [ 14%]
+../OspreyFlow_Build/tests/conformance/compute_port/test_guard.py ..      [ 28%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_guard.py ...       [ 50%]
+../OspreyFlow_Build/tests/conformance/media_store/test_guard.py ..       [ 64%]
+../OspreyFlow_Build/tests/conformance/model_port/test_guard.py ..        [ 78%]
+../OspreyFlow_Build/tests/conformance/recognise_port/test_guard.py ...   [100%]
+
+====================== 14 passed, 690 deselected in 1.43s ======================
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 82 items
+
+../OspreyFlow_Build/tests/test_stack_lease.py ................           [ 19%]
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py ...................... [ 46%]
+                                                                         [ 46%]
+../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 76%]
+...                                                                      [ 80%]
+../OspreyFlow_Build/tests/test_friction_assemble.py ......               [ 87%]
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 96%]
+../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [100%]
+
+======================== 82 passed in 81.18s (0:01:21) =========================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 8 items
+
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py .FF... [ 75%]
+..                                                                       [100%]
+
+=================================== FAILURES ===================================
+__________ test_only_the_reverts_module_names_its_unfiltered_lookups ___________
+
+    def test_only_the_reverts_module_names_its_unfiltered_lookups() -> None:
+        for name, allowed in CONFINED.items():
+            offenders = {
+                f
+                for root in (CORE / "services", CORE / "scripts", CORE / "packages")
+                for f in callers(root, CORE, name)
+                if f not in allowed
+            }
+>           assert offenders == set(), f"these name GraphPort.{name}: {sorted(offenders)}"
+E           AssertionError: these name GraphPort.live_edges_touching: ['services/api/promotions.py']
+E           assert {'services/api/promotions.py'} == set()
+E             
+E             Extra items in the left set:
+E             'services/api/promotions.py'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py:86: AssertionError
+___________ test_the_module_each_lookup_is_confined_to_does_call_it ____________
+
+    def test_the_module_each_lookup_is_confined_to_does_call_it() -> None:
+        for name, allowed in CONFINED.items():
+            if name == NAME:
+                continue
+>           assert callers(CORE / "services", CORE, name) == allowed, name
+E           AssertionError: live_edges_touching
+E           assert {'services/ap...ad_revert.py'} == {'services/in...ad_revert.py'}
+E             
+E             Extra items in the left set:
+E             'services/api/promotions.py'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py:93: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py::test_only_the_reverts_module_names_its_unfiltered_lookups
+FAILED ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py::test_the_module_each_lookup_is_confined_to_does_call_it
+========================= 2 failed, 6 passed in 3.62s ==========================
+make: *** [confinement-check] Error 1
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.no_branches_check
+no-branches-check: 1429 files, no branch named.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items
+
+../OspreyFlow_Build/tests/test_no_branches_check.py ............         [100%]
+
+============================== 12 passed in 1.23s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=packages:/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build .venv/bin/python -m tools.osprey_bundle --profile local-lite --out /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/dist
+osprey bundle: 79 file(s) -> /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
+make: Target `ci' not remade because of errors.
+make -k ci exit 2

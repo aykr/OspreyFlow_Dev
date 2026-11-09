@@ -1,0 +1,33 @@
+# L3.4 live run at 701c027 (tree 13700d233fe0c4bc51d399fab77b30fa97f55b71) on main cbe0281, with ci-wiring, admin-delete, case-b-writer-gate and registry -L3.4.patch applied and placesByRole.json regenerated per places-regeneration-L3.4.md, all uncommitted (git status below), under lease case on stack e, OSPREY_LANE=case, from 2026-11-09T13:09:35Z
+#  M ../.github/workflows/ci.yml
+#  M ../OspreyFlow_Build/Makefile
+#  M ../OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+#  M ../OspreyFlow_Build/tests/services/api/test_admin_sections.py
+#  M ../OspreyFlow_Build/tests/services/api/test_analyst_link_types.py
+#  M ../OspreyFlow_Build/tests/services/api/test_investigation_levels.py
+#  M ../OspreyFlow_Build/tests/services/api/test_promotions.py
+#  M ../OspreyFlow_Build/tests/services/api/test_route_rights.py
+#  M apps/workspace/keyboard/actionRegistry.ts
+#  M apps/workspace/src/shell/placesByRole.json
+#  M services/api/app.py
+# ?? ../OspreyFlow_Build/process/lanes/case/gates/701c027.axe.txt
+# ?? ../OspreyFlow_Build/process/lanes/case/gates/701c027.ci.txt
+# ?? ../OspreyFlow_Build/process/lanes/case/gates/701c027.kb.txt
+# ?? ../OspreyFlow_Build/process/lanes/case/gates/701c027.live.txt
+# ?? ../OspreyFlow_Build/process/lanes/case/gates/701c027.test.txt
+# ?? apps/workspace/a11y/zz-case-port.config.ts
+# files: ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_promotion_store.py ../OspreyFlow_Build/tests/services/api/test_board_store.py ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py ../OspreyFlow_Build/tests/services/api/test_case_writes_store.py ../OspreyFlow_Build/tests/services/api/test_composite_writes_live.py ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 407 items
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_analyst_layer.py . [  0%]
+.                                                                        [  0%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_bulk_loader.py ... [  1%]
+...........FF.......
+# WITHDRAWN, UNMEASURED: stopped at 2026-11-09T14:38:21Z on the owner's ruling through the orchestrator. Over the ssh tunnel to stack e every database call took about 0.7 s, so the set had run for about 1h25 and was still in test_bulk_loader.py (about 11% of 407); its four F there are unexamined (no traceback was printed before the stop) and are read again in the rerun. Not a result in either direction; the lease on e was kept and the stack left up for the rerun on the server (stack_lease.sh remote).

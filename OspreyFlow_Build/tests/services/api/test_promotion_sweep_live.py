@@ -189,3 +189,72 @@ def test_the_lifespans_own_sweep_raises_r7s_alert_once_at_n_days(api_env: None) 
     assert sorted(__import__("json").loads(row["recipients"])) == ["sw-adm", "sw-rev"]
     assert row["words"] == (
         f"Promotion {tag}-load-1 into Synthetic custody {tag} has waited 3 days for review.")
+
+
+async def _record_promotions(dataset_id: str, tag: str) -> None:
+    """Two promotions waiting in L3.4's own record (`promotion_store.PostgresPromotionStore`), one
+    past N days and one not, as a board's promotion under *Second person reviews* writes them."""
+    from services.api.promotion_store import PostgresPromotionStore, PromotionRecord
+
+    store = await PostgresPromotionStore.connect(PostgresConfig.from_env().dsn)
+    now = datetime.now(UTC)
+    try:
+        for suffix, load, age in (("old", 1, timedelta(days=3, minutes=5)),
+                                  ("new", 2, timedelta(days=1))):  # fmt: skip
+            await store.add(PromotionRecord(
+                id=f"{tag}-{suffix}", load_id=f"{tag}-load-{load}", trigger="analyst_promotion",
+                case_id=f"case-{tag}", board_id=f"board-{tag}", dataset_id=dataset_id,
+                layer_id=f"layer-{tag}", proposed_by=PROPOSER.id, proposed_at=now - age,
+                status="awaiting_review", marking="OFFICIAL", unit="unit-sw",
+            ))  # fmt: skip
+    finally:
+        await store.close()
+
+
+async def _forget(tag: str) -> None:
+    """What the real-store case wrote, removed (the promotions and their alert)."""
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        await conn.execute("DELETE FROM promotions WHERE id LIKE $1", f"{tag}-%")
+        await conn.execute("DELETE FROM promotion_overdue_alerts WHERE promotion_id LIKE $1",
+                           f"{tag}-%")  # fmt: skip
+    finally:
+        await conn.close()
+
+
+def test_the_lifespans_own_seam_over_the_real_promotion_record_raises_the_alert(
+    api_env: None,
+) -> None:
+    """The same sweep with nothing stood in for the source: the lifespan's own
+    `app.state.waiting_promotions` (`app.waiting_promotions_seam`, L3.4) over promotions written
+    to the real `promotions` table. Red with `NoPromotionsYet()` still in the lifespan (no
+    alert)."""
+    tag = "swr" + uuid.uuid4().hex[:8]
+    dataset_id = f"ds-{tag}"
+    case_id = asyncio.run(_home_case())
+    days_before = asyncio.run(_home(dataset_id, case_id))
+    from services.api.app import app
+
+    try:
+        with TestClient(app):
+            held = app.state.identity_admin
+            app.state.identity_admin = _People()
+            try:
+                asyncio.run(_record_promotions(dataset_id, tag))
+                deadline = time.monotonic() + 20
+                rows: list[asyncpg.Record] = []
+                while time.monotonic() < deadline and not rows:
+                    time.sleep(0.5)
+                    rows = asyncio.run(_alerts(tag))
+                time.sleep(2)
+                rows = asyncio.run(_alerts(tag))
+            finally:
+                app.state.identity_admin = held
+    finally:
+        asyncio.run(_forget(tag))
+        asyncio.run(_restore(days_before))
+    assert [r["promotion_id"] for r in rows] == [f"{tag}-old"]
+    [row] = rows
+    assert sorted(__import__("json").loads(row["recipients"])) == ["sw-adm", "sw-rev"]
+    assert row["words"] == (
+        f"Promotion {tag}-load-1 into {dataset_id} has waited 3 days for review.")

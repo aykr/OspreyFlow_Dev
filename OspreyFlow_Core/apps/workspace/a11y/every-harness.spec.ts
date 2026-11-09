@@ -86,6 +86,23 @@ const EXTRA_STATES: Record<string, string[]> = {
     "board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CWithdraw%20Unknown%20male%20%E2%80%9CTall%E2%80%9D",
     "board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D",
     "board=b-wing&press=menu%3APerson%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)",
+    // L3.4: the promotion sheet, with an item that cannot go and a warning; the sheet after sending,
+    // with what was left out; Promotions from this board.
+    "board=b-wing&press=Promote%E2%80%A6",
+    "board=b-wing&policy=second_person_reviews&press=Promote%E2%80%A6%7CSend%20for%20review",
+  ],
+  // ADR-143 decision 10 and Amendment 2 decision 1 (L3.4): the Studio's Analyst promotions with a
+  // promotion's details open for review, its rejection's reason asked, the revert command shown, the
+  // proposer and a non-Author told why they cannot decide, and a removed case's merge sheet and delete
+  // question.
+  "promotions-harness.html": [
+    "press=Review%20load%20promotion-wing-1",
+    "press=Review%20load%20promotion-wing-1%7CReject%20with%20a%20reason",
+    "revert=1",
+    "as=alice",
+    "as=fred",
+    "press=Merge%20into%20the%20dataset%20from%20Old%20wing",
+    "press=Delete%E2%80%A6%20Old%20wing's%20layer",
   ],
   // ADR-143 decision 9 (L3.5): the Model tab's proposals block with its decision form, the form's
   // error summary, and as the proposer.

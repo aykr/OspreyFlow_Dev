@@ -1,0 +1,71 @@
+# stack c, lease case, 2026-11-09T09:28:58Z, HEAD d9436b4 with the case fixed (uncommitted)
+## as fixed
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py .     [100%]
+
+============================== 1 passed in 13.50s ==============================
+pytest exit 0
+## plant: the walk without session_id=tx
+ OspreyFlow_Core/packages/adapters/graph_arcadedb/adapter.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py F     [100%]
+
+=================================== FAILURES ===================================
+_ test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote[graph_arcadedb[gremlin]] _
+
+factory = GraphAdapterFactory(label='graph_arcadedb', dialect='gremlin', context=<function _graph_arcadedb_factories.<locals>._context at 0x1066d2340>)
+
+    async def test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote(
+        factory: GraphAdapterFactory,
+    ) -> None:
+        """ADR-143 Amendment 5 decision 8 (the independent review of L3.4, item 4): the revert asks
+        `live_edges_touching` inside its own transaction, so the read and the writes that follow are
+        one view of the graph. A link written in that transaction, not yet committed, is seen through
+        it; the same read outside it (the plant: the session dropped) does not see it. Rolled back, so
+        nothing stays. The link goes to a third person: one between `loaded` and `drawn` would merge
+        into `_drawn`'s own committed link (same pair, same type) and answer its id, seen everywhere
+        (measured on ArcadeDB at d9436b4)."""
+        async with factory.context() as adapter:
+            _, drawn, _ = await _drawn(adapter)
+            (third,), _ = await _write(
+                adapter, [_node("Person", classification="OFFICIAL", datasets=[SOURCE])], []
+            )
+            held = await adapter.live_edges_touching([drawn])
+            tx = await adapter.begin_transaction()
+            try:
+                (written,) = await adapter.upsert_edges(
+                    [_edge("ASSOCIATE_OF", drawn, third, classification="OFFICIAL",
+                           datasets=[LAYER_A])],
+                    tx,
+                )  # fmt: skip
+                assert written not in held, "a new link, not a merge into a committed one"
+                inside = await adapter.live_edges_touching([drawn], tx=tx)
+                outside = await adapter.live_edges_touching([drawn])
+            finally:
+                await adapter.rollback_transaction(tx)
+>           assert written in inside
+E           AssertionError: assert '01M6ZT83KAXRDFD8M3YG15X5DF' in {'01M6ZT83BA74H0BC8VWV7Q8X24'}
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py:282: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote[graph_arcadedb[gremlin]]
+============================== 1 failed in 9.02s ===============================
+pytest exit 1
+adapter restored

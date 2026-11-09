@@ -1,0 +1,25 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 452ef6f..a68f59a 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -504,6 +504,20 @@ export const BOARD_ACTIONS = defineActionRegistry("BOARD_ACTIONS", [
+   "decide-not-the-same-on-a-suggested-match-by-keyboard",
+   "start-a-drawing-with-no-case-by-keyboard",
+   "go-back-to-the-boards-by-keyboard",
++  // ADR-143 decision 8 (L3.4).
++  "promote-drawn-items-by-keyboard",
++  "close-the-promotion-sheet-by-escape",
++] as const);
++
++/** The Ingest Studio's *Analyst promotions* (ADR-143 decision 10; Amendment 2 decision 1; L3.4):
++ * review, reject, a removed case's layer merged or deleted. `keyboard/promotions.spec.ts`. */
++export const PROMOTION_ACTIONS = defineActionRegistry("PROMOTION_ACTIONS", [
++  "review-and-approve-a-promotion-by-keyboard",
++  "reject-a-promotion-with-a-reason-by-keyboard",
++  "close-a-promotions-details-by-escape",
++  "merge-a-removed-cases-layer-by-keyboard",
++  "cancel-a-layer-merge-by-keyboard",
++  "delete-a-removed-cases-layer-after-asking-once-by-keyboard",
+ ] as const);
+ 
+ /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's

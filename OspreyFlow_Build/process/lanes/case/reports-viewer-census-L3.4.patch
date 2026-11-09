@@ -1,0 +1,21 @@
+diff --git a/OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py b/OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py
+index 0a5bffe..61a1698 100644
+--- a/OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py
++++ b/OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py
+@@ -266,6 +266,16 @@ OPEN_TO_ANY_SIGNED_IN = {
+     "get_map_local_source_route", "list_connectors", "list_domain_packs", "get_handling_scheme_route",
+     "get_yardstick_route", "get_grading_scheme_route", "list_transforms", "my_rights_route",
+     "model_engines_route", "case_model_engines_route", "issue_ws_ticket",
++} | {
++    # L3.4 (ADR-143 Amendment 2 decision 1), weighed at its independent review on 9 November: a
++    # removed case's layers listed, and a merge sheet read again through its own grant. Reads by
++    # one of the dataset's Authors alone: owning a dataset needs no right (ADR-145 Amendment 4
++    # decision 3), and the dataset's own gate (404 to a person none of whose cases loads into it)
++    # and Author level on its home case ask instead. Their writes (opening a merge, merging,
++    # cancelling, deleting and its dry run) name `investigate`, which a Reports Viewer does not hold
++    # (ADR-112: refused every write); `test_promotions.py`'s
++    # `test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer`.
++    "removed_case_layers", "read_layer_merge",
+ }  # fmt: skip
+ 
+ 

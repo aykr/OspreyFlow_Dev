@@ -26547,7 +26547,7 @@ board, drawn item, promotion), `02_GLASS_FRONTEND.md` (boards) and `03_CONDUIT_M
 2. **Revert of a promotion online.** A revert today runs as an operator command with the Conduit
    stopped (ADR-127 Amendment 9). The prototype lets an analyst revert their own promotion from the
    board. An online path for promotion loads (small, one case's items) or the operator command only?
-   For the owner at L3.4.
+   For the owner at L3.4. **Settled (a), the operator command only** (Amendment 5 decision 8).
 3. Should the dataset's highest allowed marking (ADR-145 A3) bind pipeline loads as well as promotions?
    Recommendation: yes, as a load rule; its own amendment to ADR-140.
 4. Moving versus linking (C7): to be confirmed with one of the owner's field analysts before L3.3's
@@ -31451,3 +31451,187 @@ ourselves. What the platform requires, and where `main` stands:
   Calico deny policy, no RWX storage class).
 - Solirius runs ArcadeDB and ClickHouse in production: backups, patching, upgrades and monitoring are in
   the support service, and their runbooks are part of the documentation step (D2c).
+
+### ADR-143, Amendment 5 (9 November 2026) — promotion and a removed case's layer as built (L3.4)
+
+Status: built by the case lane at L3.4 under Prompt L. The decisions the brief left open were taken
+as recommended and are recorded here for the owner to overrule. Decisions 8 and 10 and Amendment 2
+decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and spec 03 §3.1c's
+*Promotion* have the detail.
+
+**As built.**
+
+1. **One load adds the dataset to the drawn elements themselves.** `GraphPort.promote_elements`
+   unions the case's source dataset into each element's `datasets` and stamps `promoted_by_load`, in
+   one transaction. An id that is not live (missing, withdrawn, superseded) refuses the whole call
+   before anything is written. Its revert is `revert_promotion`; a removed case's layer is withdrawn
+   by `withdraw_layer`. Each has conformance cases, written first.
+2. **The record is the promotion's own ledger** (`promotions`), not the Studio's run ledger: a
+   promotion runs no recipe. It holds the load id and trigger (`analyst_promotion`, `layer_merge`),
+   the case, board, dataset and layer, the proposer, status and review, the element ids, the items,
+   what was left out and why, the highest marking and the unit. The Runs tab lists promotions as
+   their own list under the grid, not as a grid row.
+3. **Who promotes, and from where.** Promoting needs the case's Author level and
+   `promote_to_dataset` (ADR-112 Amendment 4, I12), on one's own board. A board that promotes into
+   nothing says why: a drawing that is its own dataset (Amendment 3 decision 1; merged at L3.9), a
+   case reading a composite, a case reading no dataset.
+4. **What goes.** Ticked items. A ticked link goes only when both its ends will be in the dataset. A
+   picture and a match decision follow their drawn node unticked. Everything else is listed with its
+   reason. Every check runs on the sheet and again at the route.
+5. **Who reviews** (ADR-145 decision 8 and Amendment 4 decisions 3 and 11, replacing C11's "a data
+   engineer of the dataset or an Author of the case"): the dataset's Authors (its home case's) who
+   hold `review_promotions`, never the proposer. A reviewer reads exactly the promotion's elements, by
+   id, from its layer and the dataset, through their own clearance. One who may not see every item
+   may not approve. The Studio's list leaves out a promotion marked above the reader's clearance.
+6. **Under *Second person reviews* nothing is written to the graph until the approval**, and the
+   approval runs every check again on the items as they are now: one edited since (a marking raised)
+   or the dataset's highest lowered refuses the load and records the promotion rejected, saying why.
+   An item an open promotion carries is offered in no other, and an element another load promoted is
+   not promoted again. A load refused for any reason is recorded rejected, never left waiting.
+6a. **What reaches whom** (rules 3 and 7). What a promotion left out, with its labels, goes to its
+   proposer alone. The Studio's list names the case only to the dataset's Authors and its proposer,
+   and leaves out, in the store's query, a promotion above the reader's clearance; a board's list
+   does the same for its readers, in its query too. A reviewer shown fewer items than the promotion
+   carries is given the counts of what is shown, never the difference, in the list as in *Details*
+   (`Promotions.shown_counts`). An item of an open promotion edited to a higher marking raises the
+   promotion's own marking with it, so every reader filter reads the promotion as it is now. Drawn
+   items carry only a permitted handling code, so the classification is the whole of their audience
+   beyond the dataset.
+7. **A removed case's layer is merged or deleted from the Ingest Studio's Runs**, by the dataset's
+   Authors, who need not be administrators. An administrator's *Delete* in Admin › Datasets is the
+   admin lane's to build (`process/lanes/case/admin-delete-L3.4.patch`: the route, its positive and
+   open-case tests; its screen makes the dry run come first, which the route does not enforce).
+   - The merge sheet opens a read grant to that one layer, for that Author and that merge. The grant
+     closes when the merge is sent (committed at once, or sent for review: one grant makes one
+     merge, and nothing more is read through it), when it is cancelled or refused, when the layer is
+     deleted, or after eight hours, and is never reopened; the reviewer reads as a reviewer does,
+     never through it (the independent review of L3.4, blocker 2). A case restored since the sheet was opened is not merged.
+   - The sheet lists only what the Author may see. An item above their clearance stays in the layer,
+     uncounted (rule 3 over rule 2, as the L3.3 withdrawal ruling).
+   - A merge carries the layer's drawn items (the board registry's). The analyst's own resolution
+     links and hand-marking in the layer (Amendment 1) stay; a delete withdraws them with the rest.
+   - A composite case's layer is never merged, only deleted (the owner's ruling of 9 November 2026,
+     relayed through the orchestrator); the owner may later choose a member merge. Neither from the
+     composite's Studio (409 `composite_never_merged`) nor from a member dataset's, which no case
+     reading it through the composite is linked to (404 `case_not_linked`).
+   - **The owner's ruling of 9 November 2026 (asked at the independent review's round 2, item 1):**
+     Admin's *Delete* of a removed case's layer is `administer_system`'s **within the dataset's current unit**:
+     an administrator of another unit is answered 404, as a dataset that does not exist, before
+     anything is read or withdrawn (a destructive write with no undo, as *Name an Author* is
+     unit-scoped). `test_admin_delete_is_scoped_to_the_datasets_unit`, red with the unit check
+     removed.
+   - **The owner's ruling of 9 November 2026 (asked at the independent review's round 2, item 2):**
+     the Studio's five removed-case writes (opening a merge, merging, cancelling, deleting and the delete's dry
+     run) name `investigate`, a right every Author role holds and a Reports Viewer does not (ADR-112:
+     a Reports Viewer is refused every write; ADR-146 decision 10), beside the dataset's own gate and
+     Author level on its home case; its two reads (the removed cases listed, a merge sheet read
+     again) name none, owning needing none (ADR-145 Amendment 4 decision 3), weighed in
+     `test_reports_viewer_journey.py` (`reports-viewer-census-L3.4.patch`).
+     `test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer`, red with the
+     right removed. ADR-112 stands: a Reports Viewer, even one of the dataset's Authors, writes
+     nothing here.
+   - **Nothing drawn goes into a gazetteer dataset** (`gazetteer-*`, ADR-147 Amendment 1 decision 2,
+     which holds the build's places alone): a case reading one is offered no promotion and is
+     refused one at the route, and a removed case's layer is never merged into one, only deleted
+     (found at the rebase onto P4; the case lane's choice under Prompt L, `promotions.is_gazetteer`;
+     `test_promotions.py`'s two gazetteer cases, each red with the check removed).
+   - A delete's screen shows its dry run first (for an Author in the Studio, as for an administrator
+     in Admin); neither route requires one to have been run. It needs no second person, answers in words with no count, and never touches an element holding
+     another dataset.
+8. **Revert is the operator command alone**, `python -m scripts.revert_promotion <load_id>
+   --reverted-by <you> [--dry-run]`, with the Conduit stopped (ADR-127 Amendment 9). It takes the
+   dataset back from exactly the promotion's elements, clears their `promoted_at` and the Conduit's
+   kept results, and is audited (a refusal after the audit is audited too). It is refused while a live
+   link other than its own and the case's unpromoted drawing rests on one of its nodes (as a load's
+   revert is, ADR-127 Amendment 6), and a promotion from a layer deleted since takes its elements
+   out with the layer. **The owner ruled (a) on open question 2** (9 November 2026, through the
+   orchestrator): no online revert; the operator command is the only path. The board shows the
+   command to a data engineer and tells an analyst to ask one.
+   **The revert's core lives in the operator command alone** (`scripts/revert_promotion.py`): its
+   guard asks `GraphPort.live_edges_touching`, the unfiltered lookup a load's revert asks, and that
+   module is the second one allowed it (`tests/test_unfiltered_node_lookup_confined.py`'s
+   `CONFINED`; the orchestrator's ratification for L3.4, 9 November 2026). Nothing under
+   `services/` imports it (`test_no_service_imports_the_revert_command`, red by a planted import),
+   the entry fails if the script stops calling it (red with the call dropped), and
+   `services/api/promotions.py` names neither that lookup nor `links_resting_on`.
+9. **A link's type is checked against the dataset's live model**, its packs, as a node's is (C14).
+   **A case's own proposed link types are usable on its boards at once** (decision 9), through
+   `LinkTypeService.case_types` alone. A proposal's hidden storage label is never offered or accepted
+   by name (the orchestrator's carried item). Their links are promoted only once live, through case-b's
+   `promotion_refusals` (Amendment 4 decision 3).
+
+10. **A proposed link type's words go only to an accepter cleared for the case's marking.** The owner
+   ruled (b) on Amendment 4's open access question (9 November 2026, through the orchestrator): the
+   strict reading built meanwhile stands, in `link_types.may_read_proposal_words`; any other
+   `accept_types` holder is told only that a proposal exists above their clearance, without its words.
+
+11. **After the lane's second review** (9 November 2026; the case lane's choices under Prompt L,
+   none loosening access):
+   - **A restored case is merged no more, and read no more, at every step.** Each use of a merge's
+     grant (reading the sheet again, merging) checks the case is still removed; one restored since
+     is refused (404 `case_not_linked` since decision 12, as an id no case reading the dataset
+     has) and its grant closed for good. An approval of a waiting
+     `layer_merge` checks it too, and a restored case's merge is recorded rejected, nothing
+     written. *Cancel* closes the holder's grant whatever the case's state.
+   - **The grant ends however the merge ends**: committed, rejected by a reviewer, rejected by the
+     approval's re-check, its load refused or failed, its layer deleted (`Promotions.reject`, the
+     one path every rejection takes).
+   - **A decided promotion's elements are read for no reviewer.** *Details* reads a waiting
+     promotion's elements from its layer and the dataset, a committed one's from the dataset alone,
+     and nothing for a rejected or reverted one, whose elements are its case's layer's alone again.
+   - **Deleting a layer rejects what still waits from it**, so nothing ages in *Promotions overdue*
+     that can never be approved.
+   - **Every state change has its audit entry**: a promotion rejected by anything but a reviewer's
+     own *Reject* is audited `promotion_rejected`; reading a merge sheet through its grant is
+     audited `read_layer_merge`.
+   - **The delete's dry run says what goes**: the layer's counts as the reader may see them,
+     promoted items included, and that deleting withdraws those not promoted; never "would delete
+     N".
+
+12. **After the orchestrator's independent review** (9 November 2026; the case lane's choices under
+   Prompt L, none loosening access, each red by a plant at its call site):
+   - **C14 holds through case-b's real service**: an ontology link type goes only when the dataset's
+     live model holds it, whatever `promotion_refusals` answers (`None` for every ontology type); a
+     case's own proposed type is that service's alone to decide. No quiet fallback when the app
+     holds a service without the method.
+   - **A rejection's words reach only who may know the case**: a check's rejection records fixed
+     words; a reviewer's own reason, the proposer and the case go to the dataset's Authors, the
+     proposer and the case's own board, never to another reader of the dataset.
+   - **The revert goes on only when it can tell the Conduit is stopped**: a bare connection to
+     `OSPREY_CONDUIT_URL`'s host and port, stopped only when the host resolves and the connection is
+     refused (an answer, an unresolved name or a timeout refuses; no route is asked). It reads its
+     resting links inside its own transaction (`live_edges_touching` gains an optional `tx`). Not
+     conformance first: the port, adapter and fake took `tx` before the case could fail; the case
+     was shown red afterwards by a plant in the adapter (`L3.4_RED_RECORD.md`, the d9436b4 section).
+   - **Strict 404**: an open case reading the dataset answers every removed-case route exactly as
+     an id no case reading it has (the lane review's minor 12, reversed from "left" to fixed).
+   - **An ambiguous id refuses the load in words** (409 `ambiguous_item`), the board fake refusing
+     it as the adapter's `_holders` does; the removed cases' list is audited.
+   - **A case's own proposed type is read by the name it reads as**: its links are stored under the
+     proposal's storage label (`<NAME>__<id>`), which `promotion_refusals` does not know; the label
+     is translated through `LinkTypeService.case_types` first, so a type accepted and live is
+     promoted (found by the lane review through the real service, from proposal to promotion).
+   - **The revert fails closed on the Conduit**: it goes on only when the Conduit's address resolves
+     and refuses the connection; any answer, an unresolved name or a timeout refuses.
+   - **Found, not fixed here**: a case's own type accepted and live is no longer offered for *new*
+     links on its boards (`Boards.case_link_types` keeps only a type carrying a `proposal_id`, and a
+     live one carries none, while `model_link_types` reads packs, not the model's extensions). Its
+     links drawn while it waited promote; drawing more needs that fix (the case lane's, next step).
+   - **Left to their owners**: the administrator's *Delete* route (`admin-delete-L3.4.patch`, for
+     admin), the promotion-writer gate read as syntax over both triggers
+     (`case-b-writer-gate-L3.4.patch`, for case-b), and `placesByRole.json` regenerated at the
+     merge (`places-regeneration-L3.4.md`, for the orchestrator).
+
+**Open.** Nothing for the owner. The *Promotions overdue* sweep (ADR-145 Amendment 6) is wired to
+this record (`app.waiting_promotions_seam`, in place of `NoPromotionsYet`): a promotion is listed to a
+reader only if admin's `promotion_ageing.may_review` admits them, asked of each dataset as it is now
+(its owning unit, highest marking and home case's Authors), never of what the promotion recorded at
+proposal, and the reviewable datasets go into the store's query with the markings the reader's
+clearance reaches, since the items' own marking is not bounded by a dataset with no highest marking or
+one lowered while it waits (the independent review of L3.4, blocker 1 and round 2's item 3). `test_waiting_promotions_contract.py` holds the case store to the nine readers; the
+lifespan's own sweep over the real record is `test_promotion_sweep_live.py`'s second case.
+
+**Tests.** `tests/conformance/graph_port/test_promotion.py`; `tests/services/api/test_promotions.py`;
+`tests/services/api/test_promotion_store.py` (real Postgres); `test_boards.py`'s proposed-type cases;
+`keyboard/boards.spec.ts` and `keyboard/promotions.spec.ts`; axe in dark, light and GOV.UK. Each red
+by a plant at its call site (`process/lanes/case/L3.4_RED_RECORD.md`).

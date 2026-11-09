@@ -1,0 +1,47 @@
+# Round 2's item 2: the removed-case writes' right (investigate) removed from all five at once (_LAYER_WRITES emptied), offline, over f63d4d8; restored after.
+# plant in services/api/app.py:
+#   - '_LAYER_WRITES = [Depends(require_right(Right.INVESTIGATE))]'
+#   + '_LAYER_WRITES: list[Any] = []'
+========
+_ test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer _
+
+pw = namespace(datasets=<services.api.datasets.InMemoryDatasetStore object at 0x1202b02c0>, cases=<tests.services.api.test_...at 0x1202f0fb0>, store=<services.api.promotion_store.InMemoryPromotionStore object at 0x120149550>, removed={'case-k'})
+
+    def test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer(
+        pw: SimpleNamespace,
+    ) -> None:
+        """ADR-112 (a Reports Viewer is refused every write) and ADR-146 decision 10 (read-only): one
+        of the dataset's Authors holding only `reports_viewer` opens no merge, merges, cancels, deletes
+        nor runs the delete's dry run (403 `right_required`, before anything is read or granted). The
+        round 2 review's item 2; whether owning alone should do is the owner's open question."""
+        PEOPLE["vic"] = Principal(id="vic", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"])
+        pw.cases.grants[HOME]["vic"] = AccessLevel.AUTHOR
+        try:
+            first, _ = _removed_with_items(pw)
+            for method, path in (
+                ("post", f"/v1/datasets/src/removed-cases/{K}/merge-sheet"),
+                ("post", f"/v1/datasets/src/removed-cases/{K}/delete/dry-run"),
+                ("delete", f"/v1/datasets/src/removed-cases/{K}/layer"),
+                ("post", "/v1/datasets/src/layer-merges/any-grant"),
+                ("delete", "/v1/datasets/src/layer-merges/any-grant"),
+            ):
+                kwargs = {"json": {"item_ids": []}} if method == "post" and "layer-merges" in path else {}
+                answer = getattr(_as("vic"), method)(path, **kwargs)
+>               assert answer.status_code == 403, (method, path, answer.text)
+E               AssertionError: ('post', '/v1/datasets/src/removed-cases/case-k/merge-sheet', '{"grant_id":"01M70W6P2DF5EVEYQSNDFR4QSD","investigation... keeps its marking and grading; it is listed in the Ingest Studio\'s Analyst promotions and reverted like any load."}')
+E               assert 200 == 403
+E                +  where 200 = <Response [200 OK]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_promotions.py:983: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotions.py::test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer
+1 failed, 98 deselected, 1 warning in 1.60s
+
+pytest exit 1
+# restored: True

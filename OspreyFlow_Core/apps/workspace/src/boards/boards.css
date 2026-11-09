@@ -83,3 +83,13 @@
   min-height: var(--h-control-28); padding: 0 var(--sp-12); text-align: left; border: 0; background: transparent; color: var(--text-primary); cursor: pointer;
 }
 .board-menu__item:hover, .board-menu__item:focus-visible { background: var(--surface-menu-hover); }
+
+/* Promotion (ADR-143 decision 8, L3.4): the sheet's ticks, its checks and what was left out. */
+.board__checks { display: grid; gap: var(--sp-6); }
+.board__check { display: grid; grid-template-columns: var(--h-control-24) 1fr; gap: var(--sp-2) var(--sp-6); align-items: center; }
+.board__check input { width: var(--h-control-24); height: var(--h-control-24); margin: 0; }
+.board__why { grid-column: 2; margin: 0; color: var(--text-secondary); }
+.board__summary { display: grid; gap: var(--sp-4); margin: 0; }
+.board__summary-row { display: grid; grid-template-columns: 96px 1fr; gap: var(--sp-8); }
+.board__summary-row dd { margin: 0; }
+.board__warnings, .board__promotions { margin: 0; padding-left: var(--sp-16); display: grid; gap: var(--sp-4); }

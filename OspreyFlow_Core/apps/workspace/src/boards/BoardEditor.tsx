@@ -45,6 +45,9 @@ import {
   type MatchSuggestions,
 } from "./boardsApi";
 import "./boards.css";
+import { BoardAlerts } from "./BoardAlerts";
+import { BoardPromotionsList, PromoteSheet } from "./PromoteSheet";
+import { boardPromotions, type Promotion } from "./promotionsApi";
 
 export interface EntityTypeShape {
   name: string;
@@ -66,6 +69,7 @@ type Panel =
   | { kind: "edit"; id: string }
   | { kind: "link"; from: string; to: string | null }
   | { kind: "withdraw"; id: string }
+  | { kind: "promote" }
   | null;
 
 interface Menu {
@@ -92,6 +96,8 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
   const [matches, setMatches] = useState<MatchSuggestions | null>(null);
   const [pictures, setPictures] = useState<Record<string, string>>({});
   const [rubber, setRubber] = useState<{ from: string; x: number; y: number } | null>(null);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const promoteButton = useRef<HTMLButtonElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
@@ -108,6 +114,8 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
     setMatches(found.ok ? found.value : null);
     const shown = await boardPictures(apiBaseUrl, bearerToken, caseId, boardId);
     setPictures(shown.ok ? (shown.value.pictures ?? {}) : {});
+    const sent = await boardPromotions(apiBaseUrl, bearerToken, caseId, boardId);
+    setPromotions(sent.ok ? (sent.value.promotions ?? []) : []);
   }, [apiBaseUrl, bearerToken, caseId, boardId]);
 
   useEffect(() => {
@@ -286,6 +294,19 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
             }
           >
             Share with the case
+          </button>
+        )}
+        {mayDraw && (
+          <button
+            ref={promoteButton}
+            type="button"
+            className={govuk ? "govuk-button govuk-button--secondary board__button" : "btn board__button"}
+            onClick={() => {
+              setMenu(null);
+              setPanel({ kind: "promote" });
+            }}
+          >
+            Promote…
           </button>
         )}
         <button type="button" className={govuk ? "govuk-button govuk-button--secondary board__button" : "btn board__button"} onClick={onBack}>
@@ -581,6 +602,23 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               </div>
             </div>
           )}
+          {panel?.kind === "promote" && (
+            <PromoteSheet
+              apiBaseUrl={apiBaseUrl}
+              bearerToken={bearerToken}
+              caseId={caseId}
+              boardId={boardId}
+              govuk={govuk}
+              onClose={() => {
+                setPanel(null);
+                requestAnimationFrame(() => promoteButton.current?.focus());
+              }}
+              onPromoted={(p) => {
+                setSaid(p.status === "committed" ? `Promoted into ${p.dataset_name}.` : `Sent for review into ${p.dataset_name}.`);
+                void reload();
+              }}
+            />
+          )}
           {!panel && selectedNode && (
             <Inspector
               node={selectedNode}
@@ -610,6 +648,8 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               }}
             />
           )}
+          {promotions.length > 0 && <BoardPromotionsList promotions={promotions} govuk={govuk} />}
+          <BoardAlerts api={{ apiBaseUrl, bearerToken, investigationId: caseId }} />
           <MatchesPanel
             matches={matches}
             byId={byId}

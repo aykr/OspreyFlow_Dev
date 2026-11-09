@@ -1,0 +1,16 @@
+# test_promotion_store.py again, after the _three fix (uncommitted at the run, committed next), same tree otherwise, lease case on stack e held throughout, detached on the server by stack_lease.sh remote, from 2026-11-09T19:09:34Z
+Running on ospreyflow-test (stack e, osprey-runs/case/OspreyFlow_Build/), logged at osprey-runs/case.meta/runs/20261109T190944Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_promotion_store.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 11 items
+
+../OspreyFlow_Build/tests/services/api/test_promotion_store.py ......... [ 81%]
+..                                                                       [100%]
+
+============================== 11 passed in 3.40s ==============================
+remote exit 0

@@ -3,7 +3,8 @@
 // with a document of the case as its source and an icon of its own; inspect it, move it by the arrow
 // keys, edit it and withdraw it after asking once (from the inspector and from its menu, Shift+F10);
 // open the link form from the selected item and from an item's menu; add a picture, or choose one on
-// the board; decide a suggested match both ways; start a drawing with no case; go back to the boards. No `page.mouse`, no `.click()` in these.
+// the board; decide a suggested match both ways; start a drawing with no case; go back to the boards;
+// promote drawn items from the sheet, and close it by Escape (L3.4). No `page.mouse`, no `.click()` in these.
 //
 // The pointer gestures (C7: drag moves; the link handle, Alt-drag and right-click draw a link) are
 // below the keyboard cases, each named as a pointer case and not registered: they are not what rule
@@ -399,6 +400,15 @@ test("a drawing is started with no case by keyboard: its dataset, its case and i
   registerCovered("BOARD_ACTIONS", "start-a-drawing-with-no-case-by-keyboard");
 });
 
+test("an open board shows the case's Alerts panel, its rows words with nothing to open", async ({ page }) => {
+  // ADR-146 decision 9 (rules-b's panel, mounted on a board at L3.4). Not an action: the board
+  // never works an alert, so nothing here is reached by keyboard but the panel's own text.
+  await open(page, "?board=b-wing");
+  await expect(page.getByRole("table", { name: "Open alerts by source and age" })).toBeVisible();
+  await expect(page.getByText(/Visits to Wing B/)).toBeVisible();
+  expect((await sent(page)).some((s) => s.path === "/v1/investigations/c1/reports?weeks=12")).toBe(true);
+});
+
 test("Back to the boards is reached from a board by keyboard", async ({ page }) => {
   await open(page, "?board=b-wing");
   await press(page, "Back to the boards");
@@ -418,6 +428,46 @@ test("another member sees a shared board read-only: nothing to declare, edit or 
   await item(page, /^Person Unknown male “Tall” \(drawn\)/).focus();
   await page.keyboard.press("ArrowRight");
   expect((await sent(page)).some((s) => s.method === "PUT")).toBe(false);
+});
+
+// --- promotion (ADR-143 decision 8, L3.4) ---------------------------------------------------------
+
+test("drawn items are promoted from the sheet by keyboard", async ({ page }) => {
+  await open(page, "?board=b-wing");
+  await press(page, "Promote…");
+  const sheet = page.getByRole("dialog", { name: "Promote into Prison intel" });
+  await expect(sheet).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Promote into Prison intel" })).toBeFocused();
+  // The item failing a check cannot be ticked, and says why.
+  await expect(page.getByLabel(/Item: Night caller/)).toBeDisabled();
+  await expect(sheet.getByText(/Cannot go: Marked SECRET/)).toBeVisible();
+  // Untick M. Mercer by Space; Tall stays ticked.
+  const mercer = page.getByLabel(/Item: M\. Mercer/);
+  await mercer.focus();
+  await page.keyboard.press("Space");
+  await expect(mercer).not.toBeChecked();
+  await press(page, "Promote");
+  await expect(page.getByRole("heading", { name: "Promotion sent" })).toBeFocused();
+  const posted = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/promotions"));
+  expect((posted?.body as { item_ids: string[] }).item_ids).toContain("i-tall");
+  expect((posted?.body as { item_ids: string[] }).item_ids).not.toContain("i-ms");
+  await expect(page.getByRole("dialog", { name: "Promotion sent" }).getByText("Left out, and why")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Promotions from this board" })).toContainText("Committed");
+  await press(page, "Close");
+  await expect(page.getByRole("button", { name: "Promote…" })).toBeFocused();
+  registerCovered("BOARD_ACTIONS", "promote-drawn-items-by-keyboard");
+});
+
+test("the promotion sheet closes on Escape, back to Promote…", async ({ page }) => {
+  await open(page, "?board=b-wing&policy=second_person_reviews");
+  await press(page, "Promote…");
+  await expect(page.getByRole("button", { name: "Send for review" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Promote into Prison intel" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: /Promote into/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Promote…" })).toBeFocused();
+  expect((await sent(page)).some((s) => s.method === "POST" && s.path.endsWith("/promotions"))).toBe(false);
+  registerCovered("BOARD_ACTIONS", "close-the-promotion-sheet-by-escape");
 });
 
 test("every registered board action has its own proving test case above", () => {

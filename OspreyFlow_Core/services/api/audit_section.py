@@ -118,11 +118,18 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "update_studio_recipe_pipeline",
         "update_studio_recipe_row_template",
         "add_ingest_connection",
-        # Case's L3.4 (promotions of drawn items, and a layer's deletion): classified before they
-        # are written (`AWAITED_ACTIONS`).
+        # Case's L3.4 (ADR-143 Amendment 5): promotions of drawn items, their review, rejection
+        # and revert (the operator command's, refused or done), and a removed case's layer merged
+        # through its read grant (opened, merged, cancelled) or deleted.
         "promote_drawn_items",
         "approve_promotion",
         "reject_promotion",
+        "promotion_rejected",
+        "revert_promotion",
+        "revert_promotion_refused",
+        "open_layer_merge",
+        "merge_layer",
+        "cancel_layer_merge",
         "delete_layer",
     ),
     "types": (
@@ -182,6 +189,8 @@ _CLASSIFIED: tuple[str, ...] = tuple(a for actions in KIND_ACTIONS.values() for 
 #: reads, refusals, the case's own work and the platform's. `kind_of` reads an unnamed one as this
 #: kind too, with its words withheld, so a missing name never shows words.
 READS_AND_OTHER: tuple[str, ...] = (
+    # Case's L3.4: a promotion's Details, the removed cases' list, a merge sheet read again.
+    "read_promotion", "list_removed_case_layers", "read_layer_merge",
     # Written by scripts, not routes: a seed's case brief, a sweep closing synthetic instants.
     "case_brief_seed", "close_paysim_instants",
     # L3.7 (ADR-143 Amendment 6): the operator's whole-deployment change of grading scheme, run by
@@ -236,11 +245,9 @@ READS_AND_OTHER: tuple[str, ...] = (
 )  # fmt: skip
 #: Actions written with a computed suffix (`compute_<metric>`, `dry_run_layer_<merge|delete>`).
 READS_AND_OTHER_PREFIXES: tuple[str, ...] = ("compute_", "dry_run_layer_")
-#: Classified before their writer is on main (case's L3.4); the check that a kind's action is
-#: written (`test_every_kinds_action_is_one_the_conduit_records`) leaves these alone until then.
-AWAITED_ACTIONS = frozenset(
-    {"promote_drawn_items", "approve_promotion", "reject_promotion", "delete_layer"}
-)
+#: Classified before their writer is on main; none since case's L3.4. The check that a kind's
+#: action is written (`test_every_kinds_action_is_one_the_conduit_records`) leaves these alone.
+AWAITED_ACTIONS: frozenset[str] = frozenset()
 
 #: The kinds whose words the reader's own section shows them, and the right that section needs.
 WORDS_SHOWN_WITH: dict[str, Right] = {
