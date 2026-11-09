@@ -30416,8 +30416,13 @@ theme only, and its reference image could not fail there.
    `more`, from which a case that had added the gazetteer could rebuild an `osm_id` character by
    character. For a request reader, a node in a `gazetteer-*` dataset now matches on `name` alone in
    both (`builders.match_any_field`), inside the traversal, so the rows, the extra row that says `more`
-   and any count follow it. The Conduit's own work (`datasets is None`) matches every field, so
-   resolution and a rebuild still find a place by its `osm_id`.
+   and any count follow it. An unlimited principal (`datasets is None`, which no request carries)
+   matches every field. A load's lookups and a rebuild find a place by its `osm_id` through
+   `find_node`, which matches its one named field unguarded and is not a case's search. So a
+   gazetteer place cannot be found by `postcode` either, though 3a shows it (the OSM recipe writes
+   none). The port's own contract (`ports/graph.py`'s `search_nodes` and `suggest_nodes`) is to say
+   so too; the conformance suite's positive controls (a case reader finding a node by an identifier,
+   by each mode) run with it.
 4. **The map's colours meet WCAG's floors in the dark, light and GOV.UK themes**, measured from their own
    call sites (the bundled style, `map/overlayColours.ts`, the controls' CSS): text 4.5:1, a marker, link
    or trail 3:1, over land and over water. In the dark theme a marker on the ramp's second step was 2.7:1,

@@ -242,20 +242,39 @@ async def test_the_case_s_own_searches_match_a_gazetteer_place_on_its_name_alone
     for i in range(12):
         await _plant(
             graph, analytics, node_id=f"prefix-{i}", name=f"Marlow {i}", dataset=GAZETTEER,
-            classification="OFFICIAL", lon=-0.77, lat=51.57, osm_id=f"node/55120{i:02d}",
+            classification="OFFICIAL", lon=-0.77, lat=51.57, osm_id=f"55120{i:02d}",
         )  # fmt: skip
     for options in (
         SuggestOptions(),
         SuggestOptions(mode="contains", ignore_case=True),
         SuggestOptions(types=("Location",)),
     ):
-        hits = await graph.suggest_nodes("node/5512", WITH_GAZETTEER, limit=10, options=options)
+        hits = await graph.suggest_nodes("5512", WITH_GAZETTEER, limit=10, options=options)
         assert hits.nodes == [] and hits.more is False, options
     named = await graph.suggest_nodes("Marlow", WITH_GAZETTEER, limit=10)
     assert len(named.nodes) == 10 and named.more is True
-    assert await graph.search_nodes("node/5512003", WITH_GAZETTEER) == []
+    assert await graph.search_nodes("5512003", WITH_GAZETTEER) == []
     assert [n.properties["name"] for n in await graph.search_nodes("Marlow 3", WITH_GAZETTEER)] == [
         "Marlow 3"
     ]
+    # Positive controls (the lane's review): the guard narrows gazetteer places alone. A case's own
+    # place is still found by its identifier, in every mode, and the regular-expression form still
+    # finds by name; a guard that matched nothing at all would fail here.
+    await _plant(
+        graph, analytics, node_id="case-address", name="Statement address", dataset="case-a",
+        classification="OFFICIAL", lon=-0.5, lat=51.5, uprn="100099123",
+    )  # fmt: skip
+    assert [n.id for n in await graph.search_nodes("100099123", WITH_GAZETTEER)] == ["case-address"]
+    for options in (SuggestOptions(), SuggestOptions(mode="contains", ignore_case=True)):
+        hits = await graph.suggest_nodes("10009912", WITH_GAZETTEER, limit=10, options=options)
+        assert [n.id for n in hits.nodes] == ["case-address"], options
+    regex = await graph.suggest_nodes(
+        "marlow",
+        WITH_GAZETTEER,
+        limit=10,
+        options=SuggestOptions(mode="contains", ignore_case=True),
+    )
+    assert len(regex.nodes) == 10 and regex.more is True
+    # The branch no request takes (every request's principal carries datasets, ADR-099): unguarded.
     unlimited = WITH_GAZETTEER.model_copy(update={"datasets": None})
-    assert [n.id for n in await graph.search_nodes("node/5512003", unlimited)] == ["prefix-3"]
+    assert [n.id for n in await graph.search_nodes("5512003", unlimited)] == ["prefix-3"]

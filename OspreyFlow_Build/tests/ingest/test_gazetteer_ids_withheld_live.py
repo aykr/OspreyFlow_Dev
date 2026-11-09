@@ -53,7 +53,9 @@ UNIT = Principal(id="loader-1", clearance="OFFICIAL", org_unit="unit-1", roles=[
 TAG = f"{secrets.randbelow(10**8):08d}"
 GAZETTEER = f"gazetteer-osm-p4-live-{TAG}"
 NAME = f"Quillbury {TAG}"
-OSM_ID = f"node/{TAG}"
+#: Digits, as the OSM loader writes an `osm_id` (`connectors/geo/osm.py`), led by a 7 so the place's
+#: own name (which holds the tag) never contains it.
+OSM_ID = f"7{TAG}"
 UPRN = f"9{TAG}"
 PERSON = f"Quillfeather{TAG}"
 #: Every node this run plants beyond the place and the person, removed in teardown.
@@ -126,12 +128,13 @@ async def _plant() -> tuple[str, str, str, dict[str, Any]]:
         place.model_copy(
             update={
                 "id": new_node_id(),
-                "properties": {"name": f"Elsewhere {i}", "osm_id": f"node/{TAG}{i:02d}"},
+                "properties": {"name": f"Elsewhere {i}", "osm_id": f"{OSM_ID}{i:02d}"},
             }
         )
         for i in range(12)
     ]
-    PLANTED.extend(n.id for n in alike)
+    # Every id recorded before anything is written: teardown removes what a part-way failure left.
+    PLANTED.extend([place.id, neighbour.id, link.id, *(n.id for n in alike)])
     tx = await graph.begin_transaction()
     await graph.upsert_nodes([place, neighbour, *alike], tx)
     await graph.upsert_edges([link], tx)
@@ -147,11 +150,15 @@ async def _plant() -> tuple[str, str, str, dict[str, Any]]:
 
 
 async def _remove(ids: list[str]) -> None:
+    if not ids:
+        return
     client, _graph_adapter = await _graph()
     try:
         quoted = ",".join(f"'{i}'" for i in ids)
         await client.gremlin(f"g.E().has('id',within({quoted})).drop()")
         await client.gremlin(f"g.V().has('id',within({quoted})).drop()")
+        left = await client.gremlin(f"g.V().has('id',within({quoted})).values('id')")
+        assert left == [], f"left behind in the shared database: {left}"
     finally:
         await client.aclose()
 
@@ -208,12 +215,13 @@ def test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifie
 ) -> None:
     private_key, _ = keypair
     headers = {"Authorization": f"Bearer {sign_token(private_key, default_claims())}"}
-    place_id, neighbour_id, link_id, person_body = _run(_plant())
+    PLANTED.clear()
     cases: list[str] = []
 
     from services.api.app import app
 
     try:
+        place_id, neighbour_id, _link_id, person_body = _run(_plant())
         with TestClient(app) as client:
             made = client.post("/v1/investigations", headers=headers, json=new_case())
             case_id = made.json()["id"]
@@ -228,8 +236,8 @@ def test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifie
             )
             assert by_id.status_code == 200 and by_id.json()["nodes"] == [], by_id.text
             for body in (
-                {"query": f"node/{TAG}"},
-                {"query": f"node/{TAG}", "mode": "contains", "ignore_case": True},
+                {"query": OSM_ID},
+                {"query": OSM_ID, "mode": "contains", "ignore_case": True},
             ):
                 hinted = client.post(
                     f"/v1/investigations/{case_id}/suggest", headers=headers, json=body
@@ -278,6 +286,6 @@ def test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifie
                 answer = client.delete(f"/v1/investigations/{made_id}", headers=headers)
                 if answer.status_code not in (200, 204):
                     refused.append((made_id, answer.status_code))
-        _run(_remove([place_id, neighbour_id, link_id, *PLANTED]))
+        _run(_remove(list(PLANTED)))
         _run(_remove_rows(cases))
         assert not refused, f"cases not removed: {refused}"

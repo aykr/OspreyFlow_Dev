@@ -37,3 +37,14 @@ def test_a_request_reader_matches_a_gazetteer_node_on_its_name_alone() -> None:
 def test_the_conduit_s_own_work_matches_every_field() -> None:
     for query in _queries(CONDUIT):
         assert GUARD not in query
+
+
+def test_a_type_with_no_name_field_matches_a_gazetteer_node_on_nothing() -> None:
+    """A Person has no `name`: its fields are all guarded, so a person in a gazetteer dataset is
+    found by none of them (the form `or(__.and(guard, __.or(...)))`)."""
+    access = AccessFilter(load_uk_le_scheme())
+    query = SuggestNodesBuilder(("Person",), ("family_name", "nino"), "Smi").render_gremlin(
+        access, READER
+    )
+    assert f"or(__.and({GUARD},__.or(" in query
+    assert "__.has('family_name'" in query and query.index(GUARD) < query.index("__.has('nino'")

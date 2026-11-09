@@ -82,8 +82,9 @@ def match_any_field(
     on its name alone, never an identifier (`osm_id`, `uprn`, …: source-system identifiers, rule
     7; the orchestrator's ruling of 9 November 2026). Inside the traversal, so the rows, the
     `limit + 1` row that says `more`, and any count follow it: a run of prefix searches cannot
-    rebuild a place's `osm_id`. The Conduit's own work (`datasets is None`: resolution, a load's
-    lookups) matches on every field, as before."""
+    rebuild a place's `osm_id`. An unlimited principal (`datasets is None`, which no request
+    carries, ADR-099) matches every field, as before. A load's lookups and a rebuild do not pass
+    here: `find_node` (`FindByIdentifierBuilder`) matches its one named field unguarded."""
     every = [clause(field) for field in fields]
     if principal.datasets is None:
         return f"or({','.join(every)})"
