@@ -802,6 +802,7 @@ from .promotions import (
     PromotionNotFound,
     PromotionRefused,
     Promotions,
+    is_composite,
     is_gazetteer,
 )
 from .questions import (
@@ -10021,7 +10022,7 @@ async def open_layer_merge(
     dataset, row, layer = await _removed_case(
         dataset_id, case_id, principal, datasets, investigations, graph
     )
-    if dataset.kind == "composite":
+    if is_composite(dataset):
         raise LayerActionRefused(409, "composite_never_merged", _COMPOSITE_NEVER_MERGED)
     if is_gazetteer(dataset):
         raise LayerActionRefused(409, "gazetteer_never_merged", GAZETTEER_TAKES_NOTHING_DRAWN)

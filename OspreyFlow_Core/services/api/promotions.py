@@ -124,6 +124,13 @@ GAZETTEER_TAKES_NOTHING_DRAWN = (
 )
 
 
+def is_composite(dataset: Dataset) -> bool:
+    """A composite holds none of its members' data, so nothing drawn goes into one: a case reading
+    one promotes nothing, and its removed case's layer is never merged, only deleted (the owner's
+    ruling of 9 November 2026)."""
+    return dataset.kind == COMPOSITE
+
+
 def is_gazetteer(dataset: Dataset) -> bool:
     """A `gazetteer-*` dataset (ADR-147 Amendment 1 decision 2): the build's places alone."""
     return dataset.id.startswith(GAZETTEER_DATASET_PREFIX)
@@ -164,7 +171,7 @@ class Promotions:
                 "This drawing is its own dataset: what is drawn here is already its data. Merge "
                 "the drawing into another dataset from the Ingest Studio instead."
             )
-        if chosen[0].kind == COMPOSITE:
+        if is_composite(chosen[0]):
             return None, (
                 "A case reading a composite promotes nothing: a composite holds none of its "
                 "members' data. Promote from a case reading the member dataset."

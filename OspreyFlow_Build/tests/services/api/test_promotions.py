@@ -947,7 +947,8 @@ def test_an_open_cases_layer_is_never_deleted_from_the_studio(pw: SimpleNamespac
     assert "open_layer_merge" not in [r["action"] for r in pw.audit.records]
 
 
-def test_a_composite_cases_layer_is_never_merged_only_deleted(pw: SimpleNamespace) -> None:
+def _composite(pw: SimpleNamespace, case: str) -> None:
+    """`mix`, a composite of `src` with its own home case (Dana an Author of both), read by `case`."""
     pw.datasets.add(
         Dataset(id="mix", name="Mixed", owning_unit=UNIT, created_by="eng",
                 created_at=datetime(2026, 11, 1, tzinfo=UTC), kind=COMPOSITE, members=["src"])
@@ -957,17 +958,94 @@ def test_a_composite_cases_layer_is_never_merged_only_deleted(pw: SimpleNamespac
     pw.datasets.homes["mix"] = HomeCase(
         dataset_id="mix", investigation_id=HOME + "-mix", made_at=datetime.now(UTC), made_by="dana"
     )
-    pw.cases.seed("case-c", {"alice": AccessLevel.AUTHOR})
-    pw.datasets.cases["case-c"] = ["mix"]
+    if case not in pw.cases.grants:
+        pw.cases.seed(case, {"alice": AccessLevel.AUTHOR})
+    pw.datasets.cases[case] = ["mix"]
+
+
+def _removed_composite_case(pw: SimpleNamespace) -> None:
+    _composite(pw, "case-c")
     board = _board(case="case-c")
     _item(board, case="case-c")
     pw.removed.add("case-c")
+
+
+def test_a_composite_cases_layer_is_never_merged_only_deleted(pw: SimpleNamespace) -> None:
+    _removed_composite_case(pw)
     (row,) = _as("dana").get("/v1/datasets/mix/removed-cases").json()["cases"]
     assert not row["mergeable"] and "never merged" in row["why_not"]
     refused = _as("dana").post("/v1/datasets/mix/removed-cases/case-c/merge-sheet")
     assert refused.status_code == 409 and refused.json()["error"] == "composite_never_merged"
+    assert not pw.store.grants and "open_layer_merge" not in [r["action"] for r in pw.audit.records]
     deleted = _as("dana").delete("/v1/datasets/mix/removed-cases/case-c/layer")
     assert deleted.status_code == 200 and "deleted" in deleted.json()["words"]
+
+
+def test_the_composite_merge_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The plant at the route's call site (`open_layer_merge`'s `is_composite`)."""
+    from services.api import app as app_module
+
+    monkeypatch.setattr(app_module, "is_composite", lambda _d: False)
+    _removed_composite_case(pw)
+    opened = _as("dana").post("/v1/datasets/mix/removed-cases/case-c/merge-sheet")
+    assert opened.status_code == 200, opened.text
+
+
+def test_a_composite_cases_layer_is_not_merged_from_a_member_datasets_studio(
+    pw: SimpleNamespace,
+) -> None:
+    """The realistic path: case-c reads `mix`, of which `src` is a member, and `src`'s Author tries
+    the merge from `src`'s own Studio. case-c reads `src` only through `mix`, so `src` lists it not
+    and answers it as an id no case reading it has: nothing granted, nothing audited as opened."""
+    _removed_composite_case(pw)
+    assert _as("dana").get("/v1/datasets/src/removed-cases").json()["cases"] == []
+    refused = _as("dana").post("/v1/datasets/src/removed-cases/case-c/merge-sheet")
+    assert refused.status_code == 404 and refused.json()["error"] == "case_not_linked"
+    assert not pw.store.grants and "open_layer_merge" not in [r["action"] for r in pw.audit.records]
+
+
+def test_the_member_path_check_fails_with_a_case_through_a_composite_taken(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The plant at its call site: `_removed_case` taking a case that reads the dataset through a
+    composite as one reading it directly."""
+    from services.api import app as app_module
+
+    real = app_module._linked_cases
+
+    async def direct(*args: Any, **kwargs: Any) -> Any:
+        return [c.model_copy(update={"through": None}) for c in await real(*args, **kwargs)]
+
+    monkeypatch.setattr(app_module, "_linked_cases", direct)
+    _removed_composite_case(pw)
+    opened = _as("dana").post("/v1/datasets/src/removed-cases/case-c/merge-sheet")
+    assert opened.status_code == 200, opened.text
+
+
+def test_a_case_reading_a_composite_promotes_nothing_from_its_boards(pw: SimpleNamespace) -> None:
+    """`Promotions._target`: a composite holds none of its members' data, so a case reading one is
+    offered no promotion and refused one at the route."""
+    _composite(pw, K)
+    board = _board()
+    made = _item(board)
+    sheet = _sheet(board)
+    assert not sheet["items"] and "promotes nothing" in sheet["refused"]
+    answer = _promote(board, made["item_id"])
+    assert answer.status_code == 409 and answer.json()["error"] == "nothing_to_promote_into"
+    assert not pw.store.records and pw.graph.promotions == 0
+    assert "mix" not in _node_datasets(pw, made["element_id"])
+
+
+def test_the_board_composite_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The plant at `_target`'s call site."""
+    monkeypatch.setattr(promotions_module, "is_composite", lambda _d: False)
+    _composite(pw, K)
+    board = _board()
+    assert _sheet(board).get("refused") is None
 
 
 def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace) -> None:
