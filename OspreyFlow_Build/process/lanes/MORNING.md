@@ -467,6 +467,17 @@ New ones are added at the bottom as they happen.
     OWNER osprey` after creating its Postgres.
     **Your word, about 13:05:** up to four leased live runs at once, raised from two now that the stacks run on the
     server. Platform took d and case took e at once; rules takes the first stack to free up.
+    **Live runs on the server itself (your word, about 13:20, option A).** The server is on the public
+    internet, not your local network: one Valkey round trip through the tunnel took about 720 ms, so live runs were
+    network-bound (case's 15-minute run was heading for 45). The new `stack_lease.sh remote <lane> -- <command>`
+    copies the lane's worktree to `~/osprey-runs/<lane>` on the stack's host and runs the command there, next to
+    the containers. It sends only what git tracks or would track, so nothing gitignored (the real-data exceptions,
+    `data/`) leaves this machine. `osprey.yaml` goes as committed. It builds the server's venv (`uv sync --frozen`),
+    copies the lease's info file there for the port guard, and runs the command with the stack's ports. I
+    installed `uv` in root's home on the server; Node is not installed, so `test-js` and Playwright stay on this
+    machine. The red records: three cases red against the previous script, then the two defects that matter
+    planted at their call site (no `--exclude-standard`; the local `osprey.yaml` sent), each turning the case
+    red. The first copy took about 2 minutes; the server venv built and 58 offline tests passed there.
 
 ## Evening, 7 November: your records of 7 November applied
 

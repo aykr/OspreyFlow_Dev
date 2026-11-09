@@ -361,3 +361,93 @@ def test_with_local_stacks_off_status_says_so(lease) -> None:
     status = lease("status").stdout.splitlines()
     assert "a: off (local stacks are off on this machine)" in status
     assert "b: free" in status
+
+
+# --- remote: a lane's command run on its remote stack's own host (9 November 2026) -----------------------------
+# Over the tunnel each database call crossed the internet (about 0.3 to 0.7 s), so a live run was network-bound;
+# `remote` copies the worktree to the stack's host and runs the command there, beside the containers.
+
+
+def _remote_tools(tmp_path: Path) -> Path:
+    """ssh and rsync stand-ins that record their arguments (and what rsync was told to send) and answer 0."""
+    log = tmp_path / "remote.log"
+    bin_dir = tmp_path / "bin"
+    (bin_dir / "ssh").write_text(f'#!/bin/sh\necho "ssh $*" >> "{log}"\ncat > /dev/null\nexit 0\n')
+    (bin_dir / "rsync").write_text(
+        "#!/bin/sh\n"
+        f'for a in "$@"; do case "$a" in --files-from=*) sed "s/^/sent /" "${{a#--files-from=}}" >> "{log}";; esac; done\n'
+        f'echo "rsync $*" >> "{log}"\nexit 0\n'
+    )
+    for tool in ("ssh", "rsync"):
+        (bin_dir / tool).chmod(0o755)
+    return log
+
+
+def _lane_worktree(tmp_path: Path) -> Path:
+    """A tiny lane worktree: tracked files, an owner-edited osprey.yaml, an untracked new test file, and a
+    gitignored dataset of the shape config/real_data_exceptions.yaml admits."""
+    wt = tmp_path / "wt"
+    (wt / "OspreyFlow_Core").mkdir(parents=True)
+    (wt / "OspreyFlow_Build" / "tests").mkdir(parents=True)
+    (wt / ".gitignore").write_text("OspreyFlow_Core/data/\n")
+    (wt / "OspreyFlow_Core" / "osprey.yaml").write_text("committed: true\n")
+    (wt / "OspreyFlow_Build" / "tests" / "test_x.py").write_text("")
+    git = ["git", "-C", str(wt), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-qm", "init"], check=True)
+    (wt / "OspreyFlow_Core" / "osprey.yaml").write_text("owner_local: secret\n")
+    (wt / "OspreyFlow_Build" / "tests" / "test_new.py").write_text("")
+    (wt / "OspreyFlow_Core" / "data").mkdir()
+    (wt / "OspreyFlow_Core" / "data" / "real_dataset.csv").write_text("real,data\n")
+    return wt
+
+
+def _remote(lease, tmp_path: Path, cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    lease("status")  # writes the fixture's docker stand-in onto PATH
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    return subprocess.run(["bash", str(SCRIPT), "remote", *args], cwd=cwd, env=env, capture_output=True, text=True)
+
+
+def test_remote_sends_only_what_git_tracks_and_never_the_local_osprey_yaml(lease, tmp_path: Path) -> None:
+    """Rule 9: a gitignored dataset never leaves this machine, and osprey.yaml goes as committed."""
+    lease("acquire", "studio", "a run")  # stack a: local
+    lease("acquire", "case", "a run")    # stack b: on the server
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "pytest", "-q", "tests")
+    assert ran.returncode == 0, ran.stderr
+    sent = {l[len("sent "):] for l in log.read_text().splitlines() if l.startswith("sent ")}
+    assert "OspreyFlow_Build/tests/test_x.py" in sent and "OspreyFlow_Build/tests/test_new.py" in sent
+    assert not any("real_dataset" in f or f.startswith("OspreyFlow_Core/data") for f in sent), sent
+    assert "OspreyFlow_Core/osprey.yaml" not in sent
+    assert any("cat > osprey-runs/case/OspreyFlow_Core/osprey.yaml" in l for l in log.read_text().splitlines())
+
+
+def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "pytest", "-q", "tests").returncode == 0
+    run = [l for l in log.read_text().splitlines() if l.startswith("ssh") and "pytest" in l]
+    assert len(run) == 1, log.read_text()
+    line = run[0]
+    assert "ospreyflow-test" in line
+    assert "cd osprey-runs/case/OspreyFlow_Build/" in line
+    assert "ARCADEDB_HTTP_PORT=2492" in line and "POSTGRES_PORT=55434" in line and "OSPREY_LANE=case" in line
+    assert "OSPREY_LEASE_DIR=$HOME/osprey-runs/case/.osprey-lease" in line
+    mirrored = [l for l in log.read_text().splitlines() if ".osprey-lease/stack-b.lease/info" in l]
+    assert mirrored, log.read_text()
+
+
+def test_remote_is_refused_for_a_local_stack_and_for_a_lane_holding_none(lease, tmp_path: Path) -> None:
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    none = _remote(lease, tmp_path, wt, "case", "--", "true")
+    assert none.returncode == 1 and "holds no stack" in none.stderr
+    lease("acquire", "studio", "a run")  # stack a: local
+    local = _remote(lease, tmp_path, wt, "studio", "--", "true")
+    assert local.returncode == 1 and "runs on this machine" in local.stderr
+    assert not log.exists() or "rsync" not in log.read_text()

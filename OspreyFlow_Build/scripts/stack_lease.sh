@@ -11,6 +11,16 @@
 #   OspreyFlow_Build/scripts/stack_lease.sh up <lane>                     start the holder's own stack
 #   OspreyFlow_Build/scripts/stack_lease.sh down <lane>                   stop it again, before release
 #   OspreyFlow_Build/scripts/stack_lease.sh ports <lane>                  the export line for the holder's stack
+#   OspreyFlow_Build/scripts/stack_lease.sh remote <lane> -- <command…>   run a command on a remote stack's own host,
+#                                                                          beside its containers (9 November 2026)
+#
+# `remote` copies the caller's worktree to <host>:~/osprey-runs/<lane>, sending only what git tracks or would
+# track (`git ls-files -co --exclude-standard`), so nothing gitignored ever leaves this machine (rule 9: the
+# real-data exceptions and their datasets are gitignored); osprey.yaml goes as committed, never the local
+# copy. It makes OspreyFlow_Core's venv there (uv sync --frozen), mirrors the lease's info file into a lease
+# directory there for tests/port_guard.py, then runs the command in the same folder relative to the worktree,
+# with the stack's ports pinned (its containers listen on 127.0.0.1 there, as the tunnel does here). Over the
+# tunnel each database call crosses the internet (about 0.3 to 0.7 s); there it is local.
 #   OspreyFlow_Build/scripts/stack_lease.sh status                        each stack: who holds it, since when, for what
 #
 # A lane holds at most one stack. The leased stacks are the throwaway ones (SESSIONS_RUNBOOK.md §4), never
@@ -175,6 +185,42 @@ case "$cmd" in
     fi
     echo "Test stack $s ${cmd} for $who: ${these[*]}${remote:+ (on $remote, tunnelled to 127.0.0.1 here)}"
     ;;
+  remote)
+    who="${2:?usage: stack_lease.sh remote <lane> -- <command…>}"
+    shift 2
+    [ "${1:-}" = "--" ] && shift
+    [ "$#" -gt 0 ] || { echo "usage: stack_lease.sh remote <lane> -- <command…>" >&2; exit 2; }
+    s="$(held_by "$who")"
+    [ -n "$s" ] || { echo "$who holds no stack: take one first (acquire)." >&2; exit 1; }
+    h="$(host_of "$s")"
+    [ -n "$h" ] || { echo "Stack $s runs on this machine: run the command here, not with remote." >&2; exit 1; }
+    top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not inside a git worktree: run remote from your lane's checkout." >&2; exit 1; }
+    rel="$(git rev-parse --show-prefix)"
+    rroot="${OSPREY_REMOTE_ROOT:-osprey-runs}/$who"
+    list="$(mktemp)"; trap 'rm -f "$list"' EXIT
+    # What git tracks or would track, less the local osprey.yaml (sent as committed, below) and paths gone from disk.
+    ( cd "$top" && git ls-files -co --exclude-standard -z | tr '\0' '\n' \
+        | grep -v -x 'OspreyFlow_Core/osprey.yaml' | while IFS= read -r f; do [ -e "$f" ] && printf '%s\n' "$f"; done ) > "$list"
+    ssh -o BatchMode=yes "$h" "mkdir -p $rroot" || { echo "Could not reach $h." >&2; exit 1; }
+    rsync -a --files-from="$list" "$top/" "$h:$rroot/" || { echo "Copying the worktree to $h failed." >&2; exit 1; }
+    # Remove what the worktree no longer has (never the venv or caches), then the committed osprey.yaml.
+    ssh -o BatchMode=yes "$h" "cd $rroot && python3 -c 'import os,sys
+keep=set(sys.stdin.read().splitlines()); keep.add(\"OspreyFlow_Core/osprey.yaml\")
+skip=(\".venv\",\"node_modules\",\".pytest_cache\",\"__pycache__\",\".osprey-lease\",\".git\")
+for d,ds,fs in os.walk(\".\"):
+  ds[:]=[x for x in ds if x not in skip]
+  for f in fs:
+    p=os.path.relpath(os.path.join(d,f))
+    if p not in keep: os.remove(p)'" < "$list" || { echo "Pruning the copy on $h failed." >&2; exit 1; }
+    ( cd "$top" && git show HEAD:OspreyFlow_Core/osprey.yaml ) | ssh -o BatchMode=yes "$h" "cat > $rroot/OspreyFlow_Core/osprey.yaml"
+    lockname="$(basename "$(lock_of "$s")")"
+    ssh -o BatchMode=yes "$h" "rm -rf $rroot/.osprey-lease && mkdir -p $rroot/.osprey-lease/$lockname && cat > $rroot/.osprey-lease/$lockname/info" < "$(lock_of "$s")/info"
+    ssh -o BatchMode=yes "$h" "cd $rroot/OspreyFlow_Core && ~/.local/bin/uv sync --frozen -q" || { echo "uv sync on $h failed." >&2; exit 1; }
+    cmdline="$(printf '%q ' "$@")"
+    echo "Running on $h (stack $s, $rroot/$rel): $*" >&2
+    # shellcheck disable=SC2029
+    ssh -o BatchMode=yes "$h" "cd $rroot/$rel && export $(ports_line "$s" "$who") OSPREY_LEASE_DIR=\$HOME/$rroot/.osprey-lease PATH=\$HOME/.local/bin:\$PATH && $cmdline"
+    ;;
   ports)
     who="${2:?usage: stack_lease.sh ports <lane>}"
     s="$(held_by "$who")"
@@ -194,7 +240,7 @@ case "$cmd" in
     done
     ;;
   *)
-    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | release <lane> | status" >&2
+    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | release <lane> | status" >&2
     exit 2
     ;;
 esac
