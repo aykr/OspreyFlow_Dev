@@ -28,6 +28,25 @@ its lease; the build plan, runbook, progress table and the five first briefs (ad
 L2.8c, case L3.2, studio L1.3, platform P1); worktrees `admin`, `rules` and `platform` set up. The
 studio, case and glass sessions are retired (each replied "retired"); their worktrees are clean and merged.
 
+**Your rulings, 9 November about 05:10 UTC (the eight questions below and item 68; all answered):**
+1. Java: **(A)**, a Classpath-exception entry in the licence register, the runtime in the Conduit image (platform, P5,
+   ADR-147 Amendment 2).
+2. Screening lists: **(a)**, L1.6's reference lists are the store of record, ADR-133's Lists tab read-only then
+   retired (studio-b, ADR-133 Amendment 9; rules moves its picker and re-screening, the carry already in CARRIES).
+3. Alert timing: **(a)**, the 250 ms residual accepted; nothing to build.
+4. Promotion revert: **(a)**, the operator command only, as built (case, L3.4).
+5. Proposal text: **(b)**, as built, only to an accepter cleared for the case's marking (ADR-143 Amendment 4's open
+   question closed).
+6. Gazetteer beside a case: **(c)**, not my recommendation: gazetteer places are copied into each case's dataset at
+   load (platform, P5, ADR-147 Amendment 2). The copies keep 3b: their source identifiers withheld from every request
+   reader and never matched.
+7. Private networks: **(a)**, an operator's allow-list in `osprey.yaml` (studio-b, ADR-140 Amendment 15).
+8. Gazetteer unit (item 68): a build setting (platform, P5).
+
+Also, 9 November about 04:55 UTC: every lane session except platform's had exited about two hours earlier (cause
+unknown; worktrees intact). All seven were resumed in fresh sessions from their HANDOFF and state. rules-b's orphaned
+vite on 5184 was left running (stopping it was refused to me); admin's stack-c lease passes to its resumed session.
+
 **A question for you (platform's P3; the licence register, so yours):** building the local basemap needs Java 21
 (planetiler). The only runtime here is Eclipse Temurin, GPL-2.0 with the Classpath exception, and spec/00 §7 says
 "GPL and AGPL never pass".
