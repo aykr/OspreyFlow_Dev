@@ -133,3 +133,54 @@ on this machine at the same time (load average 24–29).
   `gazetteer-*` datasets alone, so it did not show this side; kept here, not counted.) Restored: passed.
 - Teardown: each live test's ArcadeDB database is a throwaway one, dropped pass or fail
   (`arcadedb_adapter`); the analytics store is in memory; the stack was brought down before release.
+
+## The independent review's round, and the lane's review of it (9 November 2026)
+
+Offline plants (closed ports, no lease):
+
+| Item | Plant | Red |
+| --- | --- | --- |
+| 2: a gazetteer's identifiers withheld from every request reader | `_gazetteer_identifiers_withheld` dropped from `withhold_sources` | `tests/ontology/test_gazetteer_identifiers_withheld.py::test_a_request_reader_is_sent_a_gazetteer_place_without_its_identifiers` |
+| 3: the store asked by name alone, `more` included | `search_places` back on `suggest_nodes` (contains, ignoring case, `Location`), the shape it had | `test_an_identifier_fragment_finds_no_place_and_says_no_more`, at its assertion (`more` true): the stand-in's `suggest_nodes` matches identifiers as `suggestion_scope` does, so the case fails at the assertion and not on a missing method |
+| 6: registration after the load commits | `map_admin._build_here` registers before the commit; the script registers before the load | `tests/test_gazetteer_build_registration_order.py`: `…cli_build…[finished]`; the script's two cases |
+| 8: a user part or a key-like path segment in a browser-fetched address | each refusal disabled | `test_a_provider_the_browser_fetches_takes_no_key[…user part]`, `[…key-like path segment]` (two) |
+| 8: the path rule reads whole segments | the segment rule replaced by the letter rule (`_KEY_NAMED`) | `test_a_word_holding_key_is_not_refused` (`monkey.pmtiles`, `keystone`, `authority-maps`, `turnkey`) |
+
+**Live plants**, platform lease on stack a (below):
+
+| Item | Plant | Red |
+| --- | --- | --- |
+| 2 | the projection dropped | `tests/ingest/test_gazetteer_ids_withheld_live.py`, at `/search`'s answer carrying `osm_id` and `uprn` |
+| 3 | `suggest_nodes` (contains, ignoring case) in place of `suggest_locations` | `test_an_identifier_fragment_finds_no_place_and_no_more`, at its assertion (`more` true) |
+| 5 | the store asked with the reader's clearance raised to SECRET | `test_a_case_that_added_the_gazetteer_finds_its_place…`, the SECRET depot offered (its point OFFICIAL, so only the graph store's access step keeps it out) |
+
+**Two plants that proved nothing first (rule 15), kept, not counted:**
+- the first live plant of item 3 called `SuggestOptions`, which `map_places` does not import: every case
+  errored on the name, not at an assertion. Redone with the import.
+- redone, it passed: with one place holding the fragment, the name check alone rejected it and the scan
+  never filled, so `more` stayed false. The case now plants 205 places whose identifiers, not names,
+  hold the fragment (more than one scan of 200 reads); then it went red at `more`.
+
+**Axe states drawn (item 9 and the review's 11):** a scratch Playwright case (not kept) opened the
+harness at `searched=1`, `searched=more` and `searched=fail`, each with and without `brand=govuk`, waited
+for the network to settle as `every-harness.spec.ts` does, and found each state's words already in the
+status (6 passed); axe on the four states in dark, light and GOV.UK, 16 passed. Port 5184 was held by
+another worktree's vite throughout, so both ran from a temporary copy of `a11y/playwright.config.ts` on
+port 5187, removed afterwards.
+
+## The leased live run, round 2
+
+**Platform lease on stack a, 03:31:21–03:38:05 UTC 9 November 2026**, at `aad6e9b` and again at
+`b38c6de` (the second only adds the identifier-fragment case's 205 places), on main `75f277d`. **Nothing
+else ran on this machine of this lane's during the lease** (no `make ci`, no Playwright); load average 4–5.
+
+`test_route_rights.py` (with L3.5's routes, on main), `tests/ingest/{test_gazetteer_place_search_live,
+test_gazetteer_ids_withheld_live,test_map_admin_build_end_to_end,test_build_local_basemap_end_to_end,
+test_osm_gazetteer_recipe_end_to_end}.py`, `test_tile_cache.py`, `test_prefetch.py`,
+`test_statelessness.py`, `tests/geocoder/test_match_live.py`, `test_sources_withheld_routes.py`,
+`tests/adapters/graph_arcadedb/test_sources_withheld_live.py` and every file under
+`tests/services/api/working_set/` (the per-reader projection changed): **336 passed** at each commit.
+`test_statelessness.py` passed with its own 15 s wait unchanged; its round-1 failures were the load.
+The three live plants above were run within the same lease. Teardown: the throwaway databases dropped;
+`test_gazetteer_ids_withheld_live.py` removed its nodes and link by id, deleted its two cases (each
+delete checked) and its dataset rows (asserted gone).
