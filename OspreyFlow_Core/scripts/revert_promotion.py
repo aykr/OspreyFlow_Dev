@@ -1,6 +1,6 @@
 """Reverts a promotion: `python -m scripts.revert_promotion <load_id> --reverted-by <principal id>
 [--dry-run]` (`06_DECISIONS.md` ADR-143 decision 8; the logic is
-`services/api/promotions.py`'s `revert_promotion`).
+`revert_promotion` below, in this operator module alone).
 
 A promotion is a load (trigger `analyst_promotion` or `layer_merge`) that added a dataset to drawn
 elements of a case's analyst layer. Its revert takes that dataset back from exactly those elements,
@@ -27,14 +27,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+from dataclasses import replace
+from datetime import UTC, datetime
 from typing import Any
 
 from services.api.audit import AuditWriter
 from services.api.board_store import PostgresBoardItemStore
 from services.api.cache import invalidate_every_cache
 from services.api.config import PostgresConfig, ValkeyConfig
-from services.api.promotion_store import PostgresPromotionStore, PromotionStore
-from services.api.promotions import PromotionRefused, revert_promotion
+from services.api.promotion_store import PostgresPromotionStore, PromotionRecord, PromotionStore
+from services.api.promotions import LAYER_DELETE_PREFIX, LAYER_DELETER, PromotionRefused
 from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -55,6 +57,63 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reverted-by", required=True, help="the principal doing this")
     parser.add_argument("--dry-run", action="store_true", help="report only; write nothing")
     return parser
+
+
+async def revert_promotion(
+    record: PromotionRecord, graph: Any, store: PromotionStore, items: Any
+) -> PromotionRecord:
+    """The revert of a committed promotion: the dataset taken back from exactly its elements in
+    one transaction, the promotion recorded `reverted`, its items' `promoted_at` cleared. The
+    operator command's core, run with the Conduit stopped (ADR-127
+    Amendment 9); never a route (ADR-143 open question 2, settled (a): Amendment 5 decision 8).
+
+    Refused, as a load's revert is (ADR-127 Amendment 6, `live_edges_touching`), while a
+    live link other than the promotion's own and the case's own unpromoted drawing rests on one of
+    its nodes: another case's link or a later load's would be left resting on a node gone from the
+    dataset. A promotion from a layer since deleted takes its elements out with the layer."""
+    if record.status != "committed":
+        raise PromotionRefused(
+            "not_committed",
+            f"Promotion {record.load_id} is {record.status}: nothing to revert.",
+        )
+    held = await items.in_case(record.case_id)
+    own_drawing = {
+        i.element_id for i in held
+        if i.kind != "node" and i.withdrawn_at is None and i.promoted_at is None
+    }  # fmt: skip
+    # Whatever the operator may read (the unfiltered lookup a load's revert asks too): this is
+    # an operator's command, never a route, and the one module outside the load revert that
+    # names it (`test_unfiltered_node_lookup_confined.py`).
+    resting = await graph.live_edges_touching(list(record.node_ids))
+    others = set(resting) - set(record.edge_ids) - own_drawing
+    if others:
+        raise PromotionRefused(
+            "links_rest_on_it",
+            f"{len(others)} link(s) written since rest on its items: revert those first.",
+        )
+    layer_deleted = await store.layer_deleted(record.layer_id)
+    tx = await graph.begin_transaction()
+    try:
+        await graph.revert_promotion(record.load_id, record.dataset_id, tx)
+        if layer_deleted:
+            await graph.withdraw_layer(
+                record.layer_id, f"{LAYER_DELETE_PREFIX}{record.case_id}", tx
+            )
+    except Exception:
+        await graph.rollback_transaction(tx)
+        raise
+    if not await store.decide(
+        record.id, was="committed", now="reverted", by=None, at=datetime.now(UTC)
+    ):
+        await graph.rollback_transaction(tx)
+        raise PromotionRefused("already_decided", "This promotion has changed since it was read.")
+    await graph.commit_transaction(tx)
+    await items.mark_promoted(record.case_id, list(record.item_ids), None)
+    if layer_deleted:
+        await items.withdraw(
+            record.case_id, list(record.item_ids), LAYER_DELETER, datetime.now(UTC)
+        )
+    return replace(record, status="reverted")
 
 
 def stop_if_dry(dry_run: bool, says: str) -> bool:

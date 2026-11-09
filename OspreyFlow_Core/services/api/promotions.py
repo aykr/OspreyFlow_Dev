@@ -30,7 +30,9 @@ orchestrator's settlement of admin's Q5), which is only deleted. Deleting withdr
 wholly the layer's (`withdraw_layer`); promoted items are never touched.
 
 **Revert.** A promotion is reverted like any load: with the Conduit stopped, by the operator command
-`python -m scripts.revert_promotion` (ADR-127 Amendment 9), whose core is `revert`. There is no
+`python -m scripts.revert_promotion` (ADR-127 Amendment 9), whose core lives in that operator module
+alone: the unfiltered lookups a revert asks are confined to operator modules, never one that serves
+a route (`test_unfiltered_node_lookup_confined.py`). There is no
 online revert: the owner settled ADR-143 open question 2 as (a), the operator command alone
 (Amendment 5 decision 8).
 """
@@ -38,14 +40,13 @@ online revert: the owner settled ADR-143 open question 2 as (a), the operator co
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from conduit_common.identity import new_id
 from ports.graph import NotPromotable
 from schemas.domain import NOT_SAME_AS, SAME_AS, Edge, Node, Principal
-from schemas.ingest import LoadRecord
 from schemas.mapconfig import GAZETTEER_DATASET_PREFIX
 from schemas.promotions import (
     DetailItem,
@@ -59,7 +60,6 @@ from schemas.promotions import (
     SheetItem,
 )
 
-from ..ingest.load_revert import links_resting_on
 from .board_store import BoardItem
 from .boards import Boards, ItemNotFound
 from .case_views import StoredCaseView
@@ -952,72 +952,6 @@ class Promotions:
             words="The layer was deleted: its items are withdrawn and kept in the audit. Promoted "
             "items were not touched.",
         )
-
-    # --- revert (the operator command's core) ----------------------------------------------
-
-    async def revert(self, record: PromotionRecord) -> PromotionRecord:
-        return await revert_promotion(record, self.boards.graph, self.store, self.boards.items)
-
-
-async def revert_promotion(
-    record: PromotionRecord, graph: Any, store: PromotionStore, items: Any
-) -> PromotionRecord:
-    """The revert of a committed promotion: the dataset taken back from exactly its elements in
-    one transaction, the promotion recorded `reverted`, its items' `promoted_at` cleared. The
-    operator command's core (`scripts.revert_promotion`), run with the Conduit stopped (ADR-127
-    Amendment 9); never a route (ADR-143 open question 2, settled (a): Amendment 5 decision 8).
-
-    Refused, as a load's revert is (ADR-127 Amendment 6, through its `links_resting_on`), while a
-    live link other than the promotion's own and the case's own unpromoted drawing rests on one of
-    its nodes: another case's link or a later load's would be left resting on a node gone from the
-    dataset. A promotion from a layer since deleted takes its elements out with the layer."""
-    if record.status != "committed":
-        raise PromotionRefused(
-            "not_committed",
-            f"Promotion {record.load_id} is {record.status}: nothing to revert.",
-        )
-    held = await items.in_case(record.case_id)
-    own_drawing = {
-        i.element_id for i in held
-        if i.kind != "node" and i.withdrawn_at is None and i.promoted_at is None
-    }  # fmt: skip
-    # The load revert's own guard (`links_resting_on`, ADR-127 Amendment 23), asked of the
-    # promotion as the load it is: the unfiltered lookup under it stays confined to the revert's
-    # module (`test_unfiltered_node_lookup_confined.py`), never named here.
-    as_load = LoadRecord(
-        load_id=record.load_id, recipe_id=record.trigger, recipe_version=1,
-        source=record.dataset_id, started_at=record.proposed_at, created_by=record.proposed_by,
-        created_node_ids=list(record.node_ids), created_edge_ids=list(record.edge_ids),
-    )  # fmt: skip
-    others = set(await links_resting_on([as_load], graph)) - own_drawing
-    if others:
-        raise PromotionRefused(
-            "links_rest_on_it",
-            f"{len(others)} link(s) written since rest on its items: revert those first.",
-        )
-    layer_deleted = await store.layer_deleted(record.layer_id)
-    tx = await graph.begin_transaction()
-    try:
-        await graph.revert_promotion(record.load_id, record.dataset_id, tx)
-        if layer_deleted:
-            await graph.withdraw_layer(
-                record.layer_id, f"{LAYER_DELETE_PREFIX}{record.case_id}", tx
-            )
-    except Exception:
-        await graph.rollback_transaction(tx)
-        raise
-    if not await store.decide(
-        record.id, was="committed", now="reverted", by=None, at=datetime.now(UTC)
-    ):
-        await graph.rollback_transaction(tx)
-        raise PromotionRefused("already_decided", "This promotion has changed since it was read.")
-    await graph.commit_transaction(tx)
-    await items.mark_promoted(record.case_id, list(record.item_ids), None)
-    if layer_deleted:
-        await items.withdraw(
-            record.case_id, list(record.item_ids), LAYER_DELETER, datetime.now(UTC)
-        )
-    return replace(record, status="reverted")
 
 
 def _kind(edge: Edge) -> Any:

@@ -925,16 +925,19 @@ async def test_reverting_a_promotion_leaves_the_items_in_the_layer_and_clears_th
     boards = get_boards(SimpleNamespace(app=app), stamping(pw.graph, registry=pw.datasets),
                         pw.views, pw.items, pw.datasets, app.state.ontology,
                         app.state.handling_scheme, pw.models)  # type: ignore[arg-type]  # fmt: skip
-    service = Promotions(boards=boards, store=pw.store, investigations=pw.cases,
-                         author_level=AccessLevel.AUTHOR)  # fmt: skip
-    reverted = await service.revert(pw.store.records[promotion])
+    from scripts.revert_promotion import revert_promotion  # the operator module's own core
+
+    async def revert(record: Any) -> Any:
+        return await revert_promotion(record, boards.graph, pw.store, boards.items)
+
+    reverted = await revert(pw.store.records[promotion])
     assert reverted.status == "reverted"
     layer = pw.items.items[made["item_id"]].dataset_id
     assert _node_datasets(pw, made["element_id"]) == [layer]
     assert not _carol_sees_it_from_b(made["element_id"])
     assert pw.items.items[made["item_id"]].promoted_at is None
     with pytest.raises(promotions_module.PromotionRefused):
-        await service.revert(pw.store.records[promotion])
+        await revert(pw.store.records[promotion])
 
 
 # --- admin's ageing seam (ADR-145 Amendment 6) -----------------------------------------------
