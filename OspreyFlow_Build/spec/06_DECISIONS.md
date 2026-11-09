@@ -31444,7 +31444,9 @@ Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
       through as its own row has it, never rewritten (`* REPLACE`, a constant, an expression),
       renamed, computed or dropped. The gate refuses what it can see, and the run compares every
       marked cell with its one input row's. Where none is marked, every row shares the source's
-      marking, and joins and aggregates stay (the exit's own SELECT). The gate, Check SQL, a drawer's
+      marking, and joins and aggregates stay (the exit's own SELECT): that rests on every source node
+      of a pipeline sharing the draft's single handling (a source node carries none of its own; a
+      list's rows are the dataset's). The gate, Check SQL, a drawer's
       sample, Test, publish and every run read the draft's or the recipe's marked columns; a Map
       change binding one after a SQL step is saved is refused at the next Test, publish or run, in
       the same words.
@@ -31452,9 +31454,13 @@ Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
       `QUALIFY`), a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, any table or
       CTE read more than once in one SELECT (a self-join), a recursive or forward CTE reference (a CTE
       sees only those declared before it), and a `* REPLACE` or `* RENAME` touching `_ref`; a qualified
-      `EXCLUDE` of `_ref` is a drop. Tokens carry a nonce drawn for each run, so none can be written by
-      hand; an input column named `_ref…` in any case is refused. So each token used is a row's own,
-      and `filtered_out` counts the rows no row names (rule 2).
+      `EXCLUDE` of `_ref` is a drop. A `_ref…` column is read only as a bare select item, a GROUP BY
+      key or the sole argument of `list`/`array_agg`, never inside an expression (a string function,
+      a struct, a condition, an `ORDER BY`). Each row's token is drawn at random for each run (the
+      second pass: a run-wide nonce with `table#n` let a string function build row 0's), so none can
+      be written by hand or built from another's; an input column named `_ref…` in any case is
+      refused. So each token used is a row's own, and `filtered_out` counts the rows no row names
+      (rule 2).
     - **A refusal never repeats a value.** DuckDB's message is never passed on (a conversion error
       and `error()` print a value unquoted): the words are fixed, by the kind of refusal, with the
       SELECT's line where DuckDB gives one. `error()` is a denied function.
@@ -31466,9 +31472,10 @@ Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
     - **Another dataset's staged Parquet**, by its object-store path or a file path that exists, is
       refused by the gate by name, and past the gate the sandbox reads no file; a source node naming
       another dataset's file is refused at save (L1.4's rule, shown red here).
-    - **Left for the orchestrator to judge:** the typed steps (a Join's right-side cells, a Dedupe's
-      fold, a Derive's new column) are not yet held to the same rule where a marking is bound to a
-      column; the review named the SQL step, and this amendment holds it alone.
+    - **The typed steps (the orchestrator's ruling):** a Join and a Dedupe carry values under the
+      surviving row's marking, as Amendment 12 accepted, and stand. A Derive's new column computed
+      from a marked column could carry a marked value into an unmarked one: the orchestrator's carry
+      for L1.7 (`CARRIES.md`), with Join, Dedupe, Lookup and the fuzzy match.
 
 **Tests (each shown red first; `process/lanes/studio/L1.5_RED_RECORD.md`).**
 
