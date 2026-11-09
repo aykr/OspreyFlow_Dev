@@ -31392,8 +31392,8 @@ Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
    (`any_value(_ref)`, `min(_ref)`, a constant) is one row's ref for many and refused. At the run a
    row with no ref, a ref naming no input row, and an input with rows none of whose refs reach the
    output are refused; an input row no output row names is counted as filtered out (rule 2). A cell
-   that is not text, a number, a boolean or a date is refused in words. A refusal never quotes a value:
-   DuckDB's quoted text is taken out.
+   that is not text, a number, a boolean or a date is refused in words. A refusal never repeats a
+   value (decision 11).
 4. **The person's own principal:** at the run, the step's tables hold only the rows the runner may
    read (`studio_staging.row_reader`, the preview's own per-row marking); the rest are absent and
    counted `rows_withheld`, and the `_ref` tokens are numbered over the kept rows, so none tells
@@ -31433,6 +31433,42 @@ Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
     staging steps now give nothing to a reader not cleared for every row they read, or to a case not
     reading the recipe's dataset, as the staged path does. Amendment 12's "recorded, unchanged" is
     withdrawn.
+
+11. **The orchestrator's independent review (9 November 2026), each fix shown red at its call site**
+    (`L1.5_RED_RECORD.md`, B1–B19):
+    - **A marking is never lowered (the blocker; Map's "tighten, never loosen", the orchestrator's
+      call).** Map judges each row's marking from the cells of its marked columns: the columns the
+      source declares for a part (`defaults.handling_columns`) and those an element's handling binds
+      (`recipe_rules.marked_columns`). Where a pipeline has any, a SQL step runs **row by row**: no
+      join, aggregate, `GROUP BY`, `HAVING`, `INTERSECT` or `EXCEPT`, and each marked column passed
+      through as its own row has it, never rewritten (`* REPLACE`, a constant, an expression),
+      renamed, computed or dropped. The gate refuses what it can see, and the run compares every
+      marked cell with its one input row's. Where none is marked, every row shares the source's
+      marking, and joins and aggregates stay (the exit's own SELECT). The gate, Check SQL, a drawer's
+      sample, Test, publish and every run read the draft's or the recipe's marked columns; a Map
+      change binding one after a SQL step is saved is refused at the next Test, publish or run, in
+      the same words.
+    - **No row is given another row's values or `_ref`.** Always refused: a window function (`OVER`,
+      `QUALIFY`), a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, any table or
+      CTE read more than once in one SELECT (a self-join), a recursive or forward CTE reference (a CTE
+      sees only those declared before it), and a `* REPLACE` or `* RENAME` touching `_ref`; a qualified
+      `EXCLUDE` of `_ref` is a drop. Tokens carry a nonce drawn for each run, so none can be written by
+      hand; an input column named `_ref…` in any case is refused. So each token used is a row's own,
+      and `filtered_out` counts the rows no row names (rule 2).
+    - **A refusal never repeats a value.** DuckDB's message is never passed on (a conversion error
+      and `error()` print a value unquoted): the words are fixed, by the kind of refusal, with the
+      SELECT's line where DuckDB gives one. `error()` is a denied function.
+    - **Off the event loop.** Test stages in a worker thread (`asyncio.to_thread`), as Preview and the
+      run do, so a slow SELECT or Splink stops no other request.
+    - **Bounded output.** At most 1,000,000 rows and 256 MB, counted batch by batch as DuckDB gives
+      them and within the time limit, before any becomes a Python value; past either the step is
+      refused in words and nothing is cut short (rule 2).
+    - **Another dataset's staged Parquet**, by its object-store path or a file path that exists, is
+      refused by the gate by name, and past the gate the sandbox reads no file; a source node naming
+      another dataset's file is refused at save (L1.4's rule, shown red here).
+    - **Left for the orchestrator to judge:** the typed steps (a Join's right-side cells, a Dedupe's
+      fold, a Derive's new column) are not yet held to the same rule where a marking is bound to a
+      column; the review named the SQL step, and this amendment holds it alone.
 
 **Tests (each shown red first; `process/lanes/studio/L1.5_RED_RECORD.md`).**
 

@@ -1340,6 +1340,11 @@ with the other counts) and each rejection's rows by table, row, load and side (`
   a sandbox (read-only, no file or network functions, no other dataset's rows, a time and memory limit,
   the person's own principal), refused at publish if it is anything but one SELECT or if it drops the
   `_ref` columns, and listed in the run report with its rows in and out (ADR-140 decision 12).
+  As built (Amendment 14, decision 11): no window function, subquery in an expression, `COLUMNS(…)`
+  or table read twice, so no row holds another row's values or `_ref`; and where the pipeline binds
+  a marking to a column, the step runs row by row and passes each marked column through as its own
+  row has it, so no marking is lowered. Its output is bounded (rows and bytes), refused past the
+  bound and never cut short, and a refusal names its kind and line, never a value.
 - **Joins on declared keys in guided mode; SQL and fuzzy match in expert mode, with provenance,
   disclosure and safeguards.** A Join takes two upstream tables on an exact or normalised key, declared
   and never guessed. Every staged row carries `source_refs` — which input rows it came from, and
