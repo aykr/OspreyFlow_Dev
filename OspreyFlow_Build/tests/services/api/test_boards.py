@@ -206,6 +206,8 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
         "board_items": held.items, "media": media, "target_models": held.models,
         "handling_scheme": SCHEME, "ontology": ONTOLOGY,
         "working_set": WorkingSetService(graph, FakeWorkingSetStore(), SCHEME),
+        # No proposed link types unless a test gives the case some (`_case_types`).
+        "link_types": None,
     }  # fmt: skip
     for key, value in state.items():
         monkeypatch.setattr(app.state, key, value, raising=False)
@@ -1523,3 +1525,100 @@ def test_a_link_is_never_drawn_under_a_proposals_storage_label(
     answer = _link(board, one, two, type=label)
     assert answer.status_code == 422 and answer.json()["error"] == "not_in_the_model"
     assert len(world.graph.edge_writes) == before
+# --- a case's own proposed link types (decision 9; the orchestrator's carried item, L3.4) -------
+
+PROPOSED, STORED = "WATCHED_OVER", "WATCHED_OVER__proposal_k1"
+
+
+class _CaseTypes:
+    """`LinkTypeService.case_types` as case-b's L3.5 answers it: a proposal is offered in its own
+    case alone (ADR-143 Amendment 4 decision 1), under its storage label; another case reading the
+    same dataset is offered none of it."""
+
+    def __init__(self, ontology: Any) -> None:
+        from services.api.link_types import CaseType
+
+        self.offered = {
+            K: {PROPOSED: CaseType(definition=ontology.edge_type(STORED).model_copy(
+                update={"name": PROPOSED, "hidden": False}), storage_name=STORED,
+                proposal_id="proposal-k1")},
+        }  # fmt: skip
+
+    async def case_types(self, investigation_id: str, principal: Principal) -> dict[str, Any]:
+        return dict(self.offered.get(investigation_id, {}))
+
+
+def _with_a_proposal(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """K's proposal composed into the shared ontology as the service does it: a hidden storage
+    label the store accepts writes under, never offered (ADR-090 Amendment 1)."""
+    from schemas.domain import EdgeTypeDef
+
+    ontology = ONTOLOGY.model_copy(deep=True)
+    ontology.edge_types.append(
+        EdgeTypeDef(name=STORED, from_types=["Person"], to_types=["Person"], directed=False,
+                    analyst_defined=True, hidden=True)
+    )  # fmt: skip
+    monkeypatch.setattr(app.state, "ontology", ontology)
+    world.graph.ontology = ontology
+    types = _CaseTypes(ontology)
+    monkeypatch.setattr(app.state, "link_types", types, raising=False)
+    return types
+
+
+def _board_link_types(who: str, case: str, board: str) -> list[str]:
+    opened = _as(who).get(f"/v1/investigations/{case}/boards/{board}")
+    assert opened.status_code == 200, opened.text
+    return list(opened.json()["link_types"])
+
+
+def test_a_cases_own_proposed_link_type_is_offered_on_its_boards_and_no_other_cases(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_a_proposal(world, monkeypatch)
+    board = _board(start="selection", node_ids=["p-loaded"])
+    drawn = _item(board)["element_id"]
+    assert PROPOSED in _board_link_types("alice", K, board)
+    assert STORED not in _board_link_types("alice", K, board)
+    linked = _link(board, drawn, "p-loaded", type=PROPOSED)
+    assert linked.status_code == 201, linked.text
+    assert world.graph.edge_writes[-1].type == STORED
+    # Carol's board in B, reading the same source: not offered, and refused if named.
+    b_board = _board("carol", B, start="selection", node_ids=["p-loaded"])
+    b_drawn = _item(b_board, "carol", B)["element_id"]
+    assert PROPOSED not in _board_link_types("carol", B, b_board)
+    refused = _as("carol").post(
+        f"/v1/investigations/{B}/boards/{b_board}/links",
+        json={"type": PROPOSED, "label": "x", "marking": "OFFICIAL", "grading": GRADE,
+              "source_note": "n", "source": b_drawn, "target": "p-loaded"},
+    )  # fmt: skip
+    assert refused.status_code == 422 and refused.json()["error"] == "not_in_the_model"
+    # Its storage label is never a type a board offers or accepts by name.
+    assert _link(board, drawn, "p-loaded", type=STORED).status_code == 422
+
+
+def test_the_own_case_check_fails_with_every_cases_proposals_offered(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    types = _with_a_proposal(world, monkeypatch)
+    # The plant: the boards asking for the case's types without the case, as the leak would.
+    real = types.case_types
+
+    async def any_case(investigation_id: str, principal: Principal) -> dict[str, Any]:
+        return await real(K, principal)
+
+    monkeypatch.setattr(types, "case_types", any_case)
+    b_board = _board("carol", B)
+    assert PROPOSED in _board_link_types("carol", B, b_board)
+
+
+def test_the_hidden_label_check_fails_with_hidden_types_listed(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_a_proposal(world, monkeypatch)
+
+    def every_type(self: Boards) -> list[str]:
+        return sorted(e.name for e in self.ontology.edge_types if not e.system)
+
+    monkeypatch.setattr(Boards, "link_types", every_type)
+    b_board = _board("carol", B)
+    assert STORED in _board_link_types("carol", B, b_board)

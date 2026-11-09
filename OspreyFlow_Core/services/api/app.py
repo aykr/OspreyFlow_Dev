@@ -4094,6 +4094,7 @@ def get_boards(
         models=models,
         media=getattr(request.app.state, "media", None),
         cap_breach=_cap_breach,
+        case_types=getattr(request.app.state, "link_types", None),
     )
 
 

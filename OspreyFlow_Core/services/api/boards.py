@@ -61,6 +61,7 @@ from schemas.domain import (
     SAME_AS,
     DrawnAssertion,
     Edge,
+    EdgeTypeDef,
     EdgeWrite,
     Grading,
     Handling,
@@ -132,6 +133,13 @@ class _Models(Protocol):
     async def live(self, dataset_id: str) -> Any: ...
 
 
+class _CaseTypes(Protocol):
+    """`LinkTypeService.case_types` (ADR-143 decision 9): the link types a case may use, a proposal
+    of its own among them (case-b's L3.5 offers a case its own proposals alone, rule 3)."""
+
+    async def case_types(self, investigation_id: str, principal: Principal) -> dict[str, Any]: ...
+
+
 class _Projection(Protocol):
     async def filtered_view(self, case_id: str, principal: Principal, keeps: Any) -> Any: ...
 
@@ -149,6 +157,8 @@ class Boards:
     models: _Models | None = None
     media: MediaStore | None = None
     cap_breach: Callable[[int, int], Any] | None = None
+    #: Decision 9: a case's own proposed link types are usable on its boards at once.
+    case_types: _CaseTypes | None = None
 
     # --- where drawing goes ---------------------------------------------------------------
 
@@ -240,6 +250,8 @@ class Boards:
         return sorted(names)
 
     def link_types(self) -> list[str]:
+        """The model's own link types: never a system type, never a proposal's hidden storage label
+        (another case's, which would tell this case of it: rule 3)."""
         return sorted(
             e.name
             for e in self.ontology.edge_types
@@ -248,6 +260,27 @@ class Boards:
             # (rule 7), and let a link be drawn under it (ADR-143 decision 9; L3.5).
             if not e.system and not e.hidden and e.name not in _NOT_DRAWN_LINK_TYPES
         )
+
+    async def case_link_types(
+        self, case_id: str, principal: Principal
+    ) -> dict[str, tuple[EdgeTypeDef, str]]:
+        """Each link type a board of this case may draw, with its definition and the label its
+        links are written under: the model's, then the case's own proposals (decision 9), offered
+        through `LinkTypeService.case_types` and nowhere else."""
+        out: dict[str, tuple[EdgeTypeDef, str]] = {}
+        for name in self.link_types():
+            held = self.ontology.edge_type(name)
+            assert held is not None
+            out[name] = (held, name)
+        if self.case_types is not None:
+            for name, offered in (await self.case_types.case_types(case_id, principal)).items():
+                if (
+                    getattr(offered, "proposal_id", None) is not None
+                    and name not in out
+                    and name not in _NOT_DRAWN_LINK_TYPES
+                ):
+                    out[name] = (offered.definition, offered.storage_name)
+        return out
 
     def markings_up_to(self, ceiling: str, principal: Principal) -> list[str]:
         return [
@@ -366,7 +399,7 @@ class Boards:
             layout={k: v.model_dump() for k, v in board.layout.items() if k in set(shown)},
             missing=max(missing, 0),
             node_types=await self.node_types(board.case_id),
-            link_types=self.link_types(),
+            link_types=sorted(await self.case_link_types(board.case_id, principal)),
             markings=self.markings_up_to(ceiling, principal),
             ceiling=ceiling,
             may_draw=board.created_by == principal.id,
@@ -478,11 +511,13 @@ class Boards:
     ) -> DrawnItemMade:
         """A drawn link between two items on the board the reader may see, drawn or loaded. The
         link lives in the layer; a loaded end stays in its dataset untouched (decision 2)."""
-        if given.type not in self.link_types():
+        offered = await self.case_link_types(board.case_id, principal)
+        if given.type not in offered:
             raise DrawingRefused(
                 "not_in_the_model", f"{given.type} is not a link type of this case's model",
                 status=422,
             )  # fmt: skip
+        edge_type, stored_as = offered[given.type]
         if given.source == given.target:
             raise DrawingRefused("same_item", "a link joins two different items", status=422)
         on_board = set(board.node_ids or []) | {
@@ -497,8 +532,6 @@ class Boards:
                 status=422,
             )  # fmt: skip
         by_id = {n.id: n for n in ends}
-        edge_type = self.ontology.edge_type(given.type)
-        assert edge_type is not None
         source_type, target_type = by_id[given.source].type, by_id[given.target].type
         if not _accepts(edge_type.from_types, source_type) or not _accepts(
             edge_type.to_types, target_type
@@ -525,7 +558,8 @@ class Boards:
         item_id = new_id()
         write = EdgeWrite(
             id=new_edge_id(),
-            type=given.type,
+            # A proposal's links are written under its own storage label (ADR-090 Amendment 1).
+            type=stored_as,
             source=given.source,
             target=given.target,
             provenance=self._provenance(item_id, board, principal, given),
