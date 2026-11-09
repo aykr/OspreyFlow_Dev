@@ -38,10 +38,13 @@ recommended and are recorded here for the owner to overrule. Amendment 2 decisio
 7. **Revert** is the promotion's operator command; for a drawn merge it also withdraws the merge's matches
    in its transaction, then puts the case back on the drawing and the views back to boards; without those
    stores it refuses.
-8. **Not atomic across stores:** the graph commit comes first and the Postgres steps of decision 7 after it,
-   as L3.4's `promoted_at`; a failure between them leaves the elements merged and the case on its drawing,
-   said in the Conduit's log and repaired by running the revert (recorded, not built: a retry of the Postgres
-   steps is a hygiene item if the orchestrator wants one).
+8. **Across the stores:** before the graph commits, the matches' link ids are kept and the drawing's one
+   merge claimed (`merge_drawn`, the case moved in the same Postgres transaction); of two merges at once
+   one commits, the other is refused with nothing written; a failed graph commit undoes the claim. Only
+   the boards' becoming views follows the commit: a failure there is logged and leaves them boards, on
+   which nothing is drawn (the drawing is read-only: `drawing_merged`).
+9. **Review:** a reviewer's *Details* list the matches; an approval checks each again, and one changed
+   since rejects the merge (Amendment 5 decision 6: never left waiting).
 
 **Open question for the owner (from item 3).** (a) same name only, as built; (b) a retype inside the load
 through `supersede_node` (a new revision of another type, its revert undoing the supersede: a port change

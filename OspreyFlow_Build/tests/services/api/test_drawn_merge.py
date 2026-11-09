@@ -9,7 +9,7 @@ the people below so that each reads it as any reader does; Ann, an analyst who i
 dataset, `other`.
 
 What a mistake here would do, and the case that catches it (each red by its plant, below or in
-`process/lanes/case/L3.9_RED_RECORD.md`):
+`process/lanes/case/gates/L3.9-plants.txt`):
 
 - a merge by someone Amendment 3 does not name: `test_every_step_names_merge_datasets`,
   `test_a_holder_of_merge_datasets_who_is_no_author_of_the_target_is_answered_as_for_no_target`;

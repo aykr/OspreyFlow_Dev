@@ -278,9 +278,9 @@ dataset's gate (the merger reads the drawing through its home case, shared with 
 merge_datasets on every route:
 
 ```
-GET    /v1/datasets/{drawn}/merge-targets              the datasets this reader may merge the drawing into (`MergeTargets`): each a source dataset of the drawing's unit that they are an Author of (its home case's), never a composite, a gazetteer, a drawn dataset or a layer; `refused` once it has been merged
+GET    /v1/datasets/{drawn}/merge-targets              the datasets this reader may merge the drawing into (`MergeTargets`): each a source dataset of the drawing's unit that they are an Author of (its home case's), never a composite, a gazetteer, a drawn dataset or a layer
 GET    /v1/datasets/{drawn}/merge-sheet                 map and match for `?target=` (`DrawnMergeSheet`): each drawn type and the target type it goes in as (the same name), or why not; the *Looks like a loaded item* pairs read through the merger scoped to the target alone; the drawn items with every check each fails against the target (its highest marking, its model, a grading and source); audited as read_drawn_merge_sheet
-POST   /v1/datasets/{drawn}/merges/dry-run              the dry run (`DrawnMergeInput` → `DrawnMergeDryRun`): every check, what would be added and matched counting only what the merger may see, nothing written
+POST   /v1/datasets/{drawn}/merges/dry-run              the dry run (`DrawnMergeInput` → `DrawnMergeDryRun`): every check, what would be added and matched counting only what the merger may see, nothing written but its audit entry (dry_run_drawn_merge)
 POST   /v1/datasets/{drawn}/merges                      the merge (`DrawnMergeInput` → `Promotion`): one promotion (`promotion-<id>`, trigger drawn_merge) into the target under its policy, reviewed in the target's *Analyst promotions*; audited as merge_drawn_dataset
 ```
 
@@ -295,10 +295,18 @@ not see, another dataset's and none); it is written with the load, in the same t
 `SAME_AS` that is `inferred` and scored (`model_version` drawn_merge), in the target alone, marked as
 the stricter of its ends and within the target's highest (rule 5: a person confirms it later; rule 6:
 both nodes stay). An item above the target's highest marking refuses the merge, 422 `check_failed`,
-nothing written. A drawing with a merge waiting is refused another (409 `merge_waiting`). Once
-committed (decision 7) the drawing's home case reads the target, and the drawn dataset read-only
-(`DatasetStore.merge_drawn`, once: `already_merged`), so the Studio reaches the drawing no more; its
-boards become views (drawing off, layout and sharing kept, the drawn nodes added to the selection);
+nothing written. A drawing with a merge waiting is refused another (409 `merge_waiting`). A
+reviewer's *Details* list the merge's matches as they read them, and an approval checks each again:
+one changed since (an end withdrawn or raised, the target's highest lowered) rejects the merge, never
+leaves it waiting. Before the graph commits, the matches' link ids are kept and the drawing's one merge
+claimed (`DatasetStore.merge_drawn`, moving the case onto the target in the same Postgres
+transaction): of two merges at once one commits and the other is refused 409 `already_merged` with
+nothing written; a graph commit that fails after it undoes the claim. Once committed (decision 7) the
+drawing's home case reads the target, and the drawn dataset read-only, so the Studio reaches the
+drawing no more and an unmerged item is edited or withdrawn by no one (409 `drawing_merged`); its
+boards become views (drawing off, layout and sharing kept, the drawn nodes added to the selection but
+never counted in `chosen` or `missing`, so nothing above a reader is told); drawing again is a new
+board from the view, into the case's layer;
 and opening such a view answers `annotations` beside its items (`ViewAnnotation`: the label, the
 marking and grading as drawn, the source note, and "Drawn by …, merged as load …" or "not merged"),
 read through the reader's own principal, so an item they may not see has none. The revert is the
