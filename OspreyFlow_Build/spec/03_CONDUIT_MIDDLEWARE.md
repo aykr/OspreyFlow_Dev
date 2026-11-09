@@ -279,7 +279,7 @@ merge_datasets on every route:
 
 ```
 GET    /v1/datasets/{drawn}/merge-targets              the datasets this reader may merge the drawing into (`MergeTargets`): each a source dataset of the drawing's unit that they are an Author of (its home case's), never a composite, a gazetteer, a drawn dataset or a layer; `refused` once it has been merged
-GET    /v1/datasets/{drawn}/merge-sheet?target=        map and match (`DrawnMergeSheet`): each drawn type and the target type it goes in as (the same name), or why not; the *Looks like a loaded item* pairs read through the merger scoped to the target alone; the drawn items with every check each fails against the target (its highest marking, its model, a grading and source); audited as read_drawn_merge_sheet
+GET    /v1/datasets/{drawn}/merge-sheet                 map and match for `?target=` (`DrawnMergeSheet`): each drawn type and the target type it goes in as (the same name), or why not; the *Looks like a loaded item* pairs read through the merger scoped to the target alone; the drawn items with every check each fails against the target (its highest marking, its model, a grading and source); audited as read_drawn_merge_sheet
 POST   /v1/datasets/{drawn}/merges/dry-run              the dry run (`DrawnMergeInput` → `DrawnMergeDryRun`): every check, what would be added and matched counting only what the merger may see, nothing written
 POST   /v1/datasets/{drawn}/merges                      the merge (`DrawnMergeInput` → `Promotion`): one promotion (`promotion-<id>`, trigger drawn_merge) into the target under its policy, reviewed in the target's *Analyst promotions*; audited as merge_drawn_dataset
 ```
