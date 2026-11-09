@@ -224,3 +224,24 @@ at ef45fa1.
 - **The address timing case.** It passed in the set and again re-taken alone.
 - **Not rules': PID r1 and r14's interval cases.** These are the PID build's. The loaded `valid_from`
   keeps the row's time of day where the plan expects the day's start. Sent to the orchestrator.
+
+## 12. The live set at 855899f: the ClickHouse frequency span (stack c, on the server, 9 November 2026)
+
+The live retake at 855899f (`gates/855899f.live.txt`, 779 passed, 1 failed) was the first in which the analytics suite's
+`analytics_clickhouse` variant ran against a real ClickHouse: the stacks had none until c's on 18125. That ClickHouse is
+25.8.33.6, the version the deployment pins (`harness/render.py`). The failure was
+`test_frequency_counts_the_most_events_in_any_span_of_the_days_asked[analytics_clickhouse]`, at its 30-day span:
+ClickHouse refuses a RANGE window offset of 2^31 or more ("Frame start offset for 'RANGE' frame must be a nonnegative
+32-bit integer, '2592000000' of type 'UInt64' given"). So `event_frequency` failed in a ClickHouse deployment for any
+span past about 24.9 days (ADR-133's frequency conditions allow 366).
+
+- **The fix** (`analytics_clickhouse/adapter.py`): each event's span is a self-join of the same rows,
+  `b.at BETWEEN a.at - span_ms AND a.at` within a subject. It is exact to the millisecond and counts ties as
+  DuckDB's `RANGE … CURRENT ROW` does, at any span.
+- **The new case:** `test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_millisecond`. Events
+  exactly 90 days apart are in one span; one 90 days and 1 ms later is not (largest total 12, never 18).
+- **Red, each on c's ClickHouse through `stack_lease.sh remote`:**
+  - The old RANGE window: both cases red, refused by ClickHouse.
+  - A plant by whole seconds (`toUnixTimestamp`, the span in seconds), the obvious fix that keeps the window:
+    the new case alone red, `assert 18.0 == 12.0`.
+  - The fix: 14 passed, both adapters.

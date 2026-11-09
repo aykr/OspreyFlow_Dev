@@ -2528,6 +2528,30 @@ async def test_frequency_counts_the_most_events_in_any_span_of_the_days_asked(
     assert thirty.nodes["acct-a"].most_in_span == 4
 
 
+async def test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_millisecond(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """A span of more than 2^31 ms (about 24.9 days) is counted, not refused, and its edge is exact.
+
+    ClickHouse refuses a RANGE window offset of 2^31 or more, so the adapter once failed on any span
+    past 24 days (L2.10's live run); a fix by whole seconds would move the edge. An event exactly 90
+    days before another is in its span; one a millisecond earlier is not."""
+    from datetime import timedelta
+
+    edge = _day(90)
+    events = [
+        _paid(0, 5.0), _paid(90, 7.0),                                          # exactly 90 days apart
+        _event(occurred_at=edge + timedelta(days=90, milliseconds=1), edge_type="TRANSACTED",
+               source_id="acct-a", target_id="acct-b", properties={"amount": 11.0}),  # 90 days and 1 ms after
+    ]  # fmt: skip
+    wide = Interval(valid_from=FREQ_T0 - timedelta(days=1), valid_to=FREQ_T0 + timedelta(days=200))
+    async with factory.context(events) as adapter:
+        ninety = await adapter.event_frequency(_frequency(90, amount="amount", window=wide), OFFICIAL)
+    assert ninety.nodes["acct-a"].most_in_span == 2  # 0 and 90, the span's far end included
+    # 5 + 7 at the edge; 7 + 11 (18) would mean a span of 90 days and 1 ms was counted as 90 days.
+    assert ninety.nodes["acct-a"].largest_total == 12.0
+
+
 async def test_frequency_counts_a_subject_at_either_end_and_each_event_once(
     factory: AnalyticsAdapterFactory,
 ) -> None:

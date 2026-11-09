@@ -782,12 +782,18 @@ class AnalyticsClickHouseAdapter:
             f"WHERE {predicate.where} AND target_id IN ({marks}) AND target_id != source_id"
         )
         span_ms = int(req.span_days) * 86_400_000
+        # Each event's span is every event of the same subject from span_ms before it up to and
+        # including its own instant (ties included), as DuckDB's RANGE … CURRENT ROW counts it. A
+        # self-join, not a RANGE window: ClickHouse refuses a RANGE offset of 2^31 or more, and 25
+        # days in milliseconds is already past it (L2.10's live run, ClickHouse 25.8).
         rows = await self._ch.rows(
+            f"WITH touched AS ({touched}) "
             "SELECT node, max(n), max(total) FROM ("
-            "  SELECT node, count() OVER span AS n, sum(amount) OVER span AS total "
-            f"  FROM ({touched}) "
-            "  WINDOW span AS (PARTITION BY node ORDER BY at "
-            f"  RANGE BETWEEN {span_ms} PRECEDING AND CURRENT ROW)"
+            "  SELECT a.node AS node, a.k AS k, count() AS n, sum(b.amount) AS total "
+            "  FROM (SELECT node, at, rowNumberInAllBlocks() AS k FROM touched) AS a "
+            "  INNER JOIN touched AS b ON a.node = b.node "
+            f"  WHERE b.at BETWEEN a.at - {span_ms} AND a.at "
+            "  GROUP BY a.node, a.k"
             ") GROUP BY node",
             [*predicate.params, *subjects, *predicate.params, *subjects],
         )
