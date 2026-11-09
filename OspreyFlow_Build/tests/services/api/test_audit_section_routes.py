@@ -390,7 +390,7 @@ class _Waiting:
                               ["ops-1"])]  # fmt: skip
 
     def _all(self) -> list[PendingPromotion]:
-        return [PendingPromotion(promotion_id=f"p{n}", load_id="load-7", dataset_id="ds-a",
+        return [PendingPromotion(items_marking=None, promotion_id=f"p{n}", load_id="load-7", dataset_id="ds-a",
                                  dataset_name="Prison records", dataset_unit="unit-1",
                                  proposed_by=who, proposed_at=datetime.now(UTC) - timedelta(days=4, minutes=1))
                 for n, who in enumerate(self.proposers, 1)]  # fmt: skip
@@ -565,7 +565,7 @@ def test_an_overdue_alert_is_read_without_its_other_recipients() -> None:
     from services.api.promotion_ageing import PendingPromotion
 
     store = InMemoryAgeingStore()
-    promotion = PendingPromotion(promotion_id="p1", load_id="load-7", dataset_id="ds-a",
+    promotion = PendingPromotion(items_marking=None, promotion_id="p1", load_id="load-7", dataset_id="ds-a",
                                  dataset_name="Prison records", dataset_unit="unit-1",
                                  proposed_by="ana-1", proposed_at=T0)  # fmt: skip
     asyncio.run(store.raise_once(PromotionOverdueAlert(
@@ -675,7 +675,7 @@ def test_recipients_are_asked_of_the_dataset_as_it_stands_now() -> None:
 
     from schemas.admin import PersonAccount
 
-    recorded = PendingPromotion(promotion_id="p1", load_id="load-7", dataset_id="ds-a",
+    recorded = PendingPromotion(items_marking=None, promotion_id="p1", load_id="load-7", dataset_id="ds-a",
                                 dataset_name="Prison records", dataset_unit="unit-1",
                                 proposed_by="ana-1", proposed_at=T0)  # fmt: skip
     now = Dataset(id="ds-a", name="Prison records", owning_unit="unit-2", created_at=T0,

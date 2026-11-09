@@ -3,7 +3,7 @@
 // reads *1 Model · n proposed* with the count the Conduit made for this reader in this dataset alone,
 // a reminder with its tip shows above the other tabs, and *Needs you* opens the Model tab. The count
 // leaving out what the reader cannot read is the Conduit's (`test_needs_you.py`); here, that the tab
-// shows that count and no other (another dataset's, or one above the reader's clearance).
+// shows that count and no other dataset's.
 import {
   cleanup,
   fireEvent,
@@ -77,7 +77,7 @@ const open = () =>
   );
 
 describe("the Studio's proposals count", () => {
-  it("names this dataset's count on the Model tab, never another's or one above the reader's clearance", async () => {
+  it("names this dataset's count on the Model tab, never another's", async () => {
     serve([
       {
         dataset_id: "ds-a",

@@ -73,9 +73,9 @@ NOT_A_SECTION_S = {
     r"^/v1/admin/datasets/\{dataset_id\}/cases/\{investigation_id\}/delete$":
         "Admin › Datasets' Delete, the admin lane's screen to come",
     # ADR-090 Amendment 4 (L2.7): Admin's Proposed types is removed, proposals being decided on
-    # the Studio's Model tab. These routes stay for the proposals that name no dataset (those
-    # made before ADR-099 Amendment 3 among them) (ADR-143 decision 5: the administrator's promotion "remains only" for
-    # those), with no screen of their own; the list names no other, in its query
+    # the Studio's Model tab. These routes stay for the proposals that name no dataset (ADR-143
+    # decision 5: the administrator's promotion "remains only" for those), with no screen of their
+    # own; the list names no other, in its query
     # (`test_link_type_routes.py`'s `test_the_administrators_list_holds_no_proposal_that_names_a_dataset`).
     r"^/v1/admin/link-types(/\{proposal_id\}/(promote|reject)|/retire)?$": (
         "the proposals naming no dataset, decided by the API alone since L2.7"

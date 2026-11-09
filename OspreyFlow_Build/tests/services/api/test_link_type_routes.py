@@ -49,8 +49,8 @@ class _Cases(_Store):
 
 
 def _made_before_am3(world: _World, pid: str) -> None:
-    """The administrator's decisions are for proposals made before ADR-099 Amendment 3 alone, which
-    name no dataset (ADR-090 Amendment 4): the proposal is stored as one."""
+    """The administrator's decisions are for proposals that name no dataset alone (those made
+    before ADR-099 Amendment 3 among them; ADR-090 Amendment 4): the proposal is stored as one."""
     world.store.rows[pid] = world.store.rows[pid].model_copy(update={"dataset_id": None})
     asyncio.run(world.service.refresh())
 

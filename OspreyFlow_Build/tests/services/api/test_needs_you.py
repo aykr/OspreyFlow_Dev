@@ -30,7 +30,6 @@ from services.api.app import app
 from services.api.datasets import Dataset
 from services.api.investigations import AccessLevel, Investigation
 from services.api.link_types import ModelProposalView
-from services.api.needs_you import to_decide
 from services.api.promotion_ageing import InMemoryAgeingStore, PendingPromotion
 
 from ontology.handling import HandlingScheme
@@ -140,8 +139,7 @@ def _proposal(pid: str, status: str, in_model: str | None = None) -> ModelPropos
 
 
 class _LinkTypes:
-    """`dataset_proposal_views` as the real service answers it: each proposal of the dataset, and
-    to a reader who may not read the words, each `without_words()` (`link_types.py`)."""
+    """The service's count as the real one answers it, over each dataset's proposals."""
 
     def __init__(self) -> None:
         self.of: dict[str, list[ModelProposalView]] = {
@@ -154,21 +152,18 @@ class _LinkTypes:
         }  # fmt: skip
         self.asked: list[tuple[str, bool]] = []
 
-    async def dataset_proposal_views(
-        self, dataset_id: str, *, may_read_words: bool = True
-    ) -> list[ModelProposalView]:
-        self.asked.append((dataset_id, may_read_words))
-        views = self.of.get(dataset_id, [])
-        return list(views) if may_read_words else [v.without_words() for v in views]
-
     async def open_proposal_count(self, dataset_id: str) -> int:
-        """As the real service counts them (`LinkTypeService.open_proposal_count`): a number, never
-        a proposal; recorded as asked with words, since a count is asked only of a cleared reader."""
+        """As the real service counts them (`LinkTypeService.open_proposal_count`, held to the Model
+        tab's rule in `test_analyst_link_types.py`): pending, or accepted and in neither model; a
+        number, never a proposal."""
         self.asked.append((dataset_id, True))
-        return sum(1 for v in self.of.get(dataset_id, []) if to_decide(v))
+        return sum(
+            1 for v in self.of.get(dataset_id, [])
+            if v.status == "pending" or (v.status == "accepted" and v.in_model is None)
+        )  # fmt: skip
 
 
-PROMOTION = PendingPromotion(promotion_id="pr-1", load_id="load-7", dataset_id="ds-a",
+PROMOTION = PendingPromotion(items_marking=None, promotion_id="pr-1", load_id="load-7", dataset_id="ds-a",
                              dataset_name="Prison records", dataset_unit="unit-1",
                              proposed_by="ana-1", proposed_at=T0,
                              dataset_marking="SECRET")  # fmt: skip
@@ -353,6 +348,8 @@ def test_a_dataset_lowered_while_the_promotion_waits_widens_nothing(world: Simpl
     assert asyncio.run(world.ageing.raise_once(alert, item))
     world.datasets.held["ds-a"] = _dataset("ds-a", "Prison records", "OFFICIAL")
     assert _read(world, "low-1")["promotions_overdue"] == []
+    # The positive control: the SECRET reviewer is still served it, so the read refused one person.
+    assert [n["promotion_id"] for n in _read(world, "rev-1")["promotions_overdue"]] == ["pr-1"]
 
 
 def test_the_people_are_read_once_a_read(world: SimpleNamespace) -> None:
@@ -381,26 +378,3 @@ def test_a_dataset_a_case_only_reads_is_not_reached(world: SimpleNamespace) -> N
     body = _read(world, "reader-eng")
     assert "ds-a" not in str(body)
     assert {d for d, _ in world.link_types.asked} <= {"ds-x"}
-
-
-@pytest.mark.parametrize(
-    ("status", "in_model", "withheld", "counted"),
-    [
-        ("pending", None, False, True),
-        ("accepted", None, False, True),
-        ("accepted", "draft", False, False),
-        ("accepted", "live", False, False),
-        ("rejected", None, False, False),
-        ("withdrawn", None, False, False),
-        ("pending", None, True, False),
-    ],
-)
-def test_to_decide_is_the_model_tabs_own_rule(
-    status: str, in_model: str | None, withheld: bool, counted: bool
-) -> None:
-    """The count is `ModelProposals.tsx`'s `decidable`: pending, or accepted and lost from the
-    model, and never a withheld one."""
-    view = _proposal("x", status, in_model)
-    if withheld:
-        view = view.without_words().model_copy(update={"status": status})
-    assert to_decide(view) is counted

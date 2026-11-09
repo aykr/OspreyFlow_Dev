@@ -25,17 +25,6 @@ from schemas.admin import NeedsYouProposals
 from schemas.domain import Principal
 
 
-def to_decide(view: object) -> bool:
-    """Still to decide, and readable by this reader: pending, or accepted and since lost from both
-    the live model and the draft (`link_types._decidable`'s rule). A withheld one is never counted,
-    and neither is one whose words the reader may not read."""
-    if getattr(view, "withheld", False):
-        return False
-    status = getattr(view, "status", None)
-    value = getattr(status, "value", status)
-    return value == "pending" or (value == "accepted" and getattr(view, "in_model", None) is None)
-
-
 async def proposals_to_decide(
     dataset_ids: Iterable[str],
     names: dict[str, str],

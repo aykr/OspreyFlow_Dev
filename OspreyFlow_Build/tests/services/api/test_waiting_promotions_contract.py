@@ -11,7 +11,7 @@ test, not the route's.
 **Case's L3.4 adds its store to `STORES`** (a factory taking the promotions and each dataset's
 Authors, and setting them up in that store) and must pass every case here. Until then the suite runs
 against `ReferenceWaiting`, the shape the contract describes, and is shown red with each check
-dropped from it (`L2.6_RED_RECORD.md`, C1–C4).
+dropped from it (`L2.6_RED_RECORD.md`, C1–C4; `L2.7_RED_RECORD.md`, C5–C6 for the items' marking).
 """
 
 from __future__ import annotations
@@ -37,10 +37,10 @@ SCHEME = HandlingScheme(name="contract", classification=["OFFICIAL", "SECRET", "
                         handling_codes={}, action_codes={}, sanitisation_codes={})  # fmt: skip
 SENT = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
 PROMOTIONS = [
-    PendingPromotion(promotion_id="p-secret", load_id="load-1", dataset_id="ds-s",
+    PendingPromotion(items_marking=None, promotion_id="p-secret", load_id="load-1", dataset_id="ds-s",
                      dataset_name="Synthetic custody", dataset_unit="unit-1",
                      proposed_by="ana-1", proposed_at=SENT, dataset_marking="SECRET"),
-    PendingPromotion(promotion_id="p-plain", load_id="load-2", dataset_id="ds-p",
+    PendingPromotion(items_marking=None, promotion_id="p-plain", load_id="load-2", dataset_id="ds-p",
                      dataset_name="Synthetic visits", dataset_unit="unit-1",
                      proposed_by="ana-1", proposed_at=SENT),
     # Its dataset has no highest marking, and its items are marked SECRET: the dataset's marking
@@ -160,3 +160,24 @@ async def test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it(
     assert waiting.recorded is True
     got = {p.promotion_id for p in await waiting.waiting_for_review(reader)}
     assert got == listed, who
+
+
+@pytest.mark.parametrize("store", sorted(STORES))
+async def test_every_waiting_promotion_carries_its_items_marking(store: str) -> None:
+    """L2.7 (CARRIES row 46): the sweep and *Needs you* read each promotion from `all_waiting()`,
+    and `may_review` asks its `items_marking`; `None` clears everyone. So the store must hand back
+    the items' marking it holds, for every promotion, here and not only in its own filtered read.
+    Red with a store that leaves the field out of `all_waiting()` (it would alert and serve an
+    uncleared reviewer)."""
+    waiting = STORES[store](PROMOTIONS, AUTHORS)
+    got = {p.promotion_id: p.items_marking for p in await waiting.all_waiting()}
+    assert got == {p.promotion_id: p.items_marking for p in PROMOTIONS}
+    assert got["p-item"] == "SECRET"
+
+
+def test_the_items_marking_is_required() -> None:
+    """A store cannot build a promotion and forget the items' marking: `PendingPromotion` takes no
+    default for it, since `None` clears everyone. Red with a default given."""
+    with pytest.raises(TypeError, match="items_marking"):
+        PendingPromotion(promotion_id="p", load_id="l", dataset_id="d", dataset_name="n",  # type: ignore[call-arg]
+                         dataset_unit="u", proposed_by="a", proposed_at=SENT)  # fmt: skip

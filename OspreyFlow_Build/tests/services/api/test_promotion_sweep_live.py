@@ -12,8 +12,8 @@ the Conduit held at start-up rather than the one on `app.state` at each tick (no
 proposer, an Author without `review_promotions`, or another unit's administrator alerted; an alert
 before N days. Not this test's: the alert raised on every tick, which the table's primary key
 refuses and which `test_promotion_ageing.py::test_the_alert_fires_once` (A2) and the store test's
-U5 catch. Each run leaves its own dataset, home case, grants and alert rows on the stack, named by
-its run so a second run never meets them.
+U5 catch. Each run is named by its own tag and removes, in teardown whatever happened, the alert
+rows, dataset, home case, case and grants it wrote (`_tidy`; never the audit log).
 """
 
 from __future__ import annotations
@@ -62,11 +62,11 @@ class _Source:
     def __init__(self, dataset_id: str, tag: str) -> None:
         now = datetime.now(UTC)
         self.items = [
-            PendingPromotion(promotion_id=f"{tag}-old", load_id=f"{tag}-load-1",
+            PendingPromotion(items_marking=None, promotion_id=f"{tag}-old", load_id=f"{tag}-load-1",
                              dataset_id=dataset_id, dataset_name=f"Synthetic custody {tag}",
                              dataset_unit="unit-sw", proposed_by=PROPOSER.id,
                              proposed_at=now - timedelta(days=3, minutes=5)),
-            PendingPromotion(promotion_id=f"{tag}-new", load_id=f"{tag}-load-2",
+            PendingPromotion(items_marking=None, promotion_id=f"{tag}-new", load_id=f"{tag}-load-2",
                              dataset_id=dataset_id, dataset_name=f"Synthetic custody {tag}",
                              dataset_unit="unit-sw", proposed_by=PROPOSER.id,
                              proposed_at=now - timedelta(days=1)),
@@ -160,23 +160,22 @@ async def _alerts(tag: str) -> list[asyncpg.Record]:
         await conn.close()
 
 
-async def _tidy(tag: str, dataset_id: str, case_id: str) -> None:
+async def _tidy(tag: str, dataset_id: str, case_id: str | None) -> None:
     """Removes what the test wrote to the shared stack, whatever it did (L2.7's review): its alerts,
-    the dataset's home case and the dataset, and the home case with every row naming it."""
+    the dataset's home case and the dataset, and the home case with its grants, tab state and
+    datasets, each table named here; never the audit log, which nothing deletes from."""
     conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
     try:
         await conn.execute("DELETE FROM promotion_overdue_alerts WHERE promotion_id LIKE $1",
                            f"{tag}-%")  # fmt: skip
         await conn.execute("DELETE FROM home_cases WHERE dataset_id = $1", dataset_id)
-        naming = await conn.fetch(
-            "SELECT table_name FROM information_schema.columns WHERE table_schema = current_schema() "
-            "AND column_name = 'investigation_id' AND table_name <> 'investigations'"
-        )
-        for row in naming:
-            await conn.execute(
-                f'DELETE FROM "{row["table_name"]}" WHERE investigation_id = $1', case_id
-            )
-        await conn.execute("DELETE FROM investigations WHERE id = $1", case_id)
+        if case_id is not None:
+            for table in ("investigation_grants", "investigation_access_history",
+                          "investigation_tab_state", "investigation_datasets",
+                          "case_layer_reads"):  # fmt: skip
+                if await conn.fetchval("SELECT to_regclass($1)", table) is not None:
+                    await conn.execute(f"DELETE FROM {table} WHERE investigation_id = $1", case_id)
+            await conn.execute("DELETE FROM investigations WHERE id = $1", case_id)
         await conn.execute("DELETE FROM datasets WHERE id = $1", dataset_id)
     finally:
         await conn.close()
@@ -185,28 +184,35 @@ async def _tidy(tag: str, dataset_id: str, case_id: str) -> None:
 def test_the_lifespans_own_sweep_raises_r7s_alert_once_at_n_days(api_env: None) -> None:
     tag = "sw" + uuid.uuid4().hex[:8]
     dataset_id = f"ds-{tag}"
-    case_id = asyncio.run(_home_case())
-    days_before = asyncio.run(_home(dataset_id, case_id))
-    from services.api.app import app
+    case_id: str | None = None
+    days_before: int | None = None
+    restore = False
+    rows: list[asyncpg.Record] = []
+    try:
+        case_id = asyncio.run(_home_case())
+        days_before = asyncio.run(_home(dataset_id, case_id))
+        restore = True
+        from services.api.app import app
 
-    with TestClient(app):
-        held, source_held = app.state.identity_admin, app.state.waiting_promotions
-        app.state.identity_admin = _People()
-        try:
-            # Set after start-up, as L3.4 will: the job asks `app.state` at every tick.
-            app.state.waiting_promotions = _Source(dataset_id, tag)
-            deadline = time.monotonic() + 20
-            rows: list[asyncpg.Record] = []
-            while time.monotonic() < deadline and not rows:
-                time.sleep(0.5)
+        with TestClient(app):
+            held, source_held = app.state.identity_admin, app.state.waiting_promotions
+            app.state.identity_admin = _People()
+            try:
+                # Set after start-up, as L3.4 will: the job asks `app.state` at every tick.
+                app.state.waiting_promotions = _Source(dataset_id, tag)
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and not rows:
+                    time.sleep(0.5)
+                    rows = asyncio.run(_alerts(tag))
+                time.sleep(2)  # several more ticks
                 rows = asyncio.run(_alerts(tag))
-            time.sleep(2)  # several more ticks
-            rows = asyncio.run(_alerts(tag))
-        finally:
-            app.state.identity_admin = held
-            app.state.waiting_promotions = source_held
+            finally:
+                app.state.identity_admin = held
+                app.state.waiting_promotions = source_held
+    finally:
+        if restore:
             asyncio.run(_restore(days_before))
-            asyncio.run(_tidy(tag, dataset_id, case_id))
+        asyncio.run(_tidy(tag, dataset_id, case_id))
     assert [r["promotion_id"] for r in rows] == [f"{tag}-old"]  # once, and only the one at N days
     [row] = rows
     assert sorted(__import__("json").loads(row["recipients"])) == ["sw-adm", "sw-rev"]

@@ -214,16 +214,32 @@ describe("Admin's words: roles by name, never people or ids", () => {
   });
 
   // The independent review's item 3: every section `sections.json` names, built or coming, drawn as
-  // its holder sees it, and its text, its tips and its refusals read.
+  // its holder sees it, and its text, its tips and its refusals read. Each waits for its own content
+  // (so a section still loading is not passed unread) and a built one must not be drawn as coming;
+  // a section that draws tips must have them read.
   const EVERY_RIGHT = [...new Set(ADMIN_GROUPS.flatMap((g) => g.sections.map((s) => s.right)))];
-  it.each(ADMIN_GROUPS.flatMap((g) => g.sections.map((s) => s.label)))("in %s, nothing names a person in a tip or shows an id", async (label) => {
+  const SHOWS: Record<string, string> = {
+    people: "Author of Kestrel", roles: "A preset: gives", dashboards: "osprey-dashboard-board", datasets: "Prison records",
+    connections: "Telco lookup (synthetic)", operations: "Prison records", system: "Graph store", models: "Gemini",
+    maps: "OpenStreetMap", "grading-scheme": "admiralty", "approval-rights": "Coming:", uploads: "Coming:",
+    audit: "Bea Engineer", "demo-packs": "HMP extract (synthetic)",
+  }; // prettier-ignore
+  const DRAWS_TIPS = new Set(["people", "roles"]);
+  const SECTIONS = ADMIN_GROUPS.flatMap((g) => g.sections);
+  it("names a content to wait for in every section", () => {
+    expect(Object.keys(SHOWS).sort()).toEqual(SECTIONS.map((s) => s.id).sort());
+  });
+  it.each(SECTIONS.map((s) => [s.label, s] as const))("in %s, nothing names a person in a tip or shows an id", async (label, s) => {
     serve();
     open(EVERY_RIGHT);
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Admin sections" })).getByRole("button", { name: new RegExp(`^${label}( \\(coming\\))?$`) }));
-    await waitFor(() => expect(document.getElementById("admin-section-title")?.textContent).toContain(label));
-    await new Promise((r) => setTimeout(r, 30));
+    const name = s.screen ? label : `${label} (coming)`;
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Admin sections" })).getByRole("button", { name }));
+    await waitFor(() => expect(document.getElementById("admin-section-title")?.textContent).toBe(label));
+    await waitFor(() => expect(document.querySelector(".admin-place__section")?.textContent).toContain(SHOWS[s.id]));
     for (const id of IDS) expect(document.body.textContent, `${label}: ${id}`).not.toMatch(word(id));
-    for (const { of, text } of [...tips(), ...screen.queryAllByRole("alert").map((a) => ({ of: "a refusal", text: a.textContent ?? "" }))]) {
+    const said = [...tips(), ...screen.queryAllByRole("alert").map((a) => ({ of: "a refusal", text: a.textContent ?? "" }))];
+    if (DRAWS_TIPS.has(s.id)) expect(tips().length, `${label}: no tip was read`).toBeGreaterThan(0);
+    for (const { of, text } of said) {
       for (const person of PERSON_WORDS) expect(text, `${label}: ${of} names ${person}`).not.toMatch(personWord(person));
     }
   });

@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 // The top bar's *Needs you · n* (ADR-145 decision 11, A2; L2.7). What it may list is the Conduit's
 // (`test_needs_you.py`, each case red by a plant at the route); these prove the control counts only
-// what the reader may decide, says a proposal above their clearance exists without counting or
-// describing it, gives every entry its tip, opens where to act, and says a failed read.
+// what the reader may decide and lists only what the Conduit served, gives every entry its tip, opens where to act, and says a failed read.
 import {
   cleanup,
   fireEvent,
