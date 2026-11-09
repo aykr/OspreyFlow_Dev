@@ -4,6 +4,7 @@
 // never counted as nothing. Where no source exists yet (the last sign-in, a changelog, who granted
 // what) Home says nothing rather than invent it; the build plan's E3 row lists each.
 import { typologyLabel } from "../alerts/names";
+import { alertRuleGroup } from "../reports/figureParts";
 import type { CaseListing } from "../investigation/cases";
 
 export type Unreadable = "unreadable";
@@ -75,12 +76,9 @@ export interface AttentionRow {
   alertRule?: { label: string; typology: string };
 }
 
-const RULE_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors" };
-
-/** The rule group a queued alert is counted under, as the Conduit's report labels it. */
+/** The rule group a queued alert is counted under, from the Figures' own one copy (`reports/figureParts`). */
 export function ruleGroupOf(row: Pick<QueuedAlertLite, "alert" | "kind">): { label: string; typology: string } {
-  const kind = row.kind ?? "typology";
-  return { label: RULE_GROUP[kind] ?? kind, typology: kind === "typology" ? (row.alert.typology ?? "") : "" };
+  return alertRuleGroup(row);
 }
 export interface RecentCase {
   id: string;

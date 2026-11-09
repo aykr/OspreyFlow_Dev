@@ -27,6 +27,15 @@ export interface RuleGroup {
 
 export const groupKey = (g: RuleGroup): string => `${g.label}:${g.typology}`;
 
+const KIND_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors" };
+
+/** The rule group a queued alert is counted under, as the Conduit's `_RULE_GROUP` names it: the Glass's one
+ * copy, read by the Alerts panel and by Home's *Open the dashboard*, so the two cannot drift apart. */
+export function alertRuleGroup(row: { kind?: string | null; alert: { typology?: string | null } }): RuleGroup {
+  const kind = row.kind ?? "typology";
+  return { label: KIND_GROUP[kind] ?? kind, typology: kind === "typology" ? (row.alert.typology ?? "") : "" };
+}
+
 /** A rule group in words: a typology rule by its typology, never a rule's own analyst-written name. */
 export function groupName(g: RuleGroup): string {
   if (g.label === "hotlists") return "Hotlists";

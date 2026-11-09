@@ -14,16 +14,12 @@ import type { MonitoringFigures, QueuedAlert } from "../../../../packages/schema
 import { typologyLabel } from "../alerts/names";
 import { Button } from "../design/primitives";
 import { fetchNewestAlerts, type ReportsApi } from "./api";
-import { AGE_BANDS, groupKey, groupName, NUMBER, plural, Section, type RuleGroup } from "./figureParts";
+import { AGE_BANDS, alertRuleGroup, groupKey, groupName, NUMBER, plural, Section, type RuleGroup } from "./figureParts";
 
 export const NEWEST_FEW = 5;
-const KIND_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors" };
 
-/** The rule group a queued alert is counted under, as the Conduit's `_group` names it. */
-export function groupOf(row: QueuedAlert): RuleGroup {
-  const kind = row.kind ?? "typology";
-  return { label: KIND_GROUP[kind] ?? kind, typology: kind === "typology" ? (row.alert.typology ?? "") : "" };
-}
+/** The rule group a queued alert is counted under (`figureParts`' one copy). */
+export const groupOf = (row: QueuedAlert): RuleGroup => alertRuleGroup(row);
 
 export interface AlertsPanelProps {
   api: ReportsApi;
