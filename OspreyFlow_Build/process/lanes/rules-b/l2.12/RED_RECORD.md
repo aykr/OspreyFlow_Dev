@@ -68,3 +68,33 @@ closed ports (59991–59994), no lease.
   18 scans and 6 label checks, all passed. Seen by eye in dark and GOV.UK: the board was clipped by the
   Superset frame's 480 px kept while hidden, and a hotlist row read "Alert:"; both fixed, the label held by
   `AlertsPanel.test.tsx`.
+
+## 9. After the lane review (round 1)
+- **Hidden alerts, live, under the rules-b lease on stack b (00:10Z, 9 November):** plant in
+  `alert_report` feeding the two new sections from `alerts.list_case_queue` (the store's rows before the
+  evidence check) → `test_monitoring_dashboard.py::test_a_hidden_alert_changes_no_dashboard_figure`
+  FAILED (its comparison holds the whole `monitoring` section); restored, 5 passed.
+- **The call site** (`test_alert_panel_figures.py::test_the_report_counts_mine_as_the_reader_it_is_read_as`,
+  offline): plant `reader_id=investigation_id` at `alert_report`'s call → FAILED; restored.
+- **A kind L2.10 adds** (`test_a_kind_the_report_does_not_name_is_counted_under_its_own_name`): red on the
+  committed `reports.py` (`KeyError: 'analyst'`, the route's 500); green with `.get`.
+- The closed-band case `test_the_closed_age_bands_are_the_report_s_own` was added green after the schema's
+  `Literal` (its plant would be a fifth band in `AGE_LABELS`); counts now 8 passed in that file.
+- **The Reports Viewer's refusals** are derived from `app.routes` (every route about an alert but the two
+  shared reads), naming 12 that must be among them. Plant: `send-back` with no checks → FAILED with
+  `{'send_back_alert_close': 500}` (a route the hand-written list had missed). The reached half shown able
+  to fail: a reader with no role is stopped at all four (`test_the_reached_half_can_fail`). 5 passed.
+- **Keyboard, the five not yet shown red:** Back from the Figures, Back from the board, the board chooser,
+  *Open in its case* and the help page's Back each made a no-op → those five cases and the coverage case
+  FAILED; restored, 8 passed. With §8, all eight actions shown red.
+- **The board's team view under the filter:** plant, the team table unfiltered → `opens filtered … every
+  figure follows the filter` FAILED.
+- **A Superset board under the Glass's slug:** plant, no filter → the new case FAILED (listed twice).
+- **The journey ends when its screen is left:** plant, never cleared → the new App case FAILED.
+- **The roles' places** are now read from `shell/placesByRole.json`: the hand-copied ones were wrong (the
+  Data Engineer and the Super user also open Admin), found by the new `roles.test.ts` case.
+- **Admin's patch:** a right's tip read with its box and the help door, by keyboard (`admin.spec.ts`),
+  red with `aria-describedby` removed; axe's 2.5.3 label-in-name check failed with the tip inside the
+  `<label>`, fixed by moving it beside; 56 axe and 34 keyboard passed with the patch applied.
+- **Rule 1, honestly:** the Alerts panel's tests (§3) and the board's (§5) were written beside the code and
+  passed first; their reds are plants, not a first run.

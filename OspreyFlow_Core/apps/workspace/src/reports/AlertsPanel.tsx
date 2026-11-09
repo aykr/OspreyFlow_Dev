@@ -48,7 +48,9 @@ export function AlertsPanel({ api, monitoring, only = null, onOpenAlert, outline
   const [newest, setNewest] = useState<QueuedAlert[] | null | "unread">(null);
   useEffect(() => {
     let live = true;
-    fetchNewestAlerts(api, 100)
+    // Every row still in the queue, filtered to the panel's rule group before the newest few are
+    // taken, so a filtered board never shows none while its counts show some.
+    fetchNewestAlerts(api, Number.MAX_SAFE_INTEGER)
       .then((rows) => live && setNewest(rows))
       .catch(() => live && setNewest("unread"));
     return () => {

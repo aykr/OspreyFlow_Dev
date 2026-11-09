@@ -159,6 +159,8 @@ function RulesPicture({ open }: { open: number | null }) {
 export interface AlertJourneyStart {
   caseId: string;
   alertId: string;
+  /** The row's title, which the journey's banner names the alert by. */
+  title: string;
   rule: { label: string; typology: string };
   at: string;
 }
@@ -299,7 +301,7 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
                   <li key={`${a.place}-${a.title}-${a.at}`}>
                     {"journeyAlertId" in a && a.journeyAlertId && a.caseId && a.alertRule && onAlertJourney ? (
                       <JourneyRow row={a} now={now} onJourney={(to) =>
-                        onAlertJourney({ caseId: a.caseId!, alertId: a.journeyAlertId!, rule: a.alertRule!, at: a.at }, to)} />
+                        onAlertJourney({ caseId: a.caseId!, alertId: a.journeyAlertId!, title: a.title, rule: a.alertRule!, at: a.at }, to)} />
                     ) : (
                     <button type="button" className="home-attention__row"
                             onClick={() =>

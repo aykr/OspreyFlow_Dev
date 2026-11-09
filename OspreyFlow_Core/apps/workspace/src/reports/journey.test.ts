@@ -16,7 +16,7 @@ import {
 afterEach(() => sessionStorage.clear());
 
 const JOURNEY: AlertJourney = {
-  to: "figures", caseId: "case-9", alertId: "a14", rule: { label: "typology", typology: "structuring" }, weeks: 4,
+  to: "figures", caseId: "case-9", alertId: "a14", title: "Structuring alert in Operation Kestrel", rule: { label: "typology", typology: "structuring" }, weeks: 4,
 }; // prettier-ignore
 
 describe("the Reports Viewer's journey", () => {
@@ -55,15 +55,7 @@ describe("the Reports Viewer's journey", () => {
     expect(weeksFor("2024-01-01T12:00:00Z", now)).toBe(52);
   });
 
-  it("names the alert by its rule group, never its own words", () => {
-    expect(journeyWords({ label: "typology", typology: "structuring" })).toBe(
-      "the structuring alert",
-    );
-    expect(journeyWords({ label: "hotlists", typology: "" })).toBe(
-      "the hotlist alert",
-    );
-    expect(journeyWords({ label: "monitors", typology: "" })).toBe(
-      "the monitor alert",
-    );
+  it("names the alert by the title Home showed for it", () => {
+    expect(journeyWords(JOURNEY)).toBe("alert: Structuring alert in Operation Kestrel");
   });
 });

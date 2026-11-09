@@ -1,8 +1,18 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 4e64076..33e336c 100644
+index 4e64076..e933604 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -954,12 +954,25 @@ export const SESSION_PROMPT_ACTIONS = defineActionRegistry("SESSION_PROMPT_ACTIO
+@@ -793,6 +793,9 @@ export const MODELS_ACTIONS = defineActionRegistry("MODELS_ACTIONS", [
+ ] as const);
+ 
+ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
++  // L2.12 (ADR-145 Amendment 4 decision 12): a right's tip, and the help page from Admin.
++  "read-a-rights-tip-by-keyboard",
++  "open-and-leave-roles-teams-and-authors-from-admin-by-keyboard",
+   "save-a-persons-roles-by-keyboard",
+   "register-a-dashboard-by-keyboard",
+   "remove-a-dashboard-by-keyboard",
+@@ -954,12 +957,25 @@ export const SESSION_PROMPT_ACTIONS = defineActionRegistry("SESSION_PROMPT_ACTIO
  export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
    "change-the-reports-period-by-keyboard",
    "download-the-figures-by-keyboard",

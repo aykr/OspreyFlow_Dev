@@ -1,13 +1,12 @@
 // The Reports Viewer's journey (ADR-145 Amendment 4 decision 10): from an alert on Home, *Open in
 // its case* enters the alert's case on its Figures, the panel the alert concerns outlined, under
-// "From ‹the alert› · ← Back to your alerts"; *Open the dashboard* opens the Alert monitoring board
+// "From alert: ‹its title on Home› · ← Back to your alerts"; *Open the dashboard* opens the Alert monitoring board
 // filtered to the alert's rule and period. They never work an alert: neither opens its address.
 //
 // Opening a case is a reload (`investigation/cases.ts`'s `openCase`), which may pass through the
 // sign-in round trip, so the journey is noted in this tab's session storage beside the case, as a
 // case's view is (`rememberCaseView`), and taken once when that case is open. It grants nothing:
 // the Figures and the board are read from the Conduit as the reader, as any other time.
-import { typologyLabel } from "../alerts/names";
 import { caseUrl } from "../investigation/cases";
 import { INVESTIGATION_ID_SESSION_KEY } from "../investigation/investigationId";
 import type { RuleGroup } from "./figureParts";
@@ -21,6 +20,8 @@ export interface AlertJourney {
   to: JourneyTo;
   caseId: string;
   alertId: string;
+  /** The alert's title as Home showed it (ADR-146 Amendment 2 point 3 gives the Reports Viewer it). */
+  title: string;
   rule: RuleGroup;
   /** The period the board and the Figures open on: the shortest that holds the alert. */
   weeks: number;
@@ -33,12 +34,10 @@ export function weeksFor(createdAt: string, now: Date = new Date()): number {
   return PERIODS.find((p) => p > weeks) ?? PERIODS[PERIODS.length - 1]!;
 }
 
-/** The alert in words, for the banner: "the structuring alert", "the hotlist alert". Its rule
- * group and typology only, never its own words (which the address would hold). */
-export function journeyWords(rule: RuleGroup): string {
-  if (rule.label === "hotlists") return "the hotlist alert";
-  if (rule.label === "monitors") return "the monitor alert";
-  return `the ${typologyLabel(rule.typology || "other").toLowerCase()} alert`;
+/** The alert in words, for the banner (decision 10's "From alert A14"): the title Home showed for
+ * it, "alert: Hotlist alert in Operation Kestrel". The workspace has no short alert number. */
+export function journeyWords(journey: Pick<AlertJourney, "title">): string {
+  return `alert: ${journey.title}`;
 }
 
 /** Notes the journey and opens its case (a reload, as every case switch is). */
@@ -63,6 +62,7 @@ function isJourney(value: unknown): value is AlertJourney {
     (j.to === "figures" || j.to === "board") &&
     typeof j.caseId === "string" &&
     typeof j.alertId === "string" &&
+    typeof j.title === "string" &&
     typeof j.weeks === "number" &&
     typeof j.rule?.label === "string" &&
     typeof j.rule?.typology === "string"

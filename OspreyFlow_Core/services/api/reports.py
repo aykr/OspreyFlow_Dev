@@ -145,7 +145,9 @@ NOT_OF_INTEREST = ("false_positive", "no_further_action")
 
 def _group(q: QueuedAlert) -> tuple[str, str]:
     """The rule group an alert is counted under, as `raised_by_rule` labels it."""
-    return _RULE_GROUP[q.kind], (q.alert.typology or "") if q.kind == "typology" else ""
+    # A kind this table does not name yet (ADR-146 decision 1's analyst and drawn-watch alerts,
+    # L2.10) is counted under its own name rather than refused.
+    return _RULE_GROUP.get(q.kind, q.kind), (q.alert.typology or "") if q.kind == "typology" else ""
 
 
 def _panel_figures(
@@ -194,7 +196,7 @@ def _monitoring_figures(
     for q in in_period:
         week = _week_of(q.alert.created_at)
         typology = (q.alert.typology or "") if q.kind == "typology" else ""
-        raised[(week, _RULE_GROUP[q.kind], typology)] += 1
+        raised[(week, _RULE_GROUP.get(q.kind, q.kind), typology)] += 1
         if q.kind == "hotlist":
             matches[(week, "hotlists", "")] += 1
     for q in visible:

@@ -768,8 +768,12 @@ export function App() {
     setAlertJourney(taken);
     setView(taken.to === "figures" ? "reports" : "dashboards");
   }, [investigationId, bearerToken]);
+  // The journey's banner and outline belong to the screen it opened: leaving that screen ends it.
+  useEffect(() => {
+    if (alertJourney && view !== (alertJourney.to === "figures" ? "reports" : "dashboards")) setAlertJourney(null);
+  }, [view, alertJourney]);
   const journeyBack = alertJourney
-    ? { words: journeyWords(alertJourney.rule), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
+    ? { words: journeyWords(alertJourney), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
     : null;
   const openAlertFromPanel = opensRules ? (alertId: string) => navigate(alertPath(alertId)) : undefined;
   useEffect(() => {
@@ -1435,7 +1439,7 @@ export function App() {
           openAlert: (alertId) => navigate(alertPath(alertId)),
           openCaseOnRules: (id) => openRulesOnCase(id),
           openAlertJourney: (alert, to) =>
-            startJourney({ to, caseId: alert.caseId, alertId: alert.alertId, rule: alert.rule, weeks: weeksFor(alert.at) }),
+            startJourney({ to, caseId: alert.caseId, alertId: alert.alertId, title: alert.title, rule: alert.rule, weeks: weeksFor(alert.at) }),
         })
       : null;
   if (startScreenShown)

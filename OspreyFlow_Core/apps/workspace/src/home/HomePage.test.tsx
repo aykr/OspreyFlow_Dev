@@ -97,7 +97,7 @@ describe("Home", () => {
     );
     const row = within(screen.getByRole("region", { name: "Needs your attention" })).getByRole("group", { name: /KYC screening alert/ });
     expect(within(row).getAllByRole("button").map((b) => b.textContent)).toEqual(["Open in its case", "Open the dashboard"]);
-    const start = { caseId: "c1", alertId: "al-1", rule: { label: "typology", typology: "kyc_screening" }, at: "2026-10-13T06:46:00Z" };
+    const start = { caseId: "c1", alertId: "al-1", title: "KYC screening alert in Operation Ledger", rule: { label: "typology", typology: "kyc_screening" }, at: "2026-10-13T06:46:00Z" };
     fireEvent.click(within(row).getByRole("button", { name: "Open in its case" }));
     expect(journey).toHaveBeenLastCalledWith(start, "figures");
     fireEvent.click(within(row).getByRole("button", { name: "Open the dashboard" }));

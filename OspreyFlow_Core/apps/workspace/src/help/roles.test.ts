@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { RIGHT_WORDS, whyNot } from "./roles";
+import BY_ROLE from "../shell/placesByRole.json";
+import { RIGHT_WORDS, ROLE_WORDS, whyNot } from "./roles";
 
 const RIGHTS_PY = join(dirname(fileURLToPath(import.meta.url)), "../../../../packages/schemas/rights.py");
 
@@ -40,3 +41,15 @@ describe("the words for roles, teams and Authors", () => {
   });
 });
 
+
+describe("the roles' places", () => {
+  it("are the record's, for every role said, and each opens at least the Glass", () => {
+    const recorded = (BY_ROLE as { roles: Record<string, { places: string[] }> }).roles;
+    for (const [key, role] of Object.entries(ROLE_WORDS)) {
+      expect(recorded[key], `${key} is not in placesByRole.json`).toBeTruthy();
+      expect(role.places).toEqual(recorded[key]!.places);
+      expect(role.places).toContain("glass");
+    }
+    expect(ROLE_WORDS.data_engineer!.places).toEqual(["glass", "ingest", "admin"]);
+  });
+});

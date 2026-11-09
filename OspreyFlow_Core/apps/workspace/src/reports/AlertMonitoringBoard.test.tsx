@@ -98,6 +98,8 @@ describe("the Alert monitoring board", () => {
     expect(screen.getByRole("region", { name: "Alerts" }).textContent).toContain("1 alert open");
     expect(screen.queryByRole("region", { name: "Hotlist matches" })).toBeNull();
     expect(screen.getByRole("region", { name: "Closed by outcome (every rule)" })).toBeTruthy();
+    const team = screen.getByRole("table", { name: "Team view by rule" });
+    expect(within(team).getAllByRole("row").slice(1).map((r) => r.textContent)).toEqual(["Structuring10050% of 2"]);
     fireEvent.change(screen.getByRole("combobox", { name: "Rule" }), { target: { value: "" } });
     expect(rows("Raised by rule")).toEqual(["Structuring: 3", "Hotlists: 4"]);
   });
@@ -110,5 +112,22 @@ describe("the Alert monitoring board", () => {
     expect(document.activeElement).toBe(within(note).getByRole("button", { name: "← Back to your alerts" }));
     fireEvent.click(within(note).getByRole("button", { name: "← Back to your alerts" }));
     expect(back).toHaveBeenCalledOnce();
+  });
+});
+
+describe("a Superset board under the Glass's own board's slug", () => {
+  it("is left out, never shadowing the Alert monitoring board or listed twice", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (raw: string) => {
+      const url = new URL(raw);
+      if (url.pathname === "/v1/reports/dashboards")
+        return json(200, [{ slug: "alert-monitoring", title: "Someone's board" }, { slug: "fraud-board", title: "Fraud board" }]);
+      if (url.pathname.endsWith("/alert-queue")) return json(200, []);
+      return json(200, FIGURES);
+    }));  // prettier-ignore
+    render(<EmbeddedDashboards apiBaseUrl="http://api" bearerToken="t" embed={vi.fn<Embed>(async () => ({}))}
+                               leading={{ ...ALERT_MONITORING, draw: () => <AlertMonitoringBoard api={API} /> }} />);  // prettier-ignore
+    const chooser = await screen.findByRole("group", { name: "Choose a dashboard" });
+    await waitFor(() => expect(within(chooser).getAllByRole("button")).toHaveLength(2));
+    expect(within(chooser).getAllByRole("button").map((b) => b.textContent)).toEqual(["Alert monitoring", "Fraud board"]);
   });
 });

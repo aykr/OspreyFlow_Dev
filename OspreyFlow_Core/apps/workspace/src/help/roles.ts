@@ -6,6 +6,7 @@
 //
 // Plain words, British English; what a role or right lets a person do, never how it is checked.
 import type { BuiltInRole } from "../../../../packages/schemas/generated";
+import BY_ROLE from "../shell/placesByRole.json";
 
 export type Right = BuiltInRole["rights"][number];
 
@@ -17,21 +18,27 @@ export const PLACE_WORDS = {
   admin: { name: "Admin", says: "Run the deployment: people, roles, teams, datasets, models, maps and operations." },
 } as const;
 
-/** The built-in roles (ADR-112 and its Amendment 5), and the Super user preset. */
-export const ROLE_WORDS: Record<string, { name: string; says: string; places: (keyof typeof PLACE_WORDS)[] }> = {
-  analyst: { name: "Analyst", places: ["glass", "rules"],
-    says: "Investigates cases, works alerts and keeps watches. Reads figures and boards." },
-  data_engineer: { name: "Data Engineer", places: ["glass", "ingest"],
-    says: "Builds and runs pipelines, reviews promotions into a dataset and decides held rows." },
-  "osprey-admin": { name: "Administrator", places: ["glass", "admin"],
-    says: "Looks after people, roles, teams, datasets and the deployment. Does not investigate by being one." },
-  reports_viewer: { name: "Reports Viewer", places: ["glass"],
-    says: "Reads a case's figures and the dashboards, and sees the alerts on cases they can read. Never works an alert." },
-  rule_author: { name: "Rule author", places: ["glass", "rules"],
-    says: "Writes the rules that raise alerts, and works the alerts in the queue." },
-  super_user: { name: "Super user", places: ["glass", "ingest", "rules"],
-    says: "Analyst, Data Engineer and Rule author together, given as three roles. Still never the second person on their own work." },
+/** The built-in roles (ADR-112 and its Amendment 5), and the Super user preset. Which places each
+ * opens is read from `shell/placesByRole.json`, the record `test_place_routes.py` holds to the routes,
+ * never copied here. */
+const SAID_ROLES: Record<string, { name: string; says: string }> = {
+  analyst: { name: "Analyst", says: "Investigates cases, works alerts and keeps watches. Reads figures and boards." },
+  data_engineer: { name: "Data Engineer", says: "Builds and runs pipelines, reviews promotions into a dataset and decides held rows." },
+  "osprey-admin": { name: "Administrator", says: "Looks after people, roles, teams, datasets and the deployment. Does not investigate by being one." },
+  reports_viewer: { name: "Reports Viewer", says: "Reads a case's figures and the dashboards, and sees the alerts on cases they can read. Never works an alert." },
+  rule_author: { name: "Rule author", says: "Writes the rules that raise alerts, and works the alerts in the queue." },
+  super: { name: "Super user", says: "Analyst, Data Engineer and Rule author together, given as three roles. Still never the second person on their own work." },
 };  // prettier-ignore
+
+type PlaceKey = keyof typeof PLACE_WORDS;
+const RECORDED = (BY_ROLE as { roles: Record<string, { places: string[] }> }).roles;
+
+export const ROLE_WORDS: Record<string, { name: string; says: string; places: PlaceKey[] }> = Object.fromEntries(
+  Object.entries(SAID_ROLES).map(([key, role]) => [
+    key,
+    { ...role, places: (RECORDED[key]?.places ?? []).filter((p): p is PlaceKey => p in PLACE_WORDS) },
+  ]),
+);
 
 /** Every right, in plain words: what it lets a person do. */
 export const RIGHT_WORDS: Record<Right, string> = {
@@ -88,7 +95,8 @@ export const RIGHT_WORDS: Record<Right, string> = {
   manage_models: "Choose the models and their keys.",
 };
 
-/** A right's name in words: `review_promotions` reads "Review promotions". */
+/** A right's name in words: `review_promotions` reads "Review promotions". Admin's labels take it from
+ * here (`admin-tips.patch` makes `admin/sections/Roles.tsx`'s `rightWords` this function). */
 export function rightName(right: string): string {
   const words = right.replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);

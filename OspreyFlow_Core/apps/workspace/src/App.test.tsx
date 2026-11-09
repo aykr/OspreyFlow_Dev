@@ -540,10 +540,14 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   // ADR-145 Amendment 4 decision 10: the Reports Viewer's journey, noted over the case switch's reload,
   // lands on the case's Figures under "From the … alert · ← Back to your alerts", or on the Alert
   // monitoring board filtered to the alert; Back goes Home. Never the alert's address.
+  let asked: string[] = [];
   const asViewer = () => {
+    asked = [];
     const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
     vi.mocked(globalThis.fetch).mockImplementation((input) => {
-      const url = String(input).split("?")[0]!;
+      const whole = String(input);
+      asked.push(whole.replace(/^.*\/v1\/investigations\/inv-1\//, ""));
+      const url = whole.split("?")[0]!;
       if (url.endsWith("/v1/me/rights")) return json({ rights: ["read_alert_queue", "read_reports", "read_report_feed"] });
       if (url.endsWith("/inv-1/alert-queue")) return json([]);
       if (url.endsWith("/v1/reports/dashboards")) return json([]);
@@ -556,19 +560,34 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   };
   const note = (to: "figures" | "board") =>
     sessionStorage.setItem("ospreyflow.alertJourney", JSON.stringify({
-      to, caseId: "inv-1", alertId: "a14", rule: { label: "hotlists", typology: "" }, weeks: 4 }));  // prettier-ignore
+      to, caseId: "inv-1", alertId: "a14", title: "Hotlist alert in Kestrel", rule: { label: "hotlists", typology: "" }, weeks: 4 }));  // prettier-ignore
 
   test("the Reports Viewer's journey opens the case's Figures from an alert, and Back goes Home", async () => {
     asViewer();
     note("figures");
     render(<App />);
     const banner = await screen.findByRole("note", { name: "Opened from an alert" });
-    expect(banner.textContent).toContain("From the hotlist alert");
+    expect(banner.textContent).toContain("From alert: Hotlist alert in Kestrel");
+    await vi.waitFor(() => expect(asked).toContain("reports?weeks=4"));
     expect(screen.getByRole("heading", { name: "Figures" })).toBeTruthy();
     expect(window.location.pathname).toBe("/");
     fireEvent.click(within(banner).getByRole("button", { name: "← Back to your alerts" }));
     expect(await screen.findByRole("region", { name: "Needs your attention" })).toBeTruthy();
     expect(sessionStorage.getItem("ospreyflow.alertJourney")).toBeNull();
+  });
+
+  test("the journey's banner ends when the reader leaves the screen it opened", async () => {
+    asViewer();
+    note("figures");
+    render(<App />);
+    await screen.findByRole("note", { name: "Opened from an alert" });
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "More" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Dashboards" }));
+    await screen.findByRole("region", { name: "Alert monitoring" });
+    expect(screen.queryByRole("note", { name: "Opened from an alert" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Figures" }));
+    await screen.findByRole("heading", { name: "Figures" });
+    expect(screen.queryByRole("note", { name: "Opened from an alert" })).toBeNull();
   });
 
   test("the Reports Viewer's journey opens the Alert monitoring board filtered to the alert's rule", async () => {

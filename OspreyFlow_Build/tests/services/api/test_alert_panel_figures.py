@@ -131,3 +131,42 @@ def test_the_closed_age_bands_are_the_report_s_own() -> None:
     from schemas.domain import AgeBand
 
     assert get_args(AgeBand) == reports.AGE_LABELS
+
+
+async def test_the_report_counts_mine_as_the_reader_it_is_read_as(monkeypatch: object) -> None:
+    """The real call site, `alert_report`: the queue it reads (here the rows the reader's queue
+    would hold) and `mine` taken against the reader the report is read as, not any other id. Red
+    with `reader_id` given anything but `reader.id` at the call."""
+    import pytest
+
+    from schemas.domain import Principal
+
+    async def queue(*_args: object, **_kwargs: object) -> list[QueuedAlert]:
+        return ROWS
+
+    patch = pytest.MonkeyPatch()
+    patch.setattr(reports, "monitoring_queue", queue)
+    try:
+        me = Principal(id="me", clearance="OFFICIAL", org_unit="unit-a")
+        other = Principal(id="other", clearance="OFFICIAL", org_unit="unit-a")
+        mine = {(t.label, t.typology): t.mine for t in (await reports.alert_report(
+            None, None, None, "case-1", me, today=NOW.date())).monitoring.team}  # type: ignore[arg-type]  # fmt: skip
+        theirs = {(t.label, t.typology): t.mine for t in (await reports.alert_report(
+            None, None, None, "case-1", other, today=NOW.date())).monitoring.team}  # type: ignore[arg-type]  # fmt: skip
+    finally:
+        patch.undo()
+    assert mine == {("typology", _S): 1, ("hotlists", ""): 1, ("monitors", ""): 0}
+    assert theirs == {("typology", _S): 1, ("hotlists", ""): 0, ("monitors", ""): 0}
+
+
+def test_a_kind_the_report_does_not_name_is_counted_under_its_own_name() -> None:
+    """ADR-146 decision 1's analyst and drawn-watch alerts (L2.10) must not stop the report (a
+    KeyError answered 500): each is counted under its own kind until the groups name it."""
+    # Built past today's `AlertKind` literal, as L2.10's widened one will admit it.
+    analyst = _row("monitor", age=timedelta(hours=1))
+    rows = [*ROWS, QueuedAlert.model_construct(alert=analyst.alert, summary="", kind="analyst")]
+    m = reports._monitoring_figures(rows, start=START, now=NOW, reader_id="me")
+    assert ("analyst", "", "under a day", 1) in {
+        (c.label, c.typology, c.age, c.count) for c in m.open_by_source
+    }
+    assert any(w.label == "analyst" for w in m.raised_by_rule)

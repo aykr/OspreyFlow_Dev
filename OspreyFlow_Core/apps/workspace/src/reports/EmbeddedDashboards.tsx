@@ -44,7 +44,8 @@ export function EmbeddedDashboards({ embed = embedDashboard as Embed, leading, .
   const [superset, setBoards] = useState<EmbeddedDashboard[] | null>(null);
   const [open, setOpen] = useState<string | null>(leading?.slug ?? null);
   const boards: EmbeddedDashboard[] | null =
-    leading ? [{ slug: leading.slug, title: leading.title }, ...(superset ?? [])] : superset;
+    // A Superset board registered under the Glass's own board's slug is left out rather than shadowed.
+    leading ? [{ slug: leading.slug, title: leading.title }, ...(superset ?? []).filter((b) => b.slug !== leading.slug)] : superset;
   const drawsItself = leading !== undefined && open === leading.slug;
   const [problem, setProblem] = useState<string | null>(null);
   const mount = useRef<HTMLDivElement>(null);

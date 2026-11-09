@@ -1,3 +1,33 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
+index 82d9db6..5bd0a1b 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
+@@ -590,6 +590,25 @@ test("a custom role is made by keyboard", async ({ page }) => {
+   registerCovered(REGISTRY, "make-a-custom-role-by-keyboard");
+ });
+ 
++// ADR-145 Amendment 4 decision 12 (L2.12): each right's tip is read with its box when it takes focus,
++// and the one help page opens from Admin and is left, by keyboard.
++test("a right's tip is read with its box, and Roles, teams and Authors is opened and left, by keyboard", async ({ page }) => {
++  await serve(page);
++  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
++  await open(page, "Roles");
++  await press(page, "New role");
++  const box = page.getByLabel("Review promotions");
++  await box.focus();
++  await expect(box).toHaveAccessibleDescription("Review items proposed for a dataset.");
++  registerCovered(REGISTRY, "read-a-rights-tip-by-keyboard");
++  await press(page, "Roles, teams and Authors");
++  await expect(page.getByRole("heading", { level: 2, name: "Roles, teams and Authors" })).toBeVisible();
++  await expect(page.getByRole("button", { name: "← Back to Admin" })).toBeFocused();
++  await page.keyboard.press("Enter");
++  await expect(page.getByRole("navigation", { name: "Admin sections" })).toBeVisible();
++  registerCovered(REGISTRY, "open-and-leave-roles-teams-and-authors-from-admin-by-keyboard");
++});
++
+ test("a custom role's versions are shown by keyboard", async ({ page }) => {
+   const asked = await serve(page);
+   await page.goto("/keyboard/admin-harness.html?rights=manage_people");
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx
 index 1d5cf14..5bb3a89 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx
@@ -55,18 +85,39 @@ index cabf95a..dd2df80 100644
        {section && (
          <div className="admin-place__body">
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
-index 497c227..7cb42f7 100644
+index 497c227..74d9856 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
 @@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
  import type { BuiltInRole, CustomRole, CustomRoleVersion, RolesCatalogue, Team } from "../../../../../packages/schemas/generated";
  import { Button, Input, Select } from "../../design/primitives";
  import { changeRole, createRole, listRoles, makeTeam, roleVersions, setTeamCover, setTeamLead, type AdminApi } from "../api";
-+import { RIGHT_WORDS, type Right } from "../../help/roles";
++import { RIGHT_WORDS, rightName, type Right } from "../../help/roles";
  
  /** The rights grouped as the places they work in (decision 7); a right named in no group is still
   * offered, under *Other*, so no right is ever left out of the form. */
-@@ -97,6 +98,9 @@ function RoleForm({
+@@ -37,11 +38,9 @@ export const RIGHT_GROUPS: { label: string; rights: string[] }[] = [
+   },
+ ];
+ 
+-/** A right's name in words: `review_promotions` reads "Review promotions". */
+-export const rightWords = (right: string) => {
+-  const words = right.replace(/_/g, " ");
+-  return words.charAt(0).toUpperCase() + words.slice(1);
+-};
++/** A right's name in words: `review_promotions` reads "Review promotions" — from the one set of words
++ * (`help/roles.ts`, ADR-145 Amendment 4 decision 12). */
++export const rightWords = rightName;
+ 
+ /** Every right offered, by group, with any the groups do not name under *Other*. */
+ export function groupsFor(all: string[]): { label: string; rights: string[] }[] {
+@@ -93,10 +92,14 @@ function RoleForm({
+           <legend className="label">{group.label}</legend>
+           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
+             {group.rights.map((right) => (
+-              <label key={right} className="label">
++              <span key={right} style={{ display: "grid" }}>
++              <label className="label">
                  <input
                    type="checkbox"
                    aria-label={rightWords(right)}
@@ -76,13 +127,14 @@ index 497c227..7cb42f7 100644
                    checked={chosen.has(right)}
                    onChange={(e) => {
                      const next = new Set(chosen);
-@@ -106,6 +110,9 @@ function RoleForm({
-                   }}
+@@ -107,6 +110,10 @@ function RoleForm({
                  />{" "}
                  {rightWords(right)}
-+                <span id={`right-tip-${right}`} className="label" style={{ display: "block", opacity: 0.8 }}>
-+                  {RIGHT_WORDS[right as Right] ?? ""}
-+                </span>
                </label>
++              <span id={`right-tip-${right}`} className="label">
++                {RIGHT_WORDS[right as Right] ?? ""}
++              </span>
++              </span>
              ))}
            </div>
+         </fieldset>

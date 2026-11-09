@@ -82,7 +82,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
 const api = { apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "inv-1" };
 const params = new URLSearchParams(window.location.search);
-const fromAlert = params.get("from") === "alert" ? { words: "the hotlist alert", onBack: () => did("back to your alerts") } : null;
+const fromAlert = params.get("from") === "alert" ? { words: "alert: Hotlist alert in Operation Kestrel (synthetic)", onBack: () => did("back to your alerts") } : null;
 
 const SUMMARY: HomeSummary = {
   glass: [{ tone: "info", text: "1 case open to you" }],

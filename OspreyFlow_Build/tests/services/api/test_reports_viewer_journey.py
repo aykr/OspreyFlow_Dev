@@ -33,16 +33,34 @@ REACHED = {
     "embedded_dashboard_guest_token": ("POST", "/v1/reports/dashboards/alert-board/guest-token"),
     "read_alert_queue": ("GET", "/v1/investigations/case-1/alert-queue"),
 }
-#: Every way into an alert itself: its address, its detail, its canvas, and working it.
-REFUSED = {
-    "open_alert_at_address": ("GET", "/v1/alerts/alert-1"),
-    "explain_alert": ("GET", "/v1/investigations/case-1/alert-queue/alert-1"),
-    "alert_canvas": ("POST", "/v1/investigations/case-1/alert-queue/alert-1/canvas"),
-    "claim_alert": ("POST", "/v1/investigations/case-1/alert-queue/alert-1/claim"),
-    "release_alert": ("POST", "/v1/investigations/case-1/alert-queue/alert-1/release"),
-    "dispose_alert": ("POST", "/v1/investigations/case-1/alert-queue/alert-1/disposition"),
-    "assign_alert": ("POST", "/v1/investigations/case-1/alert-queue/alert-1/assign"),
-}
+#: The routes about alerts the Reports Viewer is given (Home's list of the alerts on the cases they
+#: can read; ADR-146 Amendment 2 point 3), and no other.
+SHARED_WITH_THE_VIEWER = {"read_alert_queue", "read_alert_queue_counts"}
+
+
+def _alert_routes() -> dict[str, tuple[str, str]]:
+    """Every route of the app about an alert (its path names `alert`), but the shared ones: read
+    from `app.routes`, so a route added beside this step (L2.10's) is held too."""
+    import re
+
+    from fastapi.routing import APIRoute
+    from services.api.app import app
+
+    found: dict[str, tuple[str, str]] = {}
+    for route in app.routes:
+        if not isinstance(route, APIRoute) or "alert" not in route.path:
+            continue
+        if route.endpoint.__name__ in SHARED_WITH_THE_VIEWER:
+            continue
+        path = re.sub(r"\{[a-z_]+(:path)?\}", "x", route.path)
+        found[route.endpoint.__name__] = (sorted(route.methods or {"GET"})[0], path)
+    return found
+
+
+#: The named ways into an alert the table must hold, so the derivation cannot quietly find none.
+NAMED = {"open_alert_at_address", "explain_alert", "alert_canvas", "claim_alert", "release_alert",
+         "dispose_alert", "assign_alert", "approve_alert_close", "send_back_alert_close",
+         "get_alert_route", "list_alerts_route", "read_alert_assignees"}  # fmt: skip
 
 
 @pytest.fixture
@@ -68,7 +86,11 @@ def test_the_paths_are_the_routes_named() -> None:
     from services.api.app import app
 
     names = {getattr(r, "endpoint", None).__name__ for r in app.routes if hasattr(r, "endpoint")}  # type: ignore[union-attr]
-    assert set(REACHED) | set(REFUSED) <= names, (set(REACHED) | set(REFUSED)) - names
+    assert set(REACHED) <= names, set(REACHED) - names
+    assert SHARED_WITH_THE_VIEWER <= names
+    found = set(_alert_routes())
+    assert len(found) >= len(NAMED) and not set(REACHED) & found
+    assert NAMED <= found, NAMED - found
 
 
 def test_a_reports_viewer_reaches_figures_and_the_boards(client: TestClient) -> None:
@@ -79,7 +101,7 @@ def test_a_reports_viewer_reaches_figures_and_the_boards(client: TestClient) -> 
 
 def test_a_reports_viewer_is_refused_every_way_into_an_alert(client: TestClient) -> None:
     answered = {}
-    for name, (method, path) in REFUSED.items():
+    for name, (method, path) in _alert_routes().items():
         code, text = _ask(client, method, path)
         if code != 403 or not any(why in text for why in ("place_required", "right_required")):
             answered[name] = code
@@ -95,8 +117,25 @@ def test_the_refusals_are_the_gate_s_own(client: TestClient) -> None:
 
     app.dependency_overrides[require_rules_place] = lambda: None
     try:
-        opened = {name for name, (method, path) in REFUSED.items()
+        opened = {name for name, (method, path) in _alert_routes().items()
                   if _ask(client, method, path)[0] != 403}  # fmt: skip
     finally:
         app.dependency_overrides.pop(require_rules_place, None)
     assert {"open_alert_at_address", "explain_alert"} <= opened
+
+
+def test_the_reached_half_can_fail() -> None:
+    """The red half of `test_a_reports_viewer_reaches_figures_and_the_boards`: a reader without the
+    Reports Viewer's rights is stopped at every destination, so that case would report them."""
+    from services.api.app import app, get_principal
+
+    nobody = Principal(id="nobody-1", clearance="SECRET", org_unit="unit-1", roles=[])
+    app.dependency_overrides[get_principal] = lambda: nobody
+    try:
+        client = TestClient(app, raise_server_exceptions=False)
+        stopped = {
+            name for name, (method, path) in REACHED.items() if _ask(client, method, path)[0] == 403
+        }
+    finally:
+        app.dependency_overrides.pop(get_principal, None)
+    assert stopped == set(REACHED)
