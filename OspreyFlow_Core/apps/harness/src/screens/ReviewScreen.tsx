@@ -63,6 +63,7 @@ export function ReviewScreen({
           <>
             <li>Ingest folder: {storage?.ingest ?? "not chosen"}</li>
             <li>Basemap folder: {storage?.tiles ?? "not chosen"}</li>
+            <li>Backups folder: {storage?.backups ?? "not chosen"}</li>
           </>
         ) : (
           <>

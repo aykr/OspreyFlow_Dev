@@ -175,14 +175,16 @@ describe("DemoPacksScreen with a starter (ADR-138)", () => {
 });
 
 describe("FoldersScreen", () => {
-  it("saves the ingest and basemap folders as the storage settings", async () => {
+  it("saves the ingest, basemap and backups folders as the storage settings", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<FoldersScreen config={{ components: { storage: { data: "/d" } } }} onSave={onSave} />);
     fireEvent.change(screen.getByLabelText("Ingest folder"), { target: { value: "/srv/in" } });
     fireEvent.change(screen.getByLabelText("Basemap folder"), { target: { value: "/srv/map" } });
+    // ADR-114 Amendment 37 decision 1: setup asks where backups go, the guided page included.
+    fireEvent.change(screen.getByLabelText("Backups folder"), { target: { value: "/srv/bk" } });
     fireEvent.click(screen.getByRole("button", { name: "Save folders" }));
     expect(onSave).toHaveBeenCalledWith({
-      components: { storage: { data: "/d", ingest: "/srv/in", tiles: "/srv/map" } },
+      components: { storage: { data: "/d", ingest: "/srv/in", tiles: "/srv/map", backups: "/srv/bk" } },
     });
   });
 
@@ -196,6 +198,18 @@ describe("FoldersScreen", () => {
     );
     expect((screen.getByLabelText("Ingest folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/ingest");
     expect((screen.getByLabelText("Basemap folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/basemap");
+    // The schema's backups placeholder is a folder nobody chose: `~/OspreyFlow/backups` in its place.
+    expect((screen.getByLabelText("Backups folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/backups");
+  });
+
+  it("says the backups folder is outside the checkout, one subfolder per deployment, and holds the data", () => {
+    render(<FoldersScreen config={{ components: { storage: { backups: "/srv/bk" } } }} onSave={vi.fn()} home="/u/ada" />);
+    const field = screen.getByLabelText("Backups folder") as HTMLInputElement;
+    expect(field.value).toBe("/srv/bk");
+    const help = document.getElementById(field.getAttribute("aria-describedby") ?? "")?.textContent ?? "";
+    expect(help).toMatch(/outside the OspreyFlow folder/);
+    expect(help).toMatch(/subfolder/);
+    expect(help).toMatch(/synced/);
   });
 
   it("keeps a folder the person's own configuration already names", () => {
@@ -269,7 +283,7 @@ describe("ReviewScreen", () => {
     render(
       <ReviewScreen
         state={state({ answers })}
-        config={{ components: { storage: { ingest: "/in", tiles: "/tiles" } } }}
+        config={{ components: { storage: { ingest: "/in", tiles: "/tiles", backups: "/bk" } } }}
         onInstall={onInstall}
         onSaveAnswers={vi.fn()}
       />,
@@ -278,6 +292,7 @@ describe("ReviewScreen", () => {
     expect(client.getInstallDoctor).toHaveBeenCalled();
     expect(screen.getByText(/Mode: Lite/)).toBeTruthy();
     expect(screen.getByText(/Demo packs: HMP/)).toBeTruthy();
+    expect(screen.getByText("Backups folder: /bk")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Save answers" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Install" }));
     expect(onInstall).toHaveBeenCalled();

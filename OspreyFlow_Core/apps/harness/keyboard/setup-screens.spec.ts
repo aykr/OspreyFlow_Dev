@@ -598,15 +598,23 @@ test("install page: a keyboard-activated switch reaches Folders and a real Enter
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("/srv/osprey/basemap");
   await page.keyboard.press("Tab");
+  // ADR-114 Amendment 37 decision 1: the backups folder, asked at setup.
+  await expect(page.getByRole("textbox", { name: "Backups folder" })).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("/srv/osprey/backups");
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Save folders" })).toBeFocused();
   const [response] = await Promise.all([
     page.waitForResponse((r) => r.url().includes("/api/config") && r.request().method() === "PUT"),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
-  const saved = (await response.json()) as { components: { storage: { ingest: string; tiles: string } } };
+  const saved = (await response.json()) as {
+    components: { storage: { ingest: string; tiles: string; backups: string } };
+  };
   expect(saved.components.storage.ingest).toBe("/srv/osprey/ingest");
   expect(saved.components.storage.tiles).toBe("/srv/osprey/basemap");
+  expect(saved.components.storage.backups).toBe("/srv/osprey/backups");
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-folders");
 });
 
