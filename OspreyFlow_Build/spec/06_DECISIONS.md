@@ -31204,9 +31204,12 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
 6a. **What reaches whom** (rules 3 and 7). What a promotion left out, with its labels, goes to its
    proposer alone. The Studio's list names the case only to the dataset's Authors and its proposer,
    and leaves out, in the store's query, a promotion above the reader's clearance; a board's list
-   does the same for its readers. A reviewer shown fewer items than the promotion carries is given
-   the counts of what is shown, never the difference. Drawn items carry only a permitted handling
-   code, so the classification is the whole of their audience beyond the dataset.
+   does the same for its readers, in its query too. A reviewer shown fewer items than the promotion
+   carries is given the counts of what is shown, never the difference, in the list as in *Details*
+   (`Promotions.shown_counts`). An item of an open promotion edited to a higher marking raises the
+   promotion's own marking with it, so every reader filter reads the promotion as it is now. Drawn
+   items carry only a permitted handling code, so the classification is the whole of their audience
+   beyond the dataset.
 7. **A removed case's layer is merged or deleted from the Ingest Studio's Runs**, by the dataset's
    Authors, who need not be administrators. An administrator deletes through Admin's route after its
    dry run.
@@ -31245,6 +31248,28 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    ruled (b) on Amendment 4's open access question (9 November 2026, through the orchestrator): the
    strict reading built meanwhile stands, in `link_types.may_read_proposal_words`; any other
    `accept_types` holder is told only that a proposal exists above their clearance, without its words.
+
+11. **After the lane's second review** (9 November 2026; the case lane's choices under Prompt L,
+   none loosening access):
+   - **A restored case is merged no more, and read no more, at every step.** Each use of a merge's
+     grant (reading the sheet again, merging) checks the case is still removed; one restored since
+     is refused 409 `case_open` and its grant closed for good. An approval of a waiting
+     `layer_merge` checks it too, and a restored case's merge is recorded rejected, nothing
+     written. *Cancel* closes the holder's grant whatever the case's state.
+   - **The grant ends however the merge ends**: committed, rejected by a reviewer, rejected by the
+     approval's re-check, its load refused or failed, its layer deleted (`Promotions.reject`, the
+     one path every rejection takes).
+   - **A decided promotion's elements are read for no reviewer.** *Details* reads a waiting
+     promotion's elements from its layer and the dataset, a committed one's from the dataset alone,
+     and nothing for a rejected or reverted one, whose elements are its case's layer's alone again.
+   - **Deleting a layer rejects what still waits from it**, so nothing ages in *Promotions overdue*
+     that can never be approved.
+   - **Every state change has its audit entry**: a promotion rejected by anything but a reviewer's
+     own *Reject* is audited `promotion_rejected`; reading a merge sheet through its grant is
+     audited `read_layer_merge`.
+   - **The delete's dry run says what goes**: the layer's counts as the reader may see them,
+     promoted items included, and that deleting withdraws those not promoted; never "would delete
+     N".
 
 **Open.** Nothing for the owner. The *Promotions overdue* sweep (ADR-145
 Amendment 6) is wired to this record when admin's L2.6 is on main (`WaitingFromStore`); until then the

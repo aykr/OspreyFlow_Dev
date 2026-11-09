@@ -569,8 +569,8 @@ checkbox, ticked when it may go; an item failing a check is not tickable and say
 link, picture or match decision says it goes when its ends go; then the checks (passed or not, in the
 Conduit's words), the undecided matches as warnings, and how it is recorded. *Promote* (or *Send for
 review*) sends what is ticked; the sheet then says the outcome, the load and *Left out, and why*. A
-board that promotes into nothing (a drawing that is its own dataset, a case reading a composite) says
-why and offers no button. Escape or *Cancel* closes it, back to *Promote…*. *Promotions from this
+board that promotes into nothing (a drawing that is its own dataset, a case reading a composite or a
+gazetteer dataset) says why and offers no button. Escape or *Cancel* closes it, back to *Promote…*. *Promotions from this
 board* lists each one the reader may see, its status, what it added and, when rejected, the reason;
 what was left out is shown to its proposer alone.
 
