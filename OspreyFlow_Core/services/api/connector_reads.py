@@ -216,11 +216,25 @@ async def read_into_file(
     adds its rows to the rows the file holds (none of which may have been loaded yet) and leaves the
     file as it was when it finds nothing; any other read is the file, whole (the lane review of
     L1.6)."""
+    refuse_unbound(connection, dataset_id)
     root = root if root is not None else ingest_root()
     target = source_file(dataset_id, name, root)
     rows = await read_rows(source, connection, dataset_id=dataset_id, cursor=cursor,
                            readers=readers, root=root)  # fmt: skip
     return rows, write_snapshot(rows, target.parent, name, keep_earlier=incremental(source))
+
+
+NOT_BOUND = (
+    "this connection is not bound to this dataset: an administrator binds a connection to the "
+    "datasets whose sources may read through it (Admin › Connections); nothing was read"
+)
+
+
+def refuse_unbound(connection: Connection, dataset_id: str) -> None:
+    """A source reads only through a connection bound to its own dataset (the orchestrator's ruling
+    on L1.6, rule 3). Every connector read passes here, in `read_into_file`."""
+    if connection.kind != "files" and dataset_id not in connection.datasets:
+        raise ConnectorRefused(NOT_BOUND)
 
 
 def incremental(source: SourceTable | Any) -> bool:

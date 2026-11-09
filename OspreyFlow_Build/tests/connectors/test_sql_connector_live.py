@@ -316,7 +316,8 @@ async def test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_r
             made = await client.post(
                 "/v1/admin/connections",
                 headers={"Authorization": "Bearer admin"},
-                json={"kind": "sql", "name": "NOMIS replica", "settings": settings},
+                json={"kind": "sql", "name": "NOMIS replica", "settings": settings,
+                      "datasets": ["ds-exit"]},
             )
             assert made.status_code == 201, made.text
             body = {

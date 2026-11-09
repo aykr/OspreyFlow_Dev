@@ -510,6 +510,7 @@ from .connector_reads import (
     check_connection,
     read_into_file,
     refuse_connection_hosts,
+    refuse_unbound,
     source_file,
 )
 from .credentials import MissingCredentialError
@@ -858,6 +859,7 @@ from .source_refresh import StoredSourceWatches
 from .sources import (
     InMemorySourceStore,
     PostgresSourceStore,
+    SecretInUseError,
     SourceAlreadyRegisteredError,
     SourceNotFoundError,
     SourceStore,
@@ -9004,7 +9006,15 @@ async def add_admin_connection(
         refuse_connection_hosts(body.settings)
     except ConnectorRefused as refused:
         raise _connector_refused(refused) from refused
-    made = await sources.add_connection(body, principal)
+    try:
+        made = await sources.add_connection(body, principal)
+    except SecretInUseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "secret_in_use",
+                    "detail": "That secret is already used by another connection: a secret "
+                    "belongs to one connection, so give this one its own."},
+        ) from exc  # fmt: skip
     await audit.record(
         principal=principal,
         action="add_ingest_connection",
@@ -9876,6 +9886,11 @@ async def register_dataset_source(
             detail={"error": "unknown_connection", "detail": "There is no such connection."},
         ) from exc
     if connection.kind != "files":
+        try:
+            refuse_unbound(connection, dataset_id)
+        except ConnectorRefused as refused:
+            await _audit_refused_read(audit, principal, dataset_id, body.connection_id, refused)
+            raise _connector_refused(refused) from refused
         made = await _register_through_connection(
             dataset_id, body, connection, request, principal, sources, studio_recipes
         )
@@ -9926,6 +9941,20 @@ def get_connector_readers(request: Request) -> Readers:
     through the egress allow-list; a test sets fixtures that refuse what the real ones refuse."""
     readers = getattr(request.app.state, "connector_readers", None)
     return readers if readers is not None else Readers()
+
+
+async def _audit_refused_read(
+    audit: AuditWriter, principal: Principal, dataset_id: str, connection_id: str,
+    refused: ConnectorRefused,
+) -> None:
+    """A refused connector read is audited, by ids and words alone: no server path."""
+    await audit.record(
+        principal=principal,
+        action="connector_read_refused",
+        resolved_query={"dataset_id": dataset_id, "connection_id": connection_id,
+                        "why": str(refused)},
+        result_cardinality=0,
+    )  # fmt: skip
 
 
 def _connector_refused(refused: ConnectorRefused) -> HTTPException:
@@ -10010,7 +10039,13 @@ async def read_connector_source(
     connection, landing whole as its file; an incremental SQL source reads only rows past its
     cursor, so the file holds only what is new, and its watch runs the source's pipelines on it."""
     source = await _source_of(sources, dataset_id, source_id)
-    connection = await sources.connection(source.connection_id)
+    try:
+        connection = await sources.connection(source.connection_id)
+    except UnknownConnectionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "not_found", "detail": "There is no such connection."},
+        ) from exc
     if connection.kind == "files":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -10024,6 +10059,7 @@ async def read_connector_source(
             cursor=cursor, readers=get_connector_readers(request),
         )  # fmt: skip
     except ConnectorRefused as refused:
+        await _audit_refused_read(audit, principal, dataset_id, source.connection_id, refused)
         raise _connector_refused(refused) from refused
     await sources.set_cursor(source_id, rows.cursor)
     words = (
@@ -10037,7 +10073,8 @@ async def read_connector_source(
         resolved_query={"dataset_id": dataset_id, "source_id": source_id},
         result_cardinality=len(rows.rows),
     )
-    return ConnectorRead(source_id=source_id, file=str(file), rows=len(rows.rows),
+    # The file's own name: the server's folders are never in a reply (the review of L1.6).
+    return ConnectorRead(source_id=source_id, file=file.name, rows=len(rows.rows),
                          cursor=rows.cursor, words=words)  # fmt: skip
 
 

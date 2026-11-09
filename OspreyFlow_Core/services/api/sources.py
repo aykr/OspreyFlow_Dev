@@ -43,6 +43,11 @@ class UnknownConnectionError(Exception):
     """No connection has that id."""
 
 
+class SecretInUseError(Exception):
+    """Another connection already names that secret: a secret belongs to one connection, so its
+    value never goes to another host or database (the orchestrator's review of L1.6)."""
+
+
 class SourceNotFoundError(Exception):
     """No source of that id in the dataset (another dataset's included: rule 3)."""
 
@@ -69,6 +74,10 @@ class SourceStore(Protocol):
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _secret_of(settings: object) -> str | None:
+    return getattr(settings, "secret", None)
 
 
 def _built_in(now: datetime) -> Connection:
@@ -153,6 +162,9 @@ class InMemorySourceStore:
         )
 
     async def add_connection(self, body: ConnectionInput, principal: Principal) -> Connection:
+        secret = _secret_of(body.settings)
+        if secret and any(_secret_of(c.settings) == secret for c in self._connections.values()):
+            raise SecretInUseError(secret)
         made = Connection(
             id=new_id(),
             kind=body.kind,
@@ -160,6 +172,7 @@ class InMemorySourceStore:
             created_by=principal.id,
             created_at=_now(),
             settings=body.settings,
+            datasets=list(body.datasets),
         )
         self._connections[made.id] = made
         return made
@@ -266,6 +279,10 @@ CREATE INDEX IF NOT EXISTS ingest_sources_dataset ON ingest_sources (dataset_id)
 -- ADR-140 Amendment 13: a connection's settings (a secret's name, never its value), a source's
 -- read, and how far an incremental connector source has read.
 ALTER TABLE ingest_connections ADD COLUMN IF NOT EXISTS settings JSONB;
+ALTER TABLE ingest_connections ADD COLUMN IF NOT EXISTS datasets JSONB NOT NULL DEFAULT '[]';
+-- A secret belongs to one connection (the orchestrator's review of L1.6).
+CREATE UNIQUE INDEX IF NOT EXISTS ingest_connections_secret
+    ON ingest_connections ((settings ->> 'secret')) WHERE settings ->> 'secret' IS NOT NULL;
 ALTER TABLE ingest_sources ADD COLUMN IF NOT EXISTS read JSONB;
 CREATE TABLE IF NOT EXISTS connector_cursors (
     source_id TEXT PRIMARY KEY REFERENCES ingest_sources (id) ON DELETE CASCADE,
@@ -290,8 +307,9 @@ def _source(row: asyncpg.Record) -> SourceTable:
 
 def _connection(row: asyncpg.Record) -> Connection:
     data: dict[str, Any] = dict(row)
-    if isinstance(data.get("settings"), str):
-        data["settings"] = json.loads(data["settings"])
+    for key in ("settings", "datasets"):
+        if isinstance(data.get(key), str):
+            data[key] = json.loads(data[key])
     return Connection(**data)
 
 
@@ -318,7 +336,8 @@ class PostgresSourceStore:
     async def connections(self) -> list[Connection]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, kind, name, created_by, created_at, settings FROM ingest_connections "
+                "SELECT id, kind, name, created_by, created_at, settings, datasets "
+                "FROM ingest_connections "
                 "ORDER BY id <> $1, name",
                 FILES_CONNECTION_ID,
             )
@@ -327,7 +346,8 @@ class PostgresSourceStore:
     async def connection(self, connection_id: str) -> Connection:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, kind, name, created_by, created_at, settings FROM ingest_connections "
+                "SELECT id, kind, name, created_by, created_at, settings, datasets "
+                "FROM ingest_connections "
                 "WHERE id = $1",
                 connection_id,
             )
@@ -364,14 +384,19 @@ class PostgresSourceStore:
             created_by=principal.id,
             created_at=_now(),
             settings=body.settings,
+            datasets=list(body.datasets),
         )
         async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO ingest_connections (id, kind, name, created_by, created_at, settings) "
-                "VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
-                made.id, made.kind, made.name, made.created_by, made.created_at,
-                made.settings.model_dump_json() if made.settings else None,
-            )  # fmt: skip
+            try:
+                await conn.execute(
+                    "INSERT INTO ingest_connections (id, kind, name, created_by, created_at, "
+                    "settings, datasets) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)",
+                    made.id, made.kind, made.name, made.created_by, made.created_at,
+                    made.settings.model_dump_json() if made.settings else None,
+                    json.dumps(made.datasets),
+                )  # fmt: skip
+            except asyncpg.UniqueViolationError as exc:
+                raise SecretInUseError(_secret_of(made.settings) or "") from exc
         return made
 
     async def list_for(self, dataset_id: str) -> list[SourceTable]:

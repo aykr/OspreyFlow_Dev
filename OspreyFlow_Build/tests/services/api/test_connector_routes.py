@@ -155,6 +155,7 @@ def _as(person: str) -> dict[str, str]:
 API = {
     "kind": "api",
     "name": "Telco lookup (synthetic)",
+    "datasets": ["ds-a"],
     "settings": {
         "kind": "api",
         "base_url": "https://telco.example",
@@ -250,9 +251,10 @@ def test_a_connector_source_lands_as_its_one_file(world: SimpleNamespace) -> Non
         f"/v1/datasets/ds-a/sources/{made.json()['id']}/read", headers=_as("engineer")
     )
     assert again.status_code == 200 and again.json()["rows"] == 2, again.text
-    assert again.json()["file"] == str(file)
+    assert again.json()["file"] == file.name
     json_connection = _connection(
-        world, {"kind": "json", "name": "Bookings files", "settings": {"kind": "json"}}
+        world, {"kind": "json", "name": "Bookings files", "settings": {"kind": "json"},
+                "datasets": ["ds-a"]}
     )
     json_read = {"kind": "json", "pattern": "bookings-*.json", "records_at": "records"}
     bookings = _register(world, json_connection, json_read, name="bookings")
