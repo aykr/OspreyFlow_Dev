@@ -76,7 +76,9 @@ NOT_A_SECTION_S = {
     # the Studio's Model tab. These routes stay for proposals made before ADR-099 Amendment 3,
     # which name no dataset (ADR-143 decision 5: the administrator's promotion "remains only" for
     # those), with no screen of their own; `test_analyst_link_types.py` holds their access cases.
-    r"^/v1/admin/link-types": "the pre-Amendment 3 proposals, decided by the API alone since L2.7",
+    r"^/v1/admin/link-types(/\{proposal_id\}/(promote|reject)|/retire)?$": (
+        "the pre-Amendment 3 proposals, decided by the API alone since L2.7"
+    ),
 }
 
 

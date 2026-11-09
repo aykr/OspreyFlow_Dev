@@ -454,8 +454,9 @@ class LinkTypeService:
         return await self._store.get(proposal_id)
 
     async def proposals(self, principal: Principal) -> list[LinkTypeProposal]:
-        """The administrator's list: their own unit's proposals, newest first."""
-        return await self._store.list_authorized(principal)
+        """The administrator's list: their own unit's proposals that name no dataset (made before
+        ADR-099 Amendment 3), newest first, chosen in the store's query (L2.7)."""
+        return await self._store.list_authorized(principal, without_dataset=True)
 
     async def _pending_for_decision(
         self, proposal_id: str, principal: Principal

@@ -91,6 +91,11 @@ async def test_an_administrator_reads_only_their_own_units_proposals(
     listed = {p.id for p in await store.list_authorized(ADMIN_1)}
     assert mine.id in listed and theirs.id not in listed
     assert theirs.id in {p.id for p in await store.list_authorized(ADMIN_2)}
+    # L2.7: the administrator's list keeps to proposals naming no dataset, in the query itself.
+    bound = _proposal("unit-1").model_copy(update={"dataset_id": "ds-a"})
+    await store.create(bound)
+    legacy = {p.id for p in await store.list_authorized(ADMIN_1, without_dataset=True)}
+    assert bound.id not in legacy and bound.id in {p.id for p in await store.list_authorized(ADMIN_1)}
 
 
 async def test_a_decision_is_kept_and_a_decided_proposal_is_no_longer_pending(

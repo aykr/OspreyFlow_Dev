@@ -234,15 +234,22 @@ class LinkTypeProposalStore:
             raise ProposalNotFoundError(proposal_id)
         return _row(row)
 
-    async def list_authorized(self, principal: Principal) -> list[LinkTypeProposal]:
-        """The proposals of the administrator's own unit, newest first."""
+    async def list_authorized(
+        self, principal: Principal, *, without_dataset: bool = False
+    ) -> list[LinkTypeProposal]:
+        """The proposals of the administrator's own unit, newest first. `without_dataset` keeps to
+        those made before ADR-099 Amendment 3, which name no dataset: the administrator's list since
+        L2.7, a proposal naming one being decided on its dataset's Model tab, whose words are withheld
+        above the reader's clearance (ADR-143 Amendment 4), so they are never listed here."""
+        clause = " AND dataset_id IS NULL" if without_dataset else ""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT id, name, label, from_types, to_types, directed, colour, thickness, "
                 "investigation_id, owning_unit, proposed_by, proposed_at, reason, status, "
                 "decided_by, decided_at, decision_reason, basis, promoted_name, direct_since, "
                 "dataset_id "
-                "FROM link_type_proposals WHERE owning_unit = $1 ORDER BY proposed_at DESC, id",
+                f"FROM link_type_proposals WHERE owning_unit = $1{clause} "
+                "ORDER BY proposed_at DESC, id",
                 principal.org_unit,
             )
         return [_row(r) for r in rows]
