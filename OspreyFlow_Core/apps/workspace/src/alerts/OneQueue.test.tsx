@@ -124,6 +124,27 @@ describe("What raises alerts", () => {
     await waitFor(() => expect(within(table).queryByText("Listed people")).toBeNull());
     expect(within(table).getByText("Hotlist 07700 900310")).toBeTruthy();
   });
+
+  it("names the owner and the suppressor, never by their identity-provider ids (ADR-106, rule 7)", async () => {
+    const subject = "6f1c2a9e-idp-subject";
+    const lead = "9b2d7c41-idp-subject";
+    serve({
+      "GET alert-sources": {
+        sources: [
+          { id: "h", rule_id: "hotlist:h", name: "Hotlist 07700 900310", source: "watch", kind: "hotlist", maker: subject, maker_name: "Mo Maker", owner: subject, owner_name: "Mo Maker", state: "live", alerts_30_days: 1, suppressed: [{ alert_id: "x", until: "2026-12-01", reason: "known", by: lead, by_name: "Lee Lead" }] },
+          { id: "r", rule_id: "typology:r", name: "Routed", source: "rule", kind: "rule", maker: subject, maker_name: "Mo Maker", owner: "team-7", owner_name: "Prison intel", state: "live", alerts_30_days: 0, suppressed: [] },
+        ],
+      },
+    });
+    render(<AlertSourcesPanel {...API} />);
+    const table = await screen.findByRole("table", { name: "Rules and watches" });
+    expect(within(table).getAllByText("Mo Maker").length).toBe(3);
+    expect(within(table).getByText("Prison intel")).toBeTruthy();
+    expect(within(table).getByText(/suppressed until .* by Lee Lead: known/)).toBeTruthy();
+    expect(table.textContent).not.toContain(subject);
+    expect(table.textContent).not.toContain(lead);
+    expect(table.textContent).not.toContain("team-7");
+  });
 });
 
 describe("made in the Glass", () => {

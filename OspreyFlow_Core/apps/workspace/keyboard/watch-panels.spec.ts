@@ -9,7 +9,7 @@
 // and `/v1/alerts` are intercepted so every result is deterministic — the
 // same "real network call, mocked at the transport" shape every other keyboard spec in this
 // directory already uses.
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { assertAllCovered, registerCovered, WATCH_PANEL_ACTIONS } from "./actionRegistry";
 
@@ -39,6 +39,20 @@ async function tabToButtonNamed(page: Page, name: string, maxTabs = 30): Promise
     },
     maxTabs,
   );
+}
+
+
+/** Chooses a native select's option as a person does with it focused: by typing its label. A closed
+ * select takes arrow keys differently by platform (macOS opens the menu), and letters typed within
+ * about a second join into one search, so the label is typed whole after a pause (`keyboard.spec.ts`'s
+ * `chooseOption`). The orchestrator's L2.10 review, item 6: never `selectOption` (rule 13). */
+async function chooseByTyping(page: Page, select: Locator, value: string) {
+  await select.focus();
+  const label = ((await select.locator(`option[value="${value}"]`).textContent()) ?? "").trim();
+  if (label === "") throw new Error(`no option with value ${value}`);
+  await page.waitForTimeout(1100);
+  await page.keyboard.type(label);
+  await expect(select).toHaveValue(value);
 }
 
 test("submitting the hotlist form creates a hotlist and it appears in the list, reachable by keyboard alone", async ({
@@ -274,9 +288,7 @@ test("a watched pattern's own schedule is set by keyboard (ADR-146 decision 4, G
   const state = await serveWatches(page);
   await page.goto("/keyboard/watch-panels-harness.html");
   const schedule = page.getByRole("combobox", { name: "How often Common contacts runs on its own" });
-  await schedule.focus();
-  // A native select: its keyboard is the browser's (End chooses the last option).
-  await schedule.selectOption("never");
+  await chooseByTyping(page, schedule, "never");
   await expect.poll(() => state.sent.find((s) => s.path === "monitors/mo-1/schedule")?.body).toEqual({ every: "never", hour: 6, weekday: null });
   registerCovered("WATCH_PANEL_ACTIONS", "set-a-watched-patterns-schedule-by-keyboard");
 });
@@ -310,7 +322,7 @@ test("an alert is raised to the dataset, by keyboard (ADR-146 decision 7)", asyn
   await page.keyboard.type("Two people at one flat");
   await page.getByRole("textbox", { name: "Why, in words: the reason for the alert" }).focus();
   await page.keyboard.type("Seen together twice");
-  await page.getByRole("combobox", { name: "Where the alert goes" }).selectOption("dataset");
+  await chooseByTyping(page, page.getByRole("combobox", { name: "Where the alert goes" }), "dataset");
   await tabToButtonNamed(page, "Raise the alert");
   await page.keyboard.press("Enter");
   await expect.poll(() => state.sent.find((s) => s.path === "raised-alerts")?.body).toMatchObject({

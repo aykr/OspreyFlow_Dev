@@ -22,7 +22,8 @@ function cells(s: AlertSource): Record<string, string> {
     maker: s.maker_name ?? s.maker,
     source: s.source === "rule" ? "Rule" : "Watch",
     dataset: s.dataset_id ?? "—",
-    owner: s.owner,
+    // ADR-106: the owner by name (a team's for a routed rule); the id only where no name is known.
+    owner: s.owner_name ?? s.owner,
     state: STATE_WORDS[s.state] ?? s.state,
   };
 }
@@ -104,7 +105,7 @@ export function AlertSourcesPanel(api: AlertsApi) {
                     {key === "name" &&
                       (s.suppressed ?? []).map((q) => (
                         <div key={q.alert_id} className="label" style={{ color: "var(--warning)" }}>
-                          {`One alert suppressed until ${when(q.until)}: ${q.reason}`}
+                          {`One alert suppressed until ${when(q.until)}${q.by_name ? ` by ${q.by_name}` : ""}: ${q.reason}`}
                         </div>
                       ))}
                   </td>

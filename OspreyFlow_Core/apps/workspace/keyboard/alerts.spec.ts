@@ -205,6 +205,19 @@ async function press(page: Page, target: Locator) {
   await page.keyboard.press("Enter");
 }
 
+/** Chooses a native select's option as a person does with it focused: by typing its label. A closed
+ * select takes arrow keys differently by platform (macOS opens the menu), and letters typed within
+ * about a second join into one search, so the label is typed whole after a pause (`keyboard.spec.ts`'s
+ * `chooseOption`). The orchestrator's L2.10 review, item 6: never `selectOption` (rule 13). */
+async function chooseByTyping(page: Page, select: Locator, value: string) {
+  await select.focus();
+  const label = ((await select.locator(`option[value="${value}"]`).textContent()) ?? "").trim();
+  if (label === "") throw new Error(`no option with value ${value}`);
+  await page.waitForTimeout(1100);
+  await page.keyboard.type(label);
+  await expect(select).toHaveValue(value);
+}
+
 async function openTheAlert(page: Page) {
   await press(page, page.getByRole("button", { name: /Open alert: Medium severity, Structuring — / }));
   await expect(page.getByRole("table", { name: "Transactions this alert cites" })).toBeVisible();
@@ -297,7 +310,7 @@ test("the watches are reached with the rules, by keyboard (ADR-146: one queue, t
 test("the queue is filtered by whose and by age, by keyboard (ADR-146 decision 2)", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");
-  await page.getByRole("combobox", { name: "Whose alerts" }).selectOption("unassigned");
+  await chooseByTyping(page, page.getByRole("combobox", { name: "Whose alerts" }), "unassigned");
   await expect.poll(() => state.queueSearches).toContain("?status=active&show=unassigned");
   await page.getByRole("spinbutton", { name: "Older than, in days" }).focus();
   await page.keyboard.type("7");
@@ -333,11 +346,15 @@ test("a team's lead gives one of its alerts to a member, by keyboard (ADR-146 Am
   await page.goto("/keyboard/alerts-harness.html");
   await openTheAlert(page);
   const lead = page.getByRole("group", { name: "As the team's lead" });
-  await lead.getByRole("combobox", { name: "Give to (a member of the team)" }).selectOption("analyst-2");
+  await chooseByTyping(page, lead.getByRole("combobox", { name: "Give to (a member of the team)" }), "analyst-2");
   await press(page, lead.getByRole("button", { name: "Give to the member" }));
   await expect.poll(() => state.sent.find((s) => s.path === "alert-queue/a1/assign")?.body).toEqual({ assignee: "analyst-2" });
   registerCovered(REGISTRY, "give-a-team-alert-to-a-member-by-keyboard");
 });
+
+test.describe("a date typed as a person types it", () => {
+  // Day, month, year: the segments a British browser's date field takes, whatever the machine's.
+  test.use({ locale: "en-GB" });
 
 test("a team's lead suppresses one of its alerts until a day, with a reason, by keyboard (ADR-146 Amendment 1)", async ({ page }) => {
   const state = await serve(page);
@@ -345,7 +362,11 @@ test("a team's lead suppresses one of its alerts until a day, with a reason, by 
   await page.goto("/keyboard/alerts-harness.html");
   await openTheAlert(page);
   const lead = page.getByRole("group", { name: "As the team's lead" });
-  await lead.getByLabel("Suppress until (at most 90 days ahead)").fill("2026-12-01");
+  // A native date field, its day, month and year typed as segments (the locale is set above).
+  const until = lead.getByLabel("Suppress until (at most 90 days ahead)");
+  await until.focus();
+  await page.keyboard.type("01122026");
+  await expect(until).toHaveValue("2026-12-01");
   await lead.getByLabel("Why, in words: the reason for suppressing it").focus();
   await page.keyboard.type("A known pattern, reviewed weekly");
   await press(page, lead.getByRole("button", { name: "Suppress until…" }));
@@ -353,6 +374,7 @@ test("a team's lead suppresses one of its alerts until a day, with a reason, by 
     until: "2026-12-01", reason: "A known pattern, reviewed weekly",
   });  // prettier-ignore
   registerCovered(REGISTRY, "suppress-a-team-alert-by-keyboard");
+});
 });
 
 test("What raises alerts is filtered by a column, by keyboard (ADR-146 decision 5)", async ({ page }) => {
@@ -568,9 +590,9 @@ test("a sentence's alerts are sent to a named team, by keyboard (ADR-146 decisio
   );
   await page.goto("/keyboard/alerts-harness.html");
   await writeTheSentence(page);
-  // A native select: its keyboard is the browser's.
-  await page.getByRole("combobox", { name: "Alert goes to (team)" }).selectOption("team:team-7");
-  await page.getByLabel("Name of the sentence rule").fill("Listed people for the team");
+  await chooseByTyping(page, page.getByRole("combobox", { name: "Alert goes to (team)" }), "team:team-7");
+  await page.getByLabel("Name of the sentence rule").focus();
+  await page.keyboard.type("Listed people for the team");
   await press(page, page.getByRole("button", { name: "Deploy the sentence" }));
   await expect.poll(() => (state.sent.find((s) => s.path === "rules/sentence")?.body as { sentence?: Record<string, unknown> } | undefined)?.sentence).toMatchObject({
     team: "team",
