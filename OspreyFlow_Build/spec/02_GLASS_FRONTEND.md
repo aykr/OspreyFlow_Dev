@@ -973,7 +973,9 @@ the draft model again…**), *Declined*, *Withdrawn* or *Merged* tag, what it me
 direction, who proposed it and when, never the case (rule 3), with **Add <type> to the draft model…**
 (asking *What stands behind its links?*, Direct or Probabilistic, no default) and **Decline <type>…**,
 each asking *Why? (required)* (Ctrl/⌘+Enter decides, Escape cancels and focus goes back to the button;
-the outcome takes focus). Admin's *Proposed types* offers no decision on a proposal that names a
+the outcome takes focus). To a holder not cleared for the case's marking (ADR-143 Amendment 4's *Open*,
+the strict reading meanwhile) a row says only *A proposed link type above your clearance*, with no words,
+tag or decision, and is left out of the count. Admin's *Proposed types* offers no decision on a proposal that names a
 dataset, saying it is decided on that dataset's Model tab. The tab's count, the reminder above the
 Studio's other tabs and the *Needs you* entry (ADR-090 Amendment 4) are Admin's L2.7. A refusal is said in the Conduit's words; to a person the routes refuse the block
 is not drawn. Under the GOV.UK brand it is a summary list with tags, GOV.UK buttons and a textarea with an

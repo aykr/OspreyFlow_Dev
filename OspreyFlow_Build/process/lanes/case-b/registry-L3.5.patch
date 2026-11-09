@@ -1,6 +1,8 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 9c906a2..f5c9d0c 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -706,6 +706,15 @@
+@@ -737,6 +737,17 @@ export const PROPOSED_TYPES_ACTIONS = defineActionRegistry("PROPOSED_TYPES_ACTIO
    "retire-by-keyboard",
  ] as const);
  
@@ -11,6 +13,8 @@
 +  "decline-a-proposed-type-by-keyboard",
 +  "escape-closes-the-decision-form-and-returns-focus",
 +  "a-refusal-is-shown-in-the-conduits-words-by-keyboard",
++  "cancel-closes-the-decision-form-by-keyboard",
++  "add-a-lost-type-to-the-draft-model-again-by-keyboard",
 +] as const);
 +
  /** The Inspector's parts (ADR-096): each folds under its header, opening *Change this link* lands in
