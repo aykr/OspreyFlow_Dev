@@ -261,7 +261,7 @@ approval, so no other case reads a promoted item before it
 (`test_under_review_nothing_is_readable_outside_the_case_until_a_second_person_approves`).
 
 A promotion is reverted like any load, with the Conduit stopped: `python -m scripts.revert_promotion
-<load_id>` (dry run first, `--dry-run`), which takes the dataset back from exactly its elements
+<load_id>` (`--dry-run` says what would go; the command does not require it first), which takes the dataset back from exactly its elements
 (`GraphPort.revert_promotion`), clears their `promoted_at` and records the promotion `reverted`. It is
 refused while a live link other than its own and the case's own unpromoted drawing rests on one of its
 nodes (`test_a_revert_is_refused_while_another_link_rests_on_its_items`); a promotion from a layer

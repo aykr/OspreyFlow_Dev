@@ -31227,8 +31227,8 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
      refused one at the route, and a removed case's layer is never merged into one, only deleted
      (found at the rebase onto P4; the case lane's choice under Prompt L, `promotions.is_gazetteer`;
      `test_promotions.py`'s two gazetteer cases, each red with the check removed).
-   - A delete has its dry run first (for an Author in the Studio, as for an administrator in Admin),
-     needs no second person, answers in words with no count, and never touches an element holding
+   - A delete's screen shows its dry run first (for an Author in the Studio, as for an administrator
+     in Admin); neither route requires one to have been run. It needs no second person, answers in words with no count, and never touches an element holding
      another dataset.
 8. **Revert is the operator command alone**, `python -m scripts.revert_promotion <load_id>
    --reverted-by <you> [--dry-run]`, with the Conduit stopped (ADR-127 Amendment 9). It takes the
@@ -31289,9 +31289,12 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    - **A rejection's words reach only who may know the case**: a check's rejection records fixed
      words; a reviewer's own reason, the proposer and the case go to the dataset's Authors, the
      proposer and the case's own board, never to another reader of the dataset.
-   - **The revert refuses while the Conduit answers** (`OSPREY_CONDUIT_URL`'s `/healthz`), as a
-     seed does, and reads its resting links inside its own transaction (`live_edges_touching`
-     gains an optional `tx`; conformance first).
+   - **The revert goes on only when it can tell the Conduit is stopped**: a bare connection to
+     `OSPREY_CONDUIT_URL`'s host and port, stopped only when the host resolves and the connection is
+     refused (an answer, an unresolved name or a timeout refuses; no route is asked). It reads its
+     resting links inside its own transaction (`live_edges_touching` gains an optional `tx`). Not
+     conformance first: the port, adapter and fake took `tx` before the case could fail; the case
+     was shown red afterwards by a plant in the adapter (`L3.4_RED_RECORD.md`, the d9436b4 section).
    - **Strict 404**: an open case reading the dataset answers every removed-case route exactly as
      an id no case reading it has (the lane review's minor 12, reversed from "left" to fixed).
    - **An ambiguous id refuses the load in words** (409 `ambiguous_item`), the board fake refusing

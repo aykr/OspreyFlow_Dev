@@ -832,7 +832,8 @@ class GraphPort(Protocol):
         (`tests/test_unfiltered_node_lookup_confined.py`). Each id once however often given; no ids
         give the empty set; a bare `str` is a `TypeError`. Given `tx`, read inside that open
         transaction (ADR-143 Amendment 5 decisions 8 and 12: a promotion's revert reads and writes
-        as one view), so what it has written and not yet committed is seen."""
+        as one view), so a link it has written and not yet committed is seen; only a link between
+        nodes already committed is tested (the revert reads before it writes)."""
         ...
 
     async def live_nodes_naming_geometry(

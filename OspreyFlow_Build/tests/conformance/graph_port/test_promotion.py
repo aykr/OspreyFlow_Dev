@@ -254,10 +254,11 @@ async def test_withdrawing_a_layer_leaves_what_was_promoted_from_it(
 async def test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote(
     factory: GraphAdapterFactory,
 ) -> None:
-    """ADR-143 Amendment 5 decision 8 (the independent review of L3.4, item 4): the revert asks
+    """ADR-143 Amendment 5 decision 12 (the independent review of L3.4, item 4): the revert asks
     `live_edges_touching` inside its own transaction, so the read and the writes that follow are
     one view of the graph. A link written in that transaction, not yet committed, is seen through
-    it; the same read outside it (the plant: the session dropped) does not see it. Rolled back, so
+    it; the same read outside it (a control, not the plant: the plant drops the session in the
+    adapter's walk, `L3.4_RED_RECORD.md`'s d9436b4 section) does not see it. Rolled back, so
     nothing stays. The link goes to a third person: one between `loaded` and `drawn` would merge
     into `_drawn`'s own committed link (same pair, same type) and answer its id, seen everywhere
     (measured on ArcadeDB at d9436b4)."""
@@ -280,5 +281,5 @@ async def test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote(
         finally:
             await adapter.rollback_transaction(tx)
         assert written in inside
-        assert written not in outside  # the plant: a read without the session misses it
+        assert written not in outside  # the control: a read without the session misses it
         assert written not in await adapter.live_edges_touching([drawn])

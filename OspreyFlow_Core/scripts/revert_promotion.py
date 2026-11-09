@@ -9,9 +9,10 @@ promotion `reverted`; clears its board items' `promoted_at`; audits it under `--
 clears the Conduit's kept results (`cache:*` in the shared Valkey), since what was counted included
 the promoted elements. Nothing is deleted.
 
-**Stop the Conduit**, as for any load's revert (ADR-127 Amendment 9): the command asks the Conduit's
-liveness route (`OSPREY_CONDUIT_URL`, default `http://api:8000`) and goes on only when it can tell
-the Conduit is stopped (its host resolves and nothing listens): an answer, a name that does not
+**Stop the Conduit**, as for any load's revert (ADR-127 Amendment 9): the command opens a bare
+connection to the Conduit's address (`OSPREY_CONDUIT_URL`, default `http://api:8000`; no route is
+asked) and goes on only when it can tell the Conduit is stopped (its host resolves and the
+connection is refused): an answer, a name that does not
 resolve, a timeout, anything else refuses. There is no online revert:
 the owner settled ADR-143 open question 2 as (a), this command alone (Amendment 5 decision 8), and
 it must never be routed through the Conduit.
