@@ -1,0 +1,4 @@
+Mon  9 Nov 2026 06:23:01 UTC
+# at 72a87a8: test_port_guard.py alone, MINIO_ENDPOINT unset (the full run exported it, which its own case forbids)
+...........................                                              [100%]
+27 passed in 12.09s

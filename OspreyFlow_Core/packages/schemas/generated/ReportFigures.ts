@@ -29,6 +29,19 @@ export type RaisedByRule = LabelledWeekCount[];
 export type ClosedByOutcome = LabelledWeekCount[];
 export type TimeToClose = ReportCount[];
 export type HotlistMatches = LabelledWeekCount[];
+export type Label2 = string;
+export type Typology3 = string;
+export type Age = "under a day" | "1 to 7 days" | "7 to 30 days" | "over 30 days";
+export type Count2 = number;
+export type OpenBySource = AgeCount[];
+export type Label3 = string;
+export type Typology4 = string;
+export type Unassigned = number;
+export type Mine = number;
+export type OlderThanWeek = number;
+export type Closed1 = number;
+export type NotOfInterest = number;
+export type Team = TeamCount[];
 export type Held = number;
 export type Released = number;
 export type Rejected = number;
@@ -43,12 +56,16 @@ export type ByBand = ReportCount[];
 export type PoleClass = "person" | "object" | "location" | "event" | "organisation";
 export type Total = number;
 export type EntityType = string;
-export type Count2 = number;
+export type Count3 = number;
 export type Types = PoleTypeCount[];
 export type Classes = PoleClassCount[];
 export type Other = PoleTypeCount[];
 export type Links = number;
 export type CountedAt = string;
+export type Drawn = number;
+export type Promoted = number;
+export type AwaitingReview = number;
+export type Withdrawn = number;
 
 /**
  * A case's report (`06_DECISIONS.md` ADR-111): the Reports view and the dashboards' feed are
@@ -68,6 +85,7 @@ export interface ReportFigures {
   held?: HeldFigures | null;
   kyc?: KycFigures | null;
   pole?: PoleFigures | null;
+  drawing?: DrawingFigures | null;
   [k: string]: unknown;
 }
 /**
@@ -114,6 +132,8 @@ export interface MonitoringFigures {
   closed_by_outcome?: ClosedByOutcome;
   time_to_close?: TimeToClose;
   hotlist_matches?: HotlistMatches;
+  open_by_source?: OpenBySource;
+  team?: Team;
   [k: string]: unknown;
 }
 /**
@@ -126,6 +146,34 @@ export interface LabelledWeekCount {
   label: Label1;
   typology?: Typology2;
   count: Count1;
+  [k: string]: unknown;
+}
+/**
+ * How many alerts of one rule group are open in one age band (ADR-146 decision 9: the
+ * *Alerts* panel's open by source and age). `label` and `typology` are `LabelledWeekCount`'s;
+ * `age` is one of the `open_by_age` bands. Never a rule's own name or an alert's words.
+ */
+export interface AgeCount {
+  label: Label2;
+  typology?: Typology3;
+  age: Age;
+  count: Count2;
+  [k: string]: unknown;
+}
+/**
+ * The team view of one rule group (ADR-145 Amendment 4 decision 9): its alerts still in the
+ * queue with no one on them, those claimed by the reader, those open longer than seven days, and
+ * those closed in the period, of which closed as not of interest (False positive or No further
+ * action). Counted as the reader, from the same queue as every other figure.
+ */
+export interface TeamCount {
+  label: Label3;
+  typology?: Typology4;
+  unassigned?: Unassigned;
+  mine?: Mine;
+  older_than_week?: OlderThanWeek;
+  closed?: Closed1;
+  not_of_interest?: NotOfInterest;
   [k: string]: unknown;
 }
 /**
@@ -181,6 +229,18 @@ export interface PoleClassCount {
  */
 export interface PoleTypeCount {
   entity_type: EntityType;
-  count: Count2;
+  count: Count3;
+  [k: string]: unknown;
+}
+/**
+ * A case's drawing figures (ADR-145 Amendment 4 decision 8): items drawn on its boards,
+ * promoted into the dataset, awaiting review, and withdrawn. Served once drawing boards and
+ * promotions are built (L3.3, L3.4); until then `ReportFigures.drawing` is `None`.
+ */
+export interface DrawingFigures {
+  drawn: Drawn;
+  promoted: Promoted;
+  awaiting_review: AwaitingReview;
+  withdrawn: Withdrawn;
   [k: string]: unknown;
 }

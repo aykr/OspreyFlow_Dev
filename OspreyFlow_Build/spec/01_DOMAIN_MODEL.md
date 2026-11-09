@@ -2535,6 +2535,21 @@ class MonitoringFigures(BaseModel):   # ADR-134 decision 2: every kind of alert 
     closed_by_outcome: list[LabelledWeekCount]
     time_to_close: list[ReportCount]  # alerts closed in the period, in the `open_by_age` bands
     hotlist_matches: list[LabelledWeekCount]
+    open_by_source: list[AgeCount]    # ADR-146 decision 9: the Alerts panel's open (open, claimed,
+                                      # closing) by rule group and age band
+    team: list[TeamCount]             # ADR-145 Am. 4 decision 9: the Alert monitoring board's team view
+AgeBand = Literal["under a day", "1 to 7 days", "7 to 30 days", "over 30 days"]  # closed: the feed
+class AgeCount(BaseModel):            #   carries no other words in its place
+    label: str; typology: str = ""    # as LabelledWeekCount's
+    age: AgeBand; count: int
+class TeamCount(BaseModel):           # one rule group, counted as the reader
+    label: str; typology: str = ""
+    unassigned: int; mine: int        # in the queue with no one on it; claimed by the reader
+    older_than_week: int              # in the queue, raised more than seven days ago
+    closed: int; not_of_interest: int # closed in the period; of which False positive or No further action
+class DrawingFigures(BaseModel):      # ADR-145 Am. 4 decision 8: drawn, promoted, awaiting review,
+    drawn: int; promoted: int         #   withdrawn — served once promotions exist (L3.4)
+    awaiting_review: int; withdrawn: int
 class ReportFigures(BaseModel):
     period_weeks: int                 # 1..52
     as_of: date; generated_at: datetime
@@ -2545,6 +2560,7 @@ class ReportFigures(BaseModel):
     held: HeldFigures | None          # None for a reader below Editor
     kyc: KycFigures | None            # only when `fibo` is among the case's packs (ADR-126)
     pole: PoleFigures | None          # whenever the packs are not exactly [fibo] (ADR-126)
+    drawing: DrawingFigures | None    # None until L3.4; the Figures tab then draws no Drawing panel
 class ReportLimitExceeded(BaseModel): # the report past its bound
     error: Literal["limit_exceeded"]
     cap_kind: Literal["alerts", "customers"]   # bounds: 10,000 alerts, 2,000 customers (KYC only)

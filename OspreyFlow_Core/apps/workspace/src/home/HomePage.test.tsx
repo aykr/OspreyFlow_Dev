@@ -81,6 +81,50 @@ describe("Home", () => {
     expect(openAlert).not.toHaveBeenCalled();
   });
 
+  it("offers a Reports Viewer, on an alert's row, its case's Figures and its dashboard and nothing else (ADR-145 Amendment 4 decision 10)", () => {
+    const openAlert = vi.fn();
+    const journey = vi.fn();
+    const summary: HomeSummary = {
+      ...SUMMARY,
+      attention: [{ ...SUMMARY.attention[0]!, alertRule: { label: "typology", typology: "kyc_screening" } }],
+    };
+    const chose = vi.fn();
+    const opened = vi.fn();
+    render(
+      <HomePage rights={new Set(["read_alert_queue", "read_reports"])} person={PERSON} summary={summary} onChoose={chose}
+                onOpenCase={opened} onOpenAlert={openAlert} onAlertJourney={journey} account={null} marking="OFFICIAL"
+                now={new Date("2026-10-13T09:00:00Z")} />,  // prettier-ignore
+    );
+    const row = within(screen.getByRole("region", { name: "Needs your attention" })).getByRole("group", { name: /KYC screening alert/ });
+    expect(within(row).getAllByRole("button").map((b) => b.textContent)).toEqual(["Open in its case", "Open the dashboard"]);
+    const start = { caseId: "c1", alertId: "al-1", title: "KYC screening alert in Operation Ledger", rule: { label: "typology", typology: "kyc_screening" }, at: "2026-10-13T06:46:00Z" };
+    fireEvent.click(within(row).getByRole("button", { name: "Open in its case" }));
+    expect(journey).toHaveBeenLastCalledWith(start, "figures");
+    fireEvent.click(within(row).getByRole("button", { name: "Open the dashboard" }));
+    expect(journey).toHaveBeenLastCalledWith(start, "board");
+    expect(openAlert).not.toHaveBeenCalled();
+    expect(opened).not.toHaveBeenCalled();
+  });
+
+  it("keeps the alert's own address for a reader Rules and Monitoring is offered to, with no journey", () => {
+    const openAlert = vi.fn();
+    const journey = vi.fn();
+    const summary: HomeSummary = {
+      ...SUMMARY,
+      attention: [{ ...SUMMARY.attention[0]!, alertRule: { label: "typology", typology: "kyc_screening" } }],
+    };
+    render(
+      <HomePage rights={new Set(["read_alert_queue", "triage_alerts", "investigate"])} person={PERSON} summary={summary}
+                onChoose={vi.fn()} onOpenCase={vi.fn()} onOpenAlert={openAlert} onAlertJourney={journey} account={null}
+                marking="OFFICIAL" now={new Date("2026-10-13T09:00:00Z")} />,  // prettier-ignore
+    );
+    const attention = within(screen.getByRole("region", { name: "Needs your attention" }));
+    expect(attention.queryByRole("button", { name: "Open in its case" })).toBeNull();
+    fireEvent.click(attention.getByRole("button", { name: /KYC screening alert/ }));
+    expect(openAlert).toHaveBeenCalledWith("al-1");
+    expect(journey).not.toHaveBeenCalled();
+  });
+
   it("gives brass to the first usable place only", () => {
     home(["investigate", "edit_pipelines", "manage_people"]);
     expect(panel("The Glass").getByRole("button", { name: /^Open The Glass/ }).className).toContain("btn--primary");

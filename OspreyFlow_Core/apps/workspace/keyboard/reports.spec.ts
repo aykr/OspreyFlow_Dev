@@ -1,5 +1,7 @@
-// A keyboard-only walkthrough of the Reports view (ADR-111, `CLAUDE.md` rule 13): change the period
-// and download the figures — no `page.mouse`, no `.click()`; each proves its call reached the server.
+// A keyboard-only walkthrough of the case's Figures (ADR-111, ADR-145 Amendment 4 decision 8;
+// `CLAUDE.md` rule 13): change the period, download the figures and open Data feeds — no
+// `page.mouse`, no `.click()`; each proves its call reached the server. The Dashboards tab went with
+// the second door (decision 8); choosing a board is `alert-figures.spec.ts`'s.
 import { expect, test } from "@playwright/test";
 
 import { REPORTS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
@@ -40,25 +42,6 @@ async function serve(page: import("@playwright/test").Page): Promise<string[]> {
   });
   return asked;
 }
-
-test("the Dashboards tab is opened and a board chosen by keyboard", async ({ page }) => {
-  const asked = await serve(page);
-  await page.goto("/keyboard/reports-harness.html");
-  await page.getByRole("tab", { name: "Figures" }).focus();
-  // ADR-113, ADR-110: with every right assumed the tabs run Figures, Trends, Packs, Published,
-  // Data feeds, Dashboards.
-  for (const next of ["Trends", "Packs", "Published", "Data feeds", "Dashboards"]) {
-    await page.keyboard.press("Tab");
-    await expect(page.getByRole("tab", { name: next })).toBeFocused();
-  }
-  await page.keyboard.press("Enter");
-  await expect.poll(() => page.evaluate(() => window.__EMBEDDED__?.at(-1)?.id)).toBe("uuid-compliance-board");
-  await page.getByRole("button", { name: "Fraud board" }).focus();
-  await page.keyboard.press("Enter");
-  await expect.poll(() => page.evaluate(() => window.__EMBEDDED__?.at(-1))).toEqual({ id: "uuid-fraud-board", domain: "http://bi.invalid" });
-  expect(asked.filter((a) => a.includes("guest-token"))).toHaveLength(2);
-  registerCovered(REGISTRY, "open-the-dashboards-tab-and-choose-a-board-by-keyboard");
-});
 
 test("the period is changed by keyboard", async ({ page }) => {
   const asked = await serve(page);

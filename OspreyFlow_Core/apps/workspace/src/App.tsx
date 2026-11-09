@@ -127,6 +127,8 @@ import { alertPath, navigate, noteAddress, takeNotedAddress, useAddress } from "
 import { BoardsPlace } from "./boards/BoardsPlace";
 import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
 import { ReportsPlace } from "./reports/ReportsPlace";
+import { ALERT_MONITORING, AlertMonitoringBoard } from "./reports/AlertMonitoringBoard";
+import { journeyWords, startJourney, takeJourney, weeksFor, type AlertJourney } from "./reports/journey";
 import {
   canDownloadFeed,
   landingView,
@@ -754,6 +756,26 @@ export function App() {
   // switcher's Rules and Monitoring since ADR-146 decision 2 (it left the Glass's banner).
   const [alertCount, setAlertCount] = useState<number | undefined>(undefined);
   const opensRules = startPlaces(rights).includes("rules");
+  // ADR-145 Amendment 4 decision 10: the Reports Viewer's journey from an alert on Home, noted over the
+  // case switch's reload (`reports/journey.ts`) and taken once the case is open: its Figures, or the
+  // Alert monitoring board filtered to the alert. A reader offered Rules and Monitoring opens alerts
+  // at their address instead, and the Figures' and the board's Alerts panels open them there too.
+  const [alertJourney, setAlertJourney] = useState<AlertJourney | null>(null);
+  useEffect(() => {
+    if (!investigationId || !bearerToken) return;
+    const taken = takeJourney(investigationId);
+    if (!taken) return;
+    setAlertJourney(taken);
+    setView(taken.to === "figures" ? "reports" : "dashboards");
+  }, [investigationId, bearerToken]);
+  // The journey's banner and outline belong to the screen it opened: leaving that screen ends it.
+  useEffect(() => {
+    if (alertJourney && view !== (alertJourney.to === "figures" ? "reports" : "dashboards")) setAlertJourney(null);
+  }, [view, alertJourney]);
+  const journeyBack = alertJourney
+    ? { words: journeyWords(alertJourney), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
+    : null;
+  const openAlertFromPanel = opensRules ? (alertId: string) => navigate(alertPath(alertId)) : undefined;
   useEffect(() => {
     if (!investigationId || !bearerToken || !opensRules) {
       setAlertCount(undefined);
@@ -1416,6 +1438,8 @@ export function App() {
           openRules: () => setView("alerts"),
           openAlert: (alertId) => navigate(alertPath(alertId)),
           openCaseOnRules: (id) => openRulesOnCase(id),
+          openAlertJourney: (alert, to) =>
+            startJourney({ to, caseId: alert.caseId, alertId: alert.alertId, title: alert.title, rule: alert.rule, weeks: weeksFor(alert.at) }),
         })
       : null;
   if (startScreenShown)
@@ -1482,8 +1506,8 @@ export function App() {
     { id: "map", label: "Map", pressed: view === "map", onSelect: () => setView("map") },
     // `02_GLASS_FRONTEND.md` §6: the screen-reader-navigable rendering of the same data.
     { id: "matrix", label: "Matrix", pressed: view === "matrix", onSelect: () => setView("matrix") },
-    // ADR-111: the case's figures for people who read rather than investigate.
-    { id: "reports", label: "Reports", pressed: view === "reports", onSelect: () => setView("reports") },
+    // ADR-145 Amendment 4 decision 8: the case's Figures, replacing ADR-111's Reports view.
+    { id: "reports", label: "Figures", pressed: view === "reports", onSelect: () => setView("reports") },
   ].filter((v) => (viewsFor(rights) as string[]).includes(v.id));
   const mainViews = allowedViews.filter((v) => v.id === "graph" || v.id === "map");
   const otherViews = allowedViews.filter((v) => v.id !== "graph" && v.id !== "map");
@@ -1757,11 +1781,19 @@ export function App() {
           </section>
         )}
         {view === "reports" && (
-          <ReportsPlace key={reportsStart.opened} initialTab={reportsStart.tab} apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} rights={rights} />
+          <ReportsPlace key={reportsStart.opened} initialTab={reportsStart.tab} apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} investigationId={investigationId} canDownload={canDownloadFeed(rights)} rights={rights}
+                        onOpenAlert={openAlertFromPanel} fromAlert={alertJourney?.to === "figures" ? journeyBack : null}
+                        initialWeeks={alertJourney?.to === "figures" ? alertJourney.weeks : undefined} />
         )}
         {view === "dashboards" && (
           <div style={{ flex: 1, display: "flex", padding: "var(--sp-16)", minHeight: 0 }}>
-            <EmbeddedDashboards apiBaseUrl={API_BASE_URL} bearerToken={bearerToken} />
+            <EmbeddedDashboards apiBaseUrl={API_BASE_URL} bearerToken={bearerToken}
+              // ADR-145 Amendment 4 decision 9: the Alert monitoring board, first, on the open case.
+              leading={investigationId ? { ...ALERT_MONITORING, draw: () => (
+                <AlertMonitoringBoard key={alertJourney?.alertId ?? "board"} api={{ apiBaseUrl: API_BASE_URL, bearerToken, investigationId }}
+                  onOpenAlert={openAlertFromPanel} fromAlert={alertJourney?.to === "board" ? journeyBack : null}
+                  filter={alertJourney?.to === "board" ? { rule: alertJourney.rule, weeks: alertJourney.weeks } : undefined} />
+              ) } : undefined} />
           </div>
         )}
         {view === "ownership" && (

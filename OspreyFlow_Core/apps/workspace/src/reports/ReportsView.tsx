@@ -1,18 +1,25 @@
-// The Reports view (`06_DECISIONS.md` ADR-111): a third way of looking at a case, beside Graph and
-// Map, for people who read rather than investigate. Every figure arrives counted for this reader by
-// the Conduit (rule 3); the view only draws it — in words first, and in plain bars built from the
-// design tokens. Held rows appear only when the server sends them (Editors and above).
-import { useEffect, useState } from "react";
+// The case's *Figures* (ADR-145 Amendment 4 decision 8, replacing ADR-111's Reports view): a way of
+// looking at a case, beside Graph and Map, for people who read rather than investigate. Every figure
+// arrives counted for this reader by the Conduit (rule 3); the view only draws it — in words first,
+// and in plain bars built from the design tokens. Held rows appear only when the server sends them
+// (Editors and above). Its *Alerts* panel (ADR-146 decision 9) and its *Drawing* panel (drawn,
+// promoted, awaiting review, withdrawn; served once promotions exist, L3.4) sit with the rest.
+// Opened from an alert (the Reports Viewer's journey, decision 10), it says so, outlines the
+// panel the alert concerns, and offers the way back.
+import { useEffect, useRef, useState } from "react";
 
 import type { OutcomeCount, PoleFigures, ReportFigures } from "../../../../packages/schemas/generated";
+
+type DrawingFigures = NonNullable<ReportFigures["drawing"]>;
 import { CLOSING_REASONS, type ClosingReason } from "../alerts/closingReasons";
 import { typologyLabel } from "../alerts/names";
 import { utcStampOf } from "../time/utcStamp";
 import { Button, Select } from "../design/primitives";
+import { AlertsPanel } from "./AlertsPanel";
 import { fetchFeedCsv, fetchReport, type ReportsApi } from "./api";
+import { Bars, channel, NUMBER, plural, Section } from "./figureParts";
 
-const PERIODS = [4, 12, 26, 52];
-const CHANNELS = ["--ch-azure", "--ch-ochre", "--ch-jade", "--ch-plum", "--ch-rose", "--ch-cyan", "--ch-indigo", "--ch-moss"];
+export const PERIODS = [4, 12, 26, 52];
 /** The Outcomes table's columns: open, claimed, each closing reason as the close dialog says it
  * (ADR-133 Amendment 5), and closed with none (taken back). Build order step 18c (D12). */
 type OutcomeField = "open" | "claimed" | ClosingReason | "closed";
@@ -22,40 +29,6 @@ const OUTCOME_COLUMNS: ReadonlyArray<readonly [OutcomeField, string]> = [
   ...(Object.entries(CLOSING_REASONS) as Array<[ClosingReason, string]>),
   ["closed", "Closed, no outcome"],
 ];
-
-const NUMBER = new Intl.NumberFormat("en-GB");
-
-function plural(n: number, one: string, many = `${one}s`): string {
-  return `${NUMBER.format(n)} ${n === 1 ? one : many}`;
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section
-      aria-label={title}
-      style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "grid", gap: "var(--sp-8)", alignContent: "start" }}
-    >
-      <h3 className="value" style={{ margin: 0 }}>{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-/** One horizontal bar per row, its length the share of the largest; the number always written. */
-function Bars({ rows }: { rows: { label: string; value: number; colour?: string }[] }) {
-  const most = Math.max(1, ...rows.map((r) => r.value));
-  return (
-    <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
-      {rows.map((r) => (
-        <li key={r.label} style={{ display: "grid", gridTemplateColumns: "10rem 1fr", gap: "var(--sp-8)", alignItems: "center" }}>
-          <span className="label">{`${r.label}: ${NUMBER.format(r.value)}`}</span>
-          <span aria-hidden style={{ height: 10, width: `${(r.value / most) * 100}%`, minWidth: r.value ? 2 : 0,
-                                     background: `var(${r.colour ?? "--brass"})` }} />
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 const POLE_CLASS_LABELS: Record<string, string> = {
   person: "Person",
@@ -132,8 +105,43 @@ function RaisedByWeek({ figures, colours }: { figures: ReportFigures; colours: M
   );
 }
 
-export function ReportsView({ canDownload, ...api }: ReportsApi & { canDownload: boolean }) {
-  const [weeks, setWeeks] = useState(12);
+/** Where the Figures were opened from: an alert on the Reports Viewer's Home (ADR-145 Amendment 4
+ * decision 10), named in words, with the way back. */
+export interface FromAlert {
+  words: string;
+  onBack: () => void;
+}
+
+function DrawingCard({ drawing }: { drawing: DrawingFigures }) {
+  return (
+    <Section title="Drawing">
+      <Bars label="Drawing figures" rows={[
+        { label: "Drawn", value: drawing.drawn, colour: channel(0) },
+        { label: "Promoted", value: drawing.promoted, colour: channel(1) },
+        { label: "Awaiting review", value: drawing.awaiting_review, colour: channel(2) },
+        { label: "Withdrawn", value: drawing.withdrawn, colour: channel(3) },
+      ]} />
+    </Section>
+  );
+}
+
+export interface ReportsViewProps extends ReportsApi {
+  canDownload: boolean;
+  /** Opens an alert at its address; only for a reader Rules and Monitoring is offered to. */
+  onOpenAlert?: (alertId: string) => void;
+  fromAlert?: FromAlert | null;
+  /** The period to open on (the journey's, from the alert's age); 12 weeks when left out. */
+  initialWeeks?: number;
+}
+
+export function ReportsView({ canDownload, onOpenAlert, fromAlert = null, initialWeeks = 12, ...api }: ReportsViewProps) {
+  const [weeks, setWeeks] = useState(PERIODS.includes(initialWeeks) ? initialWeeks : 12);
+  const back = useRef<HTMLButtonElement>(null);
+  // Focus the way back when it first appears, not each time the parent hands over an equal one.
+  const opened = fromAlert !== null;
+  useEffect(() => {
+    if (opened) back.current?.focus();
+  }, [opened]);
   const [figures, setFigures] = useState<ReportFigures | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -169,12 +177,20 @@ export function ReportsView({ canDownload, ...api }: ReportsApi & { canDownload:
   }
 
   const typologies = [...new Set((figures?.outcomes ?? []).map((o) => o.typology))];
-  const colours = new Map(typologies.map((t, i) => [t, CHANNELS[i % CHANNELS.length] ?? "--brass"]));
+  const colours = new Map(typologies.map((t, i) => [t, channel(i)]));
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "var(--sp-16)", display: "grid", gap: "var(--sp-16)", alignContent: "start" }}>
+      {fromAlert && (
+        <div role="note" aria-label="Opened from an alert" className="label"
+             style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center", flexWrap: "wrap" }}>
+          <span>{`From ${fromAlert.words}`}</span>
+          <span aria-hidden>·</span>
+          <button ref={back} type="button" className="btn" onClick={fromAlert.onBack}>← Back to your alerts</button>
+        </div>
+      )}
       <header style={{ display: "flex", gap: "var(--sp-12)", alignItems: "center", flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0 }}>Reports</h2>
+        <h2 style={{ margin: 0 }}>Figures</h2>
         <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
           Period
           <Select aria-label="Period" value={String(weeks)} onChange={(e) => setWeeks(Number(e.target.value))}>
@@ -198,6 +214,7 @@ export function ReportsView({ canDownload, ...api }: ReportsApi & { canDownload:
             Counted for you: an alert concerning anything you cannot see is in no figure here.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(22rem, 1fr))", gap: "var(--sp-16)" }}>
+            <AlertsPanel api={api} monitoring={figures.monitoring ?? null} onOpenAlert={onOpenAlert} outlined={fromAlert !== null} />
             <Section title="Alerts raised each week">
               <RaisedByWeek figures={figures} colours={colours} />
             </Section>
@@ -246,6 +263,8 @@ export function ReportsView({ canDownload, ...api }: ReportsApi & { canDownload:
               </Section>
             )}
             {figures.pole && <PoleCard pole={figures.pole} />}
+            {/* ADR-145 Amendment 4 decision 8: none until promotions exist (L3.4); never a zero. */}
+            {figures.drawing && <DrawingCard drawing={figures.drawing} />}
             {figures.held && (
               <Section title="Held rows">
                 <p style={{ margin: 0 }}>

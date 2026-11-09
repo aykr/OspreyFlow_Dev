@@ -1,7 +1,7 @@
-// The Reports view (ADR-111) with its tabs: the case's own figures (always), then — each only when
-// the person holds the right it rests on (ADR-112) — Trends, Packs, Published (ADR-113), and the
-// Superset dashboards this person may open (Amendment 3 of ADR-111), and Data feeds (ADR-110
-// decision 9).
+// The case's Figures (ADR-145 Amendment 4 decision 8, replacing ADR-111's Reports view) with its
+// tabs: the case's own figures (always), then — each only when the person holds the right it rests
+// on (ADR-112) — Trends, Packs, Published (ADR-113) and Data feeds (ADR-110 decision 9). Superset's
+// boards are not here: the Glass's rail *Dashboards* is their one door (decision 8, D1).
 import { useState } from "react";
 
 import { Tabs } from "../design/primitives/Tabs";
@@ -14,20 +14,23 @@ import {
   type Rights,
 } from "../rights/visibility";
 import { DataFeedsTab } from "./DataFeedsTab";
-import { EmbeddedDashboards, type Embed } from "./EmbeddedDashboards";
 import { PacksTab } from "./PacksTab";
 import { PublishedTab } from "./PublishedTab";
-import { ReportsView } from "./ReportsView";
+import { ReportsView, type FromAlert } from "./ReportsView";
 import { TrendsTab } from "./TrendsTab";
 
-export type TabId = "figures" | "trends" | "packs" | "published" | "feeds" | "dashboards";
+export type TabId = "figures" | "trends" | "packs" | "published" | "feeds";
 
 export interface ReportsPlaceProps {
   apiBaseUrl: string;
   bearerToken: string;
   investigationId: string;
   canDownload: boolean;
-  embed?: Embed;
+  /** Opens an alert at its address; given only when Rules and Monitoring is offered to the reader. */
+  onOpenAlert?: (alertId: string) => void;
+  /** Opened from an alert (the Reports Viewer's journey, ADR-145 Amendment 4 decision 10). */
+  fromAlert?: FromAlert | null;
+  initialWeeks?: number;
   /** What this person may do; absent or null means not yet known, so everything is offered. */
   rights?: Rights;
   /** Receives an exported pack's print document; the default prints it from a hidden frame. */
@@ -37,7 +40,7 @@ export interface ReportsPlaceProps {
   initialTab?: TabId;
 }
 
-export function ReportsPlace({ embed, rights = null, print, initialTab = "figures", ...props }: ReportsPlaceProps) {
+export function ReportsPlace({ rights = null, print, initialTab = "figures", ...props }: ReportsPlaceProps) {
   const [tab, setTab] = useState<TabId>(initialTab);
   const api = { apiBaseUrl: props.apiBaseUrl, bearerToken: props.bearerToken, investigationId: props.investigationId };
   const tabs: { id: TabId; label: string }[] = [
@@ -46,7 +49,6 @@ export function ReportsPlace({ embed, rights = null, print, initialTab = "figure
     ...(canAssemblePacks(rights) ? [{ id: "packs" as const, label: "Packs" }] : []),
     ...(canReadPublished(rights) ? [{ id: "published" as const, label: "Published" }] : []),
     ...(canReadDataFeeds(rights) ? [{ id: "feeds" as const, label: "Data feeds" }] : []),
-    { id: "dashboards", label: "Dashboards" },
   ];
   // A tab the rights no longer offer falls back to Figures rather than showing a screen to be refused.
   const active: TabId = tabs.some((t) => t.id === tab) ? tab : "figures";
@@ -60,11 +62,6 @@ export function ReportsPlace({ embed, rights = null, print, initialTab = "figure
       {active === "packs" && <PacksTab api={api} canExport={canExportPacks(rights)} print={print} />}
       {active === "published" && <PublishedTab api={api} canExport={canExportPacks(rights)} print={print} />}
       {active === "feeds" && <DataFeedsTab api={api} />}
-      {active === "dashboards" && (
-        <div style={{ flex: 1, display: "flex", padding: "var(--sp-16)", minHeight: 0 }}>
-          <EmbeddedDashboards apiBaseUrl={props.apiBaseUrl} bearerToken={props.bearerToken} embed={embed} />
-        </div>
-      )}
     </div>
   );
 }
