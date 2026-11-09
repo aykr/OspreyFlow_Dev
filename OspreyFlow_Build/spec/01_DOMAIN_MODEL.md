@@ -807,8 +807,13 @@ a source. It carries `provenance.drawn` (`DrawnAssertion`, `schemas/domain.py`),
 - `label`, what the analyst calls it (a type of the model may declare no name of its own, so the
   type's required properties are given beside it; the Glass fills a required name from the label
   until the analyst changes it);
-- `grading` (`Grading`: the scheme, then the source's, the intelligence's and the handling grade;
-  `5x5x5` until L3.7 makes the scheme a deployment setting, the grade always kept with its scheme);
+- `grading` (`Grading`: the scheme, then the source's, the intelligence's and the handling grade,
+  the grade always kept with its scheme), in the deployment's one scheme (`grading.scheme`, ADR-143
+  decision 11: `5x5x5` by default, or `3x5x2`, whose handling code P or C is part of the grade and
+  never merged with the marking). An opened board offers that scheme's grades, and a drawn node,
+  link or edit graded in any other is refused (422 `grading_scheme`) before anything is written;
+- `original_grading`, absent until the scheme is first changed, then the grade and scheme the item
+  had before that change, kept for good through every later one;
 - `source_note`, `source_document`, or both, never neither;
 - `icon`, a display choice only (C17 c).
 
@@ -828,6 +833,25 @@ The invariants, each with the test that fails if it is broken (rule 12):
     set; the graph port's own case is `test_a_link_in_case_as_layer_leaves_the_loaded_node_unchanged_under_case_b`.
 - **In the layer, attributed and graded** (decision 4).
   - `test_a_drawn_item_is_attributed_graded_and_in_the_layer`, red with the writer aimed at the source.
+- **Graded in the deployment's scheme, changed only by the command, the original kept** (decision
+  11, C13). `python -m scripts.grading_change --to <scheme> --mapping <file> [--dry-run]
+  --changed-by <id>` (`services/api/grading.py`), run inside the deployment with the Conduit quiet,
+  maps every grade of each part of the old scheme to one of the new. It says first how many live
+  drawn items each mapping line moves; a dry run stops there and writes nothing. Otherwise it
+  rewrites each live drawn node's and link's grade under its own id, setting `original_grading` at
+  its first change and never after, and records one audit entry (`grading_change`) with the counts.
+  It is refused whole, before any write, for a mapping that does not cover the old scheme, one from
+  another scheme than `grading.scheme`, an item graded in another scheme, or a registered item it
+  cannot read back (rule 2). A withdrawn item keeps the grade it was drawn with. A run stopped part
+  way is finished by running it again. The operator then sets `grading.scheme` and starts the
+  deployment again. (`ospreyflow grading change`, the verb decision 11 names, is to wrap both.)
+  - `test_the_dry_run_writes_nothing_and_counts_each_mapping_line`, red with a write planted at the
+    dry-run branch; `test_every_item_keeps_its_original_grade_and_scheme_through_two_changes`, red
+    with the original overwritten at the second change;
+    `test_an_item_in_another_scheme_refuses_the_whole_change_before_any_write` and
+    `test_a_registered_item_that_cannot_be_read_back_refuses_the_whole_change`
+    (`test_grading_change.py`); `test_a_drawn_item_in_another_scheme_is_refused_before_anything_is_written`
+    (`test_grading_boards.py`).
 - **Within the case's ceiling** (Amendment 2 decision 3): nothing drawn above the strictest highest
   marking its datasets set, nor above the drawer's clearance, refused in words naming it.
   - `test_an_item_above_the_ceiling_is_refused_in_words`, red with the ceiling bypassed.
