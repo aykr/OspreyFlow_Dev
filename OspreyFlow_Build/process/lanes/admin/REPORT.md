@@ -1,51 +1,53 @@
 # admin lane · report · L2.6, the Audit section and Operations' ageing (8–9 November 2026)
 
-Resumed again on 9 November from the branch alone, with no `HANDOFF.md` and no `wip(admin)` commit. The branch
-already held rounds 1–3 and round 3's live set, but its report and gates dated from before round 3. It was
-rebased onto main 3be89a7 (44 commits, no conflict), keyboard and axe were rerun, and a fourth lane review
-covered the commits no reviewer had read. Its fixes are in, and the gates were rerun at the head.
+Sent back on 9 November by the orchestrator's independent review with six must-fixes and four minor
+points. All are done below, each with a test shown red by a plant at its real call site
+(`L2.6_RED_RECORD.md`, round 5). The branch is rebased onto main a06d114; the head is in `git log`.
 
-| Brief item | State | Proving test (each red by a plant at its call site, `L2.6_RED_RECORD.md`) |
+| Brief item | State | Proving test |
 | --- | --- | --- |
-| 1. Audit read by unit (O2) | met | `test_audit_section_store.py` U1, U2, U7 (live) |
-| 1. The rule audit for the Administrator | met | `test_audit_section_routes.py` W2–W4, R1–R2; `test_place_routes.py` P1, P2 |
+| 1. Audit read by unit (O2) | met | U1, U2, U7; the picker's writers U19 (live), W9 |
+| 1. The rule audit for the Administrator | met | W2–W4, R1–R2; `test_place_routes.py` P1, P2 |
 | 1. Filters by who, what and when | met | W8, F1, U2, U6; keyboard K1 |
-| 1. Withheld words stay withheld; no account id | met | W1, W6, G4, G5, I1–I9 |
-| 2. Operations' ageing (O3) | met | A6, A7; keyboard K2 |
-| 3. *Promotions overdue* (R7) | alert built; the record left for L3.4 | A1–A5, U5, S1–S6, `test_promotion_sweep_live.py` |
-| Keyboard (rule 13) | met | 61/61 `keyboard/admin*` with `registry.diff` applied, at 5a3eeb4 |
-| Axe in dark, light and GOV.UK | met | 72/72 admin scans, at 5a3eeb4 |
+| 1. Withheld words stay withheld; no account id | met | W1, W6, W10, G4, G5, I1–I9 |
+| 2. Operations' ageing (O3) | met; listed only to those who may review | A6, A7; contract C1–C3; keyboard K2 |
+| 3. *Promotions overdue* (R7) | alert met; the record left for L3.4 | A1–A5, A8, A9, U5, U20 (live), S1–S6 |
+| Keyboard (rule 13) | met | `gates/ac69f9a.keyboard.txt`, 61/61 with `registry.diff` |
+| Axe in dark, light and GOV.UK | met | `gates/ac69f9a.axe.txt`, 72/72 |
 
-1. **Audit by unit (O2): met.** The stream is read by unit in its `WHERE` clause, and a case's entries only by the unit's `osprey-admin` (ADR-052 §4). Every filter narrows the read.
-2. **Rule audit: met.** One case at a time, read only through `readable_rule_audit` behind its own route, which needs `read_rule_audit` and the administrator's role. Its exception from ADR-146 Am. 2 point 3 is pinned to that one route and its three checks. The engines' history needs `manage_models` and is paged with its true total.
-3. **Withheld words: met.** No account's id reaches the Glass: who acted is served by name, and the shown words are an allowlist. **New in round 4:** the actions that show their words are a named list of their own (`test_only_the_named_actions_ever_show_their_words`), so moving an action into *People and roles* or *Datasets* fails a test (G4, G5).
-4. **Operations' ageing (O3): met.** *What ages*, N days (1–90, default 3, audited) and the promotions waiting, read as the reader and within the reader's unit.
-5. ***Promotions overdue*: the alert is built.**
-   - Raised once at N days, by the database, from admin's own job in the lifespan.
-   - Sent to reviewers and the unit's administrators cleared to the dataset's marking, never to the proposer.
-   - **Left for L3.4** (`promotion_ageing.WaitingPromotions`): the promotion record, `waiting_for_review`, `all_waiting`, and setting `app.state.waiting_promotions`.
-   - **Left for L2.7:** *Needs you* reads `alerts_for`.
-6. **Gates** (`gates/`, every failure explained at each file's head):
-   - `make -k ci` at 05ec788: green except for trivy, which could not download its vulnerability database, and the test-file wiring that `ci-wiring.diff` supplies. At 341a110 lint found a 101-column comment, now fixed.
-   - `make test` at 341a110, offline: 9479 passed. All 28 failed and 49 errors are explained:
-     - Docker not running during the run (helm, Caddy/TLS, render-memory, organisation sign-in, workspace proxy). Docker came up before the `ci` rerun, where opentofu and the chart passed;
-     - the live store test (19 errors) and the live sweep test (1 failure) on closed ports, wired by `ci-wiring.diff`, and its wiring check (1 failure);
-     - `test_place_routes.py`'s two cases until `places.diff` is applied: 104/104 with it applied;
-     - this machine's own `osprey.yaml`, Valkey port and `graphify-out`;
-     - main's `test_phone_extraction_fixture.py`, a live object-store test on a closed port.
-   - 341a110 and 05ec788 differ only by that comment.
-   - The live set at afc54b6 (`gates/afc54b6.live.txt`, stack a, admin lease) stands. Since then the store code (`audit.py`) is unchanged, and `audit_section.py` changed only in two actions' kinds, which no live case reads.
-7. **Reviews:**
-   - Round 1: 18 items. Round 2: 10 items. Round 3: the orchestrator's independent access review, and a lane review of it.
-   - Round 4, at 5a3eeb4, over the commits after round 3's review. Fixed:
-     - `grading_change`, the operator's change of grading scheme, was filed as an analyst assertion;
-     - nothing pinned which actions show their words;
-     - `read_connector_source` was a read, not a load;
-     - the red record's U17 wording;
-     - the live sweep test's docstring promised more than it checks;
-     - a 150-column docstring.
-   - The review's items 1 and 2 (`places.diff` unnamed, no gates at the head) are answered by this report and `gates/`.
-8. **Decisions taken** (yours to overrule; all in ADR-145 Am. 6):
+1. **The picker's writers.** `AuditSectionReader.writers` uses the stream's own unit filter and its `cases`.
+   - Live: U19, red with the unit predicate dropped.
+   - At the route: W9, red with `cases=True` forced. The route test's fake now narrows the same way the real read does.
+2. **Operations' waiting promotions.** `operate_schedules` opens the screen but lists nothing on its own.
+   - A promotion is listed only to someone who `may_review` it: one of the dataset's Authors holding `review_promotions`, or an administrator of the dataset's unit. Either way, only someone cleared to the dataset's marking.
+   - `test_waiting_promotions_contract.py` is the contract L3.4's store must pass: L3.4 adds its factory to `STORES`. It runs against `ReferenceWaiting` until then, and is red as C1–C3.
+   - Recorded in Amendment 6 decision 5 and in the module's docstring.
+3. **Governance words withheld.** A source's governance edit no longer serves its handling, its legal basis or what follows from them. W10 is red with them back.
+4. **`alerts_for` checks again.** The store keeps each alert's promotion. Each read asks `still` (the sweep's own recipients, read now), so a reader who has since been disabled, lost `review_promotions`, moved unit or dropped below the marking is served nothing.
+   - Offline: A8, red on 4 of 5 cases. Live: U20.
+   - L2.7 passes `_promotion_recipients` as `still`.
+5. **Records** (`gates/`):
+   - `ac69f9a.keyboard.txt`, `ac69f9a.axe.txt`: Playwright on this Mac.
+   - `ac69f9a.places.txt`: 104/104 with `places.diff` applied.
+   - `0989d88.live.txt`: 26/26 on stack g, plus U19 and U20.
+   - `0989d88.ci.txt`, `0989d88.test.txt`.
+6. **Minors:**
+   - one friction row for the step;
+   - `cleared_to` uses `HandlingScheme.clears`;
+   - an alert to nobody is not spent: it is counted in `PromotionSweep.unreached`, logged once, and raised once someone may review it (A9);
+   - `test_only_the_named_actions_ever_show_their_words`'s docstring says what it checks.
+7. **Gates at 0989d88, on main a06d114, offline.** Every failure is explained at the head of each file.
+   - `make -k ci`: green except the Docker-backed checks and the test-file wiring. Docker is off on the owner's word (807d070); with Docker up at 05ec788, opentofu and the chart passed.
+   - `make test`: 9497 passed, 29 failed, 51 errors:
+     - Docker off: 70 refusals;
+     - the live tests and their wiring: green live;
+     - two place cases until `places.diff` is applied;
+     - this machine's `osprey.yaml`, Valkey port and `graphify-out`;
+     - main's phone-extraction live test;
+     - one preflight case that passes alone (a connect to TEST-NET-1 answered once during the run).
+   - The lane's code is unchanged since 0989d88; later commits are records.
+8. **Left for L3.4:** the promotion record, `waiting_for_review` passing the contract suite, `all_waiting`, and setting `app.state.waiting_promotions`. **Left for L2.7:** *Needs you* calls `alerts_for(person, lambda p: _promotion_recipients(app, p))`.
+9. **Decisions taken** (yours to overrule; all in ADR-145 Amendment 6):
    - (a) words withheld except where the reader's own section shows them;
    - (b) an entry naming no case belongs to its writer's unit;
    - (c) case entries are for `osprey-admin` only;
@@ -54,10 +56,18 @@ covered the commits no reviewer had read. Its fixes are in, and the gates were r
    - (f) the sweep is admin's own lifespan job, and L3.4 sets its source;
    - (g) `read_audit` opens Admin;
    - (h) a start never waits on or drops another start's index build;
-   - (i) new: `grading_change` is filed under *Reads and refusals* with the platform's script actions, and `read_connector_source` under *Loads*.
-9. **Requests at the merge:**
-   - Apply `places.diff` (the branch's `test_place_routes.py` is red on two cases without it), `registry.diff` and `ci-wiring.diff`. All three pass `git apply --check` on main 3be89a7.
-   - Mark ADR-145 Amendment 6 `written` in `spec/ADR_RESERVATIONS.md`.
-   - Ratify `test_place_routes.py`, `a11y/every-harness.spec.ts`, `services/api/audit.py`, `spec/03_CONDUIT_MIDDLEWARE.md` and `test_route_rights.py`.
-   - The Audit section touches access, so it needs your independent review of round 4's change. That change only narrows: no action newly shows words.
-10. **Questions:** none. **Still running:** nothing. No stack is held, and the lane-reviewer has finished.
+   - (i) `grading_change` is filed under *Reads and refusals*, `read_connector_source` under *Loads*;
+   - (j) new: an Author's own unit is not asked. Decision 11 names the dataset's Authors, so an Author granted from another unit is listed and alerted; the unit is asked only of administrators.
+10. **Requests at the merge:**
+    - Apply `places.diff` (two place cases are red without it), `registry.diff` and `ci-wiring.diff`. All three apply cleanly to a06d114.
+    - Land `packages/schemas/admin.py` (and its generated types) as a separate schemas commit first.
+    - Mark ADR-145 Amendment 6 `written` in `spec/ADR_RESERVATIONS.md`.
+    - **Ratify** these files outside admin's map:
+      - `services/api/principal_names.py` (`full_names`) with `tests/services/api/test_principal_names.py`;
+      - `apps/workspace/keyboard/admin.spec.ts` and `keyboard/admin-harness.tsx`;
+      - `tests/services/api/test_place_routes.py`;
+      - `apps/workspace/a11y/every-harness.spec.ts`;
+      - `services/api/audit.py`;
+      - `spec/03_CONDUIT_MIDDLEWARE.md`;
+      - `tests/services/api/test_route_rights.py`.
+11. **Questions:** none. **Still running:** nothing. Stack g is down and its lease released, the scratch worktree is removed, and no agent is running.

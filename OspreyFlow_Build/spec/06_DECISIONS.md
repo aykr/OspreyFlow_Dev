@@ -31146,7 +31146,9 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    the person is still one of them**: the store keeps the promotion with the alert and asks `still`
    again at the read. L2.7 passes the sweep's own `_promotion_recipients`, so a person since disabled,
    no longer an Author holding `review_promotions` or the unit's administrator, or no longer cleared to
-   the marking, is served nothing (`test_an_alert_is_read_only_while_its_reader_is_still_a_recipient`;
+   the marking, is served nothing. An Author's own unit is not asked: decision 11 names the dataset's
+   Authors, so one granted from another unit is one of them; the unit is asked of administrators alone
+   (`test_an_alert_is_read_only_while_its_reader_is_still_a_recipient`;
    live, `test_an_alert_is_served_only_while_its_reader_is_still_a_recipient`). A team's Author grant
    does not make its members recipients, and an alert's recipients are fixed when it is raised (one
    raised while the dataset has no reviewer reaches only the administrators).
