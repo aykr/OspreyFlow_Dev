@@ -38,7 +38,7 @@ Each restored: 3 passed.
 | the loader handed no analytics store (`analytics=None`) | `build_basemap_route`'s `_load_places` | the case |
 | the dataset's registration dropped | the same | the case (no `gazetteer-osm-rutland` in the store) |
 
-Each restored: 13 passed. The stamping itself, live: see the leased run below.
+Each restored: 13 passed. The stamping itself, live: see "The leased live run" below.
 
 ## The basemap switch and the place search, by keyboard (rule 13)
 
@@ -53,7 +53,9 @@ each made its case red and, with it, the registry's coverage case:
 | going to a place moves nothing | `MapView`'s `PlaceSearch onGo` | `a place is found in the case's gazetteer and shown by keyboard` |
 | Enter in the search submits nothing | `PlaceSearch`'s `onSubmit` | the same |
 
-Each restored: 7 passed.
+Each restored: 7 passed. Added after the lane's review: the third keyboard case (`a name the gazetteer
+does not hold is said in words…`), red with the empty answer's words removed from `PlaceSearch`; a
+`-g Atlantis` filter matched no test at first ("No tests found", not a pass), so it was run by its title.
 
 ## The map's contrast in the dark, light and GOV.UK themes
 
@@ -73,10 +75,61 @@ on land, and land and water stay apart (`style.test.ts`'s 0.08 OKLab lightness, 
 | the controls' note in `--text-tertiary` | `mapControls.css` | **not red**: it still meets 4.5:1, so it proves nothing (kept here, not counted) |
 | the controls' note in `--border-strong` | `mapControls.css` | the dark and GOV.UK themes |
 
-Each restored: 3 passed.
+Each restored: the 3 floor checks passed (the plants were run against the floor checks alone; the
+reference images are this section's last paragraph).
 
 **The reference images: the comparison could not fail in the dark theme.** With the picture rewritten
 for P4, the old dark reference (the four channel dots of 8 November) still passed against the new
 page: at Playwright's default per-pixel threshold of 0.2 (YIQ), a dark scene's changes fall under it.
 With `threshold: 0.05` the same comparison failed (324,927 pixels, 36%), then the three references
 were made (`map-contrast-{dark,light,govuk}-darwin.png`) and passed twice more unchanged.
+
+## The lane's review round (9 November 2026)
+
+The lane-reviewer's findings, each fixed and shown red (offline, closed ports):
+
+| Finding | Plant | Red |
+| --- | --- | --- |
+| the store matches a `Location` on its identifiers, so a `uprn` fragment found a place (rule 7) | the name match dropped in `is_gazetteer_place` | `test_a_match_on_a_gazetteers_identifier_alone_offers_nothing` |
+| "the gazetteer's places" were picked by identifier, so a case's own address with a postcode was one | the `gazetteer-*` dataset check dropped | `test_only_the_gazetteers_places_with_a_point_are_offered` (the case's address offered) |
+| a query of spaces reached the store as an empty scan (a 500 against ArcadeDB) | the stripping validator returns the value unchanged | `test_a_spaces_only_query_is_refused_not_a_scan` |
+| no test went through the real case-level check (rule 4) | the route takes a bare `investigation_id` in place of `InvestigationViewerDep` | `test_the_case_level_is_checked_before_the_store_is_asked` (no level, another case) |
+| an `osprey.yaml` provider with `credential: env:` and no `proxy` line was handed to the Glass whole | the needs-a-key refusal in `MapProvider` disabled | `test_a_provider_the_browser_fetches_takes_no_key` (the two `{credential}` shapes) |
+| a key typed into a browser-fetched address | the key-named-parameter refusal disabled | the same test (the two typed shapes) |
+| an unreachable database at a command-line build was a traceback | the `except` narrowed to nothing | `test_an_unreachable_database_is_said_in_words` (a refused connection and an unresolvable name; an authentication refusal is caught but not planted, since importing the driver marks a test file live) |
+| an empty answer with `more` was said as "no such place" (rule 2) | `PlaceSearch` ignores `more` | `MapControls.test.tsx` |
+
+**A plant that proved nothing, first (rule 15's second paragraph):** the first two shapes of
+`test_a_provider_the_browser_fetches_takes_no_key` used `?key={credential}`, which the key-named rule
+also refuses, so disabling the needs-a-key rule left them refused by the other: 15 passed under the plant.
+Their parameter was renamed `tile`, and each case now matches its own rule's words; then each plant
+made exactly its own two cases red.
+
+**The axe state `searched=1`:** checked drawn before it was relied on: a scratch Playwright case (not
+kept) opened the harness with `searched=1`, with and without `brand=govuk`, waited for the network to
+settle as `every-harness.spec.ts` does, and found both "Go to …" buttons each time.
+
+## The leased live run
+
+**Platform lease on stack b, 02:23:11–02:31:30 UTC 9 November 2026, at `e1470f1`** (on main `90b3149`),
+ports pinned from the lease's own export line, `OSPREY_LANE=platform`; `make -k ci` was running offline
+on this machine at the same time (load average 24–29).
+
+- `test_route_rights.py`, `tests/ingest/test_gazetteer_place_search_live.py`,
+  `test_map_admin_build_end_to_end.py`, `test_build_local_basemap_end_to_end.py`,
+  `test_osm_gazetteer_recipe_end_to_end.py`, `test_tile_cache.py`, `test_prefetch.py`,
+  `tests/geocoder/test_match_live.py`, `test_statelessness.py`: **23 passed, 1 failed, 1 error**, the two
+  both `test_statelessness.py`'s, whose Conduit subprocess did not answer within the test's 15 seconds
+  ("never came up"). Not this branch's: the same Conduit started cleanly by hand under the same lease,
+  and with the wait raised to 90 seconds for one diagnostic run (the file restored) both passed (2
+  passed, 27 s). The machine's load, not the change.
+- **The stamp, red live:** `load_gazetteer` writing through the plain graph (`stamping` dropped):
+  `test_a_case_that_added_the_gazetteer_finds_its_place…`, `test_a_rebuild_writes_no_second_copy…`,
+  `test_map_admin_build_end_to_end[finished]` and `test_build_local_basemap…` red (4 failed).
+- **The case's limit, red live at its own assertion:** the search asking the store with an unlimited
+  principal (`principal.model_copy(update={"datasets": None})` in `search_places`): red at `assert
+  nothing.places == []`, the case that did not add the gazetteer then finding Cranford. (A first plant,
+  stamping into the case's own dataset, went red only at the case that did add it, since the search keeps
+  `gazetteer-*` datasets alone, so it did not show this side; kept here, not counted.) Restored: passed.
+- Teardown: each live test's ArcadeDB database is a throwaway one, dropped pass or fail
+  (`arcadedb_adapter`); the analytics store is in memory; the stack was brought down before release.

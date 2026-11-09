@@ -11,7 +11,8 @@ places themselves are stamped into the dataset is `load_gazetteer`'s, proven liv
 
 from __future__ import annotations
 
-import asyncpg
+import socket
+
 import pytest
 from services.api.datasets import InMemoryDatasetStore
 from services.api.map_places import (
@@ -48,10 +49,13 @@ async def test_a_command_line_build_registers_the_regions_dataset_for_the_recipe
     assert again.created_by == "cli:owner"
 
 
+#: The two ways a build meets no database: nothing listening, and a name that does not resolve. An
+#: authentication refusal (`asyncpg.PostgresError`, also caught) is not planted here: importing the
+#: driver marks a file live (`tools/test_file_coverage_check.py`), and this one needs no service.
 @pytest.mark.parametrize(
     "failure",
     [ConnectionRefusedError(61, "Connect call failed ('127.0.0.1', 5432)"),
-     asyncpg.InvalidPasswordError("password authentication failed for user \"osprey\"")],
+     socket.gaierror(8, "nodename nor servname provided, or not known: osprey-postgres")],
 )  # fmt: skip
 async def test_an_unreachable_database_is_said_in_words(failure: Exception) -> None:
     async def connect(_dsn: str) -> InMemoryDatasetStore:
@@ -62,4 +66,4 @@ async def test_an_unreachable_database_is_said_in_words(failure: Exception) -> N
     words = str(raised.value)
     assert "Cannot reach the Conduit's database" in words and "--tiles-only" in words
     # Its name, not its text: the text names an address or a user.
-    assert "127.0.0.1" not in words and "osprey" not in words
+    assert "127.0.0.1" not in words and "osprey-postgres" not in words
