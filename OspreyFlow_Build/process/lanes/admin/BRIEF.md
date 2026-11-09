@@ -1,36 +1,50 @@
-# Admin lane · brief L2.6 · the Audit section, and Operations' ageing
+# Admin lane · brief L2.7 · *Needs you*, Home's *What you can do*, and Admin's tips
 
-Written by the orchestrator, 8 November 2026, after L2.5's merge (`3656678`), for a **fresh admin session**
-on the orchestrator's account. Read `process/lanes/admin/REPORT.md` (L2.5) first. Rebase onto `main`. Sonnet
-or Opus at medium, as the plan says for L2.6–L2.7. Size M. After it comes L2.7, then L2.5b once case's
-ownership route (L3.8) is on main.
+Written by the orchestrator, 9 November 2026, after L2.6's merge (`0194eec`), for the **admin session already
+open** on the default account (`ayan`), or a fresh one. Read `process/lanes/admin/REPORT.md` (L2.6, especially
+items 4 and 8, "Left for L2.7") and ADR-145 Amendment 4 decisions 11 and 12, as ruled by the owner on 9
+November (option (c): a refusal or tip names the **roles** that hold a right, never people). Rebase onto
+`main`. Opus, medium. Size M. After it comes L2.5b, once case-b's ownership route (L3.8) is on main.
 
-**The lane, the stacks, the merge rule.** Admin's ownership map; a test stack by `stack_lease.sh acquire
-admin "<purpose>" && …` only; Prompt L's rules: never stop on a question (log it under "Decisions taken";
-only loosening access, real data or contradicting an accepted ADR stops a piece); schemas changes ride with
-the step; before ready-to-merge, your own lane-reviewer, then make -k ci and make test at a commit rebased
-onto main, saved under `process/lanes/admin/gates/`. The Audit section touches access (who reads which
-audit, by unit), so it gets the orchestrator's independent review too.
+**The lane, the stacks, the merge rule.** Admin's ownership map. The test stacks are on the owner's server
+only (b to g); stack a and Docker are off on this Mac: never start Docker. Ask the orchestrator for a stack,
+then use main's `OspreyFlow_Build/scripts/stack_lease.sh` (acquire, up, `remote admin -- …` from your
+worktree's `OspreyFlow_Build`, down, release); `remote-log admin` reattaches a dropped run. Prompt L's rules:
+never stop on a question (log it under "Decisions taken"), except that **loosening access stops the piece**:
+L2.6's decision (j) was such a case and had to be withdrawn. Schemas ride with the step. Before
+ready-to-merge: your own lane-reviewer, then `make -k ci` and `make test` offline at a commit rebased onto
+main, saved under `gates/`, with a leased live run including `test_route_rights.py`. **Re-gate after any code
+change**: L2.6's gates predated its last round. Report to the orchestrator **by message**, not only in your
+window. This step shows people things on Home and in *Needs you*, so it gets the orchestrator's independent
+review.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 7, 12, 13 and 15 above all); ADR-145 decision 9, O2 and O3,
-Amendment 4 decision 11 (R7); ADR-112 (`read_audit`, `read_rule_audit`); ADR-146 Amendment 2 (rules' L2.9:
-the rule audit leaves Rules and Monitoring for the Administrator and returns here).
+**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 7, 12, 13 and 15 above all); ADR-145 Amendment 4 decisions
+11 and 12; ADR-090 Amendment 4; ADR-143 Amendment 6 (the grading scheme); ADR-145 Amendment 6 (as merged).
 
-**Build** (the plan's row L2.6):
-1. **Admin › Audit (O2):** every audit the deployment keeps, read by unit as the plan's exit says (a reader
-   of one unit sees that unit's entries alone); the rule audit for the Administrator (rules' L2.9 handed it
-   here); filters by who, what and when; the words an entry holds withheld exactly as their own reads
-   withhold them (rule 3: an entry naming what the reader may not see shows its existence only as the
-   existing audits already decide).
-2. **Operations' ageing (O3):** what ages and when, inside *Admin › Running › Operations*.
-3. ***Promotions overdue*** (R7) to the dataset's Authors holding `review_promotions`, fired once at N days.
-   Promotions themselves are case's L3.4: build the ageing rule and the alert against the promotion record's
-   shape as L3.4's brief will define it, behind one named seam, and say what is left for L3.4; if nothing
-   can be built usefully before L3.4, log it under "Decisions taken" and leave it.
+**Build, in this order** (the plan's row L2.7):
+1. **The data engineer's *Needs you*** (A2): *promotions overdue* through `PromotionAgeingStore.alerts_for`,
+   passing `_promotion_recipients` as `still` (L2.6's seam), so an alert is shown only to a person who is
+   still a recipient at read time; and the Model tab's proposal count, reminder and *Needs you* entry for
+   analyst-defined link types (CARRIES, from case-b's L3.5). Nothing listed or counted that the reader can't
+   see: a proposal above the reader's clearance shows only that one exists, as ADR-143 Amendment 4 (b) says.
+2. **Remove Admin's *Proposed types* section**: proposals are decided on the Studio's Model tab (ADR-090
+   Amendment 4; CARRIES, from case-b's L3.5).
+3. ***Admin › Connections*** gains the SQL and API connection settings' fields (CARRIES, from studio-b's
+   L1.6), within what ADR-140 Amendments 13 and 15 allow an administrator to see (secrets write-only).
+4. **Admin's read-only display of the grading scheme** over `GET /v1/grading-scheme` (CARRIES, from case-b's
+   L3.7).
+5. **Once rules-b's L2.12 is on main** (it brings `help/roles.ts` and `admin-tips.patch`): Admin's tips for
+   Roles' tables and team editor, People, Datasets and levels, and every disabled Admin action saying why and
+   which roles can, through studio-b's `whyNotByRole` (CARRIES, narrowed by rules-b). Then Home's *What you can
+   do, and what you answer for*, from the same source as the tips. If L2.12 hasn't landed when 1–4 are done,
+   say so and wait; don't copy its files.
 
-**Tests first, each red by a plant at the real call site:** the audit access test by unit (red with the
-unit filter removed); an entry's withheld words stay withheld; the overdue alert fires once at N days (if
-built); keyboard cases (rule 13) with registry ids as a diff; axe in dark, light and GOV.UK.
+**Tests first, each red by a plant at the real call site:** *Needs you* shows an overdue promotion only to a
+current recipient, red with `still` bypassed; the Model tab's count excludes proposals the reader can't read,
+red with the filter removed; no tip or refusal names a person or a role id (a test over every Admin string,
+like L1.8's `ui_words_check`); the Connections fields never return a secret; keyboard cases for every new
+action (rule 13), registry ids as a diff; axe in dark, light and GOV.UK.
 
-**Exit.** The row's exit (or its promotions part named as left); make ci and make test green offline; a
-friction fragment. Report in Prompt L's format, then stop.
+**Exit.** The row's exit ("the section lists nothing the reader can't see"); keyboard and tooltip cases; make
+ci and make test green offline; live cases under a named lease and stack; a friction fragment. Report in
+Prompt L's format, then stop.
