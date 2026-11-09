@@ -132,6 +132,22 @@ async def test_the_command_line_check_asks_the_conduit_s_database_and_closes_it(
         await check_unit_from_env("unit-8", region="rutland", connect=connect)
 
 
+async def test_a_fresh_install_builds_from_admin_maps_alone() -> None:
+    """Recorded, not changed (the orchestrator's re-review of P5): with no case and no dataset yet,
+    the command-line builds and the set-up console's (which runs the command line) refuse every
+    unit, since none holds anything and they have no administrator's own unit to admit. *Admin ›
+    Maps* builds, for the administrator's own unit (`own`). So the first basemap of a fresh install
+    is built there, or after the first case or dataset exists (ADR-147 Amendment 2, Left)."""
+    empty = _held_by()
+
+    async def connect(_dsn: str) -> InMemoryDatasetStore:
+        return empty
+
+    with pytest.raises(UnknownUnit):
+        await check_unit_from_env("unit-1", region="rutland", connect=connect)
+    check_unit("unit-1", set(), own="unit-1")  # Admin › Maps, the administrator's own unit
+
+
 async def test_the_command_line_check_says_an_unreachable_database_in_words() -> None:
     async def connect(_dsn: str) -> InMemoryDatasetStore:
         raise ConnectionRefusedError(61, "Connect call failed ('127.0.0.1', 5432)")

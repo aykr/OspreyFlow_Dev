@@ -721,7 +721,7 @@ class MapAdmin:
         else:
             builder = (
                 "The map builder (planetiler) is not in the tiles folder. Run `ospreyflow map "
-                "build <region> --planetiler-jar <path>` once to place it."
+                "build <region> --unit <unit> --planetiler-jar <path>` once to place it."
             )
         return BasemapState(
             basemaps=basemaps, glyphs_installed=len(fonts) == len(GLYPH_FONTS),

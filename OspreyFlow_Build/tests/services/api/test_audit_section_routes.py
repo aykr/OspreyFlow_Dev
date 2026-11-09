@@ -662,6 +662,20 @@ def test_a_sources_governance_words_stay_withheld(world: SimpleNamespace) -> Non
 
 
 
+@pytest.mark.parametrize("action", ["add_dataset_gazetteer", "remove_dataset_gazetteer"])
+def test_a_gazetteer_s_addition_shows_its_dataset_alone(world: SimpleNamespace, action: str) -> None:
+    """Platform's P5 (ADR-147 Amendment 2): a gazetteer added to a dataset or removed is filed under
+    *Datasets*, whose words `administer_system` is shown, as the dataset it names alone: the
+    gazetteer's id, which says which regions a unit has built, is no plain word. Red with
+    `gazetteer` among the plain words, or the action filed where its words are withheld."""
+    world.reader.rows = [_row(action, {
+        "dataset_id": "ds-a", "gazetteer": "gazetteer-osm-rutland",
+    }, case=None)]  # fmt: skip
+    [entry] = world.client.get("/v1/admin/audit", headers=_as("adm-1")).json()["entries"]
+    assert entry["detail"] == {"dataset_id": "ds-a"}
+    assert "rutland" not in str(entry)
+
+
 def test_recipients_are_asked_of_the_dataset_as_it_stands_now() -> None:
     """`_promotion_recipients`, which the sweep and every read of `alerts_for` ask, reads the
     dataset's unit and marking now, not as the promotion recorded them: a dataset moved to another
