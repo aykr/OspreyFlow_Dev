@@ -16,7 +16,8 @@ own dataset (`case_gazetteers.copy_places`). A reader of that case alone (its pr
 - **a re-copy writes no second copy**, and a place the gazetteer no longer holds has its copy
   kept; **a case's load writing onto a copy** keeps it a copy, withheld, and makes it the case's:
   a re-build does not write over it; **a region is copied in
-  pages**, timed. Removal (which deletes nothing, ruling (d)) is the routes' file's.
+  pages**, timed; **a retracted copy** (its new revision) is still a copy, withheld. Removal
+  (which deletes nothing, ruling (d)) is the routes' file's.
 
 Each shown red with its fix removed (`P5_RED_RECORD.md`). The routes themselves, over the
 Conduit's shared database, are `test_case_gazetteer_routes_live.py`. Live, so under `tests/ingest`
@@ -35,6 +36,7 @@ import pytest
 from scripts.build_local_basemap import load_gazetteer
 from services.api.case_gazetteers import copy_id, copy_places
 from services.api.map_places import gazetteer_dataset_id, search_places
+from services.extract.writer import retract_node
 from services.ingest.geometries import POINT_GEOMETRY_VERSION
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
@@ -198,6 +200,34 @@ async def test_no_copy_s_identifier_is_sent_on_any_node_read(stores: Stores) -> 
     # The Conduit's own work keeps them (a rebuild's lookups), as a read written back does.
     unlimited = CASE.model_copy(update={"datasets": None})
     whole = await graph.get_node(copy, unlimited)
+    assert whole is not None and whole.properties["osm_id"] == PREFIX
+
+
+async def test_a_retracted_copy_is_still_a_copy_and_its_identifiers_still_withheld(
+    stores: Stores,
+) -> None:
+    """The orchestrator's review of round 3 (a minor): a retract writes a new revision of the copy
+    (`writer.retract_node`, as `POST …/nodes/{id}/retract` does), and that revision is still the
+    gazetteer's copy. It keeps its provenance's `gazetteer`, so its identifiers stay withheld and
+    are never matched, and it keeps them in the store, so nothing is lost."""
+    graph, _analytics, _ = stores
+    await _plant(stores)
+    await _copy(graph)
+    copy = copy_id("01JP5ASHWELL00000000000000", "case-a")
+    tx = await graph.begin_transaction()
+    revision = await retract_node(graph, copy, CASE, tx=tx)
+    await graph.commit_transaction(tx)
+    read = await graph.get_node(revision, CASE)
+    assert read is not None and read.provenance.state is ProvenanceState.INFERRED
+    assert read.provenance.gazetteer == GAZETTEER and read.datasets == ["case-a"]
+    assert _no_identifier(read.properties), read.properties
+    assert await graph.search_nodes(PREFIX, CASE) == []
+    named = await graph.suggest_nodes("Ashwe", CASE, limit=10)
+    assert [n.id for n in named.nodes] == [revision]
+    assert all(_no_identifier(n.properties) for n in named.nodes), named.nodes
+    # Kept in the store: the Conduit's own work still reads them.
+    unlimited = CASE.model_copy(update={"datasets": None})
+    whole = await graph.get_node(revision, unlimited)
     assert whole is not None and whole.properties["osm_id"] == PREFIX
 
 
