@@ -746,9 +746,11 @@ def pin_release_images(out_dir: Path, lock_path: Path) -> None:
 
 
 #: A `deployment.env` key that holds a secret (ADR-132, the owner's ruling 6), a model provider's
-#: key among them (ADR-135 decision 2).
+#: key among them (ADR-135 decision 2); and (ADR-140 Amendment 13) a SQL or API connection's
+#: secret and the connectors' egress allow-list, which an operator sets and a re-render must keep.
 _SECRET_KEY = re.compile(
     r"(PASSWORD|SECRET|SECRET_KEY|ACCESS_KEY)$|^OSPREY_MODEL_KEY_[A-Z0-9_]+$|^OSPREY_MODEL_PROVIDER_KEY$"
+    r"|^OSPREY_CONNECTION_SECRET_[A-Z0-9_]+$|^OSPREY_CONNECTOR_EGRESS$"
 )
 
 
