@@ -298,8 +298,8 @@ async def test_a_row_past_the_byte_cap_is_never_held(
 async def test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_it(
     nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A million rows, a 1,000-byte cap and a reader whose statements time out after 1.5 seconds: the
-    read stops at the first row past the cap and says so in the cap's words. A filter on the running
+    """Two million rows, a 1,000-byte cap and a reader whose statements time out after half a
+    second: the read stops at the first row past the cap and says so in the cap's words. A filter on the running
     total would make the server scan every row looking for one to send, and time out, so the read
     would say the database refused it instead (the lane review of L1.8)."""
     from services.ingest.connectors import reads
@@ -307,9 +307,9 @@ async def test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_i
     await nomis.execute(f"""
         CREATE TABLE nomis_replica_fixture.case_notes (note_id integer PRIMARY KEY, note text NOT NULL);
         INSERT INTO nomis_replica_fixture.case_notes
-            SELECT n, 'synthetic note ' || n FROM generate_series(1, 1000000) AS n;
+            SELECT n, 'synthetic note ' || n FROM generate_series(1, 2000000) AS n;
         GRANT SELECT ON nomis_replica_fixture.case_notes TO {READER};
-        ALTER ROLE {READER} SET statement_timeout = '1500ms';
+        ALTER ROLE {READER} SET statement_timeout = '500ms';
     """)
     monkeypatch.setattr(reads, "MAX_BYTES", 1000)
     with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
