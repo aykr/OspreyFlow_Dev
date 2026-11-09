@@ -31096,7 +31096,14 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    `approve_promotion`, `reject_promotion`, `delete_layer`) are classified under *Loads and
    promotions* before they are written (`AWAITED_ACTIONS`). The guard reads `scripts/` too, which write
    through the same `AuditWriter` (`case_brief_seed`, `close_paysim_instants`), and shows a writer it
-   cannot read failing as unresolved. The note names this deployment's own date
+   cannot read failing as unresolved. L3.7's `grading_change`, the operator's whole-deployment change
+   of grading scheme (`scripts/grading_change.py`, outside any case), is filed with the platform's
+   script actions under *Reads and refusals*, not *Analyst assertions*: no analyst asserts anything.
+   L1.6's `read_connector_source`, which writes a connector's rows into the dataset's ingest file, is
+   a load, beside `upload_ingest_source_file`. **Which actions show their words is a list of its own**
+   (`test_audit_kinds.py::test_only_the_named_actions_ever_show_their_words`, read through
+   `words_shown(kind_of(…))` and `shown_actions` over every written and classified action): moving an
+   action into *People and roles* or *Datasets* fails it until the list names that action too. The note names this deployment's own date
    for entries recorded without a unit (`audit_log_units_from`, written once when the column is added,
    or at the earliest entry recording one). **Not built:** decision 10's link from each entry to the record holding it (a case's entry
    names its case; the link needs each record's own screen to open at an entry); dates are whole days
