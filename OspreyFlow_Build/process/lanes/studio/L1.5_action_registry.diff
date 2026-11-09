@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 5ba4070..bbfea4f 100644
+index 4edafcb..131b579 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -896,6 +896,13 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
+@@ -980,6 +980,13 @@ export const INGEST_STUDIO_ACTIONS = defineActionRegistry("INGEST_STUDIO_ACTIONS
    "a-drawer-refuses-what-the-save-gate-refuses-by-keyboard",
    "remove-a-staging-step-by-keyboard",
    "build-visits-and-contacts-by-keys-for-phase-7s-exit",

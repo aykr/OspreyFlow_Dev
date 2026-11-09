@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-index d162a8f..05f3228 100644
+index 37df445..ebe3961 100644
 --- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
 +++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-@@ -112,6 +112,12 @@ const EXTRA_STATES: Record<string, string[]> = {
+@@ -164,6 +164,12 @@ const EXTRA_STATES: Record<string, string[]> = {
      "contacts=built&staged=lookup", "contacts=built&staged=join", "contacts=built&staged=derive-preview",
      "contacts=1&staged=filter", "contacts=built&staged=map", "contacts=1&staged=union",
      "contacts=1&staged=dedupe",
