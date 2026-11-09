@@ -7,7 +7,12 @@ administrator's clearance, are never retrieved, so they are neither named nor co
 would do, and the case that catches it (each shown red with its clause planted out,
 `process/lanes/case-b/L3.8_RED_RECORD.md`):
 
-- the unit clause dropped: `test_another_units_items_are_left_out`;
+- the unit clause dropped, or a proposal's own unit unchecked:
+  `test_another_units_items_are_left_out`, `test_each_item_left_out_is_said_to_be_withheld_…`;
+- an item left out but not said to be withheld, so *Transfer and disable* would go through with it
+  untransferred (A4), or a visible or closed item said to be withheld:
+  `test_each_item_left_out_is_said_to_be_withheld_and_never_named` and the `withheld is False`
+  assertions;
 - the clearance clause dropped, or a dataset with no marking read as unmarked rather than the
   deployment's highest: `test_an_item_above_the_administrators_clearance_is_never_named_nor_counted`;
 - a view's, a board's or a type's analyst-written name in a label (rule 7):
@@ -157,6 +162,7 @@ async def test_each_kind_the_person_owns_is_listed_by_its_case(
     assert by_id[watch].kind == "drawn_watch"
     assert {i.investigation_id for i in owned.items} == {"c-k"}
     assert owned.counts == {"view": 2, "board": 1, "link_type_proposal": 1, "drawn_watch": 1}
+    assert owned.withheld is False
     assert owned.not_yet_listed == list(PROMOTION_KINDS)
 
 
@@ -171,10 +177,18 @@ async def test_what_is_no_longer_theirs_or_no_longer_open_is_left_out(
     await _proposal(conn, "c-k", "ana-1", status="promoted", dataset="ds-off")
     await _proposal(conn, "c-k", "ana-2", dataset="ds-off")
     await _watch(conn, "c-k", "ana-1", dataset="ds-off", ended=True)
+    # Closed items of another unit too, so `withheld` is shown to ask about open ones alone.
+    await _case(conn, "c-other", "Harrier", unit="unit-2")
+    await _case(conn, "c-other-gone", "Gone too", unit="unit-2", removed=True)
+    await _view(conn, "c-other-gone", "ana-1")
+    await _proposal(conn, "c-other", "ana-1", unit="unit-2", status="rejected", dataset="ds-off")
+    await _watch(conn, "c-other", "ana-1", dataset="ds-off", ended=True)
 
     owned = await ownership.owned_by("ana-1", admin=ADMIN, scheme=SCHEME)
 
     assert owned.items == [] and owned.counts == {}
+    # Closed or someone else's: nothing left to transfer, so nothing is said to be withheld either.
+    assert owned.withheld is False
 
 
 async def test_another_units_items_are_left_out(
@@ -194,9 +208,11 @@ async def test_another_units_items_are_left_out(
     assert [i.id for i in owned.items] == [mine]
     assert owned.counts == {"view": 1}
     assert "Harrier" not in owned.model_dump_json() and "c-other" not in owned.model_dump_json()
-    # An administrator with no unit reads nothing at all (default-deny).
+    assert owned.withheld is True
+    # An administrator with no unit reads nothing at all (default-deny), and is told some exist.
     unitless = ADMIN.model_copy(update={"org_unit": None})
-    assert (await ownership.owned_by("ana-1", admin=unitless, scheme=SCHEME)).items == []
+    alone = await ownership.owned_by("ana-1", admin=unitless, scheme=SCHEME)
+    assert alone.items == [] and alone.withheld is True
 
 
 async def test_an_item_above_the_administrators_clearance_is_never_named_nor_counted(
@@ -215,6 +231,7 @@ async def test_an_item_above_the_administrators_clearance_is_never_named_nor_cou
         await _proposal(conn, "c-k", "ana-1", dataset="ds-unmarked"),
         await _watch(conn, "c-k", "ana-1", dataset="ds-unmarked"),
         await _proposal(conn, "c-k", "ana-1", dataset=None),
+        await _watch(conn, "c-k", "ana-1", dataset=None),
     }
 
     owned = await ownership.owned_by("ana-1", admin=ADMIN, scheme=SCHEME)
@@ -222,11 +239,46 @@ async def test_an_item_above_the_administrators_clearance_is_never_named_nor_cou
     assert {i.id for i in owned.items} == seen
     assert owned.counts == {"link_type_proposal": 1, "drawn_watch": 1}
     assert not any(h in owned.model_dump_json() for h in hidden)
-    # An administrator cleared to the top sees all of them.
+    assert owned.withheld is True
+    # An administrator cleared to the top sees all of them, and nothing is withheld from them.
     top = ADMIN.model_copy(update={"clearance": "TOP SECRET"})
-    assert {i.id for i in (await ownership.owned_by("ana-1", admin=top, scheme=SCHEME)).items} == (
-        seen | hidden
-    )
+    whole = await ownership.owned_by("ana-1", admin=top, scheme=SCHEME)
+    assert {i.id for i in whole.items} == seen | hidden and whole.withheld is False
+
+
+#: Each way an item is left out, alone, so `withheld` is shown to say each one (ADR-145 A4).
+HIDDEN_ONE = ["view_elsewhere", "board_elsewhere", "proposal_elsewhere",
+              "proposal_of_another_unit_on_this_units_case", "watch_elsewhere",
+              "proposal_above", "watch_above", "watch_on_no_dataset"]  # fmt: skip
+
+
+@pytest.mark.parametrize("hidden", HIDDEN_ONE)
+async def test_each_item_left_out_is_said_to_be_withheld_and_never_named(
+    conn: asyncpg.Connection, ownership: PostgresOwnershipStore, hidden: str
+) -> None:
+    await _case(conn, "c-k", "Kestrel")
+    await _case(conn, "c-other", "Harrier", unit="unit-2")
+    await _dataset(conn, "ds-off", "OFFICIAL")
+    await _dataset(conn, "ds-top", "TOP SECRET")
+    made = {
+        "view_elsewhere": lambda: _view(conn, "c-other", "ana-1"),
+        "board_elsewhere": lambda: _view(conn, "c-other", "ana-1", board=True),
+        "proposal_elsewhere": lambda: _proposal(conn, "c-other", "ana-1", unit="unit-2",
+                                                dataset="ds-off"),
+        "proposal_of_another_unit_on_this_units_case": lambda: _proposal(
+            conn, "c-k", "ana-1", unit="unit-2", dataset="ds-off"),
+        "watch_elsewhere": lambda: _watch(conn, "c-other", "ana-1", dataset="ds-off"),
+        "proposal_above": lambda: _proposal(conn, "c-k", "ana-1", dataset="ds-top"),
+        "watch_above": lambda: _watch(conn, "c-k", "ana-1", dataset="ds-top"),
+        "watch_on_no_dataset": lambda: _watch(conn, "c-k", "ana-1", dataset=None),
+    }  # fmt: skip
+    item = await made[hidden]()
+
+    owned = await ownership.owned_by("ana-1", admin=ADMIN, scheme=SCHEME)
+
+    assert owned.items == [] and owned.counts == {}
+    assert owned.withheld is True
+    assert item not in owned.model_dump_json()
 
 
 async def test_labels_name_the_case_and_never_what_the_analyst_wrote(

@@ -13,9 +13,13 @@ on main when this was built: `PROMOTION_KINDS` names them in `not_yet_listed`, a
 unit, through the item's case (a removed case's items are left out with it), and an item on a
 dataset reads that dataset's highest allowed marking, or the deployment's highest where none is set
 or there is no dataset at all (the strict side, as the Model tab's proposal words are read,
-`app._reads_proposal_words`). An item the administrator does not clear is not retrieved, so it is
-neither named nor counted: its existence cannot be inferred from this answer beyond what Admin ›
-People already shows, which is the person's levels in the cases of the administrator's own unit.
+`app._reads_proposal_words`). An item the administrator does not clear is not retrieved, named or
+counted. One more statement asks only whether any such item exists (`withheld`): said, never how
+many, of which kind or where, as ADR-145 Amendment 5 decision 8 says another unit's cases, rules and
+schedules, so that *Transfer and disable* is refused while someone else still has items to transfer
+(A4: each item needs a *Transfer to…*). A view or a board is a lens on its case and holds no data
+(ADR-144), so it is read at its case's unit alone, as Admin › People shows the case; a proposal and
+a watch are tied to a dataset and read at its marking too.
 
 **Words only** (rule 7): each item is placed by its case's name, which People shows. A view's,
 a board's or a proposed type's name is the analyst's own writing and is never read here.
@@ -61,6 +65,36 @@ LEFT JOIN datasets d ON d.id = w.dataset_id
 WHERE w.owner = $1 AND w.ended_at IS NULL AND {_CLEARED}
 ORDER BY i.name, w.case_id, w.created_at, w.id
 """
+
+
+#: Whether the person owns anything of these kinds the reads above leave out: the same tables, the
+#: same open items, with the administrator's unit and markings negated. Answers one boolean.
+_WITHHELD_SQL = f"""
+SELECT EXISTS (
+    SELECT 1 FROM case_views v
+    JOIN investigations i ON i.id = v.case_id AND i.removed_at IS NULL
+    WHERE v.created_by = $1 AND i.owning_unit IS DISTINCT FROM $2
+) OR EXISTS (
+    SELECT 1 FROM link_type_proposals p
+    JOIN investigations i ON i.id = p.investigation_id AND i.removed_at IS NULL
+    LEFT JOIN datasets d ON d.id = p.dataset_id
+    WHERE p.proposed_by = $1 AND p.status = 'pending'
+      AND NOT COALESCE(p.owning_unit = $2 AND i.owning_unit = $2 AND {_CLEARED}, FALSE)
+) OR EXISTS (
+    SELECT 1 FROM drawn_watches w
+    JOIN investigations i ON i.id = w.case_id AND i.removed_at IS NULL
+    LEFT JOIN datasets d ON d.id = w.dataset_id
+    WHERE w.owner = $1 AND w.ended_at IS NULL
+      AND NOT COALESCE(i.owning_unit = $2 AND {_CLEARED}, FALSE)
+)
+"""
+
+
+async def withheld(
+    conn: asyncpg.Connection, person: str, *, admin_unit: str | None, cleared: list[str], top: str
+) -> bool:
+    """Whether the person owns items of these kinds the administrator may not see: never which."""
+    return bool(await conn.fetchval(_WITHHELD_SQL, person, admin_unit, cleared, top))
 
 
 def cleared_markings(admin: Principal, scheme: HandlingScheme) -> list[str]:
@@ -123,10 +157,16 @@ async def owned_items(
     return items
 
 
-def ownership_of(person: str, items: list[OwnershipItem]) -> PersonOwnership:
+def ownership_of(
+    person: str, items: list[OwnershipItem], *, withheld: bool = False
+) -> PersonOwnership:
     counts = Counter(i.kind for i in items)
     return PersonOwnership(
-        person=person, items=items, counts=dict(counts), not_yet_listed=list(PROMOTION_KINDS)
+        person=person,
+        items=items,
+        counts=dict(counts),
+        withheld=withheld,
+        not_yet_listed=list(PROMOTION_KINDS),
     )
 
 
@@ -147,15 +187,12 @@ class PostgresOwnershipStore:
     async def owned_by(
         self, person: str, *, admin: Principal, scheme: HandlingScheme
     ) -> PersonOwnership:
-        async with self._pool.acquire() as conn:
-            items = await owned_items(
-                conn,
-                person,
-                admin_unit=admin.org_unit,
-                cleared=cleared_markings(admin, scheme),
-                top=scheme.classification[-1],
-            )
-        return ownership_of(person, items)
+        unit, top = admin.org_unit, scheme.classification[-1]
+        cleared = cleared_markings(admin, scheme)
+        async with self._pool.acquire() as conn, conn.transaction(isolation="repeatable_read"):
+            items = await owned_items(conn, person, admin_unit=unit, cleared=cleared, top=top)
+            hidden = await withheld(conn, person, admin_unit=unit, cleared=cleared, top=top)
+        return ownership_of(person, items, withheld=hidden)
 
 
 __all__ = [
@@ -165,4 +202,5 @@ __all__ = [
     "owned_items",
     "ownership_of",
     "promotion_items",
+    "withheld",
 ]
