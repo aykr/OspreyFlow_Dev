@@ -139,5 +139,5 @@ test("a name the gazetteer does not hold is said in words, and nothing else is a
 });
 
 test("every registered map view action has its own proving test case above", () => {
-  assertAllCovered(REGISTRY, MAP_VIEW_ACTIONS);
+  assertAllCovered("MAP_VIEW_ACTIONS", MAP_VIEW_ACTIONS);
 });
