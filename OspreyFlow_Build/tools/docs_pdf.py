@@ -58,6 +58,7 @@ GUIDES: tuple[tuple[str, str], ...] = (
     ("administration-guide.md", "OspreyFlow — Installation and Administration Guide"),
     ("user-guide.md", "OspreyFlow — User Guide"),
     ("developer-guide.md", "OspreyFlow — Developer Guide"),
+    ("architecture-guide.md", "OspreyFlow — Architecture Guide"),
 )
 _IMAGE = re.compile(r"^!\[[^\]]*\]\(([^)\s]+)\)\s*$", re.MULTILINE)
 _GUIDE_LINK = re.compile(r'<a href="([a-z0-9-]+)\.md(?:#[^"]*)?">([^<]*)</a>')
