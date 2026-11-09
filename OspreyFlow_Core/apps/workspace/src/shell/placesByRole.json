@@ -532,7 +532,11 @@
     "review_promotions"
    ],
    "places": [],
-   "answered_hidden": []
+   "answered_hidden": [
+    "decide_promotion",
+    "list_dataset_promotions",
+    "promotion_details"
+   ]
   },
   "right:run_analysis": {
    "rights": [

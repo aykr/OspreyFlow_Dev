@@ -14,6 +14,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChecksList, LeftOutList, SheetChecklist } from "../../boards/PromoteSheet";
 import {
   addsInWords,
+  startingTicks,
+  STATUS_WORDS,
+  type LayerMergeSheet,
+  type Promotion,
+  type PromotionDetails,
+  type RemovedCaseLayers,
+} from "../../boards/promotionsApi";
+import {
   cancelLayerMerge,
   datasetPromotions,
   decidePromotion,
@@ -23,13 +31,7 @@ import {
   openLayerMerge,
   promotionDetails,
   removedCases,
-  startingTicks,
-  STATUS_WORDS,
-  type LayerMergeSheet,
-  type Promotion,
-  type PromotionDetails,
-  type RemovedCaseLayers,
-} from "../../boards/promotionsApi";
+} from "./promotionsApi";
 import { currentBrand } from "../../brand/brand";
 
 const TAG: Record<Promotion["status"], string> = {
