@@ -23,3 +23,15 @@ Mac. Ask the orchestrator for stacks and before heavy local runs. `make test` ru
    `L1.8_PATCHES.md`'s order, with keyboard and axe re-gated. The orchestrator tells you when L2.7 has merged.
 
 **Exit.** Both parts merged, or part 1 with part 2 waiting for L2.7; `make ci` and `make test` green; a friction row.
+
+**Then, from ADR-148 (the owner's client decision, 9 November):**
+3. **L1.10, the deployment's marking ceiling** (ADR-148 decision 10), when parts 1 and 2 are done:
+   `deployment.highest_marking` (defaulting to the scheme's highest); a load or an import marked above it refused
+   before anything is written, in words naming the limit, never the content; System shows the ceiling. Red at each
+   entry point first; nothing written on refusal (plant a row above the ceiling); a load at the ceiling passes. The
+   drawn-item check is case-b's (CARRIES).
+4. **L1.9, S3 and Athena connectors**, only after platform's P7 merges (it needs the profile's egress list):
+   read-only; S3 (CSV and Parquet under a prefix) and Athena (a named query or a table, paged); the namespace's IAM
+   role, never a stored key; the host on the egress allow list only when the source is enabled; an ADR-140
+   amendment, reserved through the orchestrator when you start. Golden files on synthetic data in an S3 stand-in;
+   Athena against a recorded fixture; another dataset's source refused; the byte cap; keyboard and axe.

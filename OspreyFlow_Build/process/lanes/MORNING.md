@@ -651,6 +651,24 @@ New ones are added at the bottom as they happen.
       on docs; the README stays a draft for your approval.
 
     Case-b, rules-b and the old studio-b session were closed, their work merged (your word).
+97. **The UK public sector client's Cloud Platform (your client decision, about 21:50).** ADR-148 is reserved
+    (`9b2e74f`) and written as ACCEPTED (design) (`0ab4eb2`). The build plan is applied (`35fac3b`): P7–P11
+    after P5 (P11 held), L1.9 and L1.10 for studio-b, D2c for docs, the merge order and the ownership lines. P7's
+    brief (`process/lanes/platform/BRIEF_P7.md`) opens a fresh platform session after P5 merges, proving itself
+    on a kind/k3d cluster on your test server, with no client access. Nothing building today stopped.
+
+## Questions for you: ADR-148 (recommendation first)
+
+1. **ADR-148 question 2, the settings and key files** (model settings, map settings, the write-only keys) that
+   every Conduit replica reads:
+   - **(a) Recommended:** in Postgres (RDS), the keys encrypted with a KMS key the namespace holds; each replica
+     notified of a change through Redis.
+   - (b) Kubernetes Secrets the Conduit writes (needs a Role to write Secrets in its own namespace, which the Cloud
+     Platform team may refuse).
+2. **ADR-148 question 3, Java in the Conduit:**
+   - **(a) Recommended:** on this profile, the Conduit without Java; the basemap is built off-platform and uploaded.
+   - (b) One image everywhere, accepting the larger image and its scan findings.
+3. **ADR-148 question 1, the recipes repository:** asked only after P8's report of who reads and writes it.
 
 ## Evening, 7 November: your records of 7 November applied
 
