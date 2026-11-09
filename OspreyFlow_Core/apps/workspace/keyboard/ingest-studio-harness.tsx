@@ -291,7 +291,10 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       if (path.endsWith("/verify")) contacts = { ...contacts, verified_at: day(0, 10) };
       return reply({ ...VERIFY, rows_read: 10, entities_by_type: { Document: { created: 5, referenced: 0 }, Endpoint: { created: 4, referenced: 0 },
         Person: { created: 2, referenced: 0 } }, edges_by_type: { MENTIONED_IN: { created: 5 }, USES: { created: 2 } },
-        rejections: [{ reason: "staging step with_owner (right side, number_owners row 3): number: a phone number has no letters in it", count: 1, sample_row_indices: [3] }] });  // prettier-ignore
+        // The real report's shape (`schemas.ingest.RejectionGroup`): its samples are records, never bare row
+        // indices. The earlier `sample_row_indices` crashed Test's report once it rendered (found in L1.8).
+        rejections: [{ reason: "staging step with_owner (right side, number_owners row 3): number: a phone number has no letters in it", count: 1,
+          samples: [{ row_index: 3, reason: "number: a phone number has no letters in it", sample: "", refs: [] }] }] });  // prettier-ignore
     }
     if (path.endsWith("/row-template") && method === "PUT") {
       contacts = { ...contacts, ...(JSON.parse(String(init?.body)) as object), verified_at: null };
