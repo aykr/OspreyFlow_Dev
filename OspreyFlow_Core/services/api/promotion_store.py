@@ -5,9 +5,10 @@ decision 1; ADR-145 Amendment 4 decision 11; L3.4).
 (`analyst_promotion` from a board, `layer_merge` for a removed case's layer), the case and board it
 came from, the dataset it goes into and the layer it comes from, who proposed it and when, its
 status and review, the element ids it carries (a revert needs nothing else), the board items those
-are, what it left out and why, the highest marking among its items and the dataset's unit. Ids and
-counts, never data: what an item *is* stays on the element, read through the reader's own principal
-(rule 3).
+are, the highest marking among its items and the dataset's unit. What an item *is* stays on the
+element, read through the reader's own principal (rule 3). One thing more is held: what it left out
+and why, with each item's label as the proposer saw it on the sheet, given back to the proposer
+alone (`Promotions.view`), never to a reviewer or the Studio's list.
 
 **Statuses.** `awaiting_review` (the dataset's policy asks for a second person), `committed` (the
 load written), `rejected` (with a reason), `reverted` (by the operator command). A decision is
@@ -81,7 +82,17 @@ class PromotionStore(Protocol):
     async def get(self, promotion_id: str) -> PromotionRecord | None: ...
     async def by_load(self, load_id: str) -> PromotionRecord | None: ...
     async def of_board(self, case_id: str, board_id: str) -> list[PromotionRecord]: ...
-    async def into(self, dataset_id: str) -> list[PromotionRecord]: ...
+    #: Rule 3: `markings`, when given, the markings the reader reaches, applied in the query.
+    async def into(
+        self, dataset_id: str, *, markings: Sequence[str] | None = None
+    ) -> list[PromotionRecord]: ...
+    #: The board items an open promotion of the case carries (one item, one open promotion).
+    async def pending_item_ids(self, case_id: str) -> set[str]: ...
+    async def close_grants_for_layer(self, layer_id: str, at: datetime) -> None: ...
+    #: A removed case's layer deleted: so a later revert of a promotion from it takes its elements
+    #: out with the layer, even when every item of it had been promoted.
+    async def mark_layer_deleted(self, layer_id: str, at: datetime) -> None: ...
+    async def layer_deleted(self, layer_id: str) -> bool: ...
     async def decide(
         self,
         promotion_id: str,
@@ -104,6 +115,13 @@ class InMemoryPromotionStore:
     def __init__(self) -> None:
         self.records: dict[str, PromotionRecord] = {}
         self.grants: dict[str, LayerGrant] = {}
+        self.deleted_layers: dict[str, datetime] = {}
+
+    async def mark_layer_deleted(self, layer_id: str, at: datetime) -> None:
+        self.deleted_layers.setdefault(layer_id, at)
+
+    async def layer_deleted(self, layer_id: str) -> bool:
+        return layer_id in self.deleted_layers
 
     async def add(self, record: PromotionRecord) -> None:
         self.records[record.id] = record
@@ -120,12 +138,31 @@ class InMemoryPromotionStore:
             key=lambda r: (r.proposed_at, r.id),
         )
 
-    async def into(self, dataset_id: str) -> list[PromotionRecord]:
+    async def into(
+        self, dataset_id: str, *, markings: Sequence[str] | None = None
+    ) -> list[PromotionRecord]:
         return sorted(
-            (r for r in self.records.values() if r.dataset_id == dataset_id),
+            (
+                r
+                for r in self.records.values()
+                if r.dataset_id == dataset_id and (markings is None or r.marking in markings)
+            ),
             key=lambda r: (r.proposed_at, r.id),
             reverse=True,
         )
+
+    async def pending_item_ids(self, case_id: str) -> set[str]:
+        return {
+            i
+            for r in self.records.values()
+            if r.case_id == case_id and r.status == "awaiting_review"
+            for i in r.item_ids
+        }
+
+    async def close_grants_for_layer(self, layer_id: str, at: datetime) -> None:
+        for grant_id, grant in list(self.grants.items()):
+            if grant.layer_id == layer_id and grant.closed_at is None:
+                self.grants[grant_id] = replace(grant, closed_at=at)
 
     async def decide(
         self,
@@ -211,6 +248,10 @@ CREATE TABLE IF NOT EXISTS promotion_layer_grants (
     opened_at TIMESTAMPTZ NOT NULL,
     closed_at TIMESTAMPTZ
 );
+CREATE TABLE IF NOT EXISTS promotion_deleted_layers (
+    layer_id TEXT PRIMARY KEY,
+    deleted_at TIMESTAMPTZ NOT NULL
+);
 """
 
 _COLUMNS = (
@@ -285,14 +326,53 @@ class PostgresPromotionStore:
             )
         return [_record(r) for r in rows]
 
-    async def into(self, dataset_id: str) -> list[PromotionRecord]:
+    async def into(
+        self, dataset_id: str, *, markings: Sequence[str] | None = None
+    ) -> list[PromotionRecord]:
+        # The reader's clearance is in the WHERE clause (rule 3), never applied after the read.
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM promotions WHERE dataset_id = $1 "
+                "AND ($2::text[] IS NULL OR marking = ANY($2::text[])) "
                 "ORDER BY proposed_at DESC, id DESC",
                 dataset_id,
+                list(markings) if markings is not None else None,
             )
         return [_record(r) for r in rows]
+
+    async def pending_item_ids(self, case_id: str) -> set[str]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT unnest(item_ids) AS item_id FROM promotions "
+                "WHERE case_id = $1 AND status = 'awaiting_review'",
+                case_id,
+            )
+        return {str(r["item_id"]) for r in rows}
+
+    async def mark_layer_deleted(self, layer_id: str, at: datetime) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO promotion_deleted_layers (layer_id, deleted_at) VALUES ($1, $2) "
+                "ON CONFLICT (layer_id) DO NOTHING",
+                layer_id,
+                at,
+            )
+
+    async def layer_deleted(self, layer_id: str) -> bool:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT 1 FROM promotion_deleted_layers WHERE layer_id = $1", layer_id
+            )
+        return row is not None
+
+    async def close_grants_for_layer(self, layer_id: str, at: datetime) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE promotion_layer_grants SET closed_at = $2 "
+                "WHERE layer_id = $1 AND closed_at IS NULL",
+                layer_id,
+                at,
+            )
 
     async def decide(
         self,

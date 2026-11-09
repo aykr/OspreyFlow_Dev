@@ -14,7 +14,8 @@ as the ArcadeDB adapter does it (`adapters/graph_arcadedb/adapter.py`):
 - a write's provenance with its sources withheld is refused, as `serialization.py` refuses it;
 - `withdraw_elements`: each live element set reverted, so every read leaves it out;
 - `promote_elements` (L3.4): each live element gains the dataset, the same element; any id not live
-  (missing, reverted, superseded) refuses the whole call before anything lands, as the adapter does;
+  (missing, reverted, superseded) or promoted by another load already refuses the whole call before
+  anything lands, as the adapter does;
   `revert_promotion` takes the dataset back from exactly that load's elements; `withdraw_layer`
   reverts every live element wholly the layer's and leaves one holding another dataset;
 - `search_nodes` (an exact identifier) and `suggest_nodes` (`contains`, case ignored, by type),
@@ -277,8 +278,13 @@ class BoardGraph(FakeGraphPort):
         tx: str,
     ) -> None:  # fmt: skip
         self.promotions += 1
-        nodes = [self._live_node(n) for n in set(node_ids)]
-        edges = [self._live_edge(e) for e in set(edge_ids)]
+        # As the adapter: live, and not promoted by another load already.
+        nodes = [
+            None if n in self.promoted_by else self._live_node(n) for n in set(node_ids)
+        ]
+        edges = [
+            None if e in self.promoted_by else self._live_edge(e) for e in set(edge_ids)
+        ]
         missing = sum(1 for x in [*nodes, *edges] if x is None)
         if missing:
             raise NotPromotable(missing)
@@ -316,9 +322,30 @@ class BoardGraph(FakeGraphPort):
             e.id for e in self._graph_edges
             if not e.audit.reverted and list(e.datasets) == [dataset_id]
         ]  # fmt: skip
-        self._pending[tx][2].append((nodes, edges, withdrawal))
+        # Landed in order with the transaction's other writes, as the store reads its own writes
+        # within a transaction (a revert just before it in the same one has taken its dataset).
+        def land() -> None:
+            now_nodes = [
+                n.id for n in self._graph_nodes.values()
+                if not n.audit.reverted and list(n.datasets) == [dataset_id]
+            ]  # fmt: skip
+            now_edges = [
+                e.id for e in self._graph_edges
+                if not e.audit.reverted and list(e.datasets) == [dataset_id]
+            ]  # fmt: skip
+            self._land_withdrawal(now_nodes, now_edges, withdrawal)
+
+        self._later.setdefault(tx, []).append(land)
         return PromotionReverted(nodes=len(nodes), edges=len(edges))
 
+    async def live_edges_touching(self, node_ids: Sequence[str]) -> set[str]:
+        """As the adapter: every live link at one of the nodes, whoever may read it."""
+        wanted = set(node_ids)
+        return {
+            e.id for e in self._graph_edges
+            if not e.audit.reverted and not e.audit.superseded_by
+            and (e.source in wanted or e.target in wanted)
+        }  # fmt: skip
 
     def _merge_target(self, write: EdgeWrite) -> Edge | None:
         key = audience_of(write.handling, write.datasets, SCHEME)

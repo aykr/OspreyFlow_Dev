@@ -4613,8 +4613,14 @@ async def list_board_promotions(
     the board."""
     board = await boards.board(investigation.id, board_id, principal.id)
     held = await promotions.store.of_board(investigation.id, board.id)
+    # Rule 3: a promotion carrying an item above the reader's clearance is not listed to them.
+    scheme = promotions.boards.scheme
     return PromotionsList(
-        promotions=[await promotions.view(r, principal, with_board=True) for r in held]
+        promotions=[
+            await promotions.view(r, principal, with_board=True)
+            for r in held
+            if scheme.clears(principal.clearance, r.marking)
+        ]
     )
 
 
@@ -9791,20 +9797,29 @@ async def list_dataset_promotions(
     reader's clearance is not listed (rule 3)."""
     author, why = await _may_review(promotions, dataset_id, principal)
     reverts = Right.REVERT_LOADS in rights_for(principal.roles)
-    scheme = promotions.boards.scheme
     out = []
-    for record in await promotions.store.into(dataset_id):
-        if not scheme.clears(principal.clearance, record.marking):
-            continue
+    # Rule 3: the reader's clearance is in the store's query, never applied after the read. Drawn
+    # items carry only a permitted handling code (`Boards._handling`), so the classification is
+    # the whole of their audience beyond the dataset the gate has already checked.
+    for record in await promotions.store.into(
+        dataset_id, markings=_markings_cleared(promotions, principal)
+    ):
         own = record.proposed_by == principal.id
         out.append(
             await promotions.view(
                 record, principal, may_review=author and not own, reverts=reverts,
                 why_not="You sent this promotion: a second person must review it." if own
                 else why,
+                # The case is named to the dataset's Authors, who answer for it, and its proposer.
+                show_case=author or own,
             )
         )  # fmt: skip
     return PromotionsList(promotions=out)
+
+
+def _markings_cleared(promotions: Promotions, principal: Principal) -> list[str]:
+    scheme = promotions.boards.scheme
+    return [m for m in scheme.classification if scheme.clears(principal.clearance, m)]
 
 
 async def _reviewable(
@@ -9998,6 +10013,8 @@ async def merge_removed_case_layer(
     body: LayerMergeInput,
     principal: PrincipalDep,
     datasets: DatasetsDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
     promotions: PromotionsDep,
     audit: AuditDep,
 ) -> Promotion:
@@ -10005,6 +10022,16 @@ async def merge_removed_case_layer(
     policy; the grant closes with the merge."""
     await _an_author(promotions, dataset_id, principal)
     dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
+    grant = await promotions.store.grant(grant_id)
+    if grant is not None and grant.holder == principal.id and grant.closed_at is None:
+        # The case again, now: one restored since the sheet was opened is merged no more, and its
+        # grant closes.
+        try:
+            await _removed_case(dataset_id, grant.case_id, principal, datasets, investigations,
+                                graph)  # fmt: skip
+        except LayerActionRefused:
+            await promotions.store.close_grant(grant_id, datetime.now(UTC))
+            raise
     record = await promotions.merge(grant_id, dataset, body.item_ids, principal)
     await _audit_promotion(
         audit, principal, "merge_layer", record.case_id,
@@ -10012,6 +10039,35 @@ async def merge_removed_case_layer(
         load_id=record.load_id, dataset_id=dataset_id, status=record.status,
     )  # fmt: skip
     return await promotions.view(record, principal)
+
+
+@app.post("/v1/datasets/{dataset_id}/removed-cases/{case_id}/delete/dry-run")
+async def dry_run_delete_removed_case_layer(
+    dataset_id: StudioDatasetDep,
+    case_id: str,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> LayerDryRun:
+    """*Delete…*'s dry run for one of the dataset's Authors (Amendment 2 decision 1: each outcome
+    with a dry run first that writes nothing but its audit entry): the layer's counts as this
+    reader's own handling takes them, as Admin's dry run does."""
+    await _an_author(promotions, dataset_id, principal)
+    _, row, _ = await _removed_case(dataset_id, case_id, principal, datasets, investigations, graph)
+    await _audit_promotion(
+        audit, principal, "dry_run_layer_delete", case_id, row.items + row.links,
+        dataset_id=dataset_id, layer_action="delete",
+    )  # fmt: skip
+    counts = f"{row.items} items and {row.links} links ({_size_words(row.size_bytes)})"
+    return LayerDryRun(
+        investigation_id=case_id, action="delete", items=row.items, links=row.links,
+        size_bytes=row.size_bytes,
+        would=f"Would delete {counts} from {row.name}'s layer. Promoted items are never touched. "
+        "Nothing has been written.",
+    )  # fmt: skip
 
 
 @app.delete(

@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from conduit_common.identity import new_id
@@ -65,8 +65,15 @@ from .evidence_brief import display_name
 from .promotion_store import LayerGrant, PromotionRecord, PromotionStore
 
 #: The revert command shown to a reader holding `revert_loads` (ADR-127 Amendment 9).
-REVERT_COMMAND = "python -m scripts.revert_promotion {load_id}"
+REVERT_COMMAND = "python -m scripts.revert_promotion {load_id} --reverted-by <your username>"
 LAYER_DELETE_PREFIX = "layer-delete:"
+#: Who the registry says withdrew a deleted layer's items.
+LAYER_DELETER = "layer-delete"
+#: A merge's read grant lasts a working day at most (Amendment 5 decision 7, as reviewed): an
+#: Author who walks away from the sheet does not keep the layer open.
+GRANT_HOURS = 8
+#: Each check's code, in the order the sheet shows them.
+CHECKS = ("marking", "types", "graded", "ends")
 
 
 class PromotionRefused(Exception):
@@ -166,8 +173,8 @@ class Promotions:
 
     async def _problems(
         self, reads: Sequence[_Read], dataset: Dataset, case_id: str, reader: Principal
-    ) -> dict[str, list[str]]:
-        """Every check each item fails, in words (decision 8's checks)."""
+    ) -> dict[str, list[tuple[str, str]]]:
+        """Every check each item fails, as (check, words) (decision 8's checks; `CHECKS`)."""
         highest = self.highest(dataset)
         node_types = set(await self.boards.node_types(case_id))
         link_names = sorted(
@@ -176,45 +183,51 @@ class Promotions:
         refusals: dict[str, str | None] = {}
         if link_names and self.link_types is not None:
             refusals = await self.link_types.promotion_refusals(case_id, reader, link_names)
-        model_links = set(self.boards.link_types())
-        out: dict[str, list[str]] = {}
+        # C14 for links as for nodes: the dataset's model, its live packs (not the deployment's).
+        model_links = set(await self.boards.model_link_types(case_id))
+        out: dict[str, list[tuple[str, str]]] = {}
         for read in reads:
-            problems: list[str] = []
+            problems: list[tuple[str, str]] = []
             element = read.element
             if element is None:
-                problems.append("You may not see this item now, so it cannot be promoted.")
-                out[read.item.item_id] = problems
+                out[read.item.item_id] = [("unseen", "You may not see this item now.")]
                 continue
             marking = element.handling.classification
             if not self.boards.scheme.clears(highest, marking):
-                problems.append(
-                    f"Marked {marking}, above {dataset.name}'s highest allowed marking, {highest}."
-                )
+                problems.append((
+                    "marking",
+                    f"Marked {marking}, above {dataset.name}'s highest allowed marking, {highest}.",
+                ))  # fmt: skip
             if read.item.kind == "picture" and read.item.source in self._docs:
                 doc_marking = self._docs[read.item.source].handling.classification
                 if not self.boards.scheme.clears(highest, doc_marking):
-                    problems.append(
+                    problems.append((
+                        "marking",
                         f"The picture is marked {doc_marking}, above {dataset.name}'s highest "
-                        f"allowed marking, {highest}."
-                    )
+                        f"allowed marking, {highest}.",
+                    ))  # fmt: skip
             if read.item.kind == "node" and element.type not in node_types:
-                problems.append(f"{element.type} is not a type of {dataset.name}'s model.")
+                problems.append(
+                    ("types", f"{element.type} is not a type of {dataset.name}'s model.")
+                )
             if read.item.kind == "link":
                 why = refusals.get(element.type)
                 if why is not None:
-                    problems.append(why)
+                    problems.append(("types", why))
                 elif element.type not in model_links and element.type not in refusals:
-                    problems.append(f"{element.type} is not a link type of {dataset.name}'s model.")
+                    problems.append(
+                        ("types", f"{element.type} is not a link type of {dataset.name}'s model.")
+                    )
             drawn = element.provenance.drawn
             if read.item.kind in ("node", "link"):
                 if drawn is None or drawn.grading is None:
-                    problems.append("It has no grading.")
+                    problems.append(("graded", "It has no grading."))
                 elif not ((drawn.source_note or "").strip() or drawn.source_document):
-                    problems.append("It has no source note or source document.")
+                    problems.append(("graded", "It has no source note or source document."))
             out[read.item.item_id] = problems
         return out
 
-    def _sheet_item(self, read: _Read, problems: list[str]) -> SheetItem:
+    def _sheet_item(self, read: _Read, problems: list[tuple[str, str]]) -> SheetItem:
         element = read.element
         return SheetItem(
             item_id=read.item.item_id,
@@ -226,7 +239,7 @@ class Promotions:
             follows=read.item.kind != "node",
             source=read.item.source,
             target=read.item.target,
-            problems=problems,
+            problems=[words for _, words in problems],
         )
 
     async def _pending_items(self, case_id: str, board_id: str | None) -> list[BoardItem]:
@@ -235,37 +248,45 @@ class Promotions:
             if board_id is not None
             else await self.boards.items.in_case(case_id)
         )
-        return [i for i in held if i.withdrawn_at is None and i.promoted_at is None]
+        # An item an open promotion already carries is not offered again: one item, one open
+        # promotion, so no two loads stamp one element.
+        open_ = await self.store.pending_item_ids(case_id)
+        return [
+            i for i in held
+            if i.withdrawn_at is None and i.promoted_at is None and i.item_id not in open_
+        ]  # fmt: skip
 
-    def _checks(self, items: Sequence[SheetItem], dataset: Dataset) -> list[PromotionCheck]:
+    def _checks(
+        self, reads: Sequence[_Read], problems: dict[str, list[tuple[str, str]]], dataset: Dataset
+    ) -> list[PromotionCheck]:
+        """Each check counted by its code, never by its words. `ends` counts the links one of whose
+        drawn ends cannot go (a check that can fail, not a sentence)."""
         highest = self.highest(dataset)
 
-        def failing(word: str) -> int:
-            return sum(1 for i in items if any(word in p for p in i.problems))
+        def failing(code: str) -> int:
+            return sum(1 for r in reads if any(c == code for c, _ in problems[r.item.item_id]))
 
-        above = failing("highest allowed marking")
-        types = failing("model") + failing("promoted once") + failing("is accepted")
-        ungraded = failing("no grading") + failing("no source")
+        blocked = {
+            r.item.element_id for r in reads if r.item.kind == "node" and problems[r.item.item_id]
+        }
+        ends = sum(
+            1 for r in reads
+            if r.item.kind == "link" and ({r.item.source, r.item.target} & blocked)
+        )  # fmt: skip
+        counts = {"marking": failing("marking"), "types": failing("types"),
+                  "graded": failing("graded"), "ends": ends}  # fmt: skip
+        words = {
+            "marking": f"Every marking within {dataset.name}'s highest allowed, {highest}",
+            "types": f"Every type in {dataset.name}'s model",
+            "graded": "Every item graded, with a source",
+            "ends": "Every link with both its ends able to go",
+        }
         return [
             PromotionCheck(
-                name="marking", passed=above == 0,
-                words=f"Every marking within {dataset.name}'s highest allowed, {highest}"
-                + ("" if above == 0 else f": {above} above it"),
-            ),
-            PromotionCheck(
-                name="types", passed=types == 0,
-                words=f"Every type in {dataset.name}'s model"
-                + ("" if types == 0 else f": {types} not"),
-            ),
-            PromotionCheck(
-                name="graded", passed=ungraded == 0,
-                words="Every item graded, with a source"
-                + ("" if ungraded == 0 else f": {ungraded} not"),
-            ),
-            PromotionCheck(
-                name="ends", passed=True,
-                words="No link without both its ends: a link whose end does not go stays behind",
-            ),
+                name=code, passed=counts[code] == 0,
+                words=words[code] + ("" if counts[code] == 0 else f": {counts[code]} not"),
+            )
+            for code in CHECKS
         ]  # fmt: skip
 
     def _recorded_as(self, dataset: Dataset, trigger: str) -> str:
@@ -298,6 +319,10 @@ class Promotions:
 
     # --- the sheet ------------------------------------------------------------------------
 
+    async def _seen(self, case_id: str, board_id: str | None, reader: Principal) -> list[_Read]:
+        reads = await self._read(await self._pending_items(case_id, board_id), reader)
+        return [r for r in reads if r.element is not None]
+
     async def sheet(self, board: StoredCaseView, reader: Principal) -> PromotionSheet:
         dataset, refused = await self._target(board.case_id)
         top = self._top()
@@ -306,7 +331,8 @@ class Promotions:
                 board_id=board.id, dataset_id=None, dataset_name=None, highest_marking=top,
                 policy="author_promotes", items=[], checks=[], recorded_as="", refused=refused,
             )  # fmt: skip
-        reads = await self._read(await self._pending_items(board.case_id, board.id), reader)
+        # Rule 3: an item the reader may not see now is not on their sheet, as from every read.
+        reads = await self._seen(board.case_id, board.id, reader)
         problems = await self._problems(reads, dataset, board.case_id, reader)
         items = [self._sheet_item(r, problems[r.item.item_id]) for r in reads]
         return PromotionSheet(
@@ -316,7 +342,7 @@ class Promotions:
             highest_marking=self.highest(dataset),
             policy=dataset.promotion_policy,
             items=items,
-            checks=self._checks(items, dataset),
+            checks=self._checks(reads, problems, dataset),
             warnings=await self._warnings(board, reader),
             recorded_as=self._recorded_as(dataset, "analyst_promotion"),
         )
@@ -326,7 +352,7 @@ class Promotions:
     async def _plan(
         self,
         reads: Sequence[_Read],
-        problems: dict[str, list[str]],
+        problems: dict[str, list[tuple[str, str]]],
         ticked: Sequence[str],
         dataset: Dataset,
         reader: Principal,
@@ -343,7 +369,7 @@ class Promotions:
             first = failing[0]
             raise PromotionRefused(
                 "check_failed",
-                f"{self._label(first)} cannot be promoted: {problems[first.item.item_id][0]}",
+                f"{self._label(first)} cannot be promoted: {problems[first.item.item_id][0][1]}",
                 status=422,
             )
         going_nodes = {by_id[i].item.element_id for i in ticked if by_id[i].item.kind == "node"}
@@ -366,7 +392,7 @@ class Promotions:
                 continue
             follows = read.item.kind in ("picture", "match")
             wanted = follows or read.item.item_id in ticked
-            both = self.ends_land(read.item, lands)
+            both = self.ends_land(read.item, lands, going_nodes)
             if not wanted:
                 left.append(LeftOut(item_id=read.item.item_id, label=label, why="Not ticked."))
             elif not both:
@@ -383,7 +409,7 @@ class Promotions:
             elif problems[read.item.item_id]:
                 left.append(
                     LeftOut(item_id=read.item.item_id, label=label,
-                            why=problems[read.item.item_id][0])
+                            why=problems[read.item.item_id][0][1])
                 )  # fmt: skip
             else:
                 goes.append(read)
@@ -438,7 +464,7 @@ class Promotions:
         dataset, refused = await self._target(board.case_id)
         if dataset is None:
             raise PromotionRefused("nothing_to_promote_into", refused or "", status=409)
-        reads = await self._read(await self._pending_items(board.case_id, board.id), proposer)
+        reads = await self._seen(board.case_id, board.id, proposer)
         problems = await self._problems(reads, dataset, board.case_id, proposer)
         goes, left = await self._plan(
             reads, problems, list(dict.fromkeys(ticked)), dataset, proposer
@@ -455,11 +481,16 @@ class Promotions:
     # --- the checks, each its own call site (rule 15: each plant replaces exactly one) ------
 
     @staticmethod
-    def ends_land(item: BoardItem, lands: set[str]) -> bool:
-        """A link goes only when both its ends will be in the dataset; a picture or a match
-        decision goes with its drawn node."""
+    def ends_land(item: BoardItem, lands: set[str], going: set[str]) -> bool:
+        """A link goes only when both its ends will be in the dataset. A picture or a match
+        decision goes only with its own drawn node in this promotion, never with a later,
+        unrelated one (a *Same* changes resolution for every case reading the dataset)."""
         if item.kind == "picture":
-            return item.target in lands
+            return item.target in going
+        if item.kind == "match":
+            return bool({item.source, item.target} & going) and (
+                item.source in lands and item.target in lands
+            )
         return item.source in lands and item.target in lands
 
     @staticmethod
@@ -477,8 +508,11 @@ class Promotions:
                 status=403,
             )
 
-    async def reviewer_sees_all(self, record: PromotionRecord, reviewer: Principal) -> bool:
-        return not (await self.details(record, reviewer)).withheld
+    @staticmethod
+    def reviewer_sees_all(reads: Sequence[_Read]) -> bool:
+        """Rule 3: a reviewer approves only what they have read; one item they may not see and
+        they may not approve (another of the dataset's Authors may)."""
+        return all(r.element is not None for r in reads)
 
     async def _commit(self, record: PromotionRecord, *, by: str | None) -> PromotionRecord:
         """The load itself: one graph transaction, all or nothing; then the registry's
@@ -502,7 +536,13 @@ class Promotions:
                 "sent. Promote again from the board.",
             ) from gone
         except Exception:
+            # Whatever refused the load (an ambiguous id, a composite, an unconverted case), the
+            # promotion is not left waiting as if it could still be approved.
             await graph.rollback_transaction(tx)
+            await self.store.decide(
+                record.id, was="awaiting_review", now="rejected", by=by, at=datetime.now(UTC),
+                reason="The load was refused, and nothing was written.",
+            )  # fmt: skip
             raise
         now = datetime.now(UTC)
         if not await self.store.decide(
@@ -557,9 +597,11 @@ class Promotions:
         edges = await self.boards.graph.get_edges(list(record.edge_ids), reader)
         items = [_detail(n, "node") for n in nodes] + [_detail(e, _kind(e)) for e in edges]
         withheld = len(nodes) != len(set(record.node_ids)) or len(edges) != len(record.edge_ids)
-        return PromotionDetails(
-            promotion=await self.view(record, reviewer), items=items, withheld=withheld
-        )
+        promotion = await self.view(record, reviewer, show_case=True)
+        if withheld:
+            # Rule 7: no count beside the items that would say how many are withheld.
+            promotion = promotion.model_copy(update={"nodes": len(nodes), "links": len(edges)})
+        return PromotionDetails(promotion=promotion, items=items, withheld=withheld)
 
     async def decide(
         self, record: PromotionRecord, reviewer: Principal, *, approve: bool, reason: str | None
@@ -576,13 +618,7 @@ class Promotions:
                 status=403,
             )
         if approve:
-            if not await self.reviewer_sees_all(record, reviewer):
-                raise PromotionRefused(
-                    "not_all_seen",
-                    "You may not see every item in this promotion, so you may not approve it: "
-                    "ask another of the dataset's Authors who may review promotions.",
-                    status=403,
-                )
+            await self.recheck(record, reviewer)
             return await self._commit(record, by=reviewer.id)
         now = datetime.now(UTC)
         if not await self.store.decide(
@@ -596,6 +632,40 @@ class Promotions:
         assert held is not None
         return held
 
+    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> None:
+        """At the approval, on the items as they are now. First, the reviewer must see every one
+        (403, and the promotion waits for another reviewer). Then every check runs again: an item
+        withdrawn or edited since it was sent (a marking raised, the dataset's highest lowered)
+        refuses the load, and the promotion is recorded rejected, saying why. Nothing is written."""
+        held = (await self.boards.datasets.egress_of([record.dataset_id])).get(record.dataset_id)
+        if held is None:
+            raise PromotionNotFound
+        reader = self._reviewer_read(record, reviewer)
+        items = [await self.boards.items.get(record.case_id, i) for i in record.item_ids]
+        live = [i for i in items if i is not None and i.withdrawn_at is None]
+        reads = await self._read(live, reader)
+        if not self.reviewer_sees_all(reads):
+            raise PromotionRefused(
+                "not_all_seen",
+                "You may not see every item in this promotion, so you may not approve it: ask "
+                "another of the dataset's Authors who may review promotions.",
+                status=403,
+            )
+        reads = [r for r in reads if r.element is not None]
+        problems = await self._problems(reads, held, record.case_id, reader)
+        failing = [(r, problems[r.item.item_id][0][1]) for r in reads if problems[r.item.item_id]]
+        if len(live) != len(record.item_ids) or failing:
+            why = (
+                f"{self._label(failing[0][0])} has changed since it was sent: {failing[0][1]}"
+                if failing
+                else "One of its items was withdrawn since it was sent."
+            )
+            await self.store.decide(
+                record.id, was="awaiting_review", now="rejected", by=reviewer.id,
+                at=datetime.now(UTC), reason=f"Nothing was written. {why}",
+            )  # fmt: skip
+            raise PromotionRefused("items_changed", f"Nothing was promoted. {why}")
+
     # --- views ----------------------------------------------------------------------------
 
     async def view(
@@ -607,17 +677,24 @@ class Promotions:
         why_not: str | None = None,
         reverts: bool = False,
         with_board: bool = False,
+        show_case: bool = True,
     ) -> Promotion:
+        """One promotion for `reader`. What it left out, with its labels as the sheet showed them,
+        goes to its proposer alone (rule 3: an unticked item may be one no one else may see). The
+        case is named only where `show_case` says the reader may know it (its own board, one of
+        the dataset's Authors)."""
         held = await self.boards.datasets.egress_of([record.dataset_id])
         dataset = held.get(record.dataset_id)
         people = [p for p in (record.proposed_by, record.reviewed_by) if p]
         names = await self.names(people) if self.names is not None else {}
-        case_name = await self._case_name(record.case_id)
+        case_name = (
+            await self._case_name(record.case_id) if show_case else "a case reading this dataset"
+        )
         return Promotion(
             id=record.id, load_id=record.load_id, trigger=record.trigger,
             dataset_id=record.dataset_id,
             dataset_name=dataset.name if dataset is not None else record.dataset_id,
-            case_id=record.case_id, case_name=case_name,
+            case_id=record.case_id if show_case else "", case_name=case_name,
             board_id=record.board_id if with_board else None,
             proposed_by=record.proposed_by,
             proposed_by_name=names.get(record.proposed_by, record.proposed_by),
@@ -627,7 +704,8 @@ class Promotions:
             if record.reviewed_by else None,
             reviewed_at=record.reviewed_at, reason=record.reason,
             nodes=len(record.node_ids), links=len(record.edge_ids),
-            left_out=[LeftOut(item_id=i, label=lab, why=why) for i, lab, why in record.left_out],
+            left_out=[LeftOut(item_id=i, label=lab, why=why) for i, lab, why in record.left_out]
+            if reader.id == record.proposed_by else [],
             revert_command=REVERT_COMMAND.format(load_id=record.load_id)
             if reverts and record.status == "committed" else None,
             may_review=may_review and record.status == "awaiting_review",
@@ -660,6 +738,7 @@ class Promotions:
             or grant.holder != author.id
             or grant.dataset_id != dataset.id
             or grant.closed_at is not None
+            or datetime.now(UTC) - grant.opened_at > timedelta(hours=GRANT_HOURS)
         ):
             raise PromotionRefused(
                 "no_open_grant",
@@ -677,17 +756,16 @@ class Promotions:
     ) -> LayerMergeSheet:
         grant = await self._granted(grant.id, dataset, author)
         reader = self._granted_read(grant, author)
-        reads = await self._read(await self._pending_items(grant.case_id, None), reader)
         # Rule 3: an item above the Author's clearance is absent from the sheet, as from every
         # read, and is not counted; it stays in the layer.
-        reads = [r for r in reads if r.element is not None]
+        reads = await self._seen(grant.case_id, None, reader)
         problems = await self._problems(reads, dataset, grant.case_id, reader)
         items = [self._sheet_item(r, problems[r.item.item_id]) for r in reads]
         return LayerMergeSheet(
             grant_id=grant.id, investigation_id=grant.case_id, case_name=case_name,
             dataset_id=dataset.id, dataset_name=dataset.name,
             highest_marking=self.highest(dataset), policy=dataset.promotion_policy, items=items,
-            checks=self._checks(items, dataset),
+            checks=self._checks(reads, problems, dataset),
             recorded_as=self._recorded_as(dataset, "layer_merge"),
         )  # fmt: skip
 
@@ -696,11 +774,7 @@ class Promotions:
     ) -> PromotionRecord:
         grant = await self._granted(grant_id, dataset, author)
         reader = self._granted_read(grant, author)
-        reads = [
-            r
-            for r in await self._read(await self._pending_items(grant.case_id, None), reader)
-            if r.element is not None
-        ]
+        reads = await self._seen(grant.case_id, None, reader)
         problems = await self._problems(reads, dataset, grant.case_id, reader)
         goes, left = await self._plan(reads, problems, list(dict.fromkeys(ticked)), dataset, reader)
         record = await self._record(
@@ -726,10 +800,20 @@ class Promotions:
             await graph.rollback_transaction(tx)
             raise
         await graph.commit_transaction(tx)
-        unpromoted = [i.item_id for i in await self._pending_items(case_id, None)]
+        now = datetime.now(UTC)
+        await self.store.close_grants_for_layer(layer_id, now)
+        await self.store.mark_layer_deleted(layer_id, now)
+        held = await self.boards.items.in_case(case_id)
+        unpromoted = [i.item_id for i in held if i.withdrawn_at is None and i.promoted_at is None]
         if unpromoted:
-            await self.boards.items.withdraw(case_id, unpromoted, "layer-delete", datetime.now(UTC))
-        return LayerDeleted(investigation_id=case_id, nodes=gone.nodes, links=gone.edges)
+            await self.boards.items.withdraw(case_id, unpromoted, LAYER_DELETER, now)
+        # Rule 7: no count of what was withdrawn, which would include what the deleter may not see.
+        del gone
+        return LayerDeleted(
+            investigation_id=case_id,
+            words="The layer was deleted: its items are withdrawn and kept in the audit. Promoted "
+            "items were not touched.",
+        )
 
     # --- revert (the operator command's core) ----------------------------------------------
 
@@ -743,15 +827,37 @@ async def revert_promotion(
     """The revert of a committed promotion: the dataset taken back from exactly its elements in
     one transaction, the promotion recorded `reverted`, its items' `promoted_at` cleared. The
     operator command's core (`scripts.revert_promotion`), run with the Conduit stopped (ADR-127
-    Amendment 9); never a route until the owner rules on ADR-143 open question 2."""
+    Amendment 9); never a route until the owner rules on ADR-143 open question 2.
+
+    Refused, as a load's revert is (ADR-127 Amendment 6, `live_edges_touching`), while a live link
+    other than the promotion's own and the case's own unpromoted drawing rests on one of its
+    nodes: another case's link or a later load's would be left resting on a node gone from the
+    dataset. A promotion from a layer since deleted takes its elements out with the layer."""
     if record.status != "committed":
         raise PromotionRefused(
             "not_committed",
             f"Promotion {record.load_id} is {record.status}: nothing to revert.",
         )
+    held = await items.in_case(record.case_id)
+    own_drawing = {
+        i.element_id for i in held
+        if i.kind != "node" and i.withdrawn_at is None and i.promoted_at is None
+    }  # fmt: skip
+    resting = await graph.live_edges_touching(list(record.node_ids))
+    others = set(resting) - set(record.edge_ids) - own_drawing
+    if others:
+        raise PromotionRefused(
+            "links_rest_on_it",
+            f"{len(others)} link(s) written since rest on its items: revert those first.",
+        )
+    layer_deleted = await store.layer_deleted(record.layer_id)
     tx = await graph.begin_transaction()
     try:
         await graph.revert_promotion(record.load_id, record.dataset_id, tx)
+        if layer_deleted:
+            await graph.withdraw_layer(
+                record.layer_id, f"{LAYER_DELETE_PREFIX}{record.case_id}", tx
+            )
     except Exception:
         await graph.rollback_transaction(tx)
         raise
@@ -762,6 +868,10 @@ async def revert_promotion(
         raise PromotionRefused("already_decided", "This promotion has changed since it was read.")
     await graph.commit_transaction(tx)
     await items.mark_promoted(record.case_id, list(record.item_ids), None)
+    if layer_deleted:
+        await items.withdraw(
+            record.case_id, list(record.item_ids), LAYER_DELETER, datetime.now(UTC)
+        )
     return replace(record, status="reverted")
 
 

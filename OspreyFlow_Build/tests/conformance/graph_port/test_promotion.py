@@ -12,8 +12,9 @@ Withdrawing A's layer takes away what was never promoted and leaves what was.
 the shape the real defect would take at the call site:
 `test_the_one_element_check_fails_with_the_promotion_written_as_a_copy` writes the promotion the way
 an upsert into the source would (a new node), and asserts the check sees two;
-`test_the_all_or_nothing_check_fails_with_the_promotion_written_item_by_item` promotes each id in its
-own call and asserts that the live one lands even though the other could not.
+`test_the_all_or_nothing_check_fails_with_the_all_live_check_removed` replaces the adapter's own
+all-live check with one that refuses nothing, and asserts the live elements land beside a withdrawn
+one.
 """
 
 from __future__ import annotations
@@ -124,33 +125,80 @@ async def test_the_one_element_check_fails_with_the_promotion_written_as_a_copy(
         assert not await _promoted_as_one(adapter, drawn, people)
 
 
-async def test_a_promotion_with_an_element_not_live_writes_nothing(
+async def _withdrawn(adapter: GraphPort) -> str:
+    (gone,), _ = await _write(
+        adapter, [_node("Person", classification="OFFICIAL", datasets=[LAYER_A])], []
+    )
+    tx = await adapter.begin_transaction()
+    await adapter.withdraw_elements([gone], [], "board-withdrawal:x", tx)
+    await adapter.commit_transaction(tx)
+    return gone
+
+
+async def _superseded(adapter: GraphPort) -> str:
+    """A drawn node replaced by a correction: the old revision is not live."""
+    old = _node("Person", classification="OFFICIAL", datasets=[LAYER_A], family_name="Old")
+    (old_id,), _ = await _write(adapter, [old], [])
+    tx = await adapter.begin_transaction()
+    await adapter.supersede_node(
+        old_id, _node("Person", classification="OFFICIAL", datasets=[LAYER_A]), tx
+    )
+    await adapter.commit_transaction(tx)
+    return old_id
+
+
+async def test_a_promotion_with_a_withdrawn_element_writes_nothing(
     factory: GraphAdapterFactory,
 ) -> None:
     async with factory.context() as adapter:
         _, drawn, link = await _drawn(adapter)
-        (gone,), _ = await _write(
-            adapter, [_node("Person", classification="OFFICIAL", datasets=[LAYER_A])], []
-        )
-        tx = await adapter.begin_transaction()
-        await adapter.withdraw_elements([gone], [], "board-withdrawal:x", tx)
-        await adapter.commit_transaction(tx)
-
+        gone = await _withdrawn(adapter)
         with pytest.raises(NotPromotable):
-            await _promote(adapter, [drawn, gone, "no-such-node"], [link])
-
+            await _promote(adapter, [drawn, gone], [link])
         assert await _b_reads(adapter, drawn, link) == (False, False)
 
 
-async def test_the_all_or_nothing_check_fails_with_the_promotion_written_item_by_item(
+async def test_a_promotion_with_a_superseded_element_writes_nothing(
     factory: GraphAdapterFactory,
 ) -> None:
     async with factory.context() as adapter:
         _, drawn, link = await _drawn(adapter)
-        # The plant: each item its own call, as a promotion committed item by item would be.
-        await _promote(adapter, [drawn], [])
+        old = await _superseded(adapter)
         with pytest.raises(NotPromotable):
-            await _promote(adapter, ["no-such-node"], [])
+            await _promote(adapter, [drawn, old], [link])
+        assert await _b_reads(adapter, drawn, link) == (False, False)
+
+
+async def test_an_element_promoted_by_another_load_is_not_promoted_again(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        _, drawn, link = await _drawn(adapter)
+        await _promote(adapter, [drawn], [])
+        tx = await adapter.begin_transaction()
+        with pytest.raises(NotPromotable):
+            await adapter.promote_elements([drawn], [link], SOURCE, "promotion-load-2", tx)
+        await adapter.rollback_transaction(tx)
+        # The first load's revert still takes back what it promoted.
+        tx = await adapter.begin_transaction()
+        taken = await adapter.revert_promotion(LOAD, SOURCE, tx)
+        await adapter.commit_transaction(tx)
+        assert (taken.nodes, taken.edges) == (1, 0)
+        assert await _b_reads(adapter, drawn, link) == (False, False)
+
+
+async def test_the_all_or_nothing_check_fails_with_the_all_live_check_removed(
+    factory: GraphAdapterFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async with factory.context() as adapter:
+        _, drawn, link = await _drawn(adapter)
+        gone = await _withdrawn(adapter)
+        # The plant, at the adapter's own call site: the all-live check made to refuse nothing,
+        # so the live elements are written and the withdrawn one skipped.
+        monkeypatch.setattr(
+            type(adapter), "_refuse_unless_all_live", staticmethod(lambda wanted, live: None)
+        )
+        await _promote(adapter, [drawn, gone], [link])
         assert await _b_reads(adapter, drawn, link) != (False, False)
 
 

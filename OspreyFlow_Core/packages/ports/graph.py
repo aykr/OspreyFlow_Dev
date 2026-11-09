@@ -800,8 +800,9 @@ class GraphPort(Protocol):
         """ADR-143 decision 8: a promotion's one load. Each element gains `dataset_id` in its
         `datasets` (ADR-099 decision 2's union: the same element, never a copy, never a merge of
         two) and is stamped `promoted_by_load = load_id`; nothing else of it changes (its marking,
-        its provenance, its `analyst_drawn` class). Every id must be a live element, or the call
-        raises `NotPromotable` before anything is written (all or nothing). A backend write, as
+        its provenance, its `analyst_drawn` class). Every id must be a live element not promoted by
+        another load already, or the call raises `NotPromotable` before anything is written (all
+        or nothing). A backend write, as
         `revert_elements` is: no principal; the caller checks what the proposer may promote."""
         ...
 

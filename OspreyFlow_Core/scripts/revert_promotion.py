@@ -57,6 +57,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def stop_if_dry(dry_run: bool, says: str) -> bool:
+    """The dry run's one stop, before the audit and before anything is written."""
+    if dry_run:
+        print(f"Would revert {says}, leaving each in the case's layer only. Nothing was written.")
+    return dry_run
+
+
 async def run(
     load_id: str,
     *,
@@ -79,8 +86,7 @@ async def run(
     if record.status != "committed":
         print(f"Refused: {says} is {record.status}, not committed. Nothing was changed.")
         return 1
-    if dry_run:
-        print(f"Would revert {says}, leaving each in the case's layer only. Nothing was written.")
+    if stop_if_dry(dry_run, says):
         return 0
     by = Principal(id=reverted_by, clearance="OFFICIAL", org_unit=record.unit)
     # Audited before anything is written (ADR-127 Amendment 23's order).
@@ -95,6 +101,15 @@ async def run(
     try:
         await revert_promotion(record, graph, store, items)
     except PromotionRefused as refused:
+        # Audited before it was tried, so its refusal is audited too: the trail says it did not
+        # happen.
+        await audit.record(
+            principal=by,
+            action="revert_promotion_refused",
+            investigation_id=record.case_id,
+            resolved_query={"load_id": load_id, "error": refused.code},
+            result_cardinality=0,
+        )
         print(f"Refused: {refused.message} Nothing was changed.")
         return 1
     await invalidate()

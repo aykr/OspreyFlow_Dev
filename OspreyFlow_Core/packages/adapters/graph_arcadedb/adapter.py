@@ -1794,17 +1794,22 @@ class GraphArcadeDBAdapter:
         rows: list[tuple[str, dict[str, Any]]] = []
         for type_name, ids in plan:
             found = await self._client.sql(
-                f"SELECT id, datasets, reverted, superseded_by FROM "
+                f"SELECT id, datasets, reverted, superseded_by, promoted_by_load FROM "
                 f"`{groovy_identifier(type_name)}` WHERE id IN :ids",
                 params={"ids": ids},
                 session_id=tx,
             )
             rows += [(type_name, r) for r in found]
+        # Live, and not promoted by another load already (one element, one promotion: a second
+        # stamp would leave the first load's revert taking back nothing).
         live = [
-            (t, r) for t, r in rows if r.get("reverted") is not True and not r.get("superseded_by")
+            (t, r)
+            for t, r in rows
+            if r.get("reverted") is not True
+            and not r.get("superseded_by")
+            and not r.get("promoted_by_load")
         ]
-        if len(live) != wanted:
-            raise NotPromotable(wanted - len(live))
+        self._refuse_unless_all_live(wanted, len(live))
         for type_name, row in live:
             await self._client.sql(
                 f"UPDATE `{groovy_identifier(type_name)}` SET datasets = :datasets, "
@@ -1816,6 +1821,12 @@ class GraphArcadeDBAdapter:
                 },
                 session_id=tx,
             )
+
+    @staticmethod
+    def _refuse_unless_all_live(wanted: int, live: int) -> None:
+        """All or nothing (ADR-143 decision 8): refused before anything is written."""
+        if live != wanted:
+            raise NotPromotable(wanted - live)
 
     async def revert_promotion(self, load_id: str, dataset_id: str, tx: TxId) -> PromotionReverted:
         counts = {"vertex": 0, "edge": 0}

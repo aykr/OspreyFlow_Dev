@@ -229,16 +229,24 @@ class Boards:
 
     # --- what may be drawn ----------------------------------------------------------------
 
+    async def _live_packs(self, case_id: str) -> set[str] | None:
+        """The packs of the case's dataset's live model; `None` while it has no model yet."""
+        if self.models is None:
+            return None
+        chosen = await self.datasets.chosen_of_case(case_id)
+        if not chosen:
+            return None
+        live = await self.models.live(chosen[0].id)
+        return set(live.packs) if live is not None else None
+
+    def _in_packs(self, name: str, packs: set[str] | None) -> bool:
+        pack = self.ontology.type_packs.get(name)
+        return packs is None or pack is None or pack in packs
+
     async def node_types(self, case_id: str) -> list[str]:
         """C14: a board's node types come only from the case's model: the core and the live
         model's packs; the deployment's whole ontology while the case's dataset has no model yet."""
-        packs: set[str] | None = None
-        if self.models is not None:
-            chosen = await self.datasets.chosen_of_case(case_id)
-            if chosen:
-                live = await self.models.live(chosen[0].id)
-                if live is not None:
-                    packs = set(live.packs)
+        packs = await self._live_packs(case_id)
         names = []
         for t in self.ontology.entity_types:
             if t.name in _NOT_DRAWN_NODE_TYPES:
@@ -261,6 +269,12 @@ class Boards:
             if not e.system and not e.hidden and e.name not in _NOT_DRAWN_LINK_TYPES
         )
 
+    async def model_link_types(self, case_id: str) -> list[str]:
+        """C14 for links, as `node_types` for nodes: the model's link types in the core and the
+        case's dataset's live packs."""
+        packs = await self._live_packs(case_id)
+        return [name for name in self.link_types() if self._in_packs(name, packs)]
+
     async def case_link_types(
         self, case_id: str, principal: Principal
     ) -> dict[str, tuple[EdgeTypeDef, str]]:
@@ -268,7 +282,7 @@ class Boards:
         links are written under: the model's, then the case's own proposals (decision 9), offered
         through `LinkTypeService.case_types` and nowhere else."""
         out: dict[str, tuple[EdgeTypeDef, str]] = {}
-        for name in self.link_types():
+        for name in await self.model_link_types(case_id):
             held = self.ontology.edge_type(name)
             assert held is not None
             out[name] = (held, name)

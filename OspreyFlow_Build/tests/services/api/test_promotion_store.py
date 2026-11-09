@@ -124,3 +124,43 @@ async def test_a_grant_closes_once_and_is_never_reopened(store: PostgresPromotio
     held = await store.grant(grant.id)
     assert held is not None and held.closed_at == NOW + timedelta(minutes=5)
     assert await store.grant("no-such") is None
+
+
+async def test_the_studio_list_is_filtered_by_clearance_in_the_query(
+    store: PostgresPromotionStore,
+) -> None:
+    mine, other_unit, above = await _three(store)
+    seen = await store.into("src", markings=["OFFICIAL", "OFFICIAL-SENSITIVE"])
+    assert {r.id for r in seen} == {mine, other_unit}
+    assert {r.id for r in await store.into("src")} == {mine, other_unit, above}  # the plant
+
+
+async def test_an_open_promotions_items_are_held_and_released_when_it_is_decided(
+    store: PostgresPromotionStore,
+) -> None:
+    record = _record()
+    await store.add(record)
+    await store.add(_record(case_id="case-b", item_ids=("b1",)))
+    assert await store.pending_item_ids("case-k") == {"i1", "i2", "i3"}
+    await store.decide(record.id, was="awaiting_review", now="rejected", by="dana", at=NOW,
+                       reason="no")  # fmt: skip
+    assert await store.pending_item_ids("case-k") == set()
+
+
+async def test_a_deleted_layer_is_recorded_and_its_grants_closed(
+    store: PostgresPromotionStore,
+) -> None:
+    grant = LayerGrant(id=new_id(), layer_id="layer-k", case_id="case-k", dataset_id="src",
+                       holder="dana", opened_at=NOW)  # fmt: skip
+    other = LayerGrant(id=new_id(), layer_id="layer-b", case_id="case-b", dataset_id="src",
+                       holder="dana", opened_at=NOW)  # fmt: skip
+    await store.open_grant(grant)
+    await store.open_grant(other)
+    assert not await store.layer_deleted("layer-k")
+    await store.close_grants_for_layer("layer-k", NOW)
+    await store.mark_layer_deleted("layer-k", NOW)
+    await store.mark_layer_deleted("layer-k", NOW + timedelta(hours=1))  # once
+    assert await store.layer_deleted("layer-k") and not await store.layer_deleted("layer-b")
+    closed, kept = await store.grant(grant.id), await store.grant(other.id)
+    assert closed is not None and closed.closed_at == NOW
+    assert kept is not None and kept.closed_at is None
