@@ -120,7 +120,8 @@ def backups_folder(config: OspreyConfig) -> tuple[Path, str | None]:
     `osprey.yaml` from before the amendment names none, or names the placeholder."""
     storage = config.components.storage
     value = storage.backups.strip() if "backups" in storage.model_fields_set else ""
-    if value and (value != LEGACY_PLACEHOLDER or self_contained_small(config)):
+    placeholder = value and Path(value) == Path(LEGACY_PLACEHOLDER)
+    if value and (not placeholder or self_contained_small(config)):
         return Path(value).expanduser(), None
     folder = fallback_backups_folder()
     return folder, (
@@ -150,8 +151,9 @@ def is_inside(folder: Path, root: Path) -> bool:
     """Whether `folder`, once made, would be `root` or under it. Compared by the file each existing
     ancestor is (`os.path.samefile`), not by spelling: on a case-insensitive disk
     `ospreyflow_core/backups` is `OspreyFlow_Core/backups`, and a bind mount or link is the folder
-    it shows."""
-    target = Path(os.path.abspath(folder.expanduser())).resolve()
+    it shows. Resolved as the system resolves it (`..` after a link is the link's own parent), never
+    by tidying the spelling first."""
+    target = folder.expanduser().resolve()
     for candidate in (target, *target.parents):
         try:
             if candidate.exists() and os.path.samefile(candidate, root):
@@ -731,6 +733,10 @@ def new_set_folder(out_root: Path, profile: str) -> Path:
     """A new set's folder under `out_root`, readable by its owner only: it holds the case data and
     the people's identities with the dashboards' client secrets (ADR-114 Amendment 33 decision 5
     puts it in a folder of its own on a server). Never inside the checkout (Amendment 37)."""
+    if Path(profile).name != profile or profile in ("", ".", ".."):
+        raise BackupFailed(
+            "out-root", f"{profile!r} cannot name a set: a deployment's name is one folder's name"
+        )
     refuse_inside_the_checkout(out_root)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     target = out_root / f"{stamp}-{profile}-{git_sha()}"

@@ -80,6 +80,7 @@ def test_a_config_without_a_backups_folder_falls_back_and_says_so(
     fallback = tmp_path / "home" / "OspreyFlow" / "backups"
     assert backup.LEGACY_PLACEHOLDER == "/var/lib/osprey/backups"
     for raw in ({}, {"components": {"storage": {"backups": backup.LEGACY_PLACEHOLDER}}},
+                {"components": {"storage": {"backups": backup.LEGACY_PLACEHOLDER + "/"}}},
                 {"components": {"storage": {"backups": " "}}}):  # fmt: skip
         config = OspreyConfig.model_validate(raw)
         root, notice = backup.backups_folder(config)
@@ -113,7 +114,7 @@ def test_no_backup_is_written_inside_the_checkout(
     three local-lite sets, 16 GB, were synced with `~/Documents`); and the one place a set's folder
     is made refuses one inside the checkout, whatever chose it."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    checkout = backup.REPO_ROOT.resolve()
+    checkout = backup.checkout_root().resolve()
     for raw in ({}, {"components": {"storage": {"backups": backup.LEGACY_PLACEHOLDER}}}):
         chosen = backup.default_out_root(OspreyConfig.model_validate(raw)).resolve()
         assert not chosen.is_relative_to(checkout), chosen
@@ -160,6 +161,16 @@ def test_the_checkout_spelt_another_way_is_still_the_checkout(
     (tmp_path / "link").symlink_to(stand_in)
     with pytest.raises(backup.BackupFailed, match="inside the checkout"):
         backup.new_set_folder(tmp_path / "link" / "backups", "local-lite")
+    # A link followed by `..`: the folder made is the link's parent's sibling, inside the checkout
+    # (second lane-reviewer pass).
+    (stand_in / "core").mkdir()
+    (tmp_path / "to-core").symlink_to(stand_in / "core")
+    with pytest.raises(backup.BackupFailed, match="inside the checkout"):
+        backup.new_set_folder(tmp_path / "to-core" / ".." / "bk", "local-lite")
+    assert not (stand_in / "bk").exists() and not (tmp_path / "bk").exists()
+    # A deployment name that climbs out of the folder it is given is refused as well.
+    with pytest.raises(backup.BackupFailed, match="name"):
+        backup.new_set_folder(tmp_path / "ok", "x/../../Checkout")
     other_case = tmp_path / "checkout"
     if not other_case.exists():
         pytest.skip("this disk tells letter cases apart, so the other spelling is another folder")
