@@ -36,7 +36,9 @@ SCHEME = HandlingScheme(name="contract", classification=["OFFICIAL", "SECRET", "
                         handling_codes={}, action_codes={}, sanitisation_codes={})  # fmt: skip
 SENT = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
 PROMOTIONS = [
-    PendingPromotion(items_marking="SECRET", promotion_id="p-secret", load_id="load-1", dataset_id="ds-s",
+    # OFFICIAL items in a SECRET dataset: the dataset's marking is the stricter check here (the
+    # narrow review), as the items' is for p-item-high below.
+    PendingPromotion(items_marking="OFFICIAL", promotion_id="p-secret", load_id="load-1", dataset_id="ds-s",
                      dataset_name="Synthetic custody", dataset_unit="unit-1",
                      proposed_by="ana-1", proposed_at=SENT, dataset_marking="SECRET"),
     PendingPromotion(items_marking="OFFICIAL", promotion_id="p-plain", load_id="load-2", dataset_id="ds-p",

@@ -607,8 +607,8 @@ class WaitingFromStore:
                 dataset_unit=dataset.owning_unit, proposed_by="", proposed_at=None,
                 dataset_marking=dataset.highest_marking,
                 # The dataset's probe: each promotion's own items' marking is asked in the store's
-                # query (`markings`) and again by `may_review` on its record, not here, so one
-                # marked promotion does not hide the dataset's others.
+                # query (`markings`, the WHERE), the only item filter of `waiting_for_review`, not
+                # here, so one marked promotion does not hide the dataset's others.
                 items_marking=None,
             )  # fmt: skip
             authors = await self.authors_of(dataset_id)
