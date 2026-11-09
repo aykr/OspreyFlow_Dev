@@ -14,6 +14,7 @@ audited or sent back. **Egress**: an API connection reaches only hosts on `OSPRE
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import ipaddress
 import os
@@ -388,7 +389,8 @@ async def read_rows(
     """The rows one read of `source` finds, through its connection."""
     settings, read = connection.settings, source.read
     if isinstance(settings, SqlConnectionSettings) and isinstance(read, SqlRead):
-        addresses = readers.sql_addresses(settings.host)
+        # Off the event loop: getaddrinfo blocks (the independent review of L1.6, in L1.8).
+        addresses = await asyncio.to_thread(readers.sql_addresses, settings.host)
         if read.table.split(".")[0] not in settings.schemas:
             raise ConnectorRefused(
                 f"the table {read.table} is not in a schema this connection may read "
@@ -473,9 +475,9 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     if found is not None:
         try:
             if found[0] == "sql":
-                addresses = readers.sql_addresses(found[1])
+                addresses = await asyncio.to_thread(readers.sql_addresses, found[1])
             else:
-                readers.check(*found)
+                await asyncio.to_thread(readers.check, *found)
         except ConnectorRefused as refused:
             return ConnectionTest(ok=False, words=str(refused))
     if isinstance(settings, SqlConnectionSettings):
