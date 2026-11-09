@@ -31,7 +31,7 @@ from dulwich.errors import NotGitRepository
 from dulwich.index import index_entry_from_stat
 from dulwich.object_store import commit_tree_changes, tree_lookup_path
 from dulwich.objects import ZERO_SHA, Blob, Commit, ObjectID, Tree
-from dulwich.refs import HEADREF
+from dulwich.refs import HEADREF, Ref
 from dulwich.repo import Repo
 from services.ingest.engine import (
     RowRejected,
@@ -263,15 +263,17 @@ def _open_repository(repo_root: Path) -> Repo:
 
     A rendered deployment's recipe root is an empty directory on a fresh persistent volume, so
     initialising on first use keeps the operator's install step at "start the deployment", which
-    is what `05_DEPLOYMENT.md` promises. The branch is `main`, as `git init --initial-branch=main`
-    made it before the dulwich swap; a repository the old code (or anyone) made is opened as it is,
-    on whichever branch its `HEAD` names.
+    is what `05_DEPLOYMENT.md` promises. `HEAD` names `refs/heads/main`, as
+    `git init --initial-branch=main` made it before the dulwich swap; a repository the old code
+    (or anyone) made is opened as it is, on whichever ref its `HEAD` names.
     """
     try:
         return Repo(str(repo_root))
     except NotGitRepository:
         repo_root.mkdir(parents=True, exist_ok=True)
-        return Repo.init(str(repo_root), default_branch=b"main")
+        repo = Repo.init(str(repo_root))
+        repo.refs.set_symbolic_ref(HEADREF, Ref(b"refs/heads/main"))
+        return repo
 
 
 def _commit_file(repo_root: Path, relative_path: str, message: str) -> None:
@@ -294,7 +296,7 @@ def _commit_file(repo_root: Path, relative_path: str, message: str) -> None:
         try:
             head = repo.refs[HEADREF]
         except KeyError:
-            head = None  # `HEAD` names a branch with no commit yet
+            head = None  # `HEAD` names a ref with no commit yet
         parent: Commit | None = None
         if head is not None:
             found = repo[head]
@@ -328,7 +330,7 @@ def _commit_file(repo_root: Path, relative_path: str, message: str) -> None:
                 committer=_COMMIT_IDENTITY, message=b"commit: " + message.encode("utf-8"),
             ):  # fmt: skip
                 raise GitCommitError(
-                    f"the branch in {str(repo_root)!r} moved while {relative_path!r} was being "
+                    f"`HEAD` in {str(repo_root)!r} moved while {relative_path!r} was being "
                     "committed; publish again"
                 )
 
