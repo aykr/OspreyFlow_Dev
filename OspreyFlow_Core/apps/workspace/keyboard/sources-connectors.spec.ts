@@ -356,5 +356,5 @@ test("a SQL source is read again by Refresh now", async ({ page }) => {
 });
 
 test("every registered Sources connector action has its own proving test case above", () => {
-  assertAllCovered(REGISTRY, SOURCES_CONNECTORS_ACTIONS);
+  assertAllCovered("SOURCES_CONNECTORS_ACTIONS", SOURCES_CONNECTORS_ACTIONS);
 });
