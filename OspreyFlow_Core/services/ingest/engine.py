@@ -1857,7 +1857,8 @@ async def _write_edge(
         provenance,
         state.fuzzy,
         row_index,
-        state.fuzzy is not None and state.fuzzy.edge_inferred_by(edge.type, edge.from_ref, edge.to_ref),
+        state.fuzzy is not None
+        and state.fuzzy.edge_inferred_by(edge.type, edge.from_ref, edge.to_ref),
     )
     # `01_DOMAIN_MODEL.md` §7: duplicate rows collapse to one event, but
     # every source row reference is retained on the survivor — every
@@ -2146,7 +2147,8 @@ class _DryRunState:
 
 def _fuzzy_problems(recipe: Recipe) -> None:
     """ADR-140 decision 13: a fuzzy match's SAME_AS names two elements of one type, the right one
-    written from its matched columns (`fuzzy_links.fuzzy_link_problems`), refused at run and Test."""
+    written from its matched columns (`fuzzy_links.fuzzy_link_problems`), refused at run and
+    Test."""
     from .fuzzy_links import fuzzy_link_problems
 
     problems = fuzzy_link_problems(recipe)
@@ -2345,7 +2347,8 @@ def _dry_run_edge(
         provenance,
         state.fuzzy,
         row_index,
-        state.fuzzy is not None and state.fuzzy.edge_inferred_by(edge.type, edge.from_ref, edge.to_ref),
+        state.fuzzy is not None
+        and state.fuzzy.edge_inferred_by(edge.type, edge.from_ref, edge.to_ref),
     )
     interval = edge_interval(resolved.instant, resolved.valid_to, resolved.span)
     state.edges[key] = Edge(

@@ -1,5 +1,5 @@
-"""The fuzzy match, expert mode's similarity step (ADR-140 decision 13; ADR-006 Amendment 1; R5, R13;
-the redesign's phase 8; brief §5.4). `schemas.staging.FuzzyMatchStep` is its record.
+"""The fuzzy match, expert mode's similarity step (ADR-140 decision 13; ADR-006 Amendment 1;
+R5, R13; brief §5.4). `schemas.staging.FuzzyMatchStep` is its record.
 
 **What it does.** Every row of `left` is kept. Each is compared with the rows of `right` by the
 Splink-backed comparisons already in the product (`exact`, `jaro_winkler`, `levenshtein`: the
@@ -37,7 +37,7 @@ from splink.duckdb.comparison_library import (
 from splink.duckdb.linker import DuckDBLinker
 
 from ontology.resolution_functions import ResolutionFunctionCall, blocking_rule_sql
-from schemas.staging import MATCH_SCORE, FuzzyMatchStep
+from schemas.staging import MATCH_SCORE, FuzzyBlocking, FuzzyComparison, FuzzyMatchStep
 
 from .staging_catalogue import (
     StagedTable,
@@ -78,9 +78,7 @@ def _year_of(value: str | None) -> date | None:
         return None
 
 
-def _frame(
-    table: StagedTable, columns: Mapping[str, str], years: frozenset[str]
-) -> pd.DataFrame:
+def _frame(table: StagedTable, columns: Mapping[str, str], years: frozenset[str]) -> pd.DataFrame:
     """`unique_id` and one column per comparison or blocking key, named as Splink compares them."""
     data: dict[str, list[Any]] = {"unique_id": [str(i) for i in range(len(table.rows))]}
     for name, column in columns.items():
@@ -89,7 +87,9 @@ def _frame(
     return pd.DataFrame(data)
 
 
-def _scores(step: FuzzyMatchStep, left: StagedTable, right: StagedTable) -> dict[int, tuple[float, int]]:
+def _scores(
+    step: FuzzyMatchStep, left: StagedTable, right: StagedTable
+) -> dict[int, tuple[float, int]]:
     """Each left row's best right row and its score, at or above the threshold: left row ->
     (score, right row). Ties go to the right row that comes first."""
     left_columns = {f"c{i}": c.left for i, c in enumerate(step.compare)}
@@ -155,9 +155,10 @@ def score_text(score: float) -> str:
 def run_fuzzy_step(
     step: FuzzyMatchStep, left: StagedTable, right: StagedTable
 ) -> tuple[StagedTable, StepReport]:
+    compared_columns: list[FuzzyComparison | FuzzyBlocking] = [*step.compare, *step.block_on]
     problems = [
         f"step {step.id!r} compares {column!r}, which {table.name!r} has not"
-        for compared in [*step.compare, *step.block_on]
+        for compared in compared_columns
         for column, table in ((compared.left, left), (compared.right, right))
         if column not in table.columns
     ]
@@ -166,14 +167,19 @@ def run_fuzzy_step(
     pairs = _added_names(step.id, right, step.add, left.columns)
     if MATCH_SCORE in left.columns or MATCH_SCORE in {name for _, name in pairs}:
         raise StagingError(
-            [f"step {step.id!r} gives a {MATCH_SCORE} column, which its left table or its added "
-             "columns already name"]  # fmt: skip
+            [
+                f"step {step.id!r} gives a {MATCH_SCORE} column, which its left table or its added "
+                "columns already name"
+            ]  # fmt: skip
         )
     if not step.block_on and len(left.rows) * len(right.rows) > FUZZY_PAIR_LIMIT:
         raise StagingError(
-            [f"step {step.id!r} would compare {len(left.rows) * len(right.rows):,} pairs, more than "
-             f"{FUZZY_PAIR_LIMIT:,}: declare a blocking key (block_on), so only pairs agreeing "
-             "on it are compared"]  # fmt: skip
+            [
+                f"step {step.id!r} would compare {len(left.rows) * len(right.rows):,} pairs, "
+                "more than "
+                f"{FUZZY_PAIR_LIMIT:,}: declare a blocking key (block_on), so only pairs agreeing "
+                "on it are compared"
+            ]  # fmt: skip
         )
     best = _scores(step, left, right) if left.rows and right.rows else {}
     out: list[StagedTableRow] = []

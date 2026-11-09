@@ -1,7 +1,8 @@
 """The SQL transform, expert mode's one SELECT (ADR-140 decision 12; R4, R15; the redesign's phase
 8; brief §5.3). `schemas.staging.SqlStep` is its record.
 
-**The sandbox** is a private, in-memory DuckDB connection per run of the step (`sandbox_connection`):
+**The sandbox** is a private, in-memory DuckDB connection per run of the step
+(`sandbox_connection`):
 
 - **read-only, no file or network function.** `enable_external_access` is off, so DuckDB opens no
   file, URL or extension (`read_csv`, `read_parquet('https://…')`, `httpfs`, `COPY`, `ATTACH`,
@@ -21,15 +22,15 @@
   step's report counts how many were withheld (rule 2), a count withheld with every other.
 
 **The gate** (`sql_gate_problems`; the save gate, Test, a drawer's sample, Deploy and every run ask
-it): exactly one statement, and that a SELECT; the tables above; a `_ref` column carried through, and
-never named through a list of column names (`c(pin, _ref)` renames by position).
-**`_ref`** (R15, brief §5.2): each input row carries a `_ref` token; every output column named `_ref`
-or starting `_ref_` is read back as the refs of the input rows it names (a token, or a list of them
-from `list(_ref)`), so each output row names every input row it came from and the element Map
-writes from it lists them all. A `_ref` item is a `_ref` column (in a grouped SELECT, one it groups
-on) or `list(_ref)`. At the run, the output must hold such a column, and each input table with rows
-must reach the output through one. Tokens are numbered over the rows the reader may read, so none
-tells where a withheld row was.
+it): exactly one statement, and that a SELECT; the tables above; a `_ref` column carried through,
+and never named through a list of column names (`c(pin, _ref)` renames by position).
+**`_ref`** (R15, brief §5.2): each input row carries a `_ref` token; every output column named
+`_ref` or starting `_ref_` is read back as the refs of the input rows it names (a token, or a list
+of them from `list(_ref)`), so each output row names every input row it came from and the element
+Map writes from it lists them all. A `_ref` item is a `_ref` column (in a grouped SELECT, one it
+groups on) or `list(_ref)`. At the run, the output must hold such a column, and each input table
+with rows must reach the output through one. Tokens are numbered over the rows the reader may read,
+so none tells where a withheld row was.
 
 Nothing here evaluates text in Python, and a refusal names its cause, never a cell's value.
 """
@@ -86,7 +87,9 @@ def sandbox_connection(*, memory_limit: str = SQL_MEMORY_LIMIT) -> duckdb.DuckDB
 # --- The gate ---------------------------------------------------------------------------------
 
 
-def _scoped(node: Any, scope: frozenset[str] = frozenset()) -> Iterator[tuple[dict[str, Any], frozenset[str]]]:
+def _scoped(
+    node: Any, scope: frozenset[str] = frozenset()
+) -> Iterator[tuple[dict[str, Any], frozenset[str]]]:
     """Every node with the CTE names visible at it: a `WITH`'s names are visible within the query
     that declares them (its body and its CTEs, a recursive one included), never outside it, so a
     CTE named like a catalogue table inside a subquery does not let the outer query read the table
@@ -113,9 +116,7 @@ def _carries_a_ref(select_node: dict[str, Any]) -> bool:
     `_ref…` unaliased, or a `*` that does not exclude `_ref`. A set operation (UNION) judges each
     side; anything the AST does not let us judge here is left to the run's check."""
     if select_node.get("type") == "SET_OPERATION_NODE":
-        return all(
-            _carries_a_ref(select_node.get(side) or {}) for side in ("left", "right")
-        )
+        return all(_carries_a_ref(select_node.get(side) or {}) for side in ("left", "right"))
     if select_node.get("type") != "SELECT_NODE":
         return True
     for item in select_node.get("select_list", []):
@@ -146,7 +147,9 @@ def _one_for_many(select_node: dict[str, Any]) -> list[str]:
     is a `_ref…` column (in a grouped SELECT, one it groups on), or `list(_ref…)`; anything else
     (`any_value(_ref)`, `min(_ref)`, a constant, an expression) names one row, or none, for many."""
     grouped = {
-        _names(g) for g in select_node.get("group_expressions", []) if g.get("class") == "COLUMN_REF"
+        _names(g)
+        for g in select_node.get("group_expressions", [])
+        if g.get("class") == "COLUMN_REF"
     }
     has_groups = bool(select_node.get("group_expressions"))
     found: list[str] = []
@@ -154,9 +157,7 @@ def _one_for_many(select_node: dict[str, Any]) -> list[str]:
         if item.get("class") == "STAR":
             continue
         alias = str(item.get("alias") or "")
-        name = alias or (
-            str(item["column_names"][-1]) if item.get("class") == "COLUMN_REF" else ""
-        )
+        name = alias or (str(item["column_names"][-1]) if item.get("class") == "COLUMN_REF" else "")
         if not _is_ref_name(name):
             continue
         if item.get("class") == "COLUMN_REF" and _is_ref_name(str(item["column_names"][-1])):
@@ -206,7 +207,7 @@ def sql_gate_problems(step: SqlStep) -> list[str]:
         found = con.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()
     finally:
         con.close()
-    tree = json.loads(found[0]) if found else {"error": True}
+    tree: dict[str, Any] = json.loads(found[0]) if found else {"error": True}
     if tree.get("error"):
         return [f"step {step.id!r}'s SELECT cannot be read as SQL"]
     problems: list[str] = []
@@ -308,9 +309,7 @@ def run_sql_step(
         except duckdb.Error as exc:
             raise StagingError([f"step {step.id!r}'s SELECT cannot be read as SQL"]) from exc
         if len(statements) != 1:
-            raise StagingError(
-                [f"step {step.id!r} is one SELECT statement, not {len(statements)}"]
-            )
+            raise StagingError([f"step {step.id!r} is one SELECT statement, not {len(statements)}"])
     by_token: dict[str, tuple[StagedRef, ...]] = {}
     rows_in = withheld = 0
     con = sandbox_connection(memory_limit=memory_limit)
@@ -361,14 +360,18 @@ def run_sql_step(
                     continue
                 if token not in by_token:
                     raise StagingError(
-                        [f"step {step.id!r} gives a _ref that names no input row: carry each "
-                         "row's _ref through unchanged"]  # fmt: skip
+                        [
+                            f"step {step.id!r} gives a _ref that names no input row: carry each "
+                            "row's _ref through unchanged"
+                        ]  # fmt: skip
                     )
                 tokens.append(token)
         if not tokens:
             raise StagingError(
-                [f"step {step.id!r} gives a row that carries no input row's _ref: every row it "
-                 "gives must name the rows it came from"]  # fmt: skip
+                [
+                    f"step {step.id!r} gives a row that carries no input row's _ref: every row it "
+                    "gives must name the rows it came from"
+                ]  # fmt: skip
             )
         refs: list[StagedRef] = []
         for token in dict.fromkeys(tokens):
@@ -379,8 +382,10 @@ def run_sql_step(
             cells = {c: _text(record[c]) for c in columns}
         except TypeError as exc:
             raise StagingError(
-                [f"step {step.id!r} gives a column holding a {exc}, which a staged table cannot "
-                 "hold: give it as text (string_agg, CAST … AS VARCHAR)"]  # fmt: skip
+                [
+                    f"step {step.id!r} gives a column holding a {exc}, which a staged table cannot "
+                    "hold: give it as text (string_agg, CAST … AS VARCHAR)"
+                ]  # fmt: skip
             ) from exc
         out.append(StagedTableRow(cells, tuple(refs)))
     if out:

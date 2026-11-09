@@ -24,7 +24,6 @@ from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
 from schemas.analytics import EventRecord
 from schemas.domain import EdgeWrite, NodeWrite, OntologySchema, Principal, SourceRef, TxId
-from schemas.staging import FuzzyMatchStep, SqlStep, StagingStep
 from schemas.ingest import (
     ExpertStepDisclosure,
     LoadReport,
@@ -33,6 +32,7 @@ from schemas.ingest import (
     RejectionRef,
     StagingStepCount,
 )
+from schemas.staging import FuzzyMatchStep, SqlStep, StagingStep
 
 from .engine import DryRunResult, RowKeys, dry_run_recipe, run_recipe
 from .staging import ObjectStorageConfig
@@ -120,7 +120,8 @@ def map_rejection_record(
 def expert_disclosures(steps: Sequence[StagingStep] | None) -> list[ExpertStepDisclosure]:
     """ADR-140 decision 16 and brief §5.3–5.4: what every run report, and Test, says of each expert
     step, in words: the SQL step's summary and SELECT; the fuzzy match's tables, comparisons and
-    threshold, and the SAME_AS it writes, inferred and never a merge. Settings, never a row's value."""
+    threshold, and the SAME_AS it writes, inferred and never a merge. Settings, never a row's
+    value."""
     found: list[ExpertStepDisclosure] = []
     for step in steps or []:
         if isinstance(step, SqlStep):

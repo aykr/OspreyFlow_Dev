@@ -44,10 +44,10 @@ VISITS = [
     {"booking_id": "VB-3", "pin": "P3", "visitor_name": "A. Khan"},
 ]
 CALLS = [
-    {"pin": "P1", "called": "+447700900640"},
-    {"pin": "P1", "called": "+447700900641"},
-    {"pin": "P2", "called": "+447700900718"},
-    {"pin": "P1", "called": "+447700900642"},
+    {"pin": "P1", "called": "+447700900650"},
+    {"pin": "P1", "called": "+447700900651"},
+    {"pin": "P2", "called": "+447700900758"},
+    {"pin": "P1", "called": "+447700900652"},
 ]
 
 

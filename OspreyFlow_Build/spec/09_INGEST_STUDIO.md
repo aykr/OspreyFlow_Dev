@@ -181,7 +181,7 @@ pipeline" (the drawer's **Close** goes back to the step, or lets it go).
 - **Guided and expert mode** (ADR-140 decision 3; Amendment 1.3). **Guided**, every person's default,
   shows the steps as a **numbered list** in the order they run, each opening the same drawer, beside a
   picture of the pipeline with nothing to press. **Expert** shows the canvas as the editor. A step
-  guided mode does not offer (an expert step: a SQL transform or a fuzzy match, ADR-140 decisions 12 and 13, built in phase 8) is listed, labelled "Expert step, read-only here"
+  guided mode does not offer (an expert step: a SQL transform or a fuzzy match, ADR-140 decisions 12 and 13; Amendment 14) is listed, labelled "Expert step, read-only here"
   and opened read-only, never hidden, and guided mode's *Remove selected* refuses it. The mode is a per-person preference **kept in the person's browser**,
   keyed by their user name (`ingest/dag/studioMode.ts`; the owner's ruling Q1 a, 7 November 2026): with
   no preference store on the server, a second browser starts in guided mode again, and a browser that
@@ -1216,7 +1216,7 @@ nothing in this section is wired to anything yet.
 
 Rewritten 5 November 2026 for ADR-140 (rulings R4, R5, R13 and R15). **The guided staging steps'
 engine is built** (ADR-140 Amendment 11), **and so are their drawers** (Amendment 12), **and so are
-the SQL transform and the fuzzy match** (phase 8, Amendment 14). Until a pipeline declares staging
+the SQL transform and the fuzzy match** (Amendment 14). Until a pipeline declares staging
 steps, its sources are separate branches mapped row by row, as §1 describes.
 
 **The expert steps as built** (Amendment 14). `kind: sql` takes `inputs` (the tables it reads),
@@ -1332,7 +1332,7 @@ It also counts the rows its steps staged and the bytes their Parquet took, for t
 (`RunMetering.rows_staged`, `parquet_bytes`), and reports each step's counts (`staging_steps`, withheld
 with the other counts) and each rejection's rows by table, row, load and side (`refs`), never by key.
 
-- **No scripting in guided mode; a sandboxed SELECT in expert mode** (ADR-140: guided mode holds no expression or scripting language; expert mode may declare a sandboxed SELECT; built in phase 8, above).
+- **No scripting in guided mode; a sandboxed SELECT in expert mode** (ADR-140: guided mode holds no expression or scripting language; expert mode may declare a sandboxed SELECT; built as above).
   Guided mode offers a closed catalogue of staging steps (Lookup, Join, Filter, Derive, Union,
   Dedupe), each declared in the recipe's YAML, and every operation in it is a Knowledge Adapter with
   golden tests (§4). Expert mode, for a person holding `write_sql_transforms`, may declare an SQL

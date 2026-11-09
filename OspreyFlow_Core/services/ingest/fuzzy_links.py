@@ -1,14 +1,15 @@
-"""What Map writes from a fuzzy match (ADR-006 Amendment 1; ADR-140 decision 13; R13; rules 5 and 6).
+"""What Map writes from a fuzzy match (ADR-006 Amendment 1; ADR-140 decision 13; R13; rules 5
+and 6).
 
 A pipeline whose last step is a fuzzy match (`fuzzy_match.run_fuzzy_step`) gives Map, on each row,
 the left row's columns, the matched right row's added columns and `match_score`. The engine asks
 this module three things of such a recipe:
 
-- **which elements are inferred** (`FuzzyPlan.inferred`): an entity that binds, or is conditional on,
-  a matched column (an added column or `match_score`), and a link that does, or joins such an
-  entity. On a matched row each is written `inferred`, its `extraction_confidence` the match's
-  score; nothing a fuzzy match decided is ever written as fact (R13; rule 5). A row below the
-  threshold has those cells empty, so what it writes from them is absent.
+- **which elements are inferred** (`FuzzyPlan.entity_inferred`): an entity that binds, or is
+  conditional on, a matched column (an added column or `match_score`), and a link that does, or
+  joins such an entity. On a matched row each is written `inferred`, its `extraction_confidence` the
+  match's score; nothing a fuzzy match decided is ever written as fact (R13; rule 5). A row below
+  the threshold has those cells empty, so what it writes from them is absent.
 - **the row's score** (`FuzzyPlan.score`), read from the row's `match_score` cell.
 - **the `SAME_AS`** (`FuzzyPlan.same_as_edge`): on a matched row, a scored `SAME_AS` between the two
   elements `same_as` names, marked `inferred` with its score, its method and the version's threshold
