@@ -16809,7 +16809,8 @@ async def my_needs_you_route(
     async def still(p: promotion_ageing_module.PendingPromotion) -> list[str]:
         if p.promotion_id not in current:
             return []
-        return await _promotion_recipients(app_, p, people)
+        # The promotion as the seam holds it now, with its items' marking (the contract's field).
+        return await _promotion_recipients(app_, current[p.promotion_id], people)
 
     words_now = promotion_ageing_module.overdue_words
     overdue = [
@@ -17423,7 +17424,9 @@ async def _promotion_recipients(
     each read of `alerts_for`): the dataset's home case's Authors holding `review_promotions` and
     its unit's administrators, cleared to its marking (`promotion_ageing.recipients_of`). The
     dataset's unit and marking are read as they stand now, not as the promotion recorded them, and
-    a dataset no longer held has no recipients. A team's grant is not expanded to its members."""
+    a dataset no longer held has no recipients. The items' own marking is the promotion's and is
+    kept, so a dataset lowered while it waits widens nothing (CARRIES row 46). A team's grant is
+    not expanded to its members."""
     current = (await app.state.datasets.egress_of([p.dataset_id])).get(p.dataset_id)
     if current is None:
         return []

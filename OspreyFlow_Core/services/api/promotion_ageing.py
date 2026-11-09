@@ -79,6 +79,11 @@ class PendingPromotion:
     #: The dataset's highest marking (ADR-145 decision 8), when it has one: a recipient must be
     #: cleared to it, since the alert names the dataset.
     dataset_marking: str | None = None
+    #: The highest marking among the items the promotion carries, as L3.4's record holds it: a
+    #: recipient must be cleared to it too, since the Studio's list hides an item marked above its
+    #: reader whatever the dataset's own marking (an unmarked dataset, or one lowered while the
+    #: promotion waits; CARRIES row 46, L2.7). `None` when no item is marked.
+    items_marking: str | None = None
 
 
 class WaitingPromotions(Protocol):
@@ -164,11 +169,17 @@ def may_review(
 ) -> bool:
     """Amendment 4 decision 11's people for one waiting promotion, all of the dataset's unit: one
     of the dataset's Authors (its home case's, `authors`) whose rights hold `review_promotions`, or
-    an administrator (`administer_system`); and, where the dataset has a highest marking, only one
-    cleared to it. The unit is asked of an Author too: the case recognises an Author grant only for
-    a person of its own unit (`get_authorized`'s `owning_unit`), and a grant outlives a move. The
-    Operations read lists a promotion to these people alone, and the alert goes to them."""
-    if org_unit != p.dataset_unit or not cleared_to(clearance, p.dataset_marking, scheme):
+    an administrator (`administer_system`); and only one cleared to the dataset's highest marking
+    and to the highest marking of the items it carries. The unit is asked of an Author too: the
+    case recognises an Author grant only for a person of its own unit (`get_authorized`'s
+    `owning_unit`), and a grant outlives a move. The Operations read lists a promotion to these
+    people alone, and the alert goes to them."""
+    if org_unit != p.dataset_unit:
+        return False
+    if not (
+        cleared_to(clearance, p.dataset_marking, scheme)
+        and cleared_to(clearance, p.items_marking, scheme)
+    ):
         return False
     rights = rights_for(list(roles), custom)
     if person_id in set(authors) and Right.REVIEW_PROMOTIONS in rights:
@@ -328,9 +339,18 @@ CREATE TABLE IF NOT EXISTS promotion_overdue_alerts (
     dataset_unit TEXT NOT NULL,
     dataset_marking TEXT,
     proposed_by TEXT NOT NULL,
-    proposed_at TIMESTAMPTZ NOT NULL
+    proposed_at TIMESTAMPTZ NOT NULL,
+    items_marking TEXT
 );
 """
+
+#: L2.7: the items' marking, added to a table made before it. The catalogue is asked first, so a
+#: start finding the column takes no lock (`ALTER TABLE … ADD COLUMN IF NOT EXISTS` takes an
+#: exclusive one even when it changes nothing; CARRIES row 22).
+_HAS_ITEMS_MARKING = (
+    "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+    "AND table_name = 'promotion_overdue_alerts' AND column_name = 'items_marking'"
+)
 
 
 class PromotionAgeingStore:
@@ -346,6 +366,11 @@ class PromotionAgeingStore:
         pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=3)
         async with pool.acquire() as conn:
             await conn.execute(_BOOTSTRAP_SQL)
+            if await conn.fetchval(_HAS_ITEMS_MARKING) is None:
+                await conn.execute(
+                    "ALTER TABLE promotion_overdue_alerts "
+                    "ADD COLUMN IF NOT EXISTS items_marking TEXT"
+                )
         return cls(pool)
 
     async def close(self) -> None:
@@ -374,13 +399,13 @@ class PromotionAgeingStore:
             made = await conn.fetchval(
                 "INSERT INTO promotion_overdue_alerts "
                 "(promotion_id, load_id, dataset_id, raised_at, recipients, words, dataset_name, "
-                "dataset_unit, dataset_marking, proposed_by, proposed_at) "
-                "VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11) "
+                "dataset_unit, dataset_marking, proposed_by, proposed_at, items_marking) "
+                "VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12) "
                 "ON CONFLICT (promotion_id) DO NOTHING RETURNING promotion_id",
                 alert.promotion_id, alert.load_id, alert.dataset_id, alert.raised_at,
                 json.dumps(alert.recipients), alert.words, promotion.dataset_name,
                 promotion.dataset_unit, promotion.dataset_marking, promotion.proposed_by,
-                promotion.proposed_at,
+                promotion.proposed_at, promotion.items_marking,
             )  # fmt: skip
         return made is not None
 
@@ -402,7 +427,7 @@ class PromotionAgeingStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT promotion_id, load_id, dataset_id, raised_at, words, dataset_name, "
-                "dataset_unit, dataset_marking, proposed_by, proposed_at "
+                "dataset_unit, dataset_marking, proposed_by, proposed_at, items_marking "
                 "FROM promotion_overdue_alerts WHERE recipients ? $1 ORDER BY raised_at DESC",
                 person,
             )
@@ -422,6 +447,7 @@ def _kept_promotion(row: Mapping[str, object]) -> PendingPromotion:
         dataset_unit=str(row["dataset_unit"]), proposed_by=str(row["proposed_by"]),
         proposed_at=row["proposed_at"],  # type: ignore[arg-type]
         dataset_marking=row["dataset_marking"],  # type: ignore[arg-type]
+        items_marking=row.get("items_marking"),  # type: ignore[arg-type]
     )  # fmt: skip
 
 

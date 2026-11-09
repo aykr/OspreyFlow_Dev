@@ -305,6 +305,50 @@ def test_a_promotion_no_longer_waiting_is_not_shown(world: SimpleNamespace) -> N
     assert _read(world, "rev-1")["promotions_overdue"] == []
 
 
+def test_an_item_marked_above_a_reviewer_on_an_unmarked_dataset_is_not_served_to_them(
+    world: SimpleNamespace,
+) -> None:
+    """CARRIES row 46: an item marked SECRET in a promotion into an unmarked dataset. An OFFICIAL
+    Author holding `review_promotions` may not see the item in the Studio's list, so the alert is not
+    served to them; a SECRET one is. Red with the items' marking left out of `may_review`."""
+    import asyncio
+    from dataclasses import replace
+
+    plain = _dataset("ds-a", "Prison records", None)
+    world.datasets.held["ds-a"] = plain
+    item = replace(PROMOTION, dataset_marking=None, items_marking="SECRET")
+    world.waiting.waiting = [item]
+    world.people.append(_account("low-1", ["data_engineer"], clearance="OFFICIAL"))
+    _token(world.people[-1])
+    world.investigations.grants["home-a"]["low-1"] = AccessLevel.AUTHOR
+    alert = PromotionOverdueAlert(promotion_id="pr-1", load_id="load-7", dataset_id="ds-a",
+                                  raised_at=T0 + timedelta(days=3), recipients=["low-1", "rev-1"],
+                                  words="w")  # fmt: skip
+    assert asyncio.run(world.ageing.raise_once(alert, item))
+    assert _read(world, "low-1")["promotions_overdue"] == []
+    assert [n["promotion_id"] for n in _read(world, "rev-1")["promotions_overdue"]] == ["pr-1"]
+
+
+def test_a_dataset_lowered_while_the_promotion_waits_widens_nothing(world: SimpleNamespace) -> None:
+    """Raised while the dataset was SECRET, its items SECRET; the dataset's highest marking is then
+    lowered to OFFICIAL. An OFFICIAL reviewer is still not served it: the items' marking is the
+    promotion's, kept. Red with the items' marking left out of `may_review`."""
+    import asyncio
+    from dataclasses import replace
+
+    item = replace(PROMOTION, items_marking="SECRET")
+    world.waiting.waiting = [item]
+    world.people.append(_account("low-1", ["data_engineer"], clearance="OFFICIAL"))
+    _token(world.people[-1])
+    world.investigations.grants["home-a"]["low-1"] = AccessLevel.AUTHOR
+    alert = PromotionOverdueAlert(promotion_id="pr-1", load_id="load-7", dataset_id="ds-a",
+                                  raised_at=T0 + timedelta(days=3), recipients=["low-1", "rev-1"],
+                                  words="w")  # fmt: skip
+    assert asyncio.run(world.ageing.raise_once(alert, item))
+    world.datasets.held["ds-a"] = _dataset("ds-a", "Prison records", "OFFICIAL")
+    assert _read(world, "low-1")["promotions_overdue"] == []
+
+
 def test_the_people_are_read_once_a_read(world: SimpleNamespace) -> None:
     """The recipients of every stored alert are asked from one read of the people (the top bar
     reads every minute)."""

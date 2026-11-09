@@ -3,7 +3,8 @@ Amendment 4 decision 11, Amendment 6 decision 5; rule 1: the suite before the st
 
 Operations lists a promotion waiting for review only to the people decision 11 names: the dataset's
 Authors holding `review_promotions`, and the administrators of the dataset's unit; in either case
-only someone cleared to the dataset's highest marking. Holding `operate_schedules`, which opens
+only someone cleared to the dataset's highest marking and to the highest marking of the items the
+promotion carries (`items_marking`, L2.7: an unmarked dataset's marked item, CARRIES row 46). Holding `operate_schedules`, which opens
 Operations, lists none on its own. The store filters in its own read (rule 3), so this is the store's
 test, not the route's.
 
@@ -45,9 +46,11 @@ PROMOTIONS = [
     # Its dataset has no highest marking, and its items are marked SECRET: the dataset's marking
     # does not bound them, so the items' own marking is asked (rule 3; the independent review's
     # round 2, item 3).
+    # One case for both lanes' (case's p-item-high, admin's p-item; CARRIES row 46): the store
+    # must supply `items_marking`, the highest current marking of the items it carries.
     PendingPromotion(promotion_id="p-item-high", load_id="load-3", dataset_id="ds-p",
                      dataset_name="Synthetic visits", dataset_unit="unit-1",
-                     proposed_by="ana-1", proposed_at=SENT),
+                     proposed_by="ana-1", proposed_at=SENT, items_marking="SECRET"),
 ]  # fmt: skip
 #: The highest marking among each promotion's own items, where it is above the lowest.
 ITEM_MARKINGS: dict[str, str] = {"p-item-high": "SECRET"}
