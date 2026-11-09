@@ -1,0 +1,15 @@
+# as of 2026-11-09T20:36:42Z
+studio	L1.5	clear after its live run on b, then the merge	~1½–2 h
+case	L3.4	live run on e, then round-3 review	~2–3 h
+platform	P5	round 3 on d, then re-review	~2–3 h
+rules	L2.10	ClickHouse fix on c, then independent review	~2–3 h
+admin	L2.7	three must-fixes, then gates and re-review	~3–4 h
+admin	L2.5b	after L2.7	~3 h after L2.7
+studio-b	tips	the Studio's tips patches, after L2.7	~1–2 h after L2.7
+platform	P5b	backups folder, after P5	~3 h after P5
+platform	P6	gazetteer panel, after P5	~3 h after P5
+case	L3.6	after L3.4 and L2.10	~3 h after both
+case	L3.9	after L3.4	~8–10 h after L3.4
+rules	L2.11	after L2.10	~8–10 h after L2.10
+studio	L1.7	after L1.5	~8–10 h after L1.5
+docs	D2a+b	last	~6–8 h, last

@@ -38,6 +38,10 @@ STATES="planning working testing waiting-for-owner blocked ready-to-merge idle p
 LAUNCHER="${OSPREY_LAUNCHER:-$(cd "$(dirname "$0")" && pwd)/lanes_launch.sh}"
 # The step table the orchestrator keeps on main (process/lanes/progress.tsv).
 PROGRESS="${OSPREY_PROGRESS_FILE:-$(cd "$(dirname "$0")/.." && pwd)/process/lanes/progress.tsv}"
+# The orchestrator's estimates of time to merge, beside the step table (the owner, 9 November 2026: "add the
+# time estimates table to the heartbeat dashboard"). Tab-separated: lane, step, where it is, estimate; a first
+# line `# as of <UTC ISO time>` says when they were made, so the dashboard can say how old they are.
+ESTIMATES="${OSPREY_ESTIMATES_FILE:-$(dirname "$PROGRESS")/estimates.tsv}"
 mkdir -p "$DIR"
 
 now() { echo "${OSPREY_NOW:-$(date -u +%s)}"; }   # OSPREY_NOW: the test's clock
@@ -144,6 +148,20 @@ stacks_lines() {
   done
 }
 
+# The estimates table, with when it was made and how long ago; nothing when there is no estimates file.
+estimates() {
+  [ -s "$ESTIMATES" ] || { echo; return 0; }
+  local asof ago="" t
+  asof="$(sed -n 's/^# as of //p' "$ESTIMATES" | head -1)"
+  if [ -n "$asof" ]; then
+    t="$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$asof" +%s 2>/dev/null || date -u -d "$asof" +%s 2>/dev/null || echo "")"
+    [ -n "$t" ] && ago=", $(( ($(date -u +%s) - t) / 60 ))m ago"
+  fi
+  echo "ESTIMATED TIME TO MERGE (the orchestrator's${asof:+, as of ${asof:11:5} UTC}$ago):"
+  grep -v '^#' "$ESTIMATES" | awk -F'\t' 'NF >= 4 { printf "  %-9s %-6s %-46s %s\n", $1, $2, substr($3, 1, 46), $4 }'
+  echo
+}
+
 # `show` is one screen: a heading and at most one note line per lane, with the step it is on (the owner,
 # 8 November 2026: no scrolling). `show --full` adds every step as a checklist.
 show() {
@@ -233,7 +251,7 @@ show() {
     elif [ -n "$note" ]; then printf '  note: %s\n' "${note:0:90}"; fi
     echo
   done
-  echo
+  estimates
   echo
   if [ -s "$needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$needs"; else echo "Nothing needs you."; fi
   # The orchestrator's own queue: shown for information, never notified.

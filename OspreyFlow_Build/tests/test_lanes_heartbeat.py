@@ -368,3 +368,29 @@ def test_the_default_view_fits_one_screen_and_names_each_lanes_current_step(hb, 
     assert all(len(line) <= 120 for line in lines), "a note is trimmed to the screen"
     full = hb("show", "--full", OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout
     assert "to do        ST8" in full
+
+
+
+# --- The orchestrator's estimates on the dashboard (the owner, 9 November 2026) ------------------------------
+
+
+def test_show_prints_the_orchestrators_estimates_with_their_age(hb, tmp_path) -> None:
+    table = tmp_path / "progress.tsv"
+    table.write_text("studio\tL1.5\tL\tbuilding\tExpert steps\n")
+    (tmp_path / "estimates.tsv").write_text(
+        "# as of 2026-11-09T20:50:00Z\n"
+        "studio\tL1.5\tlive run on b, then the merge\t~1 h\n"
+        "case\tL3.9\tafter L3.4\t~8-10 h after L3.4\n"
+    )
+    out = hb("show", OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout
+    assert "ESTIMATED TIME TO MERGE (the orchestrator's, as of 20:50 UTC" in out and "m ago)" in out
+    assert "live run on b, then the merge" in out and "~8-10 h after L3.4" in out
+    needs = out.find("NEEDS YOU:") if "NEEDS YOU:" in out else out.index("Nothing needs you")
+    assert out.index("ESTIMATED TIME TO MERGE") < needs  # above what needs the owner
+
+
+def test_show_prints_no_estimates_section_without_the_file(hb, tmp_path) -> None:
+    table = tmp_path / "progress.tsv"
+    table.write_text("studio\tL1.5\tL\tbuilding\tExpert steps\n")
+    out = hb("show", OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout
+    assert "ESTIMATED TIME TO MERGE" not in out
