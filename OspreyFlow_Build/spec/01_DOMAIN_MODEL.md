@@ -811,7 +811,8 @@ a source. It carries `provenance.drawn` (`DrawnAssertion`, `schemas/domain.py`),
   the grade always kept with its scheme), in the deployment's one scheme (`grading.scheme`, ADR-143
   decision 11: `5x5x5` by default, or `3x5x2`, whose handling code P or C is part of the grade and
   never merged with the marking; decision 11's third form, a scheme file, is not built: the setting
-  takes the two names alone, and an unknown one stops the Conduit's start). An opened board offers that scheme's grades, and a drawn node,
+  takes the two names alone, and an unknown one stops the Conduit's start). `GET /v1/grading-scheme`
+  answers `GradingSchemeAnswer`: the scheme and each part's grades, for Admin's read-only display. An opened board offers that scheme's grades, and a drawn node,
   link or edit graded in any other is refused (422 `grading_scheme`) before anything is written;
 - `original_grading`, absent until the scheme is first changed, then the grade and scheme the item
   had before that change, kept for good through every later one;

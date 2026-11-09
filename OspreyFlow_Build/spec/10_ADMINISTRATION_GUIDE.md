@@ -759,6 +759,7 @@ Every question `install` asks can be answered in this file; unknown settings are
 | `starter` | A starter, `<theme>-<domain>` (section 1a): fills in the answers below that are not given |
 | `appearance.brand`, `appearance.service_name`, `appearance.organisation`, `appearance.phase` | The look (appendix A's `appearance`); `govuk` needs `service_name`, which names the whole service |
 | `demo_accounts` | `true` (default) makes the demo accounts; `false` makes none (the `blank` starter's answer) |
+| `grading.scheme` | `5x5x5` (default) or `3x5x2`: the scheme drawn items are graded in. Changed later only by `python -m scripts.grading_change` with a mapping, a dry run first, then `grading.scheme` set and the deployment started again |
 
 The answers become `osprey.yaml` (appendix A): `mode` sets `profile`, `components.dashboards` sets
 both `reporting.sync` and `reporting.superset`, and the address is `http://ospreyflow.localhost` for
@@ -1460,6 +1461,8 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `appearance.service_name` | str or none | none | The service's name, in the page title. |
 | `appearance.organisation` | str or none | none | The organisation in the GOV.UK footer and the page title. |
 | `appearance.phase` | `alpha` \| `beta` \| `live` \| `none` | `none` | The phase banner shows at alpha or beta. |
+| `grading` | section | — | The scheme every drawn node and link is graded in (ADR-143 decision 11); changed only by `python -m scripts.grading_change`. |
+| `grading.scheme` | `5x5x5` \| `3x5x2` | `5x5x5` | The scheme drawn items are graded in: 5x5x5, or 3x5x2, whose handling code (P or C) is part of the grade and never merged with the marking. |
 | `external` | section | — | What a cloud runs for the deployment instead of a container (Small). |
 | `external.postgres` | section or none | none | A cloud's managed PostgreSQL; its password arrives at install. |
 | `external.postgres.host` | str | required | The managed server's address |

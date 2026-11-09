@@ -110,6 +110,7 @@ SECTIONS = {
     "mail": "A mail server, for invitations and password resets by email.",
     "welcome": "The welcome page before sign-in: its About section and footer links.",
     "appearance": "How every page looks: the deployment's brand, and what its page title names.",
+    "grading": "The scheme every drawn node and link is graded in (ADR-143 decision 11); changed only by `python -m scripts.grading_change`.",
     "deployment": "Which deployment this is, on a machine that runs more than one.",
     "external": "What a cloud runs for the deployment instead of a container (Small).",
     "external.postgres": "A cloud's managed PostgreSQL; its password arrives at install.",
