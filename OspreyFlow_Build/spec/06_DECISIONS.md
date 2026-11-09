@@ -30997,14 +30997,19 @@ Open: none.
 Status: accepted from the owner's ruling of 9 November 2026 on studio-b's L1.8 question: who can is said by
 naming the roles that hold a right, never the people (option C). ADR-145 Amendment 4 decision 12 is unchanged
 except where this says so, and its example ("D. Engineer and S. Lead have it") is closed by decision 1 below.
-Built in Lane 1 (L1.8).
+Built in Lane 1 (L1.8), in two parts. Decision 5's wording and gate are on `main` with L1.8's merge. Decisions
+1–4 are built as patches (`process/lanes/studio-b/L1.8_roles_words.patch`, `L1.8_studio_tips.patch`,
+`L1.8_action_registry.diff`, `L1.8_every_harness.diff`; `L1.8_PATCHES.md`). They build on rules-b's
+`help/roles.ts`, so they land on `main` with rules-b's L2.12, after its `admin-tips.patch`. Until then the
+Studio's refused actions are disabled as before, and Admin › Roles still says "Edit target model".
 
 **Decision.**
 
 1. **Who can is said by role, never by person (the owner's ruling).** An action a person can't take says
    why and who can by naming the built-in roles that hold the right. For example: "You need Review
    promotions; the Data Engineer role has it. Ask an administrator to give it to you." With several roles:
-   "…; the Data Engineer and Source author roles have it. Ask an administrator to give you one." It never
+   "You need Load screening lists; the Data Engineer and Administrator roles have it. Ask an administrator to
+   give you one." It never
    names a person, a role id, a role these words do not name (the Studio's older roles, which ADR-112
    folded into the Data Engineer), or the Super user preset (which is given as three roles). A custom role
    is an administrator's, so it is not named. Naming the people who hold a right would tell someone who is not an
@@ -31081,6 +31086,15 @@ and was then refused at each of the three. It failed closed: nothing leaked, but
 4. **L1.4's stand-in stays retired, and a test holds it.** No module that a deployment runs refers to
    `reference_list_import.import_list`, resolved by module. `list_connector.import_list`, a deployment-wide
    list's import, is a different function.
+5. **The SQL connector's byte cap, its bound stated** (L1.8's other carry, from the independent review of
+   L1.6; rule 2). The server keeps a running total of each row's size in its own count,
+   `octet_length(ROW(...)::text)`, and sends values only for rows within the cap. The read counts each row
+   again in UTF-8 bytes, as the file will hold it, and refuses at the first row that crosses the cap,
+   having held none past it. So the read never holds more than the cap in the file's bytes, for any source.
+   Where the database's count is the smaller (booleans, `t` against the file's `true`; or a non-UTF-8
+   database, where LATIN1 counts one byte for `é` and UTF-8 two), the rows the server sends may come to more
+   than the cap in the file's bytes. At most that is the source's own ratio of file bytes to its bytes:
+   2 for LATIN1 text, and under 2 for booleans. The read's own count is then the one that refuses.
 
 **Tests** (`OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py`; red records in
 `process/lanes/studio-b/l1.8/red-carry-subscribed.txt`):
@@ -31095,6 +31109,15 @@ and was then refused at each of the three. It failed closed: nothing leaked, but
   missed nine of them. Its green half is `test_the_caller_check_passes_the_real_callers_shape`.
 - `test_nothing_but_tests_seeds_a_list`, shown red by three plants. Its green half is the list connector's own
   `import_list`.
+- A subscribed list read by a run against the real stores, Postgres's list store and the object store:
+  `test_subscribed_lookup_live.py`, red with the run's `subscribed=` taken out, live under a lease.
+- The subscribed list's rows withheld from a case that does not read the dataset, at the sample and at Test,
+  including a case whose own dataset subscribes the same list (`test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_the_sample`
+  and `..._at_test`). Test's is red with its guard removed. The sample's two guards (the dataset's, and a
+  Lookup's lists') each back the other, so its case is red only with both removed.
+- The byte cap's own UTF-8 count: `test_the_read_counts_the_file_s_bytes_where_the_database_counts_fewer`
+  (`tests/connectors/test_sql_connector_live.py`), 300 truth values under the cap in the database's count and
+  over it in the file's. It is red with the read's own count removed, live.
 
 **Cost and what is open.** The `subscribed: Collection[str] = ()` defaults remain in `staging_catalogue`,
 `staged_run` and `reference_list_import`, which are the Studio lane's (`services/ingest/**`). Removing them would
