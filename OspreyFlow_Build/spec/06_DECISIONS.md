@@ -30613,3 +30613,27 @@ for the ruling. An incremental source's file
 grows with each read; pruning rows every pipeline has loaded is not built (a file past the cap is
 refused in words). A torn write of a read's file has no test that could catch it in one process; the
 rename is recorded as untested.
+
+### ADR-146, Amendment 3 (9 November 2026) — `load_screening_lists` acts in Rules and Monitoring and in Studio › Sources' list connector
+
+Status: accepted, the orchestrator's reconciliation of 9 November 2026 (on the owner's review list),
+written in the studio-b lane at step L1.6. Decision 2 is unchanged except where this says so.
+
+**Context.** Decision 2 made `load_screening_lists` one of the rights that act only in Rules and
+Monitoring, so every route asking for it is that place's (`test_place_routes.py`'s
+`RULES_ONLY_RIGHTS`). ADR-140 Amendment 9 decision 3, accepted earlier, puts a screening list's
+deployment-wide import "through a list connector in Studio › Sources", and Amendment 13 built it as
+five routes under `/v1/studio/screening-lists` that ask for `load_screening_lists`. The two
+decisions met at L1.6's gate.
+
+**Decision.** `load_screening_lists` acts in Rules and Monitoring (ADR-133's Lists, unchanged) and in
+Studio › Sources' list connector, the routes under `/v1/studio/screening-lists`, and nowhere else.
+**No one's rights change:** the same roles hold the right (Data engineer and Administrator), and
+each route still asks for it. A Studio list route is answered to whoever holds the right, as ADR-133's
+are; an administrator who is not offered the Studio is recorded as answered there
+(`shell/placesByRole.json`'s `answered_hidden`), as decision 2's gate already records for other places.
+
+**Tests.** `test_place_routes.py`: `RULES_ONLY_RIGHTS` no longer holds the right;
+`test_every_route_loading_screening_lists_is_rules_or_the_studio_list_connector_s` finds any route
+asking for it outside the two, red with the Studio's path narrowed to nothing (5 routes found) and
+with a planted Glass route (`test_a_list_loading_route_elsewhere_is_found`).
