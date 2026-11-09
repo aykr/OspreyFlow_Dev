@@ -28,8 +28,12 @@ reader; `feed_rows` carries them as figures only.
 - `journey.ts`: the Reports Viewer's URLs (Figures from an alert, the board from an alert) and reading them.
 - `alertBadges.ts` + overlay (mount is a patch for case).
 - `help/roles.ts` (one source of words), `help/RolesHelpPage.tsx`; Admin's and the Studio's tips as patches.
-- Out of map, additive, for ratification: `App.tsx` (Figures label, board, journey), `home/HomePage.tsx`,
-  `home/homeData.ts` (the Reports Viewer's two actions).
+- Out of map, additive, for ratification: `App.tsx` and `App.test.tsx` (Figures label, board, journey),
+  `home/HomePage.tsx`, `home/homeData.ts` and their tests (the Reports Viewer's two actions; `homeData.ts`
+  reads its rule group from `reports/figureParts.tsx`), `shell/startScreen.tsx` (the journey's start).
+  Shared test kit, where the view switch now says *Figures*: `a11y/every-harness.spec.ts` (the alert-figures
+  harness's states), `keyboard/{reports,shell}.spec.ts`, `keyboard/{reports,top-bar,places,
+  case-screen-options}-harness.tsx`, `live/capture-kit.ts`.
 
 ## Tests first, each red by a plant at the real call site
 1. `test_monitoring_dashboard.py`: the new sections count as specified; a hidden alert changes neither

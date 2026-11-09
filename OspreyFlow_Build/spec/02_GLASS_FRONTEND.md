@@ -510,7 +510,8 @@ is, the address kept (`alerts/address.ts`); an address opened while signed out i
 session storage over the sign-in round trip, which returns to the root. Opening an alert in the queue,
 on Home's *Needs your attention* or from the inbox's *Open the alert* gives it its address; Back leaves
 it. Home's alert rows open the alert for whoever Rules and Monitoring is offered to; for someone it is
-not (a Reports Viewer) they stay on the Glass's card and open the case, until L2.12. An address followed
+not (a Reports Viewer) a row offers *Open in its case* and *Open the dashboard*, never the alert (ADR-145
+Amendment 4 decision 10; the journey is under the case's *Figures*). An address followed
 by someone the place is not offered to opens the Glass instead, and the address is left. The place, like
 the Studio, draws none of the Glass's working-set tools (the Inspector, the timeline, the status line).
 **Open the evidence** (R5) saves the alert's evidence, the nodes the reader was shown, as a private view of
