@@ -1,0 +1,15 @@
+--- make lanes-check alone, at 39e2348, 10:52:21Z
+============================= 82 passed in 35.57s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
+exit 0
+--- MatrixView.budget alone, at 39e2348
+      Tests  1 passed (1)
+--- make test's failures, at main c678a84, offline
+E             ERROR: failed to build: failed to solve: nginx:1.30-alpine: failed to resolve source metadata for docker.io/library/nginx:1.30-alpine: unexpected status from HEAD request to https://regi
+E             ERROR: failed to build: failed to solve: nginx:1.30-alpine: failed to resolve source metadata for docker.io/library/nginx:1.30-alpine: unexpected status from HEAD request to https://regi
+FAILED ../OspreyFlow_Build/tests/services/api/test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly
+FAILED ../OspreyFlow_Build/tests/test_phone_extraction_fixture.py::test_the_extraction_loads_as_documents_held_by_the_phones
+ERROR ../OspreyFlow_Build/tests/harness/test_workspace_proxy.py::test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api]
+ERROR ../OspreyFlow_Build/tests/harness/test_workspace_proxy.py::test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api.osprey.svc.cluster.local]
+2 failed, 3 passed, 2 errors in 7.39s
