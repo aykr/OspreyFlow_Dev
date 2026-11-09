@@ -35,6 +35,10 @@ _DOCKER = {
 def lease(tmp_path: Path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
+    # Stacks b to e are on the owner's test server: a no-op ssh, so no case ever reaches the real one (the
+    # remote cases replace it with a recording one).
+    (bin_dir / "ssh").write_text("#!/bin/sh\nexit 0\n")
+    (bin_dir / "ssh").chmod(0o755)
     lease_dir = tmp_path / "lease"
 
     def run(*args: str, docker: str = "down") -> subprocess.CompletedProcess[str]:
@@ -56,7 +60,7 @@ def lease(tmp_path: Path):
 
 def test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder(lease) -> None:
     """ADR-142 Amendments 3 and 4: throwaway stacks, one holder each, a, b and c on this machine and d and e on
-    the owner's test server (9 November 2026). The first five lanes get a to e in order; the sixth is refused
+    the owner's test server (9 November 2026; b and c moved there the same day). The first five lanes get a to e in order; the sixth is refused
     and told who holds each."""
     lanes = ["studio", "rules", "case", "admin", "platform"]
     for lane, stack in zip(lanes, "abcde"):
@@ -327,3 +331,33 @@ def test_a_remote_stack_s_release_asks_its_own_host(lease, tmp_path: Path) -> No
         del _DOCKER["recording"]
     ps = [c for c in log.read_text().splitlines() if " ps " in c]
     assert ps and all("host=ssh://ospreyflow-test" in c for c in ps), ps
+
+
+# --- Local stacks off on this machine (the owner, 9 November 2026: test on the server, not this machine) -----
+# While <lease dir>/no-local-stacks exists, a stack with no host in lane_stack_hosts.tsv is never leased.
+
+
+def test_with_local_stacks_off_a_default_acquire_skips_the_local_stack(lease) -> None:
+    lease.lock.parent.mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "no-local-stacks").touch()
+    taken = lease("acquire", "studio", "a run")
+    assert taken.returncode == 0, taken.stderr
+    assert "stack b" in taken.stdout
+    assert not lease.lock.exists()
+
+
+def test_with_local_stacks_off_naming_the_local_stack_is_refused(lease) -> None:
+    lease.lock.parent.mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "no-local-stacks").touch()
+    taken = lease("acquire", "studio", "the ClickHouse run", "a")
+    assert taken.returncode == 1
+    assert "local stacks are off" in taken.stderr
+    assert not lease.lock.exists()
+
+
+def test_with_local_stacks_off_status_says_so(lease) -> None:
+    lease.lock.parent.mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "no-local-stacks").touch()
+    status = lease("status").stdout.splitlines()
+    assert "a: off (local stacks are off on this machine)" in status
+    assert "b: free" in status

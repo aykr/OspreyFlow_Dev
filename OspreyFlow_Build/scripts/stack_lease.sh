@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # The lanes' throwaway test stacks, each used by one lane at a time (spec/06_DECISIONS.md ADR-142 decision 4
-# and Amendment 3; process/CLAUDE.md rule 14). Stacks a, b and c on this machine and d and e on the owner's
-# test server, listed in scripts/lane_stacks.tsv; scripts/lane_stack_hosts.tsv names a remote stack's host.
+# and Amendment 3; process/CLAUDE.md rule 14). Stack a on this machine and b to e on the owner's test server
+# (b and c moved there on 9 November 2026), listed in scripts/lane_stacks.tsv; scripts/lane_stack_hosts.tsv names a remote stack's host.
+# While $OSPREY_LEASE_DIR/no-local-stacks exists (the owner's per-machine switch, 9 November 2026: test on the
+# server, not this machine), acquire never takes a stack with no host, even one asked for by name.
 #
 #   OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>" [a|b]   take a free stack (a first),
 #                                                                          or the one named; or say who holds each
@@ -44,6 +46,8 @@ docker_for() {
   local h; h="$(host_of "$1")"; shift
   if [ -n "$h" ]; then DOCKER_HOST="ssh://$h" docker "$@"; else docker "$@"; fi
 }
+# Whether a stack may be leased on this machine: a local one not while no-local-stacks is there.
+offered() { [ ! -e "$DIR/no-local-stacks" ] || [ -n "$(host_of "$1")" ]; }
 tunnel_sock() { echo "$DIR/tunnel-$1.sock"; }
 # One ssh connection carrying each of a remote stack's ports to this machine's 127.0.0.1.
 tunnel_open() {
@@ -109,9 +113,14 @@ case "$cmd" in
     fi
     if [ -n "$want" ]; then
       case " $STACKS " in *" $want "*) ;; *) echo "No stack '$want' (one of: $STACKS)." >&2; exit 2;; esac
+      if ! offered "$want"; then
+        echo "Stack $want runs on this machine, and local stacks are off here ($DIR/no-local-stacks): take a server stack." >&2
+        exit 1
+      fi
       try="$want"
     else
-      try="$STACKS"
+      try=""
+      for s in $STACKS; do if offered "$s"; then try="$try $s"; fi; done
     fi
     for s in $try; do
       lock="$(lock_of "$s")"
@@ -175,7 +184,9 @@ case "$cmd" in
   status)
     for s in $STACKS; do
       lock="$(lock_of "$s")"
-      if [ -d "$lock" ]; then
+      if ! offered "$s"; then
+        echo "$s: off (local stacks are off on this machine)"
+      elif [ -d "$lock" ]; then
         printf '%s: %s\n' "$s" "$(tr '\n' ' ' < "$lock/info" 2>/dev/null | sed 's/ $//' || echo "held (no details recorded yet)")"
       else
         echo "$s: free"

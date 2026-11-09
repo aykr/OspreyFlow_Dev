@@ -447,6 +447,18 @@ New ones are added at the bottom as they happen.
     Checked live under a lease: ArcadeDB, Postgres, Valkey and the object store all answered. **For you:** on that
     server port 1099 (likely the `osprey-small` ArcadeDB's JMX) listens on every interface and its firewall
     (ufw) is inactive, so it may be reachable from outside. Not changed by me; worth closing.
+73. **Every test stack on your server, none on this machine (9 November about 12:30 UTC, your word: "instead of using
+    my machine for testing the stack, use the small server").** The machine had rebooted; every lane session was gone,
+    Docker Desktop was not running, and the leases on b (case) and c (studio) were left by dead sessions, so I removed
+    them. Stacks b and c were recreated on `ospreyflow-test` like d (same images and settings, their own ports, bound to
+    127.0.0.1 there) and listed in `lane_stack_hosts.tsv`. The new `~/.ospreyflow/no-local-stacks` switch makes
+    `stack_lease.sh` refuse stack a, the last local one, even when it is asked for by name. b and c were checked live
+    under my lease: ArcadeDB, Postgres, Valkey and the object store all answered through the tunnel. Three cases were red
+    first against the old script. The fixture now gives every case a no-op `ssh`, so no case reaches the real server.
+    **The cost:** `test_statelessness_clickhouse.py` runs under stack a only, so it cannot run until stack a is
+    switched back on (`rm ~/.ospreyflow/no-local-stacks`, with Docker Desktop started). Docker Desktop stays off,
+    so the local image scans in `make ci` are refused (`make -k ci`, as on the 429 days). Each lane uses the lease
+    script from main's checkout, not its own branch's copy, until it next rebases.
 
 ## Evening, 7 November: your records of 7 November applied
 
