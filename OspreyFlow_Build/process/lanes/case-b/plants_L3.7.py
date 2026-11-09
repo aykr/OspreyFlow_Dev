@@ -20,6 +20,7 @@ S = "../OspreyFlow_Build/tests/services/api/test_grading_setting.py"
 A = "../OspreyFlow_Build/tests/cli/test_grading_answers.py"
 R = "../OspreyFlow_Build/tests/services/api/test_grading_registry.py"
 B = "../OspreyFlow_Build/tests/services/api/test_grading_boards.py"
+L = "../OspreyFlow_Build/tests/services/api/test_grading_change_live.py"
 G = "services/api/grading.py"
 CMD = "scripts/grading_change.py"
 
@@ -111,6 +112,19 @@ OFFLINE: list[Plant] = [
 ]
 
 LIVE: list[Plant] = [
+    ("the dry run writes as the change does, against ArcadeDB", G,
+     [("    if dry_run:\n        return plan\n    for done", "    for done")],
+     [f"{L}::test_the_change_rewrites_each_grade_in_the_store_keeping_its_original_and_the_rest"]),
+    ("a second change overwrites the original, against ArcadeDB", G,
+     [("mapping.apply(item.grading), item.original or item.grading)",
+       "mapping.apply(item.grading), item.grading)")],
+     [f"{L}::test_the_change_rewrites_each_grade_in_the_store_keeping_its_original_and_the_rest"]),
+    ("the node's rewrite written into the source dataset, against ArcadeDB", G,
+     [("                        created_by=self.written_by, created_at=now, datasets=element.datasets,\n"
+       "                    )],\n                    tx,\n                )  # fmt: skip\n            else:",
+       "                        created_by=self.written_by, created_at=now, datasets=[\"src\"],\n"
+       "                    )],\n                    tx,\n                )  # fmt: skip\n            else:")],
+     [f"{L}::test_the_change_rewrites_each_grade_in_the_store_keeping_its_original_and_the_rest"]),
     ("the registry read includes withdrawn items", CMD,
      [('    "WHERE withdrawn_at IS NULL AND kind IN', '    "WHERE kind IN')],
      [f"{R}::test_the_registry_read_is_every_cases_live_drawn_nodes_and_links"]),
