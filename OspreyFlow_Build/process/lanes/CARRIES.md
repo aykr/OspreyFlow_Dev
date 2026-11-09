@@ -19,3 +19,4 @@ takes them (then struck through with the brief's commit). Newest last.
 | rules | *See the trend* in the queue's detail opening the board filtered (patch in process/lanes/rules-b/) | rules-b, L2.12 | L2.10 or L2.11 |
 | case | A case's own proposed link types usable at once on its boards, through LinkTypeService.case_types (decision 9); case-b's L3.5 closes the cross-case leak (hidden types left out of BoardService.link_types) | case-b, L3.5 | L3.4 |
 | case | The promotion writer calls LinkTypeService.promotion_refusals; test_every_promotion_writer_asks_which_links_may_go holds it | case-b, L3.5 | L3.4 |
+| case | DatasetStore's bootstrap takes AccessExclusiveLock even when nothing changes (ALTER TABLE … ADD COLUMN IF NOT EXISTS), so a starting replica waits behind live reads and one process can deadlock itself: check the catalogue first, or a one-shot migration (found by admin's L2.6 live run) | admin, L2.6 | L3.4 or a hygiene step |
