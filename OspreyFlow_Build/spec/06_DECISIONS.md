@@ -31223,7 +31223,15 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
      uncounted (rule 3 over rule 2, as the L3.3 withdrawal ruling).
    - A merge carries the layer's drawn items (the board registry's). The analyst's own resolution
      links and hand-marking in the layer (Amendment 1) stay; a delete withdraws them with the rest.
-   - A composite case's layer is never merged, only deleted (the orchestrator's settlement).
+   - A composite case's layer is never merged, only deleted (the owner's ruling of 9 November 2026,
+     relayed through the orchestrator); the owner may later choose a member merge. Neither from the
+     composite's Studio (409 `composite_never_merged`) nor from a member dataset's, which no case
+     reading it through the composite is linked to (404 `case_not_linked`).
+   - Admin's *Delete* of a removed case's layer is `administer_system`'s, deployment-wide as Admin ›
+     Datasets is (ADR-136 decision 2) and as its dry run already was: another unit's administrator
+     may, another unit's person without the right may not (the case lane's choice under Prompt L
+     after the independent review's must-fix 8; the owner may overrule it, scoping it to the
+     dataset's unit).
    - **Nothing drawn goes into a gazetteer dataset** (`gazetteer-*`, ADR-147 Amendment 1 decision 2,
      which holds the build's places alone): a case reading one is offered no promotion and is
      refused one at the route, and a removed case's layer is never merged into one, only deleted
