@@ -88,7 +88,7 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "publish_studio_recipe",
         "verify_studio_recipe",
         "upload_ingest_source_file",
-        # L1.6: a connector's source read into the dataset's ingest file, the connector's own upload.
+        # L1.6: a connector's source read into the dataset's ingest file (its own upload).
         "read_connector_source",
         "upload_document",
         "pause_schedule",
