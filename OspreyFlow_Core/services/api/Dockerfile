@@ -40,8 +40,11 @@ COPY recipes ./recipes
 # GPL-2.0 with the Classpath exception, the licence register's one recorded runtime exception
 # (`00_ARCHITECTURE.md` §7; `make licence-check` reads the label below). jlinked to the modules a JVM
 # program such as planetiler uses, without its tools, debug symbols or headers; the official image
-# pinned by its digest (the multi-architecture index, so arm64 and amd64 build alike).
-FROM eclipse-temurin:21-jdk@sha256:f9bf7e9fe2f9bc4657537c1a7e20c768f0c3bafca41598263be4714783dd62eb AS java
+# pinned by its digest (the multi-architecture index, so arm64 and amd64 build alike): Temurin
+# 21.0.13+9, October 2026's update. trivy does not see a jlinked runtime, so the version label below
+# is held to the image's /opt/java/release and to Temurin 21's newest by `tools/java_runtime_check.py`
+# (`make trivy-image-api`); repin the digest and the label together.
+FROM eclipse-temurin:21-jdk@sha256:ebfbb18d11ff163ee83b21258acf12248af48d22a0fdfdc68fa1a1516c05976a AS java
 RUN jlink \
       --add-modules java.base,java.compiler,java.desktop,java.instrument,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.security.jgss,java.sql,java.xml,jdk.crypto.ec,jdk.jfr,jdk.management,jdk.unsupported,jdk.zipfs \
       --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
@@ -75,6 +78,7 @@ LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"
 
 COPY --from=java /opt/jre /opt/java
 LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
+LABEL org.ospreyflow.runtime.java.version="21.0.13+9"
 
 RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app
