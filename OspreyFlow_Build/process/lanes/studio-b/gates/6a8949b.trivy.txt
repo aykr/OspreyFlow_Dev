@@ -1,0 +1,2193 @@
+docker build --pull -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.40kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 1.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.17kB 0.0s done
+#3 DONE 0.0s
+
+#4 [builder 1/7] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 7.21MB 0.7s done
+#5 DONE 0.7s
+
+#6 [stage-1 2/7] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#6 CACHED
+
+#7 [stage-1 4/7] WORKDIR /app
+#7 CACHED
+
+#8 [builder 4/7] COPY pyproject.toml uv.lock ./
+#8 CACHED
+
+#9 [builder 7/7] COPY services ./services
+#9 CACHED
+
+#10 [stage-1 6/7] COPY --from=builder --chown=osprey:osprey /app/packages ./packages
+#10 CACHED
+
+#11 [builder 3/7] WORKDIR /app
+#11 CACHED
+
+#12 [stage-1 3/7] RUN useradd --create-home --uid 10001 osprey
+#12 CACHED
+
+#13 [builder 2/7] RUN pip install --no-cache-dir uv==0.5.14
+#13 CACHED
+
+#14 [stage-1 5/7] COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
+#14 CACHED
+
+#15 [builder 5/7] RUN uv sync --frozen --no-dev --no-install-project
+#15 CACHED
+
+#16 [builder 6/7] COPY packages ./packages
+#16 CACHED
+
+#17 [stage-1 7/7] COPY --from=builder --chown=osprey:osprey /app/services ./services
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:bccd5507e55d3ed913e11e46bacbba403f406e8a0c261013c25c5b8c66690a03 done
+#18 naming to docker.io/ospreyflow/ingest:ci 0.0s done
+#18 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/ingest:ci
+2026-11-09T02:04:02Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:04:02Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:04:02Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:04:02Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T02:04:18Z	INFO	Detected OS	family="debian" version="13.7"
+2026-11-09T02:04:18Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=87
+2026-11-09T02:04:18Z	INFO	Number of language-specific files	num=2
+2026-11-09T02:04:18Z	INFO	[jar] Detecting vulnerabilities...
+2026-11-09T02:04:18Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-09T02:04:18Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/ingest:ci (debian 13.7)                                               │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_classic.jar                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_spark3.3.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.1_spark3.x.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/altair-5.5.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_doc-0.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_types-0.8.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/anyio-4.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/asyncpg-0.32.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/attrs-26.1.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/certifi-2026.10.23.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cffi-2.1.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/click-8.5.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/croniter-6.2.4.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cryptography-50.0.2.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/defusedxml-0.7.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/duckdb-1.5.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/fastapi-0.146.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpcore-1.0.9.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httptools-0.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpx-0.28.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/idna-3.20.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema-4.26.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema_specifications-2025.9.1.dist-- │ python-pkg │        0        │    -    │
+│ info/METADATA                                                                    │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/markupsafe-3.0.4.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/msgpack-1.2.3.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/narwhals-2.27.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/networkx-3.7.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/numpy-2.5.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/opentelemetry_api-1.45.1.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/packaging-26.3.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pandas-3.0.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonenumbers-9.0.41.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonetics-1.0.5.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyarrow-26.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pycparser-3.11.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic-2.14.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic_core-2.50.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyjwt-2.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyproj-3.8.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dateutil-2.9.0.post0.dist-info/ME- │ python-pkg │        0        │    -    │
+│ TADATA                                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dotenv-1.2.4.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_multipart-0.0.32.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_ulid-4.0.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/referencing-0.37.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rpds_py-2026.9.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rustworkx-0.18.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink-3.9.9.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/sqlglot-18.17.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/starlette-1.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_inspection-0.4.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvicorn-0.54.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvloop-0.23.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/valkey-6.2.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/watchfiles-1.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/websockets-17.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f services/api/Dockerfile -t ospreyflow/api:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 6.85kB 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.17kB done
+#3 DONE 0.0s
+
+#4 [builder  1/10] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 801.40kB 0.1s done
+#5 DONE 0.1s
+
+#6 [stage-1 14/15] RUN mkdir -p /run/osprey/model-settings && chown osprey:osprey /run/osprey/model-settings     && chmod 700 /run/osprey/model-settings
+#6 CACHED
+
+#7 [builder  9/10] COPY connectors ./connectors
+#7 CACHED
+
+#8 [builder  4/10] COPY pyproject.toml uv.lock ./
+#8 CACHED
+
+#9 [builder  6/10] COPY packages ./packages
+#9 CACHED
+
+#10 [builder  8/10] COPY scripts ./scripts
+#10 CACHED
+
+#11 [stage-1 11/15] COPY --from=builder /app/recipes ./recipes
+#11 CACHED
+
+#12 [builder 10/10] COPY recipes ./recipes
+#12 CACHED
+
+#13 [stage-1 13/15] RUN mkdir -p /var/lib/osprey/data && chown -R osprey:osprey /var/lib/osprey
+#13 CACHED
+
+#14 [stage-1  3/15] RUN apt-get update && apt-get install -y --no-install-recommends git     && rm -rf /var/lib/apt/lists/*
+#14 CACHED
+
+#15 [builder  7/10] COPY services ./services
+#15 CACHED
+
+#16 [builder  3/10] WORKDIR /app
+#16 CACHED
+
+#17 [stage-1  7/15] COPY --from=builder /app/packages ./packages
+#17 CACHED
+
+#18 [builder  5/10] RUN uv sync --frozen --no-dev --no-install-project
+#18 CACHED
+
+#19 [stage-1  4/15] RUN useradd --create-home --uid 10001 osprey
+#19 CACHED
+
+#20 [builder  2/10] RUN pip install --no-cache-dir uv==0.5.14
+#20 CACHED
+
+#21 [stage-1  9/15] COPY --from=builder /app/scripts ./scripts
+#21 CACHED
+
+#22 [stage-1  6/15] COPY --from=builder /app/.venv ./.venv
+#22 CACHED
+
+#23 [stage-1 12/15] RUN /app/.venv/bin/python -c "import duckdb; duckdb.connect().install_extension('spatial')"     && chown -R osprey:osprey /app
+#23 CACHED
+
+#24 [stage-1  8/15] COPY --from=builder /app/services ./services
+#24 CACHED
+
+#25 [stage-1  2/15] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#25 CACHED
+
+#26 [stage-1 10/15] COPY --from=builder /app/connectors ./connectors
+#26 CACHED
+
+#27 [stage-1  5/15] WORKDIR /app
+#27 CACHED
+
+#28 [stage-1 15/15] RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-settings     && chmod 700 /run/osprey/map-settings
+#28 CACHED
+
+#29 exporting to image
+#29 exporting layers done
+#29 writing image sha256:3ee98167880ce64da0a2c9dc0acbea7776aab41ef48c6936a77c739d824d6fcb done
+#29 naming to docker.io/ospreyflow/api:ci 0.0s done
+#29 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/api:ci
+2026-11-09T02:04:19Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:04:19Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:04:19Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:04:19Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T02:05:02Z	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-11-09T02:05:02Z	INFO	Detected OS	family="debian" version="13.7"
+2026-11-09T02:05:02Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=118
+2026-11-09T02:05:02Z	INFO	Number of language-specific files	num=2
+2026-11-09T02:05:02Z	INFO	[jar] Detecting vulnerabilities...
+2026-11-09T02:05:02Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-09T02:05:02Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/api:ci (debian 13.7)                                                  │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_classic.jar                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_spark3.3.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.1_spark3.x.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/altair-5.5.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_doc-0.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_types-0.8.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/anyio-4.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/asyncpg-0.32.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/attrs-26.1.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/certifi-2026.10.23.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cffi-2.1.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/click-8.5.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/croniter-6.2.4.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cryptography-50.0.2.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/defusedxml-0.7.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/duckdb-1.5.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/fastapi-0.146.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpcore-1.0.9.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httptools-0.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpx-0.28.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/idna-3.20.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema-4.26.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema_specifications-2025.9.1.dist-- │ python-pkg │        0        │    -    │
+│ info/METADATA                                                                    │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/markupsafe-3.0.4.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/msgpack-1.2.3.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/narwhals-2.27.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/networkx-3.7.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/numpy-2.5.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/opentelemetry_api-1.45.1.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/packaging-26.3.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pandas-3.0.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonenumbers-9.0.41.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonetics-1.0.5.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyarrow-26.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pycparser-3.11.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic-2.14.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic_core-2.50.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyjwt-2.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyproj-3.8.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dateutil-2.9.0.post0.dist-info/ME- │ python-pkg │        0        │    -    │
+│ TADATA                                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dotenv-1.2.4.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_multipart-0.0.32.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_ulid-4.0.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/referencing-0.37.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rpds_py-2026.9.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rustworkx-0.18.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink-3.9.9.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/sqlglot-18.17.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/starlette-1.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_inspection-0.4.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvicorn-0.54.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvloop-0.23.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/valkey-6.2.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/watchfiles-1.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/websockets-17.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.96kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:22-slim
+#2 ...
+
+#3 [internal] load metadata for docker.io/library/nginx:1.30-alpine
+#3 DONE 0.5s
+
+#2 [internal] load metadata for docker.io/library/node:22-slim
+#2 DONE 0.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 5.17kB done
+#4 DONE 0.0s
+
+#5 [stage-1 1/5] FROM docker.io/library/nginx:1.30-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311
+#5 DONE 0.0s
+
+#6 [builder 1/8] FROM docker.io/library/node:22-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 7.78MB 0.8s done
+#7 DONE 0.9s
+
+#8 [builder 2/8] WORKDIR /app
+#8 CACHED
+
+#9 [builder 3/8] COPY package.json package-lock.json ./
+#9 CACHED
+
+#10 [builder 6/8] COPY tsconfig.json ./
+#10 CACHED
+
+#11 [stage-1 2/5] RUN apk upgrade --no-cache
+#11 CACHED
+
+#12 [stage-1 3/5] COPY apps/workspace/nginx.conf.template /etc/nginx/templates/default.conf.template
+#12 CACHED
+
+#13 [builder 4/8] COPY apps/workspace/package.json ./apps/workspace/
+#13 CACHED
+
+#14 [builder 5/8] RUN npm ci
+#14 CACHED
+
+#15 [builder 7/8] COPY apps/workspace ./apps/workspace
+#15 CACHED
+
+#16 [builder 8/8] RUN npm run build --workspace apps/workspace
+#16 CACHED
+
+#17 [stage-1 4/5] COPY --from=builder /app/apps/workspace/dist /usr/share/nginx/html
+#17 CACHED
+
+#18 [stage-1 5/5] RUN touch /var/run/nginx.pid     && rm -f /etc/nginx/conf.d/default.conf     && chown -R nginx:nginx /var/run/nginx.pid /var/cache/nginx /usr/share/nginx/html /etc/nginx/conf.d
+#18 CACHED
+
+#19 exporting to image
+#19 exporting layers done
+#19 writing image sha256:a871a824c7110a85b9620903c5a7f4a4252f3f5e13ec92cabf86451a797d3930 0.0s done
+#19 naming to docker.io/ospreyflow/workspace:ci 0.0s done
+#19 DONE 0.1s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/workspace:ci
+2026-11-09T02:05:06Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:05:06Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:05:06Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:05:06Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T02:05:08Z	INFO	Detected OS	family="alpine" version="3.24.4"
+2026-11-09T02:05:08Z	INFO	[alpine] Detecting vulnerabilities...	os_version="3.24" repository="3.24" pkg_num=71
+2026-11-09T02:05:08Z	INFO	Number of language-specific files	num=0
+
+Report Summary
+
+┌─────────────────────────────────────────┬────────┬─────────────────┬─────────┐
+│                 Target                  │  Type  │ Vulnerabilities │ Secrets │
+├─────────────────────────────────────────┼────────┼─────────────────┼─────────┤
+│ ospreyflow/workspace:ci (alpine 3.24.4) │ alpine │        0        │    -    │
+└─────────────────────────────────────────┴────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f harness/Dockerfile -t ospreyflow/harness:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 13.79kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:22-slim
+#2 DONE 0.2s
+
+#3 [internal] load metadata for docker.io/library/docker:29-cli
+#3 ...
+
+#4 [internal] load metadata for docker.io/library/python:3.12-slim
+#4 DONE 0.4s
+
+#3 [internal] load metadata for docker.io/library/docker:29-cli
+#3 DONE 1.3s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 5.17kB done
+#5 DONE 0.0s
+
+#6 [dockercli 1/1] FROM docker.io/library/docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d
+#6 DONE 0.0s
+
+#7 [builder  1/11] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#7 DONE 0.0s
+
+#8 [frontend-builder  1/12] FROM docker.io/library/node:22-slim@sha256:5ec23b7c622b00547753bc6ffd78085dd868a68aeb41c8e0a1418f033e13d96d
+#8 DONE 0.0s
+
+#9 [internal] load build context
+#9 transferring context: 4.91MB 0.3s done
+#9 DONE 0.3s
+
+#10 [builder  6/11] COPY harness ./harness
+#10 CACHED
+
+#11 [stage-3  8/13] COPY --from=builder --chown=osprey:osprey /app/harness ./harness
+#11 CACHED
+
+#12 [stage-3  6/13] WORKDIR /app
+#12 CACHED
+
+#13 [frontend-builder 12/12] RUN npm run build --workspace apps/harness
+#13 CACHED
+
+#14 [frontend-builder  3/12] COPY package.json package-lock.json ./
+#14 CACHED
+
+#15 [frontend-builder  6/12] RUN npm ci
+#15 CACHED
+
+#16 [frontend-builder 11/12] COPY apps/workspace/src/welcome/statement.ts ./apps/workspace/src/welcome/statement.ts
+#16 CACHED
+
+#17 [builder  7/11] COPY packages/schemas ./packages/schemas
+#17 CACHED
+
+#18 [builder 11/11] COPY scripts ./scripts
+#18 CACHED
+
+#19 [builder  2/11] RUN pip install --no-cache-dir uv==0.5.14
+#19 CACHED
+
+#20 [stage-3 10/13] COPY --from=builder --chown=osprey:osprey /app/scripts ./scripts
+#20 CACHED
+
+#21 [stage-3 11/13] RUN chmod -R a+rX ./harness ./packages ./scripts
+#21 CACHED
+
+#22 [frontend-builder  7/12] COPY apps/harness ./apps/harness
+#22 CACHED
+
+#23 [frontend-builder  2/12] WORKDIR /app
+#23 CACHED
+
+#24 [frontend-builder  4/12] COPY apps/harness/package.json apps/harness/package.json
+#24 CACHED
+
+#25 [stage-3  7/13] COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
+#25 CACHED
+
+#26 [stage-3  2/13] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#26 CACHED
+
+#27 [frontend-builder  8/12] COPY apps/workspace/src/design ./apps/workspace/src/design
+#27 CACHED
+
+#28 [builder  5/11] RUN uv sync --frozen --no-dev --no-install-project
+#28 CACHED
+
+#29 [stage-3  3/13] COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
+#29 CACHED
+
+#30 [stage-3  5/13] RUN useradd --create-home --uid 10001 osprey
+#30 CACHED
+
+#31 [stage-3  4/13] COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-compose     /usr/local/libexec/docker/cli-plugins/docker-compose
+#31 CACHED
+
+#32 [builder 10/11] COPY packages/demo_fixtures ./packages/demo_fixtures
+#32 CACHED
+
+#33 [builder  4/11] COPY pyproject.toml uv.lock ./
+#33 CACHED
+
+#34 [frontend-builder 10/12] COPY apps/workspace/src/brand/brand.ts ./apps/workspace/src/brand/brand.ts
+#34 CACHED
+
+#35 [builder  3/11] WORKDIR /app
+#35 CACHED
+
+#36 [frontend-builder  5/12] COPY apps/workspace/package.json apps/workspace/package.json
+#36 CACHED
+
+#37 [frontend-builder  9/12] COPY apps/workspace/src/theme ./apps/workspace/src/theme
+#37 CACHED
+
+#38 [builder  9/11] COPY packages/ontology ./packages/ontology
+#38 CACHED
+
+#39 [stage-3  9/13] COPY --from=builder --chown=osprey:osprey /app/packages ./packages
+#39 CACHED
+
+#40 [builder  8/11] COPY packages/principal_auth ./packages/principal_auth
+#40 CACHED
+
+#41 [stage-3 12/13] COPY --from=frontend-builder --chown=osprey:osprey /app/apps/harness/dist ./apps/harness/dist
+#41 CACHED
+
+#42 [stage-3 13/13] RUN groupadd docker && usermod -aG docker osprey
+#42 CACHED
+
+#43 exporting to image
+#43 exporting layers done
+#43 writing image sha256:edb52f72e48b90c3602736311dfe9522c47a12492062b4bf92b8cf0056e9e320 done
+#43 naming to docker.io/ospreyflow/harness:ci 0.0s done
+#43 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/harness:ci
+2026-11-09T02:05:10Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:05:10Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:05:10Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:05:10Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T02:05:37Z	INFO	Detected OS	family="debian" version="13.7"
+2026-11-09T02:05:37Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=87
+2026-11-09T02:05:37Z	INFO	Number of language-specific files	num=4
+2026-11-09T02:05:37Z	INFO	[gobinary] Detecting vulnerabilities...
+2026-11-09T02:05:37Z	INFO	[jar] Detecting vulnerabilities...
+2026-11-09T02:05:37Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-09T02:05:37Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+2026-11-09T02:05:37Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/harness:ci (debian 13.7)                                              │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_classic.jar                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_spark3.3.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.1_spark3.x.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/altair-5.5.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_doc-0.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_types-0.8.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/anyio-4.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/asyncpg-0.32.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/attrs-26.1.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/certifi-2026.10.23.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cffi-2.1.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/click-8.5.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/croniter-6.2.4.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cryptography-50.0.2.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/defusedxml-0.7.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/duckdb-1.5.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/fastapi-0.146.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpcore-1.0.9.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httptools-0.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpx-0.28.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/idna-3.20.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema-4.26.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema_specifications-2025.9.1.dist-- │ python-pkg │        0        │    -    │
+│ info/METADATA                                                                    │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/markupsafe-3.0.4.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/msgpack-1.2.3.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/narwhals-2.27.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/networkx-3.7.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/numpy-2.5.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/opentelemetry_api-1.45.1.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/packaging-26.3.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pandas-3.0.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonenumbers-9.0.41.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonetics-1.0.5.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyarrow-26.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pycparser-3.11.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic-2.14.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic_core-2.50.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyjwt-2.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyproj-3.8.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dateutil-2.9.0.post0.dist-info/ME- │ python-pkg │        0        │    -    │
+│ TADATA                                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dotenv-1.2.4.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_multipart-0.0.32.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_ulid-4.0.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/referencing-0.37.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rpds_py-2026.9.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rustworkx-0.18.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink-3.9.9.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/sqlglot-18.17.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/starlette-1.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_inspection-0.4.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvicorn-0.54.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvloop-0.23.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/valkey-6.2.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/watchfiles-1.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/websockets-17.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/bin/docker                                                             │  gobinary  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/libexec/docker/cli-plugins/docker-compose                              │  gobinary  │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.39kB 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.17kB done
+#3 DONE 0.0s
+
+#4 [ 1/13] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 9.03kB 0.1s done
+#5 DONE 0.1s
+
+#6 [ 5/13] COPY services/ner/requirements.txt ./requirements.txt
+#6 CACHED
+
+#7 [ 9/13] RUN python -c "import stanza; stanza.download('en', processors='tokenize,ner', model_dir='/models')"
+#7 CACHED
+
+#8 [12/13] COPY services/ner/app.py ./app.py
+#8 CACHED
+
+#9 [ 3/13] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [ 4/13] RUN pip install --upgrade setuptools==84.0.0  && pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+#10 CACHED
+
+#11 [ 7/13] COPY services/ner/licence_gate.py ./licence_gate.py
+#11 CACHED
+
+#12 [ 8/13] RUN pip install pip-licenses==5.5.5  && python licence_gate.py  && pip uninstall -y pip-licenses prettytable wcwidth  && rm licence_gate.py
+#12 CACHED
+
+#13 [10/13] COPY services/ner/models.sha256 /tmp/models.sha256
+#13 CACHED
+
+#14 [11/13] RUN cd /models  && sha256sum -c --strict /tmp/models.sha256  && test "$(find . -type f | wc -l)" -eq "$(wc -l < /tmp/models.sha256)"  && rm /tmp/models.sha256
+#14 CACHED
+
+#15 [ 2/13] WORKDIR /srv
+#15 CACHED
+
+#16 [ 6/13] RUN pip install -r requirements.txt
+#16 CACHED
+
+#17 [13/13] RUN useradd --create-home --uid 10001 ner && chown -R ner /models /srv
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:97eccc91bda8b472faeec4ee333284ded9c7e1497fe2631db1f29ccb66022ec9 0.0s done
+#18 naming to docker.io/ospreyflow/ner:ci
+#18 naming to docker.io/ospreyflow/ner:ci done
+#18 DONE 0.1s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/ner:ci
+2026-11-09T02:05:39Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:05:39Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:05:39Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:05:39Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T02:05:39Z	INFO	Detected OS	family="debian" version="13.7"
+2026-11-09T02:05:39Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=87
+2026-11-09T02:05:39Z	INFO	Number of language-specific files	num=1
+2026-11-09T02:05:39Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-09T02:05:39Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+2026-11-09T02:05:39Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/ner:ci (debian 13.7)                                                  │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/annotated_doc-0.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/annotated_types-0.8.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/anyio-4.16.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/certifi-2026.10.23.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/charset_normalizer-3.5.2.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/click-8.5.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/emoji-2.16.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/fastapi-0.146.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/filelock-4.2.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/fsspec-2026.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/idna-3.20.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/markupsafe-3.0.3.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/mpmath-1.3.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/networkx-3.7.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/numpy-2.5.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/opentelemetry_api-1.45.2.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/protobuf-7.36.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pydantic-2.14.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pydantic_core-2.50.4.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/requests-2.34.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools-84.0.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/autocommand-2.2.2.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/backports.tarfile-1.2- │ python-pkg │        0        │    -    │
+│ .0.dist-info/METADATA                                                            │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/importlib_metadata-8.- │ python-pkg │        0        │    -    │
+│ 7.1.dist-info/METADATA                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/jaraco.text-4.0.0.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/jaraco_context-6.1.0.- │ python-pkg │        0        │    -    │
+│ dist-info/METADATA                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/jaraco_functools-4.4.- │ python-pkg │        0        │    -    │
+│ 0.dist-info/METADATA                                                             │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/more_itertools-10.8.0- │ python-pkg │        0        │    -    │
+│ .dist-info/METADATA                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/packaging-26.0.dist-i- │ python-pkg │        0        │    -    │
+│ nfo/METADATA                                                                     │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/platformdirs-4.4.0.di- │ python-pkg │        0        │    -    │
+│ st-info/METADATA                                                                 │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/tomli-2.4.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/wheel-0.46.3.dist-inf- │ python-pkg │        0        │    -    │
+│ o/METADATA                                                                       │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/setuptools/_vendor/zipp-3.23.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/stanza-1.10.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/starlette-1.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/sympy-1.14.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/torch-2.14.1+cpu.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/tqdm-4.70.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/typing_inspection-0.4.5.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/urllib3-2.8.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/uvicorn-0.54.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.56kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.17kB done
+#3 DONE 0.0s
+
+#4 [builder 1/7] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 7.20MB 0.4s done
+#5 DONE 0.4s
+
+#6 [stage-1 3/7] RUN useradd --create-home --uid 10001 osprey
+#6 CACHED
+
+#7 [stage-1 2/7] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#7 CACHED
+
+#8 [builder 7/7] COPY services ./services
+#8 CACHED
+
+#9 [builder 4/7] COPY pyproject.toml uv.lock ./
+#9 CACHED
+
+#10 [builder 6/7] COPY packages ./packages
+#10 CACHED
+
+#11 [stage-1 6/7] COPY --from=builder --chown=osprey:osprey /app/packages ./packages
+#11 CACHED
+
+#12 [builder 2/7] RUN pip install --no-cache-dir uv==0.5.14
+#12 CACHED
+
+#13 [builder 3/7] WORKDIR /app
+#13 CACHED
+
+#14 [stage-1 5/7] COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
+#14 CACHED
+
+#15 [builder 5/7] RUN uv sync --frozen --no-dev --no-install-project
+#15 CACHED
+
+#16 [stage-1 4/7] WORKDIR /app
+#16 CACHED
+
+#17 [stage-1 7/7] COPY --from=builder --chown=osprey:osprey /app/services ./services
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:e4c0169788b79162783b42ce9da16ba48f7fc9bc191f07678e2baf7dbb1a1b49 0.0s done
+#18 naming to docker.io/ospreyflow/worker:ci 0.0s done
+#18 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/worker:ci
+2026-11-09T02:05:41Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:05:41Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:05:41Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:05:41Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+2026-11-09T02:05:45Z	ERROR	Failed to acquire cache or database lock, see https://trivy.dev/docs/v0.76/guide/references/troubleshooting#database-and-cache-lock-errors for troubleshooting
+2026-11-09T02:05:45Z	FATAL	Fatal error	run error: image scan error: scan error: unable to initialize a scan service: unable to initialize cache: unable to initialize fs cache: cache may be in use by another process: timeout
+make: *** [trivy-image-worker] Error 1
+docker build --pull -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.47kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.17kB done
+#3 DONE 0.0s
+
+#4 [builder 1/7] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 56.98kB 0.0s done
+#5 DONE 0.1s
+
+#6 [builder 7/7] COPY services ./services
+#6 CACHED
+
+#7 [stage-1 6/7] COPY --from=builder --chown=osprey:osprey /app/packages ./packages
+#7 CACHED
+
+#8 [stage-1 2/7] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [stage-1 4/7] WORKDIR /app
+#9 CACHED
+
+#10 [builder 3/7] WORKDIR /app
+#10 CACHED
+
+#11 [builder 5/7] RUN uv sync --frozen --no-dev --no-install-project
+#11 CACHED
+
+#12 [stage-1 5/7] COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
+#12 CACHED
+
+#13 [stage-1 3/7] RUN useradd --create-home --uid 10001 osprey
+#13 CACHED
+
+#14 [builder 2/7] RUN pip install --no-cache-dir uv==0.5.14
+#14 CACHED
+
+#15 [builder 4/7] COPY pyproject.toml uv.lock ./
+#15 CACHED
+
+#16 [builder 6/7] COPY packages ./packages
+#16 CACHED
+
+#17 [stage-1 7/7] COPY --from=builder --chown=osprey:osprey /app/services ./services
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:9067cc0ab387ecc57541fa34dbf40fe34955a3e3b400124ebf74efb561c56652 done
+#18 naming to docker.io/ospreyflow/report-sync:ci 0.0s done
+#18 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/report-sync:ci
+2026-11-09T02:05:47Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:05:47Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:05:47Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:05:47Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+2026-11-09T02:05:52Z	ERROR	Failed to acquire cache or database lock, see https://trivy.dev/docs/v0.76/guide/references/troubleshooting#database-and-cache-lock-errors for troubleshooting
+2026-11-09T02:05:52Z	FATAL	Fatal error	run error: image scan error: scan error: unable to initialize a scan service: unable to initialize cache: unable to initialize fs cache: cache may be in use by another process: timeout
+make: *** [trivy-image-report-sync] Error 1
+docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 3.00kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
+#2 DONE 1.5s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/10] FROM docker.io/apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 31.57kB done
+#5 DONE 0.0s
+
+#6 [ 4/10] RUN /usr/local/bin/python -m pip install --no-cache-dir --upgrade setuptools==84.0.0 uv==0.13.4
+#6 CACHED
+
+#7 [ 7/10] COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
+#7 CACHED
+
+#8 [ 9/10] COPY osprey_entrypoint.py /app/osprey_entrypoint.py
+#8 CACHED
+
+#9 [ 5/10] COPY superset_config.py osprey_theme.json /app/pythonpath/
+#9 CACHED
+
+#10 [ 6/10] COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/images/
+#10 CACHED
+
+#11 [ 2/10] RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+#11 CACHED
+
+#12 [ 3/10] RUN uv pip install --no-cache --python /app/.venv/bin/python psycopg2-binary==2.9.6     authlib==1.9.1 mako==1.3.12 pyjwt==2.14.0 pillow==12.3.0 urllib3==2.8.0 pyasn1==0.6.5     jaraco.context==6.1.0 wheel==0.46.2 setuptools==84.0.0 brotli==1.2.1 certifi==2026.10.18
+#12 CACHED
+
+#13 [ 8/10] COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
+#13 CACHED
+
+#14 [10/10] COPY osprey_setup.py osprey_palette.py /app/
+#14 CACHED
+
+#15 exporting to image
+#15 exporting layers done
+#15 writing image sha256:19bc179996936c95a88c3ce899c0e9cacd62826dc9a0c33b1528ae70145f6254 done
+#15 naming to docker.io/ospreyflow/superset:ci done
+#15 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/superset:ci
+2026-11-09T02:05:54Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:05:54Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:05:54Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:05:54Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T02:05:59Z	INFO	Detected OS	family="debian" version="12.15"
+2026-11-09T02:05:59Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=134
+2026-11-09T02:05:59Z	INFO	Number of language-specific files	num=4
+2026-11-09T02:05:59Z	INFO	[node-pkg] Detecting vulnerabilities...
+2026-11-09T02:05:59Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-09T02:05:59Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-09T02:05:59Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+2026-11-09T02:05:59Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/superset:ci (debian 12.15)                                            │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset-frontend/package.json                                               │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset/mcp_service/package.json                                            │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset/static/assets/package.json                                          │  node-pkg  │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Deprecated-1.2.18.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Caching-2.3.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Compress-1.17.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_JWT_Extended-4.7.1.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Login-0.6.3.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_Migrate-3.1.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/Flask_SQLAlchemy-2.5.1.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/MarkupSafe-3.0.2.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/PySocks-1.7.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/PyYAML-6.0.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/SQLAlchemy-1.4.54.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/XlsxWriter-3.0.9.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/alembic-1.15.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/amqp-5.3.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/annotated_types-0.7.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apache_superset-6.1.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apache_superset_core-0.1.0rc3.dist-info/- │ python-pkg │        0        │    -    │
+│ METADATA                                                                         │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apispec-6.6.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/apsw-3.50.1.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/async_timeout-4.0.3.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/attrs-25.3.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/authlib-1.9.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/babel-2.17.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/backoff-2.2.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/backports.tarfile-1.2.0.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/bcrypt-4.3.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/billiard-4.2.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/blinker-1.9.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/bottleneck-1.5.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/brotli-1.2.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cachelib-0.13.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cachetools-6.2.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cattrs-25.1.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/celery-5.5.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/certifi-2026.10.18.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cffi-2.0.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/charset_normalizer-3.4.2.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click-8.2.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_didyoumean-0.3.1.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_option_group-0.5.7.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_plugins-1.1.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/click_repl-0.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/colorama-0.4.6.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cron_descriptor-1.4.5.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/croniter-6.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/cryptography-46.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/defusedxml-0.7.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/deprecation-2.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/dnspython-2.7.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/email_validator-2.2.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/et_xmlfile-2.0.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/exceptiongroup-1.3.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/filelock-3.20.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask-2.3.3.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_appbuilder-5.0.2.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_babel-3.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_cors-6.0.2.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_limiter-3.12.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_session-0.8.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_talisman-1.1.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/flask_wtf-1.2.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/geographiclib-2.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/geopy-2.4.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/google_auth-2.43.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/greenlet-3.1.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/gunicorn-23.0.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/hashids-1.3.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/holidays-0.82.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/humanize-4.12.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/idna-3.10.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/isodate-0.7.2.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/itsdangerous-2.2.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jaraco_context-6.1.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/joserfc-1.7.7.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonpath_ng-1.7.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonschema-4.23.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/jsonschema_specifications-2025.4.1.dist-- │ python-pkg │        0        │    -    │
+│ info/METADATA                                                                    │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/kombu-5.5.3.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/limits-5.1.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/mako-1.3.12.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/markdown-3.8.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/markdown_it_py-3.0.0.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow-3.26.2.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow_sqlalchemy-1.4.0.dist-info/M- │ python-pkg │        0        │    -    │
+│ ETADATA                                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/marshmallow_union-0.1.15.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/mdurl-0.1.2.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/msgpack-1.0.8.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/msgspec-0.19.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/nh3-0.2.21.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/numexpr-2.10.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/numpy-1.26.4.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/odfpy-1.4.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/openapi_schema_validator-0.6.3.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/openpyxl-3.1.5.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/ordered_set-4.1.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/outcome-1.3.0.post0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/packaging-25.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pandas-2.1.4.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/paramiko-3.5.1.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/parsedatetime-2.6.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pgsanity-0.2.9.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pillow-12.3.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/platformdirs-4.3.8.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/ply-3.11.dist-info/METADATA               │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/polyline-2.0.2.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/prison-0.2.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/prompt_toolkit-3.0.51.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/psycopg2_binary-2.9.6.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyarrow-16.1.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyasn1-0.6.5.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyasn1_modules-0.4.2.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pycparser-2.22.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pydantic-2.11.7.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pydantic_core-2.33.2.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pygeohash-3.2.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pygments-2.19.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyjwt-2.14.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pynacl-1.6.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyopenssl-25.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyparsing-3.2.3.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/python_dateutil-2.9.0.post0.dist-info/ME- │ python-pkg │        0        │    -    │
+│ TADATA                                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/python_dotenv-1.1.0.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pytz-2025.2.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/pyxlsb-1.0.10.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/redis-5.3.1.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/referencing-0.36.2.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/requests-2.32.4.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/requests_cache-1.2.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rfc3339_validator-0.1.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rich-13.9.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rpds_py-0.25.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/rsa-4.9.1.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/selenium-4.32.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools-84.0.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/autocommand-2.2.2.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/backports.tarfile-1.2- │ python-pkg │        0        │    -    │
+│ .0.dist-info/METADATA                                                            │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/importlib_metadata-8.- │ python-pkg │        0        │    -    │
+│ 7.1.dist-info/METADATA                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco.text-4.0.0.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco_context-6.1.0.- │ python-pkg │        0        │    -    │
+│ dist-info/METADATA                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/jaraco_functools-4.4.- │ python-pkg │        0        │    -    │
+│ 0.dist-info/METADATA                                                             │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/more_itertools-10.8.0- │ python-pkg │        0        │    -    │
+│ .dist-info/METADATA                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/packaging-26.0.dist-i- │ python-pkg │        0        │    -    │
+│ nfo/METADATA                                                                     │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/platformdirs-4.4.0.di- │ python-pkg │        0        │    -    │
+│ st-info/METADATA                                                                 │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/tomli-2.4.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/wheel-0.46.3.dist-inf- │ python-pkg │        0        │    -    │
+│ o/METADATA                                                                       │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/setuptools/_vendor/zipp-3.23.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/shillelagh-1.4.3.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/simplejson-3.20.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/slack_sdk-3.35.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sniffio-1.3.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sortedcontainers-2.4.0.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sqlalchemy_utils-0.42.0.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sqlglot-28.10.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/sshtunnel-0.4.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/tabulate-0.9.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/trio-0.30.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/trio_websocket-0.12.2.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/typing_extensions-4.15.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/typing_inspection-0.4.1.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/tzdata-2025.2.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/url_normalize-2.2.1.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/urllib3-2.8.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/vine-5.1.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/watchdog-6.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wcwidth-0.2.13.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/websocket_client-1.8.0.dist-info/METADATA │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/werkzeug-3.1.6.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wheel-0.46.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wrapt-1.17.2.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wsproto-1.2.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wtforms-3.2.1.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/wtforms_json-0.3.5.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/xlrd-2.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.10/site-packages/zstandard-0.23.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/apache_superset.egg-info/PKG-INFO                                            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/superset-core/src/apache_superset_core.egg-info/PKG-INFO                     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/packaging-26.3.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/pip-23.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools-84.0.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/autocommand-2.2.2.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/backports.tarfile-1.2- │ python-pkg │        0        │    -    │
+│ .0.dist-info/METADATA                                                            │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/importlib_metadata-8.- │ python-pkg │        0        │    -    │
+│ 7.1.dist-info/METADATA                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco.text-4.0.0.dis- │ python-pkg │        0        │    -    │
+│ t-info/METADATA                                                                  │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco_context-6.1.0.- │ python-pkg │        0        │    -    │
+│ dist-info/METADATA                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/jaraco_functools-4.4.- │ python-pkg │        0        │    -    │
+│ 0.dist-info/METADATA                                                             │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/more_itertools-10.8.0- │ python-pkg │        0        │    -    │
+│ .dist-info/METADATA                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/packaging-26.0.dist-i- │ python-pkg │        0        │    -    │
+│ nfo/METADATA                                                                     │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/platformdirs-4.4.0.di- │ python-pkg │        0        │    -    │
+│ st-info/METADATA                                                                 │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/tomli-2.4.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/wheel-0.46.3.dist-inf- │ python-pkg │        0        │    -    │
+│ o/METADATA                                                                       │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/setuptools/_vendor/zipp-3.23.0.dist-info- │ python-pkg │        0        │    -    │
+│ /METADATA                                                                        │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/uv-0.13.4.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.10/site-packages/wheel-0.46.3.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/bin/uv                                                                 │ rustbinary │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/bin/uvx                                                                │ rustbinary │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+exit 2
+=== re-run of the two scans the shared cache lock stopped ===
+docker build --pull -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.56kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.3s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.17kB done
+#3 DONE 0.0s
+
+#4 [builder 1/7] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 7.21MB 0.4s done
+#5 DONE 0.4s
+
+#6 [stage-1 5/7] COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
+#6 CACHED
+
+#7 [builder 7/7] COPY services ./services
+#7 CACHED
+
+#8 [stage-1 3/7] RUN useradd --create-home --uid 10001 osprey
+#8 CACHED
+
+#9 [stage-1 4/7] WORKDIR /app
+#9 CACHED
+
+#10 [builder 5/7] RUN uv sync --frozen --no-dev --no-install-project
+#10 CACHED
+
+#11 [builder 4/7] COPY pyproject.toml uv.lock ./
+#11 CACHED
+
+#12 [builder 3/7] WORKDIR /app
+#12 CACHED
+
+#13 [stage-1 6/7] COPY --from=builder --chown=osprey:osprey /app/packages ./packages
+#13 CACHED
+
+#14 [builder 6/7] COPY packages ./packages
+#14 CACHED
+
+#15 [stage-1 2/7] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#15 CACHED
+
+#16 [builder 2/7] RUN pip install --no-cache-dir uv==0.5.14
+#16 CACHED
+
+#17 [stage-1 7/7] COPY --from=builder --chown=osprey:osprey /app/services ./services
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:e4c0169788b79162783b42ce9da16ba48f7fc9bc191f07678e2baf7dbb1a1b49 done
+#18 naming to docker.io/ospreyflow/worker:ci done
+#18 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/worker:ci
+2026-11-09T02:06:24Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:06:24Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:06:24Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:06:24Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T02:06:24Z	INFO	Detected OS	family="debian" version="13.7"
+2026-11-09T02:06:24Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=87
+2026-11-09T02:06:24Z	INFO	Number of language-specific files	num=2
+2026-11-09T02:06:24Z	INFO	[jar] Detecting vulnerabilities...
+2026-11-09T02:06:24Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-09T02:06:24Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/worker:ci (debian 13.7)                                               │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_classic.jar                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_spark3.3.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.1_spark3.x.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/altair-5.5.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_doc-0.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_types-0.8.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/anyio-4.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/asyncpg-0.32.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/attrs-26.1.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/certifi-2026.10.23.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cffi-2.1.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/click-8.5.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/croniter-6.2.4.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cryptography-50.0.2.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/defusedxml-0.7.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/duckdb-1.5.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/fastapi-0.146.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpcore-1.0.9.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httptools-0.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpx-0.28.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/idna-3.20.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema-4.26.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema_specifications-2025.9.1.dist-- │ python-pkg │        0        │    -    │
+│ info/METADATA                                                                    │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/markupsafe-3.0.4.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/msgpack-1.2.3.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/narwhals-2.27.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/networkx-3.7.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/numpy-2.5.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/opentelemetry_api-1.45.1.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/packaging-26.3.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pandas-3.0.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonenumbers-9.0.41.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonetics-1.0.5.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyarrow-26.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pycparser-3.11.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic-2.14.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic_core-2.50.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyjwt-2.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyproj-3.8.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dateutil-2.9.0.post0.dist-info/ME- │ python-pkg │        0        │    -    │
+│ TADATA                                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dotenv-1.2.4.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_multipart-0.0.32.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_ulid-4.0.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/referencing-0.37.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rpds_py-2026.9.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rustworkx-0.18.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink-3.9.9.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/sqlglot-18.17.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/starlette-1.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_inspection-0.4.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvicorn-0.54.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvloop-0.23.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/valkey-6.2.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/watchfiles-1.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/websockets-17.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.47kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 0.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 5.17kB done
+#3 DONE 0.0s
+
+#4 [builder 1/7] FROM docker.io/library/python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 56.98kB 0.0s done
+#5 DONE 0.0s
+
+#6 [builder 2/7] RUN pip install --no-cache-dir uv==0.5.14
+#6 CACHED
+
+#7 [builder 6/7] COPY packages ./packages
+#7 CACHED
+
+#8 [stage-1 2/7] RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [stage-1 6/7] COPY --from=builder --chown=osprey:osprey /app/packages ./packages
+#9 CACHED
+
+#10 [builder 3/7] WORKDIR /app
+#10 CACHED
+
+#11 [stage-1 5/7] COPY --from=builder --chown=osprey:osprey /app/.venv ./.venv
+#11 CACHED
+
+#12 [stage-1 3/7] RUN useradd --create-home --uid 10001 osprey
+#12 CACHED
+
+#13 [builder 7/7] COPY services ./services
+#13 CACHED
+
+#14 [stage-1 4/7] WORKDIR /app
+#14 CACHED
+
+#15 [builder 5/7] RUN uv sync --frozen --no-dev --no-install-project
+#15 CACHED
+
+#16 [builder 4/7] COPY pyproject.toml uv.lock ./
+#16 CACHED
+
+#17 [stage-1 7/7] COPY --from=builder --chown=osprey:osprey /app/services ./services
+#17 CACHED
+
+#18 exporting to image
+#18 exporting layers done
+#18 writing image sha256:9067cc0ab387ecc57541fa34dbf40fe34955a3e3b400124ebf74efb561c56652 done
+#18 naming to docker.io/ospreyflow/report-sync:ci 0.0s done
+#18 DONE 0.0s
+trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/report-sync:ci
+2026-11-09T02:06:25Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-09T02:06:25Z	INFO	[secret] Secret scanning is enabled
+2026-11-09T02:06:25Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-09T02:06:25Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-09T02:06:25Z	INFO	Detected OS	family="debian" version="13.7"
+2026-11-09T02:06:25Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=87
+2026-11-09T02:06:25Z	INFO	Number of language-specific files	num=2
+2026-11-09T02:06:25Z	INFO	[jar] Detecting vulnerabilities...
+2026-11-09T02:06:25Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-09T02:06:25Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┬─────────┐
+│                                      Target                                      │    Type    │ Vulnerabilities │ Secrets │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ ospreyflow/report-sync:ci (debian 13.7)                                          │   debian   │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_classic.jar                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.0_spark3.3.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink/files/spark_jars/scala-udf-simila- │    jar     │        0        │    -    │
+│ rity-0.1.1_spark3.x.jar                                                          │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/altair-5.5.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_doc-0.0.5.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/annotated_types-0.8.0.dist-info/METADATA  │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/anyio-4.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/asyncpg-0.32.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/attrs-26.1.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/certifi-2026.10.23.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cffi-2.1.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/click-8.5.0.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/croniter-6.2.4.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/cryptography-50.0.2.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/defusedxml-0.7.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/duckdb-1.5.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/fastapi-0.146.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/h11-0.16.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpcore-1.0.9.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httptools-0.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/httpx-0.28.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/idna-3.20.dist-info/METADATA              │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jinja2-3.1.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema-4.26.0.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/jsonschema_specifications-2025.9.1.dist-- │ python-pkg │        0        │    -    │
+│ info/METADATA                                                                    │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/markupsafe-3.0.4.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/msgpack-1.2.3.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/narwhals-2.27.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/networkx-3.7.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/numpy-2.5.4.dist-info/METADATA            │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/opentelemetry_api-1.45.1.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/packaging-26.3.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pandas-3.0.6.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonenumbers-9.0.41.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/phonetics-1.0.5.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyarrow-26.0.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pycparser-3.11.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic-2.14.1.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pydantic_core-2.50.1.dist-info/METADATA   │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyjwt-2.15.1.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyproj-3.8.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dateutil-2.9.0.post0.dist-info/ME- │ python-pkg │        0        │    -    │
+│ TADATA                                                                           │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_dotenv-1.2.4.dist-info/METADATA    │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_multipart-0.0.32.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/python_ulid-4.0.1.dist-info/METADATA      │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/pyyaml-6.0.3.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/referencing-0.37.0.dist-info/METADATA     │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rpds_py-2026.9.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/rustworkx-0.18.1.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/six-1.17.0.dist-info/METADATA             │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/splink-3.9.9.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/sqlglot-18.17.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/starlette-1.9.0.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_extensions-4.16.0.dist-info/METAD- │ python-pkg │        0        │    -    │
+│ ATA                                                                              │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/typing_inspection-0.4.4.dist-info/METADA- │ python-pkg │        0        │    -    │
+│ TA                                                                               │            │                 │         │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvicorn-0.54.0.dist-info/METADATA         │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/uvloop-0.23.0.dist-info/METADATA          │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/valkey-6.2.0.dist-info/METADATA           │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/watchfiles-1.3.0.dist-info/METADATA       │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ app/.venv/lib/python3.12/site-packages/websockets-17.2.dist-info/METADATA        │ python-pkg │        0        │    -    │
+├──────────────────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┼─────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA             │ python-pkg │        0        │    -    │
+└──────────────────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+exit 0
