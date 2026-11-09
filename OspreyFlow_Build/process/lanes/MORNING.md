@@ -375,6 +375,14 @@ New ones are added at the bottom as they happen.
     held for hidden files read, byte caps applied after the whole body was read, and connection secrets lost on
     every `apply`.
 
+68. **Platform's P4 sent back after my independent review, with rule 7 settled strictly.** A gazetteer's source
+    identifiers (`osm_id`, `uprn`) count as source-system identifiers. So once a case adds a `gazetteer-osm-*`
+    dataset, they are stripped from every response the Glass gets (search, expand, node detail), not only from
+    place search. Place search's "more places match" now counts name matches only. **For you:** the gazetteer
+    recipe hard-codes its unit as `unit-1` (`recipes/osm_gazetteer.yaml:24`). That fails closed, but in a
+    deployment with no unit of that name no case can add the gazetteer. I recommend the build takes the unit
+    as a parameter; say if you would rather keep `unit-1`.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
