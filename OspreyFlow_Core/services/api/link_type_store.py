@@ -238,9 +238,9 @@ class LinkTypeProposalStore:
         self, principal: Principal, *, without_dataset: bool = False
     ) -> list[LinkTypeProposal]:
         """The proposals of the administrator's own unit, newest first. `without_dataset` keeps to
-        those made before ADR-099 Amendment 3, which name no dataset: the administrator's list since
-        L2.7, a proposal naming one being decided on its dataset's Model tab, whose words are withheld
-        above the reader's clearance (ADR-143 Amendment 4), so they are never listed here."""
+        those made before ADR-099 Amendment 3, which name no dataset: the administrator's list
+        since L2.7. A proposal naming one is decided on its dataset's Model tab, whose words are
+        withheld above the reader's clearance (ADR-143 Amendment 4), so it is never listed here."""
         clause = " AND dataset_id IS NULL" if without_dataset else ""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
