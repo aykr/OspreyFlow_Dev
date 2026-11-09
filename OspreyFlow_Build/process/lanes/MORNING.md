@@ -523,6 +523,16 @@ New ones are added at the bottom as they happen.
     and Datasets; and there is no ratification list. My earlier review's items 2 and 4 went unrecorded, their
     text lost with the previous orchestrator session; this review stands in for them. No rule 7 or fixture
     defect was found.
+79. **Stacks f and g, a ClickHouse on each server stack, six live runs at once (your word, about 15:50).** f and g
+    were built on the server like b to e, with the `ospreyflow` database. b to g each have their own ClickHouse
+    (`clickhouse-server:25.8.33.6`, 18124 to 18129), and the lease pins its port and credentials; only a stack
+    with no ClickHouse row is pinned to the closed 59994. **`remote` hardened after studio's run lost its ssh
+    session an hour in** (16:02; the server was not loaded, load 5.5 on 16 cores): the run now starts detached on
+    the host (`nohup setsid`), logged in `osprey-runs/<lane>/.runs/<stamp>/log`, and is followed with ssh
+    keepalives. `remote-log <lane>` reattaches and returns the run's exit code, and a second run is refused while
+    the lane's last is alive. I stopped studio's orphaned pytest on the server. Five cases were red against the
+    previous script, and 109 lane-tooling tests pass. Live on f: ClickHouse answered as `osprey` on 18128, 25
+    tests passed in 28 s with the copy, and `remote-log` reattached with the same exit code.
 
 ## Evening, 7 November: your records of 7 November applied
 

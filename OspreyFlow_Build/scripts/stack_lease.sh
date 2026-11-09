@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The lanes' throwaway test stacks, each used by one lane at a time (spec/06_DECISIONS.md ADR-142 decision 4
-# and Amendment 3; process/CLAUDE.md rule 14). Stack a on this machine and b to e on the owner's test server
-# (b and c moved there on 9 November 2026), listed in scripts/lane_stacks.tsv; scripts/lane_stack_hosts.tsv names a remote stack's host.
+# and Amendment 3; process/CLAUDE.md rule 14). Stack a on this machine and b to g on the owner's test server
+# (b and c moved there, f and g added, each with a ClickHouse, on 9 November 2026), listed in scripts/lane_stacks.tsv; scripts/lane_stack_hosts.tsv names a remote stack's host.
 # While $OSPREY_LEASE_DIR/no-local-stacks exists (the owner's per-machine switch, 9 November 2026: test on the
 # server, not this machine), acquire never takes a stack with no host, even one asked for by name.
 #
@@ -13,6 +13,8 @@
 #   OspreyFlow_Build/scripts/stack_lease.sh ports <lane>                  the export line for the holder's stack
 #   OspreyFlow_Build/scripts/stack_lease.sh remote <lane> -- <command…>   run a command on a remote stack's own host,
 #                                                                          beside its containers (9 November 2026)
+#   OspreyFlow_Build/scripts/stack_lease.sh remote-log <lane>             follow the lane's last remote run again (after
+#                                                                          a dropped ssh session), exiting with its code
 #
 # `remote` copies the caller's worktree to <host>:~/osprey-runs/<lane>, sending only what git tracks or would
 # track (`git ls-files -co --exclude-standard`), so nothing gitignored ever leaves this machine (rule 9: the
@@ -46,7 +48,12 @@ ports_line() {
   grep -v '^#' "$TABLE" | awk -F'\t' -v s="$1" -v lane="$2" '$1 == s && $5 == "MINIO_ENDPOINT" { printf "%s=localhost:%s ", $5, $4; next }
     $1 == s && $5 != "-" { printf "%s=%s ", $5, $4 }
     END { printf "POSTGRES_PASSWORD=throwaway OSPREY_LANE=%s", lane }'
-  [ "$1" = a ] || printf ' CLICKHOUSE_HTTP_PORT=59994'
+  # A stack with its own ClickHouse container gets its credentials; one with no ClickHouse row, the closed 59994.
+  if grep -v '^#' "$TABLE" | awk -F'\t' -v s="$1" '$1 == s && $2 == "clickhouse" && $3 != "-" { f = 1 } END { exit !f }'; then
+    printf ' CLICKHOUSE_USER=osprey CLICKHOUSE_PASSWORD=throwaway'
+  elif ! grep -v '^#' "$TABLE" | awk -F'\t' -v s="$1" '$1 == s && $2 == "clickhouse" { f = 1 } END { exit !f }'; then
+    printf ' CLICKHOUSE_HTTP_PORT=59994'
+  fi
   echo
 }
 # The ssh host a stack runs on (scripts/lane_stack_hosts.tsv), or nothing for one on this machine.
@@ -58,6 +65,20 @@ docker_for() {
 }
 # Whether a stack may be leased on this machine: a local one not while no-local-stacks is there.
 offered() { [ ! -e "$DIR/no-local-stacks" ] || [ -n "$(host_of "$1")" ]; }
+# ssh with keepalives, so a short drop on a long internet path does not end the session.
+rssh() { ssh -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8 "$@"; }
+# Follow a lane's last remote run from its start until it ends, then exit with its exit code.
+follow() {
+  local h="$1" rroot="$2" code
+  code=0
+  rssh "$h" "l=$rroot/.runs/last; for i in 1 2 3 4 5 6 7 8 9 10; do [ -s \$l/pid ] && break; sleep 1; done
+    [ -s \$l/pid ] || { echo 'No remote run recorded.' >&2; exit 2; }
+    tail -n +1 -F --pid=\$(cat \$l/pid) \$l/log 2>/dev/null
+    for i in 1 2 3 4 5; do [ -f \$l/exit ] && break; sleep 1; done
+    exit \$(cat \$l/exit 2>/dev/null || echo 255)" || code=$?
+  [ "$code" = 255 ] && echo "The ssh session to $h ended before the run did, or the run left no exit code: follow it again with remote-log." >&2
+  return "$code"
+}
 tunnel_sock() { echo "$DIR/tunnel-$1.sock"; }
 # One ssh connection carrying each of a remote stack's ports to this machine's 127.0.0.1.
 tunnel_open() {
@@ -197,29 +218,51 @@ case "$cmd" in
     top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not inside a git worktree: run remote from your lane's checkout." >&2; exit 1; }
     rel="$(git rev-parse --show-prefix)"
     rroot="${OSPREY_REMOTE_ROOT:-osprey-runs}/$who"
-    list="$(mktemp)"; trap 'rm -f "$list"' EXIT
+    list="$(mktemp)"; trap 'rm -f "$list" "$list.cmd"' EXIT
     # What git tracks or would track, less the local osprey.yaml (sent as committed, below) and paths gone from disk.
     ( cd "$top" && git ls-files -co --exclude-standard -z | tr '\0' '\n' \
         | grep -v -x 'OspreyFlow_Core/osprey.yaml' | while IFS= read -r f; do [ -e "$f" ] && printf '%s\n' "$f"; done ) > "$list"
-    ssh -o BatchMode=yes "$h" "mkdir -p $rroot" || { echo "Could not reach $h." >&2; exit 1; }
+    rssh "$h" "mkdir -p $rroot" || { echo "Could not reach $h." >&2; exit 1; }
     rsync -a --files-from="$list" "$top/" "$h:$rroot/" || { echo "Copying the worktree to $h failed." >&2; exit 1; }
     # Remove what the worktree no longer has (never the venv or caches), then the committed osprey.yaml.
-    ssh -o BatchMode=yes "$h" "cd $rroot && python3 -c 'import os,sys
+    rssh "$h" "cd $rroot && python3 -c 'import os,sys
 keep=set(sys.stdin.read().splitlines()); keep.add(\"OspreyFlow_Core/osprey.yaml\")
-skip=(\".venv\",\"node_modules\",\".pytest_cache\",\"__pycache__\",\".osprey-lease\",\".git\")
+skip=(\".venv\",\"node_modules\",\".pytest_cache\",\"__pycache__\",\".osprey-lease\",\".git\",\".runs\")
 for d,ds,fs in os.walk(\".\"):
   ds[:]=[x for x in ds if x not in skip]
   for f in fs:
     p=os.path.relpath(os.path.join(d,f))
     if p not in keep: os.remove(p)'" < "$list" || { echo "Pruning the copy on $h failed." >&2; exit 1; }
-    ( cd "$top" && git show HEAD:OspreyFlow_Core/osprey.yaml ) | ssh -o BatchMode=yes "$h" "cat > $rroot/OspreyFlow_Core/osprey.yaml"
+    ( cd "$top" && git show HEAD:OspreyFlow_Core/osprey.yaml ) | rssh "$h" "cat > $rroot/OspreyFlow_Core/osprey.yaml"
     lockname="$(basename "$(lock_of "$s")")"
-    ssh -o BatchMode=yes "$h" "rm -rf $rroot/.osprey-lease && mkdir -p $rroot/.osprey-lease/$lockname && cat > $rroot/.osprey-lease/$lockname/info" < "$(lock_of "$s")/info"
-    ssh -o BatchMode=yes "$h" "cd $rroot/OspreyFlow_Core && ~/.local/bin/uv sync --frozen -q" || { echo "uv sync on $h failed." >&2; exit 1; }
-    cmdline="$(printf '%q ' "$@")"
-    echo "Running on $h (stack $s, $rroot/$rel): $*" >&2
-    # shellcheck disable=SC2029
-    ssh -o BatchMode=yes "$h" "cd $rroot/$rel && export $(ports_line "$s" "$who") OSPREY_LEASE_DIR=\$HOME/$rroot/.osprey-lease PATH=\$HOME/.local/bin:\$PATH && $cmdline"
+    rssh "$h" "rm -rf $rroot/.osprey-lease && mkdir -p $rroot/.osprey-lease/$lockname && cat > $rroot/.osprey-lease/$lockname/info" < "$(lock_of "$s")/info"
+    rssh "$h" "cd $rroot/OspreyFlow_Core && ~/.local/bin/uv sync --frozen -q" || { echo "uv sync on $h failed." >&2; exit 1; }
+    # The run is started detached on the host and logged there, so a dropped ssh session loses nothing:
+    # `remote-log <lane>` follows it again. A lane runs one remote command at a time.
+    run="$rroot/.runs/$(date -u +%Y%m%dT%H%M%SZ)"
+    { printf 'cd %q || exit 1\n' "$rroot/$rel"
+      printf 'export %s OSPREY_LEASE_DIR=$HOME/%s/.osprey-lease PATH=$HOME/.local/bin:$PATH\n' "$(ports_line "$s" "$who")" "$rroot"
+      printf '%q ' "$@"; echo; } > "$list.cmd"
+    rc=0
+    rssh "$h" "if [ -f $rroot/.runs/last/pid ] && kill -0 \$(cat $rroot/.runs/last/pid) 2>/dev/null; then exit 3; fi
+      mkdir -p $run && cat > $run/cmd.sh && ln -sfn \$HOME/$run $rroot/.runs/last
+      cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; bash $run/cmd.sh; echo \$? > $run/exit' > $run/log 2>&1 < /dev/null &
+      exit 0" < "$list.cmd" || rc=$?
+    case $rc in
+      0) ;;
+      3) echo "$who's last remote run is still running on $h: follow it with remote-log $who, or wait for it." >&2; exit 1 ;;
+      *) echo "Could not start the run on $h." >&2; exit 1 ;;
+    esac
+    echo "Running on $h (stack $s, $rroot/$rel), logged at $run/log: $*" >&2
+    follow "$h" "$rroot"
+    ;;
+  remote-log)
+    who="${2:?usage: stack_lease.sh remote-log <lane>}"
+    s="$(held_by "$who")"
+    [ -n "$s" ] || { echo "$who holds no stack." >&2; exit 1; }
+    h="$(host_of "$s")"
+    [ -n "$h" ] || { echo "Stack $s runs on this machine: there is no remote run to follow." >&2; exit 1; }
+    follow "$h" "${OSPREY_REMOTE_ROOT:-osprey-runs}/$who"
     ;;
   ports)
     who="${2:?usage: stack_lease.sh ports <lane>}"
@@ -240,7 +283,7 @@ for d,ds,fs in os.walk(\".\"):
     done
     ;;
   *)
-    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | release <lane> | status" >&2
+    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | remote-log <lane> | release <lane> | status" >&2
     exit 2
     ;;
 esac

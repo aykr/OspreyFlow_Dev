@@ -62,8 +62,8 @@ def test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder(
     """ADR-142 Amendments 3 and 4: throwaway stacks, one holder each, a, b and c on this machine and d and e on
     the owner's test server (9 November 2026; b and c moved there the same day). The first five lanes get a to e in order; the sixth is refused
     and told who holds each."""
-    lanes = ["studio", "rules", "case", "admin", "platform"]
-    for lane, stack in zip(lanes, "abcde"):
+    lanes = ["studio", "rules", "case", "admin", "platform", "studio-b", "rules-b"]
+    for lane, stack in zip(lanes, "abcdefg"):
         taken = lease("acquire", lane, f"{lane} run")
         assert taken.returncode == 0, taken.stderr
         assert f"stack {stack}" in taken.stdout
@@ -104,8 +104,8 @@ def test_acquire_prints_the_ports_of_the_stack_taken(lease) -> None:
     assert pins["ARCADEDB_HTTP_PORT"] == "2492" and pins["POSTGRES_PORT"] == "55434"
     assert "OSPREY_LANE=rules" in line
     b_ports = {p for p, (stack, _) in port_guard.stack_ports().items() if stack == "b"}
-    # ClickHouse's throwaway is stack a's alone (lane_stacks.tsv), so stack b pins it to a closed port.
-    assert pins.pop("CLICKHOUSE_HTTP_PORT") == "59994"
+    # Stack b has its own ClickHouse on the server (9 November 2026), pinned like its other ports.
+    assert pins["CLICKHOUSE_HTTP_PORT"] == "18124"
     assert {int(v) for v in pins.values()} <= b_ports
 
 
@@ -137,7 +137,7 @@ def test_the_holder_releases_once_the_stack_is_down(lease) -> None:
     lease("acquire", "case", "conformance")
     done = lease("release", "case", docker="down")
     assert done.returncode == 0, done.stderr
-    assert lease("status").stdout.strip() == "a: free\nb: free\nc: free\nd: free\ne: free"
+    assert lease("status").stdout.strip() == "a: free\nb: free\nc: free\nd: free\ne: free\nf: free\ng: free"
     assert lease("acquire", "rules", "axe scans").returncode == 0
 
 
@@ -200,7 +200,7 @@ def test_up_is_refused_to_a_lane_not_holding_the_lease(lease, tmp_path: Path) ->
     assert not log.exists()
 
 
-_STACK_B = ("osprey-test-b-arcadedb", "osprey-test-b-pg", "osprey-test-b-valkey", "osprey-test-b-objectstore")
+_STACK_B = ("osprey-test-b-arcadedb", "osprey-test-b-pg", "osprey-test-b-valkey", "osprey-test-b-objectstore", "osprey-test-b-clickhouse")
 
 
 def test_up_and_down_start_and_stop_only_the_holders_own_stack(lease, tmp_path: Path) -> None:
@@ -372,7 +372,11 @@ def _remote_tools(tmp_path: Path) -> Path:
     """ssh and rsync stand-ins that record their arguments (and what rsync was told to send) and answer 0."""
     log = tmp_path / "remote.log"
     bin_dir = tmp_path / "bin"
-    (bin_dir / "ssh").write_text(f'#!/bin/sh\necho "ssh $*" >> "{log}"\ncat > /dev/null\nexit 0\n')
+    # Records each call and what it was sent; answers 3 to the "is the last run alive" check when told to.
+    (bin_dir / "ssh").write_text(
+        f'#!/bin/sh\necho "ssh $*" >> "{log}"\nsed "s/^/stdin /" >> "{log}"\n'
+        f'case "$*" in *"kill -0"*) [ -f "{tmp_path}/alive" ] && exit 3;; esac\nexit 0\n'
+    )
     (bin_dir / "rsync").write_text(
         "#!/bin/sh\n"
         f'for a in "$@"; do case "$a" in --files-from=*) sed "s/^/sent /" "${{a#--files-from=}}" >> "{log}";; esac; done\n'
@@ -431,13 +435,15 @@ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(le
     log = _remote_tools(tmp_path)
     wt = _lane_worktree(tmp_path)
     assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "pytest", "-q", "tests").returncode == 0
-    run = [l for l in log.read_text().splitlines() if l.startswith("ssh") and "pytest" in l]
-    assert len(run) == 1, log.read_text()
-    line = run[0]
-    assert "ospreyflow-test" in line
-    assert "cd osprey-runs/case/OspreyFlow_Build/" in line
-    assert "ARCADEDB_HTTP_PORT=2492" in line and "POSTGRES_PORT=55434" in line and "OSPREY_LANE=case" in line
-    assert "OSPREY_LEASE_DIR=$HOME/osprey-runs/case/.osprey-lease" in line
+    text = log.read_text()
+    script = [l[len("stdin "):] for l in text.splitlines() if l.startswith("stdin ")]
+    assert "cd osprey-runs/case/OspreyFlow_Build/ || exit 1" in script, script
+    export = next(l for l in script if l.startswith("export "))
+    assert "ARCADEDB_HTTP_PORT=2492" in export and "POSTGRES_PORT=55434" in export and "OSPREY_LANE=case" in export
+    assert "OSPREY_LEASE_DIR=$HOME/osprey-runs/case/.osprey-lease" in export
+    assert "pytest -q tests " in script
+    # A call's command spans lines in the log; the start is the one call holding nohup setsid.
+    assert text.count("nohup setsid") == 1, text
     mirrored = [l for l in log.read_text().splitlines() if ".osprey-lease/stack-b.lease/info" in l]
     assert mirrored, log.read_text()
 
@@ -451,3 +457,82 @@ def test_remote_is_refused_for_a_local_stack_and_for_a_lane_holding_none(lease, 
     local = _remote(lease, tmp_path, wt, "studio", "--", "true")
     assert local.returncode == 1 and "runs on this machine" in local.stderr
     assert not log.exists() or "rsync" not in log.read_text()
+
+
+
+# --- A ClickHouse for each server stack (the owner, 9 November 2026) -------------------------------------------
+# Only stack a had one, and a is off on the owner's machine, so the analytics suite's ClickHouse half ran nowhere.
+
+
+def _export_line(taken: subprocess.CompletedProcess[str]) -> dict[str, str]:
+    line = next(l for l in taken.stdout.splitlines() if "ARCADEDB_HTTP_PORT=" in l)
+    return dict(w.split("=", 1) for w in line.split() if "=" in w)
+
+
+def test_a_server_stack_pins_its_own_clickhouse_and_its_credentials_never_the_closed_port(lease) -> None:
+    lease("acquire", "studio", "a run")
+    pins = _export_line(lease("acquire", "rules", "a run"))  # stack b
+    assert pins["CLICKHOUSE_HTTP_PORT"] == "18124"
+    assert pins["CLICKHOUSE_USER"] == "osprey" and pins["CLICKHOUSE_PASSWORD"] == "throwaway"
+    assert "59994" not in pins.values()
+
+
+def test_stack_a_keeps_its_own_clickhouse_port_and_no_server_credentials(lease) -> None:
+    pins = _export_line(lease("acquire", "studio", "a run"))  # stack a: the test starts its own ClickHouse
+    assert pins["CLICKHOUSE_HTTP_PORT"] == "18123"
+    assert "CLICKHOUSE_USER" not in pins
+
+
+def test_every_server_stack_s_clickhouse_is_started_and_stopped_with_it(lease, tmp_path: Path) -> None:
+    for lane in ("studio", "rules"):
+        lease("acquire", lane, "a run")
+    script, log = _recording_docker(tmp_path)
+    _DOCKER["recording"] = script
+    try:
+        assert lease("up", "rules", docker="recording").returncode == 0
+    finally:
+        del _DOCKER["recording"]
+    assert "osprey-test-b-clickhouse" in log.read_text()
+
+
+
+# --- A remote run survives a dropped ssh session (9 November 2026: studio's run lost its session an hour in) -----
+
+
+def test_remote_starts_the_run_detached_with_keepalives_and_follows_its_log(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true").returncode == 0
+    calls = [l for l in log.read_text().splitlines() if l.startswith("ssh")]
+    assert all("ServerAliveInterval=" in c for c in calls), calls
+    text = log.read_text()  # a call's command spans lines in the log
+    start = next(l for l in text.splitlines() if "nohup setsid" in l)
+    assert "> osprey-runs/case/.runs/" in start and "/log 2>&1" in start
+    assert "tail -n +1 -F --pid=" in text, text
+
+
+def test_a_second_remote_run_is_refused_while_the_last_is_alive(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    log = _remote_tools(tmp_path)
+    (tmp_path / "alive").touch()
+    wt = _lane_worktree(tmp_path)
+    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true")
+    assert ran.returncode == 1 and "still running" in ran.stderr and "remote-log case" in ran.stderr
+    assert "tail -n +1 -F" not in log.read_text()
+
+
+def test_remote_log_follows_the_lane_s_last_run_on_its_host(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    log = _remote_tools(tmp_path)
+    lease("status")
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    ran = subprocess.run(["bash", str(SCRIPT), "remote-log", "case"], env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    text = log.read_text()  # a call's command spans lines in the log
+    assert text.count("tail -n +1 -F") == 1, text
+    assert "ospreyflow-test l=osprey-runs/case/.runs/last" in text, text
