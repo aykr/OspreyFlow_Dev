@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.59** · 2026-11-09 · For OspreyFlow v0.4.12 · Issued
+**Version 1.60** · 2026-11-09 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.60 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §9.1: Admin as a place of its own, its sections and each one's right, the coming ones said so. §9.2: the roles in the Glass's own words, the places each opens, every right in plain words, custom roles and the Super user. §9.3: the invite form as built. §9.5 and §9.6: where lists and influencers now live. New §9.8 teams and leads, §9.9 Disable and what a person owns, §9.10 datasets, their Authors and linked cases, §9.11 Operations and Audit. §10.1: Admin › Models. New §10a: Admin › Maps. §12: the Alert monitoring board in the Glass. §13: backups to a folder named at setup, coming. The architecture has its own guide now. |
 | 1.59 | 2026-11-09 | §7: `grading.scheme`, the scheme drawn items are graded in (a built-in scheme or a scheme file). §8: `ospreyflow grading change`, its dry run and its change (ADR-143 decision 11 and Amendment 6). Appendix A regenerated: the `grading` section. |
 | 1.58 | 2026-11-09 | Appendix A regenerated: `connectors.private_hosts`, the private hosts or networks an operator admits the Studio's SQL and API connectors to, and `connectors.secrets`, the connection secrets only the Conduit is given (ADR-140 Amendment 15). |
 | 1.57 | 2026-11-08 | §8: `ospreyflow map list`, `map verify`, `map prefetch` and `map build` (ADR-147). Appendix A regenerated: a WMTS provider's `credential_param`. |
@@ -89,13 +90,16 @@ is made from the deployment's own schema, and is checked against it on every cha
 
 ## How OspreyFlow is built
 
+The [architecture guide](architecture-guide.md) describes it in full, for a reader deciding whether it
+fits; this is what an administrator needs.
+
 ![Level 0: the people who use OspreyFlow, its three tiers joined by four ports, and the identity provider, reporting, data in and the optional outside services beside it](images/architecture/level-0.svg)
 
 Three tiers; everything that passes between them crosses one of four typed ports:
 
 | Tier | What it is |
 | --- | --- |
-| **The Glass** | The browser workspace — the graph, map, timeline and reports, the Ingest Studio and the Admin area — one web application |
+| **The Glass** | The browser workspace, one web application with four places: the Glass itself (the graph, map, timeline and figures), the Ingest Studio, Rules and Monitoring, and Admin |
 | **The Conduit** | The API (FastAPI). Every request is checked against the person making it: access control is applied inside each query to the stores, never after |
 | **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch, or PostgreSQL full-text), PostgreSQL, the object store, and the models |
 
@@ -1007,7 +1011,7 @@ makes keep a volume even when its claim is deleted).
 
 One front proxy is the deployment's only door. Under the address in `network.public_origin`:
 
-- the **Glass** — with the Ingest Studio and the Admin area inside it — at the name itself;
+- the **Glass** — with its four places, the Ingest Studio, Rules and Monitoring and Admin among them — at the name itself;
 - **sign-in** (Keycloak) at `id.`;
 - **dashboards** (Superset) at `bi.`, when dashboards are on.
 
@@ -1063,40 +1067,121 @@ Everyone signs in through the deployment's identity provider; the password is on
 its own sign-in page. What a person may do is their **roles**; what they may see is their
 **clearance**, unit and handling codes, and the cases they are given.
 
-### 9.1 The Admin area
+### 9.1 The Admin place
 
-Signed in with an administration right, choose **Admin** on Start. Each tab shows only to someone
-holding its right:
+**Admin** is one of the four places (key `A`); Home and the place switcher offer it to whoever holds
+one of its sections' rights. A side list groups its sections, each shown only to someone holding its
+right, and each section's routes refuse anyone without it, so hiding a section is never the control.
+Under the GOV.UK theme the list is a GOV.UK side navigation.
 
-| Tab | Right | What it does |
-| --- | --- | --- |
-| People and roles | `manage_people` | Invite people; set their roles, clearance, unit and handling codes; disable, re-enable; reset a sign-in; remove an account; join someone the organisation's sign-in refused to their account (section 9.7) |
-| Dashboards | `manage_dashboards` | Register a dashboard's account (its secret shown once), see when it last pulled, remove it |
-| Schedules and runs | `operate_schedules` | Every scheduled or watched pipeline: pause, resume, run now, change its time, its runs |
-| System | `administer_system` | Each component's health — **Acting for people** among them, which says "The Conduit cannot act for people: run `ospreyflow repair-sign-in`" when the identity provider refuses the Conduit's own credential — the models in use, the version and whether an update exists |
-| Datasets | `administer_system` | Every dataset and its egress — whether its material may be sent to a hosted model engine (section 10) |
-| Demo packs | `administer_system` | Which packs are loaded, and the command that adds one |
+| Group | Section | Right | What it does |
+| --- | --- | --- | --- |
+| People | **People and roles** | `manage_people` | Invite people; set their roles, clearance, unit and handling codes; the Super user preset; **Disable…** with its transfers (section 9.9), re-enable; reset a sign-in; remove an account; join someone the organisation's sign-in refused to their account (section 9.7); name an Author for a case that has none |
+| People | **Roles** | `manage_people` | The built-in roles and their rights; custom roles; teams, their leads and cover (sections 9.2 and 9.8) |
+| People | **Dashboard identities** | `manage_dashboards` | Register a dashboard's account (its secret shown once), see when it last pulled, remove it |
+| Data | **Datasets** | `administer_system` | Every dataset's kind, unit, highest marking, egress, promotion policy, Authors and linked cases (section 9.10) |
+| Data | **Connections** | `administer_system` | The named connections pipelines read files through |
+| Data | **Proposed types** | `manage_ontology` | Relationship types analysts proposed with no dataset named: promote, reject or retire |
+| Running | **Operations** | `operate_schedules` | Every scheduled or watched pipeline (pause, resume, run now, change its time, its runs), and promotions waiting for review (section 9.11) |
+| Running | **System** | `administer_system` | Each component's health, the models in use, the version and whether an update exists, and who dataset owners may be |
+| Running | **Models** | `manage_models` | Model engines, each job's model, their keys, limits and usage (section 10.1) |
+| Running | **Maps** | `manage_geospatial` | Map providers and their keys, the local basemap, prefetch areas (section 10a) |
+| Policies | **Grading scheme** (coming) | `administer_system` | The deployment's grading scheme, read-only, with the command that changes it (section 8 has the command today) |
+| Policies | **Approval rights** (coming) | `administer_system` | Who may approve each kind of decision, and a warning where fewer than two can |
+| Policies | **Uploads** (coming) | `administer_system` | The largest picture an analyst may add, and the formats accepted |
+| Audit | **Audit** | `read_audit` | The audit log, filtered by who, what and when (section 9.11) |
+| Demo packs | **Demo packs** | `administer_system` | Which packs are loaded, and the command that adds one |
+
+**System → Acting for people** says "The Conduit cannot act for people: run `ospreyflow
+repair-sign-in`" when the identity provider refuses the Conduit's own credential.
 
 ![Admin → People and roles: each person's roles, with Access, Disable and Reset sign-in](images/admin/01-people.png)
 
 ### 9.2 Roles
 
-| Role | For |
-| --- | --- |
-| **Analyst** | Cases: investigate, edit the graph, confirm what models proposed, alerts and rules, exports, watches; proposing and approving connection-strength influencers |
-| **Data Engineer** | Pipelines: build, verify, publish, run and schedule them; the source files they load; held rows; screening lists. (It also carries the right to revert a load, which no screen or command uses yet) |
-| **Admin** (`osprey-admin`) | The Admin area; the ontology and the map; the audit and export ledgers; proposing and approving connection-strength influencers |
-| **Reports Viewer** | Reports and data feeds; the alert queue, read-only |
+The words below are the Glass's own: Home, the help page *Roles, teams and Authors* and this guide
+take them from one source, so they say the same.
 
-A single right can be given on its own. **Nobody can be given more than the person giving it
-holds** — clearance included — which is why the first administrator holds the highest clearance.
+| Role | What it is for | Places it opens |
+| --- | --- | --- |
+| **Analyst** | Investigates cases, works alerts and keeps watches. Reads figures and boards. | The Glass, Rules and Monitoring |
+| **Data Engineer** | Builds and runs pipelines, reviews promotions into a dataset and decides held rows. | The Glass, the Ingest Studio, Admin (Operations) |
+| **Administrator** (`osprey-admin`) | Looks after people, roles, teams, datasets and the deployment. Does not investigate by being one. | Admin, the Glass |
+| **Reports Viewer** | Reads a case's figures and the dashboards, and sees the alerts on cases they can read. Never works an alert. | The Glass |
+| **Rule author** | Writes the rules that raise alerts, and works the alerts in the queue. | The Glass, Rules and Monitoring |
+| **Super user** (a preset) | Analyst, Data Engineer and Rule author together, given as three roles. Still never the second person on their own work. | All four |
+
+**Custom roles.** Admin → Roles lists the built-in roles with their rights (**Copy ‹role› into a new
+role**) and the deployment's own under **Custom roles**, each with **Edit**, **Copy**, its versions and
+who holds it. **New role** asks for a **Role name** and its rights, grouped as Cases, Investigation (the
+Glass), Alerts and rules, Ingest Studio, Reporting, Administration and Other. **Nobody can give more
+than the person giving it holds** — clearance included — which is why the first administrator holds
+the highest clearance. A single right can also be given on its own. *Coming:* a short tip beside each
+role and right in Admin, and a refusal that names the roles that could take an action.
+
+Each right, in plain words:
+
+| Right | Lets a person |
+| --- | --- |
+| `create_case` | Start a case. |
+| `share_case` | Give people a level in a case. |
+| `remove_case` | Remove a case they are an Author of. |
+| `export` | Export from a case, through the export checks. |
+| `export_override` | Export an item that asks its originator first, with a reason. |
+| `investigate` | Search, expand, follow paths and filter in a case. |
+| `edit_graph` | Add and change entities and links in a case. |
+| `confirm_inferred` | Confirm what a model suggested, so it is no longer inferred. |
+| `extract_files` | Add files to a case, run extraction and decide its findings. |
+| `resolve_entities` | Say two entities are the same, or not. |
+| `record_assessment` | Record judgements, gaps and assumptions. |
+| `ask_model` | Ask the model a question about a case. |
+| `run_analysis` | Run analyses such as communities and centrality. |
+| `propose_link_type` | Propose a new type of link. |
+| `draw_on_boards` | Draw on a case's boards. |
+| `promote_to_dataset` | Propose a drawn item for the dataset. |
+| `propose_types` | Propose a new entity type. |
+| `read_alert_queue` | See the alerts in a case's queue. |
+| `triage_alerts` | Claim, close and hand back alerts. |
+| `deploy_rules` | Turn rules on and off for a case. |
+| `read_rule_audit` | Read who changed which rule, and when. |
+| `read_held_rows` | See rows a load held back for review. |
+| `decide_held_rows` | Release or reject held rows. |
+| `trace_ownership` | Trace ownership and neighbourhood risk. |
+| `keep_watches` | Keep watches and hotlists. |
+| `load_screening_lists` | Load and refresh licensed screening lists. |
+| `author_rules` | Write the rules that raise alerts. |
+| `manage_strength_influencers` | Change what makes a link strong. |
+| `edit_pipelines` | Build and change pipelines. |
+| `verify_pipelines` | Test a pipeline against its sample. |
+| `publish_pipelines` | Deploy a pipeline. |
+| `run_pipelines` | Run a pipeline. |
+| `schedule_pipelines` | Put a pipeline on a schedule. |
+| `add_ingest_files` | Add files for a pipeline to load. |
+| `revert_loads` | Take back a load. |
+| `edit_target_model` | Change a dataset's domain model. |
+| `review_promotions` | Review items proposed for a dataset. |
+| `accept_types` | Accept a proposed type into a domain model. |
+| `merge_datasets` | Merge a drawn dataset into another. |
+| `read_reports` | Read a case's figures and the dashboards. |
+| `read_report_feed` | Download a case's figures for a dashboard. |
+| `read_data_feeds` | See the data feeds a case's pipelines send. |
+| `administer_system` | Change how the deployment runs. |
+| `manage_people` | Add people and give them roles. |
+| `manage_dashboards` | Register dashboards. |
+| `operate_schedules` | Pause and resume schedules. |
+| `manage_ontology` | Change the deployment's ontology. |
+| `manage_geospatial` | Choose the maps the deployment shows. |
+| `read_audit` | Read the audit log. |
+| `read_export_ledger` | Read the record of what left the deployment. |
+| `manage_models` | Choose the models and their keys. |
 
 **Someone with no role sees no datasets.** A person holding no role (or only a role this deployment
 does not know) is told no dataset's name or id anywhere: the list a new case chooses from and the
 datasets a case reads come back empty, and a model engine's reason for being unavailable names none,
-whatever unit or case level they have been given. Home shows them every place dimmed with the role each needs,
-and *No cases to show* when they hold no case. A single right given on its own counts as a role here.
-Set their roles first, or straight after their access, and they see what that role allows.
+whatever unit or case level they have been given. Home tells them "Your account opens no place yet.
+Ask an administrator to give you a role.", and *No cases to show* when they hold no case. A single
+right given on its own counts as a role here. Set their roles first, or straight after their access,
+and they see what that role allows.
 
 **The first administrator** (`admin`, on a deployment with no demo accounts) holds both the
 **Admin** and the **Analyst** roles from the start, whether or not demo packs are loaded. The Admin
@@ -1106,8 +1191,8 @@ People and roles.
 
 ### 9.3 Inviting someone
 
-**Invite** asks for a sign-in name, their name, optionally an email, a clearance, a unit, handling
-codes and roles. With a mail server configured and an email given, they get an email with a link to
+**Invite a person** asks for a sign-in name, their first and last name, optionally an email, a
+clearance, a unit, handling codes and, for each role, **Invite as ‹role›**. With a mail server configured and an email given, they get an email with a link to
 set their password. Otherwise you are shown a **one-time code** (sixteen letters in four groups) to
 give them in person; it is shown once, and at first sign-in they choose their own password.
 **Reset sign-in** works the same way.
@@ -1120,7 +1205,7 @@ page also offers *Reset your password*.
 
 ### 9.4 Monitoring: whom a hotlist's alerts reach
 
-Analysts work alerts in one queue, in the Glass's **Monitoring** place: the case's rule alerts reach
+Analysts work alerts in **Rules and Monitoring** (the alerts journey, coming, rewrites this section): the case's rule alerts reach
 every member of the case; a watched pattern's alerts reach its owner and the people of the owner's
 **unit** (the unit set on their account, section 9.3); a hotlist's alerts reach its owner, and the
 owner's unit too only when the hotlist is shared. Two settings in `osprey.yaml` decide hotlists:
@@ -1181,6 +1266,11 @@ refused, in words, and nothing loads. Add an entry with
 OspreyFlow's own (`packages/demo_fixtures/screening_lists/`, known by its fingerprint); a file cannot
 make itself synthetic by saying so.
 
+**Where lists live now.** Lists are imported and refreshed in the **Ingest Studio → 2 Sources**,
+under its screening lists (and, for `load_screening_lists`, from Rules and Monitoring), and each
+dataset subscribes to the lists its rules read. The paragraphs below, written for the Glass's former
+Monitoring → Lists, are being rewritten with the alerts journey (coming).
+
 **Subscribing.** In the Glass, open **Monitoring → Lists** (it needs the `load_screening_lists` right,
 which the administrator and data-engineer roles hold). Under **Subscribe to a list**, give the list a
 name, choose its connector, name its file inside the ingest folder (for example `lists/SDN.CSV`), and,
@@ -1236,7 +1326,7 @@ Analyst and the Admin roles** (or `deploy_rules` and `administer_system` granted
 Author of a case the rule is listed in (a whole-deployment rule is listed in every case). With one such person, a whole-deployment rule can be
 proposed but never run.
 
-**Approving influencers.** In **Monitoring → Connection strength**, a version waiting for a second
+**Approving influencers.** In the Glass's rail, **Connection strength**, a version waiting for a second
 person shows what it would put in force, who proposed it and why. Another holder of the right chooses
 **Approve version N**, or **Send it back** with words; its proposer sees the approval withheld and may
 withdraw it. Until a version is approved, the influencers shipped in the weights file are in force.
@@ -1268,6 +1358,90 @@ organisation lands in that account, with its roles, clearance and cases. Join on
 sure they are the same person: the organisation said only that its account carries the same
 address. Each account joins one organisation account; an account already joined, or one OspreyFlow
 itself uses, is not offered. Every removal and every join is in the audit log.
+
+### 9.8 Teams and leads
+
+A **team** is a set of people with a lead. Admin → Roles makes one from a role (**Team for**): a
+**Team name** and an optional **Team mailbox**, then **Make a team**. Its status line says who leads
+it, who covers and until when, and who is acting today. **Name** sets the lead and **Hand over** passes
+it on; under **Cover for** and **Cover's last day**, **Save cover** names someone to stand in while the
+lead is away, and **End cover** ends it. Only a member of the team may be its lead or cover, the lead
+cannot cover for themselves, a cover needs a last day (today or later), and a service account is never
+a lead or a cover. A team can answer for a dataset (section 9.10); its members do while they are in
+it, and not after. *Coming:* a case level given to a team, and a rule's alerts routed to a team for
+its lead to hand out.
+
+### 9.9 Disable, and what a person owns
+
+**Disable…** on a person's row first reads what they answer for and asks who takes each item: "‹name›
+answers for N things. Choose who takes each one: nothing is deleted, and every transfer is audited."
+Each item has its own **Transfer to…**; then **Transfer and disable** and **Confirm disabling**. It
+lists:
+
+- the cases of which they are the only Author, a dataset's home case among them;
+- the teams they lead;
+- their hotlists, watches and saved patterns;
+- the typology rules they own;
+- their pipeline and screening-list schedules.
+
+A transfer is refused, in words, when its recipient cannot take it: the person being disabled, a
+service account, someone disabled, someone of another unit, someone outside the team, someone without
+the right the item's runs need, or someone who is not an Author of the item's case. Items of another
+unit are left to that unit's administrator ("N transferred, and those stand; not disabled yet…"). You
+cannot disable your own account. **Enable** brings a disabled person back.
+
+The panel ends with what it does not list yet: private views, boards, promotions waiting for review,
+reviews waiting on the person, and proposed types. The Conduit already reads a person's views, boards,
+link-type proposals and drawn-item watches (`GET /v1/admin/people/{user_id}/ownership`, for
+`manage_people`), each in your unit and, for proposals and watches, only at a marking you may see; it
+never names or counts an item you may not see, and says only that some exist. *Coming:* the panel
+reading that list, transferring those items, and refusing to disable someone who still owns items you
+may not see.
+
+### 9.10 Datasets, their Authors and linked cases
+
+Admin → **Datasets** lists every dataset: its **Kind** (*Source*, loaded through the Ingest Studio;
+*Composite*, read from several sources; *Drawn*, made by a drawing), its **Unit**, the **Highest
+marking it may hold** (or the deployment's highest), its **Egress** (section 10) and its details:
+
+- **Promotion of drawn items**: *Author promotes*, or *Second person reviews*. It names who can approve,
+  says "No one can approve a promotion: none of its Authors holds Review promotions." when nobody can,
+  and warns when fewer than two people can ("one absence stops every promotion").
+- **Authors**: the people or team who answer for the dataset, who are its home case's Authors.
+  **Change owner of ‹dataset›** asks "Who answers for ‹dataset›?" and is audited. Before its first
+  *Make live* a dataset says "Not live yet: who answers for it is asked at its first Make live."
+- **Linked cases**: every case reading it, open or removed, with its analyst layer's items, links and
+  size (never the layer's contents), the home case tagged. For a removed case's layer, **Merge ‹case›
+  into the dataset (dry run)** and **Delete ‹case›'s layer (dry run)** say what each would do. *Coming:*
+  the merge and the delete themselves, which arrive with promotion.
+
+**Who may be an owner.** Admin → System's **Dataset owners may be** is *People and teams* (the default),
+*People only* or *Teams only*. It governs every naming of a dataset's owners; a client who wants no
+person's name shown as an owner chooses teams only. A service account is never an owner.
+
+**A home case per dataset.** Every dataset has one home case, named for it and of its unit. It holds
+the dataset's own reports and its alerts that belong to no working case. It is made at a dataset's first *Make live*, which refuses to go live until someone
+answers for the dataset ("who answers for this dataset?"), and with a drawing made as a case of its
+own. For datasets that existed before, `python -m scripts.make_home_cases` gives each its home case,
+dry run first.
+
+### 9.11 Operations and Audit
+
+**Operations** (`operate_schedules`) has the schedules (pipeline, case, schedule, owner, next and last
+run; **Pause**, **Resume**, **Run now**, **Save schedule**) and **Promotions waiting for review**:
+the load, the dataset it goes into, who sent it, when, and how long it has waited. **Alert the
+reviewers and administrators after N days** (1 to 90) sets when a waiting promotion is overdue; an
+overdue one alerts the dataset's Authors who hold `review_promotions`, and administrators of its unit.
+A promotion is listed only to someone who may review it. Promotions are not recorded yet, so the list
+is empty and says so (coming, with promotion).
+
+**Audit** (`read_audit`) reads the audit log. **Which entries** chooses the record (*Cases, people,
+datasets and loads*; the *Rule audit of one case*; or the *Engines' history*, which also needs
+`manage_models`), a kind (analyst assertions, loads and promotions, types, people and roles, datasets,
+reads and refusals), a person, a case, a dataset and a period; then **Show entries**. Each entry gives
+when, who, what, its kind, its case and its words. Entries about another unit's cases are not shown, and
+where your own read of a record would not show its words, the entry says "Withheld: your own read of
+this record would not show them".
 
 ## 10. Models
 
@@ -1357,6 +1531,38 @@ for, whether its key is present and whether it is under a privacy contract (with
 a notice that case content then leaves the deployment. `ospreyflow models` shows the same mark
 beside each provider ("privacy contract: yes (DPA 2026/07)" or "privacy contract: no"), and the
 guided install's Models screen shows it as the configuration holds it.
+
+### 10.1 Models in Admin
+
+Admin → **Models** (`manage_models`) does on screen what `ospreyflow models` does from the command
+line, which stays for headless use and recovery. **What the installer declared** says whether the
+deployment is local-only (`local_only` in `osprey.yaml`). **Engines** lists each engine, its jobs and
+models, whether it is under a privacy contract, its key, its limits and **Edit**, **Set limits**,
+**Enter key** or **Rotate key**, **Remove key**, **Test the connection** and **Remove**; **Add an
+engine** adds one. A key is **write-only**: its field says "not shown, never sent back", and the
+screen says only *Key set*, *No key*, or *Key lost: enter it again*. **Each job's default engine**
+sets the engine for extraction and Ask, image description, transcription and embeddings. **Limits**
+are requests a minute, tokens a minute and a token budget for a period, applied by the gateway on
+the engine's own key. **Usage** gives each engine's calls, failures and tokens by job, from the
+gateway's own records, never by person. Every change is in **History** and the audit log.
+
+## 10a. Maps
+
+Admin → **Maps** (`manage_geospatial`) holds the map providers, the local basemap and prefetched
+areas; `ospreyflow map list`, `map verify`, `map prefetch` and `map build` do the same from the command
+line (section 8).
+
+- **Providers**, tier 1 to 4, each with its attribution and licence, its key, its state, **Make the
+  default**, **Edit**, **Enter key** or **Rotate key**, **Remove key** and **Remove**; **Add a provider**
+  adds one. A key is kept the way a model key is: never shown back, and never given to the browser.
+  Where more than one provider is drawable, analysts choose between them with the map's **Basemap**
+  switch.
+- **The local basemap**: choose the **Region to build** and **Build the basemap**; **Verify the
+  providers** checks each one answers.
+- **Prefetch areas**: areas whose tiles are fetched ahead of use, and **Fetch every area** by hand
+  only, every 6 hours, every day or every week.
+
+Changes are in **History** and the audit log.
 
 ## 11. Demo packs
 
@@ -1456,13 +1662,22 @@ database's `figures` table, beside `raised`, `open_by_age` and `outcome`:
 
 A typology rule is named by its typology, never by its own name, which an analyst writes and the
 feed does not carry. Every figure is counted as the dashboard's account may see it; a hotlist kept
-"only me" is counted for its owner alone, so never on a dashboard. No board ships as a file: build
-the monitoring board in Superset from the `figures` table, filtered on these sections — for
+"only me" is counted for its owner alone, so never on a dashboard.
+
+**In the Glass**, the rail's **Dashboards** draws an **Alert monitoring** board itself, first among the
+boards, from the same figures counted as the person reading it: raised each week and by rule, closed
+by outcome, time to close, hotlist matches and the team view. Rules and Monitoring's *See the trend*
+and a Reports Viewer's *Open the dashboard* open it filtered to an alert's rule and period. It needs
+no Superset set-up. For a board of your own in Superset, none ships as a file: build it from the `figures` table, filtered on these sections — for
 example a stacked bar of `raised_by_rule` by `week_start` and `label`, a bar of `closed` by
 `label`, a table of `time_to_close`, and a line of `hotlist_matches` — with a filter on
 `case_name`. Report sync fills it on its next pull; nothing else needs to change.
 
 ## 13. Backup and restore
+
+*Coming* (ADR-114 Amendment 37): every install names its backups folder at setup, never inside the
+checkout. Until then, Lite writes into the checkout's `backups/` and Small on your own server into
+`server.backups`.
 
 **Lite.** `ospreyflow backup` writes a set to `backups/<time>-<profile>-<commit>/`: the graph
 store, every PostgreSQL database (the identity provider's accounts as their own export), the
