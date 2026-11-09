@@ -14,5 +14,9 @@ export interface AlertTeam {
   display_name: DisplayName;
   lead?: Lead;
   members?: Members;
+  member_names?: MemberNames;
   [k: string]: unknown;
+}
+export interface MemberNames {
+  [k: string]: string;
 }

@@ -1838,6 +1838,9 @@ class AlertTeam(BaseModel):
     display_name: str
     lead: bool = False
     members: list[str] = Field(default_factory=list)
+    #: ADR-106: the members by name (id -> name), resolved at read time for the members served
+    #: (the lead's own team alone); never stored. The Glass shows these, an id only where unnamed.
+    member_names: dict[str, str] = Field(default_factory=dict)
 
 
 class HotlistAudienceInput(BaseModel):

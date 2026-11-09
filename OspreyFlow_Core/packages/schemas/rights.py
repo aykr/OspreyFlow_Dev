@@ -188,6 +188,8 @@ def teams_of(roles: Iterable[str]) -> list[str]:
     """The teams a principal is in: each custom role (`role:<id>`) their token carries, sorted
     (ADR-145 Amendment 5 point 5). Read from the request each time, never kept."""
     return sorted(r[len(CUSTOM_ROLE_PREFIX) :] for r in roles if r.startswith(CUSTOM_ROLE_PREFIX))
+
+
 _BY_VALUE = {r.value: r for r in Right}
 
 
