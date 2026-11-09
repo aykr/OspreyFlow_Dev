@@ -36,6 +36,7 @@ from services.api.app import (
     get_principal,
     get_target_models,
 )
+from services.api.boards import Boards
 from services.api.dataset_scope import set_case_datasets
 from services.api.investigations import (
     AccessLevel,
@@ -565,3 +566,20 @@ def test_a_stranger_to_the_case_is_told_the_promotable_check_does_not_exist(
         "/v1/investigations/inv-1/link-types/promotable", json={"types": ["BRIBED"]}
     )
     assert answer.status_code == 404
+
+
+async def test_a_board_never_offers_a_proposals_storage_label() -> None:
+    """Rule 3 and rule 7 on the boards (L3.3, found at L3.5's rebase): a proposal made in one case
+    declares its own hidden storage type in the ontology every board reads. A board lists the link
+    types it may draw, and `link` refuses any other, so listing that label would tell every case of
+    the proposal, send the label to the Glass, and let a link be drawn under it."""
+    service, _, _, _ = await _service()
+    p = await _propose(service)
+    assert service._ontology.edge_type(p.storage_name) is not None  # noqa: SLF001 - it is declared
+    boards = Boards(
+        graph=None, views=None, items=None, datasets=None,  # type: ignore[arg-type]
+        ontology=service._ontology, scheme=None,  # type: ignore[arg-type]  # noqa: SLF001
+    )  # fmt: skip
+    offered = boards.link_types()
+    assert p.storage_name not in offered and not [t for t in offered if "__" in t]
+    assert "ASSOCIATE_OF" in offered

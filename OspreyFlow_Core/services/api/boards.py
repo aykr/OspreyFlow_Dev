@@ -243,7 +243,10 @@ class Boards:
         return sorted(
             e.name
             for e in self.ontology.edge_types
-            if not e.system and e.name not in _NOT_DRAWN_LINK_TYPES
+            # A proposal's own storage label (`NAME__<proposal id>`) is `hidden`: listing it would
+            # tell this case of another case's proposal (rule 3), send a storage label to the Glass
+            # (rule 7), and let a link be drawn under it (ADR-143 decision 9; L3.5).
+            if not e.system and not e.hidden and e.name not in _NOT_DRAWN_LINK_TYPES
         )
 
     def markings_up_to(self, ceiling: str, principal: Principal) -> list[str]:
@@ -475,6 +478,14 @@ class Boards:
     ) -> DrawnItemMade:
         """A drawn link between two items on the board the reader may see, drawn or loaded. The
         link lives in the layer; a loaded end stays in its dataset untouched (decision 2)."""
+        declared = self.ontology.edge_type(given.type)
+        if declared is not None and declared.hidden:
+            # A proposal's own storage label, of this case or another: never drawn under, whatever
+            # the list says (rule 3, rule 7; ADR-143 decision 9, found at L3.5).
+            raise DrawingRefused(
+                "not_in_the_model", f"{given.type} is not a link type of this case's model",
+                status=422,
+            )  # fmt: skip
         if given.type not in self.link_types():
             raise DrawingRefused(
                 "not_in_the_model", f"{given.type} is not a link type of this case's model",

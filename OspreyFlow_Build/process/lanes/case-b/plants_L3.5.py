@@ -23,6 +23,8 @@ SVC = "services/api/link_types.py"
 APP = "services/api/app.py"
 STORE = "services/api/link_type_store.py"
 MODELS = "services/api/target_models.py"
+BOARDS = "services/api/boards.py"
+TB = "../OspreyFlow_Build/tests/services/api/test_boards.py"
 
 Plant = tuple[str, str, list[tuple[str, str]], list[str]]
 
@@ -118,6 +120,19 @@ OFFLINE: list[Plant] = [
      [("CaseType(definition=accepted.in_force(), storage_name=accepted.storage_name)",
        "CaseType(definition=accepted.definition(), storage_name=accepted.storage_name)")],
      [f"{T}::test_the_accepting_data_engineer_chooses_direct_and_it_holds_from_then"]),
+]
+
+OFFLINE += [
+    ("a board lists hidden types (a proposal's storage label)", BOARDS,
+     [("            if not e.system and not e.hidden and e.name not in _NOT_DRAWN_LINK_TYPES",
+       "            if not e.system and e.name not in _NOT_DRAWN_LINK_TYPES")],
+     [f"{TB}::test_a_board_neither_lists_nor_draws_under_a_proposals_storage_label",
+      f"{T}::test_a_board_never_offers_a_proposals_storage_label"]),
+    ("link's own hidden refusal removed and the list holding hidden types", BOARDS,
+     [("            if not e.system and not e.hidden and e.name not in _NOT_DRAWN_LINK_TYPES",
+       "            if not e.system and e.name not in _NOT_DRAWN_LINK_TYPES"),
+      ("        if declared is not None and declared.hidden:", "        if False:")],
+     [f"{TB}::test_a_link_is_never_drawn_under_a_proposals_storage_label"]),
 ]
 
 LIVE: list[Plant] = [
