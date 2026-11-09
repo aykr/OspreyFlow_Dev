@@ -627,17 +627,18 @@ def _subprocess(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]
 
 
 def _backup_root(directory: Path, repo: Path) -> Path:
-    """Where the update's backup is written: on Small on a server of your own, the folder
-    `server.backups` named (ADR-114 Amendment 33 decision 5), read from the deployment's own
-    `osprey.yaml` copy; elsewhere the checkout's `backups/`."""
+    """Where the update's backup is written: the deployment's own subfolder of its backups folder,
+    read from the deployment's own `osprey.yaml` copy (`harness.backup`'s rule, ADR-114 Amendment
+    37), never inside the checkout (`repo`), which `harness.backup` refuses."""
+    from harness.backup import backups_folder, fallback_backups_folder
+
     copy = directory / "osprey.yaml"
     if copy.is_file():
-        from schemas.deployment import OspreyConfig, self_contained_small
+        from schemas.deployment import OspreyConfig
 
         config = OspreyConfig.model_validate(yaml.safe_load(copy.read_text(encoding="utf-8")) or {})
-        if self_contained_small(config):
-            return Path(config.components.storage.backups)
-    return repo / "backups"
+        return backups_folder(config)[0] / directory.name
+    return fallback_backups_folder() / directory.name
 
 
 def real_host(

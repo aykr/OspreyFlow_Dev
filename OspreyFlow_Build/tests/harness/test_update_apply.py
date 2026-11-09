@@ -792,9 +792,43 @@ def test_update_moves_a_self_contained_small(
     monkeypatch.setattr(update, "_subprocess", subprocess_)
     host = update.real_host(directory, tmp_path)
     made = host.backup()
-    assert made.parent == backups
+    # ADR-114 Amendment 37 decision 3: in the deployment's own subfolder of that folder.
+    assert made.parent == backups / "small"
     (argv,) = [a for a in ran if "harness.backup" in a]
-    assert argv[argv.index("--out-root") + 1] == str(backups)
+    assert argv[argv.index("--out-root") + 1] == str(backups / "small")
+
+
+def test_an_updates_backup_is_never_written_inside_the_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 37 decision 2: the update's own backup of a lite deployment whose
+    `osprey.yaml` names no folder (none, or the committed placeholder) goes to
+    `~/OspreyFlow/backups/<deployment>/`, never the checkout's `backups/` — which `harness.backup`
+    now refuses, so the update would otherwise stop at its first step; a named folder is used."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    repo = tmp_path / "checkout"
+    directory = repo / "deploy" / "generated" / "local-lite"
+    directory.mkdir(parents=True)
+    ran: list[list[str]] = []
+
+    def subprocess_(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]:
+        ran.append(list(argv))
+        if "harness.backup" in argv:
+            out = Path(argv[argv.index("--out-root") + 1])
+            (out / f"2026110{len(ran)}T000000Z-local-lite-abc").mkdir(parents=True)
+        return 0, ""
+
+    monkeypatch.setattr(update, "_subprocess", subprocess_)
+    fallback = tmp_path / "home" / "OspreyFlow" / "backups" / "local-lite"
+    for raw in ({}, {"components": {"storage": {"backups": "/var/lib/osprey/backups"}}}):
+        (directory / "osprey.yaml").write_text(yaml.safe_dump(raw))
+        made = update.real_host(directory, repo).backup()
+        assert made.parent == fallback
+        assert not made.resolve().is_relative_to(repo.resolve())
+    (directory / "osprey.yaml").write_text(
+        yaml.safe_dump({"components": {"storage": {"backups": str(tmp_path / "mine")}}})
+    )
+    assert update.real_host(directory, repo).backup().parent == tmp_path / "mine" / "local-lite"
 
 
 # --- the stores moved to named volumes (ADR-114 Amendment 35) -----------------------------------
