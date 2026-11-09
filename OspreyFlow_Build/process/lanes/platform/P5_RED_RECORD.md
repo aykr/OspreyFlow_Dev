@@ -109,4 +109,5 @@ After the plants, with the diff applied: `test_route_rights.py`, the whole graph
 | Defect 7: a unit read as an option | the leading-`-` guard removed | the same | `-x` and `--by` sent as the unit |
 | Defect 9: the fake refuses an unknown unit as the Conduit does | the fake's unknown-unit branch removed | `…::test_any_unit_the_conduit_can_name…` | exit 0 for `unit-9` |
 | Defect 12: the ruling and carry said on every run | `AWAITING_OWNER`'s text without the ruling | `test_runtime_licences.py::test_every_run_names_what_awaits_the_owner` | the dulwich and L1.7 assertions |
-| Defect 1: Core stands alone | the Makefile line (`5d3281e`'s parent) | `tests/test_core_stands_alone.py` | both of its cases, as the reviewer read them; green once removed |
+| Defect 1: Core stands alone | the Makefile line, as committed at `ce36c3f` | `tests/test_core_stands_alone.py` | both of its cases red in `make test` on the server at `ce36c3f` (`gates/ce36c3f.test.txt`); green once removed |
+| Main's audit census: every action classified | none: the actions as written at `ce36c3f`, before main's census was in the lane's tests | `test_audit_kinds.py::test_every_action_the_conduit_writes_is_classified` | `['add_dataset_gazetteer', 'remove_dataset_gazetteer']` unclassified (`gates/ce36c3f.test.txt`); now in *Datasets*, only `dataset_id` shown, and named in `WORDS_SHOWN_ACTIONS` |

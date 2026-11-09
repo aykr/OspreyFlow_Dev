@@ -107,3 +107,22 @@ run's three unnamed failures did not recur. **No case needs Java** (none skipped
 `test_a_restricted_case_load_on_a_copy_is_still_the_case_s_at_a_rebuild` went red at its assertion: the re-build
 wrote the gazetteer's `Ashwell` over the case's `Ashwell (restricted)`. Restored, the whole copies file had 9 passed.
 The stack was brought down and released at 17:40:03 UTC.
+
+
+## P5 round 3 (the orchestrator's review sending P5 back, then the lane's own review of it)
+
+**Hashes.** Files named `0980675.*` and `360c83c.*` are named for the head when they ran. Both commits were rebased afterwards and are not in the branch's history: `0980675` holds the round's first fixes and `360c83c` the read-path tests. Each file says what it ran.
+
+- **Live**, platform lease on stack d through `stack_lease.sh remote`, detached. Released at 20:44 UTC.
+  - `0980675.live-plants-r3.txt`, 18:29–20:25 UTC: each read path red with its fix removed; the conformance case of `PORT_CONTRACT.diff` green and red both ways; then the delta set with the diff applied, **372 passed**.
+  - `360c83c.live-retract.txt`, 20:41 UTC: the retract test green, then red with its plant.
+- **The image**, built on the test server (amd64) under the same lease, by `p5_image_check.sh`:
+  - `360c83c.image-old-pin.txt`, 20:26 UTC, at the old pin. It was made by an earlier version of the script, without its sections 1b and 4b and without the jar's `chmod`, so planetiler's exit 1 there ("Unable to access jarfile") is the script's 0700 temporary directory, not Java.
+  - `360c83c.image-repinned.txt`, 20:35 UTC, from the committed script at the new pin: 21.0.13+9; image 1,858,898,417 bytes, `/opt/java` 62 MB; planetiler v0.10.2 `--help` exit 0; trivy exit 0 over both the current image and Temurin 21.0.1; `java-runtime-check` green over the current image and red twice over the old one; the `legal/java.desktop` notices in full.
+- **`make -k ci`** on this machine, Docker Desktop off, store ports pinned to the closed ports 59991–59994 and no `OSPREY_LANE`:
+  - `ce36c3f.ci.txt`: red at this machine's Docker socket (the eight image scans, `opentofu-check`, `chart-check`), and at `product-tree-link-check` and `provenance-annotation-check` over the register's new paragraph (fixed at `eaae0fa`).
+  - `1c1d2aa.ci.txt`: **green but this machine's Docker socket**. The harness axe run inside `core-check` passed, the Geospatial screen in dark and light included. The head after it, `b9d5aeb`, changes only `audit_section.py`'s *Datasets* list and `test_audit_kinds.py` (linted: ruff clean).
+- **`make test`** on the server through `stack_lease.sh offline`:
+  - `ce36c3f.test.txt`: 9732 passed, 7 failed, 2 errors. Of those, the lane's were `test_core_stands_alone.py` (2, the reviewer's defect 1), `test_audit_kinds.py` (main's new census) and the two citation checks above, all fixed since. The server's own: the GPU preflight case, `test_valkey_config.py` (the offline pins), `test_workspace_proxy.py`'s two errors. test-js: 2776 passed, 2 failed (the Matrix timing cases under load) and `App.test.tsx`'s hook timeout.
+  - `b9d5aeb.test.txt`: **9762 passed, 2 failed, 11 skipped, none the branch's**: the server's GPU preflight case and `test_valkey_config.py` (the offline pins). test-js: workspace 2814 passed, 1 failed, `MatrixView.budget.test.tsx`'s first-frame timing under a full run's load, as at every earlier gate. `make test-js` stopped there, before the harness suite.
+  - `b9d5aeb.test-js-rest.txt`, the same server: the harness suite, **47 passed**, the Geospatial screen's two among them; then the Matrix timing case alone, 1 passed.
