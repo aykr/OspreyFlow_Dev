@@ -1,0 +1,64 @@
+# Plant run at 6221632, lease rules-b on stack g (server copy only; the worktree untouched): alerts.py queue_scope's typology clause given AND {unit} NOT LIKE 'unit-b-%', so the fixture's other unit loses the case's typology alerts (rows removed, the shape the old <= passed)
+Running on ospreyflow-test (stack g, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b/.runs/20261109T163218Z/log: sh -c cd ../OspreyFlow_Core && python3 -c "p='services/api/alerts.py';s=open(p).read();a='(typology IS NOT NULL AND investigation_id = {case}) ';assert a in s;open(p,'w').write(s.replace(a,'(typology IS NOT NULL AND investigation_id = {case} AND {unit} NOT LIKE \'unit-b-%\') '))" && grep -n "NOT LIKE 'unit-b" services/api/alerts.py && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py -k audience
+280:        f"(typology IS NOT NULL AND investigation_id = {case} AND {unit} NOT LIKE 'unit-b-%') "
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_the_panel_and_the_team_view_reach_only_each_alert_s_audience _______
+
+stores = (<services.api.hotlists.HotlistStore object at 0x7ce3ca630cb0>, <services.api.alerts.AlertStore object at 0x7ce3ca1c5880>)
+
+    async def test_the_panel_and_the_team_view_reach_only_each_alert_s_audience(stores: Any) -> None:
+        """Rule 3 for the two L2.12 sections, by audience: the owner, a colleague of their team, a reader
+        of another unit, and a reader of another case on the same dataset. An "only me" hotlist alert,
+        claimed by its owner, is in the owner's panel and team view (as *mine*) and in no one else's; a
+        case's typology alerts are in that case's figures alone."""
+        hotlists, alerts = stores
+        owner, colleague, other_unit, other_case = _person(), _person(), _person("unit-b"), _person()
+        case, case_b = new_id(), new_id()
+        await _three_kinds(hotlists, alerts, owner, case)
+        only_me = await _hotlist(hotlists, owner, "only_me")
+        await alerts.save(_alert(f"hotlist:{only_me}", owner, referent_node_ids=["n-b"], team=owner.org_unit,
+                                 created_at=NOW, status="claimed", assignee=owner.id))  # fmt: skip
+        graph = _Graph(NAMES)
+        typology = [
+            ("typology", "rapid_movement", 0, 0, 0, 1, 0),
+            ("typology", "structuring", 1, 0, 0, 0, 0),
+        ]
+        monitors = ("monitors", "", 0, 0, 0, 1, 1)
+    
+        owners = (await _figures(alerts, graph, case, owner)).monitoring
+        assert _opened(owners) == [("hotlists", "", "1 to 7 days", 1), ("hotlists", "", "under a day", 1),
+                                   ("typology", "structuring", "1 to 7 days", 1)]  # fmt: skip
+        assert _team(owners) == [("hotlists", "", 1, 1, 0, 0, 0), monitors, *typology]
+    
+        colleagues = (await _figures(alerts, graph, case, colleague)).monitoring
+        assert _opened(colleagues) == [
+            ("hotlists", "", "1 to 7 days", 1),
+            ("typology", "structuring", "1 to 7 days", 1),
+        ]
+        assert _team(colleagues) == [("hotlists", "", 1, 0, 0, 0, 0), monitors, *typology]
+    
+        others = (await _figures(alerts, graph, case, other_unit)).monitoring
+        # The other unit's reader of the same case: the case's typology alerts, all of them, and
+        # nothing of the owner's team: pinned whole, not a subset (the orchestrator's review of
+        # 211a6dc).
+>       assert _opened(others) == [("typology", "structuring", "1 to 7 days", 1)]
+E       AssertionError: assert [] == [('typology',...o 7 days', 1)]
+E         
+E         Right contains one more item: ('typology', 'structuring', '1 to 7 days', 1)
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py:189: AssertionError
+------------------------------ Captured log setup ------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 9 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py::test_the_panel_and_the_team_view_reach_only_each_alert_s_audience
+1 failed, 5 deselected in 1.32s
+EXIT 1
+Mon  9 Nov 2026 16:32:24 UTC
+
+# Restored: the next remote copy re-synced alerts.py from the worktree
+......                                                                   [100%]
+6 passed in 1.59s
+EXIT 0
+Mon  9 Nov 2026 16:32:50 UTC

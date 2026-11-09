@@ -256,3 +256,18 @@ cannot be told from here. The orchestrator's independent review of 211a6dc (§14
 - **Lane-reviewer on this delta** found the code sound; its records findings (this section's claims of a
   live run not yet taken, the base hash, the guard's second assertion, the carry's scope, the report not
   updated, the docstring's "each still asks the case's level") are fixed here and in the report.
+- **The live run and the whole pin's red** (rules-b lease, stack g on the server, at 6221632 on main 99d92a8,
+  16:26–16:33Z): 232 passed across 24 files, `test_route_rights.py` and the new pin included
+  (`gates/6221632.live.txt`). Planted on the server's copy only (the worktree untouched, the gates running):
+  `queue_scope`'s typology clause given `AND {unit} NOT LIKE 'unit-b-%'`, so the fixture's other unit loses
+  the case's typology alerts, rows taken away, the shape the old `<=` passed. The audience case FAILED at
+  the other unit's line (`assert [] == [('typology', 'structuring', '1 to 7 days', 1)]`), the owner's and
+  the colleague's lines passing before it; the next copy restored `alerts.py`, 6 passed
+  (`gates/6221632.live-plant.txt`). Stack down, lease released.
+- **`whyNot` removed** (studio-b's review, routed by the orchestrator; the owner's ruling (c) on decision
+  12: a refusal names the roles that hold a right, never people). `whyNot(right, holders)` named people, and
+  `roles.test.ts` pinned "D. Engineer and S. Lead have it"; no screen used it. New case `name no person who
+  holds a right` (no export of `roles.ts` that takes holders or people): FAILED with `whyNot` there
+  (`expected [ 'whyNot' ] to deeply equal []`); `whyNot` removed, green; help, reports and home 163 passed,
+  `tsc` clean. Roles come from studio-b's `whyNotByRole` (its `L1.8_roles_words.patch`, which now applies
+  here with its context reduced to one line, `git apply -C1`).

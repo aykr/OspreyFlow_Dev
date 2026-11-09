@@ -1,0 +1,35 @@
+Mon  9 Nov 2026 16:40:38 UTC
+# at 6221632 (on main cc384ac), offline: ports pinned closed (59991-59994), MINIO_ENDPOINT and OSPREY_LANE unset (make test-js: make -k test stopped at pytest before it)
+npm test --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace
+
+
+ Test Files  338 passed (338)
+      Tests  2802 passed (2802)
+   Start at  16:40:39
+   Duration  25.67s (environment 49%, tests 36%, import 10%, transform 3%, setup 1%, worker 1%)
+
+    Isolate  338 workers spawned · ~437ms startup each (spawn + environment, per file)
+             at least ~13.00s faster with isolate: false — reuses workers across files instead of one per file
+
+npm test --workspace apps/harness
+
+> @ospreyflow/harness@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/harness
+
+
+ Test Files  6 passed (6)
+      Tests  45 passed (45)
+   Start at  16:41:05
+   Duration  814ms (environment 59%, tests 20%, import 11%, transform 9%)
+
+EXIT 0
+Mon  9 Nov 2026 16:41:05 UTC

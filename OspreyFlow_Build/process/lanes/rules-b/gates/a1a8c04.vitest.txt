@@ -1,0 +1,50 @@
+Mon  9 Nov 2026 16:55:51 UTC
+# at a1a8c04 (6221632 + help/roles.ts's whyNot removed), offline, make test-js
+npm test --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace
+
+ ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 5122ms
+   ❯ MatrixView at 50,000 nodes and 250,000 links (1)
+     × opens inside §5's first-frame budget, drawing one page of each table and saying so 5120ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+AssertionError: opened in 2855 ms: expected 2854.6341669999997 to be less than 2500
+ ❯ src/matrix/MatrixView.budget.test.tsx:50:60
+     48|     expect(entities.querySelector("caption")?.textContent).toContain("…
+     49|     expect(links.querySelector("caption")?.textContent).toContain("Row…
+     50|     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+       |                                                            ^
+     51|   }, 60_000);
+     52| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 337 passed (338)
+      Tests  1 failed | 2801 passed (2802)
+   Start at  16:55:51
+   Duration  27.53s (environment 51%, tests 36%, import 11%, transform 2%, setup 1%, worker 1%)
+
+    Isolate  338 workers spawned · ~491ms startup each (spawn + environment, per file)
+             at least ~14.61s faster with isolate: false — reuses workers across files instead of one per file
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run
+make: *** [test-js] Error 1
+EXIT 2
+Mon  9 Nov 2026 16:56:19 UTC
+
+# MatrixView.budget.test.tsx alone, again, 16:56:29Z (the machine shared with other lanes' runs)
+      Tests  1 passed (1)
