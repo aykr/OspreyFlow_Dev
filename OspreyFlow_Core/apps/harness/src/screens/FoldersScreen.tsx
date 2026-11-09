@@ -27,7 +27,10 @@ export function FoldersScreen({
     !value || value === shipped ? (home ? `${home}/OspreyFlow/${name}` : shipped) : value;
   const [ingest, setIngest] = useState(suggest(current?.ingest, SHIPPED.ingest, "ingest"));
   const [tiles, setTiles] = useState(suggest(current?.tiles, SHIPPED.tiles, "basemap"));
-  const [backups, setBackups] = useState(suggest(current?.backups, SHIPPED.backups, "backups"));
+  // With no home folder to suggest beneath, blank rather than the placeholder: a backup reads both
+  // as no folder named (ADR-114 Amendment 38) and writes to ~/OspreyFlow/backups, saying so.
+  const backupsSuggested = suggest(current?.backups, SHIPPED.backups, "backups");
+  const [backups, setBackups] = useState(backupsSuggested === SHIPPED.backups ? "" : backupsSuggested);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 

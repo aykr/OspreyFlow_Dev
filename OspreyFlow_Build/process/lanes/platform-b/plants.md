@@ -22,3 +22,6 @@ Amendments 37 and 38 give.
 - review fixes (doctor): old SET_NAME -> left_in red; unreadable silent -> at_least red; no in-checkout check -> fails_the_doctor red; no case folding -> plain/link red; blank as named -> agree[raw3] red; answers not checked -> answers_before_install red
 - answers placeholder refusal: test run before the refusal existed -> red
 - Review: placeholder shown as a folder -> 'never chosen' vitest red
+- second review (harness): abspath before resolve -> spelt_another_way (link + ..) and mirrors red; a climbing name accepted -> spelt_another_way red; placeholder by spelling -> falls_back (trailing slash) and agree[raw6] red
+- second review (cli): a profile dropped from PROFILE_NAMES -> profile-name param and schemas_profiles red; checkout's deployment.name not refused -> checkouts_own_deployment_name red; relative folder against cwd -> inside_the_checkout red; no checkout read as the product -> off_a_checkout red; bad yaml raises -> unreadable_settings red
+- second review (guided page): placeholder offered with no home -> 'never offers the placeholder' vitest red

@@ -202,6 +202,12 @@ describe("FoldersScreen", () => {
     expect((screen.getByLabelText("Backups folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/backups");
   });
 
+  it("never offers the schema's backups placeholder, even with no home folder to suggest beneath", () => {
+    render(<FoldersScreen config={{ components: { storage: { backups: "/var/lib/osprey/backups" } } }} onSave={vi.fn()} />);
+    // Blank is no folder named: the backup then writes to ~/OspreyFlow/backups and says so.
+    expect((screen.getByLabelText("Backups folder") as HTMLInputElement).value).toBe("");
+  });
+
   it("says the backups folder is outside the checkout, one subfolder per deployment, and holds the data", () => {
     render(<FoldersScreen config={{ components: { storage: { backups: "/srv/bk" } } }} onSave={vi.fn()} home="/u/ada" />);
     const field = screen.getByLabelText("Backups folder") as HTMLInputElement;
