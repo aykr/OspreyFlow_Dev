@@ -732,32 +732,13 @@ def _promotion_writers_missing_the_check(root: Path) -> list[str]:
     missing = []
     for path in sorted((root / "services").rglob("*.py")):
         text = path.read_text(encoding="utf-8")
-        relative = path.relative_to(root).as_posix()
-        if relative in NOT_A_WRITER:
-            continue
         if "analyst_promotion" in text and "promotion_refusals(" not in text:
-            missing.append(relative)
+            missing.append(path.relative_to(root).as_posix())
     return missing
-
-
-#: Modules that name the trigger and write no load, each with its reason (L3.4, asked of case-b
-#: through the orchestrator). `test_what_is_not_a_writer_writes_no_load` holds each to it.
-NOT_A_WRITER = {
-    # The promotion's own record: the trigger's name as its column's type and CHECK constraint.
-    # The load itself is written by `promotions.py`, which asks `promotion_refusals`.
-    "services/api/promotion_store.py": "the record, which stores the trigger's name",
-}
 
 
 def test_every_promotion_writer_asks_which_links_may_go() -> None:
     assert _promotion_writers_missing_the_check(_CORE) == []
-
-
-def test_what_is_not_a_writer_writes_no_load() -> None:
-    """An entry above is only the trigger's name: no graph write, no load's trigger given."""
-    for relative in NOT_A_WRITER:
-        text = (_CORE / relative).read_text(encoding="utf-8")
-        assert "promote_elements" not in text and 'trigger="analyst_promotion"' not in text, relative
 
 
 def test_a_planted_promotion_writer_without_the_check_is_found(tmp_path: Path) -> None:
