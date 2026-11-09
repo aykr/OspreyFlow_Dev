@@ -46,6 +46,11 @@ studio, case and glass sessions are retired (each replied "retired"); their work
 Also, 9 November about 04:55 UTC: every lane session except platform's had exited about two hours earlier (cause
 unknown; worktrees intact). All seven were resumed in fresh sessions from their HANDOFF and state. rules-b's orphaned
 vite on 5184 was left running (stopping it was refused to me); admin's stack-c lease passes to its resumed session.
+It happened again at about 05:40 UTC, platform's session included: Terminal.app itself had quit, with swap at 23 of
+24 GB (Docker's VM alone 11.4 GB), so memory pressure is the likely cause. All eight were reopened (platform fresh
+on P5). Three orphaned live pytest runs were left to finish; their leases pass to the resumed holders. An old
+container `osprey-probe-arcadedb-new` (arcadedb 26.10.1, created 7 October, 2.5 GB) is not a lane's; yours to
+remove if you want the memory back. The sisters (studio-b, case-b, rules-b) stay on `sol`: about 30% of the steps left.
 
 **A question for you (platform's P3; the licence register, so yours):** building the local basemap needs Java 21
 (planetiler). The only runtime here is Eclipse Temurin, GPL-2.0 with the Classpath exception, and spec/00 §7 says
