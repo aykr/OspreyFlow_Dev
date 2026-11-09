@@ -183,8 +183,11 @@ async def test_the_panel_and_the_team_view_reach_only_each_alert_s_audience(stor
     assert _team(colleagues) == [("hotlists", "", 1, 0, 0, 0, 0), monitors, *typology]
 
     others = (await _figures(alerts, graph, case, other_unit)).monitoring
-    assert {c.label for c in others.open_by_source} <= {"typology"}
-    assert {t.label for t in others.team} <= {"typology"}
+    # The other unit's reader of the same case: the case's typology alerts, all of them, and
+    # nothing of the owner's team: pinned whole, not a subset (the orchestrator's review of
+    # 211a6dc).
+    assert _opened(others) == [("typology", "structuring", "1 to 7 days", 1)]
+    assert _team(others) == typology
 
     # Another case's reader on the same dataset, in the same unit: the team's shared alerts are
     # theirs too; case's typology alerts and the "only me" alert are not.
