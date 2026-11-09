@@ -149,10 +149,13 @@ async def search_places(
     # Names alone, at the store (`GraphPort.suggest_locations`: `Location.name`, containing, the
     # access step in the traversal, rule 3): never an identifier, so neither the places nor
     # `more` can answer on an `osm_id` or a `uprn` (rule 7). Its match keeps case, so the words are
-    # asked as typed, capitalised and in lower case, and the answers joined.
+    # asked as typed, capitalised, in title case ("St Albans") and in lower case, and the answers
+    # joined.
     found: dict[str, Node] = {}
     more = False
-    for words in dict.fromkeys((query, query[:1].upper() + query[1:], query.lower())):
+    for words in dict.fromkeys(
+        (query, query[:1].upper() + query[1:], query.title(), query.lower())
+    ):
         nodes = await graph.suggest_locations(words, principal, limit=SCAN_LIMIT + 1)
         more = more or len(nodes) > SCAN_LIMIT
         for node in nodes[:SCAN_LIMIT]:

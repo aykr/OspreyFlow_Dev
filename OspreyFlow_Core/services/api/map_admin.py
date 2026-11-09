@@ -1307,11 +1307,19 @@ async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
     async def settle() -> None:
         # ADR-147 Amendment 1, decision 2: the dataset registered once the places are committed (a
         # failed build leaves none), and the words about the points said after the load.
-        from services.api.map_places import NO_POINTS_HERE, register_gazetteer_dataset_from_env
+        from services.api.map_places import (
+            NO_POINTS_HERE,
+            DatasetsUnreachable,
+            register_gazetteer_dataset_from_env,
+        )
 
         await graph.commit_transaction(held.pop("tx"))
-        await register_gazetteer_dataset_from_env(region, by=by)
         print(NO_POINTS_HERE)
+        try:
+            await register_gazetteer_dataset_from_env(region, by=by)
+        except DatasetsUnreachable as unreachable:
+            # The places are committed; the build goes on, and says how to register them.
+            print(str(unreachable), file=sys.stderr)
 
     try:
         name, created, referenced, rejected = await build_basemap(

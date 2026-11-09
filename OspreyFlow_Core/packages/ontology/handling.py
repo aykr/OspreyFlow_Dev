@@ -349,8 +349,9 @@ def _gazetteer_identifiers_withheld[Element: (Node, Edge)](
     place (a node in a `gazetteer-*` dataset) comes to a request reader without its gazetteer's own
     identifiers (`osm_id`, `uprn`, …), which are source-system identifiers. A case that adds the
     gazetteer reads its places through search, expansion and every other node read, all of which
-    pass here. The Conduit's own work (`datasets is None`: a build's lookup, resolution) and a read
-    written back (`sources_in_full`) keep them, so a rebuild still finds a place by its `osm_id`."""
+    pass here. The Conduit's own work (`datasets is None`: resolution) keeps them, and so does a
+    read inside `sources_in_full`: a read written back, and a gazetteer load, which reads its places
+    whole (`load_gazetteer`). A rebuild matches a place by its `osm_id` inside the store anyway."""
     if principal.datasets is None or not isinstance(element, Node):
         return element
     if not any(d.startswith(GAZETTEER_DATASET_PREFIX) for d in element.datasets):

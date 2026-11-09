@@ -115,6 +115,9 @@ def test_a_provider_the_browser_fetches_takes_no_key(fields: dict[str, str], wor
         "https://tiles.example.test/keystone/{z}/{x}/{y}.png",
         "https://tiles.example.test/authority-maps/{z}/{x}/{y}.png",
         "https://tiles.example.test/styles/turnkey/{z}/{x}/{y}.png",
+        "file:///data/tiles/key_west.pmtiles",
+        "file:///data/tiles/rutland-auth.pmtiles",
+        "https://tiles.example.test/v2-key/{z}/{x}/{y}.png",
     ],
 )
 def test_a_word_holding_key_is_not_refused(source: str) -> None:

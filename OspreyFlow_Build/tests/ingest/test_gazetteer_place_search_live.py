@@ -83,13 +83,16 @@ async def _load(
 
 async def _plant(
     graph: GraphArcadeDBAdapter, analytics: AnalyticsDuckDBAdapter, *, node_id: str, name: str,
-    dataset: str, classification: str, lon: float, lat: float, **props: str,
+    dataset: str, classification: str, lon: float, lat: float, point_classification: str = "",
+    **props: str,
 ) -> None:  # fmt: skip
-    """One `Location` with a point of its own, written as a load writes it."""
+    """One `Location` with a point of its own, written as a load writes it; the point marked as the
+    place unless `point_classification` says otherwise."""
     handling = {
         "classification": classification, "handling_code": "P",
         "originator": "unit-1", "owning_unit": "unit-1",
     }  # fmt: skip
+    point_handling = {**handling, "classification": point_classification or classification}
     ref = f"g-{node_id}"
     tx = await graph.begin_transaction()
     await graph.upsert_nodes(
@@ -114,7 +117,7 @@ async def _plant(
         [
             GeometryRecord(
                 geometry_ref=ref, version=POINT_GEOMETRY_VERSION, kind=GeometryKind.POINT,
-                lon=lon, lat=lat, handling=handling,  # type: ignore[arg-type]
+                lon=lon, lat=lat, handling=point_handling,  # type: ignore[arg-type]
             )
         ]
     )  # fmt: skip
@@ -130,10 +133,13 @@ async def _a_case_yard(graph: GraphArcadeDBAdapter, analytics: AnalyticsDuckDBAd
 
 
 async def _a_secret_place(graph: GraphArcadeDBAdapter, analytics: AnalyticsDuckDBAdapter) -> None:
-    """A gazetteer place above an OFFICIAL reader's clearance, its point marked the same."""
+    """A gazetteer place above an OFFICIAL reader's clearance, **its point OFFICIAL**: the analytics
+    store would hand the point over, so only the graph store's own access step keeps the place out
+    (rule 15: a test that the point's marking alone could pass proves nothing about the store)."""
     await _plant(
         graph, analytics, node_id="secret-cranford-depot", name="Cranford Depot",
-        dataset=GAZETTEER, classification="SECRET", lon=-0.47, lat=51.48, osm_id="secret-9",
+        dataset=GAZETTEER, classification="SECRET", point_classification="OFFICIAL",
+        lon=-0.47, lat=51.48, osm_id="secret-9",
     )  # fmt: skip
 
 

@@ -9,7 +9,9 @@ removed (`ontology.handling._gazetteer_identifiers_withheld`, `P4_RED_RECORD.md`
 
 Runs the real `services.api.app` over real ArcadeDB, Postgres and Valkey on a leased test stack, as
 `test_sources_withheld_routes.py` does. Everything it writes is removed in teardown, pass or fail: the
-two nodes and their link, by id, and its case.
+two nodes and their link, by id (the Conduit's database is always `ospreyflow`, so not a throwaway
+one); its two cases, each delete checked; and in Postgres this run's gazetteer dataset, the cases'
+own analyst layers and the rows naming them.
 """
 
 from __future__ import annotations
@@ -46,9 +48,10 @@ from tests.conftest import default_claims, sign_token
 from tests.services.api.case_dataset import new_case
 
 UNIT = Principal(id="loader-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
-GAZETTEER = "gazetteer-osm-p4-live-test"
-#: This run's own name and identifiers, so a search finds this run's place alone.
+#: This run's own name, identifiers and dataset, so a search finds this run's place alone and its
+#: teardown removes this run's rows alone.
 TAG = f"{secrets.randbelow(10**8):08d}"
+GAZETTEER = f"gazetteer-osm-p4-live-{TAG}"
 NAME = f"Quillbury {TAG}"
 OSM_ID = f"node/{TAG}"
 UPRN = f"9{TAG}"
@@ -148,6 +151,35 @@ async def _give_case(investigation_id: str) -> None:
         await store.close()
 
 
+async def _remove_rows(case_ids: list[str]) -> None:
+    """This run's dataset rows: what the cases read, their layers, and the gazetteer dataset."""
+    import asyncpg
+
+    connection = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        layers = [
+            r["id"]
+            for r in await connection.fetch(
+                "SELECT id FROM datasets WHERE layer_of = ANY($1::text[])", case_ids
+            )
+        ]
+        await connection.execute(
+            "DELETE FROM investigation_datasets WHERE investigation_id = ANY($1::text[])", case_ids
+        )
+        await connection.execute(
+            "DELETE FROM case_layer_reads WHERE investigation_id = ANY($1::text[])", case_ids
+        )
+        await connection.execute(
+            "DELETE FROM datasets WHERE id = ANY($1::text[])", [*layers, GAZETTEER]
+        )
+        left = await connection.fetchval(
+            "SELECT count(*) FROM datasets WHERE id = ANY($1::text[])", [*layers, GAZETTEER]
+        )
+        assert left == 0, f"{left} dataset row(s) of this run were not removed"
+    finally:
+        await connection.close()
+
+
 def _carries_an_identifier(text: str) -> bool:
     return OSM_ID in text or UPRN in text or '"osm_id"' in text or '"uprn"' in text
 
@@ -208,7 +240,12 @@ def test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifie
             assert place_id in {n["id"] for n in expanded.json()["delta"]["nodes"]}, expanded.text
             assert not _carries_an_identifier(expanded.text), expanded.text
     finally:
+        refused: list[tuple[str, int]] = []
         with TestClient(app) as client:
             for made_id in cases:
-                client.delete(f"/v1/investigations/{made_id}", headers=headers)
+                answer = client.delete(f"/v1/investigations/{made_id}", headers=headers)
+                if answer.status_code not in (200, 204):
+                    refused.append((made_id, answer.status_code))
         _run(_remove([place_id, neighbour_id, link_id]))
+        _run(_remove_rows(cases))
+        assert not refused, f"cases not removed: {refused}"

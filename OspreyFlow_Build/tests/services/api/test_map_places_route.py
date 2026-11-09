@@ -20,6 +20,9 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from services.api.map_places import SCAN_LIMIT
+
+from ports.graph import NodeSuggestions
+from schemas.mapconfig import GAZETTEER_SOURCE_IDENTIFIERS
 from services.api.app import (
     app,
     get_analytics,
@@ -99,6 +102,20 @@ class _Graph:
     def __init__(self, nodes: list[Node]) -> None:
         self.nodes = nodes
         self.calls: list[tuple[str, Principal, int]] = []
+
+    async def suggest_nodes(
+        self, prefix: str, principal: Principal, *, limit: int = 10, options: object = None
+    ) -> NodeSuggestions:
+        """As the real one answers a `Location` scan (`suggestion_scope`): the name **and every
+        identifier**, containing, ignoring case. Here so that a search going back to it fails at
+        the identifier case's assertion, not on a missing method (rule 15)."""
+        q = prefix.casefold()
+        hits = [
+            n for n in self.nodes
+            if any(q in str(v).casefold() for k, v in n.properties.items()
+                   if k in ("name", *GAZETTEER_SOURCE_IDENTIFIERS, "postcode", "site_ref"))
+        ]  # fmt: skip
+        return NodeSuggestions(nodes=hits[:limit], more=len(hits) > limit)
 
     async def suggest_locations(
         self, name: str, principal: Principal, *, limit: int = 20
@@ -284,9 +301,10 @@ def test_the_case_level_is_checked_before_the_store_is_asked(
 
 
 def test_a_match_on_a_gazetteers_identifier_alone_offers_nothing(world: World) -> None:
-    """Rule 7: the store also matches a `Location` on its identifiers (`suggestion_scope`), so a
-    search for part of a `uprn` reached Cranbrook by its `uprn`, and a run of such searches could
-    rebuild the identifier. Only a place whose name holds the words is offered."""
+    """Rule 7: the place search once asked the store's general suggestion scan, which matches a
+    `Location` on its identifiers too, so a search for part of a `uprn` reached Cranbrook by it,
+    and a run of such searches could rebuild the identifier. It now asks by name alone
+    (`suggest_locations`), so such a fragment offers nothing."""
     for query in ("100012", "00012", OSM_ID[:8]):
         response = _search(query)
         assert response.json() == {"places": [], "more": False}, query

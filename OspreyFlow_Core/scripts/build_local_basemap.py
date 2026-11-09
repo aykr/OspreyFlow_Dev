@@ -54,7 +54,7 @@ from services.ingest.recipe_loader import load_recipe
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from ontology.handling import load_uk_le_scheme
+from ontology.handling import load_uk_le_scheme, sources_in_full
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
@@ -286,17 +286,20 @@ async def load_gazetteer(
     from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 
     recipe = load_recipe(_OSM_GAZETTEER_RECIPE_PATH)
-    report, _events = await run_recipe(
-        recipe,
-        read_osm_places(str(osm_pbf_path)),
-        graph=stamping(graph, dataset=dataset),
-        ontology=ontology,
-        tx=tx,
-        principal=principal.model_copy(update={"datasets": [dataset]}),
-        load_id=load_id,
-        investigation_scope="reference-data",
-        source=str(osm_pbf_path),
-    )
+    # A load reads its places whole (`sources_in_full`): its lookups are the Conduit's, never the
+    # Glass's, and a gazetteer's identifiers are withheld only from what is sent to a reader.
+    with sources_in_full():
+        report, _events = await run_recipe(
+            recipe,
+            read_osm_places(str(osm_pbf_path)),
+            graph=stamping(graph, dataset=dataset),
+            ontology=ontology,
+            tx=tx,
+            principal=principal.model_copy(update={"datasets": [dataset]}),
+            load_id=load_id,
+            investigation_scope="reference-data",
+            source=str(osm_pbf_path),
+        )
     if analytics is not None:
         points = point_geometries(recipe, read_osm_places(str(osm_pbf_path)))
         for start in range(0, len(points), _POINT_BATCH):
