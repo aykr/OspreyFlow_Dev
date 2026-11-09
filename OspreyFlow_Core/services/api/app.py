@@ -16391,9 +16391,10 @@ async def read_audit_section_rules(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AuditSectionPage:
     """A case's rule audit in Admin › Audit, for the Administrator only (the orchestrator's
-    settlement on rules' Q2 (a), ADR-146 Amendment 2 point 2, on the owner's list for review; ADR-145 Amendment 6 records the exception to ADR-146 Amendment 2
-    point 3). Read through `readable_rule_audit` behind the case rule-audit route's own gate, whole
-    before any filter, so a filter narrows only what that read already withheld."""
+    settlement on rules' Q2 (a), ADR-146 Amendment 2 point 2, on the owner's list for review;
+    ADR-145 Amendment 6 records the exception to ADR-146 Amendment 2 point 3). Read through
+    `readable_rule_audit` behind the case rule-audit route's own gate, whole before any filter, so a
+    filter narrows only what that read already withheld."""
     filters = audit_section_module.StreamFilters(
         who=who or None, investigation_id=case, since=since, until=until
     )
