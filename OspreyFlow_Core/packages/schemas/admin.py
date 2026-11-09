@@ -718,14 +718,13 @@ class PromotionOverdueNotice(BaseModel):
 
 class NeedsYouProposals(BaseModel):
     """One dataset's proposed link types in the reader's *Needs you* (ADR-145 decision 11, A2;
-    ADR-090 Amendment 4): how many the reader may read and decide, and whether any exist above
-    their clearance. That is a flag, not a count, with no word of the proposal (ADR-143
-    Amendment 4's *Open*, the strict reading)."""
+    ADR-090 Amendment 4): how many the reader may read and decide. A dataset whose proposals the
+    reader is not cleared to read is not listed at all, not even as having one open (ADR-143
+    Amendment 4's *Open*, the strict reading; the orchestrator's ruling at L2.7's review)."""
 
     dataset_id: str
     dataset_name: str
     to_decide: int
-    above_clearance: bool
 
 
 class NeedsYou(BaseModel):
