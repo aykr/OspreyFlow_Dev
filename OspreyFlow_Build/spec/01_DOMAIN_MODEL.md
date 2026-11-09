@@ -2736,6 +2736,7 @@ class RaiseAlertInput(BaseModel):    # Raise an alert…: to the case, or the ca
     dataset_id: str | None; node_ids: list[NodeId]; edge_ids: list[EdgeId]; found_by: str | None
 class AlertTeam(BaseModel):          # a team a rule may route to; its members to its lead alone
     role_id: str; display_name: str; lead: bool; members: list[str]
+    member_names: dict[str, str]   # ADR-106: the members served, by name, at read time
 class SuppressedAlert(BaseModel):    # beside its rule or watch in What raises alerts
     alert_id: str; until: date; reason: str; by: str; by_name: str | None   # ADR-106, read time
 class AlertSource(BaseModel):        # one row of What raises alerts, counted from the reader's queue

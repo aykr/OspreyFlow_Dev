@@ -32244,13 +32244,16 @@ owner to overrule. ADR-146 and its Amendments 1 and 2 are unchanged except where
    through the same guarded match a load uses, `evaluation.match_monitor_guarded`); an owner who can
    no longer sign in stops it. **A watch is matched within its dataset only while its owner still
    reaches it** (the orchestrator's L2.10 review, item 4): a level, by the case's own Viewer check,
-   on a case reading the dataset (`app.owner_reaches_dataset_in`), asked of the owner as resolved
-   for the run, on the schedule and on a load alike (`MonitorScheduleExecutor.reaches_dataset`,
-   `evaluate_monitors_for_entry`'s `reaches_dataset`). Narrowing the owner to the dataset alone would
-   give back one they had lost. An owner who has lost it is matched over nothing and the slot is
-   spent, the watch kept (a case given back runs it again); a load path given no check matches no
-   watch with a dataset (fail closed), which is the command-line load's case (`run_resources.py`
-   holds no case store), until it is given one.
+   on a case reading the dataset (`watch_reach.owner_reaches_dataset_in`), asked for the owner before
+   they are narrowed, for hotlists and watched patterns, on the schedule and on every load
+   (`MonitorScheduleExecutor.reaches_dataset`; `evaluate_hotlists_for_entry`'s and
+   `evaluate_monitors_for_entry`'s `reaches_dataset`). The route's loads are given it by
+   `WatchReachDep`; the scheduled and folder-watched runs by `RecipeRunDeps.from_state`, which builds
+   it from the state's own dataset and case stores. Narrowing the owner to the dataset alone would
+   give back one they had lost. An owner who has lost it is matched over nothing, logged, and the
+   slot is spent, the watch kept (a case given back runs it again). A load path given no check
+   matches no watch with a dataset (fail closed, logged): today that is the command-line load
+   (`run_resources.py`, which holds no case store), until it is given one.
 8. **The carries.** A settle on a read path purges what it re-marked at once, published to the
    connected canvases (`alerts.settle_repoints` with `AlertStore.working_set`). Outside a load
    (`raise_committed`), a node that cannot be written in a read-only dataset or marked leaves the row
