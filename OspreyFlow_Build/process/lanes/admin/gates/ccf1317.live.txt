@@ -1,0 +1,1 @@
+# Leased live run at ccf1317: stack a, lease "L2.6 leased live run, per file under a timeout", 2026-11-09T01:29Z. Each file alone, 900 s alarm, faulthandler at 240 s. Columns: exit, seconds, file, summary.

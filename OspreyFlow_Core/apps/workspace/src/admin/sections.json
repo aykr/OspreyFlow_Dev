@@ -1,5 +1,5 @@
 {
-  "about": "The Admin place's sections (ADR-145 decision 5, ADR-110 Amendment 14). Each is shown only to a holder of its right, and each built section's routes refuse a principal without it, read from the routes' own checks. A section with no screen yet is a coming placeholder, shown only to holders of its right. The rights of Roles, Grading scheme, Approval rights, Uploads and Audit, and Proposed types under Data, were settled by the orchestrator on 7 November 2026.",
+  "about": "The Admin place's sections (ADR-145 decision 5, ADR-110 Amendment 14). Each is shown only to a holder of its right, and each built section's routes refuse a principal without it, read from the routes' own checks. A section with no screen yet is a coming placeholder, shown only to holders of its right. The rights of Roles, Grading scheme, Approval rights, Uploads and Audit, and Proposed types under Data, were settled by the orchestrator on 7 November 2026. Audit and Operations' ageing were built in L2.6.",
   "groups": [
     {
       "label": "People",
@@ -20,7 +20,7 @@
     {
       "label": "Running",
       "sections": [
-        { "id": "operations", "label": "Operations", "right": "operate_schedules", "screen": "admin/Schedules.tsx" },
+        { "id": "operations", "label": "Operations", "right": "operate_schedules", "screen": "admin/sections/Operations.tsx" },
         { "id": "system", "label": "System", "right": "administer_system", "screen": "admin/sections/System.tsx" },
         { "id": "models", "label": "Models", "right": "manage_models", "screen": "admin/sections/Models.tsx" },
         { "id": "maps", "label": "Maps", "right": "manage_geospatial", "screen": "admin/sections/Maps.tsx" }
@@ -40,8 +40,7 @@
     {
       "label": "Audit",
       "sections": [
-        { "id": "audit", "label": "Audit", "right": "read_audit",
-          "coming": "One view over the records that already exist (the case, rule, run, model, people and dataset audits), filtered by person, case, dataset and kind, read under your own access." }
+        { "id": "audit", "label": "Audit", "right": "read_audit", "screen": "admin/sections/Audit.tsx" }
       ]
     },
     {

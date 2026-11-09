@@ -34,6 +34,7 @@ from collections import Counter
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from dataclasses import replace as dataclass_replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast, get_args
@@ -127,6 +128,8 @@ from schemas.admin import (
     AdminLinkedCase,
     AdminPeopleRows,
     AdminSchedule,
+    AuditSectionEntry,
+    AuditSectionPage,
     BuiltInRole,
     ChangeScheduleInput,
     ComponentHealth,
@@ -147,10 +150,12 @@ from schemas.admin import (
     InviteInput,
     LayerAction,
     LayerDryRun,
+    OperationsAgeing,
     OrganisationArrival,
     OrganisationLinkInput,
     PauseScheduleInput,
     PersonAccount,
+    PromotionAlertSetting,
     RegisteredDashboard,
     RolesCatalogue,
     RolesInput,
@@ -423,6 +428,7 @@ from schemas.trends import (
 )
 
 from . import alert_queue, map_places
+from . import audit_section as audit_section_module
 from . import compute_routes as compute_routes_module
 from . import connections as connections_module
 from . import dossier as dossier_module
@@ -431,6 +437,7 @@ from . import map_admin as map_admin_module
 from . import model_admin as model_admin_module
 from . import model_usage as model_usage_module
 from . import ownership as ownership_module
+from . import promotion_ageing as promotion_ageing_module
 from . import readiness as readiness_module
 from . import reports as reports_module
 from . import resolution as resolution_module
@@ -1041,6 +1048,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-145 Amendment 5: custom roles and teams, and Admin › People's reads and Disable….
     custom_roles = await CustomRoleStore.connect(config.postgres.dsn)
     admin_people = await AdminPeopleStore.connect(config.postgres.dsn)
+    # ADR-145 decisions 9 and 10 (L2.6): Admin › Audit's reads, and Operations' ageing.
+    audit_section = await audit_section_module.AuditSectionReader.connect(config.postgres.dsn)
+    promotion_ageing = await promotion_ageing_module.PromotionAgeingStore.connect(
+        config.postgres.dsn
+    )
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
@@ -1125,6 +1137,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.investigations = investigations
     app.state.custom_roles = custom_roles
     app.state.admin_people = admin_people
+    app.state.audit_section = audit_section
+    app.state.promotion_ageing = promotion_ageing
+    # The seam case's L3.4 fills with the promotion record (`promotion_ageing.WaitingPromotions`).
+    app.state.waiting_promotions = promotion_ageing_module.NoPromotionsYet()
     app.state.history = history
     app.state.sites = sites
     app.state.patterns_store = patterns_store
@@ -1373,6 +1389,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         deployment_lists=_deployment_list_scheduler(app),
     )
     monitoring_task = asyncio.create_task(run_every_minute(app.state.monitoring_schedules))
+    # ADR-145 Amendment 4 decision 11 (R7), admin's own job (Amendment 6): *Promotions overdue*,
+    # once each at N days, from whatever source `app.state.waiting_promotions` holds at each tick.
+    app.state.promotion_sweep = promotion_ageing_module.PromotionSweep(
+        promotion_ageing, promotion_ageing, lambda: app.state.waiting_promotions,
+        lambda p: _promotion_recipients(app, p),
+    )  # fmt: skip
+    promotion_task = asyncio.create_task(
+        promotion_ageing_module.run_every(
+            app.state.promotion_sweep,
+            float(os.environ.get("OSPREY_PROMOTION_SWEEP_SECONDS")
+                  or promotion_ageing_module.SWEEP_SECONDS),
+        )
+    )  # fmt: skip
 
     try:
         yield
@@ -1380,9 +1409,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         sweep_task.cancel()
         schedule_task.cancel()
         monitoring_task.cancel()
+        promotion_task.cancel()
         await investigations.close()
         await custom_roles.close()
         await admin_people.close()
+        await audit_section.close()
+        await promotion_ageing.close()
         # A closed store must not outlive the app: a request's custom roles are read through it.
         app.state.custom_roles = None
         await history.close()
@@ -1921,6 +1953,27 @@ def get_admin_people(request: Request) -> AdminPeopleStore:
 
 
 CustomRolesDep = Annotated[CustomRoleStore, Depends(get_custom_roles)]
+
+
+def get_audit_section(request: Request) -> audit_section_module.AuditSectionReader:
+    return request.app.state.audit_section  # type: ignore[no-any-return]
+
+
+def get_promotion_ageing(request: Request) -> promotion_ageing_module.PromotionAgeingStore:
+    return request.app.state.promotion_ageing  # type: ignore[no-any-return]
+
+
+def get_waiting_promotions(request: Request) -> promotion_ageing_module.WaitingPromotions:
+    return request.app.state.waiting_promotions  # type: ignore[no-any-return]
+
+
+AuditSectionDep = Annotated[audit_section_module.AuditSectionReader, Depends(get_audit_section)]
+PromotionAgeingDep = Annotated[
+    promotion_ageing_module.PromotionAgeingStore, Depends(get_promotion_ageing)
+]
+WaitingPromotionsDep = Annotated[
+    promotion_ageing_module.WaitingPromotions, Depends(get_waiting_promotions)
+]
 AdminPeopleDep = Annotated[AdminPeopleStore, Depends(get_admin_people)]
 
 
@@ -16240,6 +16293,266 @@ async def set_dataset_owner_setting(
     return body
 
 
+# --- Admin › Audit (ADR-145 decision 10, O2) and Operations' ageing (decision 9, O3) — L2.6 ------
+
+
+class AuditFiltersRefused(Exception):
+    def __init__(self, words: str) -> None:
+        super().__init__(words)
+        self.words = words
+
+
+@app.exception_handler(AuditFiltersRefused)
+async def _audit_filters_refused_handler(
+    request: Request, exc: AuditFiltersRefused
+) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "audit_filters", "detail": exc.words})
+
+
+async def _served_audit(
+    principal: Principal,
+    audit: AuditWriter,
+    entries: list[AuditSectionEntry],
+    *,
+    held_in: str,
+    who: str | None,
+    filters: audit_section_module.StreamFilters,
+    total: int,
+    offset: int,
+    limit: int,
+    note: str | None,
+    people: list[str],
+) -> AuditSectionPage:
+    """Audits the read and serves the page; every entry is already named (ADR-106 decision 3:
+    names asked for only the accounts the page serves), so the page carries no account's id."""
+    await audit.record(
+        principal=principal,
+        action="read_audit_section",
+        investigation_id=filters.investigation_id if held_in == "rules" else None,
+        resolved_query={
+            "held_in": held_in,
+            "kind": filters.kind,
+            "who": who,
+            "case": filters.investigation_id,
+            "dataset": filters.dataset_id,
+            "since": filters.since.isoformat() if filters.since else None,
+            "until": filters.until.isoformat() if filters.until else None,
+            "offset": offset,
+            "limit": limit,
+        },
+        result_cardinality=len(entries),
+    )
+    return AuditSectionPage(
+        entries=entries, total=total, offset=offset, limit=limit, note=note, people=people
+    )
+
+
+async def _people_choice(
+    principal_names: PrincipalNameDirectory, writers: set[str], who: str | None
+) -> tuple[list[str], tuple[str, ...] | None]:
+    """The picker's names, and the accounts a chosen name stands for. Names are asked only for
+    accounts whose entries this reader may already read (ADR-106 decision 3); one with no name is
+    not offered, since it could be chosen only by its id."""
+    names = await principal_names.full_names(writers)
+    people = sorted(set(names.values()))
+    if who is None:
+        return people, None
+    return people, audit_section_module.accounts_named(names, who, writers)
+
+
+@app.get("/v1/admin/audit", dependencies=[Depends(require_right(Right.READ_AUDIT))])
+async def read_audit_section(
+    principal: PrincipalDep,
+    reader: AuditSectionDep,
+    audit: AuditDep,
+    principal_names: PrincipalNamesDep,
+    kind: Annotated[str | None, Query(max_length=40)] = None,
+    who: Annotated[str | None, Query(max_length=200)] = None,
+    case: Annotated[str | None, Query(max_length=200)] = None,
+    dataset: Annotated[str | None, Query(max_length=200)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AuditSectionPage:
+    """Admin › Audit's stream (`audit_section.py`): by unit in its `WHERE` clause, a case's
+    entries only for the unit's administrator (ADR-052 §4), words withheld but where the reader's
+    own section shows them, and no account's id anywhere (rule 7): who by name, `who` a name from
+    the page's own `people`. Every filter narrows; none widens."""
+    if kind and kind not in audit_section_module.STREAM_KINDS:
+        raise AuditFiltersRefused(f"{kind!r} is not a kind of this record")
+    rights = rights_for(principal.roles)
+    cases = ADMIN_ROLE in principal.roles
+    people, accounts = await _people_choice(
+        principal_names, await reader.writers(principal, cases=cases), who or None
+    )
+    filters = audit_section_module.StreamFilters(
+        who=accounts, kind=kind or None, investigation_id=case or None,
+        dataset_id=dataset or None, since=since, until=until,
+    )  # fmt: skip
+    rows, total = await reader.stream(
+        principal, filters, offset=offset, limit=limit, rights=rights, cases=cases
+    )
+    names = await principal_names.full_names(audit_section_module.ids_to_name(rows, rights))
+    note = audit_section_module.stream_note(cases, await reader.units_from())
+    return await _served_audit(
+        principal, audit, audit_section_module.stream_entries(rows, rights, names),
+        held_in="case_and_admin", who=who or None, filters=filters, total=total, offset=offset,
+        limit=limit, note=note, people=people,
+    )  # fmt: skip
+
+
+@app.get(
+    "/v1/admin/audit/rules",
+    dependencies=[
+        Depends(require_right(Right.READ_AUDIT)),
+        Depends(require_right(Right.READ_RULE_AUDIT)),
+        Depends(require_admin_role),
+    ],
+)
+async def read_audit_section_rules(
+    principal: PrincipalDep,
+    audit: AuditDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    analytics: AnalyticsDep,
+    alerts_store: AlertsStoreDep,
+    principal_names: PrincipalNamesDep,
+    case: Annotated[str, Query(min_length=1, max_length=200)],
+    who: Annotated[str | None, Query(max_length=200)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AuditSectionPage:
+    """A case's rule audit in Admin › Audit, for the Administrator only (the orchestrator's
+    settlement on rules' Q2 (a), ADR-146 Amendment 2 point 2, on the owner's list for review;
+    ADR-145 Amendment 6 records the exception to ADR-146 Amendment 2 point 3). Read through
+    `readable_rule_audit` behind the case rule-audit route's own gate, whole before any filter, so a
+    filter narrows only what that read already withheld."""
+    case_ = await _authorize(
+        case, principal, investigations, audit, AccessLevel.AUTHOR, admin_safety_net=True
+    )
+    whole = await readable_rule_audit(
+        audit, graph, case_.id, principal, analytics=analytics, alerts=alerts_store,
+        offset=0, limit=10**9,
+    )  # fmt: skip
+    people, accounts = await _people_choice(
+        principal_names, {e.principal_id for e in whole.entries}, who or None
+    )
+    filters = audit_section_module.StreamFilters(
+        who=accounts, investigation_id=case, since=since, until=until
+    )
+    kept = [
+        e for e in whole.entries
+        if (filters.who is None or e.principal_id in filters.who)
+        and (filters.since is None or e.recorded_at >= filters.since)
+        and (filters.until is None or e.recorded_at < filters.until)
+    ]  # fmt: skip
+    served = kept[offset : offset + limit]
+    names = await principal_names.full_names({e.principal_id for e in served})
+    entries = [
+        AuditSectionEntry(
+            recorded_at=e.recorded_at, who=names.get(e.principal_id, audit_section_module.NO_NAME),
+            action=e.action, kind="rules", held_in="rules", investigation_id=case_.id,
+            case_name=case_.name, detail=e.detail, result_cardinality=e.result_cardinality,
+        )  # fmt: skip
+        for e in served
+    ]
+    return await _served_audit(
+        principal, audit, entries, held_in="rules", who=who or None, filters=filters,
+        total=len(kept), offset=offset, limit=limit, note=None, people=people,
+    )  # fmt: skip
+
+
+@app.get(
+    "/v1/admin/audit/models",
+    dependencies=[
+        Depends(require_right(Right.READ_AUDIT)),
+        Depends(require_right(Right.MANAGE_MODELS)),
+    ],
+)
+async def read_audit_section_models(
+    principal: PrincipalDep,
+    reader: AuditSectionDep,
+    audit: AuditDep,
+    principal_names: PrincipalNamesDep,
+    who: Annotated[str | None, Query(max_length=200)] = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> AuditSectionPage:
+    """The engines' history in Admin › Audit, only for a holder of `manage_models` too, who reads it
+    in *Models* already (the orchestrator's ruling: it names people of every unit)."""
+    people, accounts = await _people_choice(
+        principal_names, await reader.model_writers(), who or None
+    )
+    filters = audit_section_module.StreamFilters(who=accounts, since=since, until=until)
+    raw, total = await reader.model_history(filters, offset=offset, limit=limit)
+    names = await principal_names.full_names({e.who for e in raw})
+    return await _served_audit(
+        principal, audit, audit_section_module.name_entries(raw, names), held_in="models",
+        who=who or None, filters=filters, total=total, offset=offset, limit=limit,
+        note="Engines are the deployment's, so their history is not a unit's.", people=people,
+    )  # fmt: skip
+
+
+@app.get(
+    "/v1/admin/operations/ageing", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))]
+)
+async def read_operations_ageing(
+    principal: PrincipalDep,
+    ageing: PromotionAgeingDep,
+    waiting: WaitingPromotionsDep,
+    audit: AuditDep,
+    principal_names: PrincipalNamesDep,
+) -> OperationsAgeing:
+    """Operations' ageing (O3): what ages and when, and the promotions waiting for review, each
+    with its age and whether it is overdue. The promotions come from the seam case's L3.4 fills,
+    filtered there as this reader (rule 3); until then none is recorded, and the screen says so."""
+    days = await ageing.alert_after_days()
+    now = datetime.now(UTC)
+    served = await waiting.waiting_for_review(principal)
+    # ADR-106 decision 3: names asked only for the proposers of the rows served; never an id.
+    names = await principal_names.full_names({p.proposed_by for p in served}) if served else {}
+    rows = [promotion_ageing_module.waiting_row(p, now, days, names) for p in served]
+    await audit.record(
+        principal=principal,
+        action="read_operations_ageing",
+        resolved_query={"alert_after_days": days},
+        result_cardinality=len(rows),
+    )
+    return OperationsAgeing(
+        alert_after_days=days,
+        rules=promotion_ageing_module.ageing_rules(days),
+        waiting=rows,
+        promotions_recorded=bool(getattr(waiting, "recorded", False)),
+    )
+
+
+@app.put(
+    "/v1/admin/settings/promotion-alert-days",
+    dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))],
+)
+async def set_promotion_alert_days(
+    body: PromotionAlertSetting,
+    principal: PrincipalDep,
+    ageing: PromotionAgeingDep,
+    audit: AuditDep,
+) -> PromotionAlertSetting:
+    """*Alert the reviewers and administrators after N days* (decision 9), audited."""
+    before = await ageing.alert_after_days()
+    await ageing.set_alert_after_days(body.alert_after_days)
+    await audit.record(
+        principal=principal,
+        action="set_promotion_alert_days",
+        resolved_query={"before": before, "after": body.alert_after_days},
+        result_cardinality=1,
+    )
+    return body
+
+
 @app.get("/v1/admin/datasets", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
 async def admin_datasets_route(datasets: DatasetsDep) -> list[AdminDataset]:
     """ADR-136 decision 2: every dataset of the deployment, with the unit that holds it and its
@@ -16320,6 +16633,30 @@ async def _admin_dataset_of(datasets: DatasetStore, dataset_id: str) -> Dataset:
     if found is None or found.kind == "analyst_layer":
         raise UnknownDatasetEgressError(dataset_id)
     return found
+
+
+async def _promotion_recipients(
+    app: FastAPI, p: promotion_ageing_module.PendingPromotion
+) -> list[str]:
+    """Decision 11's recipients of one overdue promotion, read now (at the sweep, and again at
+    each read of `alerts_for`): the dataset's home case's Authors holding `review_promotions` and
+    its unit's administrators, cleared to its marking (`promotion_ageing.recipients_of`). The
+    dataset's unit and marking are read as they stand now, not as the promotion recorded them, and
+    a dataset no longer held has no recipients. A team's grant is not expanded to its members."""
+    current = (await app.state.datasets.egress_of([p.dataset_id])).get(p.dataset_id)
+    if current is None:
+        return []
+    p = dataclass_replace(
+        p, dataset_unit=current.owning_unit, dataset_marking=current.highest_marking
+    )
+    home = await app.state.datasets.home_case_of(p.dataset_id)
+    authors = await _authors_of(app.state.investigations, home.investigation_id) if home else []
+    people = await app.state.identity_admin.list_people()
+    store = getattr(app.state, "custom_roles", None)
+    custom = await store.current_rights() if store is not None else {}
+    return promotion_ageing_module.recipients_of(
+        p, authors, people, custom, app.state.handling_scheme
+    )
 
 
 async def _authors_of(investigations: InvestigationStore, home_case_id: str) -> list[str]:

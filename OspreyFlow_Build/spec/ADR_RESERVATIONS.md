@@ -71,7 +71,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-140 Amendment 12 | Phase 7b as built: staging steps as pipeline nodes, a drawer per step with its live sample, the run route feeding a pipeline's sources, per-step counts and staging metering, and a dataset's reference list rows from its version's file | studio | 2026-11-08 | written |
 | ADR-135 Amendment 3 | Model usage and limits: calls and tokens per engine and job from the gateway's own records, limits per engine applied by the gateway on the engine's own key, a budget in tokens, no person in usage | platform | 2026-11-08 | written |
 | ADR-146 Amendment 2 | Rules and Monitoring as built in L2.9: the place's gate and the five routes it shares (three reads, two writes); an alert's address; the jump replaced; the Rule author's queue read, as the owner ruled | rules | 2026-11-08 | written |
-| ADR-145 Amendment 6 | Audit and Operations' ageing as built (L2.6) | admin | 2026-11-08 | reserved |
+| ADR-145 Amendment 6 | Audit and Operations' ageing as built (L2.6) | admin | 2026-11-08 | written |
 | ADR-142 Amendment 4 | Sister lanes: case-b, studio-b and rules-b take the steps that do not wait on their parent's current one, on the sol account; a third test stack (the owner's ruling, 8 November) | orchestrator | 2026-11-08 | reserved |
 | ADR-140 Amendment 13 | Phase 9 as built: connectors (SQL, API, JSON) and the screening-list connector, its templates, deployment-wide import, subscription by list id, schedule and Refresh now (L1.6) | studio-b | 2026-11-08 | written |
 | ADR-143 Amendment 4 | Analyst-defined link types as built (L3.5) | case-b | 2026-11-08 | written |

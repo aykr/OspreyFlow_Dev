@@ -1,0 +1,76 @@
+# Live set at 0989d88 (on main a06d114): stack g on the owner's test server, admin lease "L2.6 round 5 live set and plants U19 U20 at 0989d88", run there by stack_lease.sh remote, 2026-11-09T16:10Z.
+Running on ospreyflow-test (stack g, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin/.runs/20261109T161330Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py
+..........................                                               [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+26 passed, 1 warning in 52.36s
+
+# Plants, each alone in a scratch worktree at 0989d88 (the offline gates were running in the lane's own), the file restored after; same lease, stack g.
+## U19 writers' `AND i.owning_unit = $1` dropped (audit_section.AuditSectionReader.writers):
+Running on ospreyflow-test (stack g, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin/.runs/20261109T161744Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py -k pickers_writers
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________ test_the_pickers_writers_are_the_readers_units_alone _____________
+
+world = namespace(cases=<services.api.investigations.InvestigationStore object at 0x7da788e970e0>, audit=<services.api.audit.A...s=[], domains_chosen=False), dsn='postgresql://osprey:throwaway@localhost:55439/ospreyflow?search_path=l26_0fd9a5f614')
+
+    async def test_the_pickers_writers_are_the_readers_units_alone(world: SimpleNamespace) -> None:
+        """`writers`, which names the Audit picker's people, reads under the stream's own unit filter:
+        unit A's reader is offered unit A's writers alone, a case's writers only with `cases`, and
+        never a writer of the rule audit. Red with `AND i.owning_unit = $1` dropped from `writers`
+        (unit B's case's own writer offered to unit A)."""
+        await _seed(world)
+        only_b = Principal(id="ana-only-b", clearance="SECRET", org_unit="unit-b", roles=["analyst"])
+        await _record(world, only_b, "confirm_node", world.case_b.id, {"node_ids": ["n9"]})
+        rule_writer = Principal(id="rule-sys", clearance="SECRET", org_unit="unit-a", roles=[])
+        await _record(world, rule_writer, sorted(RULE_AUDIT_ACTIONS)[0], None, {})
+>       assert await world.reader.writers(A, cases=True) == {"ana-a", "ana-b", "adm-a"}
+E       AssertionError: assert {'adm-a', 'an... 'ana-only-b'} == {'adm-a', 'ana-a', 'ana-b'}
+E         
+E         Extra items in the left set:
+E         'ana-only-b'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_audit_section_store.py:272: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py::test_the_pickers_writers_are_the_readers_units_alone
+1 failed, 20 deselected in 1.90s
+## U20 PromotionAgeingStore.alerts_for on the stored recipient alone:
+Running on ospreyflow-test (stack g, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin/.runs/20261109T161902Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py -k still_a_recipient
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_an_alert_is_served_only_while_its_reader_is_still_a_recipient ______
+
+world = namespace(cases=<services.api.investigations.InvestigationStore object at 0x7010cbca7d40>, audit=<services.api.audit.A...s=[], domains_chosen=False), dsn='postgresql://osprey:throwaway@localhost:55439/ospreyflow?search_path=l26_7442beb5fe')
+
+    async def test_an_alert_is_served_only_while_its_reader_is_still_a_recipient(
+        world: SimpleNamespace,
+    ) -> None:
+        """`PromotionAgeingStore.alerts_for` asks again, over the promotion it kept, who the alert is
+        for now: one raised to `eng-1` is not served to `eng-1` once they are no recipient (here, no
+        longer cleared to the dataset's SECRET), and the promotion handed to that question is the one
+        raised. Red with `alerts_for` matching on the stored recipient alone."""
+        alert = PromotionOverdueAlert(promotion_id="p1", load_id="load-1", dataset_id="ds-a",
+                                      raised_at=datetime.now(UTC), recipients=["eng-1", "adm-a"],
+                                      words="Promotion load-1 into Prison records has waited 3 days for review.")  # fmt: skip
+        assert await world.ageing.raise_once(alert, _PROMOTION)
+        asked: list[PendingPromotion] = []
+    
+        async def now(p: PendingPromotion) -> list[str]:
+            asked.append(p)
+            return ["adm-a"]  # eng-1's clearance lowered since the alert was raised
+    
+>       assert await world.ageing.alerts_for("eng-1", now) == []
+E       AssertionError: assert [PromotionOve...for review.')] == []
+E         
+E         Left contains one more item: PromotionOverdueNotice(promotion_id='p1', load_id='load-1', dataset_id='ds-a', raised_at=datetime.datetime(2026, 11, 9..., 8, 478428, tzinfo=datetime.timezone.utc), words='Promotion load-1 into Prison records has waited 3 days for review.')
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_audit_section_store.py:234: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py::test_an_alert_is_served_only_while_its_reader_is_still_a_recipient
+1 failed, 20 deselected in 1.57s

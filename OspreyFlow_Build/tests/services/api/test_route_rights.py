@@ -398,6 +398,12 @@ ROUTE_RIGHTS = {
     # ADR-145 Amendment 4 decision 7: Admin › System's *Dataset owners may be*.
     "read_dataset_owner_setting": "administer_system",
     "set_dataset_owner_setting": "administer_system",
+    # ADR-145 decisions 9 and 10 (L2.6): Admin › Audit, and Operations' ageing and its N days.
+    "read_audit_section": "read_audit",
+    "read_audit_section_rules": "read_audit",
+    "read_audit_section_models": "read_audit",
+    "read_operations_ageing": "operate_schedules",
+    "set_promotion_alert_days": "operate_schedules",
     "set_dataset_egress_route": "administer_system",
     # ADR-145 decision 8 and Amendment 4 decision 6; ADR-143 Amendment 2 decision 1 (L2.4 part 2,
     # missing from this table at its merge: this module is outside the offline `make test`).
@@ -484,8 +490,8 @@ def test_every_right_guards_at_least_one_route() -> None:
     promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
     dataset's approvers in Admin › Datasets; its review route arrives with the promotion (L3.4).
     `manage_models` (ADR-112 Amendment 7) guards *Admin › Models*' routes (platform's P1).
-    `draw_on_boards` guards the boards' routes (L3.3)."""
-    not_yet = {"revert_loads", "read_audit",
+    `draw_on_boards` guards the boards' routes (L3.3); `read_audit` guards Admin › Audit (L2.6)."""
+    not_yet = {"revert_loads",
                "export_override", "review_promotions",
                # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (boards,
                # promotion, proposed types, the drawn-dataset merge, Rules and Monitoring).

@@ -907,6 +907,12 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "hand-over-a-teams-lead-by-keyboard",
   "name-a-teams-cover-by-keyboard",
   "end-a-teams-cover-by-keyboard",
+  // ADR-145 decisions 9 and 10 (L2.6): Audit's filters, a case's rule audit and paging; Operations'
+  // N days before a promotion waiting for review is overdue.
+  "read-the-audit-by-kind-and-person-by-keyboard",
+  "read-a-cases-rule-audit-by-keyboard",
+  "page-through-the-audit-by-keyboard",
+  "set-when-promotions-are-overdue-by-keyboard",
 ] as const);
 
 // ADR-110 decision 7 (D5): the Publish screen's structured schedule.

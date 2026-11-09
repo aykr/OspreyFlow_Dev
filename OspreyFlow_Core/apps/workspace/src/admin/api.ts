@@ -4,6 +4,9 @@
 import type {
   AccessInput,
   AdminPeopleRows,
+  AuditSectionPage,
+  OperationsAgeing,
+  PromotionAlertSetting,
   CustomRole,
   CustomRoleVersion,
   DisablePlan,
@@ -60,6 +63,8 @@ async function failure(response: Response): Promise<Error> {
   if (body.error === "not_allowed" && typeof detail === "string") return new Error(detail);
   if (body.error === "identity_provider_refused" && typeof detail === "string") return new Error(detail);
   if (body.error === "dataset_not_found") return new Error("That dataset is no longer there.");
+  // ADR-145 decision 10: Audit's filters refused in the Conduit's words.
+  if (body.error === "audit_filters" && typeof detail === "string") return new Error(`Not read: ${detail}.`);
   // ADR-143 Amendment 2 decision 1, ADR-145 Amendment 4: a dry run or a change of owner, refused in
   // the Conduit's words, which say why and who can.
   if (
@@ -188,3 +193,34 @@ export const nameAnAuthor = (api: AdminApi, caseId: string, account: string) =>
   call<void>(api, `cases/${encodeURIComponent(caseId)}/authors/${encodeURIComponent(account)}`, { method: "PUT" });
 export const roleVersions = (api: AdminApi, roleId: string) =>
   call<CustomRoleVersion[]>(api, `roles/${encodeURIComponent(roleId)}/versions`);
+
+/** Admin › Audit's filters (ADR-145 decision 10): each narrows what the Conduit reads as you. */
+export interface AuditQuery {
+  held_in: "case_and_admin" | "rules" | "models";
+  kind?: string;
+  who?: string;
+  case?: string;
+  dataset?: string;
+  since?: string;
+  until?: string;
+  offset?: number;
+  limit?: number;
+}
+/** Each record its own route, each declaring its rights: the stream (`read_audit`), a case's rule
+ * audit (and `read_rule_audit`, for the Administrator), the engines' history (and `manage_models`). */
+export const readAudit = (api: AdminApi, query: AuditQuery) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query))
+    if (key !== "held_in" && value !== undefined && value !== "") params.set(key, String(value));
+  const q = params.toString();
+  if (query.held_in === "rules") return call<AuditSectionPage>(api, `audit/rules?${q}`);
+  if (query.held_in === "models") return call<AuditSectionPage>(api, `audit/models?${q}`);
+  return call<AuditSectionPage>(api, `audit?${q}`);
+};
+/** Operations' ageing (ADR-145 decision 9): what ages and when, and the promotions waiting. */
+export const operationsAgeing = (api: AdminApi) => call<OperationsAgeing>(api, "operations/ageing");
+export const setPromotionAlertDays = (api: AdminApi, days: number) =>
+  call<PromotionAlertSetting>(api, "settings/promotion-alert-days", {
+    method: "PUT",
+    body: JSON.stringify({ alert_after_days: days }),
+  });

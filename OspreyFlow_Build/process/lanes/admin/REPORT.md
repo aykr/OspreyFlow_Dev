@@ -1,15 +1,73 @@
-# admin lane · report · L2.5, people and roles, custom roles, teams and leads, and Disable (8 November 2026)
+# admin lane · report · L2.6, the Audit section and Operations' ageing (8–9 November 2026)
 
-1. **People row (R3), Author visibility and *Name an Author* (R1): met.** The row: places, case levels and *through ‹team›*. *Name an Author* is Admin's own route. Proved by `PeopleAndRoles.test.tsx`, `test_admin_roles_routes.py` (N1, N2 red) and `test_custom_roles_store.py` (rows of one unit, R1 red).
-2. **Custom roles (R2), decision 7's refusals at the route: met.** Name used, no rights, unknown right, each pair, an administration right the giver lacks, and the lock-out are each red with its check removed (C1–C9, V1, V6). Rights are exactly as given (C8 red with one extra); an edit applies at the next request (C9).
-3. **ADR-112 Am. 5: met.** `author_rules`, `merge_datasets`, *Rule author*, the Super user preset as three roles, and the pairs. `test_rights.py`, red three ways. Landed on main in 3bb3475.
-4. **Teams, lead, hand-over, cover: met.** A team's level is gained and lost with membership (M1 red with membership kept). L2.10 reads `CustomRoleStore.team(role_id, today)` and `custom_roles.acting_lead(team, today)`; the lead's own hand-over and cover are L2.10's.
-5. ***Disable…*: met for today's owners.** It covers cases and home cases, team leads, hotlists, watches, saved patterns, rules, and pipeline and list schedules. Refused in words while any item is untransferred (D1); allowed once all are, in one transaction (T1, T2, W6). Each unit transfers its share (Y1, Y2). **L2.5b's seam:** `admin_people.l38_owned_items` and `L38_OWNED_KINDS`.
-6. **Service accounts own nothing:** refused as member, owner, lead and cover (S1–S3, D2). A dashboard identity may be a Viewer only (Q5; Q1, Q2 red). **Keyboard:** 12 new cases, all green, and `registry.diff` holds their 12 ids. **Axe:** the admin harness's 42 scans (14 states in dark, light and GOV.UK) and 14 label checks are green. **Live:** stacks a and b, leases named in `L2.5_RED_RECORD.md`.
-7. **Gates at 72a9829 (tree 5fc33515), offline, after round 2:** make -k ci is green apart from test-file-coverage-check (the wiring), the seven trivy scans (Docker Hub 429) and harness-a11y. harness-a11y was refused its Vite during the run by another lane's server; rerun alone at this commit, 34 passed. make test: 8577 passed, 5 failed and 18 errors. The errors are the unwired store test, whose 18 cases pass live; the failures are the coverage check, this machine's three, and the object store closed offline. All are in `gates/72a9829.*`.
-8. **Reviews:** the lane-reviewer ran two passes, and the orchestrator's independent review ran round 2: an invitation's giver rule; the lock-out serialised under an advisory lock; the socket reading its principal afresh; Name an Author's unit; only-Author counting; unique team names; a realistic fake directory. All are fixed and red at their call sites (`L2.5_RED_RECORD.md`, R and L), except the lane review's #10 and #13, noted. Minor items: (9) recipients are judged by `rights_for(roles, custom)`, as a schedule's owner now resolves; (10) the plan reads only the caller's unit; (11) a deployment with no directory grants as before L2.5, since refusing would break its case sharing; (13) the axe count is 42 scans and 14 label checks.
-9. **Decisions taken:** Q1–Q4 are the owner's rulings and Q3b is (a); Q5 is your settlement. Taken by me: - Name an Author got its own route, so an Admin screen does not call the Glass's grant route. - A rule or pipeline schedule goes only to an Author of its case. - A person's covers end when they are disabled. - The dry run checks its right before reading its action (your report).
-10. **Not done:** the three items carried from L2.4p2: a deployment default for the promotion policy, the policy under Details, and the Details and Cancel ids. The default needs an `osprey.yaml` setting.
-11. **Commits:** ddd96aa fb56ba5 f2d1b06 8e730ac b02aeab 0c0f0e7 db3d883 77fcfba ea2cd64 7d2cb48 e7ddd18 (3bb3475's schemas are on main).
-12. **Requests to the orchestrator:** - Apply `registry.diff` and `ci-wiring.diff`. - Mark `ADR_RESERVATIONS.md` row 69 written. - Ratify the out-of-map edits: - `investigations.py` (grant_subjects and its three queries); - the case grant route's `_may_hold_a_level`, `get_principal`'s custom roles, and `_owners_allowed` (Make live); - `admin_people.py` writing the rules, Studio and case lanes' owner columns in one transaction; - the tests `test_home_cases.py`, `test_investigation_access_routes.py`, `test_no_corpus_counts_on_the_wire.py` and `test_route_rights.py`; - `placesByRole.json`. - Note for the case and rules lanes: owner principals built without custom roles (kyc_sweep, the rescreeners, `recipe_run._owner_resolver`, the websocket bearer).
-13. **Questions:** none. **Still running:** nothing; no stack is held.
+Sent back on 9 November by the orchestrator's independent review with six must-fixes and four minor
+points. All are done below, each with a test shown red by a plant at its real call site
+(`L2.6_RED_RECORD.md`, round 5). The branch is rebased onto main a06d114; the head is in `git log`.
+
+| Brief item | State | Proving test |
+| --- | --- | --- |
+| 1. Audit read by unit (O2) | met | U1, U2, U7; the picker's writers U19 (live), W9 |
+| 1. The rule audit for the Administrator | met | W2–W4, R1–R2; `test_place_routes.py` P1, P2 |
+| 1. Filters by who, what and when | met | W8, F1, U2, U6; keyboard K1 |
+| 1. Withheld words stay withheld; no account id | met | W1, W6, W10, G4, G5, I1–I9 |
+| 2. Operations' ageing (O3) | met; listed only to those who may review | A6, A7; contract C1–C3; keyboard K2 |
+| 3. *Promotions overdue* (R7) | alert met; the record left for L3.4 | A1–A5, A8, A9, U5, U20 (live), S1–S6 |
+| Keyboard (rule 13) | met | `gates/ac69f9a.keyboard.txt`, 61/61 with `registry.diff` |
+| Axe in dark, light and GOV.UK | met | `gates/ac69f9a.axe.txt`, 72/72 |
+
+1. **The picker's writers.** `AuditSectionReader.writers` uses the stream's own unit filter and its `cases`.
+   - Live: U19, red with the unit predicate dropped.
+   - At the route: W9, red with `cases=True` forced. The route test's fake now narrows the same way the real read does.
+2. **Operations' waiting promotions.** `operate_schedules` opens the screen but lists nothing on its own.
+   - A promotion is listed only to someone who `may_review` it: one of the dataset's Authors holding `review_promotions`, or an administrator of the dataset's unit. Either way, only someone cleared to the dataset's marking.
+   - `test_waiting_promotions_contract.py` is the contract L3.4's store must pass: L3.4 adds its factory to `STORES`. It runs against `ReferenceWaiting` until then, and is red as C1–C3.
+   - Recorded in Amendment 6 decision 5 and in the module's docstring.
+3. **Governance words withheld.** A source's governance edit no longer serves its handling, its legal basis or what follows from them. W10 is red with them back.
+4. **`alerts_for` checks again.** The store keeps each alert's promotion. Each read asks `still` (the sweep's own `_promotion_recipients`), which reads the dataset's unit and marking as they stand now (A11). So a reader who has since been disabled, lost `review_promotions`, dropped below the marking, or moved unit (an administrator or an Author alike, since (j) is withdrawn) is served nothing.
+   - Offline: A8, red on 5 of 6 cases (5 of 5 before the Author's move was added). Live: U20 and A8's Author move.
+   - L2.7 passes `_promotion_recipients` as `still`.
+5. **Records** (`gates/`):
+   - `ac69f9a.keyboard.txt`, `ac69f9a.axe.txt`: Playwright on this Mac.
+   - `ac69f9a.places.txt`: 104/104 with `places.diff` applied.
+   - `0989d88.live.txt`: 26/26 on stack g, plus U19 and U20.
+   - `0989d88.ci.txt`, `0989d88.test.txt`.
+6. **Minors:**
+   - one friction row for the step;
+   - `cleared_to` uses `HandlingScheme.clears`;
+   - an alert to nobody is not spent: it is counted in `PromotionSweep.unreached`, logged once, and raised once someone may review it (A9);
+   - `test_only_the_named_actions_ever_show_their_words`'s docstring says what it checks.
+7. **Gates at 0989d88, on main a06d114, offline.** Every failure is explained at the head of each file.
+   - `make -k ci`: green except the Docker-backed checks and the test-file wiring. Docker is off on the owner's word (807d070); with Docker up at 05ec788, opentofu and the chart passed.
+   - `make test`: 9497 passed, 29 failed, 51 errors:
+     - Docker off: 70 refusals;
+     - the live tests and their wiring: green live;
+     - two place cases until `places.diff` is applied;
+     - this machine's `osprey.yaml`, Valkey port and `graphify-out`;
+     - main's phone-extraction live test;
+     - one preflight case that passes alone (a connect to TEST-NET-1 answered once during the run).
+   - The lane's code last changed at e67aed5 (round 6: `may_review`, `_promotion_recipients` and four test files). These offline gates at 0989d88 predate round 6; the orchestrator's merge-time `make -k ci` and `make test` at the merge result stand in for them. Round 6 was run offline (201 passed, plus the two place cases awaiting `places.diff`) and live on stack f (`gates/e67aed5.live.txt`).
+8. **Left for L3.4:** the promotion record, `waiting_for_review` passing the contract suite, `all_waiting`, and setting `app.state.waiting_promotions`. **Left for L2.7:** *Needs you* calls `alerts_for(person, lambda p: _promotion_recipients(app, p))`.
+9. **Decisions taken** (yours to overrule; all in ADR-145 Amendment 6):
+   - (a) words withheld except where the reader's own section shows them;
+   - (b) an entry naming no case belongs to its writer's unit;
+   - (c) case entries are for `osprey-admin` only;
+   - (d) the engines' history needs `read_audit` with `manage_models`;
+   - (e) the run ledger is not merged into the stream;
+   - (f) the sweep is admin's own lifespan job, and L3.4 sets its source;
+   - (g) `read_audit` opens Admin;
+   - (h) a start never waits on or drops another start's index build;
+   - (i) `grading_change` is filed under *Reads and refusals*, `read_connector_source` under *Loads*;
+   - (j), withdrawn at the orchestrator's re-review: it loosened access, so it should have stopped the piece rather than been logged as a decision. An Author grant held by a person of another unit is not one the case recognises (`get_authorized` asks `owning_unit`), so `may_review` now asks the dataset's unit of Authors too (C4, A8).
+10. **Requests at the merge:**
+    - Apply `places.diff` (two place cases are red without it), `registry.diff` and `ci-wiring.diff`. All three apply cleanly to a06d114.
+    - Land `packages/schemas/admin.py` (and its generated types) as a separate schemas commit first.
+    - Mark ADR-145 Amendment 6 `written` in `spec/ADR_RESERVATIONS.md`.
+    - **Ratify** these files outside admin's map:
+      - `services/api/principal_names.py` (`full_names`) with `tests/services/api/test_principal_names.py`;
+      - `apps/workspace/keyboard/admin.spec.ts` and `keyboard/admin-harness.tsx`;
+      - `tests/services/api/test_place_routes.py`;
+      - `apps/workspace/a11y/every-harness.spec.ts`;
+      - `services/api/audit.py`;
+      - `spec/03_CONDUIT_MIDDLEWARE.md`;
+      - `tests/services/api/test_route_rights.py`.
+11. **Questions:** none. **Still running:** nothing. Stack g is down and its lease released, the scratch worktree is removed, and no agent is running.

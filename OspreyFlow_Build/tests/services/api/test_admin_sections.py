@@ -283,7 +283,7 @@ def test_admin_place_draws_each_section_from_its_declared_screen() -> None:
 
 def test_a_screens_entry_drawing_another_file_is_found() -> None:
     text = ADMIN_PLACE.read_text().replace(
-        "operations: (api) => <Schedules", "operations: (api) => <System"
+        "operations: (api) => <Operations", "operations: (api) => <System"
     )
     assert "operations: (api) => <System" in text
     drawn = drawn_screens(text, ADMIN_PLACE)

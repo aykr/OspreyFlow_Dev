@@ -26,7 +26,9 @@ a different role.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -35,6 +37,10 @@ import asyncpg
 
 from schemas.domain import Principal, RuleAuditEntry
 
+#: The table, created only when the catalogue lacks it. Its indexes are not here: a
+#: `CREATE INDEX IF NOT EXISTS` takes `SHARE` on `audit_log` before it looks at the name, so at
+#: every start it would queue behind any build under way, and every audit write behind it
+#: (ADR-145 Amendment 6). They are built by `build_indexes`, which asks the catalogue first.
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS audit_log (
     id BIGSERIAL PRIMARY KEY,
@@ -46,11 +52,141 @@ CREATE TABLE IF NOT EXISTS audit_log (
     result_cardinality INTEGER NOT NULL,
     justification TEXT
 );
-CREATE INDEX IF NOT EXISTS audit_log_investigation_id_idx
-    ON audit_log (investigation_id);
-CREATE INDEX IF NOT EXISTS audit_log_principal_id_idx
-    ON audit_log (principal_id);
 """
+
+
+async def create_table(conn: asyncpg.Connection) -> None:
+    if await conn.fetchval("SELECT to_regclass('audit_log')") is None:
+        await conn.execute(_BOOTSTRAP_SQL)
+
+
+async def add_org_unit(conn: asyncpg.Connection) -> None:
+    """ADR-145 decision 10 (L2.6): the acting principal's unit, so Admin › Audit can read an entry
+    that names no case by unit (a reader of one unit sees that unit's entries alone). An entry
+    written before this column has none, and Audit leaves it out unless it names a case, saying so.
+
+    Asked of the catalogue first: `ALTER TABLE … ADD COLUMN IF NOT EXISTS` takes `ACCESS EXCLUSIVE`
+    even when the column is already there, so every start would queue behind every open read of
+    `audit_log`, and every audit write behind the start (ADR-145 Amendment 6)."""
+    have = await conn.fetchval(
+        "SELECT 1 FROM pg_attribute WHERE attrelid = 'audit_log'::regclass "
+        "AND attname = 'org_unit' AND NOT attisdropped"
+    )
+    if have is None:
+        await conn.execute("ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS org_unit TEXT")
+    await record_units_from(conn, added_now=have is None)
+
+
+async def record_units_from(conn: asyncpg.Connection, *, added_now: bool) -> None:
+    """When this deployment's `audit_log` began recording units, so Audit names its own date for
+    what it cannot show, not a fixed one. Written once: now when the column is added at this
+    start; for a deployment that already had it, at its earliest entry recording a unit."""
+    if await conn.fetchval("SELECT to_regclass('audit_log_units_from')") is None:
+        await conn.execute(
+            "CREATE TABLE IF NOT EXISTS audit_log_units_from ("
+            "one BOOLEAN PRIMARY KEY DEFAULT true CHECK (one), recorded_from TIMESTAMPTZ NOT NULL)"
+        )
+    if await conn.fetchval("SELECT 1 FROM audit_log_units_from") is not None:
+        return
+    since = None if added_now else await conn.fetchval(
+        "SELECT min(recorded_at) FROM audit_log WHERE org_unit IS NOT NULL"
+    )
+    await conn.execute(
+        "INSERT INTO audit_log_units_from (recorded_from) VALUES (coalesce($1, now())) "
+        "ON CONFLICT DO NOTHING",
+        since,
+    )
+
+
+#: `audit_log`'s indexes, each built `CONCURRENTLY` in a statement of its own (it cannot run in a
+#: transaction, and a script of several statements is one): a plain `CREATE INDEX` on a large
+#: `audit_log` would block every insert while it builds, and an audit write that cannot complete
+#: refuses the read it audits (fail closed), so every route would be refused until it finished.
+#: The first two are the stream's own, made at its first start; the last two are Admin › Audit's.
+#: A build left invalid by a crash is dropped and built again at the next start.
+_CONCURRENT_INDEXES: tuple[tuple[str, str], ...] = (
+    ("audit_log_investigation_id_idx", "audit_log (investigation_id)"),
+    ("audit_log_principal_id_idx", "audit_log (principal_id)"),
+    ("audit_log_org_unit_idx", "audit_log (org_unit, recorded_at DESC)"),
+    ("audit_log_recorded_at_idx", "audit_log (recorded_at DESC, id DESC)"),
+)
+
+#: The units the platform's own principals carry (a reverted load's `operator`, a prefetch's
+#: `system`), recorded as `system:<unit>` so that a real unit of the same name never reads their
+#: entries in Admin › Audit (ADR-145 Amendment 6). A real unit named so reads none of its own
+#: written-without-a-case entries there either: fail closed.
+SYSTEM_UNITS = frozenset({"operator", "system"})
+
+
+def recorded_unit(org_unit: str | None) -> str | None:
+    if org_unit in SYSTEM_UNITS:
+        return f"system:{org_unit}"
+    return org_unit
+
+
+#: The session lock a start holds while it builds Audit's indexes, keyed by the schema it builds in.
+#: An index another start is building reads `indisvalid = false` exactly as a crashed build's does;
+#: only the builder holds this lock, and a crashed builder's session lets it go, so a start that
+#: cannot take it leaves the indexes to the start that holds it (ADR-145 Amendment 6).
+_INDEX_LOCK_SQL = "hashtext(current_schema() || ':audit_log indexes')"
+
+
+_INDEX_STATE_SQL = (
+    "SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+    "WHERE c.relname = $1 AND pg_table_is_visible(c.oid)"
+)
+
+#: How long a start that left the indexes to another start waits before asking again.
+INDEX_RETRY_SECONDS = 60.0
+
+_log = logging.getLogger(__name__)
+
+
+async def _all_built(conn: asyncpg.Connection) -> bool:
+    for name, _ in _CONCURRENT_INDEXES:
+        if await conn.fetchval(_INDEX_STATE_SQL, name) is not True:
+            return False
+    return True
+
+
+async def build_indexes(conn: asyncpg.Connection) -> bool:
+    """Builds what the catalogue lacks; True when every index is built and valid. Asks the
+    catalogue first and issues nothing when all are built, so a start takes no lock on `audit_log`
+    at all. A start that cannot take the build's lock leaves them to the start that holds it and
+    returns False, issuing nothing (its caller asks again later)."""
+    if await _all_built(conn):
+        return True
+    if not await conn.fetchval(f"SELECT pg_try_advisory_lock({_INDEX_LOCK_SQL})"):
+        return False  # another start is building them: never touch its build
+    try:
+        for name, on in _CONCURRENT_INDEXES:
+            valid = await conn.fetchval(_INDEX_STATE_SQL, name)
+            if valid is True:
+                continue  # built: nothing to take a lock for
+            if valid is False:  # no other start holds the lock, so a crash left it
+                await conn.execute(f"DROP INDEX CONCURRENTLY IF EXISTS {name}")
+            await conn.execute(f"CREATE INDEX CONCURRENTLY {name} ON {on}")
+    finally:
+        await conn.execute(f"SELECT pg_advisory_unlock({_INDEX_LOCK_SQL})")
+    return True
+
+
+async def _build_until_done(pool: asyncpg.Pool, every: float) -> None:
+    """Builds `audit_log`'s indexes in the background, and, if another start holds the build or a
+    try fails, asks again every `every` seconds until they are built: a start never waits for a
+    build, and never serves without its indexes until a restart. Any failure is logged and tried
+    again; only cancellation (the writer closing) ends it early."""
+    while True:
+        try:
+            async with pool.acquire() as conn:
+                if await build_indexes(conn):
+                    return
+            _log.info("audit_log's indexes are being built by another start; asking again later")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - logged; the next try goes on
+            _log.warning("audit_log's indexes: asking again later (%r)", exc)
+        await asyncio.sleep(every)
 
 
 class AuditWriteError(Exception):
@@ -76,18 +212,40 @@ class _Held:
 class AuditWriter:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
+        #: Set when this start left the indexes to another and asks again until they are built.
+        self._index_retry: asyncio.Task[None] | None = None
 
     @classmethod
-    async def connect(cls, dsn: str) -> AuditWriter:
+    async def connect(
+        cls, dsn: str, *, index_retry_seconds: float = INDEX_RETRY_SECONDS
+    ) -> AuditWriter:
         # `min_size`/`max_size` — `hotlists.py::HotlistStore.connect`'s own comment has the full
         # Stage 6c connection-ceiling reasoning. Sized larger than the control-plane stores: every
         # route audits, so this is this deployment's own busiest store, not a low-traffic one.
         pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
         async with pool.acquire() as conn:
-            await conn.execute(_BOOTSTRAP_SQL)
-        return cls(pool)
+            await create_table(conn)
+            await add_org_unit(conn)
+            built = await _all_built(conn)
+        writer = cls(pool)
+        if not built:
+            # Never inside the start: on a large `audit_log` a build takes as long as it takes,
+            # and a start killed mid-build would leave an invalid index for the next to drop.
+            writer._index_retry = asyncio.create_task(_build_until_done(pool, index_retry_seconds))
+        return writer
+
+    async def indexes_built(self) -> None:
+        """Waits for this start's background build, if it has one (tests and scripts that need the
+        indexes before they go on)."""
+        if self._index_retry is not None:
+            await asyncio.shield(self._index_retry)
 
     async def close(self) -> None:
+        if self._index_retry is not None and not self._index_retry.done():
+            self._index_retry.cancel()
+        if self._index_retry is not None:
+            # Whatever the build ended with, the pool is still closed.
+            await asyncio.gather(self._index_retry, return_exceptions=True)
         await self._pool.close()
 
     async def record(
@@ -108,8 +266,8 @@ class AuditWriter:
                 await conn.execute(
                     "INSERT INTO audit_log "
                     "(recorded_at, principal_id, action, investigation_id, "
-                    " resolved_query, result_cardinality, justification) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                    " resolved_query, result_cardinality, justification, org_unit) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                     datetime.now(UTC),
                     principal.id,
                     action,
@@ -117,6 +275,7 @@ class AuditWriter:
                     json.dumps(resolved_query),
                     result_cardinality,
                     justification,
+                    recorded_unit(principal.org_unit),
                 )
         except (OSError, asyncpg.PostgresError) as exc:
             raise AuditWriteError(f"audit write failed for action {action!r}: {exc}") from exc

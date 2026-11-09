@@ -109,6 +109,33 @@ if (serving === "people") {
     return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
   };
 }
+// `?serve=audit` (L2.6): for the axe scans, the page serves Admin › Audit itself: a page of the stream
+// with one entry's words withheld and one's shown, more than a page in all (so its paging shows); and
+// `?serve=operations`, Operations' ageing with an overdue promotion waiting, and a schedule. `show=rules`
+// then chooses the rule audit and asks without a case, so its refusal shows. Synthetic (rule 9).
+if (serving === "audit" || serving === "operations") {
+  const ENTRY = { recorded_at: "2026-11-08T09:00:00Z", who: "Ana Analyst",
+                  action: "confirm_node", kind: "assertions", held_in: "case_and_admin", investigation_id: "c1",
+                  case_name: "Op Kestrel", detail: null, words_withheld: true, result_cardinality: null };  // prettier-ignore
+  const served: Record<string, unknown> = {
+    "/v1/admin/audit": { total: 120, offset: 0, limit: 50, people: ["Ana Analyst", "Bea Analyst"],
+      note: "Entries about another unit's cases are not shown. Entries written before 8 November 2026 that name no case recorded no unit, so they are not shown either. The rule audit is read for one case at a time: choose Rule audit of one case.",
+      entries: [ENTRY, { ...ENTRY, action: "set_person_roles", kind: "people_and_roles", investigation_id: null, case_name: null,
+                         detail: { person: "Bea Analyst", roles: ["analyst"] }, words_withheld: false, result_cardinality: 1 }] },
+    "/v1/admin/operations/ageing": { alert_after_days: 3, promotions_recorded: true,
+      rules: [{ what: "A promotion waiting for review", after_days: 3,
+                then: "After 3 days it is flagged overdue, and the dataset's Authors who may review it and the unit's administrators are alerted once. The alert names the load and the dataset, not what it adds." }],
+      waiting: [{ promotion_id: "p1", load_id: "load-7", dataset_id: "ds-a", dataset_name: "Prison records", proposed_by_name: "Ana Analyst",
+                  proposed_at: "2026-11-01T09:00:00Z", age_days: 7, overdue: true }] },
+    "/v1/admin/schedules": [{ recipe_id: "feed", label: "Daily custody export", case_id: "case-1", cron: "0 6 * * 1-5",
+      timezone: "Europe/London", schedule: "every weekday at 06:00 (Europe/London)", owner: "approver-1",
+      next_run: "2026-11-09T06:00:00Z", paused: false, paused_reason: null, flagged: false, last_run: null }],
+  };  // prettier-ignore
+  window.fetch = async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname;
+    return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
+  };
+}
 createRoot(document.getElementById("root")!).render(
   <AdminPlace apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={new Set(tab.split(","))} />,
 );
@@ -151,4 +178,16 @@ if (serving === "people" && show) {
   if (show === "versions") await pressWhenDrawn("Versions of Intel desk");
   if (show === "role-form") await pressWhenDrawn("Copy Analyst into a new role");
   if (show === "team") await pressWhenDrawn("Team for Intel desk");
+}
+if (serving === "audit" && show === "rules") {
+  for (let i = 0; i < 60 && !document.querySelector("table[aria-label='Audit entries']"); i++)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  const record = [...document.querySelectorAll<HTMLSelectElement>("select")].find((el) =>
+    [...el.options].some((o) => o.value === "rules"),
+  );
+  if (record) {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(record, "rules");
+    record.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  await pressWhenDrawn("Show entries");
 }
