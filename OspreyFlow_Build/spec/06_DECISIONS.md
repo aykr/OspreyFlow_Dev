@@ -32248,6 +32248,14 @@ owner to overrule. ADR-146 and its Amendments 1 and 2 are unchanged except where
    per customer, counts each failure and writes it to the rule's audit (`rule_evaluation_failed`,
    listed in *Changes*), and closes the day. A scheduled slot or a re-screening that fails part-way
    keeps and counts what it raised (`rule_evaluation.PartlyRaised`).
+9. **The address's timing residual, ruled (the owner, 9 November 2026, relayed by the orchestrator):
+   Amendment 2 point 6's question, option (a), accepted.** A refusal at `/v1/alerts/{id}` waits to the
+   end of its 250 ms quantum; an alert whose evidence takes longer than one quantum to read is refused
+   on a later quantum and can alone be told from a missing id. That residual is accepted as recorded,
+   neither capped nor given a larger quantum: it applies only to alerts with unusually large evidence,
+   measured as a 177 ms worst-case read at L2.9, and at L2.10 as a hidden alert's read of 253.9 ms
+   without the wait, run beside `make ci` under load (rules lease, stack b; green re-taken alone). The
+   guarantee is the one measured, no wider; a change to the quantum or a cap is a new amendment.
 
 **Left, and why.** An alert's address answers 404 where the reader's case is not the alert's own: a
 dataset alert read from another case on its dataset, and a watch alert a schedule raised (no case);

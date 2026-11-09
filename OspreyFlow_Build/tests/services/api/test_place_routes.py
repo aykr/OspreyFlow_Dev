@@ -508,7 +508,13 @@ def test_a_check_in_a_route_s_signature_is_read() -> None:
 
 
 def _openers(place: str) -> set[frozenset[str]]:
-    sets = {_checks(r) for r in _entry_routes(place)}
+    # A route behind another place's gate (`place:rules`) is an action offered where that place is
+    # (ADR-146 Amendment 4 point 7: the Glass's *Watch for this* and *Save as a watch*), never a way
+    # into this one, so it opens nothing here.
+    sets = {
+        c for c in (_checks(r) for r in _entry_routes(place))
+        if not any(x.startswith("place:") and x != f"place:{place}" for x in c)
+    }
     return {s for s in sets if not any(o < s for o in sets)}
 
 
