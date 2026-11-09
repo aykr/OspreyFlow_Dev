@@ -2004,7 +2004,7 @@ def holds_a_level_in(
 
 def get_watch_reach(request: Request) -> DatasetReach:
     """`owner_reaches_dataset_in` over this app's stores, for a route whose load runs watches."""
-    return owner_reaches_dataset_in(  # type: ignore[no-any-return]
+    return owner_reaches_dataset_in(
         lambda: request.app.state.datasets, lambda: get_investigations(request)
     )
 

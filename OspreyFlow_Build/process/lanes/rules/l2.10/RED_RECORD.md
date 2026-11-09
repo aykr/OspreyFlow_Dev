@@ -199,3 +199,12 @@ at ef45fa1.
 - **`writeTheSentence` by keys.** Red with the Frequency select's `onChange` a no-op (the value
   check). A first plant on the Subject select stayed green: Person is its default, so choosing it
   changes nothing. The plant proved nothing and was replaced (rule 15).
+
+## 10. The gate's own finding (make test at 5798919)
+
+- `test_run_resources.py`'s two coverage cases were red at the gate: the command-line builder gave
+  `run_deps()` no `watch_reach`, so a command-line load would have matched no watch with a dataset.
+  That was the fail-closed gap Amendment 4 had recorded, and the existing test, which asks that every
+  field a run needs is given, found it. `RunResources` now holds the case store and builds the check
+  over it and the dataset store, and both cases are green. The same `make ci` run found an unused
+  `type: ignore` in `app.py`, now removed.

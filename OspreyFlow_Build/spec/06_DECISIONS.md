@@ -32249,11 +32249,11 @@ owner to overrule. ADR-146 and its Amendments 1 and 2 are unchanged except where
    (`MonitorScheduleExecutor.reaches_dataset`; `evaluate_hotlists_for_entry`'s and
    `evaluate_monitors_for_entry`'s `reaches_dataset`). The route's loads are given it by
    `WatchReachDep`; the scheduled and folder-watched runs by `RecipeRunDeps.from_state`, which builds
-   it from the state's own dataset and case stores. Narrowing the owner to the dataset alone would
-   give back one they had lost. An owner who has lost it is matched over nothing, logged, and the
-   slot is spent, the watch kept (a case given back runs it again). A load path given no check
-   matches no watch with a dataset (fail closed, logged): today that is the command-line load
-   (`run_resources.py`, which holds no case store), until it is given one.
+   it from the state's own dataset and case stores; the command-line load by `RunResources`, which
+   holds both. Narrowing the owner to the dataset alone would give back one they had lost. An owner
+   who has lost it is matched over nothing, logged, and the slot is spent, the watch kept (a case
+   given back runs it again). A load path given no check matches no watch with a dataset (fail
+   closed, logged); none is, and `test_run_resources.py` fails if the command-line one is not.
 8. **The carries.** A settle on a read path purges what it re-marked at once, published to the
    connected canvases (`alerts.settle_repoints` with `AlertStore.working_set`). Outside a load
    (`raise_committed`), a node that cannot be written in a read-only dataset or marked leaves the row
