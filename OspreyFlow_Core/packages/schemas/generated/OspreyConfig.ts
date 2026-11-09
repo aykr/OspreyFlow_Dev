@@ -397,6 +397,10 @@ export type Organisation = string | null;
  */
 export type Phase = "alpha" | "beta" | "live" | "none";
 /**
+ * Default: 5x5x5. The scheme drawn items are graded in: 5x5x5; 3x5x2, whose handling code (P or C) is part of the grade and never merged with the marking; or the path of a scheme file (.yaml, beside this file unless absolute) naming its own scheme and each part's grades.
+ */
+export type Scheme = string;
+/**
  * The managed server's address
  */
 export type Host1 = string;
@@ -506,6 +510,7 @@ export interface OspreyConfig {
   welcome?: WelcomeConfig;
   deployment?: DeploymentConfig;
   appearance?: AppearanceConfig;
+  grading?: GradingConfig;
   external?: ExternalConfig;
   resources?: ResourcesConfig;
 }
@@ -804,6 +809,16 @@ export interface AppearanceConfig {
   service_name?: ServiceName;
   organisation?: Organisation;
   phase?: Phase;
+}
+/**
+ * The deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and Amendment 6): the
+ * scheme every drawn node and link is graded in, chosen at install (`install.yaml`'s
+ * `grading.scheme`) and shown read-only in Admin. Changed only by `ospreyflow grading change`
+ * (C13), which changes the items and this setting together: editing this alone would leave the
+ * items' grades in the old scheme.
+ */
+export interface GradingConfig {
+  scheme?: Scheme;
 }
 /**
  * What a cloud runs for the deployment instead of a container (ADR-114 decision 8).

@@ -30,11 +30,23 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+import yaml
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
+from schemas.domain import BUILT_IN_GRADING_SCHEMES, GradingSchemeAnswer
 from schemas.mapconfig import MapConfig
 from schemas.sources import SECRET_NAME, private_host_entry
 
@@ -972,6 +984,70 @@ class AppearanceConfig(BaseModel):
     )
 
 
+class GradingConfig(BaseModel):
+    """The deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and Amendment 6): the
+    scheme every drawn node and link is graded in, chosen at install (`install.yaml`'s
+    `grading.scheme`) and shown read-only in Admin. Changed only by `ospreyflow grading change`
+    (C13), which changes the items and this setting together: editing this alone would leave the
+    items' grades in the old scheme."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scheme: str = Field(
+        default="5x5x5",
+        min_length=1,
+        description=(
+            "Default: 5x5x5. The scheme drawn items are graded in: 5x5x5; 3x5x2, whose handling "
+            "code (P or C) is part of the grade and never merged with the marking; or the path of "
+            "a scheme file (.yaml, beside this file unless absolute) naming its own scheme and "
+            "each part's grades."
+        ),
+    )
+
+    #: A scheme file's scheme, read by `harness.render.load_config` (beside `osprey.yaml`).
+    _file_scheme: GradingSchemeAnswer | None = PrivateAttr(default=None)
+
+    @property
+    def names_a_file(self) -> bool:
+        return self.scheme not in BUILT_IN_GRADING_SCHEMES
+
+    def read_file(self, beside: Path) -> None:
+        """Reads the scheme file `scheme` names, relative to `beside` unless absolute, and checks
+        it (`GradingSchemeAnswer`). Refused, naming the file, if it cannot be read or is not one."""
+        if not self.names_a_file:
+            return
+        path = Path(self.scheme)
+        path = path if path.is_absolute() else beside / path
+        try:
+            raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as unread:
+            raise ValueError(
+                f"grading.scheme: the scheme file {path} cannot be read: {unread}"
+            ) from None
+        try:
+            self._file_scheme = GradingSchemeAnswer.model_validate(raw)
+        except ValidationError as bad:
+            raise ValueError(f"grading.scheme: {path} is not a grading scheme: {bad}") from None
+
+    def resolved(self) -> GradingSchemeAnswer:
+        """The scheme and its grades: a built-in one's, or the scheme file's once read."""
+        if not self.names_a_file:
+            return GradingSchemeAnswer.of(self.scheme)
+        if self._file_scheme is None:
+            raise ValueError(f"grading.scheme: the scheme file {self.scheme} has not been read")
+        return self._file_scheme
+
+    @field_validator("scheme")
+    @classmethod
+    def _a_scheme_or_its_file(cls, value: str) -> str:
+        if value in BUILT_IN_GRADING_SCHEMES or value.endswith((".yaml", ".yml")):
+            return value
+        raise ValueError(
+            f"{value!r} is neither a grading scheme ({', '.join(BUILT_IN_GRADING_SCHEMES)}) nor a "
+            "scheme file (.yaml)"
+        )
+
+
 class MailConfig(BaseModel):
     """The mail server the identity provider sends invitations and sign-in resets through
     (`06_DECISIONS.md` ADR-114 Amendment 5). Without one, people are signed in by a one-time code.
@@ -1183,6 +1259,7 @@ class OspreyConfig(BaseModel):
     welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
     deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)
     appearance: AppearanceConfig = Field(default_factory=AppearanceConfig)
+    grading: GradingConfig = Field(default_factory=GradingConfig)
     external: ExternalConfig = Field(default_factory=ExternalConfig)
     resources: ResourcesConfig = Field(default_factory=ResourcesConfig)
 
@@ -1417,6 +1494,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     ModelsConfig,
     OrganisationProvider,
     GovernanceConfig,
+    GradingConfig,
     ClusterHost,
     ClusterConfig,
     TlsFiles,
