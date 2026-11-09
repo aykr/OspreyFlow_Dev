@@ -112,7 +112,10 @@ export function PlaceSearch({ search, onGo }: PlaceSearchProps) {
         {found.state === "failed" && found.words}
         {found.state === "found" &&
           found.places.length === 0 &&
-          `No place called “${found.query}” is in the gazetteer this case reads.`}
+          (found.more
+            ? // The store's first matches were all the case's own places (rule 2): not "none".
+              `More places match “${found.query}” than were looked through; type more of the name.`
+            : `No place called “${found.query}” is in the gazetteer this case reads.`)}
         {found.state === "found" &&
           found.places.length > 0 &&
           `${found.places.length} ${found.places.length === 1 ? "place" : "places"} found${

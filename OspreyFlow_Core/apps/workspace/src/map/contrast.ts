@@ -13,10 +13,17 @@ export function luminance(colour: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** The ratio of the lighter colour's luminance to the darker's, each plus 0.05, to two places. */
+/** The ratio of the lighter colour's luminance to the darker's, each plus 0.05, unrounded: a floor
+ * is compared with the exact ratio, so 4.495 never passes 4.5. Opaque colours only (the map's are);
+ * an alpha channel is refused rather than read as opaque. */
 export function contrastRatio(a: string, b: string): number {
+  for (const colour of [a, b]) {
+    if (/^rgba\(|^#[0-9a-f]{8}$/i.test(colour) && !/,\s*1\)$/.test(colour)) {
+      throw new Error(`contrastRatio takes opaque colours only, not ${colour}`);
+    }
+  }
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-  return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+  return (hi + 0.05) / (lo + 0.05);
 }
 
 /** WCAG 1.4.11: a graphic's parts needed to understand it, against what is next to them. */
