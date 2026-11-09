@@ -125,7 +125,7 @@ createRoot(container).render(
       // ADR-145 Amendment 2: Matrix and Reports (ADR-111) under More views, as `App.tsx` offers them.
       moreViews={[
         { id: "matrix", label: "Matrix", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("matrix") },
-        { id: "reports", label: "Reports", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("reports") },
+        { id: "reports", label: "Figures", pressed: false, onSelect: () => window.__TOPBAR__!.views.push("reports") },
       ]}
       actions={<Button>Export ⚙</Button>}
       account={

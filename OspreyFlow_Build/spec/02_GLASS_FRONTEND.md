@@ -1269,7 +1269,8 @@ listed one to a line beneath it (three alerts' words joined into one sentence co
 stored or drawn on the node: the score is a read, and another analyst may read another. Its keyboard
 case is in `keyboard/inspector.spec.ts` (`score-a-neighbourhoods-risk-by-keyboard`).
 
-**The Reports view (ADR-111).** An entry of the top bar's view switch — under *More views* since
+**The case's *Figures* (ADR-145 Amendment 4 decision 8; ADR-111's Reports view until L2.12).** The view
+switch names it *Figures*; the code keeps the view id `reports`. An entry of the top bar's view switch — under *More views* since
 ADR-145 Amendment 2, or in the switch itself for someone offered neither Graph nor Map — for people who read rather than investigate (a case Viewer and above). It draws the case's
 figures as the Conduit counts them for this reader (`GET …/reports`): the alerts of the period
 ("3 alerts in the last 12 weeks"), alerts raised each week by typology (stacked bars in the channel
@@ -1287,7 +1288,16 @@ typology (open, claimed, true, false), and — only when the server sends them, 
 A line says the figures are counted for the reader. *Period* chooses the last 4, 12, 26 or 52 weeks and is asked of
 the server; *Download the figures (CSV)* fetches the dashboards' feed, each read of which is in the
 export ledger. A report past its bound says so in words with its option ("Choose a shorter period"),
-never a partial chart. Every action has its case in `keyboard/reports.spec.ts` (`REPORTS_ACTIONS`);
+never a partial chart. First among its panels is the ***Alerts* panel** (ADR-146 decision 9,
+`reports/AlertsPanel.tsx`): open alerts by source (each typology, hotlists, monitors) and age, from the
+report's `monitoring.open_by_source`, the panel adding up only what the Conduit counted for the reader
+(rule 7); and the newest five still in the queue, from the queue's own rows, only for a reader the Conduit
+gives the rows to (ADR-146 Amendment 2 point 3; anyone else sees the counts alone). A row opens the alert at
+its address only for someone Rules and Monitoring is offered to; for anyone else it is words. A *Drawing*
+panel (drawn, promoted, awaiting review, withdrawn) is drawn only when the report carries `drawing`, which
+it does not until promotions are built (L3.4). Opened from an alert (the Reports Viewer's journey, below),
+the tab says "From the ‹rule group› alert · ← Back to your alerts", the way back focused, and outlines the
+Alerts panel. Every action has its case in `keyboard/reports.spec.ts` (`REPORTS_ACTIONS`);
 the view switch itself, never proved by keyboard before, in `keyboard/shell.spec.ts`
 (`views-chosen-by-keyboard`).
 
@@ -1298,19 +1308,43 @@ decision 2), *Connection strength* for investigate or manage_strength_influencer
 *Ownership* for trace_ownership, *History* and *Explore* for investigate, *Questions* for ask_model,
 *Dashboards* for read_reports (the Ingest Studio, Admin and Proposed types are no longer on the rail:
 the place switcher offers the places, `shell/places.ts`, §2.0a); the view switch offers Graph and Map for
-investigate and Reports for read_reports, and a person who may not investigate (a Reports Viewer)
-lands on Reports; the Reports view's download is offered only to holders of read_report_feed.
+investigate and Figures for read_reports, and a person who may not investigate (a Reports Viewer)
+lands on Figures; the Figures' download is offered only to holders of read_report_feed.
 
-**Superset dashboards inside the Glass (ADR-111 Amendment 3).** The Reports view has two tabs,
-*Figures* (the case's own counts, above) and *Dashboards*; the rail's *Dashboards* place shows the
-same thing full width. Both list only the boards the Conduit says this person may open
+**Superset dashboards inside the Glass (ADR-111 Amendment 3; ADR-145 Amendment 4 decision 8).** The
+rail's *Dashboards* is the one door: the case's Figures have no *Dashboards* tab since L2.12. It lists
+only the boards the Conduit says this person may open
 (`GET /v1/reports/dashboards`) — those whose every figure they could count themselves — and draw the
 chosen one through Superset's embedded SDK (`@superset-ui/embedded-sdk` 0.4.0) in a frame, with a
 five-minute guest token the Conduit issues and the SDK asks for again before it lapses. Superset's
 menus never appear, nor its own title or each chart's menu, and the board is drawn in
 Superset's theme generated from `tokens.css`, in the Glass's current mode and following a switch
 (ADR-111 Amendment 4); a refusal is said in words; with none to open, the panel says why one would
-appear (`reports/EmbeddedDashboards.tsx`, `reports/ReportsPlace.tsx`; `keyboard/reports.spec.ts`).
+appear (`reports/EmbeddedDashboards.tsx`; `keyboard/alert-figures.spec.ts`).
+
+**The *Alert monitoring* board (ADR-145 Amendment 4 decision 9, D2).** First among the boards on the rail's
+*Dashboards*, drawn by the Glass itself from the open case's report (no Superset token is asked for it):
+alerts raised each week and by rule, closed by outcome, time to close, hotlist matches, and the team view
+(unassigned, mine, older than seven days, and the share closed as not of interest, False positive or No
+further action), with the Alerts panel. *Rule* (every rule, or one rule group) and *Period* filter it;
+figures the report does not count per rule (outcomes, time to close) say "(every rule)" when a rule is
+chosen. *See the trend* in Rules and Monitoring and the Reports Viewer's *Open the dashboard* open it
+filtered to the alert's rule group and the shortest period that holds it (`reports/AlertMonitoringBoard.tsx`;
+*See the trend* is `process/lanes/rules-b/see-the-trend.patch` until the rules lane takes it).
+
+**The Reports Viewer's journey (ADR-145 Amendment 4 decision 10).** On Home, a reader the place is not
+offered to sees each alert on the cases they can read with exactly two ways on: *Open in its case*, which
+opens the case (a reload, as every case switch is) on its Figures from the alert, and *Open the dashboard*,
+which opens the Alert monitoring board filtered to it. Neither opens the alert's address, which the Conduit
+refuses them anyway (`test_reports_viewer_journey.py`). The journey is noted in the tab's session storage
+beside the case and taken once that case is open (`reports/journey.ts`); *← Back to your alerts* returns
+Home. Keyboard: `keyboard/alert-figures.spec.ts` (`ALERT_FIGURES_ACTIONS`); axe: `alert-figures-harness.html`
+in dark, light and GOV.UK.
+
+**Roles, teams and Authors (ADR-145 Amendment 4 decision 12).** One page of words (`help/RolesHelpPage.tsx`),
+every word from `help/roles.ts`, which says every right `rights.py` declares (`help/roles.test.ts`, red with
+one missing). Admin's tips and its door to the page are `process/lanes/rules-b/admin-tips.patch` until the
+admin lane takes them; the Studio's door waits for its review, accept-type and merge screens.
 
 **Trends, report packs and their distribution (ADR-113, Amendments 1 to 3).** The Reports view's
 tabs are *Figures*, then — each only with its right (`rights/visibility.ts`) — *Trends*

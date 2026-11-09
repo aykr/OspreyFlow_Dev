@@ -73,8 +73,8 @@ describe("the Alerts panel", () => {
     expect(items).toEqual([
       "Structuring: Alpha Ltd a1today",
       "Structuring: Alpha Ltd a41 day old",
-      expect.stringContaining("Alpha Ltd a5"),
-      expect.stringContaining("Alpha Ltd a2"),
+      expect.stringMatching(/^Monitors: Alpha Ltd a5/),
+      expect.stringMatching(/^Hotlists: Alpha Ltd a2/),
     ]);
   });
 

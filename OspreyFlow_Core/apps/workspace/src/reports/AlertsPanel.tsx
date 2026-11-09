@@ -100,7 +100,7 @@ export function AlertsPanel({ api, monitoring, only = null, onOpenAlert, outline
           <h4 className="label" style={{ margin: 0 }}>Newest</h4>
           <ul aria-label="Newest alerts" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
             {rows.map((r) => {
-              const words = `${typologyLabel(r.alert.typology ?? groupName(groupOf(r)))}: ${r.summary}`;
+              const words = `${r.alert.typology ? typologyLabel(r.alert.typology) : groupName(groupOf(r))}: ${r.summary}`;
               const age = ageOf(r.alert.created_at, now);
               return (
                 <li key={r.alert.id} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "baseline" }}>

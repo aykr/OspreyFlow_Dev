@@ -123,11 +123,11 @@ test("each destination under the rail's More is reached and chosen by keyboard",
   registerCovered(REGISTRY, "rail-more-by-keyboard");
 });
 
-test("each view is chosen by keyboard, Matrix and Reports under More views", async ({ page }) => {
+test("each view is chosen by keyboard, Matrix and Figures under More views", async ({ page }) => {
   await page.goto("/keyboard/top-bar-harness.html");
   await page.getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
-  for (const name of ["Reports", "Matrix"]) {
+  for (const name of ["Figures", "Matrix"]) {
     await page.getByRole("button", { name: "More views" }).focus();
     await page.keyboard.press("Enter");
     await page.getByRole("group", { name: "More views" }).getByRole("button", { name }).focus();

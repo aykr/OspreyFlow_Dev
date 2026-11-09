@@ -47,7 +47,9 @@ function groupsOf(figures: ReportFigures | null): RuleGroup[] {
   return [...seen.values()].sort((a, b) => rank(a) - rank(b) || a.typology.localeCompare(b.typology));
 }
 
-const share = (part: number, whole: number) => (whole === 0 ? "none closed" : `${Math.round((part / whole) * 100)}%`);
+/** The share closed as not of interest, said with how many were closed; "none closed" when none were. */
+const share = (part: number, whole: number) =>
+  whole === 0 ? "none closed" : `${Math.round((part / whole) * 100)}% of ${NUMBER.format(whole)}`;
 
 export function AlertMonitoringBoard({ api, filter = {}, onOpenAlert, fromAlert = null }: AlertMonitoringBoardProps) {
   const [weeks, setWeeks] = useState(PERIODS.includes(filter.weeks ?? 12) ? (filter.weeks ?? 12) : 12);
@@ -179,7 +181,7 @@ export function AlertMonitoringBoard({ api, filter = {}, onOpenAlert, fromAlert 
                     <td style={{ textAlign: "right" }}>{NUMBER.format(t.unassigned ?? 0)}</td>
                     <td style={{ textAlign: "right" }}>{NUMBER.format(t.mine ?? 0)}</td>
                     <td style={{ textAlign: "right" }}>{NUMBER.format(t.older_than_week ?? 0)}</td>
-                    <td style={{ textAlign: "right" }}>{`${share(t.not_of_interest ?? 0, t.closed ?? 0)} of ${NUMBER.format(t.closed ?? 0)}`}</td>
+                    <td style={{ textAlign: "right" }}>{share(t.not_of_interest ?? 0, t.closed ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>

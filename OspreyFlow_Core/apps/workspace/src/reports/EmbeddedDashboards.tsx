@@ -125,8 +125,8 @@ export function EmbeddedDashboards({ embed = embedDashboard as Embed, leading, .
       )}
       {problem && !drawsItself && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
       {drawsItself && leading.draw()}
-      <div ref={mount} className="embedded-dashboard" data-open={drawsItself ? "" : (open ?? "")} hidden={drawsItself}
-           style={{ flex: 1, minHeight: 480 }} />
+      {/* Superset's frame only for one of its boards: the Glass's own board takes the whole space. */}
+      {!drawsItself && <div ref={mount} className="embedded-dashboard" data-open={open ?? ""} style={{ flex: 1, minHeight: 480 }} />}
     </section>
   );
 }

@@ -59,3 +59,12 @@ closed ports (59991–59994), no lease.
   `approve_releases` into a copy of `rights.py` and asserts it is found missing.
 - Plant in `alertBadges.tsx`: closed alerts marked too → `marks each item an open alert concerns`
   FAILED.
+
+## 8. Keyboard (`keyboard/alert-figures.spec.ts`, with `registry-L2.12.patch` applied uncommitted)
+- Handlers removed: the Alerts panel's row (no-op), the Rule select (no-op) and Home's *Open the
+  dashboard* (no-op) → the three cases using them FAILED, and the coverage case with them; 4 passed.
+- Restored: 8 passed; with `reports.spec.ts` and `shell.spec.ts`, 44 passed.
+- Axe (`a11y/every-harness.spec.ts`): `alert-figures-harness.html` in six states × dark, light and GOV.UK,
+  18 scans and 6 label checks, all passed. Seen by eye in dark and GOV.UK: the board was clipped by the
+  Superset frame's 480 px kept while hidden, and a hotlist row read "Alert:"; both fixed, the label held by
+  `AlertsPanel.test.tsx`.
