@@ -1,0 +1,23 @@
+# L1.8, the orchestrator's review item 4 (rule 4): a subscribed list's rows withheld from a case not reading the dataset, offline on closed ports, 2026-11-09T16:43:37Z
+## The sample's dataset guard (DATASET_WITHHELD, every step) removed alone
+4 passed, 25 deselected, 1 warning in 1.66s
+## The sample's lists guard (LISTS_WITHHELD, a Lookup's; the review's studio_staging.py:295-300) removed alone
+4 passed, 25 deselected, 1 warning in 1.71s
+## Both of the sample's guards removed
+test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_the_sample[a case reading none of it]
+test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_the_sample[a case whose own dataset subscribes the list]
+2 failed, 2 passed, 25 deselected, 1 warning in 1.78s
+## Test's guard (studio_verify.py, DATASET_WITHHELD before the read; the review's 196-197) removed
+test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_test[a case reading none of it]
+test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_test[a case whose own dataset subscribes the list]
+2 failed, 2 passed, 25 deselected, 1 warning in 1.79s
+## Put back
+4 passed, 25 deselected, 1 warning in 1.72s
+
+The first attempt asserted the dataset guard's own words (DATASET_WITHHELD) at the sample. It went red with
+the dataset guard removed alone, but for the wrong reason: the lists guard still withheld the sample, in
+its own words (LISTS_WITHHELD), and nothing reached the response (rule 15). The case now asks that nothing
+is given, in either guard's words. It is green with either guard removed alone and red with both. Each of
+the sample's guards backs the other: the dataset guard comes first for every step, and the lists guard
+(the review's studio_staging.py:295-300) is reached only if it is gone. Test has the one guard, which is red
+alone.

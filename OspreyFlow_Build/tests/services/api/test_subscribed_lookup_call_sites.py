@@ -15,6 +15,10 @@ What a mistake would do, and the case that catches it:
 - the run refusing it — `test_the_run_reads_a_subscribed_list`;
 - a fourth caller of the three that forgets the subscriptions —
   `test_every_caller_hands_the_staging_engine_the_subscriptions`;
+- the subscribed list's rows, a read newly opened at the sample and at Test, reaching a principal who may
+  not read the dataset (rule 4): one whose case reads no dataset of it, and one whose case reads another
+  dataset that subscribes to the same list —
+  `test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_the_sample` and `..._at_test`;
 - the subscriptions widening what a Lookup reads, at each of the three: a list another dataset subscribes
   to and this one does not — `test_another_dataset_s_subscription_is_refused_at_the_sample`,
   `..._at_test` and `..._at_the_run`;
@@ -135,7 +139,7 @@ async def published(
 async def subscribed(staged: TestClient, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     lists = InMemoryListStore()
     monkeypatch.setattr(app.state, "list_store", lists, raising=False)
-    await _deployment_list(lists, subscriber="pid")
+    staged.list_id = await _deployment_list(lists, subscriber="pid")  # type: ignore[attr-defined]
     # The dataset's own model names no list: the only `establishments` it reads is the subscribed one.
     app.dependency_overrides[get_target_models] = lambda: _Models([])
     _update(staged, pipeline=_reading_the_deployment_list(_draft(staged).pipeline))
@@ -183,6 +187,54 @@ async def test_the_run_reads_a_subscribed_list(
     lookup = next(s for s in branch.report.staging_steps if s.step == "with_establishment")
     assert lookup.rows_in == 6 and lookup.unmatched == 1  # XXX, kept with no establishment
     assert graph.committed_nodes
+
+
+#: Rule 4: the cases whose principal may not read `pid`. The second's own dataset subscribes to the
+#: same deployment-wide list, so a check that asked "is this list subscribed by a dataset the principal
+#: reads?" instead of "does the principal read the dataset this pipeline is?" would let it through.
+OUTSIDERS = {
+    "a case reading none of it": ["ledger"],
+    "a case whose own dataset subscribes the list": ["other-dataset"],
+}
+
+
+@pytest.mark.parametrize("who", sorted(OUTSIDERS))
+async def test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_the_sample(
+    subscribed: TestClient, who: str
+) -> None:
+    from services.api.app import get_principal
+    from services.api.studio_staging import DATASET_WITHHELD, LISTS_WITHHELD
+    from tests.services.api.test_studio_staging_routes import SOURCE_AUTHOR
+
+    await subscribed.lists.subscribe("other-dataset", subscribed.list_id, "author-2")  # type: ignore[attr-defined]
+    app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR.model_copy(
+        update={"datasets": OUTSIDERS[who]}
+    )
+    response = _preview(subscribed, "with_establishment")
+    body = response.json()
+    assert body["values_masked"] is True and body["rows"] == [] and body["counts"] == [], who
+    # Withheld by either of the sample's two guards: the dataset's (every step) or the lists' (a
+    # Lookup's); each backs the other, so the case asks that nothing is given, not which words.
+    assert {DATASET_WITHHELD, LISTS_WITHHELD} & set(body["problems"]), body["problems"]
+    assert "HMP" not in response.text, who
+
+
+@pytest.mark.parametrize("who", sorted(OUTSIDERS))
+async def test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_test(
+    subscribed: TestClient, who: str
+) -> None:
+    from services.api.app import get_principal
+    from services.api.studio_staging import DATASET_WITHHELD
+    from tests.services.api.test_studio_staging_routes import SOURCE_AUTHOR
+
+    await subscribed.lists.subscribe("other-dataset", subscribed.list_id, "author-2")  # type: ignore[attr-defined]
+    app.dependency_overrides[get_principal] = lambda: SOURCE_AUTHOR.model_copy(
+        update={"datasets": OUTSIDERS[who]}
+    )
+    response = subscribed.post(f"{RECIPE_URL}/verify")
+    assert response.status_code == 422, response.text
+    assert response.json() == {"error": "recipe_rule", "problems": [DATASET_WITHHELD]}
+    assert "HMP" not in response.text, who
 
 
 REFUSED = (
