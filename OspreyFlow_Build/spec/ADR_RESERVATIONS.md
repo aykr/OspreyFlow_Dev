@@ -78,6 +78,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-140 Amendment 14 | Phase 8 as built: the SQL transform's sandbox and its _ref rule, the fuzzy match's inferred SAME_AS and inferred matched values, YAML editing in expert mode, the expert steps' disclosure, and open question 7 answered (L1.5) | studio | 2026-11-08 | reserved |
 | ADR-112 Amendment 8 | write_sql_transforms (D12): the expert steps' right, held by no built-in role and granted singly by an administrator (L1.5) | studio | 2026-11-08 | reserved |
 | ADR-146 Amendment 3 | load_screening_lists acts in Rules and Monitoring and in Studio › Sources' list connector, reconciling decision 2 with ADR-140 Amendment 9 decision 3; no one's rights change (L1.6) | studio-b | 2026-11-09 | reserved |
+| ADR-143 Amendment 5 | Promotion and a removed case's layer as built (L3.4) | case | 2026-11-09 | reserved |
 
 ## Baseline
 

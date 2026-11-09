@@ -53,6 +53,16 @@ Built meanwhile: Java is out of the image and *Admin › Maps*' Build says so in
    read. **(a)** accept that residual (rules' recommendation); **(b)** cap the evidence an alert may cite;
    **(c)** a larger wait. Merged meanwhile with the 250 ms wait.
 
+**One more question for you (case's L3.4; ADR-143's open question 2, named for you):** can a promotion be
+reverted online?
+- **(a) Case's recommendation:** an operator command only, for now (`python -m scripts.revert_promotion <load_id>
+  [--dry-run]`, the Conduit stopped as ADR-127 Amendment 9 says); the board shows the command to a data engineer
+  and tells an analyst to ask one.
+- (b) An online revert route for promotion loads only, for the proposer or a data engineer, refused once anything
+  else rests on the promoted items.
+- (c) Online, data engineers only.
+Built meanwhile: the revert core and the offline command; any online route is a thin wrapper over it.
+
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
