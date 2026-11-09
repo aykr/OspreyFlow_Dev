@@ -1,8 +1,56 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/rules-place-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/rules-place-harness.tsx
+index faf9af0..7efa8e9 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/rules-place-harness.tsx
++++ b/OspreyFlow_Core/apps/workspace/keyboard/rules-place-harness.tsx
+@@ -23,10 +23,10 @@ import { ViewLensBanner } from "../src/views/ViewLensBanner";
+ 
+ declare global {
+   interface Window {
+-    __RULES__?: { went: string[]; evidence: { alertId: string; nodeIds: string[] }[] };
++    __RULES__?: { went: string[]; evidence: { alertId: string; nodeIds: string[] }[]; trend?: unknown[] };
+   }
+ }
+-window.__RULES__ = { went: [], evidence: [] };
++window.__RULES__ = { went: [], evidence: [], trend: [] };
+ 
+ const brand = await applyHarnessBrand();
+ const params = new URLSearchParams(location.search);
+@@ -111,6 +111,8 @@ function Harness() {
+       onCanvas={() => undefined}
+       address={alertId && state ? { alertId, state } : null}
+       onOpenAlert={(id) => navigate(id ? alertPath(id) : "/keyboard/rules-place-harness.html")}
++      // ADR-145 Amendment 4 decision 9 (L2.12): *See the trend*, recorded as App opens the board with it.
++      onSeeTrend={(filter) => window.__RULES__!.trend!.push(filter)}
+       onOpenEvidence={async ({ alertId, nodeIds }) => {
+         window.__RULES__!.evidence.push({ alertId, nodeIds });
+         navigate("/keyboard/rules-place-harness.html");
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/rules-place.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/rules-place.spec.ts
+index b0a5158..54126a4 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/rules-place.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/rules-place.spec.ts
+@@ -83,6 +83,17 @@ test("the evidence is opened, and Back to the alert returns to it, still open, b
+   registerCovered(REGISTRY, "back-to-the-alert-from-its-evidence-by-keyboard");
+ });
+ 
++// ADR-145 Amendment 4 decision 9 (L2.12): See the trend opens the Alert monitoring board filtered to
++// the alert's rule group and the period that holds it.
++test("See the trend is pressed on an alert by keyboard", async ({ page }) => {
++  await page.goto("/keyboard/rules-place-harness.html?address=a1");
++  await press(page, page.getByRole("button", { name: "See the trend" }));
++  const trend = (await page.evaluate(() => window.__RULES__?.trend)) as { rule: { label: string } }[];
++  expect(trend).toHaveLength(1);
++  expect(trend[0]!.rule.label).toBe("typology");
++  registerCovered(REGISTRY, "see-the-trend-on-an-alert-by-keyboard");
++});
++
+ test("every registered Rules and Monitoring action has its own proving test case above", () => {
+   assertAllCovered(REGISTRY, RULES_PLACE_ACTIONS);
+ });
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.test.tsx b/OspreyFlow_Core/apps/workspace/src/App.test.tsx
-index b75c0b3..02d9f51 100644
+index 87accad..2c4a2e0 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.test.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/App.test.tsx
-@@ -595,6 +595,40 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
+@@ -614,6 +614,40 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
    // ADR-146 decision 6 (R5) and its test: *Open the evidence*, then *← Back to the alert*, returns to
    // the same alert, still open. The evidence is a private view of the alert's own case (ADR-144
    // decision 4), saved with the nodes the reader was shown and opened as the Glass's read-only lens.
@@ -44,19 +92,19 @@ index b75c0b3..02d9f51 100644
      const person = {
        id: "n1", type: "Account", properties: { name: "GB-MULE-0042" },
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.tsx b/OspreyFlow_Core/apps/workspace/src/App.tsx
-index c10aa7f..aedfd8f 100644
+index 7c10ef8..f15af16 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/App.tsx
-@@ -767,6 +767,8 @@ export function App() {
+@@ -771,6 +771,8 @@ export function App() {
    const journeyBack = alertJourney
-     ? { words: journeyWords(alertJourney.rule), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
+     ? { words: journeyWords(alertJourney), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
      : null;
 +  // *See the trend* in Rules and Monitoring (ADR-145 Amendment 4 decision 9): the board, filtered.
 +  const [trendFilter, setTrendFilter] = useState<{ rule: AlertJourney["rule"]; weeks: number } | null>(null);
    const openAlertFromPanel = opensRules ? (alertId: string) => navigate(alertPath(alertId)) : undefined;
    useEffect(() => {
      if (!investigationId || !bearerToken || !opensRules) {
-@@ -1721,6 +1723,11 @@ export function App() {
+@@ -1725,6 +1727,11 @@ export function App() {
              }}
              address={addressedAlert && addressed ? { alertId: addressedAlert, state: addressed } : null}
              onOpenAlert={(alertId) => navigate(alertId ? alertPath(alertId) : "/")}
@@ -68,7 +116,7 @@ index c10aa7f..aedfd8f 100644
              // ADR-146 decision 6 (R5): the alert's evidence as a private view of its case (ADR-144
              // decision 4), opened as the Glass's read-only lens, with the way back to the alert.
              onOpenEvidence={async ({ alertId, title, nodeIds, caseId }) => {
-@@ -1774,9 +1781,9 @@ export function App() {
+@@ -1778,9 +1785,9 @@ export function App() {
              <EmbeddedDashboards apiBaseUrl={API_BASE_URL} bearerToken={bearerToken}
                // ADR-145 Amendment 4 decision 9: the Alert monitoring board, first, on the open case.
                leading={investigationId ? { ...ALERT_MONITORING, draw: () => (

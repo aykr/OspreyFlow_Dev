@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/apps/workspace/src/App.tsx b/OspreyFlow_Core/apps/workspace/src/App.tsx
-index c10aa7f..b6b0669 100644
+index 7c10ef8..468d2f9 100644
 --- a/OspreyFlow_Core/apps/workspace/src/App.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/App.tsx
 @@ -127,6 +127,7 @@ import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
@@ -10,8 +10,8 @@ index c10aa7f..b6b0669 100644
  import {
    canDownloadFeed,
    landingView,
-@@ -768,6 +769,10 @@ export function App() {
-     ? { words: journeyWords(alertJourney.rule), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
+@@ -772,6 +773,10 @@ export function App() {
+     ? { words: journeyWords(alertJourney), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
      : null;
    const openAlertFromPanel = opensRules ? (alertId: string) => navigate(alertPath(alertId)) : undefined;
 +  // ADR-146 decision 9: the canvas's alert badge, from the reader's own queue of the open case.
@@ -21,7 +21,7 @@ index c10aa7f..b6b0669 100644
    useEffect(() => {
      if (!investigationId || !bearerToken || !opensRules) {
        setAlertCount(undefined);
-@@ -1854,6 +1859,7 @@ export function App() {
+@@ -1858,6 +1863,7 @@ export function App() {
                  strengthLegend={strengthLegend}
                  onGroupedCountChange={setGroupedCount}
                  judgementCounts={judgementCounts}
