@@ -50,6 +50,10 @@ Your leased live run always includes `tests/services/api/test_route_rights.py` (
 and every live file your change can reach, not only your own: `make test` skips live files, so two
 regressions on 8 November reached main unseen (14 pack cases, and two routes missing from the rights table).
 
+Every live test removes what it writes to a test stack, in teardown, even when it fails: the stacks are
+shared, and a row your branch's schema allows but main's does not (a new status, say) stops other lanes' runs
+until you merge (8 November 2026: a lane's leftover link-type proposals stopped the Conduit on two stacks).
+
 Every question for the owner, every request (a reservation, a shared commit, a ratification) and your
 ready-to-merge go to the orchestrator's session by cross-session message (send to `uds:/tmp/cc-socks/8906.sock`: a
 session on another account cannot find it by its name, ospreyflow-7e), never only in
