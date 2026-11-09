@@ -36,7 +36,9 @@ so none tells where a withheld row was.
 window function, a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, a
 recursive CTE and any table read twice in one SELECT are refused always, so no row is given another
 row's values or its `_ref`; `* REPLACE`, `* RENAME` and a qualified `EXCLUDE` may not touch
-`_ref`; and tokens carry a nonce drawn for each run, so none can be written by hand. Where the
+`_ref`; a `_ref` column is read only as a bare select item, a GROUP BY key or the sole argument
+of `list`/`array_agg`, never inside an expression; and every row's token is drawn at random for
+the run, so none can be written by hand or built from another's. Where the
 pipeline binds a marking to a column (`marked`, the columns `defaults.handling_columns` and Map's
 handling bindings name), Map
 judges each row's marking from those cells, so the step runs **row by row**: no join, aggregate,
@@ -271,6 +273,43 @@ def _refused_words(exc: duckdb.Error) -> str:
     return f"{words} (line {line.group(1)})" if line else words
 
 
+def _refs_in_expressions(tree: Any) -> bool:
+    """Whether a `_ref…` column is read anywhere but as a bare select item, a GROUP BY key or the
+    sole argument of `list`/`array_agg` (the orchestrator's second pass: a string function, a
+    struct or a condition over a `_ref` could build or move one row's token to another row)."""
+    allowed: set[int] = set()
+
+    def walk(node: Any) -> Iterator[dict[str, Any]]:
+        if isinstance(node, dict):
+            yield node
+            for value in node.values():
+                yield from walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from walk(value)
+
+    nodes = list(walk(tree))
+    for node in nodes:
+        if node.get("type") != "SELECT_NODE":
+            continue
+        for item in [*node.get("select_list", []), *node.get("group_expressions", [])]:
+            if item.get("class") == "COLUMN_REF":
+                allowed.add(id(item))
+            elif (
+                item.get("class") == "FUNCTION"
+                and str(item.get("function_name", "")).casefold() in _LIST_AGGREGATES
+                and len(item.get("children", [])) == 1
+                and item["children"][0].get("class") == "COLUMN_REF"
+            ):
+                allowed.add(id(item["children"][0]))
+    return any(
+        node.get("class") == "COLUMN_REF"
+        and _is_ref_name(str(node["column_names"][-1]))
+        and id(node) not in allowed
+        for node in nodes
+    )
+
+
 def _row_by_row_problems(step: SqlStep, node: dict[str, Any], marks: set[str]) -> list[str]:
     """What a SQL step may not do where the pipeline binds a marking to a column (the
     orchestrator's review of L1.5, item 1: Map judges a row's marking by those cells, so a step
@@ -422,6 +461,11 @@ def sql_gate_problems(step: SqlStep, *, marked: Collection[str]) -> list[str]:
                 f"step {step.id!r} reads {table!r} {times} times, which a SQL step may not: read "
                 "each table once, so every row it gives names the row it came from"
             )
+    if _refs_in_expressions(tree):
+        problems.append(
+            f"step {step.id!r} reads _ref inside an expression (a function, a struct, a condition "
+            "or a join): carry each row's _ref as a bare column, or an aggregate's as list(_ref)"
+        )
     top = tree["statements"][0]["node"]
     if not _carries_a_ref(top):
         problems.append(
@@ -435,11 +479,11 @@ def sql_gate_problems(step: SqlStep, *, marked: Collection[str]) -> list[str]:
 # --- The run ----------------------------------------------------------------------------------
 
 
-def _token(nonce: str, table: str, index: int) -> str:
-    """A row's `_ref` token: a nonce drawn for this run, so no token can be written by hand into a
-    SELECT (the orchestrator's review of L1.5, item 2), then its table and its place among the rows
-    the reader may read."""
-    return f"{nonce}:{table}#{index}"
+def _token() -> str:
+    """A row's `_ref` token, drawn at random for each row of each run: no token can be written by
+    hand into a SELECT, nor built from another row's by a string function (the orchestrator's review
+    of L1.5, item 2, and its second pass), and none tells a row's place or a withheld row's."""
+    return secrets.token_hex(16)
 
 
 def _text(value: object) -> str | None:
@@ -491,7 +535,6 @@ def run_sql_step(
             raise StagingError([f"step {step.id!r}'s SELECT {_refused_words(exc)}"]) from exc
         if len(statements) != 1:
             raise StagingError([f"step {step.id!r} is one SELECT statement, not {len(statements)}"])
-    nonce = secrets.token_hex(12)
     by_token: dict[str, tuple[StagedTable, StagedTableRow]] = {}
     rows_in = withheld = 0
     con = sandbox_connection(memory_limit=memory_limit)
@@ -513,11 +556,10 @@ def run_sql_step(
             data: dict[str, list[str | None]] = {
                 c: [row.cells.get(c) for row in kept] for c in table.columns
             }
-            # Numbered over the kept rows only, so no token tells where a withheld row was (the
-            # lane review, item 5).
-            data[REF_COLUMN] = [_token(nonce, table.name, n) for n in range(len(kept))]
-            for n, row in enumerate(kept):
-                by_token[_token(nonce, table.name, n)] = (table, row)
+            tokens_in = [_token() for _ in kept]
+            data[REF_COLUMN] = list(tokens_in)
+            for token, row in zip(tokens_in, kept, strict=True):
+                by_token[token] = (table, row)
             schema = pa.schema([pa.field(name, pa.string()) for name in data])
             con.register(table.name, pa.table(data, schema=schema))
         result = _execute(con, step, time_limit, row_limit, byte_limit)
@@ -584,8 +626,9 @@ def run_sql_step(
                  "_ref_… column, so each row names the rows of it it came from" for name in dropped]
             )  # fmt: skip
     # Rule 2: an input row no output row names (a WHERE, an inner join) is counted, never lost
-    # without a word; every token is a row's own (a nonce, no window, no table read twice), so
-    # each one used is a row given.
+    # without a word. Every token is a row's own, drawn at random, and the gate admits no window,
+    # expression subquery, table read twice or `_ref` inside an expression, so a token given names
+    # the row it came from and each one used is a row given.
     report = StepReport(
         step.id, "sql", rows_in=rows_in, rows_out=len(out), rows_withheld=withheld,
         filtered_out=rows_in - len(used),

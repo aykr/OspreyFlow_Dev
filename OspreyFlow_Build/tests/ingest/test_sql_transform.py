@@ -278,7 +278,7 @@ def test_a_ref_tells_nothing_of_a_withheld_row() -> None:
         [step], sources=_tables(), lists={}, dataset_id="pid", may_read=_hide(1), marked=()
     ).output  # fmt: skip
     tokens = [r.cells["r"] or "" for r in out.rows]
-    assert [t.split(":", 1)[1] for t in tokens] == ["visits#0", "visits#1"]
+    assert len(set(tokens)) == 2 and not any("#" in t or "visits" in t for t in tokens)
     assert [ref.row_index for r in out.rows for ref in r.refs] == [0, 2]
 
 
@@ -480,39 +480,91 @@ def test_without_a_marked_column_a_step_may_still_join_and_fold() -> None:
 # 2. `_ref` cannot be forged: a token is a row's own.
 
 
-@pytest.mark.parametrize(
-    "select",
-    [
-        "SELECT * REPLACE ('visits#0' AS _ref) FROM visits",
-        "SELECT * REPLACE (first(_ref) OVER () AS _ref) FROM visits",
-        "SELECT booking_id, first(_ref) OVER (ORDER BY booking_id) AS _ref FROM visits",
-        "SELECT * RENAME (_ref AS r), 1 AS n FROM visits",
-        "SELECT * RENAME (booking_id AS _ref_b) FROM visits",
-        "SELECT v.booking_id, w._ref FROM visits v JOIN visits w ON w.pin = v.pin",
-        "WITH c AS (SELECT * FROM visits) SELECT a.booking_id, b._ref FROM c a, c b",
-        "SELECT booking_id, (SELECT min(_ref) FROM pin_calls) AS _ref_c, _ref FROM visits",
-        "SELECT booking_id, _ref FROM visits WHERE pin IN (SELECT pin FROM pin_calls)",
-        "SELECT booking_id, _ref FROM visits WHERE EXISTS (SELECT 1 FROM pin_calls)",
-        "SELECT booking_id, _ref FROM visits QUALIFY row_number() OVER () = 1",
-        "SELECT COLUMNS('.*') FROM visits",
-        "SELECT x FROM (SELECT * EXCLUDE (visits._ref) FROM visits) x",
-        "SELECT * EXCLUDE (VISITS._REF) FROM visits",
-    ],
+REWRITES = "rewrites or renames _ref through"
+WINDOW = "window function"
+TWICE = "times, which a SQL step may not"
+SUBQUERY = "subquery inside an expression"
+IN_EXPRESSION = "reads _ref inside an expression"
+DROPS = "drops the _ref column"
+#: The second pass's two shapes: a string function over a row's own token, carried out through a
+#: struct's `.*` or a UNION's column, building another row's (the old `table#n` tokens).
+STRUCT_FORGERY = (
+    "SELECT q.booking_id, s.* FROM (SELECT booking_id, struct_pack(_ref := "
+    "regexp_replace(_ref, '#[0-9]+$', '#0')) AS s FROM visits) q"
 )
-def test_the_gate_refuses_a_forged_or_borrowed_ref(select: str) -> None:
-    """The review's item 2: a `_ref` rewritten, renamed, copied from another row (a window, a
-    self-join, a CTE read twice, a subquery) or dropped through a qualified EXCLUDE. Red with each
-    rule taken out of the gate."""
+UNION_FORGERY = (
+    "SELECT _ref, booking_id AS info FROM visits UNION ALL "
+    "SELECT regexp_replace(_ref, '#[0-9]+$', '#0'), _ref FROM pin_calls"
+)
+
+
+@pytest.mark.parametrize(
+    ("select", "words"),
+    [
+        ("SELECT * REPLACE ('visits#0' AS _ref) FROM visits", REWRITES),
+        ("SELECT * REPLACE (first(_ref) OVER () AS _ref) FROM visits", REWRITES),
+        ("SELECT booking_id, first(_ref) OVER (ORDER BY booking_id) AS _ref FROM visits", WINDOW),
+        ("SELECT * RENAME (_ref AS r), 1 AS n FROM visits", REWRITES),
+        ("SELECT * RENAME (booking_id AS _ref_b) FROM visits", REWRITES),
+        ("SELECT v.booking_id, w._ref FROM visits v JOIN visits w ON w.pin = v.pin", TWICE),
+        ("WITH c AS (SELECT * FROM visits) SELECT a.booking_id, b._ref FROM c a, c b", TWICE),
+        ("SELECT booking_id, (SELECT min(_ref) FROM pin_calls) AS _ref_c, _ref FROM visits",
+         SUBQUERY),
+        ("SELECT booking_id, _ref FROM visits WHERE pin IN (SELECT pin FROM pin_calls)", SUBQUERY),
+        ("SELECT booking_id, _ref FROM visits WHERE EXISTS (SELECT 1 FROM pin_calls)", SUBQUERY),
+        ("SELECT booking_id, _ref FROM visits QUALIFY row_number() OVER () = 1", WINDOW),
+        ("SELECT COLUMNS('.*') FROM visits", "COLUMNS("),
+        ("SELECT * EXCLUDE (visits._ref), 1 AS n FROM visits", DROPS),
+        ("SELECT * EXCLUDE (VISITS._REF) FROM visits", DROPS),
+        ("SELECT booking_id, _ref FROM visits ORDER BY _ref", IN_EXPRESSION),
+        ("SELECT booking_id, upper(_ref) AS r, _ref FROM visits", IN_EXPRESSION),
+        (STRUCT_FORGERY, IN_EXPRESSION),
+        (UNION_FORGERY, IN_EXPRESSION),
+    ],
+)  # fmt: skip
+def test_the_gate_refuses_a_forged_or_borrowed_ref(select: str, words: str) -> None:
+    """The review's item 2 and its second pass: a `_ref` rewritten, renamed, copied from another
+    row (a window, a self-join, a CTE read twice, a subquery), read inside an expression (a string
+    function over it, a struct carrying it) or dropped through a qualified EXCLUDE; each refused
+    for its own reason. Red with each rule taken out of the gate."""
     problems = _gate(_step(select, ("visits", "pin_calls")))
-    assert problems, select
+    assert any(words in p for p in problems), problems
+
+
+@pytest.mark.parametrize("select", [STRUCT_FORGERY, UNION_FORGERY])
+def test_a_ref_built_from_another_row_s_is_refused_at_run_staging(select: str) -> None:
+    """The second pass's shapes at the real call site, `run_staging`: both credited every row to
+    row 0, so `filtered_out` was wrong (rule 2). The gate refuses them (red with its `_ref`-in-an-
+    expression rule out)."""
+    with pytest.raises(StagingError) as refused:
+        _run(_step(select))
+    assert any(IN_EXPRESSION in p for p in refused.value.problems), refused.value.problems
+
+
+@pytest.mark.parametrize(
+    ("select", "inputs"),
+    [(STRUCT_FORGERY, ("visits",)), (UNION_FORGERY, ("visits", "pin_calls"))],
+)
+def test_past_the_gate_a_string_function_cannot_build_another_row_s_ref(
+    select: str, inputs: tuple[str, ...]
+) -> None:
+    """And past the gate, the run's own guard: each row's token is drawn at random, so a string
+    function over it gives back the row's own token, never another's; every row is credited to
+    itself and none is miscounted as filtered out (rule 2). Red with `table#n` tokens again: every
+    row credited to row 0, the others counted as filtered out."""
+    tables = [_tables()[name] for name in inputs]
+    out, report = run_sql_step(_step(select, inputs), tables, marked=(), check=False)
+    credited = [(ref.source, ref.row_index) for row in out.rows for ref in row.refs]
+    assert len(credited) == len(set(credited)) == sum(len(t.rows) for t in tables), credited
+    assert report.filtered_out == 0
 
 
 def test_a_token_written_by_hand_names_no_row() -> None:
-    """Tokens carry a nonce drawn for each run: one read from an earlier run, or guessed, names no
-    row of this one. Red with the nonce taken out (the token is `visits#0` again)."""
+    """Each row's token is drawn at random for each run: one read from an earlier run, or
+    guessed, names no row of this one. Red with predictable tokens (`visits#0` again)."""
     shown = _run(_step("SELECT booking_id, _ref AS r, _ref FROM visits", ("visits",)))
     earlier = shown.rows[0].cells["r"]
-    assert earlier and earlier != "visits#0"
+    assert earlier and "visits" not in earlier and "#" not in earlier
     for forged in (earlier, "visits#0"):
         with pytest.raises(StagingError) as refused:
             run_sql_step(

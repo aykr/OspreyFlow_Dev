@@ -10,7 +10,7 @@
     "pin_calls"
    ],
    "summary": "Counts each booking's PIN calls.",
-   "select": "SELECT v.booking_id, count(c._ref) AS calls, v._ref AS _ref, list(c._ref) AS _ref_calls FROM visits v LEFT JOIN pin_calls c ON c.pin = v.pin GROUP BY v.booking_id, v._ref ORDER BY v.booking_id"
+   "select": "SELECT v.booking_id, count(c.pin) AS calls, v._ref AS _ref, list(c._ref) AS _ref_calls FROM visits v LEFT JOIN pin_calls c ON c.pin = v.pin GROUP BY v.booking_id, v._ref ORDER BY v.booking_id"
   }
  ],
  "sources": {
