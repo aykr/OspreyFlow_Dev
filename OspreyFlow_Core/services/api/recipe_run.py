@@ -43,7 +43,7 @@ from .audit import AuditWriter
 from .auth import PrincipalResolver
 from .change_stream import ChangeStreamEntry, ChangeStreamWriter, touched_node_ids
 from .config import ApiConfig
-from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
+from .evaluation import DatasetReach, evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
 from .jobs import JobQueue
@@ -103,6 +103,9 @@ class RecipeRunDeps:
     #: ADR-140 Amendment 13: the deployment-wide lists and each dataset's subscriptions. None: a
     #: staged run reads the dataset's own lists alone.
     list_store: ListStore | None = None
+    #: L2.10 review item 4: whether a watch's owner still reaches its dataset
+    #: (`app.owner_reaches_dataset_in`). None: a watch with a dataset is not matched (fail closed).
+    watch_reach: DatasetReach | None = None
 
     @classmethod
     def from_state(cls, state: Any) -> RecipeRunDeps:
@@ -326,6 +329,7 @@ async def _execute_recipe_run(
             action_on_failure="watch_evaluation_failed",
             error_context={"load_id": load_id},
             principal_resolver=deps.principal_resolver,
+            watch_reach=deps.watch_reach,
         )
     await deps.audit.record(
         principal=principal,
@@ -440,6 +444,7 @@ async def _evaluate_watches_best_effort(
     action_on_failure: str,
     principal_resolver: PrincipalResolver,
     error_context: dict[str, Any] | None = None,
+    watch_reach: DatasetReach | None = None,
 ) -> None:
     """Shared by every producer route wired to synchronous evaluation this stage
     (`run_studio_recipe`, `link_resolution_route`) — the identical `principal_for_owner` and the
@@ -478,6 +483,7 @@ async def _evaluate_watches_best_effort(
             audit=audit,
             valkey=valkey,
             principal_for_owner=_principal_for_owner,
+            reaches_dataset=watch_reach,
         )
     except Exception as exc:  # noqa: BLE001 - a best-effort side channel, see this function's
         # own docstring: must never fail the caller's own already-succeeded primary operation.

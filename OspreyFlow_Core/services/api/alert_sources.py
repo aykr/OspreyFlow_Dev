@@ -118,7 +118,7 @@ def inventory(
         rows.append(AlertSource(
             id=rule.id, rule_id=f"typology:{rule.id}", name=rule.name, source="rule", kind="rule",
             maker=rule.owner_id, dataset_id=rule.dataset_id,
-            owner=team_names.get(team, team) if team else rule.owner_id,
+            owner=team or rule.owner_id, owner_name=team_names.get(team, team) if team else None,
             state="live" if rule.status == "active" else "stopped" if rule.status == "retired"
             else "draft",
         ))  # fmt: skip
@@ -142,4 +142,25 @@ def inventory(
     return [_with_counts(r, counts) for r in rows]
 
 
-__all__ = ["inventory"]
+def named(rows: Sequence[AlertSource], names: dict[str, str]) -> list[AlertSource]:
+    """ADR-106: each row's maker, owner and suppressor by name, from `names` (resolved by the route
+    for the ids of these rows alone). A team's name, set by `inventory`, is kept."""
+    out: list[AlertSource] = []
+    for row in rows:
+        owner = row.owner_name if row.owner_name is not None else names.get(row.owner)
+        suppressed = [q.model_copy(update={"by_name": names.get(q.by)}) for q in row.suppressed]
+        out.append(row.model_copy(update={
+            "maker_name": names.get(row.maker), "owner_name": owner, "suppressed": suppressed,
+        }))  # fmt: skip
+    return out
+
+
+def people_named(rows: Sequence[AlertSource]) -> list[str]:
+    """The person ids these rows show: each maker, each owner not a team, each suppressor."""
+    ids = {r.maker for r in rows}
+    ids |= {r.owner for r in rows if r.owner_name is None}
+    ids |= {q.by for r in rows for q in r.suppressed if q.by}
+    return sorted(ids)
+
+
+__all__ = ["inventory", "named", "people_named"]

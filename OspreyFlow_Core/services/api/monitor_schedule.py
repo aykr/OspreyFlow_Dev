@@ -8,7 +8,8 @@ also on its own schedule, daily at 06:00 Europe/London by default, set per watch
   after downtime, are skipped, not run;
 - **as its owner**, resolved afresh by the identity provider and confined to the watch's dataset, so
   it alerts only on what its owner may see (rule 3): an owner who can no longer sign in stops the
-  watch (`stopped`, shown on the watch, ADR-036);
+  watch (`stopped`, shown on the watch, ADR-036), and one who no longer holds a level on any case
+  reading the dataset is matched over nothing;
 - the same match, and the same overlap guard, as a load's (`evaluation.match_monitor_guarded`): an
   alert is raised only for a match unlike the last one raised.
 """
@@ -59,6 +60,9 @@ class MonitorScheduleExecutor:
     resolve_owner: Callable[[str], Awaitable[Principal]]
     #: Matches the watch as its owner and raises what it finds (`match_monitor_guarded`).
     match: Callable[[Monitor, Principal], Awaitable[list[Alert]]]
+    #: Whether the owner, as resolved, still reaches the watch's dataset (a level on a case reading
+    #: it, `owner_reaches_dataset_in`): the schedule never reads a dataset its owner has lost.
+    reaches_dataset: Callable[[Principal, str], Awaitable[bool]]
 
     async def tick(self, now: datetime) -> None:
         for monitor in await self.monitors.list_all_active():
@@ -92,11 +96,15 @@ class MonitorScheduleExecutor:
             await reply(self.valkey.delete(claim))
             return
         await self.monitors.record_slot(monitor.id, latest)
-        if monitor.dataset_id is not None:
-            owner = owner.model_copy(update={"datasets": [monitor.dataset_id]})
-        else:
-            owner = owner.model_copy(update={"datasets": []})  # no dataset, nothing to read
-        await self.match(monitor, owner)
+        if monitor.dataset_id is None:
+            return  # no dataset, nothing to read
+        # Narrowed to the watch's dataset only once the owner is shown still to reach it: an owner
+        # who has lost every case reading it is matched over nothing, and the slot is spent (the
+        # watch is not stopped: a case given back runs it again).
+        if not await self.reaches_dataset(owner, monitor.dataset_id):
+            log.info("watch %s: its owner no longer reaches its dataset", monitor.id)
+            return
+        await self.match(monitor, owner.model_copy(update={"datasets": [monitor.dataset_id]}))
 
 
 def monitor_matcher(state: Any) -> Callable[[Monitor, Principal], Awaitable[list[Alert]]]:

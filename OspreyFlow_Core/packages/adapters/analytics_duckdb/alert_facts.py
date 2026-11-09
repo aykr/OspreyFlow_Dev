@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from schemas.analytics import AlertTrendRequest
 from schemas.domain import Principal
-from schemas.rights import CUSTOM_ROLE_PREFIX
+from schemas.rights import teams_of
 
 from .access_filter import AccessFilter, SqlPredicate
 
@@ -55,9 +55,7 @@ def alert_predicate(
     # ADR-146 decision 8: a rule's alert routed to a named team is its case's, for the team's
     # members alone (`team` holds the team's role id; the reader's teams are the custom roles their
     # token carries now), never its deployer's as an owner.
-    teams = sorted(
-        r[len(CUSTOM_ROLE_PREFIX) :] for r in principal.roles if r.startswith(CUSTOM_ROLE_PREFIX)
-    )
+    teams = teams_of(principal.roles)
     routed = (
         f"OR (audience = 'routed' AND investigation_scope = ? "
         f"AND team IN ({','.join('?' for _ in teams)}))"

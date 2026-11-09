@@ -298,7 +298,9 @@ async def explain_with_evidence(
         kind=row.kind,
         severity=row.severity,
         audience=row.audience,
-        team=alert.team if row.audience == "team" else None,
+        # A routed alert's team is the one it was routed to (ADR-146 decision 8), not the unit
+        # its owner shares a watch with (the L2.10 review's item 9).
+        team=(alert.routed_team or alert.team) if row.audience == "team" else None,
     )
     return explanation, cited_events
 

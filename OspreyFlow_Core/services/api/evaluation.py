@@ -237,6 +237,11 @@ async def evaluate_hotlists_for_entry(
     return all_alerts
 
 
+#: Whether a principal still reaches a dataset: holds a level on a case reading it (the app's
+#: `owner_reaches_dataset_in`). A watch is matched within its dataset only while this holds.
+DatasetReach = Callable[[Principal, str], Awaitable[bool]]
+
+
 async def evaluate_monitors_for_entry(
     entry: ChangeStreamEntry,
     *,
@@ -247,8 +252,12 @@ async def evaluate_monitors_for_entry(
     audit: AuditWriter,
     valkey: Valkey,
     principal_for_owner: Callable[[str], Awaitable[Principal | None]],
+    reaches_dataset: DatasetReach | None = None,
 ) -> list[Alert]:
-    """One overlap-guarded evaluation per active monitor. Async since `06_DECISIONS.md` ADR-043
+    """One overlap-guarded evaluation per active monitor. A watch with a dataset is matched only
+    while its owner still reaches that dataset (`reaches_dataset`: a level on a case reading it,
+    asked of the owner's own principal); without the check, such a watch is not matched at all
+    (fail closed, rule 3). Async since `06_DECISIONS.md` ADR-043
     (Phase 8 Stage 1) — see `evaluate_hotlists_for_entry`'s own docstring above for the full
     reasoning, identical here. `policy` is not a parameter here — a
     monitor's own match is always principal-filtered by construction (this module's own docstring
@@ -268,8 +277,12 @@ async def evaluate_monitors_for_entry(
         if recipient is None:
             await monitor_store.set_status(monitor.id, "stopped")
             continue
-        # ADR-099 Amendment 3: the pattern is read, and matched, within the monitor's dataset.
+        # ADR-099 Amendment 3: the pattern is read, and matched, within the monitor's dataset, and
+        # only while its owner still reaches it (L2.10 review item 4): narrowing the owner to the
+        # dataset must never give back one they have lost.
         if monitor.dataset_id is not None:
+            if reaches_dataset is None or not await reaches_dataset(recipient, monitor.dataset_id):
+                continue
             recipient = recipient.model_copy(update={"datasets": [monitor.dataset_id]})
 
         async def _run(monitor: Monitor = monitor, recipient: Principal = recipient) -> list[Alert]:
@@ -362,6 +375,7 @@ def _match_signature(subgraph: Subgraph) -> str:
 
 __all__ = [
     "LOCK_TTL_SECONDS",
+    "DatasetReach",
     "MAX_TOUCHED_NODES_PER_EVALUATION",
     "EvaluationResult",
     "evaluate_hotlists_for_entry",

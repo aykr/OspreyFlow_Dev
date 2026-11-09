@@ -10,7 +10,7 @@ from services.api.config import PostgresConfig
 from services.api.monitors import MonitorNotFoundError, MonitorStore
 from services.api.pattern_store import PatternStore
 
-from schemas.domain import PatternEdge, PatternNode, PatternQuery, Principal
+from schemas.domain import MonitorScheduleInput, PatternEdge, PatternNode, PatternQuery, Principal
 
 OWNER = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 OTHER_ANALYST = Principal(id="analyst-2", clearance="OFFICIAL", org_unit="unit-1")
@@ -109,3 +109,30 @@ async def test_turning_the_same_pattern_into_a_monitor_twice_is_rejected_not_dup
     await store.create(OWNER, pattern_id=saved.pattern_id)
     with pytest.raises(Exception):  # asyncpg.UniqueViolationError, not re-wrapped by this store
         await store.create(OWNER, pattern_id=saved.pattern_id)
+
+
+async def test_a_watchs_schedule_is_set_by_its_owner_alone(
+    store: MonitorStore, pattern_store: PatternStore
+) -> None:
+    """The orchestrator's L2.10 review, item 5 (`PUT …/monitors/{id}/schedule`, ADR-146 decision 4):
+    another principal, of the same unit, asking to set the owner's watch's schedule is answered as
+    for a missing watch and changes nothing; the owner's own request lands. Red with the owner
+    clause in `MonitorStore.set_schedule` read as `$2::text IS NOT NULL` (its parameter kept): the
+    other analyst moved the owner's watch to weekly."""
+    saved = await pattern_store.save(
+        OWNER, pattern_id=None, name="Monitor fixture schedule", definition=_pattern()
+    )
+    monitor = await store.create(OWNER, pattern_id=saved.pattern_id)
+    try:
+        weekly = MonitorScheduleInput(every="weekly", hour=9, weekday=3)
+        with pytest.raises(MonitorNotFoundError):
+            await store.set_schedule(monitor.id, OTHER_ANALYST, weekly)
+        unchanged = await store.get_authorized(monitor.id, OWNER)
+        assert (unchanged.every, unchanged.hour) == (monitor.every, monitor.hour)
+        mine = await store.set_schedule(monitor.id, OWNER, weekly)
+        assert (mine.every, mine.hour, mine.weekday) == ("weekly", 9, 3)
+    finally:
+        async with store._pool.acquire() as conn:
+            await conn.execute("DELETE FROM monitors WHERE id = $1", monitor.id)
+        async with pattern_store._pool.acquire() as conn:
+            await conn.execute("DELETE FROM saved_patterns WHERE pattern_id = $1", saved.pattern_id)

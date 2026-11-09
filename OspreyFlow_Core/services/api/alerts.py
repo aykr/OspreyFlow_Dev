@@ -66,7 +66,7 @@ from schemas.domain import (
     NodeWrite,
     Principal,
 )
-from schemas.rights import CUSTOM_ROLE_PREFIX
+from schemas.rights import teams_of
 
 from .audit import AuditWriter
 from .dataset_scope import reach_clause
@@ -281,9 +281,7 @@ def reader_teams(principal: Principal) -> list[str]:
     """The teams the reader is in on this request: each custom role (`role:<id>`) their token
     carries (ADR-145 Amendment 5 point 5), read from the principal every time and never kept, so
     leaving the role is leaving the team at once."""
-    return sorted(
-        r[len(CUSTOM_ROLE_PREFIX) :] for r in principal.roles if r.startswith(CUSTOM_ROLE_PREFIX)
-    )
+    return teams_of(principal.roles)
 
 
 #: ADR-146 decision 8, a rule 3 read: a typology alert routed to a team is read only by the team's
@@ -375,8 +373,10 @@ def _row_to_queue_row(row: asyncpg.Record) -> QueueRow:
 _log = logging.getLogger(__name__)
 
 #: ADR-134 decision 3: an alert as the analytics store keeps it for alert trends — its kind,
-#: severity and audience read by the queue's own expressions, so the trend and the queue cannot
-#: disagree about who an alert is for.
+#: severity and audience read by the queue's own expressions. One exception (ADR-146 decision 8):
+#: an alert routed to a team is `team` in the queue but `routed` as a fact (`_row_to_fact`), and
+#: trends count it in its case for the team's members alone, where the queue also shows it to the
+#: home case's Authors — so a trend may count fewer of them than the queue lists, never more.
 _FACT_COLUMNS = (
     f"id, rule_id, owner_id, investigation_id, created_at, dataset_id, typology, status, "
     f"disposition, team, routed_team, handlings, {_KIND_SQL} AS kind, "

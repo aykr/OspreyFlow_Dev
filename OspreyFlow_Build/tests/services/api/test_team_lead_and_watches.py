@@ -231,29 +231,67 @@ class _Valkey:
 OWNER = Principal(id="owner", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 
 
-def _executor(monitors: _Monitors, valkey: _Valkey, resolve: Any) -> tuple[MonitorScheduleExecutor, list[Principal]]:
+class _Cases:
+    """`InvestigationStore.get_authorized` as the real store refuses: a principal holding no level
+    on the case is told it does not exist (no level at all, a 404), whatever their roles."""
+
+    def __init__(self, members: dict[str, set[str]]) -> None:
+        self.members = members
+        self.asked: list[tuple[str, str]] = []
+
+    async def get_authorized(self, case: str, principal: Principal, *, need: Any = None) -> object:
+        from services.api.investigations import InvestigationNotFoundError
+
+        self.asked.append((case, principal.id))
+        if principal.id not in self.members.get(case, set()):
+            raise InvestigationNotFoundError(case)
+        return object()
+
+
+def _reach(members: dict[str, set[str]], reading: dict[str, list[str]] | None = None) -> Any:
+    """The app's own `owner_reaches_dataset_in`, over an in-memory dataset store (case -> its
+    datasets) and `_Cases`: the check the running Conduit wires into the schedule."""
+    from services.api.app import owner_reaches_dataset_in
+    from services.api.datasets import InMemoryDatasetStore
+
+    datasets = InMemoryDatasetStore()
+    datasets.cases.update(reading if reading is not None else {"case-1": ["ds-1"]})
+    return owner_reaches_dataset_in(datasets, _Cases(members))  # type: ignore[arg-type]
+
+
+#: The owner holds a level on case-1, which reads ds-1.
+REACHES = {"case-1": {"owner"}}
+
+
+def _executor(monitors: _Monitors, valkey: _Valkey, resolve: Any,
+              reach: Any = None) -> tuple[MonitorScheduleExecutor, list[Principal]]:  # fmt: skip
     matched: list[Principal] = []
 
     async def match(monitor: Monitor, owner: Principal) -> list[Alert]:
         matched.append(owner)
         return []
 
-    return MonitorScheduleExecutor(monitors=monitors, valkey=valkey, resolve_owner=resolve, match=match), matched  # type: ignore[arg-type]
+    return MonitorScheduleExecutor(monitors=monitors, valkey=valkey, resolve_owner=resolve, match=match,  # type: ignore[arg-type]
+                                   reaches_dataset=reach or _reach(REACHES)), matched  # fmt: skip
 
 
 async def test_a_watch_runs_on_its_schedule_as_its_owner_within_its_dataset() -> None:
     async def resolve(owner_id: str) -> Principal:
         return OWNER
 
-    for dataset, reads in (("ds-1", ["ds-1"]), (None, [])):
-        monitors, valkey = _Monitors(_monitor(dataset_id=dataset)), _Valkey()
-        executor, matched = _executor(monitors, valkey, resolve)
-        await executor.tick(NOW)  # no load: the schedule alone runs it
-        (who,) = matched
-        assert (who.id, who.datasets) == ("owner", reads)
-        assert len(monitors.slots) == 1
-        await executor.tick(NOW)
-        assert len(matched) == 1, "one run per slot"
+    monitors, valkey = _Monitors(_monitor(dataset_id="ds-1")), _Valkey()
+    executor, matched = _executor(monitors, valkey, resolve)
+    await executor.tick(NOW)  # no load: the schedule alone runs it
+    (who,) = matched
+    assert (who.id, who.datasets) == ("owner", ["ds-1"])
+    assert len(monitors.slots) == 1
+    await executor.tick(NOW)
+    assert len(matched) == 1, "one run per slot"
+    # A watch with no dataset (made before ADR-099, until `stamp_datasets` places it) reads nothing.
+    monitors = _Monitors(_monitor(dataset_id=None))
+    executor, matched = _executor(monitors, _Valkey(), resolve)
+    await executor.tick(NOW)
+    assert matched == [] and len(monitors.slots) == 1
     never, _ = _executor(_Monitors(_monitor(every="never")), _Valkey(), resolve)
     await never.tick(NOW)
 
@@ -336,10 +374,91 @@ async def test_a_scheduled_watch_alerts_only_on_what_its_maker_may_see() -> None
                                    valkey=_Valkey(), investigation_id=None)  # type: ignore[arg-type]  # fmt: skip
 
     executor = MonitorScheduleExecutor(monitors=_Monitors(_monitor()), valkey=_Valkey(),  # type: ignore[arg-type]
-                                       resolve_owner=resolve, match=match)  # fmt: skip
+                                       resolve_owner=resolve, match=match,
+                                       reaches_dataset=_reach(REACHES))  # fmt: skip
     await executor.tick(NOW)
     (alert,) = saves.saved
     assert alert.referent_node_ids == ["n-mine"] and alert.owner_id == "owner"
+
+
+async def test_a_scheduled_watch_whose_owner_has_lost_its_dataset_alerts_on_nothing() -> None:
+    """The orchestrator's L2.10 review, item 4. The owner is resolved as the identity provider gives
+    them, and narrowing them to the watch's dataset must never give back one they have lost: they
+    have left case-1, the only case reading ds-1, so the watch reads nothing and raises nothing,
+    and the check was asked of the owner as resolved (`owner_reaches_dataset_in`, over the case's
+    own Viewer check). Red with the reach check removed from `MonitorScheduleExecutor._consider`:
+    the owner, narrowed to ds-1, alerted on n-mine."""
+    graph = _ScopedGraph({"n-mine": "ds-1"})
+    saves = _Saves()
+    cases = _Cases({"case-1": {"someone-else"}})  # the owner holds no level there now
+
+    async def resolve(owner_id: str) -> Principal:
+        return OWNER
+
+    async def match(monitor: Monitor, owner: Principal) -> list[Alert]:
+        return await match_monitor(monitor, owner, graph=graph, monitor_store=_Monitors(monitor),  # type: ignore[arg-type]
+                                   pattern_store=_Saved(), alert_store=saves, audit=_Audit(),  # type: ignore[arg-type]
+                                   valkey=_Valkey(), investigation_id=None)  # type: ignore[arg-type]  # fmt: skip
+
+    from services.api.app import owner_reaches_dataset_in
+    from services.api.datasets import InMemoryDatasetStore
+
+    datasets = InMemoryDatasetStore()
+    datasets.cases.update({"case-1": ["ds-1"], "case-2": ["ds-2"]})
+    monitors = _Monitors(_monitor())
+    executor = MonitorScheduleExecutor(monitors=monitors, valkey=_Valkey(),  # type: ignore[arg-type]
+                                       resolve_owner=resolve, match=match,
+                                       reaches_dataset=owner_reaches_dataset_in(datasets, cases))  # type: ignore[arg-type]  # fmt: skip
+    await executor.tick(NOW)
+    assert saves.saved == []
+    assert cases.asked == [("case-1", "owner")], "asked of the owner as resolved, for ds-1's case alone"
+    assert len(monitors.slots) == 1 and monitors.status == [], "the slot is spent; the watch is not stopped"
+    # Given the case back, the next slot alerts again.
+    cases.members["case-1"].add("owner")
+    monitors.slots.clear()
+    await MonitorScheduleExecutor(monitors=monitors, valkey=_Valkey(), resolve_owner=resolve, match=match,  # type: ignore[arg-type]
+                                  reaches_dataset=owner_reaches_dataset_in(datasets, cases)).tick(NOW)  # type: ignore[arg-type]  # fmt: skip
+    assert [a.referent_node_ids for a in saves.saved] == [["n-mine"]]
+
+
+async def test_a_loads_watch_whose_owner_has_lost_its_dataset_is_not_matched(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Item 4's load path (`evaluate_monitors_for_entry`, evaluation.py): a load into ds-1 evaluates
+    the watch only while its owner reaches ds-1, and without the check at all it is not matched
+    (fail closed). Red with the reach check removed from the loop: the owner, narrowed to ds-1,
+    was matched in all three."""
+    from services.api import evaluation
+    from services.api.change_stream import ChangeStreamEntry
+
+    matched: list[Principal] = []
+
+    async def match(monitor: Monitor, recipient: Principal, **_: Any) -> list[Alert]:
+        matched.append(recipient)
+        return []
+
+    class _Ran:
+        def alert_list(self) -> list[Alert]:
+            return []
+
+    monkeypatch.setattr(evaluation, "match_monitor", match)
+    monkeypatch.setattr(evaluation, "_with_overlap_guard", lambda key, valkey, run: _guarded(run))
+
+    async def _guarded(run: Any) -> Any:
+        await run()
+        return _Ran()
+
+    async def owner(owner_id: str) -> Principal:
+        return OWNER
+
+    entry = ChangeStreamEntry(entry_id="1-0", source="ingest", node_ids=["n-mine"], edge_ids=[],
+                              investigation_id="case-1", recorded_at=NOW)  # fmt: skip
+    common = {"graph": object(), "monitor_store": _Monitors(_monitor()), "pattern_store": object(),
+              "alert_store": object(), "audit": _Audit(), "valkey": _Valkey(), "principal_for_owner": owner}
+    await evaluation.evaluate_monitors_for_entry(entry, **common, reaches_dataset=_reach(REACHES))  # type: ignore[arg-type]
+    assert [(p.id, p.datasets) for p in matched] == [("owner", ["ds-1"])]
+    matched.clear()
+    await evaluation.evaluate_monitors_for_entry(entry, **common, reaches_dataset=_reach({"case-1": set()}))  # type: ignore[arg-type]
+    await evaluation.evaluate_monitors_for_entry(entry, **common)  # type: ignore[arg-type]
+    assert matched == []
 
 
 async def test_a_suppression_on_a_closed_alert_is_refused() -> None:
@@ -368,3 +487,113 @@ def test_a_routed_rules_run_counts_are_its_teams_alone() -> None:
     (outside,) = runs_for_reader(rule, [run], LEAD.model_copy(update={"roles": ["analyst"]}))
     assert inside.alerts == 3
     assert outside.alerts == 0 and "3" not in outside.words
+
+
+# --- the teams a rule may go to (`GET …/alert-teams`) --------------------------------------------
+
+
+class _AllTeams(_Teams):
+    """`custom_roles` as the route reads it: every team today, and one by its role id."""
+
+    def __init__(self, *teams: Team) -> None:
+        super().__init__(teams[0])
+        self.all = list(teams)
+
+    async def teams(self, today: date) -> list[Team]:
+        return self.all
+
+    async def team(self, role_id: str, today: date) -> Team | None:
+        return next((t for t in self.all if t.role_id == role_id), None)
+
+
+class _Person:
+    def __init__(self, pid: str, roles: list[str], *, enabled: bool = True, system: bool = False) -> None:
+        self.id, self.roles, self.enabled, self.system_account = pid, roles, enabled, system
+
+
+class _Directory:
+    def __init__(self, people: list[_Person]) -> None:
+        self.people, self.asked = people, 0
+
+    async def list_people(self) -> list[_Person]:
+        self.asked += 1
+        return self.people
+
+
+class _Grants:
+    def __init__(self, grants: dict[str, AccessLevel]) -> None:
+        self.grants = grants
+
+    async def list_grants(self, case: str) -> dict[str, AccessLevel]:
+        return self.grants
+
+
+async def test_the_teams_a_rule_may_go_to_list_members_to_the_lead_alone() -> None:
+    """The orchestrator's L2.10 review, item 2 (`GET …/alert-teams`, `read_alert_teams`). The lead
+    is told the members of their own team who hold the case at Editor or above (never a disabled
+    person or a service account, nor a Viewer); a rule's deployer is told every team by name and no
+    one in any; a reader who neither routes rules nor leads a team is told no team at all, and the
+    directory is not even asked. Red with the members' lead check (`team.role_id in led`) read as
+    true: the lead of team-7 was told team-8's member; and with the no-right guard removed: the
+    Reports Viewer was told both teams."""
+    from types import SimpleNamespace
+
+    from services.api.app import read_alert_teams
+
+    seven = Team(role_id="team-7", display_name="Prison intel", mailbox="m@x", lead="lead")
+    eight = Team(role_id="team-8", display_name="Fraud", mailbox="f@x", lead="someone-else")
+    directory = _Directory([
+        _Person("lead", ["role:team-7"]), _Person("member", ["role:team-7"]),
+        _Person("viewer-member", ["role:team-7"]), _Person("gone", ["role:team-7"], enabled=False),
+        _Person("robot", ["role:team-7"], system=True), _Person("fraud", ["role:team-8"]),
+    ])  # fmt: skip
+    grants = _Grants({"lead": AccessLevel.EDITOR, "member": AccessLevel.EDITOR, "gone": AccessLevel.EDITOR,
+                      "robot": AccessLevel.EDITOR, "viewer-member": AccessLevel.VIEWER,
+                      "fraud": AccessLevel.EDITOR})  # fmt: skip
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(custom_roles=_AllTeams(seven, eight),
+                                                                        identity_admin=directory)))  # fmt: skip
+    case = SimpleNamespace(id=CASE)
+
+    async def ask(principal: Principal) -> dict[str, tuple[bool, list[str]]]:
+        teams = await read_alert_teams(request, case, principal, grants)  # type: ignore[arg-type]
+        return {t.role_id: (t.lead, t.members) for t in teams}
+
+    lead = LEAD.model_copy(update={"roles": ["reports_viewer", "role:team-7"]})  # no rule right
+    assert await ask(lead) == {"team-7": (True, ["lead", "member"]), "team-8": (False, [])}
+    deployer = Principal(id="deployer", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+    assert await ask(deployer) == {"team-7": (False, []), "team-8": (False, [])}
+    asked = directory.asked
+    viewer = Principal(id="rv", clearance="OFFICIAL", org_unit="unit-1", roles=["reports_viewer"])
+    assert await ask(viewer) == {}
+    assert directory.asked == asked, "a reader shown no team causes no directory read"
+
+
+def test_what_raises_alerts_names_its_people_and_asks_for_no_one_else() -> None:
+    """Item 3 (ADR-106, rule 7): the rows' maker, owner and suppressor are asked for by id, the
+    team a routed rule goes to is never asked for (it is named already), and each is served by
+    name. Red with `people_named` leaving the suppressors out: the lead was served unnamed."""
+    from services.api.alert_sources import named, people_named
+
+    from schemas.domain import AlertSource, SuppressedAlert
+
+    rows = [
+        AlertSource(id="h", rule_id="hotlist:h", name="Hotlist", source="watch", kind="hotlist",
+                    maker="owner", owner="owner", state="live",
+                    suppressed=[SuppressedAlert(alert_id="x", until=TODAY, reason="known", by="lead")]),
+        AlertSource(id="r", rule_id="typology:r", name="Routed", source="rule", kind="rule",
+                    maker="author", owner="team-7", owner_name="Prison intel", state="live"),
+    ]  # fmt: skip
+    asked = people_named(rows)
+    assert asked == ["author", "lead", "owner"], "the rows' people, the suppressor included, and never the team's id"
+    directory = {"owner": "Mo Maker", "author": "Ann Author", "lead": "Lee Lead", "team-7": "WRONG"}
+    served = named(rows, {i: directory[i] for i in asked})
+    assert [(r.maker_name, r.owner_name) for r in served] == [("Mo Maker", "Mo Maker"), ("Ann Author", "Prison intel")]
+    assert served[0].suppressed[0].by_name == "Lee Lead"
+
+
+async def test_a_routed_alerts_explanation_names_the_team_it_was_routed_to() -> None:
+    """Item 9: the explanation's team is the one the alert was routed to, not the unit its owner
+    shares watches with. Red with `explain_with_evidence` reading `alert.team`: it said unit-1."""
+    store, graph, analytics = _team_world(_routed(team="unit-1"))
+    why = await alert_queue.explain(store, graph, analytics, CASE, "r1", MEMBER)  # type: ignore[arg-type]
+    assert (why.audience, why.team) == ("team", "team-7")

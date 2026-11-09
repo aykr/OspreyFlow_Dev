@@ -633,6 +633,7 @@ from .entity_pictures import (
     PictureNotFoundError,
     PictureSetResponse,
 )
+from .evaluation import DatasetReach
 from .event_scope import own_events_only
 from .explore import (
     ExploreService,
@@ -1465,6 +1466,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app, app.state.principal_resolver.resolve_for_owner_detailed
             ),
             match=monitor_matcher(app.state),
+            reaches_dataset=owner_reaches_dataset_in(
+                lambda: app.state.datasets, lambda: app.state.investigations
+            ),
         ),
     )  # fmt: skip
     monitoring_task = asyncio.create_task(run_every_minute(app.state.monitoring_schedules))
@@ -1996,6 +2000,38 @@ def holds_a_level_in(
         return True
 
     return holds
+
+
+def owner_reaches_dataset_in(
+    datasets: DatasetStore | Callable[[], DatasetStore],
+    investigations: InvestigationStore | Callable[[], InvestigationStore],
+) -> Callable[[Principal, str], Any]:
+    """Whether a watch's owner still reaches its dataset: holds a level, by the case's own Viewer
+    check, on a case reading it (L2.10 review item 4). Asked of the owner's own principal as
+    resolved for the run, never of a principal narrowed to the dataset, which would reach it by
+    construction."""
+    holds = holds_a_level_in(investigations)
+
+    async def reaches(owner: Principal, dataset_id: str) -> bool:
+        store = datasets() if callable(datasets) else datasets
+        if store is None:
+            return False  # no dataset store, no case to reach it through
+        for case in await store.cases_reading(dataset_id):
+            if await holds(owner, case):
+                return True
+        return False
+
+    return reaches
+
+
+def get_watch_reach(request: Request) -> DatasetReach:
+    """`owner_reaches_dataset_in` over this app's stores, for a route whose load runs watches."""
+    return owner_reaches_dataset_in(  # type: ignore[no-any-return]
+        lambda: request.app.state.datasets, lambda: get_investigations(request)
+    )
+
+
+WatchReachDep = Annotated[DatasetReach, Depends(get_watch_reach)]
 
 
 def get_principal_resolver(request: Request) -> PrincipalResolver:
@@ -5094,6 +5130,7 @@ async def link_resolution_route(
     patterns_store: PatternsStoreDep,
     alerts_store: AlertsStoreDep,
     principal_resolver: PrincipalResolverDep,
+    watch_reach: WatchReachDep,
 ) -> ResolutionOutcome:
     """Phase 7 Stage 6c: a manual link is a `SAME_AS` write that can grow a saved pattern's own
     match set (`06_DECISIONS.md` ADR-037's own change-stream amendment names manual assertion as
@@ -5119,6 +5156,7 @@ async def link_resolution_route(
             investigation_id=investigation.id,
             action_on_failure="watch_evaluation_failed",
             principal_resolver=principal_resolver,
+            watch_reach=watch_reach,
         )
     await audit.record(
         principal=principal,
@@ -12643,6 +12681,7 @@ async def run_studio_recipe(
     kyc_expiries: KycExpiriesDep,
     recipe_runs: RecipeRunsDep,
     studio_recipes: StudioRecipesDep,
+    watch_reach: WatchReachDep,
     influencers: OptionalStrengthInfluencersDep = None,
     models: TargetModelsDep = None,  # type: ignore[assignment]
     staging_storage: StagingStorageDep = None,  # type: ignore[assignment]
@@ -12734,6 +12773,7 @@ async def run_studio_recipe(
             target_models=models,
             staging_storage=staging_storage,
             list_store=list_store,
+            watch_reach=watch_reach,
         ),
         principal=principal,
         recipe=recipe,
@@ -13882,9 +13922,11 @@ async def read_alert_sources(
         request, [t for r in rules if (t := sentence_rules.routed_team_of(r)) is not None]
     )
     rows = alert_sources.inventory(rules, hotlists, monitors, patterns, queue, teams)
-    makers = sorted({r.maker for r in rows})
-    names = await principal_names.display_names(makers) if makers else {}
-    rows = [r.model_copy(update={"maker_name": names.get(r.maker)}) for r in rows]
+    # ADR-106 (and its Amendment 1's shape): the people these rows show, by name, asked only for
+    # the ids of the rows served (the L2.10 review's item 3; rule 7).
+    people = alert_sources.people_named(rows)
+    names = await principal_names.display_names(people) if people else {}
+    rows = alert_sources.named(rows, names)
     await audit.record(
         principal=principal,
         action="read_alert_sources",

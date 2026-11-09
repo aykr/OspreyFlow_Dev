@@ -625,3 +625,120 @@ async def test_the_queue_reads_on_a_fresh_database_with_the_alert_store_alone() 
     finally:
         await conn.execute(f"DROP SCHEMA {schema} CASCADE")
         await conn.close()
+
+
+# --- What raises alerts (`GET …/alert-sources`), through the route ----------------------------
+
+
+class _Names:
+    """The ADR-106 directory: records the ids it is asked for, and knows only its own accounts."""
+
+    def __init__(self, known: dict[str, str]) -> None:
+        self.known, self.asked = known, []  # type: ignore[var-annotated]
+
+    async def display_names(self, ids: Any) -> dict[str, str]:
+        self.asked.extend(ids)
+        return {i: self.known[i] for i in ids if i in self.known}
+
+
+class _NoAudit:
+    async def record(self, **_: Any) -> None:
+        return None
+
+
+async def test_what_raises_alerts_lists_only_the_readers_watches_and_counts_only_what_they_may_see(
+    stores: Any,
+) -> None:
+    """The orchestrator's L2.10 review, item 1 (rule 4), through `read_alert_sources` over the real
+    alert, hotlist, monitor and pattern stores: another person's watch is not listed, nor its owner
+    looked up (ADR-106 decision 3); a rule routed to a team counts its alerts for the team's members
+    and 0 for anyone else in the case; an alert any of whose evidence the reader may not read is not
+    counted. Item 3: each person is served by name. Red with `HotlistStore.list_authorized`'s owner
+    clause read as `$1::text IS NOT NULL` (the other analyst's hotlist listed, its owner asked
+    for); with `_routed_sql`'s first clause read as `true` (the routed rule counted 2 for the
+    non-member); and with the route counting from `list_queue`'s rows rather than the reader's
+    queue (the hidden alert counted)."""
+    from types import SimpleNamespace
+
+    from services.api.app import read_alert_sources
+    from services.api.monitors import MonitorStore
+    from services.api.pattern_store import PatternStore
+
+    from schemas.domain import PatternEdge, PatternNode, PatternQuery, TypologyRule
+    from schemas.sentences import RuleSentence, SentenceRuleParams
+
+    hotlists, alerts = stores
+    dsn = PostgresConfig.from_env().dsn
+    monitors, patterns = await MonitorStore.connect(dsn), await PatternStore.connect(dsn)
+    case, team = new_id(), f"team-{new_id()}"
+    member, outsider, other = _person(roles=[f"role:{team}"]), _person(), _person()
+    alerts.answers_for = _answering({})
+    made: dict[str, list[str]] = {"hotlists": [], "monitors": [], "patterns": []}
+    try:
+        mine = await _hotlist(hotlists, member, "only_me")
+        theirs = await _hotlist(hotlists, other, "team")
+        made["hotlists"] += [mine, theirs]
+        definition = PatternQuery(nodes=[PatternNode(var="p", entity_type="Person"),
+                                         PatternNode(var="e", entity_type="Endpoint")],
+                                  edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")])  # fmt: skip
+        their_pattern = await patterns.save(other, pattern_id=None, name=f"Theirs {new_id()}", definition=definition)
+        made["patterns"].append(their_pattern.pattern_id)
+        made["monitors"].append((await monitors.create(other, pattern_id=their_pattern.pattern_id)).id)
+
+        def rule(rid: str, sentence: dict[str, Any]) -> TypologyRule:
+            return TypologyRule(id=rid, investigation_id=case, owner_id=member.id, name=rid,
+                                created_at=NOW, trigger="post_commit", dataset_id="ds-1",
+                                params=SentenceRuleParams(pattern_id="p",
+                                                          sentence=RuleSentence.model_validate(sentence)))  # fmt: skip
+
+        routed_rule = rule(f"routed-{new_id()}", {"subject": "Person", "team": "team", "team_id": team})
+        plain_rule = rule(f"plain-{new_id()}", {"subject": "Person"})
+        recent = datetime.now(UTC) - timedelta(hours=1)
+        for _ in range(2):
+            await alerts.save(_routed(case, member, team).model_copy(
+                update={"rule_id": f"typology:{routed_rule.id}", "created_at": recent}))
+        await alerts.save(_alert(f"typology:{plain_rule.id}", member, investigation_id=case, typology="sentence",
+                                 referent_node_ids=["n-1"], created_at=recent))  # fmt: skip
+        await alerts.save(_alert(f"typology:{plain_rule.id}", member, investigation_id=case, typology="sentence",
+                                 referent_node_ids=["n-secret"], created_at=recent))  # fmt: skip
+
+        class _Rules:
+            async def list_for_case(self, investigation_id: str, principal: Principal) -> list[TypologyRule]:
+                return [routed_rule, plain_rule]
+
+        class _OneTeam:
+            async def team(self, role_id: str, today: date) -> Any:
+                return SimpleNamespace(display_name="Prison intel") if role_id == team else None
+
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(custom_roles=_OneTeam())))
+        graph = _Graph({**GRAPH_NAMES, "n-secret": "Hidden"}, hidden={"n-secret"})
+
+        async def read(reader: Principal) -> tuple[dict[str, Any], _Names]:
+            names = _Names({member.id: "Mo Member", other.id: "Oli Other"})
+            served = await read_alert_sources(
+                request, SimpleNamespace(id=case), reader, graph, NO_TRANSACTIONS, alerts, _Rules(),  # type: ignore[arg-type]
+                hotlists, monitors, patterns, names, _NoAudit(),  # type: ignore[arg-type]
+            )
+            return {s.id: s for s in served.sources}, names
+
+        by_id, names = await read(member)
+        assert set(by_id) == {routed_rule.id, plain_rule.id, mine}, "another's hotlist and watch are not listed"
+        assert by_id[routed_rule.id].alerts_30_days == 2
+        assert by_id[plain_rule.id].alerts_30_days == 1, "the alert citing a hidden node is not counted"
+        assert other.id not in names.asked, "the hidden watch's owner is never looked up"
+        assert (by_id[mine].maker_name, by_id[mine].owner_name) == ("Mo Member", "Mo Member")
+        assert by_id[routed_rule.id].owner_name == "Prison intel"
+
+        by_id, _ = await read(outsider)
+        assert by_id[routed_rule.id].alerts_30_days == 0 and by_id[routed_rule.id].last_fired_at is None
+        assert by_id[plain_rule.id].alerts_30_days == 1
+    finally:
+        alerts.answers_for = None
+        async with hotlists._pool.acquire() as conn:  # noqa: SLF001 - the test's own clean-up
+            await conn.execute("DELETE FROM hotlists WHERE id = ANY($1::text[])", made["hotlists"])
+        async with monitors._pool.acquire() as conn:  # noqa: SLF001
+            await conn.execute("DELETE FROM monitors WHERE id = ANY($1::text[])", made["monitors"])
+        async with patterns._pool.acquire() as conn:  # noqa: SLF001
+            await conn.execute("DELETE FROM saved_patterns WHERE pattern_id = ANY($1::text[])", made["patterns"])
+        await monitors.close()
+        await patterns.close()

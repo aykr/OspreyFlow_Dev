@@ -67,6 +67,8 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "kyc_expiries": given["kyc_expiries"],
         "recipe_runs": given["recipe_runs"],
         "influencers": given["influencers"],
+        # L2.10 review item 4: whether a watch's owner still reaches its dataset.
+        "watch_reach": given["watch_reach"],
         # ADR-140 Amendment 12: a staged pipeline's lists and the store their rows are kept in.
         "models": given["target_models"], "staging_storage": given["staging_storage"],
         # ADR-140 Amendment 13: the deployment-wide lists a staged run's Lookups may subscribe to.
