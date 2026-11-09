@@ -66,6 +66,7 @@ describe("the Alert monitoring board", () => {
     const chooser = await screen.findByRole("group", { name: "Choose a dashboard" });
     expect(within(chooser).getAllByRole("button").map((b) => b.textContent)).toEqual(["Alert monitoring", "Fraud board"]);
     await screen.findByRole("list", { name: "Raised by rule" });
+    expect(document.querySelector(".embedded-dashboard")).toBeNull();
     expect(asked.some((a) => a.includes("guest-token"))).toBe(false);
     expect(embed).not.toHaveBeenCalled();
     fireEvent.click(within(chooser).getByRole("button", { name: "Fraud board" }));

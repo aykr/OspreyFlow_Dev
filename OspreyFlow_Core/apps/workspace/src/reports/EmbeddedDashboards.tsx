@@ -66,8 +66,10 @@ export function EmbeddedDashboards({ embed = embedDashboard as Embed, leading, .
   }, [api.apiBaseUrl, api.bearerToken]);
 
   useEffect(() => {
+    // No mount while the Glass draws its own board (the render below holds it back), so the embed
+    // starts only for a Superset board: one guard, red alone (AlertMonitoringBoard.test.tsx).
     const point = mount.current;
-    if (!open || !point || drawsItself) return;
+    if (!open || !point) return;
     let cancelled = false;
     let stopFollowing: (() => void) | undefined;
     setProblem(null);

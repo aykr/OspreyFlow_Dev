@@ -3,6 +3,7 @@
 // always written, and the rule groups' names. Colours are the design tokens' channels only.
 import type { ReactNode } from "react";
 
+import type { MonitoringFigures } from "../../../../packages/schemas/generated";
 import { typologyLabel } from "../alerts/names";
 
 export const NUMBER = new Intl.NumberFormat("en-GB");
@@ -16,8 +17,15 @@ export function plural(n: number, one: string, many = `${one}s`): string {
 export const CHANNELS = ["--ch-azure", "--ch-ochre", "--ch-jade", "--ch-plum", "--ch-rose", "--ch-cyan", "--ch-indigo", "--ch-moss"];
 export const channel = (i: number): string => CHANNELS[Math.min(i, CHANNELS.length - 1)] ?? "--brass";
 
-/** The age bands the Conduit counts open alerts in (`reports.AGE_LABELS`), in order. */
-export const AGE_BANDS = ["under a day", "1 to 7 days", "7 to 30 days", "over 30 days"] as const;
+/** The generated age band (`schemas.domain.AgeBand`), read from the feed's own type. */
+export type AgeBand = NonNullable<MonitoringFigures["open_by_source"]>[number]["age"];
+
+/** The age bands the Conduit counts open alerts in (`reports.AGE_LABELS`), in order. Typed against
+ * the generated `AgeBand` both ways: a band the schema drops is a type error here, and so is one it
+ * adds that this list leaves out (`_EVERY_BAND`). */
+export const AGE_BANDS = ["under a day", "1 to 7 days", "7 to 30 days", "over 30 days"] as const satisfies readonly AgeBand[];
+const _EVERY_BAND: Exclude<AgeBand, (typeof AGE_BANDS)[number]> extends never ? true : never = true;
+void _EVERY_BAND;
 
 /** A rule group as the feed labels it: `typology` with its typology, `hotlists` or `monitors`. */
 export interface RuleGroup {

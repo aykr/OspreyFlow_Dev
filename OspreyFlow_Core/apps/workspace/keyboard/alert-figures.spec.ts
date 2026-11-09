@@ -48,9 +48,22 @@ test("the Alert monitoring board is filtered to a rule by keyboard", async ({ pa
   await page.goto("/keyboard/alert-figures-harness.html?board=1");
   const raised = page.getByRole("list", { name: "Raised by rule" });
   await expect(raised.getByRole("listitem")).toHaveCount(2);
-  // A native select, operated by the platform's own keys — the convention `reports.spec.ts` follows.
-  await page.getByRole("combobox", { name: "Rule" }).selectOption("hotlists:");
+  // A native select operated by its own keys, not `selectOption` (rule 13; the orchestrator's review
+  // of 211a6dc). Typed letters, as `keyboard.spec.ts`'s `chooseOption` chooses: a closed select takes
+  // an arrow key differently by platform (macOS opens the menu), letters choose everywhere.
+  const rule = page.getByRole("combobox", { name: "Rule" });
+  await rule.focus();
+  await page.keyboard.type("Hotl");
+  await expect(rule).toHaveValue("hotlists:");
   await expect(raised.getByRole("listitem")).toHaveText(["Hotlists: 2"]);
+  // The Period select beside it, reached by Tab: the figures are asked for again over its weeks.
+  await page.keyboard.press("Tab");
+  const period = page.getByRole("combobox", { name: "Period" });
+  await expect(period).toBeFocused();
+  await page.keyboard.type("Last 26");
+  await expect(period).toHaveValue("26");
+  await expect.poll(() => did(page)).toContain("GET /v1/investigations/inv-1/reports?weeks=26");
+  await expect(rule).toHaveValue("hotlists:");
   registerCovered(REGISTRY, "filter-the-alert-monitoring-board-by-keyboard");
 });
 
