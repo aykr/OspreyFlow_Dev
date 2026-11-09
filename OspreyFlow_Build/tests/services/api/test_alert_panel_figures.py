@@ -15,7 +15,7 @@ What a mistake would do, and the case that catches it:
   `test_mine_is_the_readers_own_claims_only`;
 - the team view's counts wrong —
   `test_the_team_view_counts_unassigned_older_closed_and_not_of_interest`;
-- the feed leaving them out or carrying a person's id —
+- the feed leaving them out, carrying a person's id, or carrying `mine` out to a board —
   `test_the_feed_carries_the_panel_sections_as_figures_only`;
 - the drawing figures invented before promotions exist —
   `test_no_drawing_figures_are_served_before_promotions`;
@@ -107,8 +107,11 @@ def test_the_feed_carries_the_panel_sections_as_figures_only() -> None:
                             monitoring=_figures())  # fmt: skip
     rows = reports.feed_rows(figures)
     sections = {r[0] for r in rows}
-    assert {"open_by_source", "team_unassigned", "team_mine", "team_older_than_week",
+    assert {"open_by_source", "team_unassigned", "team_older_than_week",
             "team_closed", "team_not_of_interest"} <= sections  # fmt: skip
+    # The feed is what a dashboard pulls, as its identity (`report_sync`): "mine" is the reader's own
+    # claims, which no identity has and no board's other viewers share, so it stays in the Glass.
+    assert "team_mine" not in sections
     assert ("open_by_source", "hotlists:over 30 days", "", "", 1) in rows
     assert {r[3] for r in rows if r[0].startswith(("open_by_source", "team_"))} == {""}
     assert "me" not in {str(cell) for row in rows for cell in row}, "figures only: no person's id"

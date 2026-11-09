@@ -411,7 +411,9 @@ def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
     # week column holds a date or nothing.
     rows += [("open_by_source", f"{c.label}:{c.age}", c.typology, "", c.count)
              for c in m.open_by_source]  # fmt: skip
-    team_figures = ("unassigned", "mine", "older_than_week", "closed", "not_of_interest")
+    # Not `mine`: the feed leaves the Glass for a board, pulled as its dashboard identity, and the
+    # reader's own claims mean nothing there (the orchestrator's review of L2.12, item 8).
+    team_figures = ("unassigned", "older_than_week", "closed", "not_of_interest")
     for t in m.team:
         rows += [
             (f"team_{name}", t.label, t.typology, "", getattr(t, name)) for name in team_figures
