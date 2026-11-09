@@ -616,6 +616,13 @@ New ones are added at the bottom as they happen.
     (L2.5b draws it); my `SKIP_JS` test given a clean environment (red when run inside `make test SKIP_JS=1`).
     Admin's L2.5b is now unblocked (CARRIES). Case's L3.4 is in its third round with two questions for you
     (above). Studio's L1.5, rules' L2.10, platform's P5 and admin's L2.7 are building or testing.
+92. **Studio's L1.5 (expert SQL) sent back after my independent review (about 19:50).** The sandbox itself held
+    (an AST gate, external access off, the configuration locked before user SQL). But a SQL step could **lower a
+    row's marking** (`SELECT * REPLACE (NULL AS classification)`, or a window copying higher-marked values into
+    lower-marked rows). **My call, not yours:** the strict reading of Map's "tighten, never loosen". A step that
+    rewrites, drops or computes a handling-bound column is refused. Also: forgeable `_ref` provenance, a refusal
+    able to quote a cell value, Test blocking the event loop, an unbounded output, a cross-dataset test that
+    couldn't fail, and three shared files committed on the branch.
 
 ## Evening, 7 November: your records of 7 November applied
 
