@@ -52,3 +52,27 @@ FAILED test_subscribed_lookup_call_sites.py::test_test_reads_a_subscribed_list
 FAILED test_subscribed_lookup_call_sites.py::test_the_run_reads_a_subscribed_list
 FAILED test_subscribed_lookup_call_sites.py::test_every_caller_hands_the_staging_engine_the_subscriptions
 4 failed, 2 passed, 1 warning in 3.62s
+
+# The lane review of L1.8 (items 2-4 and 12), offline on closed ports 59991-59994, no lease, 2026-11-09T12:53:14Z, on ec1cf5e plus the fix
+## red: dataset_reference_lists' subscription filter removed (studio_staging.py, "if r.id in subscribed" dropped), the three new refusals run, then put back
+FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py::test_another_dataset_s_subscription_is_refused_at_the_sample
+FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py::test_another_dataset_s_subscription_is_refused_at_test
+FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py::test_another_dataset_s_subscription_is_refused_at_the_run
+3 failed, 17 deselected, 1 warning in 2.17s
+## red: the twelve caller-check plants against the check as first committed (aa8ffb3's _calls_without_subscriptions); each must be found once
+None             old check finds 0
+aliased          old check finds 0
+attribute        old check finds 0   (run_staged_recipe was not in ENGINE)
+awaited          old check finds 1
+bare reference   old check finds 0
+empty list       old check finds 0
+empty tuple      old check finds 0
+forgotten        old check finds 1
+partial          old check finds 0
+run_in_executor  old check finds 0
+to_thread        old check finds 1
+tuple()          old check finds 0
+## the seed check (CARRIES row 14), first written by name alone: red against the real tree, since list_connector.import_list shares the name
+E       AssertionError: {'services/api/app.py:11806', 'services/api/app.py:9188'}
+## green: the whole file with the check resolved by module (three seed plants red, the list connector's own import let through)
+25 passed, 1 warning in 5.75s
