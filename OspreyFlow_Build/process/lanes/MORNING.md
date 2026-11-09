@@ -408,6 +408,10 @@ New ones are added at the bottom as they happen.
     deployment with no unit of that name no case can add the gazetteer. I recommend the build takes the unit
     as a parameter; say if you would rather keep `unit-1`.
 
+69. **Platform gains a P6, on my recommendation:** your ruling 6 (gazetteer places copied into a case's dataset)
+    is built in the Conduit by P5, but nothing in the Glass can add or remove a gazetteer yet. P6 is that panel
+    beside the place search, reachable by keyboard. Overrule it if you'd rather it waited.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
