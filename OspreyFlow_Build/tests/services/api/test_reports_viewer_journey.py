@@ -25,7 +25,7 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -114,9 +114,11 @@ class _Cases:
                              created_by="alice", owning_unit="unit-1", domains=[])  # fmt: skip
 
     async def effective_level(self, investigation_id: str, principal: Principal) -> Any:
+        """As the real store: a level only where `get_authorized` gives one, else none."""
         from services.api.investigations import AccessLevel
 
-        return AccessLevel.VIEWER
+        given = not self.refuse and investigation_id == "case-1" and principal.id == self.viewer
+        return AccessLevel.VIEWER if given else None
 
     async def list_for(self, principal: Principal) -> list[Any]:
         return []
@@ -144,7 +146,11 @@ class _Nothing:
 
 
 def _journey_client(
-    monkeypatch: pytest.MonkeyPatch, viewer: Principal, *, refuse: bool = False
+    monkeypatch: pytest.MonkeyPatch,
+    viewer: Principal,
+    *,
+    refuse: bool = False,
+    rows: Sequence[Any] = (),
 ) -> TestClient:
     from types import SimpleNamespace
 
@@ -157,6 +163,7 @@ def _journey_client(
         get_compute,
         get_datasets,
         get_explore,
+        get_export_ledger,
         get_graph,
         get_handling_scheme,
         get_held_rows,
@@ -173,13 +180,13 @@ def _journey_client(
     from ontology.packs import load_deployment_ontology
 
     async def _queue(*args: object, **kwargs: object) -> list[Any]:
-        return []
+        return list(rows)
 
     monkeypatch.setattr(alert_queue, "monitoring_queue", _queue)
     monkeypatch.setattr(reports, "monitoring_queue", _queue)
     nothing = _Nothing()
-    for dep in (get_alerts_store, get_analytics, get_audit, get_compute, get_datasets, get_graph, get_held_rows,
-                get_identity_admin, get_principal_names, get_target_models):  # fmt: skip
+    for dep in (get_alerts_store, get_analytics, get_audit, get_compute, get_datasets, get_export_ledger, get_graph,
+                get_held_rows, get_identity_admin, get_principal_names, get_target_models):  # fmt: skip
         app.dependency_overrides[dep] = lambda: nothing
     explore = ExploreService(nothing, None)  # type: ignore[arg-type]
     ontology = load_deployment_ontology()
@@ -244,26 +251,63 @@ def test_the_reached_half_sees_the_case_s_refusal(journey: Any) -> None:
     }
 
 
-def _guarded_routes() -> dict[str, tuple[str, str, str]]:
-    """Every route of the app that names a right, with that right (`test_route_rights.py`'s table,
-    which that file holds equal to the app's own declarations)."""
+#: The routes that name no right, each open to any signed-in person (the case's level still asked
+#: where the path names a case): reads of reference data, the reader's own case list and views, and
+#: two that are the reader's own (`set_tab_state`, a tab's state; `issue_ws_ticket`, a connection
+#: ticket). Pinned, so a route added with no right, or a right taken off one, fails here until it is
+#: weighed against decision 10 (rule 12: the sweep below cannot see a route that names nothing).
+OPEN_TO_ANY_SIGNED_IN = {
+    "list_datasets_route", "case_datasets_route", "list_investigations", "set_tab_state",
+    "get_investigation", "list_case_views", "open_case_view", "readiness_route", "liveness_route",
+    "openapi_document_route", "get_ontology_route", "get_map_providers_route", "get_map_tile_route",
+    "get_map_local_source_route", "list_connectors", "list_domain_packs", "get_handling_scheme_route",
+    "get_yardstick_route", "list_transforms", "my_rights_route", "model_engines_route",
+    "case_model_engines_route", "issue_ws_ticket",
+}  # fmt: skip
+
+
+def _routes_by_right() -> dict[str, tuple[str, str, str | None]]:
+    """Every route of the app with the right it declares, read from the app itself (the same
+    reading `test_route_rights.py`'s `_declared` makes), not from a table."""
     import re
 
     from fastapi.routing import APIRoute
     from services.api.app import app
 
-    from tests.services.api.test_route_rights import ROUTE_RIGHTS
+    from tests.services.api.test_route_rights import _declared
 
-    found: dict[str, tuple[str, str, str]] = {}
+    found: dict[str, tuple[str, str, str | None]] = {}
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
-        right = ROUTE_RIGHTS.get(route.endpoint.__name__)
-        if right is None:
-            continue
         path = re.sub(r"\{[a-z_]+(:path)?\}", "x", route.path)
-        found[route.endpoint.__name__] = (sorted(route.methods or {"GET"})[0], path, right)
+        found[route.endpoint.__name__] = (
+            sorted(route.methods or {"GET"})[0],
+            path,
+            _declared(route),
+        )
     return found
+
+
+def _guarded_routes() -> dict[str, tuple[str, str, str]]:
+    """Every route of the app that names a right, with that right."""
+    return {name: (m, p, r) for name, (m, p, r) in _routes_by_right().items() if r is not None}
+
+
+def test_every_route_naming_no_right_is_one_weighed_for_the_viewer() -> None:
+    """The other half of "and nothing else": the routes the sweep cannot ask by a right. Each route
+    that names none is one of the list above, and all of them read or are the reader's own."""
+    rightless = {name for name, (_, _, right) in _routes_by_right().items() if right is None}
+    assert rightless == OPEN_TO_ANY_SIGNED_IN, (
+        f"named no right, not weighed: {sorted(rightless - OPEN_TO_ANY_SIGNED_IN)}; "
+        f"weighed, now naming one or gone: {sorted(OPEN_TO_ANY_SIGNED_IN - rightless)}"
+    )
+    writes = {
+        name
+        for name, (method, _, right) in _routes_by_right().items()
+        if right is None and method != "GET"
+    }
+    assert writes == {"set_tab_state", "issue_ws_ticket"}
 
 
 def _answered_beyond(client: TestClient) -> dict[str, int]:
@@ -352,3 +396,33 @@ def test_the_reached_half_can_fail(monkeypatch: pytest.MonkeyPatch) -> None:
     finally:
         app.dependency_overrides.pop(get_principal, None)
     assert stopped == set(REACHED) - {"read_alert_queue", "read_alert_queue_counts"}
+
+
+def test_neither_feed_format_carries_the_reader_s_own_claims(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The orchestrator's review, item 8: a board pulls the feed as its dashboard identity, so the
+    team view's *mine* stays in the Glass, in the JSON feed (the default) as in the CSV. The reader's
+    own Figures still carry it. Red: the JSON feed answered the figures whole."""
+    from schemas.domain import Alert, AlertMode, QueuedAlert
+
+    from services.api.app import app
+
+    claimed = Alert(id="a-1", rule_id="typology:r", owner_id="raiser", mode=AlertMode.FULL,
+                    created_at=datetime.now(UTC), typology="structuring", status="claimed",
+                    assignee=VIEWER.id)  # fmt: skip
+    rows = [QueuedAlert(alert=claimed, summary="", kind="typology")]
+    try:
+        client = _journey_client(monkeypatch, VIEWER, rows=rows)
+        view = client.get("/v1/investigations/case-1/reports")
+        assert view.status_code == 200, view.text
+        assert [t["mine"] for t in view.json()["monitoring"]["team"]] == [1]
+        as_json = client.get("/v1/investigations/case-1/reports/feed")
+        assert as_json.status_code == 200, as_json.text
+        team = as_json.json()["monitoring"]["team"]
+        assert team and all("mine" not in t for t in team), team
+        as_csv = client.get("/v1/investigations/case-1/reports/feed?format=csv")
+        assert as_csv.status_code == 200 and "team_unassigned" in as_csv.text
+        assert "team_mine" not in as_csv.text
+    finally:
+        app.dependency_overrides.clear()

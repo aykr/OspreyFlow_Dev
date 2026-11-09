@@ -12101,7 +12101,11 @@ async def read_report_feed(
         result_cardinality=len(rows),
     )
     if feed_format == "json":
-        return figures
+        # A board pulls the feed as its dashboard identity: the team view's *mine*, the reader's own
+        # claims, stays in the Glass, here as in `feed_rows` (the orchestrator's review of L2.12).
+        return JSONResponse(
+            figures.model_dump(mode="json", exclude={"monitoring": {"team": {"__all__": {"mine"}}}})
+        )
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(["section", "label", "typology", "week_start", "value"])
