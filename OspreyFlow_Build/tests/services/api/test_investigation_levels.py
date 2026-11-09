@@ -145,6 +145,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # ADR-099: reads over the whole graph moved under the case, so they read only its datasets.
     ("POST", P + "/search"): V,
     ("POST", P + "/suggest"): V,
+    # ADR-147 Amendment 1 (P4): the map's place search, as the case's other searches.
+    ("POST", P + "/map/places"): V,
     # The Explore panel (ADR-100): reads.
     ("GET", P + "/explore/counts"): V,
     ("GET", P + "/explore/most-connected"): V,

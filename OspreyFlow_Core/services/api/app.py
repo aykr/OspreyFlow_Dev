@@ -7866,8 +7866,9 @@ async def build_basemap_route(
 
         async def _load_places(extract: Path) -> tuple[int, int, int]:
             # ADR-147 Amendment 1: into the region's gazetteer dataset, which a case's Author
-            # adds to a case for its place search; before P4 the places were in no dataset.
-            await map_places.register_gazetteer_dataset(datasets, body.region, by=principal.id)
+            # adds to a case for its place search; before P4 the places were in no dataset. The
+            # dataset is registered once they are committed (`_settle`), so a failed build leaves
+            # none behind.
             tx = await graph.begin_transaction()
             transaction["tx"] = tx
             report = await load_gazetteer(
@@ -7880,6 +7881,7 @@ async def build_basemap_route(
         async def _settle() -> None:
             # Committed before the provider is registered (`map_admin.build_basemap`).
             await graph.commit_transaction(transaction.pop("tx"))
+            await map_places.register_gazetteer_dataset(datasets, body.region, by=principal.id)
 
         async def _run_build() -> tuple[tuple[str, int, int, int] | None, BaseException | None]:
             try:

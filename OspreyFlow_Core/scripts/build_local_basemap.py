@@ -521,15 +521,19 @@ async def _run(args: argparse.Namespace) -> int:
     await graph.apply_schema(ontology)
 
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
-    from services.api.config import PostgresConfig
-    from services.api.datasets import PostgresDatasetStore
-    from services.api.map_places import gazetteer_dataset_id, register_gazetteer_dataset
+    from services.api.map_places import (
+        NO_POINTS_HERE,
+        DatasetsUnreachable,
+        gazetteer_dataset_id,
+        register_gazetteer_dataset_from_env,
+    )
 
-    store = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
     try:
-        await register_gazetteer_dataset(store, args.region, by=principal.id)
-    finally:
-        await store.close()
+        await register_gazetteer_dataset_from_env(args.region, by=principal.id)
+    except DatasetsUnreachable as unreachable:
+        await client.aclose()
+        print(str(unreachable), file=sys.stderr)
+        return 1
     tx = await graph.begin_transaction()
     try:
         result = await build_local_basemap(
@@ -552,6 +556,7 @@ async def _run(args: argparse.Namespace) -> int:
         await client.aclose()
 
     print(f"PMTiles written to {result.pmtiles_path}")
+    print(NO_POINTS_HERE)
     print(
         f"Gazetteer: {result.gazetteer_report.nodes_created} places created, "
         f"{result.gazetteer_report.nodes_referenced} already known, "

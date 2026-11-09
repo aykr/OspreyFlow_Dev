@@ -65,8 +65,36 @@ def test_a_tier_4_provider_with_service_and_endpoint_is_valid() -> None:
 def test_credential_must_be_an_env_reference_not_a_literal_value() -> None:
     with pytest.raises(ValidationError, match="env:VAR_NAME"):
         _provider(credential="sk-abc123")
-    provider = _provider(credential="env:OS_DATAHUB_API_KEY")
+    provider = _provider(credential="env:OS_DATAHUB_API_KEY", proxy="required")
     assert provider.credential == "env:OS_DATAHUB_API_KEY"
+
+
+@pytest.mark.parametrize(
+    ("fields", "words"),
+    [
+        # The installer's shape the review found (ADR-147 Amendment 1): a key by reference, a
+        # `{credential}` source and no `proxy` line, so `proxy` is its default, "none". The
+        # parameter is named `tile` so that only the needs-a-key rule can refuse it.
+        ({"credential": "env:TILE_KEY",
+          "source": "https://tiles.example.test/{z}/{x}/{y}.png?tile={credential}"},
+         "must be fetched by the Conduit"),
+        ({"source": "https://tiles.example.test/{z}/{x}/{y}.png?tile={credential}"},
+         "must be fetched by the Conduit"),
+        # A key typed into the address itself.
+        ({"source": "https://tiles.example.test/{z}/{x}/{y}.png?api_key=sk-PLANTED"},
+         "key-named parameter"),
+        ({"source": "https://tiles.example.test/{z}/{x}/{y}.png?access_token=PLANTED"},
+         "key-named parameter"),
+    ],
+)  # fmt: skip
+def test_a_provider_the_browser_fetches_takes_no_key(fields: dict[str, str], words: str) -> None:
+    """Its address is handed to the Glass (`public_view`), and the basemap switch offers it."""
+    with pytest.raises(ValidationError, match=words):
+        _provider(kind="raster", style="bundled:osprey-raster-overlay", **fields)
+    # Through the Conduit, the same address is the proxy's alone.
+    _provider(kind="raster", style="bundled:osprey-raster-overlay", proxy="required",
+              **{**fields, "source": fields["source"].replace("sk-PLANTED", "{credential}")
+                 .replace("=PLANTED", "={credential}")})  # fmt: skip
 
 
 def test_prefetch_cache_is_optional_and_only_meaningful_for_tier_3() -> None:

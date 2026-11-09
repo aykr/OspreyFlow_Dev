@@ -24,11 +24,14 @@ stage's, ADR-136's egress rule applying there); §3.5 says none is.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
+import asyncpg
 import yaml
+from services.ingest.geometries import POINT_GEOMETRY_VERSION
 
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort, SuggestOptions
@@ -38,18 +41,8 @@ from schemas.mapconfig import MapPlace, PlaceSearchRequest, PlaceSearchResponse
 
 from .datasets import Dataset
 
-#: The external gazetteers' identifiers on `Location` (`packages/ontology/default.yaml`, v7 and v9).
-#: `site_ref` is not one: it names a deployment's own place (a yard, a wing), not a gazetteer's.
-GAZETTEER_IDENTIFIERS: tuple[str, ...] = (
-    "osm_id",
-    "uprn",
-    "os_place_id",
-    "postcode",
-    "gss_code",
-    "gnis_feature_id",
-    "tiger_geoid",
-    "nad_address_id",
-)
+#: Every gazetteer a build loads is in a dataset named with this prefix (`gazetteer_dataset_id`).
+GAZETTEER_DATASET_PREFIX = "gazetteer-"
 
 #: How many visible `Location`s one search reads before keeping the gazetteer's own: enough that a
 #: case's own locations rarely crowd the places out, and when they do `more` says so.
@@ -60,7 +53,7 @@ _RECIPE = Path(__file__).resolve().parents[2] / "recipes" / "osm_gazetteer.yaml"
 
 def gazetteer_dataset_id(region: str) -> str:
     """The dataset a region's gazetteer is loaded into."""
-    return f"gazetteer-osm-{region}"
+    return f"{GAZETTEER_DATASET_PREFIX}osm-{region}"
 
 
 def gazetteer_unit(recipe: Path = _RECIPE) -> str:
@@ -86,13 +79,57 @@ async def register_gazetteer_dataset(store: _Registers, region: str, *, by: str)
     )
 
 
-def is_gazetteer_place(node: Node) -> bool:
-    if node.type != "Location":
+#: What a command-line build says when the Conduit's database cannot be reached to register the
+#: gazetteer's dataset, in place of a connection traceback.
+UNREACHABLE_DATASETS = (
+    "Cannot reach the Conduit's database to register the gazetteer's dataset ({error}), so the "
+    "place names cannot be loaded. Start the deployment, or add --tiles-only to build the map "
+    "alone."
+)
+
+#: What a command-line build says about the places' points (ADR-147 Amendment 1).
+NO_POINTS_HERE = (
+    "The places' points were not written: the analytics store is the Conduit's, which a second "
+    "process cannot open while it runs. Until a build from Admin › Maps writes them, these places "
+    "are found by name but not offered by the map's place search."
+)
+
+
+class DatasetsUnreachable(RuntimeError):
+    """The dataset store could not be reached; its words are `UNREACHABLE_DATASETS`'s."""
+
+
+async def register_gazetteer_dataset_from_env(
+    region: str, *, by: str, connect: Callable[[str], Awaitable[Any]] | None = None
+) -> Dataset:
+    """The command-line builds' registration, against the Conduit's own database
+    (`PostgresConfig.from_env`). An unreachable database is said in words, never a traceback."""
+    from .config import PostgresConfig
+    from .datasets import PostgresDatasetStore
+
+    opener = connect or PostgresDatasetStore.connect
+    try:
+        store = await opener(PostgresConfig.from_env().dsn)
+    except (OSError, asyncpg.PostgresError) as exc:
+        raise DatasetsUnreachable(UNREACHABLE_DATASETS.format(error=type(exc).__name__)) from None
+    try:
+        return await register_gazetteer_dataset(store, region, by=by)
+    finally:
+        await store.close()
+
+
+def is_gazetteer_place(node: Node, query: str) -> bool:
+    """A gazetteer's place (in a gazetteer dataset: what the gazetteer holds, not a case's own
+    location with a postcode) whose **name** holds `query`. The store matches a `Location` on
+    its identifiers too (`suggestion_scope`); a match on an `osm_id` or a `uprn` alone is
+    dropped here, so a run of queries cannot rebuild a place's source-system identifier from
+    what comes back (rule 7)."""
+    if node.type != "Location" or not node.properties.get("geometry_ref"):
         return False
-    props = node.properties
-    if not isinstance(props.get("name"), str) or not props.get("geometry_ref"):
+    if not any(d.startswith(GAZETTEER_DATASET_PREFIX) for d in node.datasets):
         return False
-    return any(props.get(identifier) not in (None, "") for identifier in GAZETTEER_IDENTIFIERS)
+    name = node.properties.get("name")
+    return isinstance(name, str) and query.casefold() in name.casefold()
 
 
 async def search_places(
@@ -105,16 +142,21 @@ async def search_places(
     its point. A place whose point the reader may not see, or that has none (a boundary), is not
     offered: there is nowhere to take the map."""
     found = await graph.suggest_nodes(
-        body.query.strip(),
+        body.query,
         principal,
         limit=SCAN_LIMIT,
         options=SuggestOptions(mode="contains", ignore_case=True, types=("Location",)),
     )
-    candidates = [node for node in found.nodes if is_gazetteer_place(node)]
+    query = body.query.strip()
+    candidates = [node for node in found.nodes if is_gazetteer_place(node, query)]
     refs = list(dict.fromkeys(str(node.properties["geometry_ref"]) for node in candidates))
     points = {
         record.geometry_ref: record
-        for record in (await analytics.get_geometries(refs, principal) if refs else [])
+        for record in (
+            await analytics.get_geometries(refs, principal, version=POINT_GEOMETRY_VERSION)
+            if refs
+            else []
+        )
         if record.kind is GeometryKind.POINT and record.lon is not None and record.lat is not None
     }
     places: list[MapPlace] = []
@@ -127,7 +169,7 @@ async def search_places(
         )
     places.sort(
         key=lambda place: (
-            not place.name.casefold().startswith(body.query.casefold().strip()),
+            not place.name.casefold().startswith(query.casefold()),
             place.name.casefold(),
         )
     )

@@ -1294,15 +1294,14 @@ async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
 
     async def load_places(extract: Path) -> tuple[int, int, int]:
         # ADR-147 Amendment 1: into the region's gazetteer dataset, as the Admin route's build.
-        from services.api.config import PostgresConfig
-        from services.api.datasets import PostgresDatasetStore
-        from services.api.map_places import gazetteer_dataset_id, register_gazetteer_dataset
+        from services.api.map_places import (
+            NO_POINTS_HERE,
+            gazetteer_dataset_id,
+            register_gazetteer_dataset_from_env,
+        )
 
-        store = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
-        try:
-            await register_gazetteer_dataset(store, region, by=by)
-        finally:
-            await store.close()
+        await register_gazetteer_dataset_from_env(region, by=by)
+        print(NO_POINTS_HERE)
         tx = await graph.begin_transaction()
         held["tx"] = tx
         report = await load_gazetteer(

@@ -2,15 +2,17 @@
 "never a provider's key or key-bearing URL in the Glass"; ADR-147 decision 2; `00_ARCHITECTURE.md`
 §1.2's tile proxy).
 
-The basemap switch (`apps/workspace/src/map/BasemapSwitch.tsx`) offers every provider `GET
-/v1/map/providers` returns and draws whichever is chosen from that answer alone, so what the Glass
-can hold of a provider is exactly what the map's read routes answer. Two keys are planted: one
-entered in *Admin › Maps* through the real key route, one the installer's `env:` reference
-resolves. Then every `GET` route under `/v1/map/` (found by walking the app, so a route added later
-is walked too) is called for every provider, with the upstream answering a tile and refusing one,
-and the place search is called; no answer carries either key, the hosted provider's address or a
-`{credential}` template. The tile proxy's upstream request carries the key; that is the one place
-it goes.
+The basemap switch (`BasemapSwitch` in `apps/workspace/src/map/MapControls.tsx`) offers the
+providers `GET /v1/map/providers` returns that the map can draw, and draws the chosen one from that
+answer alone, so what the Glass can hold of a provider is exactly what the map's read routes answer.
+Two keys are planted: one entered in *Admin › Maps* through the real key route, one the installer's
+`env:` reference resolves. Then every `GET` route under `/v1/map/` (found by walking the app, so a
+route added later is walked too) is called for every provider, with the upstream answering a tile
+and refusing one; no answer carries either key, the hosted provider's address or a `{credential}`
+template. The tile proxy's upstream request carries the key; that is the one place it goes. (The
+place search answers places, never a provider: `test_map_places_route.py`.) A provider the browser
+fetches may take no key at all, refused as `osprey.yaml` is read (`tests/schemas/test_mapconfig.py`'s
+`test_a_provider_the_browser_fetches_takes_no_key`), since its address is the Glass's.
 """
 
 from __future__ import annotations
