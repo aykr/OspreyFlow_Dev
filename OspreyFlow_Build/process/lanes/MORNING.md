@@ -58,7 +58,7 @@ action says who can, with people's names ("You need Review promotions; D. Engine
 route today tells anyone but an administrator who holds a right.
 - (a) Studio-b's recommendation: a route listing, by display name only, the holders of a right among the people
   who hold a level in the dataset's home case, for a reader who can read that case.
-- **(c) Built meanwhile, my strict default:** name the roles that hold the right ("the Data engineer and Studio
+- **Your ruling, 9 November about 09:50 UTC: (c).** Name the roles that hold the right ("the Data engineer and Studio
   lead roles have it; ask an administrator"), never people.
 - (b) Name no one at all.
 
