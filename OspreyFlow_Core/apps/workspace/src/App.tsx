@@ -45,6 +45,7 @@ import {
   type CrossFilterStoreState,
 } from "./crossfilter/store";
 import { NeedsYou } from "./admin/needsYou/NeedsYou";
+import { AnswersForSection } from "./home/AnswersForSection";
 import { requestOpening, takeOpening } from "./admin/needsYou/openings";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
@@ -1439,19 +1440,29 @@ export function App() {
       })
       .catch(() => undefined);
   };
+  const openOperations = () => {
+    requestOpening({ kind: "admin", section: "operations" });
+    setStartChoice("admin");
+  };
+  // ADR-145 Amendment 4 decision 12 (L2.7): Home's *What you can do, and what you answer for*.
+  const answers =
+    bearerToken && rights ? (
+      <AnswersForSection
+        apiBaseUrl={API_BASE_URL}
+        bearerToken={bearerToken}
+        rights={rights}
+        roles={principal?.roles ?? []}
+        onOpenCase={(id) => openCase(id)}
+        onOpenModel={rights.has("accept_types") ? openModelFor : undefined}
+        onOpenOperations={rights.has("operate_schedules") ? openOperations : undefined}
+      />
+    ) : null;
   const needsYou = bearerToken ? (
     <NeedsYou
       apiBaseUrl={API_BASE_URL}
       bearerToken={bearerToken}
       onOpenModel={rights?.has("accept_types") ? openModelFor : undefined}
-      onOpenOperations={
-        rights?.has("operate_schedules")
-          ? () => {
-              requestOpening({ kind: "admin", section: "operations" });
-              setStartChoice("admin");
-            }
-          : undefined
-      }
+      onOpenOperations={rights?.has("operate_schedules") ? openOperations : undefined}
     />
   ) : null;
   const account = (
@@ -1487,6 +1498,7 @@ export function App() {
           openRules: () => setView("alerts"),
           openAlert: (alertId) => navigate(alertPath(alertId)),
           openCaseOnRules: (id) => openRulesOnCase(id),
+          answers,
           openAlertJourney: (alert, to) =>
             startJourney({ to, caseId: alert.caseId, alertId: alert.alertId, title: alert.title, rule: alert.rule, weeks: weeksFor(alert.at) }),
         })

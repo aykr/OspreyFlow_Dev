@@ -44,6 +44,9 @@ export interface HomePageProps {
   account: ReactNode;
   marking: string | null;
   now?: Date;
+  /** ADR-145 Amendment 4 decision 12 (L2.7): *What you can do, and what you answer for*, drawn by
+   * App from the person's own reads (`home/AnswersFor.tsx`). */
+  answers?: ReactNode;
 }
 
 // The cards' names and keys are the places' table's (`shell/places.json`); what each holds is Home's.
@@ -187,7 +190,7 @@ function JourneyRow({ row, now, onJourney }: { row: AttentionRow; now: Date; onJ
   );
 }
 
-export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date() }: HomePageProps) {
+export function HomePage({ rights, rightsUnread = false, person, summary, onChoose, onOpenCase, onOpenAlert, onAlertJourney, account, marking, now = new Date(), answers }: HomePageProps) {
   const panels = useMemo(() => startPlaces(rights), [rights]);
   const allowed = useMemo(() => new Set(panels), [panels]);
   const primary = panels[0];
@@ -326,6 +329,7 @@ export function HomePage({ rights, rightsUnread = false, person, summary, onChoo
                 ))}
               </ul>
             </section>
+            {answers}
 
             <section className="home-section">
               <div className="home-section__head">

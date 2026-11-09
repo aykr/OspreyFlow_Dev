@@ -67,6 +67,35 @@ test("the Studio's reminder opens 1 Model · n proposed by keyboard, its tip rea
   registerCovered(REGISTRY, "open-the-model-tab-from-the-studios-reminder-by-keyboard");
 });
 
+// ADR-145 Amendment 4 decision 12 (L2.7): Home's What you can do, and what you answer for, by keyboard:
+// each line's why read with it, a case, a Model tab and Operations opened, and Why can I do this? opened.
+test("what you answer for opens where to act, its why read with each line, by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/answers-harness.html");
+  const author = page.getByRole("button", { name: "Author of Harbour wing review" });
+  await author.focus();
+  await expect(author).toHaveAccessibleDescription(/^Why: Answers for the case/);
+  await page.keyboard.press("Enter");
+  const model = page.getByRole("button", { name: /2 proposed link types to decide/ });
+  await model.focus();
+  await expect(model).toHaveAccessibleDescription("Why: Given by your Data Engineer role.");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: /^Reviewer of promotions/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened)).toEqual([
+    "case:SYN-c1", "model:SYN-ds-a", "operations",
+  ]); // prettier-ignore
+  await expect(page.getByRole("button", { name: /Border watch/ })).toHaveCount(0);
+  registerCovered(REGISTRY, "open-what-you-answer-for-by-keyboard");
+  const byPlace = page.getByText("What you can do, by place");
+  await byPlace.focus();
+  await page.keyboard.press("Enter");
+  const why = page.getByText(/^Review promotions:/);
+  await why.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Given by your Data Engineer role.").first()).toBeVisible();
+  registerCovered(REGISTRY, "read-why-i-can-do-this-by-keyboard");
+});
+
 test("every registered Needs you action has its own proving test case above", () => {
   assertAllCovered(REGISTRY, NEEDS_YOU_ACTIONS);
 });

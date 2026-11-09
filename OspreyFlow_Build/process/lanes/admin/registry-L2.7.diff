@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 86c45ad..17485a3 100644
+index 86c45ad..9c7306a 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 @@ -859,6 +859,9 @@ export const MAP_VIEW_ACTIONS = defineActionRegistry("MAP_VIEW_ACTIONS", [
@@ -12,7 +12,7 @@ index 86c45ad..17485a3 100644
    "save-a-persons-roles-by-keyboard",
    "register-a-dashboard-by-keyboard",
    "remove-a-dashboard-by-keyboard",
-@@ -913,6 +916,23 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+@@ -913,6 +916,26 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
    "read-a-cases-rule-audit-by-keyboard",
    "page-through-the-audit-by-keyboard",
    "set-when-promotions-are-overdue-by-keyboard",
@@ -33,6 +33,9 @@ index 86c45ad..17485a3 100644
 +  "open-operations-from-needs-you-by-keyboard",
 +  "open-a-datasets-model-tab-from-needs-you-by-keyboard",
 +  "open-the-model-tab-from-the-studios-reminder-by-keyboard",
++  // ADR-145 Amendment 4 decision 12: Home's What you can do, and what you answer for.
++  "open-what-you-answer-for-by-keyboard",
++  "read-why-i-can-do-this-by-keyboard",
  ] as const);
  
  // ADR-110 decision 7 (D5): the Publish screen's structured schedule.
