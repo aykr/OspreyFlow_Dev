@@ -1,0 +1,30 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 8dca9e5..1713a15 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -472,6 +472,8 @@ export const VIEW_ACTIONS = defineActionRegistry("VIEW_ACTIONS", [
+   "open-a-view-of-another-case-from-the-cases-list-by-keyboard",
+   "save-a-view-from-its-form-by-keyboard",
+   "go-back-to-the-case-from-an-open-view-by-keyboard",
++  // ADR-143 Amendment 2 decision 7 (L3.9).
++  "open-a-merged-drawings-notes-by-keyboard",
+ ] as const);
+ 
+ /** Drawing boards (ADR-143 decisions 4 to 7; Amendment 2 decision 5; L3.3): a board opened, made
+@@ -520,6 +522,16 @@ export const PROMOTION_ACTIONS = defineActionRegistry("PROMOTION_ACTIONS", [
+   "delete-a-removed-cases-layer-after-asking-once-by-keyboard",
+ ] as const);
+ 
++/** The Ingest Studio's *Merge into a dataset…* (ADR-143 Amendment 2 decision 6; Amendment 3; L3.9):
++ * a drawn dataset mapped and matched, its dry run, the merge, and the merge closed.
++ * `keyboard/drawn-merge.spec.ts`. */
++export const DRAWN_MERGE_ACTIONS = defineActionRegistry("DRAWN_MERGE_ACTIONS", [
++  "choose-a-dataset-and-map-and-match-a-drawing-by-keyboard",
++  "tick-a-match-and-run-the-merges-dry-run-by-keyboard",
++  "merge-a-drawn-dataset-after-its-dry-run-by-keyboard",
++  "close-a-drawn-merge-by-escape",
++] as const);
++
+ /** Where to start in a case's data (ADR-100): a node from the most connected, or from a type's
+  * most connected, put on the canvas; a ranking paged. `keyboard/explore.spec.ts`. */
+ export const EXPLORE_ACTIONS = defineActionRegistry("EXPLORE_ACTIONS", [

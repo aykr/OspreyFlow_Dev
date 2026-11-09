@@ -68,7 +68,7 @@ const EXTRA_STATES: Record<string, string[]> = {
   "case-screen-options-harness.html": ["variant=today", "variant=b", "variant=c"],
   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
   // over an opened view.
-  "views-harness.html": ["as=bob", "show=form", "show=lens", "asking=delete"],
+  "views-harness.html": ["as=bob", "show=form", "show=lens", "show=merged", "asking=delete"],
   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
   // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
   // the boards list with a board from a view chosen, the edit form and an item's menu open, a drawing
@@ -103,6 +103,16 @@ const EXTRA_STATES: Record<string, string[]> = {
     "as=fred",
     "press=Merge%20into%20the%20dataset%20from%20Old%20wing",
     "press=Delete%E2%80%A6%20Old%20wing's%20layer",
+  ],
+  // ADR-143 Amendment 2 decision 6 (L3.9): the Studio's Merge into a dataset… with its sheet open (the
+  // mapping with a type the target lacks, a match, the checks), after the dry run, after the merge, for
+  // a second-person target, and for a drawing merged already.
+  "drawn-merge-harness.html": [
+    "choose=src&press=Map%20and%20match",
+    "choose=src&press=Map%20and%20match%7CDry%20run",
+    "choose=src&press=Map%20and%20match%7CDry%20run%7C4.%20Merge",
+    "choose=src&policy=second_person_reviews&press=Map%20and%20match",
+    "merged=1",
   ],
   // ADR-143 decision 9 (L3.5): the Model tab's proposals block with its decision form, the form's
   // error summary, and as the proposer.

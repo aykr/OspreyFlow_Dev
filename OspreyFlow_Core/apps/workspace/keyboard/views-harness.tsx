@@ -93,6 +93,21 @@ createRoot(container).render(
     {show === "lens" && (
       <ViewLensBanner name="Payments in March" shared missing={2} onBack={() => (window.__VIEWS__!.back = true)} />
     )}
+    {/* ADR-143 Amendment 2 decision 7 (L3.9): a merged drawing's view, with its notes. */}
+    {show === "merged" && (
+      <ViewLensBanner
+        name="Night visits"
+        shared={false}
+        missing={0}
+        onBack={() => (window.__VIEWS__!.back = true)}
+        annotations={[
+          { element_id: "e-1", kind: "node", label: "Mercer", marking: "OFFICIAL", grading: "B21", source_note: "Wing officer report, 4 Nov",
+            words: "Drawn by A. Field, merged as load promotion-night-1", merged: true },
+          { element_id: "e-2", kind: "node", label: "Night boat", marking: "OFFICIAL", grading: "C32", source_note: "Harbour log",
+            words: "Drawn by A. Field, not merged: it stays in the drawing, read-only", merged: false },
+        ]}  // prettier-ignore
+      />
+    )}
     {show === "form" && (
       <SaveViewForm
         count={3}
