@@ -96,6 +96,7 @@ createRoot(container).render(
     {/* ADR-143 Amendment 2 decision 7 (L3.9): a merged drawing's view, with its notes. */}
     {show === "merged" && (
       <ViewLensBanner
+        notesOpen={params.get("notes") === "open"}
         name="Night visits"
         shared={false}
         missing={0}

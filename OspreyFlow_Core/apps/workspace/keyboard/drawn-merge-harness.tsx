@@ -2,8 +2,8 @@
 // Amendment 3; L3.9): the drawing *Night visits* (three drawn items, one of a type the target lacks),
 // which Dana may merge into *Prison intel*, offered one match. The Conduit is a stand-in kept here,
 // answering as the merge routes do for an Author of the target holding `merge_datasets`
-// (`?merged=1` as for a drawing merged already; `?policy=second_person_reviews` for a target that
-// asks a second person). `?choose=src` chooses the target once drawn, and `?press=<button text>`
+// (`?policy=second_person_reviews` for a target that asks a second person; once merged it answers
+// 404 for the drawing, as the Studio's gate does). `?choose=src` chooses the target once drawn, and `?press=<button text>`
 // presses buttons in turn ("|" between), for the axe scan of each step. What was sent is on
 // `window.__DRAWN_MERGE__`.
 import { createRoot } from "react-dom/client";
@@ -29,7 +29,7 @@ declare global {
 type Json = Record<string, unknown>;
 const params = new URLSearchParams(window.location.search);
 const policy = params.get("policy") ?? "author_promotes";
-const merged = params.get("merged") === "1";
+let merged = false;
 
 const item = (id: string, type: string, label: string, problems: string[] = []): Json => ({
   item_id: id, element_id: `e-${id}`, kind: "node", type, label, marking: "OFFICIAL", follows: false,
@@ -66,11 +66,11 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const base = "/v1/datasets/d-night/";
   if (!path.startsWith(base)) return json(404, { error: "not_found" });
   const rest = path.slice(base.length);
+  if (merged) return json(404, { error: "not_found" });
   if (rest === "merge-targets") {
     return json(200, {
       drawn_dataset_id: "d-night", drawn_name: "Night visits",
-      targets: merged ? [] : [{ dataset_id: "src", name: "Prison intel", highest_marking: "OFFICIAL-SENSITIVE", policy }],
-      refused: merged ? "This drawing has been merged already: it is kept read-only for its audit." : null,
+      targets: [{ dataset_id: "src", name: "Prison intel", highest_marking: "OFFICIAL-SENSITIVE", policy }],
     });  // prettier-ignore
   }
   if (rest === "merge-sheet" && url.searchParams.get("target") === "src") return json(200, sheet);
@@ -80,6 +80,7 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     return json(200, { target_dataset_id: "src", nodes: ticked.length, links: 0, matches, left_out: [{ item_id: "i-3", label: "Night boat", why: LACKS }], recorded_as: "" });
   }
   if (rest === "merges" && method === "POST") {
+    merged = policy === "author_promotes";
     return json(201, {
       id: "m-1", load_id: "promotion-night-1", trigger: "drawn_merge", dataset_id: "src", dataset_name: "Prison intel", case_id: "h-night",
       case_name: "Night visits", board_id: null, proposed_by: "dana", proposed_by_name: "D. Engineer", proposed_at: "2026-11-09T09:00:00Z",

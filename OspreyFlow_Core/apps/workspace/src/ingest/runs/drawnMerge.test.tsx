@@ -29,7 +29,7 @@ function serve(routes: Routes) {
 }
 
 const TARGETS = {
-  drawn_dataset_id: "d1", drawn_name: "Night visits", refused: null,
+  drawn_dataset_id: "d1", drawn_name: "Night visits",
   targets: [{ dataset_id: "src", name: "Prison intel", highest_marking: "OFFICIAL-SENSITIVE", policy: "author_promotes" }],
 };  // prettier-ignore
 const ITEM = (id: string, label: string, problems: string[] = []) => ({
@@ -68,19 +68,17 @@ describe("Merge into a dataset…", () => {
     expect(screen.queryByText("Merge into a dataset…")).toBeNull();
   });
 
-  it("says why a drawing merged already is merged no more", async () => {
-    serve({ "GET /v1/datasets/d1/merge-targets": () => ({ status: 200, body: { ...TARGETS, targets: [], refused: "This drawing has been merged already." } }) });
-    show();
-    expect(await screen.findByText("This drawing has been merged already.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Map and match" })).toBeNull();
-  });
-
   it("maps, matches, runs the dry run first, and merges what the dry run showed", async () => {
+    // As the server: once merged, the Studio's gate no longer reaches the drawing (404).
+    let merged = false;
     const calls = serve({
-      "GET /v1/datasets/d1/merge-targets": () => ({ status: 200, body: TARGETS }),
+      "GET /v1/datasets/d1/merge-targets": () => (merged ? { status: 404, body: { error: "not_found" } } : { status: 200, body: TARGETS }),
       "GET /v1/datasets/d1/merge-sheet?target=src": () => ({ status: 200, body: SHEET }),
       "POST /v1/datasets/d1/merges/dry-run": () => ({ status: 200, body: DRY }),
-      "POST /v1/datasets/d1/merges": () => ({ status: 201, body: SENT }),
+      "POST /v1/datasets/d1/merges": () => {
+        merged = true;
+        return { status: 201, body: SENT };
+      },
     });
     show();
     fireEvent.change(await screen.findByLabelText("Merge into"), { target: { value: "src" } });
@@ -103,6 +101,7 @@ describe("Merge into a dataset…", () => {
     await waitFor(() => expect(merge.disabled).toBe(false));
     fireEvent.click(merge);
     expect(await screen.findByText("Merge sent")).toBeTruthy();
+    expect(screen.getByText(/load promotion-9/)).toBeTruthy();
     const sent = calls.filter((c) => c.url.endsWith("/merges")).map((c) => JSON.parse(String(c.init?.body)));
     expect(sent).toEqual([{ target_dataset_id: "src", item_ids: ["i1", "i2"], matches: [{ drawn: "e-i1", loaded: "p-loaded" }] }]);
   });

@@ -101,8 +101,9 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
       setProblem(answer.message);
       return;
     }
+    // Not read again: once merged, the drawing's case reads the target and the Studio reaches the
+    // drawing no more, so the outcome stays here until the Runs tab is read again.
     setSent(answer.value);
-    await reload();
     await onChanged?.();
   }
 
@@ -147,9 +148,7 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
         {targets.drawn_name} is a drawing that is its own dataset. As an Author of another dataset who may merge datasets, you may merge it
         into that one as one load. Afterwards its case reads that dataset, and the drawing becomes a view with its notes.
       </p>
-      {targets.refused ? (
-        <p className="label">{targets.refused}</p>
-      ) : targets.targets.length === 0 ? (
+      {targets.targets.length === 0 ? (
         <p className="label">There is no dataset you may merge it into: you must be one of a dataset&apos;s Authors, in this drawing&apos;s unit.</p>
       ) : (
         <div className="board__row">
@@ -247,7 +246,7 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
                       );
                     })}
                   </div>
-                  {sheet.more_matches && <p className="caption">More may be offered once these are decided.</p>}
+                  {sheet.more_matches && <p className="caption">More looked alike than are listed here; only these may be chosen in this merge.</p>}
                 </fieldset>
               )}
               <h5 className={govuk ? "govuk-heading-s" : "label"}>What goes</h5>

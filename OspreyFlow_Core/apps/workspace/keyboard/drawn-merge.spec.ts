@@ -75,12 +75,6 @@ test("the merge closes on Escape, nothing sent", async ({ page }) => {
   registerCovered("DRAWN_MERGE_ACTIONS", "close-a-drawn-merge-by-escape");
 });
 
-test("a drawing merged already says so, and offers no merge", async ({ page }) => {
-  await open(page, "?merged=1");
-  await expect(page.getByText("This drawing has been merged already: it is kept read-only for its audit.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Map and match" })).toHaveCount(0);
-});
-
 test("every registered drawn merge action has its own proving test case above", () => {
   assertAllCovered("DRAWN_MERGE_ACTIONS", DRAWN_MERGE_ACTIONS);
 });

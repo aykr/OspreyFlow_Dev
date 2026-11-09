@@ -22,11 +22,13 @@ export interface ViewLensBannerProps {
   from?: { label: string; backLabel: string; onBack: () => void };
   /** A merged drawing's annotations (decision 7); none for any other view. */
   annotations?: readonly Annotation[];
+  /** Whether the notes start open (a harness's axe scan of the open list). */
+  notesOpen?: boolean;
 }
 
-export function ViewLensBanner({ name, shared, missing, onBack, from, annotations = [] }: ViewLensBannerProps) {
+export function ViewLensBanner({ name, shared, missing, onBack, from, annotations = [], notesOpen: startOpen = false }: ViewLensBannerProps) {
   const govuk = currentBrand() === "govuk";
-  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(startOpen);
   const note = missingNote(missing);
   // Focus comes here when the view opens, wherever it was asked for (the Cases drawer, the over-cap
   // dialog that has just closed), so a keyboard user is never left on the page body.
