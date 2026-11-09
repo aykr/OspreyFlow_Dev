@@ -189,3 +189,43 @@ def test_a_writer_the_scan_cannot_read_is_reported(tmp_path: pathlib.Path) -> No
         "                           resolved_query={}, result_cardinality=0)\n"
     )
     assert unclassified(tmp_path) == ["unresolved planted.py:3 self.kind"]
+
+
+#: Every action whose words and count Audit shows (*People and roles* to `manage_people`,
+#: *Datasets* to `administer_system`; Amendment 6 decision 3), named here so that moving an action
+#: into a kind that shows words is a change to this list too, made on purpose (rule 12). Every
+#: other action's words and count are withheld, whatever its kind.
+WORDS_SHOWN_ACTIONS = frozenset({
+    "invite_person", "set_person_roles", "set_person_access", "disable_person",
+    "disable_person_incomplete", "enable_person", "remove_person", "reset_person_sign_in",
+    "link_organisation_account", "create_custom_role", "change_custom_role", "make_team",
+    "set_team_lead", "set_team_cover", "transfer_owned_item", "name_an_author", "grant_access",
+    "revoke_access", "set_unit_level",
+    "create_dataset", "create_composite_dataset", "set_dataset_egress",
+    "set_dataset_promotion_policy", "change_dataset_owners", "set_dataset_owner_setting",
+    "register_dataset_source", "edit_dataset_source_governance", "make_home_case",
+    "make_drawn_dataset", "set_case_datasets",
+})  # fmt: skip
+
+
+def test_only_the_named_actions_ever_show_their_words() -> None:
+    """Read the way the stream reads it: `words_shown(kind_of(action), …)` for a reader holding
+    every right, over every action the Conduit writes and every one classified, and
+    `shown_actions`, which the dataset filter looks into. Red with any action moved into
+    *People and roles* or *Datasets* (an operator's regrade there would serve its count of every
+    case's drawn items to an `administer_system` holder: an unfiltered count, rule 7)."""
+    from schemas.rights import Right
+    from services.api.audit_section import (
+        _CLASSIFIED,
+        READS_AND_OTHER,
+        kind_of,
+        shown_actions,
+        words_shown,
+    )
+
+    every = frozenset(Right)
+    actions, _, _ = written_actions()
+    named = set(_CLASSIFIED) | set(READS_AND_OTHER)
+    shown = {a for a in actions | named if words_shown(kind_of(a), every)}
+    assert shown == WORDS_SHOWN_ACTIONS
+    assert set(shown_actions(every)) == WORDS_SHOWN_ACTIONS

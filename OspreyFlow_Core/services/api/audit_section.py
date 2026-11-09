@@ -81,8 +81,6 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "set_drawn_picture",
         "choose_drawn_picture",
         "decide_board_match",
-        # L3.7 (ADR-143 Amendment 6): an analyst's change to an item's grading.
-        "grading_change",
     ),
     "loads_and_promotions": (
         "run_studio_recipe",
@@ -90,6 +88,8 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "publish_studio_recipe",
         "verify_studio_recipe",
         "upload_ingest_source_file",
+        # L1.6: a connector's source read into the dataset's ingest file, the connector's own upload.
+        "read_connector_source",
         "upload_document",
         "pause_schedule",
         "resume_schedule",
@@ -184,8 +184,12 @@ _CLASSIFIED: tuple[str, ...] = tuple(a for actions in KIND_ACTIONS.values() for 
 READS_AND_OTHER: tuple[str, ...] = (
     # Written by scripts, not routes: a seed's case brief, a sweep closing synthetic instants.
     "case_brief_seed", "close_paysim_instants",
-    # L1.6's reads and its refusal: a connector's source read or refused, a connection tested.
-    "connector_read_refused", "read_connector_source", "test_ingest_connection",
+    # L3.7 (ADR-143 Amendment 6): the operator's whole-deployment change of grading scheme, run by
+    # `scripts/grading_change.py` outside any case; no analyst asserts anything, so not *Analyst
+    # assertions*.
+    "grading_change",
+    # L1.6's refusal and reads: a connector's read refused, a connection tested.
+    "connector_read_refused", "test_ingest_connection",
     "dataset_list_subscriptions", "list_deployment_list_imports", "list_deployment_lists",
     "offered_reference_lists",
     "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",
