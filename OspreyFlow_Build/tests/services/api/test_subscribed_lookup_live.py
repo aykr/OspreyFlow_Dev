@@ -8,7 +8,7 @@ What a mistake would do, and the case that catches it:
 - the run handing the engine no subscriptions, so a subscribed list's Lookup is refused at the run though
   it saved and published (the defect at main) —
   `test_a_run_reads_a_subscribed_list_from_the_real_stores`, red with `pipeline_run`'s
-  `subscribed=` taken out (`process/lanes/studio-b/l1.8/red-carry-subscribed-live.txt`);
+  `subscribed=` taken out (`process/lanes/studio-b/l1.8/red-live-fix-round.txt`);
 - the real store's subscriptions widening what a run reads: a list another dataset subscribes to read by
   this one — `test_another_dataset_s_subscription_is_refused_by_the_real_stores`.
 

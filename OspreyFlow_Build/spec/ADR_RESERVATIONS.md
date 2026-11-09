@@ -87,7 +87,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-133 Amendment 9 | The owner's ruling of 9 November: L1.6's reference lists are the screening-list store of record; the Lists tab read-only, then retired | studio-b | 2026-11-09 | written |
 | ADR-140 Amendment 15 | The owner's ruling of 9 November: an operator's allow-list in osprey.yaml admits named private hosts or networks to the SQL and API connectors | studio-b | 2026-11-09 | written |
 | ADR-143 Amendment 6 | The grading change as built (L3.7): the verb over the scripts module, the dry run enforced (ruling C13), the Conduit stopped, the scheme file, what the change leaves alone | case-b | 2026-11-09 | written |
-| ADR-145 Amendment 7 | The Studio's tips and who-can refusals as built (L1.8): the roles that hold a right named, never people (the owner's ruling, 9 November); 'domain model' held by a gate | studio-b | 2026-11-09 | written |
+| ADR-145 Amendment 7 | The Studio's tips and who-can refusals as decided (built with L2.12's patches, L1.8): the roles that hold a right named, never people (the owner's ruling, 9 November); 'domain model' held by a gate | studio-b | 2026-11-09 | written |
 
 ## Baseline
 

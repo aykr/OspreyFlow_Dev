@@ -30992,7 +30992,7 @@ of every install), and the answers file's commented example in `cli/ospreyflow/a
 
 Open: none.
 
-### ADR-145, Amendment 7 (9 November 2026) — the Studio's tips and who-can refusals as built (L1.8); "domain model" held by a gate
+### ADR-145, Amendment 7 (9 November 2026) — the Studio's tips and who-can refusals as decided (built with L2.12's patches, L1.8); "domain model" held by a gate
 
 Status: accepted from the owner's ruling of 9 November 2026 on studio-b's L1.8 question: who can is said by
 naming the roles that hold a right, never the people (option C). ADR-145 Amendment 4 decision 12 is unchanged
@@ -31039,15 +31039,16 @@ Studio's refused actions are disabled as before, and Admin › Roles still says 
    L1.8's merge (`L1.8_ci_makefile.diff`). It cannot see words computed at run time: a right's name comes
    through `rightName`, and `rightNames.test.ts` holds it, and Admin › Roles' `rightWords`, to the same rule.
 
-**Tests (shown red first, `process/lanes/studio-b/l1.8/`).** `rightsGate.test.tsx` renders each Studio
-surface with no rights. Every listed action is focusable, `aria-disabled` and described by the words, and
-pressing every button sends no write. Each gate was taken out alone and its case went red. A holder of every
-right is offered every action. `rightNames.test.ts` is red with the name override removed, with Super user
-kept, and with a role said by its id. `keyboard/studio-tips.spec.ts` (STUDIO_TIPS_ACTIONS, 2 ids) is red
-with the button not focusable, with the tip untied from it, with no gate, and with no door.
-`ingest-studio.spec.ts`'s Preview case is now said before the press. The axe scans cover six `rights=none`
-states × dark, light and GOV.UK. `tests/test_ui_words_check.py` puts plants at the Glass's own shapes and was
-red against the real Glass before the wording (four findings).
+**Tests (each shown red first in the patches' apply check, `process/lanes/studio-b/l1.8/`; on `main` with
+L2.12's patches).** `rightsGate.test.tsx` will render each Studio surface with no rights, and check that every
+listed action is focusable, `aria-disabled` and described by the words, and that pressing every button sends no
+write. Each gate taken out alone turns its case red. A holder of every right will be offered every action.
+`rightNames.test.ts` will be red with the name override removed, with Super user kept, and with a role said by
+its id. `keyboard/studio-tips.spec.ts` (STUDIO_TIPS_ACTIONS, 2 ids) will be red with the button not focusable,
+with the tip untied from it, with no gate, and with no door. `ingest-studio.spec.ts`'s Preview case will say
+the tip before the press. The axe scans will cover six `rights=none` states × dark, light and GOV.UK. On the
+branch now, `tests/test_ui_words_check.py` puts plants at the Glass's own shapes; it was red against the real
+Glass before the wording (four findings).
 
 **Left.** The Studio's review and merge screens' tips arrive with those screens (L3.4, and the drawn-dataset
 merge). Held rows' *Release and load* and its pair live in `alerts/HeldRowsPanel.tsx` (the rules lane's).

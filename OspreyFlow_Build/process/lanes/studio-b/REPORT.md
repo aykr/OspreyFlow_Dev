@@ -32,7 +32,7 @@ Base c467064, the branch's merge-base with `main`, throughout: the gates, the li
        Test and at the run.
      - **Live through `run_staging`, against Postgres's list store and the object store**
        (`test_subscribed_lookup_live.py`). It is red with the run's `subscribed=` taken out.
-     - Another dataset's subscription is refused at all three places, offline and live.
+     - Another dataset's subscription is refused at all three places offline, and live at the run.
      - **Rule 4:** the list's rows are withheld at the sample and at Test from a case that does not read the
        dataset, including one whose own dataset subscribes the same list (`l1.8/red-principals.txt`).
        - Test's guard goes red alone.
@@ -118,8 +118,9 @@ Base c467064, the branch's merge-base with `main`, throughout: the gates, the li
 - **Studio's:** `services/api/{studio_staging,studio_verify,pipeline_run}.py` and
   `services/ingest/reference_list_import.py` (CARRIES row 36). Studio knows, and its L1.5 report carries the
   defaults into L1.7.
-- **Studio's, by agreement:** `apps/workspace/keyboard/ingest-studio.spec.ts` (its Preview case says the tip
-  before the press), and the Glass files under `src/ingest/**` (the wording).
+- **Studio's, by agreement:** `apps/workspace/keyboard/ingest-studio.spec.ts` and the Glass files under
+  `src/ingest/**` (the wording, on the branch). The Preview case's tip-before-press change is in
+  `L1.8_studio_tips.patch`, not on the branch, and lands with it.
 - **Platform's:** `services/api/map_admin.py` (Admin › Maps' lookups).
 - **Shared:** `services/api/app.py` (the tile and prefetch lookups).
 - **The spec:** `spec/06_DECISIONS.md` and `spec/ADR_RESERVATIONS.md` (the two amendments).
