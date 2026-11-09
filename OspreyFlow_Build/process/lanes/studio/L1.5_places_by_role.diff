@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
-index b85a604..b044f5e 100644
+index bb60706..8ef28eb 100644
 --- a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
 +++ b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
-@@ -593,6 +593,15 @@
+@@ -595,6 +595,15 @@
      "verify_studio_recipe"
     ]
    },
