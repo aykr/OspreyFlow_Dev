@@ -208,3 +208,26 @@ def test_test_the_sample_and_the_run_never_open_a_connection() -> None:
     assert callers == ["api/app.py"], callers
     text = (core / "api" / "app.py").read_text()
     assert text.count("await read_into_file(") == 2  # registration, and Refresh now
+
+
+def test_a_source_author_is_shown_only_connections_bound_to_a_dataset_they_author(
+    world: SimpleNamespace,
+) -> None:
+    """The register wizard's list (`GET /v1/ingest/connections`) is decision 1's ruling too: a
+    source author sees a SQL, API or JSON connection's name and kind only when it is bound to a
+    dataset one of their cases loads into, by that dataset's own gate, and never which datasets a
+    connection is bound to (another dataset's id would tell them it exists, rule 3)."""
+    _connection(world)  # bound to ds-a only
+
+    def listed(person: str) -> list[dict[str, Any]]:
+        reply = world.client.get("/v1/ingest/connections", headers=_as(person))
+        assert reply.status_code == 200, reply.text
+        return [c for c in reply.json() if c["kind"] != "files"]
+
+    assert listed("author_b") == []
+    mine = listed("author_a")
+    assert [c["name"] for c in mine] == ["Telco TELCO_A telco.example"]
+    assert all(not c.get("datasets") and c.get("settings") is None for c in mine)
+    _connection(world, secret="TELCO_B", host="other.example", datasets=["ds-a", "ds-b"])
+    assert [c["name"] for c in listed("author_b")] == ["Telco TELCO_B other.example"]
+    assert all(not c.get("datasets") for c in listed("author_b"))

@@ -8951,13 +8951,32 @@ async def _source_of(sources: SourceStore, dataset_id: str, source_id: str) -> S
 
 @app.get("/v1/ingest/connections", dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))])
 async def list_ingest_connections(
-    principal: SourceAuthorDep, sources: SourcesDep
+    request: Request, principal: SourceAuthorDep, sources: SourcesDep
 ) -> list[Connection]:
-    """The connections a source may be registered on (the register wizard's first step). The
-    deployment's, not a dataset's: names and kinds only, nothing read through them. A connection's
-    settings (a database's host and login, an API's address, a secret's name) are for whoever
-    administers the deployment (Admin › Connections), never sent here (the lane review of L1.6)."""
-    return [c.model_copy(update={"settings": None}) for c in await sources.connections()]
+    """The connections a source may be registered on (the register wizard's first step): names and
+    kinds only, nothing read through them. A connection's settings (a database's host and login, an
+    API's address, a secret's name) and the datasets it is bound to are for whoever administers the
+    deployment (Admin › Connections), never sent here (the lane review of L1.6). A SQL, API or JSON
+    connection is listed only when it is bound to a dataset one of the asker's cases loads into, by
+    that dataset's own gate (`scope_to_dataset`, as every `/v1/datasets/{id}` route), so no one
+    learns of a connection, or a dataset, they may not read (ADR-140 Amendment 13 decision 1's
+    ruling, rule 3)."""
+    reachable: dict[str, bool] = {}
+
+    async def reaches(dataset_id: str) -> bool:
+        if dataset_id not in reachable:
+            scoped = await scope_to_dataset(
+                principal, dataset_id, get_investigations(request), get_datasets(request)
+            )
+            reachable[dataset_id] = scoped is not None
+        return reachable[dataset_id]
+
+    shown: list[Connection] = []
+    for c in await sources.connections():
+        if c.kind != "files" and not [d for d in c.datasets if await reaches(d)]:
+            continue
+        shown.append(c.model_copy(update={"settings": None, "datasets": []}))
+    return shown
 
 
 @app.get("/v1/admin/connections", dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))])
