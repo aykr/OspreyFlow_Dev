@@ -31083,7 +31083,13 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    a dataset's owners, a transfer's ends) is served as that person's name; the plain words named in
    `_PLAIN_WORDS` as they are; and nothing else, so an identity provider's `subject`, a `username`, an
    `email`, a refusal's free text (`why`), or a word a later action writes, is never served until it
-   is named there.
+   is named there. A source's governance edit (`edit_dataset_source_governance`) is shown only as the
+   source and dataset it names: its handling before and after, its legal basis (free text), and the
+   pipelines and drafts that follow, are withheld, since no Admin read serves them (`_WITHHELD_WORDS`;
+   `test_a_sources_governance_words_stay_withheld`). The picker's people are the writers this reader
+   may read, under the stream's own unit filter and with the same `cases`
+   (`AuditSectionReader.writers`; `test_the_pickers_writers_are_the_readers_units_alone`, live, and
+   `test_the_picker_offers_no_case_writer_to_a_reader_who_is_not_the_administrator`).
 4. **Kinds.** Decision 10's five (*Analyst assertions*, *Loads and promotions*, *Types*, *People and
    roles*, *Datasets*), by the actions the stream records under each (`KIND_ACTIONS`), and *Reads and
    refusals* for every other action. The run ledger's loads appear as their audit entries; the Studio's
@@ -31111,6 +31117,12 @@ Revised 9 November after the orchestrator's independent review (the strict optio
 5. **Operations' ageing** (decision 9; `services/api/promotion_ageing.py`): *What ages, and when* above the
    schedules, the promotions waiting for review with their age, and *Alert the reviewers and
    administrators after N days* (1 to 90, default 3, audited), all behind `operate_schedules`.
+   **`operate_schedules` opens the screen; it lists no promotion on its own.** A waiting promotion is
+   listed only to the people decision 11 names (`promotion_ageing.may_review`): one of the dataset's
+   Authors holding `review_promotions`, or an administrator of the dataset's unit, and in either case
+   only one cleared to the dataset's highest marking (by `HandlingScheme.clears`). The store filters
+   in its own read (rule 3); `test_waiting_promotions_contract.py` is the contract L3.4's store must
+   pass (rule 1: it adds its factory to `STORES`), run until then against `ReferenceWaiting`.
 6. ***Promotions overdue*** (Amendment 4 decision 11): raised once per promotion at N whole days, by the
    database (`ON CONFLICT DO NOTHING` on its id), to the dataset's Authors holding `review_promotions` and
    the administrators (`administer_system`) of the dataset's unit — enabled people only, never a service
@@ -31126,8 +31138,16 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    roles' current rights); a tick whose people cannot be read raises nothing, and the next tries again
    (`test_promotion_sweep_live.py`, the real lifespan on real Postgres;
    `test_a_failed_tick_raises_nothing_and_the_next_tries_again`). A promotion already alerted is
-   skipped before its recipients are read (`raised_of`), so a tick re-reads no one for it. L2.7's *Needs you* reads
-   `alerts_for(person)`, which serves the alert without its other recipients. A team's Author grant
+   skipped before its recipients are read (`raised_of`), so a tick re-reads no one for it. **One whose
+   recipients are nobody is not raised**, so it is not spent on no one (rule 2): it is counted
+   (`PromotionSweep.unreached`), logged once, and raised at the first tick that finds someone who may
+   review it (`test_an_overdue_promotion_with_no_recipient_is_not_spent`). L2.7's *Needs you* reads
+   `alerts_for(person, still)`, which serves the alert without its other recipients, and **only while
+   the person is still one of them**: the store keeps the promotion with the alert and asks `still`
+   again at the read. L2.7 passes the sweep's own `_promotion_recipients`, so a person since disabled,
+   no longer an Author holding `review_promotions` or the unit's administrator, or no longer cleared to
+   the marking, is served nothing (`test_an_alert_is_read_only_while_its_reader_is_still_a_recipient`;
+   live, `test_an_alert_is_served_only_while_its_reader_is_still_a_recipient`). A team's Author grant
    does not make its members recipients, and an alert's recipients are fixed when it is raised (one
    raised while the dataset has no reviewer reaches only the administrators).
 
