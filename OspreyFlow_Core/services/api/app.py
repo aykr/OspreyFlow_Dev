@@ -674,6 +674,7 @@ from .link_types import (
     ProposalRefusedError,
     ProposeLinkTypeRequest,
     RetireLinkTypeRequest,
+    may_read_proposal_words,
     public_ontology,
 )
 from .list_schedule import ListRefreshExecutor, ListScheduleRefused
@@ -9172,12 +9173,30 @@ async def revert_dataset_model(
 _DECIDES_TYPES = [Depends(require_right(Right.ACCEPT_TYPES))]
 
 
+async def _reads_proposal_words(
+    dataset_id: str, principal: Principal, datasets: DatasetStore, scheme: HandlingScheme
+) -> bool:
+    """`may_read_proposal_words` against the dataset's highest allowed marking, or the scheme's
+    highest where none is set (the strict side)."""
+    held = (await datasets.egress_of([dataset_id])).get(dataset_id)
+    marking = (held.highest_marking if held is not None else None) or scheme.classification[-1]
+    return may_read_proposal_words(principal, marking, scheme)
+
+
 @app.get("/v1/datasets/{dataset_id}/model/proposals", dependencies=_DECIDES_TYPES)
 async def list_model_proposals(
-    dataset_id: StudioDatasetDep, link_types: LinkTypesDep
+    dataset_id: StudioDatasetDep,
+    principal: PrincipalDep,
+    link_types: LinkTypesDep,
+    datasets: DatasetsDep,
+    scheme: HandlingSchemeDep,
 ) -> ModelProposalList:
-    """The link types analysts proposed for this dataset, newest first, without their cases."""
-    return ModelProposalList(proposals=await link_types.dataset_proposal_views(dataset_id))
+    """The link types analysts proposed for this dataset, newest first, without their cases; to a
+    reader not cleared for the dataset's highest marking, without their words either."""
+    words = await _reads_proposal_words(dataset_id, principal, datasets, scheme)
+    return ModelProposalList(
+        proposals=await link_types.dataset_proposal_views(dataset_id, may_read_words=words)
+    )
 
 
 async def _audit_type_decision(
@@ -9210,14 +9229,18 @@ async def accept_model_proposal(
     body: AcceptLinkTypeRequest,
     principal: PrincipalDep,
     link_types: LinkTypesDep,
+    datasets: DatasetsDep,
+    scheme: HandlingSchemeDep,
     audit: AuditDep,
 ) -> ModelProposalView:
     """*Add it to the draft model*, Direct or Probabilistic: made live with the next model
     version; never by its proposer. The draft it was written into is named in the audit, as the
     Studio's own draft routes name theirs."""
+    words = await _reads_proposal_words(dataset_id, principal, datasets, scheme)
     found, version = await link_types.accept(
-        dataset_id, proposal_id, principal, basis=body.basis, reason=body.reason
-    )
+        dataset_id, proposal_id, principal, basis=body.basis, reason=body.reason,
+        may_read_words=words,
+    )  # fmt: skip
     await _audit_type_decision(
         audit, principal, "link_type_accept", dataset_id, found, body.reason,
         basis=body.basis, model_version=version,
@@ -9235,10 +9258,15 @@ async def decline_model_proposal(
     body: LinkTypeDecisionRequest,
     principal: PrincipalDep,
     link_types: LinkTypesDep,
+    datasets: DatasetsDep,
+    scheme: HandlingSchemeDep,
     audit: AuditDep,
 ) -> ModelProposalView:
     """*Decline*, with a reason: its links stay in its case's layer for good."""
-    found = await link_types.decline(dataset_id, proposal_id, principal, reason=body.reason)
+    words = await _reads_proposal_words(dataset_id, principal, datasets, scheme)
+    found = await link_types.decline(
+        dataset_id, proposal_id, principal, reason=body.reason, may_read_words=words
+    )
     await _audit_type_decision(
         audit, principal, "link_type_decline", dataset_id, found, body.reason
     )

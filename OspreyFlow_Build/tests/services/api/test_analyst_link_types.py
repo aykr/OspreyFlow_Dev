@@ -21,8 +21,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from pathlib import Path
 from datetime import UTC, datetime
 from typing import Any
+
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,6 +33,7 @@ from services.api.app import (
     app,
     get_audit,
     get_datasets,
+    get_handling_scheme,
     get_investigations,
     get_link_types,
     get_ontology,
@@ -56,6 +60,7 @@ from services.api.target_models import (
     TargetModelRefused,
 )
 
+from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
 from schemas.domain import Principal
 
@@ -112,13 +117,20 @@ class _Cases:
 
 
 class _Datasets:
-    """What the dataset routes ask of the dataset store: nothing here is a composite or drawn."""
+    """What the dataset routes ask of the dataset store: nothing here is a composite or drawn;
+    each dataset's highest allowed marking is `marking` (the case's ceiling)."""
+
+    def __init__(self) -> None:
+        self.marking: dict[str, str] = {"ds-1": "OFFICIAL", "ds-2": "OFFICIAL"}
 
     async def composites_among(self, ids: Any) -> list[str]:
         return []
 
     async def egress_of(self, ids: Any) -> dict[str, Any]:
-        return {}
+        return {
+            i: SimpleNamespace(id=i, highest_marking=self.marking.get(i), kind="source")
+            for i in ids
+        }
 
     async def chosen_of_case(self, investigation_id: str) -> list[Any]:
         return []
@@ -329,6 +341,7 @@ class _World:
             self.cases.levels[(case, "alice")] = AccessLevel.EDITOR
         self.cases.levels[("inv-1", "bob")] = AccessLevel.VIEWER
         self.cases.levels[("inv-2", "bob")] = AccessLevel.EDITOR
+        self.datasets = _Datasets()
 
     def client(self, principal: Principal) -> TestClient:
         app.dependency_overrides[get_investigations] = lambda: self.cases
@@ -337,7 +350,8 @@ class _World:
         app.dependency_overrides[get_link_types] = lambda: self.service
         app.dependency_overrides[get_ontology] = lambda: self.service._ontology  # noqa: SLF001
         app.dependency_overrides[get_target_models] = lambda: self.models
-        app.dependency_overrides[get_datasets] = lambda: _Datasets()
+        app.dependency_overrides[get_datasets] = lambda: self.datasets
+        app.dependency_overrides[get_handling_scheme] = load_uk_le_scheme
         return TestClient(app, raise_server_exceptions=False)
 
 
@@ -455,12 +469,12 @@ async def test_the_administrators_promotion_never_merges_a_datasets_proposal() -
     proposal of a dataset into the ontology: that would make its links promotable without any
     data engineer accepting it (ADR-090 Amendment 4)."""
     service, store, _, _ = await _service()
-    old = await service.propose(
-        "inv-1", _analyst("inv-1").model_copy(update={"datasets": None}), name="BRIBED",
-        from_types=["Person"], to_types=["Person"], directed=True, colour=None, thickness=None,
-        label=None, reason="Before ADR-099 Amendment 3",
-    )  # fmt: skip
-    assert old.dataset_id is None
+    # A proposal made before ADR-099 Amendment 3: stored then, naming no dataset (no case can make
+    # one now, `test_a_principal_reading_no_dataset_cannot_propose`).
+    made = await _propose(service, case="inv-3", name="BRIBED")
+    old = made.model_copy(update={"dataset_id": None, "investigation_id": "inv-1"})
+    store.rows[made.id] = old
+    await service.refresh()
     mine = await _propose(service, case="inv-2")
     admin = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-1", roles=["osprey-admin"])
     await service.promote(old.id, admin, basis="probabilistic", reason="Seen often")
@@ -583,3 +597,163 @@ async def test_a_board_never_offers_a_proposals_storage_label() -> None:
     offered = boards.link_types()
     assert p.storage_name not in offered and not [t for t in offered if "__" in t]
     assert "ASSOCIATE_OF" in offered
+
+
+def test_an_accepter_below_the_cases_marking_sees_no_words_and_cannot_decide(
+    world: _World,
+) -> None:
+    """ADR-143 Amendment 4's *Open*, the strict reading until the owner rules: a proposal's words
+    are text written in a case, shown on the Model tab only to an `accept_types` holder cleared for
+    the case's marking (its dataset's highest allowed marking). Anyone else is told a proposal
+    exists and is above their clearance, without its words, and cannot decide it. Red with
+    `may_read_proposal_words` answering True (the owner's (a))."""
+    world.datasets.marking["ds-1"] = "SECRET"
+    made = world.client(_analyst("inv-1")).post(
+        "/v1/investigations/inv-1/link-types", json=PROPOSAL
+    )
+    pid = made.json()["id"]
+    below = _engineer()  # OFFICIAL
+    rows = world.client(below).get("/v1/datasets/ds-1/model/proposals").json()["proposals"]
+    assert [(r["withheld"], r["status"], r["from_types"], r["proposed_at"]) for r in rows] == [
+        (True, None, [], None)
+    ]
+    text = " ".join(str(v) for v in rows[0].values())
+    for word in ("BRIBED", "prison officer", "alice"):
+        assert word not in text
+    for act in ("accept", "decline"):
+        refused = world.client(below).post(
+            f"/v1/datasets/ds-1/model/proposals/{pid}/{act}",
+            json={"basis": "probabilistic", "reason": "x"},
+        )
+        assert refused.status_code == 422 and "clearance" in refused.json()["detail"]
+    assert world.store.rows[pid].status is ProposalStatus.PENDING
+    cleared = below.model_copy(update={"clearance": "SECRET"})
+    shown = world.client(cleared).get("/v1/datasets/ds-1/model/proposals").json()["proposals"]
+    assert shown[0]["withheld"] is False and shown[0]["name"] == "BRIBED"
+
+
+def test_with_no_highest_marking_set_the_scheme_highest_is_the_cases_marking(
+    world: _World,
+) -> None:
+    world.datasets.marking.pop("ds-1")
+    world.client(_analyst("inv-1")).post("/v1/investigations/inv-1/link-types", json=PROPOSAL)
+    rows = world.client(_engineer()).get("/v1/datasets/ds-1/model/proposals").json()["proposals"]
+    assert rows[0]["withheld"] is True and rows[0]["name"] == ""
+
+
+async def test_a_principal_reading_no_dataset_cannot_propose() -> None:
+    """Not even one with no read set at all (`datasets` None): a proposal naming no dataset would
+    fall to ADR-090's deployment-wide rule (ADR-143 Amendment 4 decision 5)."""
+    service, store, _, _ = await _service()
+    unscoped = _analyst("inv-1").model_copy(update={"datasets": None})
+    with pytest.raises(ProposalRefusedError, match="reads no dataset"):
+        await service.propose(
+            "inv-1", unscoped, name="BRIBED", from_types=["Person"], to_types=["Person"],
+            directed=True, colour=None, thickness=None, label=None, reason="x",
+        )  # fmt: skip
+    assert store.rows == {}
+
+
+async def test_another_cases_live_type_never_makes_this_cases_own_proposal_promotable() -> None:
+    """The independent review's blocker 2: case A's BRIBED accepted and live; case D's own BRIBED,
+    pending (ends that do not fit) and then declined, stays unpromotable. Only a case's own
+    proposal, accepted, makes its links promotable."""
+    service, _, models, _ = await _service()
+    a = await _propose(service)
+    d = await service.propose(
+        "inv-4", _analyst("inv-4", "dora"), name="BRIBED", from_types=["Person"],
+        to_types=["Organisation"], directed=True, colour=None, thickness=None, label=None,
+        reason="Paid a firm",
+    )  # fmt: skip
+    await service.accept("ds-1", a.id, _engineer(), basis="probabilistic", reason="Useful")
+    draft = await models.draft("ds-1")
+    assert draft is not None
+    await models.make_live("ds-1", draft.version, _engineer())
+    pending = await _refusal(service, "inv-4")
+    assert pending is not None and "not yet accepted" in pending
+    await service.decline("ds-1", d.id, _engineer(), reason="Use the accepted BRIBED")
+    declined = await _refusal(service, "inv-4")
+    assert declined is not None and "declined" in declined
+    # A case with no proposal of its own uses the dataset's live type as the dataset's.
+    assert await _refusal(service, "inv-2") is None
+
+
+async def test_a_link_change_never_names_or_uses_another_cases_proposal() -> None:
+    """The independent review's blocker 3: case B's own BRIBED declined, case A's BRIBED pending
+    with other ends. B's link of its own type is read with B's own definition and written under
+    B's own label; A's ends and label never appear."""
+    service, store, _, _ = await _service()
+    mine = await service.propose(
+        "inv-2", _analyst("inv-2", "bob"), name="BRIBED", from_types=["Person"],
+        to_types=["Person"], directed=True, colour=None, thickness=None, label=None, reason="x",
+    )  # fmt: skip
+    await service.decline("ds-1", mine.id, _engineer(), reason="Not needed")
+    theirs = await service.propose(
+        "inv-1", _analyst("inv-1"), name="BRIBED", from_types=["Organisation"],
+        to_types=["Organisation"], directed=True, colour=None, thickness=None, label=None,
+        reason="Firms",
+    )  # fmt: skip
+    found = await service.type_named("BRIBED", "inv-2", _analyst("inv-2", "bob"))
+    assert found is not None and found.storage_name == mine.storage_name
+    assert found.definition.from_types == ["Person"]
+    assert theirs.storage_name not in {found.storage_name}
+    # A case with no proposal of that name is told of none.
+    assert await service.type_named("BRIBED", "inv-4", _analyst("inv-4")) is None
+
+
+async def test_a_claim_given_back_restores_every_field_it_wrote() -> None:
+    """The independent review's item 6: not the status alone."""
+    service, store, models, _ = await _service()
+    p = await _propose(service)
+    before = store.rows[p.id]
+
+    async def refused(*_: Any) -> Any:
+        raise TargetModelRefused("this dataset already has a draft, version 2")
+
+    models.add_extension = refused  # type: ignore[method-assign]
+    with pytest.raises(TargetModelRefused):
+        await service.accept("ds-1", p.id, _engineer(), basis="direct", reason="x")
+    after = store.rows[p.id]
+    for field in ("status", "decided_by", "decided_at", "decision_reason", "basis",
+                  "promoted_name", "direct_since"):  # fmt: skip
+        assert getattr(after, field) == getattr(before, field), field
+
+
+# --- the one check every promotion writer calls (the independent review's item 4; rule 12) ------
+
+_CORE = Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
+
+
+def _promotion_writers_missing_the_check(root: Path) -> list[str]:
+    """Every module under `services` that writes a promotion (ADR-143 decision 8's load, trigger
+    `analyst_promotion`) and never calls `LinkTypeService.promotion_refusals`, which says which
+    links of a proposed, declined or not-yet-live type stay behind (decision 9). L3.4 builds the
+    writer; this keeps it from skipping the check."""
+    missing = []
+    for path in sorted((root / "services").rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if "analyst_promotion" in text and "promotion_refusals(" not in text:
+            missing.append(path.relative_to(root).as_posix())
+    return missing
+
+
+def test_every_promotion_writer_asks_which_links_may_go() -> None:
+    assert _promotion_writers_missing_the_check(_CORE) == []
+
+
+def test_a_planted_promotion_writer_without_the_check_is_found(tmp_path: Path) -> None:
+    """Red first, in the shape the real writer will take: a load written with the promotion's
+    trigger and no call to the check."""
+    planted = tmp_path / "services/api/promotions.py"
+    planted.parent.mkdir(parents=True)
+    planted.write_text(
+        "async def promote(loads, items):\n"
+        '    return await loads.write(items, trigger="analyst_promotion")\n'
+    )
+    assert _promotion_writers_missing_the_check(tmp_path) == ["services/api/promotions.py"]
+    planted.write_text(
+        "async def promote(loads, link_types, case, who, items):\n"
+        "    held = await link_types.promotion_refusals(case, who, [i.type for i in items])\n"
+        '    return await loads.write(items, trigger="analyst_promotion")\n'
+    )
+    assert _promotion_writers_missing_the_check(tmp_path) == []

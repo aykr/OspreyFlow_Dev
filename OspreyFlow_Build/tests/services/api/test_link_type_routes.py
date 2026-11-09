@@ -27,8 +27,14 @@ from schemas.domain import Principal
 from .test_investigation_access_routes import _Audit, _Store
 from .test_link_type_service import Graph, MemoryStore, WorkingSet
 
-ALICE = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
-BOB = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
+# Scoped to the case's dataset, as `app.get_principal` scopes every request in a case: a case
+# reading no dataset cannot propose (ADR-143 Amendment 4).
+ALICE = Principal(
+    id="alice", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"], datasets=["ds-1"]
+)
+BOB = Principal(
+    id="bob", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"], datasets=["ds-1"]
+)
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-1", roles=["osprey-admin"])
 OTHER_ADMIN = Principal(
     id="admin-9", clearance="OFFICIAL", org_unit="unit-9", roles=["osprey-admin"]
@@ -40,6 +46,13 @@ class _Cases(_Store):
         if investigation_id != "inv-1":
             raise InvestigationNotFoundError(investigation_id)
         return self.case
+
+
+def _made_before_am3(world: _World, pid: str) -> None:
+    """The administrator's decisions are for proposals made before ADR-099 Amendment 3 alone, which
+    name no dataset (ADR-090 Amendment 4): the proposal is stored as one."""
+    world.store.rows[pid] = world.store.rows[pid].model_copy(update={"dataset_id": None})
+    asyncio.run(world.service.refresh())
 
 
 class _World:
@@ -112,6 +125,7 @@ def test_only_an_administrator_of_the_unit_lists_and_decides(world: _World) -> N
     pid = (
         world.client(ALICE).post("/v1/investigations/inv-1/link-types", json=PROPOSAL).json()["id"]
     )
+    _made_before_am3(world, pid)
     assert world.client(ALICE).get("/v1/admin/link-types").status_code == 403
     assert world.client(OTHER_ADMIN).get("/v1/admin/link-types").json() == {"proposals": []}
     promote = {"basis": "direct", "reason": "A loader backs it"}
@@ -137,6 +151,7 @@ def test_the_ontology_route_shows_a_promoted_type_and_never_a_proposals_label(
     pid = (
         world.client(ALICE).post("/v1/investigations/inv-1/link-types", json=PROPOSAL).json()["id"]
     )
+    _made_before_am3(world, pid)
     before = world.client(BOB).get("/v1/ontology").json()
     assert (
         all("__" not in t["name"] for t in before["edge_types"]) and before["storage_aliases"] == {}

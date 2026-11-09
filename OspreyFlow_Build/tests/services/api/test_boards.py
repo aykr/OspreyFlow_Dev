@@ -1509,9 +1509,8 @@ def test_a_board_neither_lists_nor_draws_under_a_proposals_storage_label(
 def test_a_link_is_never_drawn_under_a_proposals_storage_label(
     world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`link`'s own refusal of a hidden type, apart from the list: red with that refusal removed
-    and the list made to hold hidden types (each check alone keeps the link out; both are planted
-    together, `process/lanes/case-b/L3.5_RED_RECORD.md`)."""
+    """`link` draws only a type its board lists (`link_types`), so a hidden storage label is
+    refused at the route and nothing is written. Red with hidden types listed."""
     base = ONTOLOGY.edge_type("ASSOCIATE_OF")
     assert base is not None
     label = "BRIBED__01PROPOSALOFANOTHERCASE"

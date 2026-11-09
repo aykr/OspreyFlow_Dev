@@ -169,6 +169,37 @@ class LinkTypeProposalStore:
             raise ProposalNotFoundError(proposal_id)
         return _row(row)
 
+    async def get_for_case(self, proposal_id: str, investigation_id: str) -> LinkTypeProposal:
+        """One proposal made in this case; another case's is not found, as a missing one."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"SELECT {_COLUMNS} FROM link_type_proposals "
+                "WHERE id = $1 AND investigation_id = $2",
+                proposal_id,
+                investigation_id,
+            )
+        if row is None:
+            raise ProposalNotFoundError(proposal_id)
+        return _row(row)
+
+    async def give_back(self, before: LinkTypeProposal) -> None:
+        """An acceptance's claim undone: every decision field as it was read, while the row is
+        still `accepted` (ADR-143 decision 9)."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE link_type_proposals SET status = $2, decided_by = $3, decided_at = $4, "
+                "decision_reason = $5, basis = $6, promoted_name = $7, direct_since = $8 "
+                "WHERE id = $1 AND status = 'accepted'",
+                before.id,
+                before.status.value,
+                before.decided_by,
+                before.decided_at,
+                before.decision_reason,
+                before.basis,
+                before.promoted_name,
+                before.direct_since,
+            )
+
     async def pending_named(self, names: Sequence[str]) -> list[LinkTypeProposal]:
         """Pending proposals of these names, for a case whose view holds one of their links."""
         async with self._pool.acquire() as conn:

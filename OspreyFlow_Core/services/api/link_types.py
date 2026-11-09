@@ -43,6 +43,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from adapters.graph_arcadedb.naming import STORAGE_SEPARATOR
 from conduit_common.identity import new_id
+from ontology.handling import HandlingScheme
 from schemas.domain import EdgeTypeDef, OntologySchema, Principal
 
 from .dataset_scope import analyst_layer, refuse_in_a_composite_case
@@ -254,20 +255,31 @@ class LinkTypeService:
         if await self._store.revision() != self._ontology.overlay_revision:
             await self.refresh()
 
-    def type_named(self, name: str) -> CaseType | None:
-        """The type a link read as `name` has, offered or not: one in the ontology, or the latest
-        proposal its links read as (pending, rejected, withdrawn or retired). A link already of a
-        type no longer offered can still be corrected in other ways (`link_changes.py`)."""
+    async def type_named(
+        self, name: str, investigation_id: str, principal: Principal
+    ) -> CaseType | None:
+        """The type a link read as `name` has in this case, offered or not: one in the ontology;
+        the latest of this case's own proposals its links read as (pending, rejected, withdrawn or
+        retired); or a type accepted into the case's dataset's live model. Never another case's
+        proposal (rule 3: its ends would show in a refusal, and a link could be written under its
+        label; the independent review of L3.5, blocker 3). A link already of a type no longer
+        offered can still be corrected in other ways (`link_changes.py`)."""
         found = self._ontology.edge_type(name)
         if found is not None and not found.hidden:
             return CaseType(definition=found, storage_name=name)
-        for proposal in reversed(self._proposals):
-            if proposal.reads_as == name:
-                return CaseType(
-                    definition=proposal.definition(name),
-                    storage_name=proposal.storage_name,
-                    proposal_id=proposal.id if proposal.status is ProposalStatus.PENDING else None,
-                )
+        own = [
+            p for p in await self._store.named_in_case(investigation_id, None) if p.reads_as == name
+        ]
+        if own:
+            proposal = own[-1]
+            return CaseType(
+                definition=proposal.definition(name),
+                storage_name=proposal.storage_name,
+                proposal_id=proposal.id if proposal.status is ProposalStatus.PENDING else None,
+            )
+        for accepted in await self._accepted_in_force(principal):
+            if accepted.name == name:
+                return CaseType(definition=accepted.in_force(), storage_name=accepted.storage_name)
         return None
 
     async def _model_link_types(self, dataset_id: str | None) -> tuple[set[str], set[str], int]:
@@ -378,7 +390,7 @@ class LinkTypeService:
         if name in await self.case_types(case.id, principal):
             raise ProposalRefusedError(f"{name} is already offered in this case: use it instead.")
         dataset_id = next(iter(_sources_of(principal)), None)
-        if principal.datasets is not None and dataset_id is None:
+        if dataset_id is None:
             # A case that reads nothing has no dataset to decide it (ADR-143 Amendment 4).
             raise ProposalRefusedError(
                 "This case reads no dataset, so a type proposed here has no data engineer to "
@@ -429,9 +441,9 @@ class LinkTypeService:
     ) -> LinkTypeProposal:
         """The proposer or an Author of its case withdraws a pending proposal, from its case alone:
         from another case, even one reading the same dataset, it is not found (rule 3)."""
-        proposal = await self._store.get(proposal_id)
-        in_reach = proposal.investigation_id == investigation_id
-        if not in_reach or proposal.status is not ProposalStatus.PENDING:
+        # The case is in the store's query: another case's proposal is never read (rule 3).
+        proposal = await self._store.get_for_case(proposal_id, investigation_id)
+        if proposal.status is not ProposalStatus.PENDING:
             raise ProposalNotFoundError(proposal_id)
         if proposal.proposed_by != principal.id and not is_author:
             raise ProposalRefusedError(
@@ -575,15 +587,20 @@ class LinkTypeService:
         passed the dataset's own gate; the store's query names the dataset (rule 3)."""
         return await self._store.for_dataset(dataset_id)
 
-    async def dataset_proposal_views(self, dataset_id: str) -> list[ModelProposalView]:
-        """The Model tab's list, each proposal with where its type stands in the dataset's model."""
+    async def dataset_proposal_views(
+        self, dataset_id: str, *, may_read_words: bool = True
+    ) -> list[ModelProposalView]:
+        """The Model tab's list, each proposal with where its type stands in the dataset's model.
+        A reader `may_read_proposal_words` refuses is told each proposal exists and is above their
+        clearance, without its words (ADR-143 Amendment 4's *Open*, the strict reading)."""
         live, drafted, _ = await self._model_link_types(dataset_id)
         views = []
         for proposal in await self._store.for_dataset(dataset_id):
             where: Literal["live", "draft"] | None = (
                 "live" if proposal.name in live else "draft" if proposal.name in drafted else None
             )
-            views.append(ModelProposalView.of(proposal, in_model=where))
+            view = ModelProposalView.of(proposal, in_model=where)
+            views.append(view if may_read_words else view.without_words())
         return views
 
     async def _decidable(self, dataset_id: str, proposal_id: str) -> LinkTypeProposal:
@@ -607,6 +624,7 @@ class LinkTypeService:
         *,
         basis: Literal["direct", "probabilistic"],
         reason: str,
+        may_read_words: bool = True,
     ) -> tuple[LinkTypeProposal, int]:
         """*Add it to the draft model*, with the basis the data engineer chooses (ADR-090
         Amendment 4, decision 6 standing): a `link_type` extension in the dataset's draft (opened
@@ -619,6 +637,7 @@ class LinkTypeService:
         proposal and the draft's version."""
         await self._current()
         _check_reason(reason)
+        _refuse_unread(may_read_words)
         proposal = await self._decidable(dataset_id, proposal_id)
         if proposal.proposed_by == principal.id:
             raise ProposalRefusedError(
@@ -652,14 +671,8 @@ class LinkTypeService:
                 dataset_id, proposal.name, "link_type", principal
             )
         except BaseException:
-            await self._store.decide(
-                proposal.id,
-                status=proposal.status,
-                by=proposal.decided_by or principal.id,
-                at=now,
-                reason=proposal.decision_reason or "",
-                only_from=ProposalStatus.ACCEPTED,
-            )
+            # Back to exactly what it was: every field the claim wrote, not the status alone.
+            await self._store.give_back(proposal)
             raise
         accepted = proposal.definition()
         for other in await self._store.for_dataset(dataset_id):
@@ -682,11 +695,18 @@ class LinkTypeService:
         return await self._store.get(proposal_id), draft.version
 
     async def decline(
-        self, dataset_id: str, proposal_id: str, principal: Principal, *, reason: str
+        self,
+        dataset_id: str,
+        proposal_id: str,
+        principal: Principal,
+        *,
+        reason: str,
+        may_read_words: bool = True,
     ) -> LinkTypeProposal:
         """*Decline*, with a reason: no longer offered; its links stay in its case's layer for
         good and keep reading as its name. Only from pending, by a write that checks it."""
         _check_reason(reason)
+        _refuse_unread(may_read_words)
         proposal = await self._store.get_for_dataset(proposal_id, dataset_id)
         decided = proposal.status is ProposalStatus.PENDING and await self._store.decide(
             proposal.id,
@@ -711,8 +731,6 @@ class LinkTypeService:
         `None` here: whether the dataset's model holds it is the sheet's own check. A proposal of
         another case is answered exactly as a name that is no type at all (rule 3)."""
         await self._current()
-        dataset_id = next(iter(_sources_of(principal)), None)
-        live, drafted, draft_version = await self._model_link_types(dataset_id)
         mine = await self._store.named_in_case(investigation_id, list(names))
         in_force = {p.name for p in await self._accepted_in_force(principal)}
         answers: dict[str, str | None] = {}
@@ -722,22 +740,33 @@ class LinkTypeService:
                 answers[name] = None
                 continue
             own = [p for p in mine if p.reads_as == name]
-            accepted_here = any(p.status in _ACCEPTED_STATES for p in own)
-            if name in live and (accepted_here or name in in_force):
+            if not own:
+                # No proposal of this case's own: only a type accepted and live in the case's
+                # dataset, used here as the dataset's, may go.
+                answers[name] = (
+                    None if name in in_force else f"{name} is not a link type of this case."
+                )
+                continue
+            # The case's own proposal decides, never another case's acceptance (the independent
+            # review of L3.5, blocker 2), judged against the live model of the dataset it names.
+            latest = own[-1]
+            if latest.status not in _ACCEPTED_STATES:
+                answers[name] = _why_not(name, latest.status)
+                continue
+            live, drafted, draft_version = await self._model_link_types(latest.dataset_id)
+            if name in live:
                 answers[name] = None
-            elif not own:
-                answers[name] = f"{name} is not a link type of this case."
-            elif accepted_here:
+            elif name in drafted:
                 answers[name] = (
                     f"{name} is accepted into the draft domain model, version {draft_version}: "
                     "its links can be promoted once that version is made live."
-                    if name in drafted
-                    else f"{name} is accepted but is not in the dataset's domain model in force "
-                    "or in its draft: a data engineer of the dataset adds it again on the Model "
-                    "tab before its links can be promoted."
                 )
             else:
-                answers[name] = _why_not(name, own[-1].status)
+                answers[name] = (
+                    f"{name} is accepted but is not in the dataset's domain model in force or in "
+                    "its draft: a data engineer of the dataset adds it again on the Model tab "
+                    "before its links can be promoted."
+                )
         return answers
 
 
@@ -754,6 +783,24 @@ def _why_not(name: str, status: ProposalStatus) -> str:
     if status is ProposalStatus.REJECTED:
         return f"{name} was declined: its links stay in the case's layer for good."
     return f"{name} was {status.value}: its links stay in the case's layer."
+
+
+def may_read_proposal_words(reader: Principal, marking: str, scheme: HandlingScheme) -> bool:
+    """Whether the Model tab shows a proposal's words (its name, label, meaning, proposer and the
+    reasons given) to `reader`: text written in a case, shown to a data engineer who may hold no
+    level on it. **The strict reading, until the owner rules** (ADR-143 Amendment 4's *Open*):
+    only to one cleared for the case's marking, its dataset's highest allowed marking (the case's
+    ceiling, ADR-143 Amendment 2 decision 3), or the scheme's highest where none is set. The
+    owner's (a), "show it to every `accept_types` holder of the dataset", is `return True`."""
+    return scheme.clears(reader.clearance, marking)
+
+
+def _refuse_unread(may_read_words: bool) -> None:
+    if not may_read_words:
+        raise ProposalRefusedError(
+            "This proposal is above your clearance: a data engineer of the dataset cleared for "
+            "it decides it."
+        )
 
 
 def _check_reason(reason: str) -> None:
@@ -839,9 +886,9 @@ class ModelProposalView(BaseModel):
     to_types: list[str]
     directed: bool
     proposed_by: str
-    proposed_at: datetime
+    proposed_at: datetime | None = None
     reason: str
-    status: ProposalStatus
+    status: ProposalStatus | None = None
     decided_by: str | None = None
     decided_at: datetime | None = None
     decision_reason: str | None = None
@@ -850,11 +897,24 @@ class ModelProposalView(BaseModel):
     #: never added, or an accepted one lost from the draft, which may be added again).
     in_model: Literal["live", "draft"] | None = None
 
+    #: True when the reader is not cleared for the case's marking: the proposal's words (name,
+    #: label, meaning, proposer, reasons) are left out and it cannot be decided by them.
+    withheld: bool = False
+
+    def without_words(self) -> ModelProposalView:
+        """That a proposal exists and is above the reader's clearance, and nothing else: no word
+        written in its case, nor its ends, its date or where it stands (the independent review's
+        item 8)."""
+        return ModelProposalView(
+            id=self.id, name="", from_types=[], to_types=[], directed=False, proposed_by="",
+            reason="", withheld=True,
+        )  # fmt: skip
+
     @classmethod
     def of(
         cls, proposal: LinkTypeProposal, in_model: Literal["live", "draft"] | None = None
     ) -> ModelProposalView:
-        fields = proposal.model_dump(include=set(cls.model_fields) - {"in_model"})
+        fields = proposal.model_dump(include=set(cls.model_fields) - {"in_model", "withheld"})
         return cls.model_validate({**fields, "in_model": in_model})
 
 

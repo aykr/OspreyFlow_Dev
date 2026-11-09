@@ -75,6 +75,16 @@ class MemoryStore:
     async def for_dataset(self, dataset_id: str) -> list[LinkTypeProposal]:
         return [p for p in reversed(await self.all()) if p.dataset_id == dataset_id]
 
+    async def get_for_case(self, pid: str, case: str) -> LinkTypeProposal:
+        p = self.rows.get(pid)
+        if p is None or p.investigation_id != case:
+            raise ProposalNotFoundError(pid)
+        return p
+
+    async def give_back(self, before: LinkTypeProposal) -> None:
+        if self.rows[before.id].status is ProposalStatus.ACCEPTED:
+            self.rows[before.id] = before
+
     async def get_for_dataset(self, pid: str, dataset_id: str) -> LinkTypeProposal:
         p = self.rows.get(pid)
         if p is None or p.dataset_id != dataset_id:
@@ -181,7 +191,17 @@ async def _propose(
         "reason": "They know each other by sight",
     }
     fields.update(over)
-    return await service.propose(case, EDITOR, **fields)
+    # Proposed through the real path (so every refusal of `propose` applies), by a principal
+    # scoped to a case, as every request in a case is; then stored as a proposal made before ADR-099
+    # Amendment 3, naming no dataset, since these are ADR-090's own rules, which since ADR-143
+    # decision 9 hold for those alone (a case can no longer propose one naming none).
+    made = await service.propose(
+        case, EDITOR.model_copy(update={"datasets": ["before-am3"]}), **fields
+    )
+    store = service._store  # noqa: SLF001
+    store.rows[made.id] = made.model_copy(update={"dataset_id": None})  # type: ignore[attr-defined]
+    await service.refresh()
+    return store.rows[made.id]  # type: ignore[attr-defined,no-any-return]
 
 
 def names(table: dict[str, Any]) -> set[str]:
