@@ -609,6 +609,10 @@ New ones are added at the bottom as they happen.
    - **(a) Recommended, and built meanwhile:** no. The writes need a dataset Author's right, which a Reports
      Viewer doesn't hold.
    - (b) Yes, as an Author, amending ADR-112 for this case.
+   - **Your rulings, about 20:05: (a) for both.** Admin's Delete of a removed case's layer is for an administrator
+     of the dataset's own unit only (another unit 404 alike). A Reports Viewer, even one who is an Author, is
+     refused the five removed-case writes (ADR-112 stands). Built so already; ADR-143 Amendment 5 drops
+     "provisional".
 
 91. **Case-b's L3.8 merged (`2317b49`, onto main as `01a2a75`), with ADR-145 Amendment 8 written: your Disable
     ruling.** Three findings were settled at the merge, each a one-line census entry or a fix of mine: the
