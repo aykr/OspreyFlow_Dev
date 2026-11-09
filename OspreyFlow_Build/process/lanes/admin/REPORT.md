@@ -19,7 +19,7 @@ pass over round 2.
 
 1. **Gates.**
    - `make -k ci` at b85a1b6 (`gates/b85a1b6.ci.txt`): green except Docker's checks (the 8 image scans, opentofu and chart).
-   - `make test` on the server at b85a1b6 (`gates/b85a1b6.test.txt`).
+   - `make test` on the server at b85a1b6 (`gates/b85a1b6.test.txt`), and again at 1179875 after the re-review's test-only fix (`gates/1179875.test.txt`): pytest 9,674 passed and 2 failed (main's GPU and Valkey cases); test-js 2,869 of 2,870, with `MatrixView.budget` failing under load.
    - Live on stack f at b85a1b6 under the admin lease (`gates/b85a1b6.live.txt`): 183 passed, including `test_route_rights.py`. 16 leftover `test_link_type_store` rows removed. Counted before and after, the set left no row.
    - Keyboard and axe ran at cb1b1fa. After that the Glass changed only in test files and a harness comment.
 2. **Left, with why:**
