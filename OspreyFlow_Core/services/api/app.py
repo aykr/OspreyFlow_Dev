@@ -1388,6 +1388,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         deployment_lists=_deployment_list_scheduler(app),
     )
     monitoring_task = asyncio.create_task(run_every_minute(app.state.monitoring_schedules))
+    # ADR-145 Amendment 4 decision 11 (R7), admin's own job (Amendment 6): *Promotions overdue*,
+    # once each at N days, from whatever source `app.state.waiting_promotions` holds at each tick.
+    app.state.promotion_sweep = promotion_ageing_module.PromotionSweep(
+        promotion_ageing, promotion_ageing, lambda: app.state.waiting_promotions,
+        lambda p: _promotion_recipients(app, p),
+    )  # fmt: skip
+    promotion_task = asyncio.create_task(
+        promotion_ageing_module.run_every(
+            app.state.promotion_sweep,
+            float(os.environ.get("OSPREY_PROMOTION_SWEEP_SECONDS")
+                  or promotion_ageing_module.SWEEP_SECONDS),
+        )
+    )  # fmt: skip
 
     try:
         yield
@@ -1395,6 +1408,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         sweep_task.cancel()
         schedule_task.cancel()
         monitoring_task.cancel()
+        promotion_task.cancel()
         await investigations.close()
         await custom_roles.close()
         await admin_people.close()
@@ -16297,19 +16311,19 @@ async def _audit_filters_refused_handler(
 async def _served_audit(
     principal: Principal,
     audit: AuditWriter,
-    principal_names: PrincipalNameDirectory,
     entries: list[AuditSectionEntry],
     *,
     held_in: str,
+    who: str | None,
     filters: audit_section_module.StreamFilters,
     total: int,
     offset: int,
     limit: int,
     note: str | None,
+    people: list[str],
 ) -> AuditSectionPage:
-    """Names who acted, only for the entries served (ADR-106 decision 3), and audits the read."""
-    names = await principal_names.display_names({e.principal_id for e in entries})
-    entries = [e.model_copy(update={"principal_name": names.get(e.principal_id)}) for e in entries]
+    """Audits the read and serves the page; every entry is already named (ADR-106 decision 3:
+    names asked for only the accounts the page serves), so the page carries no account's id."""
     await audit.record(
         principal=principal,
         action="read_audit_section",
@@ -16317,7 +16331,7 @@ async def _served_audit(
         resolved_query={
             "held_in": held_in,
             "kind": filters.kind,
-            "who": filters.who,
+            "who": who,
             "case": filters.investigation_id,
             "dataset": filters.dataset_id,
             "since": filters.since.isoformat() if filters.since else None,
@@ -16327,7 +16341,22 @@ async def _served_audit(
         },
         result_cardinality=len(entries),
     )
-    return AuditSectionPage(entries=entries, total=total, offset=offset, limit=limit, note=note)
+    return AuditSectionPage(
+        entries=entries, total=total, offset=offset, limit=limit, note=note, people=people
+    )
+
+
+async def _people_choice(
+    principal_names: PrincipalNameDirectory, writers: set[str], who: str | None
+) -> tuple[list[str], tuple[str, ...] | None]:
+    """The picker's names, and the accounts a chosen name stands for. Names are asked only for
+    accounts whose entries this reader may already read (ADR-106 decision 3); one with no name is
+    not offered, since it could be chosen only by its id."""
+    names = await principal_names.display_names(writers)
+    people = sorted(set(names.values()))
+    if who is None:
+        return people, None
+    return people, audit_section_module.accounts_named(names, who, writers)
 
 
 @app.get("/v1/admin/audit", dependencies=[Depends(require_right(Right.READ_AUDIT))])
@@ -16347,23 +16376,28 @@ async def read_audit_section(
 ) -> AuditSectionPage:
     """Admin › Audit's stream (`audit_section.py`): by unit in its `WHERE` clause, a case's
     entries only for the unit's administrator (ADR-052 §4), words withheld but where the reader's
-    own section shows them. Every filter narrows; none widens."""
-    filters = audit_section_module.StreamFilters(
-        who=who or None, kind=kind or None, investigation_id=case or None,
-        dataset_id=dataset or None, since=since, until=until,
-    )  # fmt: skip
-    if filters.kind is not None and filters.kind not in audit_section_module.STREAM_KINDS:
-        raise AuditFiltersRefused(f"{filters.kind!r} is not a kind of this record")
+    own section shows them, and no account's id anywhere (rule 7): who by name, `who` a name from
+    the page's own `people`. Every filter narrows; none widens."""
+    if kind and kind not in audit_section_module.STREAM_KINDS:
+        raise AuditFiltersRefused(f"{kind!r} is not a kind of this record")
     rights = rights_for(principal.roles)
     cases = ADMIN_ROLE in principal.roles
+    people, accounts = await _people_choice(
+        principal_names, await reader.writers(principal, cases=cases), who or None
+    )
+    filters = audit_section_module.StreamFilters(
+        who=accounts, kind=kind or None, investigation_id=case or None,
+        dataset_id=dataset or None, since=since, until=until,
+    )  # fmt: skip
     rows, total = await reader.stream(
         principal, filters, offset=offset, limit=limit, rights=rights, cases=cases
     )
-    note = audit_section_module.STREAM_NOTE if cases else audit_section_module.STREAM_NOTE_NO_CASES
+    names = await principal_names.display_names(audit_section_module.ids_to_name(rows, rights))
+    note = audit_section_module.stream_note(cases, await reader.units_from())
     return await _served_audit(
-        principal, audit, principal_names, audit_section_module.stream_entries(rows, rights),
-        held_in="case_and_admin", filters=filters, total=total, offset=offset, limit=limit,
-        note=note,
+        principal, audit, audit_section_module.stream_entries(rows, rights, names),
+        held_in="case_and_admin", who=who or None, filters=filters, total=total, offset=offset,
+        limit=limit, note=note, people=people,
     )  # fmt: skip
 
 
@@ -16395,9 +16429,6 @@ async def read_audit_section_rules(
     ADR-145 Amendment 6 records the exception to ADR-146 Amendment 2 point 3). Read through
     `readable_rule_audit` behind the case rule-audit route's own gate, whole before any filter, so a
     filter narrows only what that read already withheld."""
-    filters = audit_section_module.StreamFilters(
-        who=who or None, investigation_id=case, since=since, until=until
-    )
     case_ = await _authorize(
         case, principal, investigations, audit, AccessLevel.AUTHOR, admin_safety_net=True
     )
@@ -16405,23 +16436,31 @@ async def read_audit_section_rules(
         audit, graph, case_.id, principal, analytics=analytics, alerts=alerts_store,
         offset=0, limit=10**9,
     )  # fmt: skip
+    people, accounts = await _people_choice(
+        principal_names, {e.principal_id for e in whole.entries}, who or None
+    )
+    filters = audit_section_module.StreamFilters(
+        who=accounts, investigation_id=case, since=since, until=until
+    )
     kept = [
         e for e in whole.entries
-        if (filters.who is None or e.principal_id == filters.who)
+        if (filters.who is None or e.principal_id in filters.who)
         and (filters.since is None or e.recorded_at >= filters.since)
         and (filters.until is None or e.recorded_at < filters.until)
     ]  # fmt: skip
+    served = kept[offset : offset + limit]
+    names = await principal_names.display_names({e.principal_id for e in served})
     entries = [
         AuditSectionEntry(
-            recorded_at=e.recorded_at, principal_id=e.principal_id, action=e.action, kind="rules",
-            held_in="rules", investigation_id=case_.id, case_name=case_.name, detail=e.detail,
-            result_cardinality=e.result_cardinality,
+            recorded_at=e.recorded_at, who=names.get(e.principal_id, audit_section_module.NO_NAME),
+            action=e.action, kind="rules", held_in="rules", investigation_id=case_.id,
+            case_name=case_.name, detail=e.detail, result_cardinality=e.result_cardinality,
         )  # fmt: skip
-        for e in kept[offset : offset + limit]
+        for e in served
     ]
     return await _served_audit(
-        principal, audit, principal_names, entries, held_in="rules", filters=filters,
-        total=len(kept), offset=offset, limit=limit, note=None,
+        principal, audit, entries, held_in="rules", who=who or None, filters=filters,
+        total=len(kept), offset=offset, limit=limit, note=None, people=people,
     )  # fmt: skip
 
 
@@ -16445,12 +16484,16 @@ async def read_audit_section_models(
 ) -> AuditSectionPage:
     """The engines' history in Admin › Audit, only for a holder of `manage_models` too, who reads it
     in *Models* already (the orchestrator's ruling: it names people of every unit)."""
-    filters = audit_section_module.StreamFilters(who=who or None, since=since, until=until)
-    entries, total = await reader.model_history(filters, offset=offset, limit=limit)
+    people, accounts = await _people_choice(
+        principal_names, await reader.model_writers(), who or None
+    )
+    filters = audit_section_module.StreamFilters(who=accounts, since=since, until=until)
+    raw, total = await reader.model_history(filters, offset=offset, limit=limit)
+    names = await principal_names.display_names({e.who for e in raw})
     return await _served_audit(
-        principal, audit, principal_names, entries, held_in="models", filters=filters,
-        total=total, offset=offset, limit=limit,
-        note="Engines are the deployment's, so their history is not a unit's.",
+        principal, audit, audit_section_module.name_entries(raw, names), held_in="models",
+        who=who or None, filters=filters, total=total, offset=offset, limit=limit,
+        note="Engines are the deployment's, so their history is not a unit's.", people=people,
     )  # fmt: skip
 
 
@@ -16462,16 +16505,17 @@ async def read_operations_ageing(
     ageing: PromotionAgeingDep,
     waiting: WaitingPromotionsDep,
     audit: AuditDep,
+    principal_names: PrincipalNamesDep,
 ) -> OperationsAgeing:
     """Operations' ageing (O3): what ages and when, and the promotions waiting for review, each
     with its age and whether it is overdue. The promotions come from the seam case's L3.4 fills,
     filtered there as this reader (rule 3); until then none is recorded, and the screen says so."""
     days = await ageing.alert_after_days()
     now = datetime.now(UTC)
-    rows = [
-        promotion_ageing_module.waiting_row(p, now, days)
-        for p in await waiting.waiting_for_review(principal)
-    ]
+    served = await waiting.waiting_for_review(principal)
+    # ADR-106 decision 3: names asked only for the proposers of the rows served; never an id.
+    names = await principal_names.display_names({p.proposed_by for p in served}) if served else {}
+    rows = [promotion_ageing_module.waiting_row(p, now, days, names) for p in served]
     await audit.record(
         principal=principal,
         action="read_operations_ageing",
@@ -16588,6 +16632,22 @@ async def _admin_dataset_of(datasets: DatasetStore, dataset_id: str) -> Dataset:
     if found is None or found.kind == "analyst_layer":
         raise UnknownDatasetEgressError(dataset_id)
     return found
+
+
+async def _promotion_recipients(
+    app: FastAPI, p: promotion_ageing_module.PendingPromotion
+) -> list[str]:
+    """Decision 11's recipients of one overdue promotion, read at the sweep: the dataset's home
+    case's Authors holding `review_promotions` and its unit's administrators, cleared to its
+    marking (`promotion_ageing.recipients_of`). A team's grant is not expanded to its members."""
+    home = await app.state.datasets.home_case_of(p.dataset_id)
+    authors = await _authors_of(app.state.investigations, home.investigation_id) if home else []
+    people = await app.state.identity_admin.list_people()
+    store = getattr(app.state, "custom_roles", None)
+    custom = await store.current_rights() if store is not None else {}
+    return promotion_ageing_module.recipients_of(
+        p, authors, people, custom, list(app.state.handling_scheme.classification)
+    )
 
 
 async def _authors_of(investigations: InvestigationStore, home_case_id: str) -> list[str]:

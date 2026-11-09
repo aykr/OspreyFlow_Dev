@@ -121,9 +121,9 @@ def test_the_alert_goes_to_reviewers_and_the_units_administrators() -> None:
 
 def test_age_and_overdue_as_operations_lists_them() -> None:
     assert age_days(SENT, SENT + timedelta(days=2, hours=23)) == 2
-    row = waiting_row(P, SENT + timedelta(days=3), 3)
+    row = waiting_row(P, SENT + timedelta(days=3), 3, {})
     assert (row.age_days, row.overdue) == (3, True)
-    assert waiting_row(P, SENT + timedelta(days=2), 3).overdue is False
+    assert waiting_row(P, SENT + timedelta(days=2), 3, {}).overdue is False
     [rule] = ageing_rules(1)
     assert rule.after_days == 1 and rule.then.startswith("After 1 day it is flagged overdue")
 

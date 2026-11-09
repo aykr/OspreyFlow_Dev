@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
@@ -75,6 +75,13 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "unmark_node_for_suppression",
         "remove_nodes",
         "resolve_now",
+        "draw_item",
+        "draw_link",
+        "edit_drawn_item",
+        "withdraw_drawn_item",
+        "set_drawn_picture",
+        "choose_drawn_picture",
+        "decide_board_match",
     ),
     "loads_and_promotions": (
         "run_studio_recipe",
@@ -97,6 +104,17 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "resume_recipe_schedule",
         "resume_source_refresh",
         "create_studio_recipe_version",
+        "create_studio_recipe_draft",
+        "update_studio_recipe_draft",
+        "update_studio_recipe_pipeline",
+        "update_studio_recipe_row_template",
+        "add_ingest_connection",
+        # Case's L3.4 (promotions of drawn items, and a layer's deletion): classified before they
+        # are written (`AWAITED_ACTIONS`).
+        "promote_drawn_items",
+        "approve_promotion",
+        "reject_promotion",
+        "delete_layer",
     ),
     "types": (
         "link_type_propose",
@@ -104,6 +122,13 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "link_type_reject",
         "link_type_withdraw",
         "link_type_retire",
+        "link_type_accept",
+        "link_type_decline",
+        "make_model_live",
+        "revert_model",
+        "save_model_draft",
+        "discard_model_draft",
+        "open_model_draft",
     ),
     "people_and_roles": (
         "invite_person",
@@ -142,6 +167,60 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
 }
 _CLASSIFIED: tuple[str, ...] = tuple(a for actions in KIND_ACTIONS.values() for a in actions)
 
+#: Every other action the Conduit writes, named so that each one is classified on purpose
+#: (`test_audit_kinds.py` finds every action written in `services/` and fails on one in no list):
+#: reads, refusals, the case's own work and the platform's. `kind_of` reads an unnamed one as this
+#: kind too, with its words withheld, so a missing name never shows words.
+READS_AND_OTHER: tuple[str, ...] = (
+    "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",
+    "alert_assigned", "alert_canvas", "alert_claimed", "alert_close_approved",
+    "alert_close_proposed", "alert_close_sent_back", "alert_disposed", "alert_released",
+    "analytics_cross_filter", "analytics_first_seen", "analytics_geo_bins", "analytics_geometries",
+    "analytics_histogram", "analytics_sightings", "ask_question", "case_brief_add_requirement",
+    "case_brief_attach", "case_brief_detach", "case_brief_edit_requirement",
+    "case_brief_remove_requirement", "case_brief_set_priority", "case_brief_set_status",
+    "case_strength_influencers_set", "connections", "create_investigation", "create_pack",
+    "create_site", "delete_board", "delete_case_view", "delete_trend",
+    "embedded_dashboard_guest_token", "expand", "expand_preview", "explain_alert",
+    "explain_resolution_cluster", "explore_busiest_days", "explore_busiest_links",
+    "explore_counts", "explore_groups", "explore_most_connected", "explore_starter_questions",
+    "explore_starter_run", "explore_whats_new", "export", "export_pack", "extract_document",
+    "extract_email", "geospatial_build_basemap", "geospatial_verify_map",
+    "get_dataset_source_profile", "get_dossier_document", "get_history", "get_investigation",
+    "get_resolution_threshold", "get_site", "get_studio_recipe_draft", "get_studio_recipe_profile",
+    "get_studio_recipe_sample_row", "hotlist_audience_changed", "hotlist_match_notified",
+    "hotlist_match_suppressed", "hotlists_create", "kyc_status", "links_among", "list_dashboards",
+    "list_data_feeds", "list_dataset_cases", "list_dataset_source_files", "list_dataset_sources",
+    "list_demo_packs", "list_embedded_dashboards", "list_extraction_candidates", "list_held_rows",
+    "list_ingest_source_files", "list_organisation_arrivals", "list_people",
+    "list_published_packs", "list_schedule_runs", "list_schedules", "list_screening_lists",
+    "list_studio_recipe_drafts", "list_studio_recipe_registry", "make_board", "map_place_search",
+    "monitors_create", "neighbourhood_risk", "open_alert_at_address", "ownership_canvas", "paths",
+    "patterns_ask", "patterns_preview", "patterns_run", "patterns_save",
+    "preview_studio_recipe_element_handling", "preview_studio_recipe_graph",
+    "preview_studio_recipe_staging", "preview_trend", "publish_pack", "read_alert_queue",
+    "read_alert_queue_counts", "read_audit_section", "read_case_report", "read_disable_plan",
+    "read_document", "read_document_file", "read_entity_picture", "read_entity_pictures",
+    "read_load_checks", "read_operations_ageing", "read_pack", "read_people_rows",
+    "read_published_pack", "read_report_feed", "read_rule_audit", "read_rule_runs",
+    "read_rule_versions", "read_trend", "refresh_pack_item", "register_dashboard",
+    "remove_dashboard", "remove_investigation", "remove_pack_item", "rename_investigation",
+    "reorder_pack", "restore_history_step", "rule_previewed", "run_extraction", "save_case_view",
+    "save_trend", "search", "seed", "set_case_domains", "set_resolution_threshold",
+    "set_site_control_points", "set_site_grid", "set_tab_state", "share_board", "share_case_view",
+    "shared_contacts", "shared_pair_canvas", "show_emails_as_documents", "stream_connect",
+    "strength_influencers_approved", "strength_influencers_proposed",
+    "strength_influencers_sent_back", "suggest", "trace_ownership", "watch_evaluation_failed",
+    "withdraw_pack",
+)  # fmt: skip
+#: Actions written with a computed suffix (`compute_<metric>`, `dry_run_layer_<merge|delete>`).
+READS_AND_OTHER_PREFIXES: tuple[str, ...] = ("compute_", "dry_run_layer_")
+#: Classified before their writer is on main (case's L3.4); the check that a kind's action is
+#: written (`test_every_kinds_action_is_one_the_conduit_records`) leaves these alone until then.
+AWAITED_ACTIONS = frozenset(
+    {"promote_drawn_items", "approve_promotion", "reject_promotion", "delete_layer"}
+)
+
 #: The kinds whose words the reader's own section shows them, and the right that section needs.
 WORDS_SHOWN_WITH: dict[str, Right] = {
     "people_and_roles": Right.MANAGE_PEOPLE,
@@ -150,21 +229,29 @@ WORDS_SHOWN_WITH: dict[str, Right] = {
 
 STREAM_KINDS = (*KIND_ACTIONS, "reads_and_other")
 
-#: Said with every page of the stream, so nothing left out is left out silently (rule 2).
-STREAM_NOTE = (
-    "Entries about another unit's cases are not shown. An entry that names no case is shown by "
-    "the unit of the account that wrote it: one written before 8 November 2026, or by the system "
-    "itself (a reverted load, a map prefetch), recorded no unit of yours and is not shown. "
-    "The rule audit is read for one case at a time: choose Rule audit of one case."
-)
-#: Said instead to a reader of `read_audit` who is not the unit's administrator: ADR-052 §4 lets
-#: only `osprey-admin` see the unit's cases without a level on them, so no case's entry is sent.
-STREAM_NOTE_NO_CASES = (
-    "You hold read_audit but are not your unit's administrator, so entries about cases are not "
-    "shown to you: only entries that name no case, written by your unit's accounts. An entry that "
-    "names no case and recorded no unit (written before 8 November 2026, or by the system) is not "
-    "shown either."
-)
+def stream_note(cases: bool, units_from: datetime | None) -> str:
+    """Said with every page of the stream, so nothing left out is left out silently (rule 2). The
+    date is this deployment's own: when its audit began recording the writer's unit."""
+    when = (
+        units_from.astimezone(UTC).strftime("%-d %B %Y") if units_from is not None
+        else "this deployment's audit began recording units"
+    )  # fmt: skip
+    if not cases:
+        # ADR-052 §4: only `osprey-admin` sees the unit's cases without a level on them.
+        return (
+            "You hold read_audit but are not your unit's administrator, so entries about cases "
+            "are not shown to you: only entries that name no case, written by your unit's "
+            f"accounts. An entry that names no case and recorded no unit (written before {when}, "
+            "or by the system) is not shown either. Who acted is shown by name; an account's "
+            "identifier is never shown."
+        )
+    return (
+        "Entries about another unit's cases are not shown. An entry that names no case is shown "
+        f"by the unit of the account that wrote it: one written before {when}, or by the system "
+        "itself (a reverted load, a map prefetch), recorded no unit of yours and is not shown. "
+        "The rule audit is read for one case at a time: choose Rule audit of one case. Who acted "
+        "is shown by name; an account's identifier is never shown."
+    )
 
 
 def dataset_ids_of(detail: dict[str, Any]) -> set[str]:
@@ -200,7 +287,9 @@ def words_shown(kind: str, rights: frozenset[Right] | set[Right]) -> bool:
 class StreamFilters:
     """Who, what and when, and a case or dataset. Each narrows; none widens (decision 10)."""
 
-    who: str | None = None
+    #: The accounts a chosen person's name stands for, resolved by the route from the writers this
+    #: reader may already read (`writers`); the Glass sends a name and never an id.
+    who: tuple[str, ...] | None = None
     kind: str | None = None
     investigation_id: str | None = None
     dataset_id: str | None = None
@@ -217,6 +306,10 @@ class StreamRow:
     case_name: str | None
     resolved_query: dict[str, Any]
     result_cardinality: int
+
+
+def _ids(who: tuple[str, ...] | None) -> list[str] | None:
+    return None if who is None else list(who)
 
 
 def _kind_clause(kind: str | None, first: int) -> tuple[str, list[Any]]:
@@ -265,7 +358,7 @@ class AuditSectionReader:
             "    OR (a.investigation_id IS NULL AND a.org_unit = $1)) "
             # The rule audit is read only through its own read (`readable_rule_audit`).
             "AND NOT (a.action = ANY($2::text[])) "
-            "AND ($3::text IS NULL OR a.principal_id = $3) "
+            "AND ($3::text[] IS NULL OR a.principal_id = ANY($3::text[])) "
             "AND ($4::text IS NULL OR a.investigation_id = $4) "
             "AND ($5::text IS NULL OR (a.action = ANY($9::text[]) AND ("
             "    a.resolved_query->>'dataset_id' = $5 "
@@ -274,7 +367,7 @@ class AuditSectionReader:
             "AND ($7::timestamptz IS NULL OR a.recorded_at < $7)"
         )
         args: list[Any] = [
-            reader.org_unit, list(RULE_AUDIT_ACTIONS), filters.who, filters.investigation_id,
+            reader.org_unit, list(RULE_AUDIT_ACTIONS), _ids(filters.who), filters.investigation_id,
             filters.dataset_id, filters.since, filters.until, cases, shown_actions(rights),
         ]  # fmt: skip
         clause, extra = _kind_clause(filters.kind, len(args) + 1)
@@ -304,6 +397,32 @@ class AuditSectionReader:
             for r in rows
         ], int(total or 0)
 
+    async def units_from(self) -> datetime | None:
+        async with self._pool.acquire() as conn:
+            if await conn.fetchval("SELECT to_regclass('audit_log_units_from')") is None:
+                return None
+            return await conn.fetchval("SELECT recorded_from FROM audit_log_units_from")
+
+    async def writers(self, reader: Principal, *, cases: bool) -> set[str]:
+        """Who wrote the entries of the stream this reader may read, under the same unit filter
+        and rule-audit exclusion as `stream` and no other: the people its picker offers, by name."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT a.principal_id FROM audit_log a "
+                "LEFT JOIN investigations i ON i.id = a.investigation_id "
+                "WHERE ((a.investigation_id IS NOT NULL AND $3::boolean AND i.owning_unit = $1) "
+                "    OR (a.investigation_id IS NULL AND a.org_unit = $1)) "
+                "AND NOT (a.action = ANY($2::text[]))",
+                reader.org_unit, list(RULE_AUDIT_ACTIONS), cases,
+            )  # fmt: skip
+        return {r["principal_id"] for r in rows}
+
+    async def model_writers(self) -> set[str]:
+        async with self._pool.acquire() as conn:
+            if await conn.fetchval("SELECT to_regclass('model_admin_audit')") is None:
+                return set()
+            return {r["by"] for r in await conn.fetch("SELECT DISTINCT by FROM model_admin_audit")}
+
     async def model_history(
         self, filters: StreamFilters, *, offset: int, limit: int
     ) -> tuple[list[AuditSectionEntry], int]:
@@ -312,11 +431,11 @@ class AuditSectionReader:
             if await conn.fetchval("SELECT to_regclass('model_admin_audit')") is None:
                 return [], 0
             where = (
-                "FROM model_admin_audit WHERE ($1::text IS NULL OR by = $1) "
+                "FROM model_admin_audit WHERE ($1::text[] IS NULL OR by = ANY($1::text[])) "
                 "AND ($2::timestamptz IS NULL OR at >= $2) "
                 "AND ($3::timestamptz IS NULL OR at < $3)"
             )
-            args = [filters.who, filters.since, filters.until]
+            args = [_ids(filters.who), filters.since, filters.until]
             total = await conn.fetchval(f"SELECT count(*) {where}", *args)
             rows = await conn.fetch(
                 f"SELECT at, by, action, engine, changes, outcome {where} "
@@ -326,7 +445,7 @@ class AuditSectionReader:
         return [
             AuditSectionEntry(
                 recorded_at=r["at"],
-                principal_id=r["by"],
+                who=r["by"],  # an id here: the route names it before serving (`name_entries`)
                 action=r["action"],
                 kind="models",
                 held_in="models",
@@ -342,25 +461,118 @@ class AuditSectionReader:
         ], int(total or 0)
 
 
-def stream_entry(row: StreamRow, rights: frozenset[Right] | set[Right]) -> AuditSectionEntry:
-    """One stream row as the reader is served it: its words and count only where `words_shown`."""
+#: Said for an account the identity provider gives no name: never its id (rule 7, ADR-106 Am. 1).
+NO_NAME = "An account with no name on record"
+
+#: The words of a shown entry that name a person, by action: each is served as that person's name,
+#: never as the account's id. `user_id` and `account` name one wherever they are written.
+_PERSON_KEYS = ("user_id", "account")
+_PERSON_WORDS: dict[str, dict[str, str]] = {
+    "set_team_lead": {"before": "one", "after": "one"},
+    "set_team_cover": {"before": "first", "after": "first"},
+    "change_dataset_owners": {"before": "many", "after": "many"},
+    "make_home_case": {"owners": "many"},
+    "transfer_owned_item": {"from": "one", "to": "one"},
+}
+#: The only other words a shown entry may carry. Anything else is left out, so an identifier a
+#: later action writes (an identity provider's `subject`, a `username`, an `email`) is never served
+#: by default: a new word is shown only once it is named here.
+_PLAIN_WORDS = frozenset({
+    "roles", "clearance", "org_unit", "receivable_handling_codes", "delivery", "transferred",
+    "why", "name", "version", "rights", "display_name", "mailbox", "level", "unit_level",
+    "dataset_id", "member_ids", "source_id", "handling_before", "handling_after",
+    "legal_basis_before", "legal_basis_after", "pipelines_needing_attention", "drafts_following",
+    "pack", "highest_marking", "kind", "id",
+})
+#: Actions whose `before` and `after` are settings, not people.
+_SETTING_CHANGES = frozenset({
+    "change_custom_role", "set_dataset_egress", "set_dataset_promotion_policy",
+    "set_dataset_owner_setting", "set_case_datasets",
+})
+
+
+def _person_values(action: str, key: str, value: Any) -> list[str]:
+    shape = "one" if key in _PERSON_KEYS else _PERSON_WORDS.get(action, {}).get(key)
+    if shape == "one":
+        return [value] if isinstance(value, str) and value else []
+    if shape == "first":
+        return [value[0]] if isinstance(value, list) and value and isinstance(value[0], str) else []
+    if shape == "many":
+        return [v for v in value if isinstance(v, str) and v] if isinstance(value, list) else []
+    return []
+
+
+def people_in(action: str, detail: dict[str, Any]) -> set[str]:
+    """The accounts a shown entry's words name, to be asked their names (ADR-106 decision 3)."""
+    return {i for k, v in detail.items() for i in _person_values(action, k, v)}
+
+
+def shown_words(action: str, detail: dict[str, Any], names: dict[str, str]) -> dict[str, Any]:
+    """An entry's words as the Glass is served them: a person by name, the plain words named in
+    `_PLAIN_WORDS` as they are, and nothing else."""
+    out: dict[str, Any] = {}
+    for key, value in detail.items():
+        shape = "one" if key in _PERSON_KEYS else _PERSON_WORDS.get(action, {}).get(key)
+        if shape is not None:
+            label = "person" if key in _PERSON_KEYS else key
+            if shape == "one":
+                out[label] = names.get(value, NO_NAME) if isinstance(value, str) and value else None
+            elif shape == "first":
+                rest = value[1:] if isinstance(value, list) else []
+                first = value[0] if isinstance(value, list) and value else None
+                out[label] = [names.get(first, NO_NAME) if first else None, *rest]
+            else:
+                out[label] = [names.get(v, NO_NAME) for v in value if isinstance(v, str) and v]
+        elif key in _PLAIN_WORDS or (key in ("before", "after") and action in _SETTING_CHANGES):
+            out[key] = value
+    return out
+
+
+def name_entries(
+    entries: Sequence[AuditSectionEntry], names: dict[str, str]
+) -> list[AuditSectionEntry]:
+    """Entries whose `who` still holds an account id (the rule audit's, the engines') served by
+    name instead."""
+    return [e.model_copy(update={"who": names.get(e.who, NO_NAME)}) for e in entries]
+
+
+def stream_entry(
+    row: StreamRow, rights: frozenset[Right] | set[Right], names: dict[str, str]
+) -> AuditSectionEntry:
+    """One stream row as the reader is served it: who by name, its words and count only where
+    `words_shown`, and those words with no account's id."""
     kind = kind_of(row.action)
     shown = words_shown(kind, rights)
     return AuditSectionEntry(
         recorded_at=row.recorded_at,
-        principal_id=row.principal_id,
+        who=names.get(row.principal_id, NO_NAME),
         action=row.action,
         kind=kind,
         held_in="case_and_admin",
         investigation_id=row.investigation_id,
         case_name=row.case_name,
-        detail=row.resolved_query if shown else None,
+        detail=shown_words(row.action, row.resolved_query, names) if shown else None,
         words_withheld=not shown,
         result_cardinality=row.result_cardinality if shown else None,
     )
 
 
+def ids_to_name(rows: Sequence[StreamRow], rights: frozenset[Right] | set[Right]) -> set[str]:
+    """Every account the page names: its writers, and the people its shown words name."""
+    out = {r.principal_id for r in rows}
+    for r in rows:
+        if words_shown(kind_of(r.action), rights):
+            out |= people_in(r.action, r.resolved_query)
+    return out
+
+
 def stream_entries(
-    rows: Sequence[StreamRow], rights: frozenset[Right] | set[Right]
+    rows: Sequence[StreamRow], rights: frozenset[Right] | set[Right], names: dict[str, str]
 ) -> list[AuditSectionEntry]:
-    return [stream_entry(r, rights) for r in rows]
+    return [stream_entry(r, rights, names) for r in rows]
+
+
+def accounts_named(names: dict[str, str], name: str, among: set[str]) -> tuple[str, ...]:
+    """The accounts, of those this reader may read, that a chosen name stands for (two people of
+    one name are both kept: the picker offers names, so it cannot tell them apart)."""
+    return tuple(sorted(i for i in among if names.get(i) == name))

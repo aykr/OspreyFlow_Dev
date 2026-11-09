@@ -55,6 +55,7 @@ class _Reader:
 
     def __init__(self) -> None:
         self.rows: list[StreamRow] = []
+        self.models: list[Any] = []
         self.asked: list[tuple[Principal, StreamFilters]] = []
         self.cases: list[bool] = []
 
@@ -66,7 +67,17 @@ class _Reader:
         return self.rows[offset : offset + limit], len(self.rows)
 
     async def model_history(self, filters: StreamFilters, *, offset: int, limit: int) -> Any:
-        return [], 0
+        rows = [e for e in self.models if filters.who is None or e.who in filters.who]
+        return rows[offset : offset + limit], len(rows)
+
+    async def writers(self, reader: Principal, *, cases: bool) -> set[str]:
+        return {r.principal_id for r in self.rows}
+
+    async def model_writers(self) -> set[str]:
+        return {e.who for e in self.models}
+
+    async def units_from(self) -> datetime | None:
+        return T0
 
 
 class _Audit:
@@ -108,8 +119,16 @@ class _Cases:
 
 
 class _Names:
+    """A directory that names every account but the `nameless-` ones, and records what it was
+    asked (ADR-106 decision 3: only accounts the page serves)."""
+
+    def __init__(self) -> None:
+        self.asked: list[set[str]] = []
+
     async def display_names(self, ids: Any) -> dict[str, str]:
-        return {i: f"Name {i}" for i in ids}
+        ids = set(ids)
+        self.asked.append(ids)
+        return {i: f"Name {i}" for i in ids if not i.startswith("nameless-")}
 
 
 @pytest.fixture
@@ -141,8 +160,9 @@ def _as(person: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {person}"}
 
 
-def _row(action: str, detail: dict[str, Any], case: str | None = "c1") -> StreamRow:
-    return StreamRow(recorded_at=T0, principal_id="ana-1", action=action, investigation_id=case,
+def _row(action: str, detail: dict[str, Any], case: str | None = "c1",
+         who: str = "ana-1") -> StreamRow:  # fmt: skip
+    return StreamRow(recorded_at=T0, principal_id=who, action=action, investigation_id=case,
                      case_name="Op Kestrel" if case else None, resolved_query=detail,
                      result_cardinality=7)  # fmt: skip
 
@@ -209,16 +229,22 @@ def test_the_rule_audit_needs_the_administrators_role(world: SimpleNamespace) ->
 
 
 def test_the_stream_is_read_as_the_reader_with_filters_passed_through(world: SimpleNamespace) -> None:
+    world.reader.rows = [_row("search", {}), _row("search", {}, who="eng-1")]
     answer = world.client.get(
-        "/v1/admin/audit?who=ana-1&kind=assertions&case=c9&dataset=ds-b"
+        "/v1/admin/audit?who=Name%20ana-1&kind=assertions&case=c9&dataset=ds-b"
         "&since=2026-11-01T00:00:00Z&until=2026-11-09T00:00:00Z",
         headers=_as("adm-1"),
     )
     assert answer.status_code == 200
     [(reader, filters)] = world.reader.asked
     assert reader.id == "adm-1" and reader.org_unit == "unit-1"
+    # The person is chosen by name and stands for the accounts of that name the reader may read.
     assert (filters.who, filters.kind, filters.investigation_id, filters.dataset_id) == (
-        "ana-1", "assertions", "c9", "ds-b")  # fmt: skip
+        ("ana-1",), "assertions", "c9", "ds-b")  # fmt: skip
+    assert answer.json()["people"] == ["Name ana-1", "Name eng-1"]
+    # A name standing for no account the reader may read narrows to nothing, never widens.
+    world.client.get("/v1/admin/audit?who=Name%20zed-9", headers=_as("adm-1"))
+    assert world.reader.asked[-1][1].who == ()
     assert answer.json()["note"].startswith("Entries about another unit's cases are not shown")
     assert world.audit.entries[-1]["action"] == "read_audit_section"
     bad = world.client.get("/v1/admin/audit?kind=everything", headers=_as("adm-1"))
@@ -242,9 +268,10 @@ def test_an_entrys_withheld_words_stay_withheld(world: SimpleNamespace) -> None:
         assert by_action[action]["result_cardinality"] is None
         assert "J. Doe" not in str(by_action[action])
     # People and roles, and Datasets: the words their own sections show this administrator.
-    assert by_action["set_person_roles"]["detail"] == {"user_id": "ana-2", "roles": ["analyst"]}
-    assert by_action["set_dataset_egress"]["detail"] == {"dataset_id": "ds-a", "egress": "none"}
-    assert by_action["confirm_node"]["principal_name"] == "Name ana-1"
+    assert by_action["set_person_roles"]["detail"] == {"person": "Name ana-2", "roles": ["analyst"]}
+    # Only words named as plain words pass (`egress` is not one); never an account's id.
+    assert by_action["set_dataset_egress"]["detail"] == {"dataset_id": "ds-a"}
+    assert by_action["confirm_node"]["who"] == "Name ana-1"
     # A holder of read_audit alone holds neither section: every entry's words withheld.
     alone = world.client.get("/v1/admin/audit", headers=_as("aud-1")).json()["entries"]
     assert [e["detail"] for e in alone] == [None, None, None, None]
@@ -309,10 +336,10 @@ def test_rule_audit_filters_narrow_after_withholding(world: SimpleNamespace) -> 
     served = [_rule_entry("rule_evaluated", m, who="ana-1" if m % 2 else "eng-1") for m in range(6)]
     served.reverse()  # newest first, as the read serves them
     calls = _readable(world, served)
-    answer = world.client.get("/v1/admin/audit/rules?case=c1&who=eng-1&limit=2",
+    answer = world.client.get("/v1/admin/audit/rules?case=c1&who=Name%20eng-1&limit=2",
                               headers=_as("adm-1")).json()  # fmt: skip
     assert answer["total"] == 3
-    assert [e["principal_id"] for e in answer["entries"]] == ["eng-1", "eng-1"]
+    assert [e["who"] for e in answer["entries"]] == ["Name eng-1", "Name eng-1"]
     # The whole readable audit was asked for, so paging never happens before the filter.
     assert calls[0]["offset"] == 0 and calls[0]["limit"] >= 10**6
 
@@ -333,14 +360,16 @@ def test_the_engines_history_is_only_for_a_holder_of_manage_models(world: Simple
 class _Waiting:
     recorded = True
 
-    def __init__(self) -> None:
+    def __init__(self, proposers: tuple[str, ...] | list[str] = ("ana-1",)) -> None:
         self.readers: list[str] = []
+        self.proposers = list(proposers)
 
     async def waiting_for_review(self, reader: Principal) -> list[PendingPromotion]:
         self.readers.append(reader.id)
-        return [PendingPromotion(promotion_id="p1", load_id="load-7", dataset_id="ds-a",
+        return [PendingPromotion(promotion_id=f"p{n}", load_id="load-7", dataset_id="ds-a",
                                  dataset_name="Prison records", dataset_unit="unit-1",
-                                 proposed_by="ana-1", proposed_at=datetime.now(UTC) - timedelta(days=4, minutes=1))]  # fmt: skip
+                                 proposed_by=who, proposed_at=datetime.now(UTC) - timedelta(days=4, minutes=1))
+                for n, who in enumerate(self.proposers, 1)]  # fmt: skip
 
     async def all_waiting(self) -> list[PendingPromotion]:
         return []
@@ -385,9 +414,105 @@ def test_every_kinds_action_is_one_the_conduit_records() -> None:
     misspelt)."""
     import pathlib
 
-    from services.api.audit_section import KIND_ACTIONS
+    from services.api.audit_section import AWAITED_ACTIONS, KIND_ACTIONS, READS_AND_OTHER
 
     core = pathlib.Path(__file__).resolve().parents[4] / "OspreyFlow_Core/services"
     source = "\n".join(p.read_text() for p in core.rglob("*.py") if p.name != "audit_section.py")
-    missing = [a for actions in KIND_ACTIONS.values() for a in actions if f'"{a}"' not in source]
+    named = [*(a for actions in KIND_ACTIONS.values() for a in actions), *READS_AND_OTHER]
+    missing = [a for a in named if f'"{a}"' not in source and a not in AWAITED_ACTIONS]
     assert missing == []
+    # Classified ahead of case's L3.4, and classified as loads and promotions.
+    assert AWAITED_ACTIONS <= set(KIND_ACTIONS["loads_and_promotions"])
+
+
+class _Directory:
+    """Names only some accounts, and none of its names holds an id, so an id in a response can be
+    nothing but an id served."""
+
+    NAMES = {"kc-u2": "Kim Lee", "lead-a": "Lee Ann", "own-a": "Owen Hart", "from-1": "Fran Ode",
+             "prop-1": "Pat Ross", "mod-w": "Mo Dell"}  # fmt: skip
+
+    async def display_names(self, ids: Any) -> dict[str, str]:
+        return {i: self.NAMES[i] for i in ids if i in self.NAMES}
+
+
+#: Every place an account's id is written into an entry the Conduit may serve: who wrote it, and
+#: the People-and-roles and Datasets words that name a person (ADR-106 Amendment 1, rule 7).
+PLANTED = [
+    "nameless-w1", "nameless-u1", "kc-u2", "login-u2", "sub-u2", "idp-u2", "nameless-u3",
+    "login-u3", "u3@mail.example", "grp-1", "lead-a", "nameless-lead-b", "nameless-cover-a",
+    "own-a", "nameless-own-b", "nameless-home-1", "from-1", "nameless-to-1", "nameless-acct-1",
+    "nameless-r1", "mod-w", "nameless-m1", "prop-1", "nameless-p2",
+]  # fmt: skip
+
+
+def test_no_account_id_reaches_the_glass(world: SimpleNamespace) -> None:
+    """Rule 7 and ADR-106 Amendment 1: each id planted where the Conduit records one, and each
+    route's whole response searched for it. Who acted is a name or fixed words; a person in the
+    words is a name; an identity provider's subject, username or email is never served."""
+    from services.api.audit_section import NO_NAME
+
+    from schemas.admin import AuditSectionEntry
+
+    world.monkeypatch.setattr(app.state, "principal_names", _Directory())
+    world.reader.rows = [
+        _row("set_person_roles", {"user_id": "nameless-u1", "roles": ["analyst"]}, None,
+             who="nameless-w1"),
+        _row("link_organisation_account", {"user_id": "kc-u2", "username": "login-u2",
+             "subject": "sub-u2", "provider_username": "idp-u2"}, None, who="kc-u2"),
+        _row("remove_person", {"user_id": "nameless-u3", "username": "login-u3",
+             "name": "Ola Moss", "email": "u3@mail.example"}, None),
+        _row("set_team_lead", {"role_id": "grp-1", "before": "lead-a", "after": "nameless-lead-b"},
+             None),
+        _row("set_team_cover", {"role_id": "grp-1", "before": ["nameless-cover-a", "2026-12-01"],
+             "after": [None, ""]}, None),
+        _row("change_dataset_owners", {"dataset_id": "ds-a", "before": ["own-a"],
+             "after": ["nameless-own-b"]}, None),
+        _row("make_home_case", {"dataset_id": "ds-a", "owners": ["nameless-home-1"]}, None),
+        _row("transfer_owned_item", {"from": "from-1", "to": "nameless-to-1", "kind": "board",
+             "id": "b-1"}, None),
+        _row("grant_access", {"account": "nameless-acct-1", "level": "author"}),
+    ]  # fmt: skip
+    world.reader.models = [
+        AuditSectionEntry(recorded_at=T0, who=w, action="engine_changed", kind="models",
+                          held_in="models", detail={"engine": "ner"})  # fmt: skip
+        for w in ("mod-w", "nameless-m1")
+    ]
+    _readable(world, [_rule_entry("rule_deployed", 1, who="nameless-r1")])
+    world.monkeypatch.setattr(app.state, "waiting_promotions", _Waiting(
+        proposers=["prop-1", "nameless-p2"]))  # fmt: skip
+    _token("all", ["osprey-admin", "right:manage_models", "right:operate_schedules"])
+    answers = [
+        world.client.get(path, headers=_as("all"))
+        for path in ("/v1/admin/audit", "/v1/admin/audit/rules?case=c1", "/v1/admin/audit/models",
+                     "/v1/admin/operations/ageing")
+    ]  # fmt: skip
+    assert [a.status_code for a in answers] == [200, 200, 200, 200], [a.text for a in answers]
+    for answer in answers:
+        assert [i for i in PLANTED if i in answer.text] == [], answer.request.url
+    stream = answers[0].json()
+    by_action = {e["action"]: e for e in stream["entries"]}
+    assert by_action["set_person_roles"]["who"] == NO_NAME
+    assert by_action["link_organisation_account"]["detail"] == {"person": "Kim Lee"}
+    assert by_action["remove_person"]["detail"] == {"person": NO_NAME, "name": "Ola Moss"}
+    assert by_action["set_team_lead"]["detail"] == {"before": "Lee Ann", "after": NO_NAME}
+    assert by_action["change_dataset_owners"]["detail"]["before"] == ["Owen Hart"]
+    assert by_action["transfer_owned_item"]["detail"]["from"] == "Fran Ode"
+    assert stream["people"] == ["Kim Lee"]  # an account with no name is not offered
+    assert [p["proposed_by_name"] for p in answers[3].json()["waiting"]] == ["Pat Ross", NO_NAME]
+
+
+def test_an_overdue_alert_is_read_without_its_other_recipients() -> None:
+    """L2.7's *Needs you* reads `alerts_for`: who else was alerted is not that person's."""
+    import asyncio
+
+    from services.api.promotion_ageing import InMemoryAgeingStore
+
+    from schemas.admin import PromotionOverdueAlert
+
+    store = InMemoryAgeingStore()
+    asyncio.run(store.raise_once(PromotionOverdueAlert(
+        promotion_id="p1", load_id="load-7", dataset_id="ds-a", raised_at=T0,
+        recipients=["rev-1", "adm-2"], words="Promotion load-7 into Prison records has waited 3 days.")))  # fmt: skip
+    [notice] = asyncio.run(store.alerts_for("rev-1"))
+    assert "adm-2" not in notice.model_dump_json() and "recipients" not in notice.model_dump()

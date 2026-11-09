@@ -17,18 +17,23 @@ Conduit holds `NoPromotionsYet`, which says so (`recorded = False`) and lists no
 - `waiting_for_review(reader)`: the promotions waiting, **filtered in its own store by the reader's
   unit and clearance** (rule 3), for the Operations read;
 - `all_waiting()`: every one waiting, for the sweep that raises the alerts (the system, not a
-  reader;
-  the alert is delivered only to its recipients, and its words name nothing a recipient's own read
-  of the dataset would not);
-- a call to `sweep` wherever promotions are listed or on its own schedule (L2.7's *Needs you* reads
-  the alerts this raises).
+  reader; the alert is delivered only to its recipients, and its words name nothing a recipient's
+  own read of the dataset would not).
+
+**The sweep is admin's own** (`PromotionSweep`, run from the Conduit's lifespan each minute, or
+every `OSPREY_PROMOTION_SWEEP_SECONDS`): it reads whatever source `app.state.waiting_promotions`
+holds at each tick, so L3.4 has only to set it. A tick whose recipients cannot be read (the identity
+provider down) raises nothing and the next tries again: an alert is never raised to fewer people
+than decision 11 names. L2.7's *Needs you* reads `alerts_for`, which carries no other recipient.
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 import asyncpg
@@ -37,12 +42,17 @@ from schemas.admin import (
     AgeingRule,
     PersonAccount,
     PromotionOverdueAlert,
+    PromotionOverdueNotice,
     WaitingPromotion,
 )
 from schemas.domain import Principal
 from schemas.rights import Right, rights_for
 
 DEFAULT_ALERT_AFTER_DAYS = 3
+#: How often the sweep runs, unless `OSPREY_PROMOTION_SWEEP_SECONDS` says otherwise.
+SWEEP_SECONDS = 60.0
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -107,13 +117,20 @@ def ageing_rules(after_days: int) -> list[AgeingRule]:
     ]
 
 
-def waiting_row(p: PendingPromotion, now: datetime, after_days: int) -> WaitingPromotion:
+#: Said for a proposer the identity provider gives no name: never the account's id (rule 7).
+NO_NAME = "An account with no name on record"
+
+
+def waiting_row(
+    p: PendingPromotion, now: datetime, after_days: int, names: Mapping[str, str]
+) -> WaitingPromotion:
+    """A waiting promotion as Operations serves it: its proposer by name, never by id."""
     return WaitingPromotion(
         promotion_id=p.promotion_id,
         load_id=p.load_id,
         dataset_id=p.dataset_id,
         dataset_name=p.dataset_name,
-        proposed_by=p.proposed_by,
+        proposed_by_name=names.get(p.proposed_by, NO_NAME),
         proposed_at=p.proposed_at,
         age_days=age_days(p.proposed_at, now),
         overdue=is_overdue(p.proposed_at, now, after_days),
@@ -198,6 +215,47 @@ async def sweep(
     return raised
 
 
+class AgeingSetting(Protocol):
+    async def alert_after_days(self) -> int: ...
+
+
+class PromotionSweep:
+    """Admin's scheduled job: raises *Promotions overdue* once each, at N days. `source` is asked
+    at every tick, so the source L3.4 sets on `app.state` is the one swept."""
+
+    def __init__(
+        self,
+        store: OverdueAlerts,
+        setting: AgeingSetting,
+        source: Callable[[], WaitingPromotions],
+        recipients: Callable[[PendingPromotion], Awaitable[list[str]]],
+    ) -> None:
+        self._store = store
+        self._setting = setting
+        self._source = source
+        self._recipients = recipients
+
+    async def tick(self, now: datetime) -> list[PromotionOverdueAlert]:
+        source = self._source()
+        if not source.recorded:
+            return []
+        return await sweep(
+            source, self._store, self._recipients, now=now,
+            after_days=await self._setting.alert_after_days(),
+        )  # fmt: skip
+
+
+async def run_every(job: PromotionSweep, seconds: float) -> None:
+    """The Conduit's lifespan task: a tick every `seconds`. A failed tick is logged and raises
+    nothing; the next tries again."""
+    while True:
+        await asyncio.sleep(seconds)
+        try:
+            await job.tick(datetime.now(UTC))
+        except Exception:  # noqa: BLE001 - logged; the next tick tries again
+            log.exception("the promotions overdue sweep failed; trying again at the next tick")
+
+
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS operations_settings (
     key TEXT PRIMARY KEY,
@@ -262,27 +320,16 @@ class PromotionAgeingStore:
             )  # fmt: skip
         return made is not None
 
-    async def alerts_for(self, person: str) -> list[PromotionOverdueAlert]:
-        """The alerts raised to one person, newest first (L2.7's *Needs you* reads these)."""
-        import json
-
+    async def alerts_for(self, person: str) -> list[PromotionOverdueNotice]:
+        """The alerts raised to one person, newest first (L2.7's *Needs you* reads these), with no
+        other recipient: who else was alerted is not that person's to read."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM promotion_overdue_alerts WHERE recipients ? $1 "
-                "ORDER BY raised_at DESC",
+                "SELECT promotion_id, load_id, dataset_id, raised_at, words "
+                "FROM promotion_overdue_alerts WHERE recipients ? $1 ORDER BY raised_at DESC",
                 person,
             )
-        return [
-            PromotionOverdueAlert(
-                promotion_id=r["promotion_id"],
-                load_id=r["load_id"],
-                dataset_id=r["dataset_id"],
-                raised_at=r["raised_at"],
-                recipients=json.loads(r["recipients"]),
-                words=r["words"],
-            )
-            for r in rows
-        ]
+        return [PromotionOverdueNotice(**dict(r)) for r in rows]
 
 
 class InMemoryAgeingStore:
@@ -305,5 +352,8 @@ class InMemoryAgeingStore:
         self.raised[alert.promotion_id] = alert
         return True
 
-    async def alerts_for(self, person: str) -> list[PromotionOverdueAlert]:
-        return [a for a in self.raised.values() if person in a.recipients]
+    async def alerts_for(self, person: str) -> list[PromotionOverdueNotice]:
+        return [
+            PromotionOverdueNotice(**a.model_dump(exclude={"recipients"}))
+            for a in self.raised.values() if person in a.recipients
+        ]  # fmt: skip
