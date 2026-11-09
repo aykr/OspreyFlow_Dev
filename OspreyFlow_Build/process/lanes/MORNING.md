@@ -499,6 +499,12 @@ New ones are added at the bottom as they happen.
     which ADR-035 §C3 admits for this device only. Their copies in that Drive, and its trash, are yours to
     check and remove. The kept set is now outside `Documents`. Left for you: a stray untracked folder named
     `" .."` (820 KB, a copy of a pytest cache, made 12:52 today) in `OspreyFlow_Core`.
+75. **The tunnelled live runs stopped, and the server run proved (your word, about 14:40).** Studio, studio-b,
+    platform and case stopped their runs over the tunnel (platform's: 25 tests in 89 minutes). Each is recorded
+    as withdrawn and unmeasured. My trial of `remote` on stack c ran three live files (Valkey, Postgres,
+    ArcadeDB), 76 tests in 31 seconds on the server, 2 minutes with the copy. One failure is main's own: a stale
+    branch test in `test_valkey_store.py` (carried to case). The lanes now rerun through `remote`. The stray
+    files are in `~/OspreyFlow/stray-2026-11-09/`, and the Drive sync of `~/Documents` is off (your word).
 
 ## Evening, 7 November: your records of 7 November applied
 
