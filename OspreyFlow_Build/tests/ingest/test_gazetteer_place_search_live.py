@@ -33,6 +33,7 @@ from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
+from ports.graph import SuggestOptions
 from schemas.analytics import GeometryKind, GeometryRecord
 from schemas.domain import NodeWrite, Principal, Provenance, ProvenanceState, SourceRef
 from schemas.ingest import LoadReport
@@ -225,3 +226,36 @@ async def test_an_identifier_fragment_finds_no_place_and_no_more(stores: Stores)
             graph, analytics, PlaceSearchRequest(query=fragment), WITH_GAZETTEER
         )
         assert answer.places == [] and answer.more is False, fragment
+
+
+async def test_the_case_s_own_searches_match_a_gazetteer_place_on_its_name_alone(
+    stores: Stores,
+) -> None:
+    """The orchestrator's ruling of 9 November 2026 (rule 7, ADR-147 Amendment 1): on a node in a
+    gazetteer dataset, the type-ahead (`suggest_nodes`) and the exact search (`search_nodes`) match
+    a case reader on its name alone, the rows and `more` alike, so a run of prefix searches cannot
+    rebuild an `osm_id`. More places than one page share the prefix, so a store that matched on it
+    would fill the page and say `more`. The Conduit's own work (no datasets) still finds a place
+    by its `osm_id`, as a rebuild and resolution need."""
+    graph, analytics, extract = stores
+    await _load(graph, analytics, extract)
+    for i in range(12):
+        await _plant(
+            graph, analytics, node_id=f"prefix-{i}", name=f"Marlow {i}", dataset=GAZETTEER,
+            classification="OFFICIAL", lon=-0.77, lat=51.57, osm_id=f"node/55120{i:02d}",
+        )  # fmt: skip
+    for options in (
+        SuggestOptions(),
+        SuggestOptions(mode="contains", ignore_case=True),
+        SuggestOptions(types=("Location",)),
+    ):
+        hits = await graph.suggest_nodes("node/5512", WITH_GAZETTEER, limit=10, options=options)
+        assert hits.nodes == [] and hits.more is False, options
+    named = await graph.suggest_nodes("Marlow", WITH_GAZETTEER, limit=10)
+    assert len(named.nodes) == 10 and named.more is True
+    assert await graph.search_nodes("node/551203", WITH_GAZETTEER) == []
+    assert [n.properties["name"] for n in await graph.search_nodes("Marlow 3", WITH_GAZETTEER)] == [
+        "Marlow 3"
+    ]
+    unlimited = WITH_GAZETTEER.model_copy(update={"datasets": None})
+    assert [n.id for n in await graph.search_nodes("node/551203", unlimited)] == ["prefix-3"]

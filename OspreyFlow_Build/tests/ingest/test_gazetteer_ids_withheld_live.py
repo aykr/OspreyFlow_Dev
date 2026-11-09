@@ -2,16 +2,16 @@
 2026, ADR-147 Amendment 1), through the real routes a case reads its nodes by once it has added the
 gazetteer: search (`/search`, `services/api/search.py`), the working set's seed (`/seed`) and
 expansion (`/expand`). A gazetteer place with an `osm_id` and a `uprn` is planted in a gazetteer
-dataset, beside a neighbour, and a case reading it searches for it by name, puts it on its canvas and
-expands from a person present at it, so the place arrives in the expansion; no answer carries
-either identifier. Shown red with the projection
-removed (`ontology.handling._gazetteer_identifiers_withheld`, `P4_RED_RECORD.md`).
+dataset, beside a neighbour, and a case reading it searches for it by name, puts it on its canvas
+and expands from a person present at it, so the place arrives in the expansion; no answer carries
+either identifier. Shown red with the projection removed
+(`ontology.handling._gazetteer_identifiers_withheld`, `P4_RED_RECORD.md`).
 
 Runs the real `services.api.app` over real ArcadeDB, Postgres and Valkey on a leased test stack, as
-`test_sources_withheld_routes.py` does. Everything it writes is removed in teardown, pass or fail: the
-two nodes and their link, by id (the Conduit's database is always `ospreyflow`, so not a throwaway
-one); its two cases, each delete checked; and in Postgres this run's gazetteer dataset, the cases'
-own analyst layers and the rows naming them.
+`test_sources_withheld_routes.py` does. Everything it writes is removed in teardown, pass or fail:
+the two nodes and their link, by id (the Conduit's database is always `ospreyflow`, so not a
+throwaway one); its two cases, each delete checked; and in Postgres this run's gazetteer dataset,
+the cases' own analyst layers and the rows naming them.
 """
 
 from __future__ import annotations
@@ -56,6 +56,8 @@ NAME = f"Quillbury {TAG}"
 OSM_ID = f"node/{TAG}"
 UPRN = f"9{TAG}"
 PERSON = f"Quillfeather{TAG}"
+#: Every node this run plants beyond the place and the person, removed in teardown.
+PLANTED: list[str] = []
 
 
 @pytest.fixture
@@ -119,8 +121,19 @@ async def _plant() -> tuple[str, str, str]:
         provenance=_provenance(), handling=_handling(), created_by="loader-1",
         created_at=now_utc(), datasets=[GAZETTEER],
     )  # fmt: skip
+    # Twelve more places whose `osm_id`s share the place's prefix: more than a type-ahead page.
+    alike = [
+        place.model_copy(
+            update={
+                "id": new_node_id(),
+                "properties": {"name": f"Elsewhere {i}", "osm_id": f"node/{TAG}{i:02d}"},
+            }
+        )
+        for i in range(12)
+    ]
+    PLANTED.extend(n.id for n in alike)
     tx = await graph.begin_transaction()
-    await graph.upsert_nodes([place, neighbour], tx)
+    await graph.upsert_nodes([place, neighbour, *alike], tx)
     await graph.upsert_edges([link], tx)
     await graph.commit_transaction(tx)
     await client.aclose()
@@ -201,6 +214,22 @@ def test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifie
             cases.append(case_id)
             _run(_give_case(case_id))
 
+            # The ruling of 9 November 2026: the case's own searches match a gazetteer place on its
+            # name alone. The exact search by its `osm_id` finds nothing; the type-ahead on the
+            # identifier's prefix suggests nothing and says no `more`, though 12 places share it.
+            by_id = client.post(
+                f"/v1/investigations/{case_id}/search", headers=headers, json={"query": OSM_ID}
+            )
+            assert by_id.status_code == 200 and by_id.json()["nodes"] == [], by_id.text
+            for body in (
+                {"query": f"node/{TAG}"},
+                {"query": f"node/{TAG}", "mode": "contains", "ignore_case": True},
+            ):
+                hinted = client.post(
+                    f"/v1/investigations/{case_id}/suggest", headers=headers, json=body
+                )
+                assert hinted.status_code == 200, hinted.text
+                assert hinted.json()["nodes"] == [] and hinted.json()["more"] is False, body
             found = client.post(
                 f"/v1/investigations/{case_id}/search", headers=headers, json={"query": NAME}
             )
@@ -246,6 +275,6 @@ def test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifie
                 answer = client.delete(f"/v1/investigations/{made_id}", headers=headers)
                 if answer.status_code not in (200, 204):
                     refused.append((made_id, answer.status_code))
-        _run(_remove([place_id, neighbour_id, link_id]))
+        _run(_remove([place_id, neighbour_id, link_id, *PLANTED]))
         _run(_remove_rows(cases))
         assert not refused, f"cases not removed: {refused}"
