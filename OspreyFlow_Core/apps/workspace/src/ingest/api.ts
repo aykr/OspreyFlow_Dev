@@ -275,15 +275,17 @@ export class ProfileError extends Error {
 
 /** The sentence a refusal carries: `detail`, or `message` (the ADR-127 refusals — a changed
  * `deduplicate`, a run already in progress — say theirs in `message`), else `fallback`. */
-function causeOf(body: { detail?: unknown; message?: unknown }, fallback: string): string {
+function causeOf(body: { detail?: unknown; message?: unknown; problems?: unknown }, fallback: string): string {
   if (typeof body.detail === "string" && body.detail) return body.detail;
+  // ADR-112 Amendment 8: a refusal of an expert step says why in `problems`.
+  if (Array.isArray(body.problems) && typeof body.problems[0] === "string") return body.problems.join(" ");
   if (typeof body.message === "string" && body.message) return body.message;
   return fallback;
 }
 
 async function parseCodedErrorOrThrow<T>(response: Response, action: string): Promise<T> {
   if (!response.ok) {
-    let body: { error?: unknown; detail?: unknown; message?: unknown } = {};
+    let body: { error?: unknown; detail?: unknown; message?: unknown; problems?: unknown } = {};
     try {
       body = await response.json();
     } catch {

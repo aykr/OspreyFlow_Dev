@@ -434,6 +434,7 @@ export function StagingSettings({
 }
 
 function sampleWords(err: unknown): string {
+  if (err instanceof ProfileError && err.code === "right_required" && err.message.includes("write_sql_transforms")) return err.message;
   if (err instanceof ProfileError && err.code === "right_required")
     return "A step's sample reads the sources' rows, so it needs the right to edit pipelines, which you do not hold.";
   if (err instanceof ProfileError && err.code === "source_unreadable") return "A source could not be read. Check it is still where the source says.";

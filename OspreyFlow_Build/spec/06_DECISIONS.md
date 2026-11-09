@@ -31349,7 +31349,9 @@ and its Amendments 1 to 7 are unchanged except where this says so.
   administration rights (A1 to A9): any holder of `manage_people` may grant it.
 - **What it gates.** `POST …/sql-check` declares it. `PUT …/pipeline` and `PUT …/pipeline/yaml`
   refuse, 403 in words, a save that adds, changes or removes an expert step, or a line into one, by a
-  person without it (`pipeline.expert_steps_changed`); a pipeline holding expert steps stays editable
+  person without it (`pipeline.expert_steps_changed`), and so does a drawer's sample
+  (`POST …/staging-preview`) asked to run an expert step the saved pipeline does not hold as given:
+  the sample runs the request's steps, so without this an editor could run any SELECT they wrote; a pipeline holding expert steps stays editable
   in every other part without it. Publishing, testing and running a pipeline with expert steps need
   only their own rights: the steps were written by a holder, and every run discloses them.
 
@@ -31375,12 +31377,16 @@ Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
 2. **The sandbox** (`services/ingest/sql_transform.py`): a private DuckDB connection per run of the
    step, its configuration locked: external access off, no autoloaded or unsigned extension, no
    Python replacement scan, no temporary directory, one thread, a memory limit (512 MB) and a time
-   limit (30 s, by interrupt). It holds only the step's input tables. The dialect is DuckDB SQL as is
-   (open question 2, the brief's recommendation), narrowed by the gate.
+   limit (30 s, by interrupt). It holds only the step's input tables; DuckDB's own catalogue
+   (settings and the sandbox's own table names, no row of another case) stays on its search path and
+   is the gate's to refuse. The dialect is DuckDB SQL as is (open question 2, the brief's
+   recommendation), narrowed by the gate, which every run asks.
 3. **The gate**, one function asked at save, a drawer's sample, *Check SQL*, Test, publish and the
-   run: exactly one statement and that a SELECT; no table function of any kind; no qualified name and
-   no table but its inputs (or its own CTEs); no `getenv`, `current_setting`, `read_text` or
-   `read_blob`; and a `_ref` carried. **`_ref` (R15):** each input row is given a `_ref` token, and
+   run: exactly one statement and that a SELECT; no table function of any kind and no `SHOW`,
+   `DESCRIBE` or `SUMMARIZE`; no qualified name and no table but its inputs or a CTE visible where it
+   is named (CTE names judged by scope, so a CTE inside a subquery does not admit a catalogue table of
+   its name outside it); no `getenv`, `current_setting`, `read_text` or `read_blob`; a `_ref`
+   carried, and never named through a list of column names. **`_ref` (R15):** each input row is given a `_ref` token, and
    every output column named `_ref` or `_ref_…` is read back as refs. A `_ref` item is a `_ref`
    column (in a grouped SELECT, one it groups on) or `list(_ref)`/`array_agg(_ref)`; anything else
    (`any_value(_ref)`, `min(_ref)`, a constant) is one row's ref for many and refused. At the run a
@@ -31390,7 +31396,8 @@ Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
    DuckDB's quoted text is taken out.
 4. **The person's own principal:** at the run, the step's tables hold only the rows the runner may
    read (`studio_staging.row_reader`, the preview's own per-row marking); the rest are absent and
-   counted `rows_withheld`. A drawer's sample and Test already give nothing to a reader not cleared
+   counted `rows_withheld`, and the `_ref` tokens are numbered over the kept rows, so none tells
+   where a withheld row was. A drawer's sample and Test already give nothing to a reader not cleared
    for every row, and read every row.
 5. **The fuzzy match** (`services/ingest/fuzzy_match.py`): Splink's `link_only` linker over the two
    tables, the comparisons of the ontology's registry, untrained (ADR-021), with the prior that a pair

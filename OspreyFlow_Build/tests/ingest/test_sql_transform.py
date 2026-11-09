@@ -207,18 +207,77 @@ def test_an_aggregate_carries_every_input_row_s_ref() -> None:
     "select",
     [
         "SELECT *, _ref FROM other_dataset_bookings",
-        'SELECT * FROM "loads/other-load/staged/visits.parquet"',
-        "SELECT * FROM visits_secret",
-        "SELECT * FROM pg_catalog.pg_tables",
-        "SELECT * FROM duckdb_settings()",
+        'SELECT *, _ref FROM "loads/other-load/staged/visits.parquet"',
+        "SELECT *, _ref FROM visits_secret",
     ],
 )
 def test_a_query_over_a_table_it_does_not_read_is_refused(select: str) -> None:
-    """Rule 3: a SQL step reads its declared inputs, this pipeline's own tables, and nothing else:
-    another case's or dataset's staged table, a catalogue, a qualified name."""
-    assert _gate(_step(select, ("visits",)))
-    with pytest.raises(StagingError):
+    """Rule 3: a SQL step reads its declared inputs, this pipeline's own tables, and nothing else.
+    The gate refuses another case's or dataset's staged table by name; without the gate the sandbox
+    holds no such table (`_ref` carried, so nothing else refuses it: rule 15)."""
+    assert any("is not one of the tables it reads" in p for p in _gate(_step(select, ("visits",))))
+    with pytest.raises(StagingError) as refused:
         run_sql_step(_step(select, ("visits",)), [_tables()["visits"]], check=False)
+    words = " ".join(refused.value.problems)
+    assert "does not exist" in words or "disabled by configuration" in words, words
+
+
+@pytest.mark.parametrize(
+    "select",
+    [
+        "SELECT v.*, s.* FROM visits v, pg_catalog.pg_tables s",
+        "SELECT v.*, s.* FROM visits v, duckdb_settings() s",
+        "SELECT v.*, s.* FROM visits v, pg_settings s",
+        "SELECT v.*, s.* FROM visits v, information_schema.tables s",
+        # The lane review of L1.5, item 1: a CTE of the same name inside a subquery is not the
+        # outer query's, so the outer name is DuckDB's catalogue, and refused.
+        "SELECT v.*, s.name FROM visits v, (WITH pg_settings AS (SELECT 1 AS x) "
+        "SELECT x FROM pg_settings) w, pg_settings s",
+    ],
+)
+def test_the_gate_refuses_duckdb_s_own_catalogue(select: str) -> None:
+    """DuckDB's catalogue is on its search path inside the sandbox too (it holds settings and the
+    sandbox's own table names, no row of another case): the gate is what refuses it, by name and by
+    scope, before anything runs, and every run of a step asks the gate (`check=False` is the tests'
+    alone)."""
+    problems = _gate(_step(select, ("visits",)))
+    assert any(
+        "is not one of the tables it reads" in p or "table function" in p for p in problems
+    ), problems
+
+
+@pytest.mark.parametrize(
+    "select",
+    [
+        "WITH c(pin, _ref) AS (SELECT pin, min(_ref) FROM pin_calls GROUP BY pin) SELECT * FROM c",
+        "SELECT * FROM (SELECT pin, min(_ref) FROM pin_calls GROUP BY pin) s(pin, _ref)",
+    ],
+)
+def test_a_column_alias_list_cannot_name_a_column_ref(select: str) -> None:
+    """The lane review, item 3: a list of column names renames by position, so it could call an
+    aggregate's one value `_ref`, past the one-for-many rule."""
+    problems = _gate(_step(select, ("pin_calls",)))
+    assert any("through a list of column names" in p for p in problems), problems
+
+
+@pytest.mark.parametrize(
+    "select",
+    ["SUMMARIZE visits", "DESCRIBE visits", "SHOW TABLES", "SELECT *, 1 AS _ref FROM (SUMMARIZE visits)"],
+)
+def test_show_describe_and_summarize_are_refused(select: str) -> None:
+    problems = _gate(_step(select, ("visits",)))
+    assert any("describes or summarises" in p for p in problems), problems
+
+
+def test_a_ref_tells_nothing_of_a_withheld_row() -> None:
+    """The lane review, item 5: tokens are numbered over the rows the reader may read, so one
+    carried into a cell (`_ref AS r`) shows no gap where a withheld row was."""
+    step = _step("SELECT booking_id, _ref AS r, _ref FROM visits ORDER BY booking_id", ("visits",))
+    out = run_staging(
+        [step], sources=_tables(), lists={}, dataset_id="pid", may_read=_hide(1),
+    ).output  # fmt: skip
+    assert [r.cells["r"] for r in out.rows] == ["visits#0", "visits#1"]
+    assert [ref.row_index for r in out.rows for ref in r.refs] == [0, 2]
 
 
 def test_a_qualified_name_is_refused_at_the_gate() -> None:

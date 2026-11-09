@@ -264,3 +264,49 @@ def test_the_threshold_is_deployed_with_the_version(expert: TestClient, git_repo
     published = yaml.safe_load((git_repo / "recipes" / "recipe-1.yaml").read_text())
     fuzzy = next(s for s in published["staging"] if s["kind"] == "fuzzy_match")
     assert (published["version"], fuzzy["threshold"]) == (1, 0.6)
+
+
+def test_a_sample_runs_an_unsaved_expert_step_only_for_a_holder_of_the_right(
+    expert: TestClient,
+) -> None:
+    """ADR-112 Amendment 8; the lane review of L1.5, item 4: the drawer's sample runs the request's
+    steps, so without this an editor could run any SELECT they wrote over the dataset's rows. The
+    saved pipeline's own expert steps still run for any editor."""
+    saved = _draft(expert).pipeline
+    changed = saved.model_copy(deep=True)
+    _sql_node(changed).config["select"] = "SELECT t.*, 1 AS extra FROM titled t"
+    app.dependency_overrides[get_principal] = lambda: EDITOR
+    body = {"pipeline": changed.model_dump(mode="json"), "step": "calls"}
+    refused = expert.post(f"{RECIPE_URL}/staging-preview", json=body)
+    assert refused.status_code == 403, refused.text
+    assert refused.json()["right"] == "write_sql_transforms"
+    assert "WHITLOW" not in refused.text
+    as_saved = {"pipeline": saved.model_dump(mode="json"), "step": "calls"}
+    assert expert.post(f"{RECIPE_URL}/staging-preview", json=as_saved).status_code == 200
+    app.dependency_overrides[get_principal] = lambda: WRITER
+    assert expert.post(f"{RECIPE_URL}/staging-preview", json=body).status_code == 200
+
+
+@pytest.mark.parametrize("route", ["yaml", "sql-check"])
+def test_the_yaml_and_check_sql_of_another_unit_s_recipe_are_not_found(
+    expert: TestClient, route: str
+) -> None:
+    """Rule 4: each new read path is scoped as the draft is (another unit's recipe reads as not
+    found), as `test_a_preview_of_another_units_recipe_is_not_found` does for the sample."""
+    _draft(expert).owning_unit = "unit-2"
+    if route == "yaml":
+        response = expert.get(f"{RECIPE_URL}/pipeline/yaml")
+    else:
+        response = expert.post(
+            f"{RECIPE_URL}/sql-check",
+            json={"pipeline": _draft(expert).pipeline.model_dump(mode="json"), "step": "calls"},
+        )
+    assert response.status_code == 404, response.text
+    assert response.json()["error"] == "studio_recipe_not_found"
+    assert "SELECT" not in response.text
+
+
+def test_the_yaml_save_of_another_unit_s_recipe_is_not_found(expert: TestClient) -> None:
+    text = expert.get(f"{RECIPE_URL}/pipeline/yaml").json()["text"]
+    _draft(expert).owning_unit = "unit-2"
+    assert expert.put(f"{RECIPE_URL}/pipeline/yaml", json={"text": text}).status_code == 404

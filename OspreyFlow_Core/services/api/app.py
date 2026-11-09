@@ -11099,7 +11099,21 @@ async def preview_studio_recipe_staging(
     over the first ten rows of each source, read as Map's sample is read (`edit_pipelines`, the
     viewer's level, the person's own principal, masked where they may not view a row), with the
     save gate's refusals for the pipeline the drawer holds, in its own words. It writes nothing:
-    no staged Parquet, no raw rows, no draft."""
+    no staged Parquet, no raw rows, no draft. ADR-112 Amendment 8: an expert step the saved pipeline
+    does not hold, or holds otherwise, is run only for a holder of `write_sql_transforms` (the lane
+    review of L1.5, item 4: the sample runs the request's steps, so it would otherwise run any
+    SELECT an editor wrote); the saved pipeline's own expert steps run for any editor."""
+    if expert_steps_changed(pipeline_from_recipe(recipe), body.pipeline) and (
+        Right.WRITE_SQL_TRANSFORMS not in rights_for(principal.roles)
+    ):
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=403,
+            content={
+                "error": "right_required",
+                "right": Right.WRITE_SQL_TRANSFORMS.value,
+                "problems": [EXPERT_RIGHT_WORDS],
+            },
+        )
     preview = await asyncio.to_thread(
         preview_staging,
         recipe,

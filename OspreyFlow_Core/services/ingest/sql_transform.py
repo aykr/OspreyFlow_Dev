@@ -8,22 +8,28 @@
   `INSTALL` are each refused by DuckDB itself); extensions neither autoload nor autoinstall; the
   Python client's scan of a variable named in `FROM` is off; nothing spills to disk.
 - **no table but its inputs.** The connection holds only the step's input tables, each under its
-  own name, so another case's or dataset's staged table is simply not there; and the gate refuses,
-  before DuckDB runs anything, a table function of any kind (`read_csv`, `query`, `range`,
-  `duckdb_settings`…), a qualified name and any table the step does not read.
+  own name, so another case's or dataset's staged table is simply not there. DuckDB's own catalogue
+  (`pg_catalog`, `information_schema`, `duckdb_settings()`) is on every connection's search path,
+  holding settings and the sandbox's own table names and no row of another case; the gate refuses
+  it, as it refuses, before DuckDB runs anything, a table function of any kind (`read_csv`, `query`,
+  `range`…), `SHOW`, `DESCRIBE` and `SUMMARIZE`, a qualified name, and any table that is neither an
+  input nor a CTE visible where it is named (CTE names are judged by scope).
 - **a time and a memory limit.** `memory_limit` is the connection's; the time limit interrupts the
   query (`con.interrupt`). The configuration is locked, so the SELECT cannot change either.
 - **the person's own principal** (`readable`): a row the person running it may not read is not put
   in the table at all, so it is absent, never masked, and nothing over the table counts it; the
   step's report counts how many were withheld (rule 2), a count withheld with every other.
 
-**The gate** (`sql_gate_problems`; the save gate, Test, a drawer's sample and Deploy all ask it):
-exactly one statement, and that a SELECT; the tables above; and a `_ref` column carried through.
+**The gate** (`sql_gate_problems`; the save gate, Test, a drawer's sample, Deploy and every run ask
+it): exactly one statement, and that a SELECT; the tables above; a `_ref` column carried through, and
+never named through a list of column names (`c(pin, _ref)` renames by position).
 **`_ref`** (R15, brief §5.2): each input row carries a `_ref` token; every output column named `_ref`
 or starting `_ref_` is read back as the refs of the input rows it names (a token, or a list of them
 from `list(_ref)`), so each output row names every input row it came from and the element Map
-writes from it lists them all. At the run, the output must hold such a column, an aggregating
-SELECT must carry each as a list, and each input table with rows must reach the output through one.
+writes from it lists them all. A `_ref` item is a `_ref` column (in a grouped SELECT, one it groups
+on) or `list(_ref)`. At the run, the output must hold such a column, and each input table with rows
+must reach the output through one. Tokens are numbered over the rows the reader may read, so none
+tells where a withheld row was.
 
 Nothing here evaluates text in Python, and a refusal names its cause, never a cell's value.
 """
@@ -80,23 +86,21 @@ def sandbox_connection(*, memory_limit: str = SQL_MEMORY_LIMIT) -> duckdb.DuckDB
 # --- The gate ---------------------------------------------------------------------------------
 
 
-def _walk(node: Any) -> Iterator[dict[str, Any]]:
+def _scoped(node: Any, scope: frozenset[str] = frozenset()) -> Iterator[tuple[dict[str, Any], frozenset[str]]]:
+    """Every node with the CTE names visible at it: a `WITH`'s names are visible within the query
+    that declares them (its body and its CTEs, a recursive one included), never outside it, so a
+    CTE named like a catalogue table inside a subquery does not let the outer query read the table
+    (the lane review of L1.5, item 1)."""
     if isinstance(node, dict):
-        yield node
+        cte_map = node.get("cte_map")
+        if isinstance(cte_map, dict) and cte_map.get("map"):
+            scope = scope | {str(e.get("key", "")).casefold() for e in cte_map["map"]}
+        yield node, scope
         for value in node.values():
-            yield from _walk(value)
+            yield from _scoped(value, scope)
     elif isinstance(node, list):
         for value in node:
-            yield from _walk(value)
-
-
-def _ctes(tree: Any) -> set[str]:
-    names: set[str] = set()
-    for node in _walk(tree):
-        cte_map = node.get("cte_map")
-        if isinstance(cte_map, dict):
-            names.update(str(entry.get("key", "")).casefold() for entry in cte_map.get("map", []))
-    return names
+            yield from _scoped(value, scope)
 
 
 def _is_ref_name(name: str) -> bool:
@@ -207,9 +211,21 @@ def sql_gate_problems(step: SqlStep) -> list[str]:
         return [f"step {step.id!r}'s SELECT cannot be read as SQL"]
     problems: list[str] = []
     inputs = {name.casefold() for name in step.inputs}
-    ctes = _ctes(tree)
-    for node in _walk(tree):
+    for node, ctes in _scoped(tree):
         kind = node.get("type")
+        if kind == "SHOW_REF":
+            problems.append(
+                f"step {step.id!r} describes or summarises a table (SHOW, DESCRIBE, SUMMARIZE), "
+                "which a SQL step may not: it selects from its tables"
+            )
+        # A column alias list renames by position, so `c(pin, _ref)` would call any column `_ref`
+        # (an aggregate's one value among them) past the rule below (the lane review, item 3).
+        for renamed in (node.get("aliases"), node.get("column_name_alias")):
+            if isinstance(renamed, list) and any(_is_ref_name(str(n)) for n in renamed):
+                problems.append(
+                    f"step {step.id!r} names a column _ref through a list of column names: carry "
+                    "_ref by its own name (an aggregate's as list(_ref) AS _ref)"
+                )
         if kind == "TABLE_FUNCTION":
             name = (node.get("function") or {}).get("function_name", "?")
             problems.append(
@@ -219,7 +235,7 @@ def sql_gate_problems(step: SqlStep) -> list[str]:
         elif kind == "BASE_TABLE":
             table = str(node.get("table_name", ""))
             qualified = node.get("schema_name") or node.get("catalog_name")
-            if qualified or table.casefold() not in inputs | ctes:
+            if qualified or table.casefold() not in inputs | set(ctes):
                 shown = table if len(table) <= 64 else table[:61] + "…"
                 problems.append(
                     f"step {step.id!r} reads {shown!r}, which is not one of the tables it reads "
@@ -314,9 +330,11 @@ def run_sql_step(
             data: dict[str, list[str | None]] = {
                 c: [row.cells.get(c) for _, row in kept] for c in table.columns
             }
-            data[REF_COLUMN] = [_token(table.name, index) for index, _ in kept]
-            for index, row in kept:
-                by_token[_token(table.name, index)] = row.refs
+            # Numbered over the kept rows only, so no token tells where a withheld row was (the
+            # lane review, item 5): `visits#0`, `visits#1` whatever the rows between them.
+            data[REF_COLUMN] = [_token(table.name, n) for n in range(len(kept))]
+            for n, (_index, row) in enumerate(kept):
+                by_token[_token(table.name, n)] = row.refs
             schema = pa.schema([pa.field(name, pa.string()) for name in data])
             con.register(table.name, pa.table(data, schema=schema))
         result = _execute(con, step, time_limit)
