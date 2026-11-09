@@ -1,9 +1,11 @@
 ## the Author check removed (targets() takes every home case's dataset)
 plant in services/api/drawn_merge.py; -k no_author_of_the_target; exit 1
+>       assert _step(mw, "targets", who).json()["targets"] == []
 E       AssertionError: assert [{'dataset_id...or_promotes'}] == []
 E         
 E         Left contains one more item: {'dataset_id': 'src', 'name': 'Prison intel', 'highest_marking': 'OFFICIAL-SENSITIVE', 'policy': 'author_promotes'}
 E         Use -v to get more diff
+>       assert _step(mw, "targets", who).json()["targets"] == []
 E       AssertionError: assert [{'dataset_id...or_promotes'}] == []
 E         
 E         Left contains one more item: {'dataset_id': 'src', 'name': 'Prison intel', 'highest_marking': 'OFFICIAL-SENSITIVE', 'policy': 'author_promotes'}
@@ -11,105 +13,225 @@ E         Use -v to get more diff
 
 ## merge_datasets removed from the routes
 plant in services/api/app.py; -k names_merge_datasets; exit 1
-E       AssertionError: {"drawn_dataset_id":"01M717TWW1CDKA5RB7Z02Y5WQT","drawn_name":"Night visits","targets":[{"dataset_id":"src","name":"Prison intel","highest_marking":"OFFICIAL-SENSITIVE","policy":"author_promotes"}],"refused":null}
+>       assert answer.status_code == 403, answer.text
+E       AssertionError: {"drawn_dataset_id":"01M71A6VDSTK50KJ77XZ7E6AR1","drawn_name":"Night visits","targets":[{"dataset_id":"src","name":"Prison intel","highest_marking":"OFFICIAL-SENSITIVE","policy":"author_promotes"}]}
 E       assert 200 == 403
 E        +  where 200 = <Response [200 OK]>.status_code
-E       AssertionError: {"drawn_dataset_id":"01M717TWZCYY0MS5H6V6R1X6N2","drawn_name":"Night visits","targets":[],"refused":null}
+>       assert answer.status_code == 403, answer.text
+E       AssertionError: {"drawn_dataset_id":"01M71A6VFT4B8FE80C5QHAADH1","drawn_name":"Night visits","targets":[]}
 E       assert 200 == 403
 E        +  where 200 = <Response [200 OK]>.status_code
-E       AssertionError: {"drawn_dataset_id":"01M717TWZYXD2S8RWE8VXCFK21","drawn_name":"Night visits","target_dataset_id":"src","target_name":"Prison intel","highest_marking":"OFFICIAL-SENSITIVE","policy":"author_promotes","mapping":[{"kind":"link","drawn_type":"ASSOCIATE_OF","target_type":"ASSOCIATE_OF","items":1,"why_not":null},{"kind":"node","drawn_type":"Person","target_type":"Person","items":2,"why_not":null}],"matches":[{"drawn":"01M717TX00G0W1WZ5E7JTQW6S4","drawn_label":"Mercer","loaded":"p-loaded","loaded_label":"Mercer","loaded_type":"Person","score":1.0,"why":"a name alike"}],"more_matches":false,"items":[{"item_id":"01M717TX00G0W1WZ5E7JTQW6S3","element_id":"01M717TX00G0W1WZ5E7JTQW6S4","kind":"node","type":"Person","label":"Mercer","marking":"OFFICIAL","follows":false,"source":null,"target":null,"problems":[]},{"item_id":"01M717TX025Q57XCBJ63EHBNFD","element_id":"01M717TX025Q57XCBJ63EHBNFE","kind":"node","type":"Person","label":"Unknown male “Tall”","marking":"OFFICIAL","follows":false,"source":null,"target":null,"problems":[]},{"item_id":"01M717TX0496HQ7P50GJ3A9EFX","element_id":"01M717TX0496HQ7P50GJ3A9EFY","kind":"link","type":"ASSOCIATE_OF","label":"seen together","marking":"OFFICIAL","follows":true,"source":"01M717TX00G0W1WZ5E7JTQW6S4","target":"01M717TX025Q57XCBJ63EHBNFE","problems":[]}],"checks":[{"name":"marking","passed":true,"words":"Every marking within Prison intel's highest allowed, OFFICIAL-SENSITIVE"},{"name":"types","passed":true,"words":"Every type in Prison intel's model"},{"name":"graded","passed":true,"words":"Every item graded, with a source"},{"name":"ends","passed":true,"words":"Every link with both its ends able to go"}],"recorded_as":"One load into Prison intel (trigger drawn_merge), committed at once (the Author promotes). Each item stays drawn and keeps its marking and grading; it is listed in the Ingest Studio's Analyst promotions and reverted like any load."}
-E       assert 200 == 403
+>       assert answer.status_code == 403, answer.text
+E       AssertionError: {"drawn_dataset_id":"01M71A6VGCWVR4677MG28TA48R","drawn_name":"Night visits","target_dataset_id":"src","target_name":"Prison intel","highest_marking":"OFFICIAL-SENSITIVE","policy":"author_promotes","mapping":[{"kind":"link","drawn_type":"ASSOCIATE_OF","target_type":"ASSOCIATE_OF","items":1,"why_not":null},{"kind":"node","drawn_type":"Person","target_type":"Person","items":2,"why_not":null}],"matches":[{"drawn":"01M71A6VGEMG7NJ5NTKTYM4HCB","drawn_label":"Mercer","loaded":"p-loaded","loaded_label":"Mercer","loaded_type":"Person","score":1.0,"why":"a name alike"}],"more_matches":false,"items":[{"item_id":"01M71A6VGEMG7NJ5NTKTYM4HCA","element_id":"01M71A6VGEMG7NJ5NTKTYM4HCB","kind":"node","type":"Person","label":"Mercer","marking":"OFFICIAL","follows":false,"source":null,"target":null,"problems":[]},{"item_id":"01M71A6VGG4FGMS454MD1S6QFB","element_id":"01M71A6VGG4FGMS454MD1S6QFC","kind":"node","type":"Person","label":"Unknown male “Tall”","marking":"OFFICIAL","follows":false,"source":null,"target":null,"problems":[]},{"item_id":"01M71A6VGJ966ZWKKEHB6D36X4","element_id":"01M71A6VGJ966ZWKKEHB6D36X5","kind":"link","type":"ASSOCIATE_OF","label":"seen together","marking":"OFFICIAL","follows":true,"source":"01M71A6VGEMG7NJ5NTKTYM4HCB","target":"01M71A6VGG4FGMS454MD1S6QFC","problems":[]}],"checks":[{"name":"marking","passed":true,"words":"Every marking within Prison intel's highest allowed, OFFICIAL-SENSITIVE"},{"name":"types","passed":true,"words":"Every type in Prison intel's model"},{"name":"graded","passed":true,"words":"Every item graded, with a source"},{"name":"ends","passed":true,"words":"Every link with both its ends able to go"}],"recorded_as":"One load into Prison intel (trigger drawn_merge), committed at once (the Author promotes). Each item stays drawn and keeps its marking and grading; it is listed in the Ingest Studio's Analyst promotions and reverted like any load."}
 
 ## the match candidates read unscoped (the target scope dropped)
 plant in services/api/drawn_merge.py; -k no_match_is_offered; exit 1
-E       AssertionError: assert [('01M717TYT3...', 'p-other')] == [('01M717TYT3..., 'p-loaded')]
+>       assert pairs == [(drawn.mercer["element_id"], "p-loaded")]
+E       AssertionError: assert [('01M71A6XCB...', 'p-other')] == [('01M71A6XCB..., 'p-loaded')]
 E         
-E         Left contains one more item: ('01M717TYT3EB52FT47R363RJWN', 'p-other')
+E         Left contains one more item: ('01M71A6XCBDSD8YGRSAJNJTACA', 'p-other')
 E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_no_match_is_offered_from_a_node_the_merger_may_not_see_or_another_dataset
-1 failed, 28 deselected, 1 warning in 1.41s
+1 failed, 38 deselected, 1 warning in 1.43s
 
 ## the target's highest marking check removed (`_problems`'s marking)
 plant in services/api/promotions.py; -k above_the_targets_highest; exit 1
+>       assert shown["problems"] == [
 E       assert [] == ['Marked SECR...L-SENSITIVE.']
 E         
 E         Right contains one more item: "Marked SECRET, above Prison intel's highest allowed marking, OFFICIAL-SENSITIVE."
 E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_an_item_above_the_targets_highest_marking_refuses_the_merge_and_writes_nothing
-1 failed, 28 deselected, 1 warning in 1.35s
+1 failed, 1 passed, 37 deselected, 1 warning in 1.39s
 
 ## a chosen match not checked against what is offered
 plant in services/api/drawn_merge.py; -k not_offered_is_refused; exit 1
-E           KeyError: ('01M717V2D1ZYGWPKPKPNXXR79D', 'p-secret')
+>       assert {_said(a) for a in answers} == {(422, "not_a_match")}
+E       AssertionError: assert {(201, None),...not_a_match')} == {(422, 'not_a_match')}
+E         
+E         Extra items in the left set:
+E         (201, None)
+E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_chosen_match_not_offered_is_refused_alike_and_writes_nothing
-1 failed, 28 deselected, 1 warning in 1.59s
+1 failed, 38 deselected, 1 warning in 1.34s
 
 ## the dry run merges
 plant in services/api/drawn_merge.py; -k dry_run_counts; exit 1
-E       AssertionError: {"error":"item_not_found"}
-E       assert 404 == 200
-E        +  where 404 = <Response [404 Not Found]>.status_code
-FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_the_dry_run_counts_only_what_the_merger_may_see_and_writes_nothing
-1 failed, 28 deselected, 1 warning in 1.33s
+>       assert mw.store.records == {} and mw.graph.node(drawn.mercer["element_id"]).datasets == [
+E       AssertionError: assert ({'01M71A72R72...rant_id=None)} == {}
+E         
+E         Left contains 1 more item:
+E         {'01M71A72R72Y22WT3Q0WM82SBR': PromotionRecord(id='01M71A72R72Y22WT3Q0WM82SBR',
+E                                                        load_id='promotion-01M71A72R72Y22WT3Q0WM82SBS',
+E                                                        trigger='drawn_merge',
+E                                                        case_id='home-5',
+E                                                        board_id=None,...
+E         
 
 ## a match written asserted (rule 5)
 plant in services/api/drawn_merge.py; -k becomes_a_view; exit 1
-E       pydantic_core._pydantic_core.ValidationError: 1 validation error for Provenance
-E         Value error, extraction_confidence must be null for asserted provenance [type=value_error, input_value={'state': <ProvenanceStat...action_confidence': 1.0}, input_type=dict]
-E           For further information visit https://errors.pydantic.dev/2.14/v/value_error
+>       assert same.provenance.state == ProvenanceState.INFERRED
+E       AssertionError: assert <ProvenanceSt...D: 'asserted'> == <ProvenanceSt...D: 'inferred'>
+E         
+E         - inferred
+E         + asserted
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_author_promotes_one_load_matches_inferred_and_the_drawing_becomes_a_view
-1 failed, 28 deselected, 1 warning in 1.64s
+1 failed, 38 deselected, 1 warning in 1.32s
 
 ## the boards left as boards (decision 7)
 plant in services/api/drawn_merge.py; -k becomes_a_view; exit 1
-E       AssertionError: assert (True, None) == (False, 'prom...BW9FCRPXSFK1')
+>       assert (view.drawing, view.merged_load) == (False, body["load_id"])
+E       AssertionError: assert (True, None) == (False, 'prom...PM5Q8BZS3JBT')
 E         
 E         At index 0 diff: True != False
 E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_author_promotes_one_load_matches_inferred_and_the_drawing_becomes_a_view
-1 failed, 28 deselected, 1 warning in 1.34s
+1 failed, 38 deselected, 1 warning in 1.32s
 
 ## annotations read unfiltered (the reader's clearance dropped)
 plant in services/api/drawn_merge.py; -k annotation_is_withheld; exit 1
+>       assert "Courier" not in json.dumps(erin) and "Informant 7" not in json.dumps(erin)
 E       assert ('Courier' not in '{"view": {"...d": false}]}'
 E         
 E         'Courier' is contained here:
 E           "label": "Courier", "marking": "SECRET", "grading": "B21", "source_note": "Informant 7", "words": "Drawn by alice, not merged: it stays in the drawing, read-only", "merged": false}]}
 E         ?           +++++++)
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_an_annotation_is_withheld_from_a_reader_who_may_not_see_its_item
-1 failed, 28 deselected, 1 warning in 1.33s
+1 failed, 38 deselected, 1 warning in 1.32s
 
 ## committed at once whatever the policy
 plant in services/api/drawn_merge.py; -k second_person; exit 1
+>       assert sent.json()["status"] == "awaiting_review"
 E       AssertionError: assert 'committed' == 'awaiting_review'
 E         
 E         - awaiting_review
 E         + committed
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_under_second_person_reviews_nothing_is_written_until_an_author_approves
-1 failed, 28 deselected, 1 warning in 1.32s
+1 failed, 38 deselected, 1 warning in 1.37s
 
 ## the revert leaving the merge's matches live
 plant in scripts/revert_promotion.py; -k reverting_a_merge; exit 1
+>       assert same.audit.reverted  # withdrawn with it, never deleted
 E       AssertionError: assert False
-E        +  where False = AuditStub(created_at=datetime.datetime(2026, 11, 9, 22, 46, 21, 13584, tzinfo=datetime.timezone.utc), created_by='dana...ision=1, superseded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None).reverted
-E        +    where AuditStub(created_at=datetime.datetime(2026, 11, 9, 22, 46, 21, 13584, tzinfo=datetime.timezone.utc), created_by='dana...ision=1, superseded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None) = Edge(id='01M717VDJN4DQJW2J5BBDVZ8FB', type='SAME_AS', source='01M717VDJET9R1FY93S5GD5KDP', target='p-loaded', properti..._by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['src']).audit
+E        +  where False = AuditStub(created_at=datetime.datetime(2026, 11, 9, 23, 27, 49, 311671, tzinfo=datetime.timezone.utc), created_by='dan...id='promotion-01M71A7BHZ353HRWGC6NH4F9BC', recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None).reverted
+E        +    where AuditStub(created_at=datetime.datetime(2026, 11, 9, 23, 27, 49, 311671, tzinfo=datetime.timezone.utc), created_by='dan...id='promotion-01M71A7BHZ353HRWGC6NH4F9BC', recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None) = Edge(id='01M71A7BHZ353HRWGC6NH4F9BD', type='SAME_AS', source='01M71A7BHREDNETFHWHFW34C8V', target='p-loaded', properti...A7BHZ353HRWGC6NH4F9BC', recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['src']).audit
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_reverting_a_merge_takes_back_the_load_its_matches_and_decision_7
-1 failed, 28 deselected, 1 warning in 1.32s
+1 failed, 38 deselected, 1 warning in 1.32s
 
 ## the revert leaving the case on the target and its views
 plant in scripts/revert_promotion.py; -k reverting_a_merge; exit 1
-E       AssertionError: assert (['src'] == ['01M717VFBGBQC5XCHHR1M2E3CD']
+>       assert mw.datasets.cases[mw.home] == [mw.drawn] and mw.datasets.merged == {}
+E       AssertionError: assert (['src'] == ['01M71A7D8YGP0W5QZQ30G5W5XB']
 E         
-E         At index 0 diff: 'src' != '01M717VFBGBQC5XCHHR1M2E3CD'
+E         At index 0 diff: 'src' != '01M71A7D8YGP0W5QZQ30G5W5XB'
 E         Use -v to get more diff)
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_reverting_a_merge_takes_back_the_load_its_matches_and_decision_7
-1 failed, 28 deselected, 1 warning in 1.36s
+1 failed, 38 deselected, 1 warning in 1.31s
 
 ## the revert taking no stores for a drawn merge
 plant in scripts/revert_promotion.py; -k reverting_a_merge; exit 1
-E               AttributeError: 'NoneType' object has no attribute 'undo_writes'
+>           await revert_promotion(record, boards.graph, mw.store, boards.items)
+>               assert merge is not None
+E               AssertionError
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_reverting_a_merge_takes_back_the_load_its_matches_and_decision_7
-1 failed, 28 deselected, 1 warning in 1.31s
+1 failed, 38 deselected, 1 warning in 1.33s
+
+## the merged drawing writable (Boards._own_item's check removed)
+plant in services/api/boards.py; -k edited_and_withdrawn_by_no_one; exit 1
+>           assert _said(answer) == (409, "drawing_merged"), answer.text
+E           AssertionError: {"element_id":"01M71A7GSZ0WQQJW2AAGH6JM2W","item_id":"01M71A7GSZ0WQQJW2AAGH6JM2V","watch_id":null}
+E           assert (200, None) == (409, 'drawing_merged')
+E             
+E             At index 0 diff: 200 != 409
+E             Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_after_a_merge_what_was_not_merged_is_edited_and_withdrawn_by_no_one
+1 failed, 38 deselected, 1 warning in 1.32s
+
+## a link checked against the drawing's own proposals, not the target's model
+plant in services/api/promotions.py; -k checked_against_the_targets_model; exit 1
+>       assert link["problems"] == ["SHARED_CELL_WITH is not a link type of Prison intel's model."]
+E       assert [] == ["SHARED_CELL...tel's model."]
+E         
+E         Right contains one more item: "SHARED_CELL_WITH is not a link type of Prison intel's model."
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_link_is_checked_against_the_targets_model_whatever_the_drawings_proposals_say
+1 failed, 38 deselected, 1 warning in 1.33s
+
+## the reviewer not shown the matches
+plant in services/api/promotions.py; -k reads_the_matches_they_approve; exit 1
+>       assert shown == [(drawn.mercer["element_id"], "p-loaded", "Mercer")]
+E       AssertionError: assert [] == [('01M71A7M9S...d', 'Mercer')]
+E         
+E         Right contains one more item: ('01M71A7M9SNGCGE0NRB20EZCQS', 'p-loaded', 'Mercer')
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_reviewer_reads_the_matches_they_approve
+1 failed, 38 deselected, 1 warning in 1.33s
+
+## a changed match left waiting (403 to every reviewer, as before the fix)
+plant in services/api/promotions.py; -k match_changed_is_rejected; exit 1
+>       assert _said(approved) == (409, "items_changed")
+E       AssertionError: assert (403, 'not_all_seen') == (409, 'items_changed')
+E         
+E         At index 0 diff: 403 != 409
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_waiting_merge_whose_match_changed_is_rejected_never_left_waiting
+1 failed, 38 deselected, 1 warning in 1.32s
+
+## the merge claimed after the graph commit
+plant in services/api/promotions.py; -k claim_fails_writes_no_graph; exit 1
+>       assert _said(answer) == (409, "already_merged")
+E       AssertionError: assert (201, None) == (409, 'already_merged')
+E         
+E         At index 0 diff: 201 != 409
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_merge_whose_claim_fails_writes_no_graph_and_says_so
+1 failed, 38 deselected, 1 warning in 1.33s
+
+## the claim not undone when the graph commit fails
+plant in services/api/drawn_merge.py; -k graph_commit_fails; exit 1
+>       assert mw.datasets.cases[mw.home] == [mw.drawn] and mw.datasets.merged == {}
+E       AssertionError: assert (['src'] == ['01M71A7SHNRN42P3KZGX6E4YKZ']
+E         
+E         At index 0 diff: 'src' != '01M71A7SHNRN42P3KZGX6E4YKZ'
+E         Use -v to get more diff)
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_merge_whose_graph_commit_fails_leaves_its_case_on_the_drawing
+1 failed, 38 deselected, 1 warning in 1.32s
+
+## the merge's links written without its load id
+plant in services/api/drawn_merge.py; -k becomes_a_view; exit 1
+>       assert same.audit.load_id == body["load_id"]  # written with the load, read as the load's
+E       AssertionError: assert None == 'promotion-01M71A7V9H32Q2XCMRYX3DHTSZ'
+E        +  where None = AuditStub(created_at=datetime.datetime(2026, 11, 9, 23, 28, 5, 425887, tzinfo=datetime.timezone.utc), created_by='dana...ision=1, superseded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None).load_id
+E        +    where AuditStub(created_at=datetime.datetime(2026, 11, 9, 23, 28, 5, 425887, tzinfo=datetime.timezone.utc), created_by='dana...ision=1, superseded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None) = Edge(id='01M71A7V9H32Q2XCMRYX3DHTT0', type='SAME_AS', source='01M71A7V980FRRNM1DN6D3C4KE', target='p-loaded', properti..._by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['src']).audit
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_author_promotes_one_load_matches_inferred_and_the_drawing_becomes_a_view
+1 failed, 38 deselected, 1 warning in 1.32s
+
+## a merged view counting the drawn nodes a reader may not see
+plant in services/api/case_views.py; -k counts_nothing; exit 1
+>       assert erin["missing"] == alice["missing"] == 0
+E       assert 1 == 0
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_merged_view_counts_nothing_a_reader_may_not_see
+1 failed, 38 deselected, 1 warning in 1.33s
+
+## a match marked above the target's highest let through
+plant in services/api/drawn_merge.py; -k marked_above_the_targets_highest_or_of_an_unticked; exit 1
+>       assert _said(above) == (422, "check_failed")
+E       AssertionError: assert (201, None) == (422, 'check_failed')
+E         
+E         At index 0 diff: 201 != 422
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_match_marked_above_the_targets_highest_or_of_an_unticked_item_is_refused
+1 failed, 38 deselected, 1 warning in 1.32s
+
+## a match of an unticked drawn node let through
+plant in services/api/drawn_merge.py; -k marked_above_the_targets_highest_or_of_an_unticked; exit 1
+>       assert _said(unticked) == (422, "not_a_match")
+E       AssertionError: assert (201, None) == (422, 'not_a_match')
+E         
+E         At index 0 diff: 201 != 422
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_match_marked_above_the_targets_highest_or_of_an_unticked_item_is_refused
+1 failed, 38 deselected, 1 warning in 1.32s
 
 ## restored
-29 passed, 1 warning in 1.68s
+39 passed, 1 warning in 1.82s

@@ -649,6 +649,13 @@ class Boards:
                 "this item has been promoted into a dataset: it is changed only by reverting "
                 "its promotion",
             )
+        # A drawing merged into a dataset is kept read-only for its audit (ADR-143 Amendment 2
+        # decision 7; L3.9): what it holds that was not merged is changed by no one.
+        if await self.datasets.drawn_merged_of(item.dataset_id) is not None:
+            raise DrawingRefused(
+                "drawing_merged",
+                "this drawing has been merged into a dataset: it is kept read-only for its audit",
+            )
         return item, element
 
     async def edit(

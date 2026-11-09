@@ -111,8 +111,14 @@ class _Investigations(Protocol):
 
 class _MergeCommit(Protocol):
     async def writes(self, record: PromotionRecord, tx: Any) -> None: ...
-    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> str | None: ...
+    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> bool: ...
+    async def before_commit(self, record: PromotionRecord) -> None: ...
+    def is_already_merged(self, error: Exception) -> bool: ...
+    async def undo_before_commit(self, record: PromotionRecord) -> None: ...
     async def after(self, record: PromotionRecord) -> None: ...
+    async def shown(
+        self, record: PromotionRecord, reviewer: Principal
+    ) -> tuple[list[Any], bool]: ...
 
 
 @dataclass(frozen=True)
@@ -217,9 +223,18 @@ class Promotions:
         return display_name(element) if isinstance(element, Node) else element.type
 
     async def _problems(
-        self, reads: Sequence[_Read], dataset: Dataset, case_id: str, reader: Principal
+        self,
+        reads: Sequence[_Read],
+        dataset: Dataset,
+        case_id: str,
+        reader: Principal,
+        *,
+        into_its_own_dataset: bool = True,
     ) -> dict[str, list[tuple[str, str]]]:
-        """Every check each item fails, as (check, words) (decision 8's checks; `CHECKS`)."""
+        """Every check each item fails, as (check, words) (decision 8's checks; `CHECKS`).
+        `into_its_own_dataset` is false for a drawn dataset merged into another (L3.9): the case's
+        own proposals answer for the drawing's model, not the target's, so every link is checked
+        against the target's model whatever they say (the lane review, item 4)."""
         highest = self.highest(dataset)
         # C14 against the dataset the items go into: the case's own for a promotion and a layer
         # merge (which reads it), the target's for a drawn dataset merged into another (L3.9).
@@ -270,7 +285,9 @@ class Promotions:
                 why = refusals.get(name)
                 if why is not None:
                     problems.append(("types", why))
-                elif self.model_check_applies(name, refusals) and name not in model_links:
+                elif (
+                    not into_its_own_dataset or self.model_check_applies(name, refusals)
+                ) and name not in model_links:
                     problems.append(
                         ("types", f"{name} is not a link type of {dataset.name}'s model.")
                     )
@@ -686,12 +703,34 @@ class Promotions:
         ):
             await graph.rollback_transaction(tx)
             raise PromotionRefused("already_decided", "This promotion has already been decided.")
+        if drawn_merge:
+            assert self.merges is not None
+            # Decision 7's Postgres half before the graph commits (L3.9; the lane review, items 7
+            # and 8): the matches' link ids kept for the revert, and the drawing's one merge
+            # claimed, so of two merges at once only one commits, and a failure here writes no
+            # graph at all.
+            try:
+                await self.merges.before_commit(record)
+            except Exception as refused:
+                await graph.rollback_transaction(tx)
+                await self.reject(
+                    record, was="committed", by=by,
+                    reason="The load was refused, and nothing was written.",
+                )  # fmt: skip
+                if self.merges.is_already_merged(refused):
+                    raise PromotionRefused(
+                        "already_merged", "This drawing has been merged already."
+                    ) from refused
+                raise
         try:
             await graph.commit_transaction(tx)
         except Exception:
             await self.reject(
                 record, was="committed", by=by, reason="The load failed, and nothing was written."
             )
+            if drawn_merge:
+                assert self.merges is not None
+                await self.merges.undo_before_commit(record)
             raise
         await self.boards.items.mark_promoted(record.case_id, list(record.item_ids), now)
         if record.grant_id is not None:
@@ -786,7 +825,14 @@ class Promotions:
             # Rule 7: the counts of what is shown, never beside a difference; the same counts
             # the list gives this reader (`shown_counts`).
             promotion = promotion.model_copy(update={"nodes": len(nodes), "links": len(edges)})
-        return PromotionDetails(promotion=promotion, items=items, withheld=withheld)
+        matches: list[Any] = []
+        if read and record.trigger == "drawn_merge" and self.merges is not None:
+            # A drawn merge's matches are approved with it, so the reviewer reads them too.
+            matches, unseen = await self.merges.shown(record, reviewer)
+            withheld = withheld or unseen
+        return PromotionDetails(
+            promotion=promotion, items=items, withheld=withheld, matches=matches
+        )
 
     async def decide(
         self, record: PromotionRecord, reviewer: Principal, *, approve: bool, reason: str | None
@@ -847,19 +893,22 @@ class Promotions:
                 status=403,
             )
         reads = [r for r in reads if r.element is not None]
-        problems = await self._problems(reads, held, record.case_id, reader)
+        problems = await self._problems(
+            reads, held, record.case_id, reader,
+            into_its_own_dataset=record.trigger != "drawn_merge",
+        )  # fmt: skip
         failing = [(r, problems[r.item.item_id][0][1]) for r in reads if problems[r.item.item_id]]
-        # A drawn dataset's merge: each chosen match too, as the reviewer reads it now (L3.9).
-        matched = None
-        if record.trigger == "drawn_merge" and self.merges is not None:
-            matched = await self.merges.recheck(record, reviewer)
-            if matched == "unseen":
-                raise PromotionRefused(
-                    "not_all_seen",
-                    "You may not see every item in this promotion, so you may not approve it: "
-                    "ask another of the dataset's Authors who may review promotions.",
-                    status=403,
-                )
+        # A drawn dataset's merge: each chosen match too, as the reviewer reads it now, once every
+        # item has passed (L3.9). The reviewer clears the promotion's marking (the routes ask it),
+        # which covers every match as chosen, so a match end they cannot read now was withdrawn
+        # or raised since: changed, and rejected, never left waiting (the lane review, item 6).
+        matched = (
+            record.trigger == "drawn_merge"
+            and len(live) == len(record.item_ids)
+            and not failing
+            and self.merges is not None
+            and await self.merges.recheck(record, reviewer)
+        )
         if len(live) != len(record.item_ids) or failing or matched:
             why = (
                 f"{self._label(failing[0][0])} has changed since it was sent: {failing[0][1]}"

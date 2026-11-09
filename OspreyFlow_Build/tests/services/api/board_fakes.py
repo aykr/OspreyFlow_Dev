@@ -422,7 +422,10 @@ class BoardGraph(FakeGraphPort):
                     properties=write.properties,
                     provenance=write.provenance,
                     handling=write.handling,
-                    audit=AuditStub(created_at=write.created_at, created_by=write.created_by),
+                    # As the adapter: the write's load names the link (L3.9's review, item 12).
+                    audit=AuditStub(created_at=write.created_at, created_by=write.created_by,
+                                    load_id=write.load_id, recipe_id=write.recipe_id,
+                                    recipe_version=write.recipe_version),
                     datasets=sorted(set(write.datasets)),
                 )
             )
@@ -439,6 +442,10 @@ class BoardGraph(FakeGraphPort):
                 "handling": merge_handling(held.handling, write.handling, SCHEME),
                 "datasets": merge_datasets(held.datasets, write.datasets),
                 "occurrences": held.occurrences + 1,
+                "audit": held.audit.model_copy(
+                    update={"load_id": write.load_id, "recipe_id": write.recipe_id,
+                            "recipe_version": write.recipe_version}
+                ),
             }
         )
         self._graph_edges = [merged if e.id == held.id else e for e in self._graph_edges]

@@ -24,23 +24,23 @@ PLANTS = [
    "above_the_targets_highest"),
   ("a chosen match not checked against what is offered",
    "services/api/drawn_merge.py",
-   "            if pick not in offered or pick[0] not in going:",
-   "            if pick[0] not in going:",
+   "                pick not in offered\n                or pick[0] not in going",
+   "                pick[0] not in going",
    "not_offered_is_refused"),
   ("the dry run merges",
    "services/api/drawn_merge.py",
    "        goes, left, rows = await self._plan(drawn, case_id, target, body, reader)\n        return DrawnMergeDryRun(",
-   "        await self.merge(drawn, case_id, target, body, reader)\n        goes, left, rows = await self._plan(drawn, case_id, target, body, reader)\n        return DrawnMergeDryRun(",
+   "        goes, left, rows = await self._plan(drawn, case_id, target, body, reader)\n        await self.merge(drawn, case_id, target, body, reader)\n        return DrawnMergeDryRun(",
    "dry_run_counts"),
   ("a match written asserted (rule 5)",
    "services/api/drawn_merge.py",
-   "                    state=ProvenanceState.INFERRED,",
-   "                    state=ProvenanceState.ASSERTED,",
+   ("                    state=ProvenanceState.INFERRED,", "                    extraction_confidence=r.score,\n"),
+   ("                    state=ProvenanceState.ASSERTED,", ""),
    "becomes_a_view"),
   ("the boards left as boards (decision 7)",
    "services/api/drawn_merge.py",
-   "        await self.views.merge_boards(record.case_id, record.load_id, drawn)",
-   "        pass",
+   "            await self.views.merge_boards(record.case_id, record.load_id, drawn)",
+   "            pass",
    "becomes_a_view"),
   ("annotations read unfiltered (the reader's clearance dropped)",
    "services/api/drawn_merge.py",
@@ -54,32 +54,85 @@ PLANTS = [
    "second_person"),
   ("the revert leaving the merge's matches live",
    "scripts/revert_promotion.py",
-   "        if drawn_merge:\n            await merge.undo_writes(record, tx)",
-   "        pass",
+   "            assert merge is not None\n            await merge.undo_writes(record, tx)",
+   "            pass",
    "reverting_a_merge"),
   ("the revert leaving the case on the target and its views",
    "scripts/revert_promotion.py",
-   "    if drawn_merge:\n        await merge.undo(record)",
-   "    pass",
+   "        assert merge is not None\n        await merge.undo(record)",
+   "        pass",
    "reverting_a_merge"),
   ("the revert taking no stores for a drawn merge",
    "scripts/revert_promotion.py",
    "    if drawn_merge and merge is None:",
    "    if False:",
    "reverting_a_merge"),
+  ("the merged drawing writable (Boards._own_item's check removed)",
+   "services/api/boards.py",
+   "        if await self.datasets.drawn_merged_of(item.dataset_id) is not None:",
+   "        if False:",
+   "edited_and_withdrawn_by_no_one"),
+  ("a link checked against the drawing's own proposals, not the target's model",
+   "services/api/promotions.py",
+   "                    not into_its_own_dataset or self.model_check_applies(name, refusals)",
+   "                    self.model_check_applies(name, refusals)",
+   "checked_against_the_targets_model"),
+  ("the reviewer not shown the matches",
+   "services/api/promotions.py",
+   "        if read and record.trigger == \"drawn_merge\" and self.merges is not None:",
+   "        if False:",
+   "reads_the_matches_they_approve"),
+  ("a changed match left waiting (403 to every reviewer, as before the fix)",
+   "services/api/promotions.py",
+   "            and await self.merges.recheck(record, reviewer)\n        )",
+   "            and await self.merges.recheck(record, reviewer)\n        )\n        if matched:\n            raise PromotionRefused(\"not_all_seen\", \"x\", status=403)",
+   "match_changed_is_rejected"),
+  ("the merge claimed after the graph commit",
+   "services/api/promotions.py",
+   "                await self.merges.before_commit(record)\n            except Exception as refused:",
+   "                pass\n            except Exception as refused:",
+   "claim_fails_writes_no_graph"),
+  ("the claim not undone when the graph commit fails",
+   "services/api/drawn_merge.py",
+   "        if held is not None and held.load_id == record.load_id:\n            await self.datasets.unmerge_drawn(record.layer_id)",
+   "        pass",
+   "graph_commit_fails"),
+  ("the merge's links written without its load id",
+   "services/api/drawn_merge.py",
+   "                load_id=record.load_id,\n",
+   "",
+   "becomes_a_view"),
+  ("a merged view counting the drawn nodes a reader may not see",
+   "services/api/case_views.py",
+   "        missing = len(set(view.node_ids) - added) - sum(1 for n in nodes if n.id not in added)",
+   "        missing = len(set(view.node_ids)) - len(nodes)",
+   "counts_nothing"),
+  ("a match marked above the target's highest let through",
+   "services/api/drawn_merge.py",
+   "            if not scheme.clears(highest, stricter.classification):\n                raise PromotionRefused(\n                    \"check_failed\",\n                    f\"A match",
+   "            if False:\n                raise PromotionRefused(\n                    \"check_failed\",\n                    f\"A match",
+   "marked_above_the_targets_highest_or_of_an_unticked"),
+  ("a match of an unticked drawn node let through",
+   "services/api/drawn_merge.py",
+   "                or pick[0] not in going\n",
+   "",
+   "marked_above_the_targets_highest_or_of_an_unticked"),
 ]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 out = []
 for words, f, old, new, k in PLANTS:
     p = CORE / f
     src = p.read_text()
-    assert src.count(old) == 1, (words, src.count(old))
-    p.write_text(src.replace(old, new))
+    planted = src
+    for o, n in (zip(old, new) if isinstance(old, tuple) else [(old, new)]):
+        assert planted.count(o) == 1, (words, o, planted.count(o))
+        planted = planted.replace(o, n)
+    p.write_text(planted)
     try:
         r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", T, "-q", "-p", "no:cacheprovider", "-k", k], cwd=CORE, env=env, capture_output=True, text=True)
     finally:
         p.write_text(src)
-    tail = [l for l in r.stdout.splitlines() if l.startswith(("FAILED", "E  ")) or " passed" in l or " failed" in l][:8]
+    tail = [l for l in r.stdout.splitlines() if l.startswith(("FAILED", "E  ", ">  ")) or " passed" in l or " failed" in l][:10]
     out.append(f"## {words}\nplant in {f}; -k {k}; exit {r.returncode}\n" + "\n".join(tail) + "\n")
     print(words, "->", "RED" if r.returncode else "GREEN (plant not caught!)")
 r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", T, "-q", "-p", "no:cacheprovider"], cwd=CORE, env=env, capture_output=True, text=True)

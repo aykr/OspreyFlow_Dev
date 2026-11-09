@@ -37,6 +37,7 @@ see has none. Drawing again opens a new board, into the case's layer.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -68,10 +69,12 @@ from schemas.promotions import (
 
 from .board_store import BoardItemStore
 from .case_views import CaseViewStore, StoredCaseView
-from .datasets import DRAWN, SOURCE, Dataset, DrawnMerged
+from .datasets import DRAWN, SOURCE, Dataset, DrawnAlreadyMerged, DrawnMerged
 from .evidence_brief import display_name
 from .promotion_store import MergeMatchRow, PromotionRecord
 from .promotions import PromotionRefused, Promotions, _Read, is_gazetteer
+
+logger = logging.getLogger(__name__)
 
 #: What a merge's `SAME_AS` names as its maker, in the resolver's `model_version` place.
 MATCH_MODEL_VERSION = "drawn_merge"
@@ -129,12 +132,6 @@ class DrawnMerges:
         return sorted(out.values(), key=lambda d: (d.name, d.id))
 
     async def target_list(self, drawn: Dataset, reader: Principal) -> MergeTargets:
-        merged = await self._datasets.drawn_merged_of(drawn.id)
-        if merged is not None:
-            return MergeTargets(
-                drawn_dataset_id=drawn.id, drawn_name=drawn.name, targets=[],
-                refused="This drawing has been merged already: it is kept read-only for its audit.",
-            )  # fmt: skip
         return MergeTargets(
             drawn_dataset_id=drawn.id, drawn_name=drawn.name,
             targets=[
@@ -218,7 +215,9 @@ class DrawnMerges:
         promotions = self.promotions
         read = self._read_as(reader, drawn, target)
         reads = await self._reads(drawn, case_id, read)
-        problems = await promotions._problems(reads, target, case_id, read)
+        problems = await promotions._problems(
+            reads, target, case_id, read, into_its_own_dataset=False
+        )
         matches, more = await self._matches(reads, drawn, target, reader)
         return DrawnMergeSheet(
             drawn_dataset_id=drawn.id, drawn_name=drawn.name, target_dataset_id=target.id,
@@ -250,26 +249,41 @@ class DrawnMerges:
         promotions = self.promotions
         read = self._read_as(reader, drawn, target)
         reads = await self._reads(drawn, case_id, read)
-        problems = await promotions._problems(reads, target, case_id, read)
+        problems = await promotions._problems(
+            reads, target, case_id, read, into_its_own_dataset=False
+        )
         goes, left = await promotions._plan(
             reads, problems, list(dict.fromkeys(body.item_ids)), target, read
         )
         going = {r.item.element_id for r in goes if r.item.kind == "node"}
         offered = {
-            (d.id, n.id): (d, n, score)
+            (d.id, n.id): score
             for d, n, score, _ in (await self._matches(reads, drawn, target, reader))[0]
         }
+        picks = list(dict.fromkeys((p.drawn, p.loaded) for p in body.matches))
+        # Both ends as the merger reads them (the drawing and the target, nothing else).
+        ends = {
+            n.id: n
+            for n in await promotions.boards.graph.get_nodes(
+                sorted({x for pick in picks for x in pick}), read
+            )
+        } if picks else {}  # fmt: skip
         rows: list[MergeMatchRow] = []
         scheme, highest = promotions.boards.scheme, promotions.highest(target)
-        for pick in dict.fromkeys((p.drawn, p.loaded) for p in body.matches):
-            if pick not in offered or pick[0] not in going:
+        for pick in picks:
+            if (
+                pick not in offered
+                or pick[0] not in going
+                or pick[0] not in ends
+                or pick[1] not in ends
+            ):
                 # One answer whether the loaded node is hidden, another dataset's, or not alike.
                 raise PromotionRefused(
                     "not_a_match",
                     "One of the chosen matches is not offered: choose from Match again.",
                     status=422,
                 )
-            d, n, score = offered[pick]
+            d, n, score = ends[pick[0]], ends[pick[1]], offered.get(pick, 0.0)
             stricter = merge_handling(d.handling, n.handling, scheme)
             if not scheme.clears(highest, stricter.classification):
                 raise PromotionRefused(
@@ -304,10 +318,6 @@ class DrawnMerges:
         reader: Principal,
     ) -> PromotionRecord:  # fmt: skip
         promotions = self.promotions
-        if await self._datasets.drawn_merged_of(drawn.id) is not None:
-            raise PromotionRefused(
-                "already_merged", "This drawing has been merged already.", status=409
-            )
         if await promotions.store.waiting_from_layer(drawn.id):
             raise PromotionRefused(
                 "merge_waiting",
@@ -367,6 +377,8 @@ class MergeCommit:
                 handling=Handling.model_validate_json(r.handling),
                 created_by=record.proposed_by,
                 created_at=now,
+                # Written with the load, so read as the load's (the lane review, item 12).
+                load_id=record.load_id,
                 # ADR-099: the datasets both ends are in once the load lands: the target.
                 datasets=[record.dataset_id],
             )
@@ -374,17 +386,19 @@ class MergeCommit:
         ]
         self._written[record.id] = list(await self.graph.upsert_edges(writes, tx))
 
-    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> str | None:
-        """At an approval: each match as the reviewer reads it now. `unseen` when they may not see
-        one of its ends; `changed` when its marking or the target's highest has moved since."""
+    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> bool:
+        """At an approval: whether any match has changed since it was chosen, as the reviewer reads
+        it now: an end gone from their read (withdrawn, or raised above the promotion's marking,
+        which they clear), its marking moved, its loaded end out of the target, or the target's
+        highest lowered below it."""
         rows = await self.promotions_store.matches_of(record.id)
         if not rows:
-            return None
+            return False
         read = reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
         ids = sorted({x for r in rows for x in (r.drawn, r.loaded)})
         nodes = {n.id: n for n in await self.graph.get_nodes(ids, read)}
         if any(i not in nodes for i in ids):
-            return "unseen"
+            return True
         held = (await self.datasets.egress_of([record.dataset_id])).get(record.dataset_id)
         highest = (held.highest_marking if held else None) or self.scheme.classification[-1]
         for r in rows:
@@ -395,12 +409,14 @@ class MergeCommit:
                 or record.dataset_id not in nodes[r.loaded].datasets
                 or not self.scheme.clears(highest, stricter.classification)
             ):
-                return "changed"
-        return None
+                return True
+        return False
 
-    async def after(self, record: PromotionRecord) -> None:
-        """Decision 7, once the load is committed: the case reads the target (and the drawing
-        read-only), and its boards become views."""
+    async def before_commit(self, record: PromotionRecord) -> None:
+        """Before the graph commits: the matches' link ids recorded (so the revert can always find
+        them), then the drawing's one merge claimed and its case moved onto the target, in one
+        Postgres transaction (`merge_drawn`, refused for a second: `DrawnAlreadyMerged`). A
+        failure here rolls the graph back, so nothing is half merged."""
         written = self._written.pop(record.id, [])
         if written:
             await self.promotions_store.set_match_edges(record.id, written)
@@ -410,11 +426,56 @@ class MergeCommit:
                 case_id=record.case_id, merged_at=datetime.now(UTC),
             )
         )  # fmt: skip
+
+    @staticmethod
+    def is_already_merged(error: Exception) -> bool:
+        return isinstance(error, DrawnAlreadyMerged)
+
+    async def undo_before_commit(self, record: PromotionRecord) -> None:
+        """The graph commit failed after `before_commit`: the case back on its drawing."""
+        held = await self.datasets.drawn_merged_of(record.layer_id)
+        if held is not None and held.load_id == record.load_id:
+            await self.datasets.unmerge_drawn(record.layer_id)
+
+    async def after(self, record: PromotionRecord) -> None:
+        """Decision 7, once the load is committed: the drawing's boards become views. A failure
+        here is logged and leaves them boards, on which nothing is drawn any more (the drawing is
+        read-only: `Boards._own_item`, `Boards.into`); the merge itself stands."""
         drawn: dict[str, list[str]] = {}
         for item in await self.items.in_case(record.case_id):
             if item.kind == "node" and item.dataset_id == record.layer_id and not item.withdrawn_at:
                 drawn.setdefault(item.board_id, []).append(item.element_id)
-        await self.views.merge_boards(record.case_id, record.load_id, drawn)
+        try:
+            await self.views.merge_boards(record.case_id, record.load_id, drawn)
+        except Exception:
+            logger.exception(
+                "drawn merge %s committed, but its boards were not made views", record.load_id
+            )
+
+    async def shown(
+        self, record: PromotionRecord, reviewer: Principal
+    ) -> tuple[list[MergeMatch], bool]:
+        """What a reviewer reads of the merge's matches (the lane review, item 5): each whose two
+        ends they may see, read through their own handling, and whether any was not shown."""
+        rows = await self.promotions_store.matches_of(record.id)
+        if not rows:
+            return [], False
+        read = reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
+        ids = sorted({x for r in rows for x in (r.drawn, r.loaded)})
+        nodes = {n.id: n for n in await self.graph.get_nodes(ids, read)}
+        shown = [
+            MergeMatch(
+                drawn=r.drawn,
+                drawn_label=(
+                    d.provenance.drawn.label if (d := nodes[r.drawn]).provenance.drawn else r.drawn
+                ),
+                loaded=r.loaded, loaded_label=display_name(nodes[r.loaded]),
+                loaded_type=nodes[r.loaded].type, score=r.score, why="chosen at the merge",
+            )
+            for r in rows
+            if r.drawn in nodes and r.loaded in nodes
+        ]  # fmt: skip
+        return shown, len(shown) != len(rows)
 
     async def undo_writes(self, record: PromotionRecord, tx: Any) -> None:
         """The revert's: the merge's matches withdrawn with it (never deleted)."""

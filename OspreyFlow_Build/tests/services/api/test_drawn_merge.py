@@ -124,6 +124,12 @@ def _nothing_written(mw: SimpleNamespace, *element_ids: str) -> None:
     assert mw.datasets.merged == {}
 
 
+def _said(answer: Any) -> tuple[int, str | None]:
+    """The status and the refusal's code, read so that an answer with none (a write that went
+    through) fails on the comparison, never on a missing key."""
+    return answer.status_code, answer.json().get("error")
+
+
 def _ids(drawn: SimpleNamespace) -> list[str]:
     return [drawn.mercer["item_id"], drawn.tall["item_id"], drawn.link["item_id"]]
 
@@ -216,8 +222,7 @@ def test_an_item_above_the_targets_highest_marking_refuses_the_merge_and_writes_
     # The route's own check (the sheet bypassed), and the dry run's.
     for step in ("dry_run", "merge"):
         answer = _step(mw, step, "dana", item_ids=[*_ids(drawn), secret["item_id"]])
-        assert answer.status_code == 422, answer.text
-        assert answer.json()["error"] == "check_failed"
+        assert _said(answer) == (422, "check_failed"), answer.text
     _nothing_written(mw, drawn.mercer["element_id"], secret["element_id"])
 
 
@@ -307,9 +312,10 @@ def test_a_chosen_match_not_offered_is_refused_alike_and_writes_nothing(
             (hidden["element_id"], "p-secret"),  # above Erin
             (drawn.mercer["element_id"], "p-other"),  # another dataset
             (drawn.mercer["element_id"], "no-such-node"),  # none at all
+            (drawn.tall["element_id"], "p-loaded"),  # both seen, not alike: never offered
         ]
     ]
-    assert {(a.status_code, a.json()["error"]) for a in answers} == {(422, "not_a_match")}
+    assert {_said(a) for a in answers} == {(422, "not_a_match")}
     assert len({json.dumps(a.json()) for a in answers}) == 1
     _nothing_written(mw, drawn.mercer["element_id"])
 
@@ -330,6 +336,10 @@ def test_the_dry_run_counts_only_what_the_merger_may_see_and_writes_nothing(
 
     erin = _step(mw, "dry_run", "erin", item_ids=_ids(drawn), matches=match)
     assert erin.status_code == 200, erin.text
+    # Nothing written by it (checked here, before any other step reads the drawing again).
+    assert mw.store.records == {} and mw.graph.node(drawn.mercer["element_id"]).datasets == [
+        mw.drawn
+    ]
     assert (erin.json()["nodes"], erin.json()["links"], erin.json()["matches"]) == (2, 1, 1)
     # The SECRET item is neither counted nor named for Erin: not even among what is left out.
     assert "Courier" not in json.dumps(erin.json())
@@ -383,6 +393,7 @@ def test_author_promotes_one_load_matches_inferred_and_the_drawing_becomes_a_vie
     assert (same.source, same.target) == (drawn.mercer["element_id"], "p-loaded")
     assert same.provenance.state == ProvenanceState.INFERRED
     assert same.properties["score"] == 1.0 and same.datasets == ["src"]
+    assert same.audit.load_id == body["load_id"]  # written with the load, read as the load's
     assert mw.store.matches[body["id"]][0].edge_id == same.id
 
     # Decision 7: the case reads the target (and its drawing, read-only); the board is a view.
@@ -452,7 +463,7 @@ def test_under_second_person_reviews_nothing_is_written_until_an_author_approves
     assert mw.datasets.cases[mw.home] == [mw.drawn]
     # A second merge waits for this one; its proposer may not approve it.
     again = _merge(mw, drawn)
-    assert (again.status_code, again.json()["error"]) == (409, "merge_waiting")
+    assert _said(again) == (409, "merge_waiting")
     decision = f"/v1/datasets/src/promotions/{sent.json()['id']}/decision"
     own = _as("dana").post(decision, json={"approve": True})
     assert own.status_code == 403, own.text
@@ -513,3 +524,211 @@ async def test_reverting_a_merge_takes_back_the_load_its_matches_and_decision_7(
     # Drawing again goes into the drawing, as before the merge.
     again = _draw(mw, label="After")
     assert mw.graph.node(again["element_id"]).datasets == [mw.drawn]
+
+
+# --- the lane review's findings, each red by its plant (`gates/L3.9-plants.txt`) -------------
+
+
+def test_after_a_merge_what_was_not_merged_is_edited_and_withdrawn_by_no_one(
+    mw: SimpleNamespace,
+) -> None:
+    """Decision 7: the drawing is kept read-only for its audit (review item 3)."""
+    drawn = _three(mw)
+    left = _draw(mw, label="Unticked")
+    assert _merge(mw, drawn).status_code == 201
+    edited = _as("alice").patch(f"/v1/investigations/{mw.home}/board-items/{left['item_id']}",
+                                json={"label": "Changed"})  # fmt: skip
+    withdrawn = _as("alice").post(
+        f"/v1/investigations/{mw.home}/board-items/{left['item_id']}/withdraw"
+    )
+    for answer in (edited, withdrawn):
+        assert _said(answer) == (409, "drawing_merged"), answer.text
+    held = mw.graph.node(left["element_id"])
+    assert held.provenance.drawn.label == "Unticked" and not held.audit.reverted
+
+
+def _target_packs(mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, packs: list[str]) -> None:
+    """`src`'s live model holds `packs` alone; the drawing's, NIEM (its starter pack)."""
+    real = mw.models.live
+
+    async def live(dataset_id: str) -> Any:
+        if dataset_id == "src":
+            return SimpleNamespace(packs=packs)
+        if dataset_id == mw.drawn:
+            return SimpleNamespace(packs=["niem"])
+        return await real(dataset_id)
+
+    monkeypatch.setattr(mw.models, "live", live)
+
+
+def test_a_drawn_type_the_target_lacks_is_left_out_and_said(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _target_packs(mw, monkeypatch, ["fibo"])
+    drawn = _three(mw)
+    incident = _draw(mw, type="Incident", label="Night fight", properties={})
+    sheet = _sheet_for(mw, "dana")
+    (row,) = [m for m in sheet["mapping"] if m["drawn_type"] == "Incident"]
+    assert row["target_type"] is None and "Incident is not a type of Prison intel" in row["why_not"]
+    person = [m for m in sheet["mapping"] if m["drawn_type"] == "Person"]
+    assert person and person[0]["target_type"] == "Person"
+    answer = _step(mw, "merge", "dana", item_ids=[*_ids(drawn), incident["item_id"]])
+    assert _said(answer) == (422, "check_failed")
+    _nothing_written(mw, incident["element_id"])
+
+
+def test_a_link_is_checked_against_the_targets_model_whatever_the_drawings_proposals_say(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review item 4: the drawing's own proposals answer for the drawing's model; a link of a type
+    they answer for (`model_check_applies` false, as for a case's own proposed type) is still
+    checked against the target's."""
+    from services.api.promotions import Promotions
+
+    from .test_promotions import _LinkTypes
+
+    _target_packs(mw, monkeypatch, ["fibo"])
+    mercer = _draw(mw, label="Mercer", properties={"family_name": "Mercer"})
+    tall = _draw(mw)
+    cell = _as("alice").post(
+        f"/v1/investigations/{mw.home}/boards/{mw.board}/links",
+        json={"type": "SHARED_CELL_WITH", "label": "same cell", "marking": "OFFICIAL",
+              "grading": GRADE, "source_note": "Wing roll", "source": mercer["element_id"],
+              "target": tall["element_id"]},
+    )  # fmt: skip
+    assert cell.status_code == 201, cell.text
+    monkeypatch.setattr(app_state(), "link_types", _LinkTypes(None), raising=False)
+    monkeypatch.setattr(Promotions, "model_check_applies", lambda self, name, refusals: False)
+    (link,) = [i for i in _sheet_for(mw, "dana")["items"] if i["item_id"] == cell.json()["item_id"]]
+    assert link["problems"] == ["SHARED_CELL_WITH is not a link type of Prison intel's model."]
+
+
+def app_state() -> Any:
+    from services.api.app import app
+
+    return app.state
+
+
+def _second_person(mw: SimpleNamespace) -> None:
+    mw.datasets.datasets["src"] = mw.datasets.datasets["src"].model_copy(
+        update={"promotion_policy": "second_person_reviews"}
+    )
+
+
+def test_a_reviewer_reads_the_matches_they_approve(mw: SimpleNamespace) -> None:
+    """Review item 5: the matches are approved with the merge, so *Details* lists them."""
+    _second_person(mw)
+    drawn = _three(mw)
+    sent = _merge(mw, drawn).json()
+    details = _as("erin").get(f"/v1/datasets/src/promotions/{sent['id']}")
+    assert details.status_code == 200, details.text
+    shown = [(m["drawn"], m["loaded"], m["loaded_label"]) for m in details.json()["matches"]]
+    assert shown == [(drawn.mercer["element_id"], "p-loaded", "Mercer")]
+    assert details.json()["withheld"] is False
+
+
+def test_a_waiting_merge_whose_match_changed_is_rejected_never_left_waiting(
+    mw: SimpleNamespace,
+) -> None:
+    """Review item 6: the loaded end withdrawn while the merge waits refuses the load and records
+    it rejected (Amendment 5 decision 6), so the drawing may be merged again."""
+    _second_person(mw)
+    drawn = _three(mw)
+    sent = _merge(mw, drawn).json()
+    loaded = mw.graph._graph_nodes["p-loaded"]
+    mw.graph._graph_nodes["p-loaded"] = loaded.model_copy(
+        update={"audit": loaded.audit.model_copy(update={"reverted": True})}
+    )
+    approved = _as("erin").post(f"/v1/datasets/src/promotions/{sent['id']}/decision",
+                                json={"approve": True})  # fmt: skip
+    assert _said(approved) == (409, "items_changed")
+    assert mw.store.records[sent["id"]].status == "rejected"
+    assert mw.graph.node(drawn.mercer["element_id"]).datasets == [mw.drawn]
+    assert _step(mw, "merge", "dana", item_ids=_ids(drawn)).status_code == 201
+
+
+def test_a_merge_whose_claim_fails_writes_no_graph_and_says_so(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review items 7 and 8: the drawing's one merge is claimed before the graph commits, so a
+    second merge at once (the claim refused) writes nothing, and the case is not moved."""
+    from services.api.datasets import DrawnAlreadyMerged
+
+    drawn = _three(mw)
+
+    async def taken(merged: Any) -> None:
+        raise DrawnAlreadyMerged(merged.dataset_id)
+
+    monkeypatch.setattr(mw.datasets, "merge_drawn", taken)
+    answer = _merge(mw, drawn)
+    assert _said(answer) == (409, "already_merged")
+    assert mw.graph.node(drawn.mercer["element_id"]).datasets == [mw.drawn]
+    assert not [e for e in mw.graph.edges() if e.type == SAME_AS]
+    assert [r.status for r in mw.store.records.values()] == ["rejected"]
+    assert mw.datasets.cases[mw.home] == [mw.drawn]
+
+
+def test_a_merge_whose_graph_commit_fails_leaves_its_case_on_the_drawing(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drawn = _three(mw)
+    real = type(mw.graph).commit_transaction
+
+    async def fails(self: Any, tx: str) -> None:
+        if self.promotions:
+            raise RuntimeError("the store went away")
+        await real(self, tx)
+
+    monkeypatch.setattr(type(mw.graph), "commit_transaction", fails)
+    with pytest.raises(RuntimeError):
+        _merge(mw, drawn)
+    assert mw.datasets.cases[mw.home] == [mw.drawn] and mw.datasets.merged == {}
+    assert [r.status for r in mw.store.records.values()] == ["rejected"]
+
+
+def test_a_match_marked_above_the_targets_highest_or_of_an_unticked_item_is_refused(
+    mw: SimpleNamespace,
+) -> None:
+    drawn = _three(mw)
+    hidden = _drawn_hidden(mw)  # alike p-secret, SECRET, above src's OFFICIAL-SENSITIVE
+    above = _step(mw, "merge", "dana", item_ids=[*_ids(drawn), hidden["item_id"]],
+                  matches=[{"drawn": hidden["element_id"], "loaded": "p-secret"}])  # fmt: skip
+    assert _said(above) == (422, "check_failed")
+    assert "above Prison intel's highest allowed marking" in above.json()["detail"]
+    unticked = _step(mw, "merge", "dana", item_ids=[drawn.tall["item_id"]],
+                     matches=[{"drawn": drawn.mercer["element_id"], "loaded": "p-loaded"}])  # fmt: skip
+    assert _said(unticked) == (422, "not_a_match")
+    alike_not = _step(mw, "merge", "dana", item_ids=_ids(drawn),
+                      matches=[{"drawn": drawn.tall["element_id"], "loaded": "p-loaded"}])  # fmt: skip
+    assert _said(alike_not) == (422, "not_a_match")
+    _nothing_written(mw, drawn.mercer["element_id"])
+
+
+def test_the_view_keeps_its_sharing_and_drawing_again_opens_a_new_board_from_it(
+    mw: SimpleNamespace,
+) -> None:
+    drawn = _three(mw)
+    shared = _as("alice").post(f"/v1/investigations/{mw.home}/boards/{mw.board}/share")
+    assert shared.status_code == 200, shared.text
+    body = _merge(mw, drawn).json()
+    assert mw.views.views[mw.board].shared is True
+    assert _open_board_as_view(mw, "erin")["view"]["merged_load"] == body["load_id"]
+    again = _as("alice").post(f"/v1/investigations/{mw.home}/boards",
+                              json={"name": "Again", "start": "view", "view_id": mw.board})  # fmt: skip
+    assert again.status_code == 201, again.text
+    item = _item(again.json()["id"], case=mw.home, label="Later")
+    # Into the case's layer now: the drawing is read-only, the target is loaded data.
+    datasets = mw.graph.node(item["element_id"]).datasets
+    assert mw.drawn not in datasets and "src" not in datasets
+
+
+def test_a_merged_view_counts_nothing_a_reader_may_not_see(mw: SimpleNamespace) -> None:
+    """Review item 13 (rule 7): the drawn nodes the merge adds to the view are shown when seen and
+    never counted when not."""
+    drawn = _three(mw)
+    _draw(mw, label="Courier", marking="SECRET")
+    assert _merge(mw, drawn).status_code == 201
+    assert _as("alice").post(f"/v1/investigations/{mw.home}/views/{mw.board}/share").status_code == 200
+    erin, alice = _open_board_as_view(mw, "erin"), _open_board_as_view(mw)
+    assert erin["missing"] == alice["missing"] == 0
+    assert erin["view"]["chosen"] == alice["view"]["chosen"]
