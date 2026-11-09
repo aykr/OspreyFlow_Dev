@@ -15,3 +15,4 @@ pytest exit 0
 40 passed, 1 warning in 143.55s (0:02:23)
 pytest exit 0
 2026-11-09T02:30:02Z
+# Run 4 (05:5xZ): NOT A RESULT. `stack_lease.sh up case` failed: stack a's containers (osprey-probe-arcadedb-new, osprey-test-pg, osprey-test-valkey-6379, osprey-test-objectstore) no longer exist on this machine; every live case errored or failed on connection. Lease released; reported to the orchestrator.
