@@ -18,6 +18,7 @@ ledger now keeps each load's record (ADR-127 decision 6).
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import threading
 import time
@@ -253,9 +254,13 @@ def recipe_git_relative_path(recipe_id: str) -> str:
 #: records the accountable human; the commit is the platform's record of what was published).
 _COMMIT_IDENTITY = b"OspreyFlow Ingest Studio <osprey@localhost>"
 
-#: One publish at a time in this process: the compare-and-swap on `HEAD` below refuses a commit
-#: whose parent moved, and this keeps two concurrent publishes from refusing each other.
+#: One publish at a time in this process, from writing the file to moving `HEAD`: the
+#: compare-and-swap on `HEAD` refuses a commit whose parent moved, and this keeps two concurrent
+#: publishes from refusing each other or committing each other's bytes. Another process (the
+#: Prison Intelligence seed beside a running Conduit) is held off by the compare-and-swap alone.
 _REPOSITORY_LOCK = threading.Lock()
+
+_log = logging.getLogger(__name__)
 
 
 def _open_repository(repo_root: Path) -> Repo:
@@ -276,7 +281,7 @@ def _open_repository(repo_root: Path) -> Repo:
         return repo
 
 
-def _commit_file(repo_root: Path, relative_path: str, message: str) -> None:
+def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str) -> None:
     """Commit the working-tree file at `relative_path` exactly as `git add <path>` then
     `git commit -m <message> -- <path>` did, with dulwich and without the `git` binary (the
     owner's ruling of 9 November 2026). The commit object is built here rather than through
@@ -287,58 +292,73 @@ def _commit_file(repo_root: Path, relative_path: str, message: str) -> None:
     in the index stays staged and out of the commit, as `git commit -- <path>` left it. A file
     whose bytes are already the committed ones makes no commit (republishing identical content is
     not an error), but its index entry is still refreshed.
+
+    The file is written, staged and committed under one lock, from `data` itself, so a concurrent
+    publish of the same recipe cannot commit the other's bytes under this one's message. The index
+    is written before `HEAD` moves, the order `git add` then `git commit` had: a failure after the
+    index leaves the recipe staged and uncommitted, never committed while the registry row is
+    left unpublished.
     """
     path = relative_path.encode("utf-8")
     absolute_path = repo_root / relative_path
-    with _REPOSITORY_LOCK, _open_repository(repo_root) as repo:
-        blob = Blob.from_string(absolute_path.read_bytes())
-        head: ObjectID | None
+    with _REPOSITORY_LOCK:
+        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        absolute_path.write_bytes(data)
+        with _open_repository(repo_root) as repo:
+            _stage_and_commit(repo, path, absolute_path, data, message)
+
+
+def _stage_and_commit(
+    repo: Repo, path: bytes, absolute_path: Path, data: bytes, message: str
+) -> None:
+    blob = Blob.from_string(data)
+    head: ObjectID | None
+    try:
+        head = repo.refs[HEADREF]
+    except KeyError:
+        head = None  # `HEAD` names a ref with no commit yet
+    parent: Commit | None = None
+    if head is not None:
+        found = repo[head]
+        if not isinstance(found, Commit):
+            raise GitCommitError("the recipe repository's HEAD is not a commit")
+        parent = found
+    parent_tree = parent.tree if parent is not None else None
+
+    # What `git add` did: the index says the working-tree file is this blob, so `git status`
+    # on the volume is clean once the commit lands.
+    repo.object_store.add_object(blob)
+    index = repo.open_index()
+    index[path] = index_entry_from_stat(os.stat(absolute_path), blob.id)
+    index.write()
+
+    unchanged = False
+    if parent_tree is not None:
         try:
-            head = repo.refs[HEADREF]
+            _, committed = tree_lookup_path(repo.object_store.__getitem__, parent_tree, path)
+            unchanged = committed == blob.id
         except KeyError:
-            head = None  # `HEAD` names a ref with no commit yet
-        parent: Commit | None = None
-        if head is not None:
-            found = repo[head]
-            if not isinstance(found, Commit):
-                raise GitCommitError(f"HEAD in {str(repo_root)!r} is not a commit")
-            parent = found
-        parent_tree = parent.tree if parent is not None else None
+            pass
 
-        unchanged = False
-        if parent_tree is not None:
-            try:
-                _, committed = tree_lookup_path(repo.object_store.__getitem__, parent_tree, path)
-                unchanged = committed == blob.id
-            except KeyError:
-                pass
-
-        if not unchanged:
-            repo.object_store.add_object(blob)
-            base: ObjectID | Tree = parent_tree if parent_tree is not None else Tree()
-            commit = Commit()
-            commit.tree = commit_tree_changes(repo.object_store, base, [(path, 0o100644, blob.id)])
-            commit.parents = [head] if head is not None else []
-            commit.author = commit.committer = _COMMIT_IDENTITY
-            commit.author_time = commit.commit_time = int(time.time())
-            commit.author_timezone = commit.commit_timezone = 0
-            commit.encoding = b"UTF-8"
-            commit.message = message.encode("utf-8") + b"\n"  # `git commit -m` ends it so
-            repo.object_store.add_object(commit)
-            if not repo.refs.set_if_equals(
-                HEADREF, head if head is not None else ZERO_SHA, commit.id,
-                committer=_COMMIT_IDENTITY, message=b"commit: " + message.encode("utf-8"),
-            ):  # fmt: skip
-                raise GitCommitError(
-                    f"`HEAD` in {str(repo_root)!r} moved while {relative_path!r} was being "
-                    "committed; publish again"
-                )
-
-        # What `git add` did: the index says the working-tree file is the committed blob, so
-        # `git status` on the volume is clean.
-        index = repo.open_index()
-        index[path] = index_entry_from_stat(os.stat(absolute_path), blob.id)
-        index.write()
+    if not unchanged:
+        base: ObjectID | Tree = parent_tree if parent_tree is not None else Tree()
+        commit = Commit()
+        commit.tree = commit_tree_changes(repo.object_store, base, [(path, 0o100644, blob.id)])
+        commit.parents = [head] if head is not None else []
+        commit.author = commit.committer = _COMMIT_IDENTITY
+        commit.author_time = commit.commit_time = int(time.time())
+        commit.author_timezone = commit.commit_timezone = 0
+        commit.encoding = b"UTF-8"
+        commit.message = message.encode("utf-8") + b"\n"  # `git commit -m` ends it so
+        repo.object_store.add_object(commit)
+        if not repo.refs.set_if_equals(
+            HEADREF, head if head is not None else ZERO_SHA, commit.id,
+            committer=_COMMIT_IDENTITY, message=b"commit: " + message.encode("utf-8"),
+        ):  # fmt: skip
+            raise GitCommitError(
+                f"the recipe repository's HEAD moved while {path.decode()!r} was being "
+                "committed; publish again"
+            )
 
 
 async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROOT) -> str:
@@ -374,18 +394,16 @@ async def commit_recipe_file(
     The commit is dulwich's (`_commit_file`), run on a worker thread because dulwich's file I/O is
     synchronous; the repository it writes is an ordinary git repository, which `git log` reads."""
     relative_path = recipe_git_relative_path(recipe_id)
-    absolute_path = repo_root / relative_path
     message = f"ingest: publish {recipe_id} v{version}"
     try:
-        absolute_path.parent.mkdir(parents=True, exist_ok=True)
-        absolute_path.write_bytes(data)
-        await asyncio.to_thread(_commit_file, repo_root, relative_path, message)
+        await asyncio.to_thread(_commit_file, repo_root, relative_path, data, message)
     except GitCommitError:
         raise
     except Exception as exc:  # dulwich's errors share no base; any failure is this typed one
-        raise GitCommitError(
-            f"committing {relative_path!r} in {str(repo_root)!r} failed: {exc!r}"
-        ) from exc
+        # The text reaches the client (app.py's handler), so it names the recipe's path and the
+        # failure's kind, never the volume's path or the exception's own text; both are logged.
+        _log.exception("committing %s in %s failed", relative_path, repo_root)
+        raise GitCommitError(f"committing {relative_path!r} failed ({type(exc).__name__})") from exc
     return relative_path
 
 
