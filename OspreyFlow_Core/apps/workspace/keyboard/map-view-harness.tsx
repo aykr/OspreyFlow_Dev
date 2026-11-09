@@ -5,7 +5,8 @@
 // P4: two basemaps to switch between (each a raster whose tiles never arrive: what is checked is
 // which source the map is drawn from, not the picture) and a place search answered by a stand-in for
 // the case's place route, which records each query on `window.__PLACE_QUERIES__`. `?searched=1`
-// draws the search's answer already shown, for the axe scan (`a11y/every-harness.spec.ts`);
+// draws the search's answer already shown, for the axe scan (`a11y/every-harness.spec.ts`), and
+// `?searched=more` and `?searched=fail` its "more match" and refused words;
 // `?brand=govuk` the GOV.UK theme (`brandHarness.ts`).
 import { useState } from "react";
 import Graph from "graphology";
@@ -15,6 +16,7 @@ import { createRoot } from "react-dom/client";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { MapView } from "../src/map/MapView";
+import { PlaceSearchFailed } from "../src/map/places";
 import type { WorkingSetGraph } from "../src/workingset/store";
 import type { MapPlace, PublicMapProvider } from "../../../packages/schemas/generated";
 import { applyHarnessBrand } from "./brandHarness";
@@ -83,6 +85,9 @@ const GAZETTEER: MapPlace[] = [
 window.__PLACE_QUERIES__ = [];
 async function searchPlaces(query: string) {
   window.__PLACE_QUERIES__!.push(query);
+  // Two answers only the axe states ask for: a scan filled by the case's own places, and a refusal.
+  if (query === "zz-more") return { places: [], more: true };
+  if (query === "zz-fail") throw new PlaceSearchFailed("The place search failed (HTTP 500). Try again.");
   const q = query.toLowerCase();
   return { places: GAZETTEER.filter((p) => p.name.toLowerCase().includes(q)), more: false };
 }
@@ -111,13 +116,15 @@ function Harness() {
 
 void applyHarnessBrand().then(() => {
   createRoot(document.getElementById("root")!).render(<Harness />);
-  if (new URLSearchParams(window.location.search).get("searched") === "1") {
+  const searched = new URLSearchParams(window.location.search).get("searched") ?? "";
+  const typed = ({ "1": "cran", more: "zz-more", fail: "zz-fail" } as Record<string, string>)[searched];
+  if (typed) {
     // The harness's own hand, not the product's: type a name and submit, so the answer is drawn.
     const fill = () => {
       const input = document.querySelector<HTMLInputElement>('form[role="search"] input');
       if (!input) return void setTimeout(fill, 50);
       const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-      set.call(input, "cran");
+      set.call(input, typed);
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.form!.requestSubmit();
     };
