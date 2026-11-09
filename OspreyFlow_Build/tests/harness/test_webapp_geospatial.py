@@ -15,6 +15,7 @@ import yaml
 from fastapi.testclient import TestClient
 from harness.webapp import create_app
 from services.api.map_admin import command_parser
+from services.api.map_places import UNKNOWN_UNIT
 
 
 def _client(config_path: Path) -> TestClient:
@@ -91,9 +92,9 @@ class _Runner:
     """`docker compose exec` as the set-up console runs it: each command recorded, answered with an
     exit status and the Conduit's printed lines."""
 
-    def __init__(self, code: int = 0, out: str = "") -> None:
+    def __init__(self, code: int = 0, out: str = "", *, units: tuple[str, ...] = ("unit-7",)) -> None:
         self.calls: list[list[str]] = []
-        self.code, self.out = code, out
+        self.code, self.out, self.units = code, out, units
 
     def __call__(self, argv: list[str]) -> tuple[int, str]:
         self.calls.append(argv)
@@ -107,6 +108,11 @@ class _Runner:
                     command_parser().parse_args(words)
             except SystemExit as exit_:
                 return int(exit_.code or 2), refused.getvalue()
+            # And what the Conduit refuses once parsed: a unit that holds nothing here, in its own
+            # words, exit 1, before anything is built (`map_admin._build_here`).
+            args = command_parser().parse_args(words)
+            if args.verb == "build" and args.unit not in self.units:
+                return 1, UNKNOWN_UNIT.format(unit=args.unit) + "\n"
         return self.code, self.out
 
 
@@ -154,12 +160,36 @@ def test_build_basemap_without_a_unit_is_refused_in_words_and_runs_nothing(tmp_p
     runner = _Runner(0, "Built.\n")
     client, _folder = _deployed(tmp_path, runner)
 
-    for body in ({"region": "rutland"}, {"region": "rutland", "unit": ""},
-                 {"region": "rutland", "unit": "unit 7; rm"}):  # fmt: skip
+    for unit in (None, "", "-x", "--by", "u" * 61, "unit\n7"):  # none, an option, too long
+        body = {"region": "rutland"} if unit is None else {"region": "rutland", "unit": unit}
         response = client.post("/api/geospatial/build-basemap", json=body)
-        assert response.status_code == 422, response.text
+        assert response.status_code == 422, (unit, response.text)
         assert "name the unit" in response.json()["detail"]
+    response = client.post("/api/geospatial/build-basemap", json={"region": "rutland", "unit": None})
+    assert response.status_code == 422, "a null unit is none, never `--unit None`"
     assert runner.calls == []
+
+
+def test_any_unit_the_conduit_can_name_is_sent_and_its_own_refusal_shown(tmp_path: Path) -> None:
+    """The console refuses only what cannot be a unit: `org_unit` is 1 to 60 characters, spaces
+    allowed (`schemas.admin.AccessInput`), so "Major Crime" is sent as one argument. Whether a
+    unit holds anything is the Conduit's to say: its refusal reaches the screen in its own words."""
+    runner = _Runner(0, "Built.\n", units=("Major Crime",))
+    client, _folder = _deployed(tmp_path, runner)
+
+    built = client.post(
+        "/api/geospatial/build-basemap", json={"region": "rutland", "unit": "Major Crime"}
+    )
+    assert built.json() == {"returncode": 0, "lines": ["Built."]}
+    assert runner.calls[-1][-3:-2] == ["Major Crime"]
+
+    refused = client.post(
+        "/api/geospatial/build-basemap", json={"region": "rutland", "unit": "unit-9"}
+    )
+    assert refused.status_code == 200
+    assert refused.json() == {
+        "returncode": 1, "lines": [UNKNOWN_UNIT.format(unit="unit-9")]
+    }  # fmt: skip
 
 
 def test_the_fake_runner_refuses_a_build_without_a_unit_as_the_conduit_does() -> None:

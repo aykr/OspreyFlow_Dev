@@ -34,7 +34,10 @@ describe("GeospatialScreen's Build", () => {
 
   it("shows the refusal of a build without a unit in words", async () => {
     client.buildLocalBasemap.mockRejectedValue(
-      new ApiError(422, "name the unit the gazetteer's places are held by: one that holds a case or a dataset"),
+      new ApiError(
+        422,
+        "name the unit the gazetteer's places are held by, as the deployment names it (up to 60 characters)",
+      ),
     );
     render(<GeospatialScreen />);
     fireEvent.click(screen.getByRole("button", { name: "Build local basemap" }));

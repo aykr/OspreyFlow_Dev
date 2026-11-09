@@ -476,7 +476,7 @@ def create_app(
     def post_build_basemap(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
         try:
             code, lines = build_basemap_step(
-                _out_dir(), str(body.get("region", "")), str(body.get("unit", "")), **runner_kw
+                _out_dir(), str(body.get("region") or ""), str(body.get("unit") or ""), **runner_kw
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
