@@ -810,6 +810,31 @@ test("when promotions are overdue is set in Operations by keyboard", async ({ pa
   registerCovered(REGISTRY, "set-when-promotions-are-overdue-by-keyboard");
 });
 
+// L2.7 (ADR-145 Amendment 4 decision 12; rule 13): the tips of People, Roles and Datasets, each read
+// with the control it explains as that control takes focus, in roles' names and never people.
+test("a role's, a team lead's and a dataset's Authors' tips are read with their controls by keyboard", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people,administer_system");
+  await open(page, "People and roles");
+  const box = page.getByRole("checkbox", { name: "Data Engineer for osprey-demo-analyst" });
+  await box.focus();
+  await expect(box).toBeFocused();
+  await expect(box).toHaveAccessibleDescription(/reviews promotions into a dataset/);
+  registerCovered(REGISTRY, "read-a-roles-tip-by-keyboard");
+  await open(page, "Roles");
+  await press(page, "Team for Intel desk");
+  const lead = page.getByRole("combobox", { name: "Lead of Intel" });
+  await lead.focus();
+  await expect(lead).toHaveAccessibleDescription(/A team's lead may give a team alert to a named member/);
+  await expect(lead).not.toHaveAccessibleDescription(/Demo Analyst|Bea Engineer/);
+  registerCovered(REGISTRY, "read-a-teams-lead-tip-by-keyboard");
+  await details(page);
+  const owner = page.getByRole("button", { name: "Change owner of Enron corpus" });
+  await owner.focus();
+  await expect(owner).toHaveAccessibleDescription(/A dataset's Authors answer for it/);
+  registerCovered(REGISTRY, "read-a-datasets-authors-tip-by-keyboard");
+});
+
 test("every registered Admin action has its own proving test case above", () => {
   assertAllCovered("ADMIN_ACTIONS", ADMIN_ACTIONS);
 });
