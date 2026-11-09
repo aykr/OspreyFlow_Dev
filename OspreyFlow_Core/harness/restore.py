@@ -821,11 +821,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def _chosen_set(given: str, found: list[FoundSet]) -> FoundSet | None:
-    """The set the operator named (ADR-114 Amendment 37 decision 3): a folder that exists, as it
-    is (said to be in an old place when it is one); else a set's name, the deployment's own folder
-    first (`found` lists it before an old copy of the same name)."""
+    """The set the operator named (ADR-114 Amendment 37 decision 3): a folder, as it is (said to be
+    in an old place when it is one; one that is not a set is refused by `run_restore`, as before);
+    else a set's bare name, the deployment's own folder first (`found` lists it before an old copy
+    of the same name)."""
     path = Path(given).expanduser()
-    if path.is_dir():
+    if path.is_dir() or "/" in given or given.startswith(("~", ".")):
         own = path.resolve()
         return next((s for s in found if s.path.resolve() == own), FoundSet(path))
     return next((s for s in found if s.path.name == given), None)
