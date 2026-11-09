@@ -30409,6 +30409,15 @@ theme only, and its reference image could not fail there.
    them, and a gazetteer load, which reads its places whole. A case's own `Location` with a `uprn` keeps
    it. Only the OSM build loads a `gazetteer-*` dataset today, so `osm_id` is the identifier withheld on
    a shipped path; the others are named for a gazetteer dataset of theirs.
+3b. **The case's own searches match a gazetteer place on its name alone** (the orchestrator's ruling of
+   9 November 2026, strict; found by the lane's review of 3a): withholding the identifiers from every
+   answer left them matchable, so the exact search (`search_nodes`) found a place by its `osm_id` typed
+   in, and the type-ahead (`/suggest`, `suggest_nodes`) matched by prefix on every identifier and said
+   `more`, from which a case that had added the gazetteer could rebuild an `osm_id` character by
+   character. For a request reader, a node in a `gazetteer-*` dataset now matches on `name` alone in
+   both (`builders.match_any_field`), inside the traversal, so the rows, the extra row that says `more`
+   and any count follow it. The Conduit's own work (`datasets is None`) matches every field, so
+   resolution and a rebuild still find a place by its `osm_id`.
 4. **The map's colours meet WCAG's floors in the dark, light and GOV.UK themes**, measured from their own
    call sites (the bundled style, `map/overlayColours.ts`, the controls' CSS): text 4.5:1, a marker, link
    or trail 3:1, over land and over water. In the dark theme a marker on the ramp's second step was 2.7:1,
@@ -30435,17 +30444,10 @@ built, a composite; (c) the places copied into each case's own dataset. (b) stan
 - **The contrast check is not a CI gate**: `make glass-map-verify` is in neither `make ci` nor the CI
   workflow (the owner's files), and its reference images are this machine's (darwin); the measured floors
   do not depend on the platform, the images do. A request to the orchestrator.
-- **The case's own searches still match a gazetteer place on its identifiers**, though no answer
-  carries them: the exact search (`search_nodes`) finds a place by its `osm_id` typed in, and **the
-  type-ahead (`/suggest`, `suggest_nodes` over `suggestion_scope`) matches by prefix or substring on
-  every identifier and says `more`**, so a case that has added the gazetteer could rebuild an
-  `osm_id` character by character, as the place search allowed before it asked by name alone. The fix
-  is in the store's suggestion scope (`suggestion_scope`: no gazetteer identifier on a `gazetteer-*`
-  node for a request reader), the store's and the case lane's; put to the orchestrator.
 - **A gazetteer loaded through the Studio into a case's own dataset** (OS Open Names' `os_place_id`,
   Boundary-Line's `gss_code`, the US gazetteers' ids) is the case's data and keeps its identifiers on
-  every read; withholding them on any `Location` would hide a case's own loaded identifiers too. Put to
-  the orchestrator with this amendment's Open.
+  every read; withholding them on any `Location` would hide a case's own loaded identifiers too. A
+  carry to the studio lane (the orchestrator, 9 November 2026).
 - **`python -m scripts.build_local_basemap` writes its provider into `osprey.yaml` before the places
   commit** (`register_local_provider` inside `build_local_basemap`); `map_admin.build_basemap` commits
   first. The script is the developer's; a failed commit leaves a provider whose places are absent.
@@ -30468,6 +30470,11 @@ built, a composite; (c) the places copied into each case's own dataset. (b) stan
   (a case that added the gazetteer finds the place, one that did not finds nothing; no second copy on a
   rebuild); the build's dataset and points, `test_geospatial_admin_routes.py`; the stamp,
   `tests/ingest/test_{map_admin,build_local}_build_end_to_end.py`.
+- **Name alone in the case's own searches**: live,
+  `test_the_case_s_own_searches_match_a_gazetteer_place_on_its_name_alone` (12 places sharing an
+  `osm_id` prefix, more than a page: no suggestion, no `more`, no exact hit; the Conduit's own read
+  still finds it) and the routes in `test_gazetteer_ids_withheld_live.py`; the rendered query,
+  `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py`.
 - **A gazetteer's identifiers in no node read**: `tests/ontology/test_gazetteer_identifiers_withheld.py`;
   live through search, seed and expansion, `tests/ingest/test_gazetteer_ids_withheld_live.py`. Names
   alone at the store, `more` included: `test_map_places_route.py` and the live
