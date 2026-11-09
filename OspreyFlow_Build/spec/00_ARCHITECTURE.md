@@ -952,7 +952,11 @@ GPL-2.0:** a plain GPL (any version), a GPL-3.0 with the exception, a GPL with a
 and AGPL still never pass. A runtime in an image is declared by a `LABEL
 org.ospreyflow.runtime.<name>.licence` in its Dockerfile, which `make licence-check` reads
 (`tools/licence_check.py`'s image leg, `find_runtime_offenders`); a Java stage with no such label
-fails too (`tests/licence_check/test_runtime_licences.py`, each refusal shown red).
+fails too, as does a distribution's Java package; the labels are read however they are written
+(`tests/licence_check/test_runtime_licences.py`, each refusal shown red). **Awaiting the owner:**
+`git` (GPL-2.0-only), in the Conduit's image since round 13bf because the Conduit runs it to publish
+recipes (`09_INGEST_STUDIO.md` §6). It is declared by the same label, and `make licence-check` names it
+on every run as awaiting the owner's ruling, never passing it silently; an undeclared `git` fails.
 
 **Fetched at deployment, not shipped in the repository:** the basemap's label glyphs, Noto Sans
 Regular from the OpenMapTiles fonts release v2.0 (SIL-OFL-1.1), installed into the tiles folder by

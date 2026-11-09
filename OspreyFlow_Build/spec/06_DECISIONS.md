@@ -31477,43 +31477,49 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    other exception, and AGPL still never pass. **`make licence-check` reads it**: an image declares a
    runtime it carries by `LABEL org.ospreyflow.runtime.<name>.licence`, which a new leg
    (`tools/licence_check.find_runtime_offenders`) checks over every Dockerfile, and a Java stage, a
-   `jlink` or an `/opt/java` with no such label fails too.
-2. **Gazetteer places copied into a case's own dataset (ruling 6, option C).** A case's Author (the
-   right `share_case`, as for changing what a case reads; a gazetteer of the Author's unit, ADR-099
-   decision 3) adds a gazetteer with `PUT /v1/investigations/{id}/map/gazetteers/{dataset}`: its places
-   are copied into the one source dataset the case reads (`services/api/case_gazetteers.py`), so **the
-   case stays one dataset and keeps its loads**. A case reading a composite or nothing is refused in
-   words. A copy is a `Location` of its own (rule 6), its id made from the place's and the dataset's
-   (so a re-copy writes the same node), with the place's properties and **the gazetteer's handling**;
-   its one source names the gazetteer (`gazetteer:<dataset>`, `place <node id>`: never the extract's
-   path or row), and **its provenance names the gazetteer** (`Provenance.gazetteer`, kept through every
-   later write by `merge_provenance`). **Decision 3b holds for a copy, keyed on that provenance**, not on
-   a `gazetteer-*` dataset name, which a copy is not in: `ontology.handling.is_gazetteer_held` withholds
-   its source identifiers from every request reader on every node read, and `builders.match_any_field`
-   matches it on its name alone in the case's searches (`__.values("provenance").select("gazetteer")`
-   in the guard). The place search keeps a copy as a gazetteer place. **An addition is recorded for
-   the dataset that holds the copies** (`dataset_gazetteers`), not for the case: every case reading
-   that dataset (a case opened from an alert reads its case's) reads the copies and sees the
-   gazetteer added, and any of their Authors may remove it, as a load into the dataset is every
-   reader's; a case deleted or moved to another dataset leaves the record with the copies it
-   describes. **A re-build refreshes them**: the Admin route and both command-line builds copy the
-   places again into every dataset recorded for the gazetteer, once the places commit
-   (`case_gazetteers.refresh_cases`), drop the record of a dataset no longer there (never writing
-   into one), and revert the copy of a place the gazetteer no longer holds. **`DELETE` removes a
-   gazetteer**: its copies are marked reverted (never deleted) and taken out of the working sets,
-   **but never another load's data**: a copy another writer also wrote (a source not the
-   gazetteer's) or an analyst confirmed is kept, and `copies_kept` says so, judged on the kept copies
-   the Author may read. **Whether a copy goes is judged on the copy alone, never on the links around
-   it** (rule 3: a link above the Author's clearance, or in a case's analyst layer, would otherwise
-   decide what the Author sees kept): a link resting on a copy goes out of every read with it, and
-   comes back when the gazetteer is added again, since the copy is written again under its same id
-   and writing a reverted node revives it. A failed re-add leaves the earlier record and its copies
-   as they were. **A case's own load may match a copy** by its `osm_id` (`find_node`, a load's
-   lookup, unguarded as decision 3b left it): the identifier is the loader's own source row's, not
-   one told it by the store, and the load is told back a count; the copy so matched carries the
-   load's source as well, keeps its provenance through the store's merge, so its identifiers stay
-   withheld and unmatched, and a removal keeps it as the case's. `GET` lists the gazetteers of the
-   reader's unit and which the case's dataset holds, by name only, never a count of places.
+   `jlink`, an `/opt/java` or a distribution's Java package with no such label fails too. The labels are
+   read however they are written (quoted or not, several on a line, continued, the legacy form).
+   **`git`** (GPL-2.0-only, in the image since round 13bf: the Conduit runs it to publish recipes,
+   `09_INGEST_STUDIO.md` §6) is declared the same way; the register does not pass it, so the leg names it
+   on every run as **awaiting the owner** (`AWAITING_OWNER`), never silently, and an undeclared `git`
+   fails.
+2. **Gazetteer places copied into a case's own dataset (ruling 6, option C).** Adding a gazetteer
+   copies its places into a case's own dataset (`services/api/case_gazetteers.py`), so **the case stays
+   one dataset and keeps its loads**. **It is a dataset-level action** (the orchestrator's review):
+   `PUT`/`DELETE /v1/datasets/{dataset}/gazetteers/{gazetteer}`, behind the dataset route's own gate (a
+   person one of whose cases loads into the dataset) and **`run_pipelines`**, the right that runs a load
+   into a dataset, the narrowest that may write into it; a composite or a drawn dataset is refused, as for
+   any load. **The gazetteer must be of the dataset's own unit**, refused in words otherwise (409). The
+   case's `GET /v1/investigations/{id}/map/gazetteers` (Viewer, `investigate`) lists the gazetteers of its
+   own dataset's unit and which it holds, by name only, never a count of places.
+   - **A copy** is a `Location` of its own (rule 6), its id made from the place's and the dataset's, with
+     the place's properties and **the gazetteer's handling**; its one source is the gazetteer
+     (`gazetteer:<dataset>`, locator `place`: no node id, path or row, rule 7); and **its provenance names
+     the gazetteer** (`Provenance.gazetteer`), kept through every later write by `merge_provenance`.
+     **Decision 3b holds for a copy, keyed on that provenance**, not on a `gazetteer-*` dataset name:
+     `ontology.handling.is_gazetteer_held` withholds its source identifiers from every request reader, and
+     `builders.match_any_field` matches it on its name alone (`__.values("provenance").select("gazetteer")`
+     in the guard). The place search keeps a copy as a gazetteer place.
+   - **Recorded for the dataset** (`dataset_gazetteers`), so every case reading it sees the gazetteer
+     added; a case deleted or moved leaves the record with the copies.
+   - **Copied in pages of 500, each its own transaction**, never one unbounded write; a copy that fails
+     part way is finished by copying again (the same nodes). A failed re-add leaves the earlier record.
+   - **A copy the case has made its own** (another writer's source, as when a case's own load matched it
+     by its `osm_id` through `find_node`, a load's lookup that 3b leaves unguarded since the identifier is
+     the loader's own row's; or a person's confirmation) **is the case's data now: a re-build never writes
+     over it**, though the store's merge keeps the newest write.
+   - **A re-build refreshes the rest**: the Admin route and both command-line builds copy the places again
+     into every recorded dataset once the places commit, drop the record of a dataset no longer there
+     (never writing into one), and revert the copy of a place gone.
+   - **`DELETE` reverts every copy but those a case's own load, link or confirmation rests on**, so no
+     case is left a link to nothing; the links are read as the Conduit reads the dataset and every analyst
+     layer of a case reading it, at the highest clearance and with every handling code, as the dataset's
+     unit. A kept copy keeps its gazetteer mark (3b holds). The answer counts the kept copies **the asker
+     may read** (`copies_kept`) and says so in words (`said`); one above their clearance is kept and not
+     counted.
+   - **Open, put to the orchestrator** (an access question): a kept copy the asker may read, kept for a
+     link they may not, still shows them that something rests on it, since it stays; neither keeping it
+     (no link left to nothing) nor reverting it (no existence told) can satisfy both.
 3. **The gazetteer's unit a build setting (ruling 8).** The recipe's `unit-1` is no longer what a build
    uses: *Admin › Maps*' Build takes a unit (empty: the administrator's own), and `ospreyflow map build`
    and `python -m scripts.build_local_basemap` take `--unit` (required). A unit that holds no case and no
@@ -31521,13 +31527,13 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    written (`map_places.check_unit`, `UNKNOWN_UNIT`, which names no other unit); otherwise the places,
    their points and their dataset are that unit's. **A re-build is for the unit the region was first
    built for** (its dataset keeps its first unit, `register`): another is refused in words
-   (`OTHER_UNIT`), so a dataset never holds the places of two units.
+   (`OTHER_UNIT`), so a dataset never holds the places of two units. **A unit holding only a
+   gazetteer's dataset holds nothing** (`units_held` leaves `gazetteer-*` datasets out).
 
 **Left, and why:**
-- **The Glass has no control for a case's gazetteers yet**: the routes are built and tested; a panel
-  beside the map's place search, with its keyboard case (rule 13) and a registry id (a shared file), is
-  the next platform step. Until then the case's dataset picker still offers a gazetteer dataset, which
-  makes a composite as before (Amendment 1's option (b)).
+- **The Glass has no control for a gazetteer yet**: platform's P6 (the orchestrator, 9 November 2026),
+  a panel beside the map's place search; until then the case's dataset picker still offers a gazetteer
+  dataset as a composite (a carry to the case lane).
 - **A case of another unit than the gazetteer's** cannot add it (ADR-099 decision 3); ruling 8 lets an
   administrator build a gazetteer for each unit.
 - **The port's own contract and the graph-port conformance suite** (`ports/graph.py`'s `search_nodes`
@@ -31535,8 +31541,10 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   alone: neither is this lane's file, so the wording is a request to the orchestrator
   (`process/lanes/platform/PORT_CONTRACT.diff`); the rendered query and the two live files prove it.
 - **The image's source offer and NOTICE** for the Java runtime are a release step (`spec/00` §7).
-- **The copy is made in the request**, one transaction for the region's places, and each re-build
-  refreshes every recorded dataset inside its stream; the timing is in the lane's report.
+- **The copy is made in the request**, a page at a time; each re-build refreshes every recorded dataset
+  inside its stream. Measured: 2,000 planted places in 42.7 s on a leased test stack under other lanes'
+  load (about 21 s per 1,000; `test_a_region_is_copied_in_bounded_pages_and_timed`), so a region of
+  100,000 places would take over half an hour per dataset: a background job is the likely next step.
 - **The command-line builds' refresh leaves an open canvas as it was**: the working sets are the
   Conduit's, so a copy reverted by a command-line re-build (its place gone) leaves an open case's canvas
   when the case is next opened. The Admin route takes it out at once.
@@ -31568,7 +31576,8 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   before anything, and refresh the cases after the registration), `test_gazetteer_dataset_registration.py`,
   `tests/cli/test_map_verb.py`, `Maps.test.tsx`.
 
-**Cost.** The Conduit's image grows by the jlinked runtime (measured in the lane's report). Each case
-that adds a gazetteer holds a copy of every place (a region's places, once per case), and a re-build
-rewrites every case's copies; a removal reads the case's `Location`s and expands from the copies in
-batches of a hundred.
+**Cost.** The Conduit's image grows by the jlinked runtime: 61 MB, the image 1.33 GB (arm64). Each
+dataset that takes a gazetteer holds a copy of every place, written a page at a time (about 21 s per
+1,000 places, measured as above); a re-build rewrites every recorded dataset's copies but those the case
+made its own; a removal reads the dataset's `Location`s and asks, a hundred copies at a time, which a
+link rests on.

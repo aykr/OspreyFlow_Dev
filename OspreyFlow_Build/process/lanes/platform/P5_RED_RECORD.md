@@ -28,3 +28,17 @@ After the lane's review (development live run on stack c under the platform leas
 | Review 5 and 8: a case load's write keeps a copy one, through the real upsert (live) | `merge.merge_provenance`: the incoming write's `gazetteer` alone | `test_case_gazetteer_copies_live.py::test_a_case_s_load_writing_onto_a_copy_keeps_it_a_copy_and_the_case_s` | `gazetteer=None`, `osm_id` on the read |
 | Review 10: a rebuild for another unit refused | `map_places.check_unit`: the first build's unit not judged | `test_geospatial_admin_routes.py::…_before_anything`, `test_gazetteer_dataset_registration.py` (2) | 3 failed |
 | Review 12: each way a Java enters an image, alone | `_JAVA_IN_IMAGE`: the package alternative never matching; then `jlink` dropped | `test_runtime_licences.py::test_a_java_runtime_the_image_does_not_declare_is_refused` | the three package cases; then the `jlink` case |
+
+After the orchestrator's independent review (offline; live on stack a under the platform lease, 08:11–08:30 UTC):
+
+| Item | Plant (at the call site) | Test | Red |
+| --- | --- | --- | --- |
+| 1: a rebuild never writes over what a case asserted (live and offline) | `copy_places`: the case's own copies not left out of the writes | `test_case_gazetteer_copies_live.py::test_a_rebuild_after_a_case_s_load_keeps_what_the_case_wrote`; `test_case_gazetteers_routes.py::test_a_rebuild_never_writes_over_what_a_case_asserted` | the gazetteer's `Ashwell` over the case's spelling |
+| 2: `copies_kept` counts only what the asker may read (live and offline) | `remove_dataset_gazetteer_route`: every kept copy counted | `test_case_gazetteer_routes_live.py` (a SECRET copy the case's load wrote); `test_removing_reverts_…_keeps_the_case_s` | `copies_kept` 2 to an OFFICIAL Author |
+| 3: the gazetteer's unit is the dataset's | `_dataset_and_gazetteer`: the unit not judged | `test_another_unit_s_gazetteer_is_refused_in_words` | 200 |
+| 6: a dataset-level right | the `run_pipelines` dependency dropped from `PUT` | `test_without_run_pipelines_nothing_is_added` | not 403 |
+| 7: a copy a case's link rests on is kept, the layers read too (live and offline) | `remove_copies`: links read in the dataset alone | `…::test_a_removal_keeps_a_copy_a_case_s_link_rests_on_in_the_dataset_or_a_layer`; offline the same | the layer-linked copy reverted |
+| 8: every declared runtime label read | the old anchored, double-quoted pattern | `test_runtime_licences.py::test_a_declared_runtime_is_read_however_its_label_is_written` | all six layouts passed silently |
+| 8: `git` not passed silently | the git detection off | `…::test_git_installed_and_undeclared_is_refused` | `[] == [('api', 'git', 'undeclared')]` |
+| 10: no gazetteer node id in a copy's source | the locator `place <node id>` | `test_adding_copies_each_place_into_the_dataset` | the id in the copy |
+| 12: a unit holding only a gazetteer holds nothing | `units_held` counting gazetteer datasets | `test_gazetteer_dataset_registration.py::test_a_unit_holding_only_a_gazetteer_holds_nothing` | `unit-9` held |
