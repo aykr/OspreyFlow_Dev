@@ -478,6 +478,15 @@ New ones are added at the bottom as they happen.
     machine. The red records: three cases red against the previous script, then the two defects that matter
     planted at their call site (no `--exclude-standard`; the local `osprey.yaml` sent), each turning the case
     red. The first copy took about 2 minutes; the server venv built and 58 offline tests passed there.
+    **Your rulings, about 13:45 (all as recommended):**
+    1. CI on Python 3.12: already applied as `68e2ec3` (your word of 8 November) and waiting for the final push;
+       nothing more to do.
+    2. A removed composite case's layer is only deleted or left, never merged into a member (item 38 stands, L3.4).
+    3. The server's firewall: ufw is on, denying all incoming except 1099 (ssh) and 443 (osprey-small). Checked
+       afterwards: a fresh ssh works, port 443 is reachable from here, and the containers are healthy. Item 72's
+       "1099 may be the ArcadeDB's JMX" was wrong: 1099 is the server's ssh port.
+    4. Every new leased live run uses `stack_lease.sh remote`, after one trial run of mine; runs already started
+       finish over the tunnel, and Playwright and `test-js` stay on this machine.
 
 ## Evening, 7 November: your records of 7 November applied
 
