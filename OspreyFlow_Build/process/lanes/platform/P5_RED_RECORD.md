@@ -63,3 +63,24 @@ After the orchestrator's independent review (offline; live on stack a under the 
 | Review (round 3) 9: a removal needs only its record | `DELETE` through `_dataset_and_gazetteer` | `test_case_gazetteers_routes.py::test_a_removal_needs_only_the_record_not_the_gazetteer_s_state_now` | 404 |
 | Review (round 3) 12: a re-add is the re-adder's | the in-memory store keeping the first record | `…::test_a_re_add_is_recorded_as_the_re_adder_s` | `author-1` |
 | Review (round 3) 11: `git-core` and a copied `git` binary | the regex without them | `test_runtime_licences.py::test_git_installed_and_undeclared_is_refused` | passed silently |
+
+**The orchestrator's review sending P5 back (round 3).** Offline unless said. Live on stack d under the platform lease, run on the server (`stack_lease.sh remote`, detached), 18:29–20:25 UTC, logs under `osprey-runs/platform.meta/runs/20261109T18*`. Each plant is one line at its call site (`adapter.py` at the line named), restored with `git checkout` after its run.
+
+| Fix | Plant (at the call site) | Test | Red |
+| --- | --- | --- | --- |
+| 1: the console's Build sends the unit | `GeospatialScreen` sending no unit | `GeospatialScreen.test.tsx` "sends the region and the unit typed" | called with `("rutland", "")` |
+| 1: the console's fake runner refuses what the Conduit refuses | `_Runner` accepting any argv (the fake before) | `test_webapp_geospatial.py::test_the_fake_runner_refuses_a_build_without_a_unit_as_the_conduit_does` | exit 0 for a build without `--unit` |
+| 1: a build without a unit refused in words, nothing run | `build_basemap_step`: the unit not judged | `…::test_build_basemap_without_a_unit_is_refused_in_words_and_runs_nothing` | the runner called |
+| 6: a gazetteer's addition audited before its copy | `audit.record` after `copy_places` | `test_case_gazetteers_routes.py` (the failed-copy case) | no `add_dataset_gazetteer` entry |
+| Minor: only a place the gazetteer's dataset holds alone | the filter `gazetteer in p.datasets` | `…::test_only_a_place_held_by_the_gazetteer_s_dataset_alone_is_copied` | the shared place copied |
+| 4: `get_node` (live) | `adapter.py:780` `node_from_element_map(results[0], None)` | `test_case_gazetteer_copies_live.py::test_no_copy_s_identifier_is_sent_on_any_node_read` (also `…_keeps_it_a_copy_and_the_case_s`) | `osm_id` and `uprn` on the read. The route test stayed green: node detail at the route is the seed, through `get_nodes` |
+| 4: `get_nodes`, node detail at the route (live) | `adapter.py:830` `(record, None)` | the same, and `test_case_gazetteer_routes_live.py::test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still_loads` (the seed) | both: the bulk read, then the seed's delta, carried `osm_id`/`uprn` |
+| 4: store search (live) | `adapter.py:929` `(r, None)` | both tests (search by name; `/search` at the route) | the identifiers on what was found |
+| 4: suggest, by name (live) | `adapter.py:961` `(r, None)` | both tests: the new suggest-by-name assertions (`Ashwe`; `NAME[:5]` at `/suggest`) | the identifiers on the suggestion |
+| 4: expansion (live) | `adapter.py:1006` `(r, None)` | both tests (`expand`; `/expand` at the route) | the identifiers on the arrived copy |
+| 4: the working set's own projection (live), not counted | `working_set/service.py:402` `withhold_sources` dropped | the route test | green: the adapter had already withheld them. The second layer is defence in depth, and no read path depends on it |
+| 5: the port contract's conformance case, `PORT_CONTRACT.diff` applied (live) | none | `test_suite.py::test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone` | green, 1 passed |
+| 5: the same, the search guard's copy clause dropped | `builders.py` `off_gazetteer` without `{copied}` | the same | `search_nodes("osm-conf-4411")` found the copy |
+| 5: the same, the suggest projection dropped | `adapter.py:961` `(r, None)` | the same | `osm_id`, `uprn` on the suggestion |
+
+After the plants, with the diff applied: `test_route_rights.py`, the whole graph-port conformance suite, both copy files, `test_gazetteer_ids_withheld_live.py` and `test_gazetteer_place_search_live.py` gave **372 passed** (1 h 43 m). The tree was then restored, and only the commit's own files were left changed.
