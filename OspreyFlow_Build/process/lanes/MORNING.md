@@ -595,6 +595,21 @@ New ones are added at the bottom as they happen.
     with its tips patch. registryCoverage went red, so I took them out again and carried them with the tips
     (CARRIES). Case-b's L3.8 merges next. Admin has a fresh session on L2.7 (your word).
 
+## Two questions for you (case's L3.4; access, so yours; strict defaults built meanwhile)
+
+1. **Who may delete a removed case's layer from Admin?** Case had made it deployment-wide (to match Admin ›
+   Datasets' list), so one unit's administrator could withdraw another unit's removed-case layer, closing its
+   merges and rejecting its waiting promotions, with no undo.
+   - **(a) Recommended, and built meanwhile:** only an administrator of the dataset's own unit; another unit's
+     request answers 404, as *Name an Author* does.
+   - (b) Any administrator, deployment-wide, as case first built it.
+2. **May a Reports Viewer who is an Author of a dataset's home case make the five removed-case writes** (open,
+   merge or cancel a layer merge, delete)? ADR-112 says a Reports Viewer is refused every write; ADR-146
+   decision 10 says read-only.
+   - **(a) Recommended, and built meanwhile:** no. The writes need a dataset Author's right, which a Reports
+     Viewer doesn't hold.
+   - (b) Yes, as an Author, amending ADR-112 for this case.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
