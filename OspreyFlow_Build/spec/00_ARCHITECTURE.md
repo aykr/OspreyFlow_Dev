@@ -961,11 +961,10 @@ image, so the gate again refuses every GPL package but the recorded Classpath ex
 lands it is declared by the same label, and `make licence-check` names it on every run with that ruling
 and carry, never passing it silently; an undeclared `git` fails.
 
-**The runtime's bundled native libraries, for the release's NOTICE (the orchestrator's review of P5
-round 3):** Temurin's `java.desktop` module, which the jlinked runtime carries (planetiler draws with
-it), bundles native libraries under their own licences, each reproduced in the image at
-`/opt/java/legal/java.desktop/*.md` (read from the built image, `jdk-21.0.13+9`, on the test server:
-`process/lanes/platform/gates/`). All are permissive; a NOTICE shipping the image names each:
+**The runtime's bundled native libraries, for the release's NOTICE:** Temurin's `java.desktop`
+module, which the jlinked runtime carries (planetiler draws with it), bundles native libraries under
+their own licences, each reproduced in the image at `/opt/java/legal/java.desktop/*.md` (as read
+from the built image at `jdk-21.0.13+9`). All are permissive; a NOTICE shipping the image names each:
 
 | Library (as bundled) | Licence, in its own notice's words |
 | --- | --- |
