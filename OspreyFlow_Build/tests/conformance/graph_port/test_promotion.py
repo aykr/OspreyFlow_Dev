@@ -283,3 +283,76 @@ async def test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote(
         assert written in inside
         assert written not in outside  # the control: a read without the session misses it
         assert written not in await adapter.live_edges_touching([drawn])
+
+
+# --- a drawn dataset's merge (ADR-143 Amendment 2 decision 6; L3.9) --------------------------
+#
+# A merge is a promotion whose transaction also writes the chosen matches: a `SAME_AS` between a
+# drawn node it promotes and a loaded node of the target, in the target alone. Both land together
+# or neither does, and the revert withdraws the link with the load.
+
+
+async def _merge(
+    adapter: GraphPort, drawn: str, loaded: str, *, commit: bool = True
+) -> str:
+    tx = await adapter.begin_transaction()
+    try:
+        await adapter.promote_elements([drawn], [], SOURCE, LOAD, tx)
+        (same,) = await adapter.upsert_edges(
+            [_edge("SAME_AS", drawn, loaded, classification="OFFICIAL", datasets=[SOURCE])], tx
+        )
+    except Exception:
+        await adapter.rollback_transaction(tx)
+        raise
+    if commit:
+        await adapter.commit_transaction(tx)
+    else:
+        await adapter.rollback_transaction(tx)
+    return same
+
+
+async def test_a_merges_match_lands_with_its_promotion_and_its_revert_withdraws_it(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        loaded, drawn, _ = await _drawn(adapter)
+        same = await _merge(adapter, drawn, loaded)
+        assert await adapter.get_nodes([drawn], CASE_B)
+        (link,) = await adapter.get_edges([same], CASE_B)
+        assert (link.source, link.target, link.datasets) == (drawn, loaded, [SOURCE])
+
+        tx = await adapter.begin_transaction()
+        await adapter.revert_promotion(LOAD, SOURCE, tx)
+        await adapter.withdraw_elements([], [same], LOAD, tx)
+        await adapter.commit_transaction(tx)
+
+        assert await adapter.get_nodes([drawn], CASE_B) == []
+        assert await adapter.get_edges([same], CASE_B) == []
+        assert await adapter.get_edges([same], EVERYONE) == []
+
+
+async def test_a_merge_rolled_back_writes_neither_its_promotion_nor_its_match(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        loaded, drawn, _ = await _drawn(adapter)
+        same = await _merge(adapter, drawn, loaded, commit=False)
+        assert await adapter.get_nodes([drawn], CASE_B) == []
+        assert await adapter.get_edges([same], EVERYONE) == []
+
+
+async def test_the_together_check_fails_with_the_match_written_in_a_transaction_of_its_own(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The plant: the match committed on its own before the promotion, which then rolls back:
+    the check above sees the link left behind."""
+    async with factory.context() as adapter:
+        loaded, drawn, _ = await _drawn(adapter)
+        _, (same,) = await _write(
+            adapter, [], [_edge("SAME_AS", drawn, loaded, classification="OFFICIAL",
+                                datasets=[SOURCE])]
+        )  # fmt: skip
+        tx = await adapter.begin_transaction()
+        await adapter.promote_elements([drawn], [], SOURCE, LOAD, tx)
+        await adapter.rollback_transaction(tx)
+        assert await adapter.get_edges([same], EVERYONE) != []
