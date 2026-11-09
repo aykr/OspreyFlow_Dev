@@ -84,5 +84,5 @@ test("the evidence is opened, and Back to the alert returns to it, still open, b
 });
 
 test("every registered Rules and Monitoring action has its own proving test case above", () => {
-  assertAllCovered(REGISTRY, RULES_PLACE_ACTIONS);
+  assertAllCovered("RULES_PLACE_ACTIONS", RULES_PLACE_ACTIONS);
 });
