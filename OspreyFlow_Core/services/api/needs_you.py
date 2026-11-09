@@ -11,10 +11,10 @@ proposed*. It names no right of its own, because each half is gated by what it l
 - **Proposed link types to decide**: only to a holder of `accept_types`, and only for the datasets
   the reader's own cases load into. That is exactly the Studio's reach (`scope_to_dataset`, ADR-140
   Amendment 2), so a dataset reached by no case of theirs, or held by another unit, is not asked.
-  A proposal the reader is not cleared to read (`may_read_proposal_words`) is neither counted nor
-  described. The dataset says only that *one or more still to decide* exist above their clearance,
-  with no count, no words and no status: `above_clearance` is a flag, raised by an open proposal
-  alone (a declined one raises nothing).
+  A dataset whose proposals the reader is not cleared to read (`may_read_proposal_words`) is not
+  asked of, so nothing of it is said, not even that one is open (ADR-143 Amendment 4 (b), the
+  strict reading, ruled at L2.7's review); for one they may read, the service answers a count
+  alone (`LinkTypeService.open_proposal_count`), so no proposal reaches this module.
 """
 
 from __future__ import annotations
@@ -23,10 +23,6 @@ from collections.abc import Awaitable, Callable, Iterable, Sequence
 
 from schemas.admin import NeedsYouProposals
 from schemas.domain import Principal
-
-#: A proposal's view as `LinkTypeService.dataset_proposal_views` answers it (duck-typed: `status`,
-#: `in_model`, `withheld`).
-ProposalViews = Callable[[str, bool], Awaitable[Sequence[object]]]
 
 
 def to_decide(view: object) -> bool:
@@ -43,31 +39,24 @@ def to_decide(view: object) -> bool:
 async def proposals_to_decide(
     dataset_ids: Iterable[str],
     names: dict[str, str],
-    views: ProposalViews,
+    open_count: Callable[[str], Awaitable[int]],
     may_read_words: Callable[[str], Awaitable[bool]],
 ) -> list[NeedsYouProposals]:
-    """One entry for each reached dataset that has something to say: a count of the proposals to
-    decide, and whether any exist above the reader's clearance. A dataset with neither is left
-    out."""
+    """One entry for each reached dataset whose proposals the reader may read and which has one to
+    decide. A dataset above the reader's clearance is not asked of at all, so nothing of it is said
+    (the strict reading, ruled at L2.7's review); a count is the only thing read."""
     found: list[NeedsYouProposals] = []
     for dataset_id in sorted(set(dataset_ids)):
-        words = await may_read_words(dataset_id)
-        # Read whole inside the Conduit and reduced here to a count or a flag, so the flag is raised
-        # only by a proposal still to decide (`without_words` keeps no status); no word of a
-        # proposal the reader may not read leaves this function.
-        listed = await views(dataset_id, True)
-        open_ = sum(1 for v in listed if to_decide(v))
-        count = open_ if words else 0
-        hidden = not words and open_ > 0
-        if count or hidden:
+        if not await may_read_words(dataset_id):
+            continue
+        count = await open_count(dataset_id)
+        if count:
             found.append(
                 NeedsYouProposals(
-                    dataset_id=dataset_id,
-                    dataset_name=names.get(dataset_id, dataset_id),
+                    dataset_id=dataset_id, dataset_name=names.get(dataset_id, dataset_id),
                     to_decide=count,
-                    above_clearance=hidden,
                 )
-            )
+            )  # fmt: skip
     return found
 
 

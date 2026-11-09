@@ -16825,14 +16825,11 @@ async def my_needs_you_route(
         held = await datasets.egress_of(reached) if reached else {}
         names = {d: held[d].name for d in reached if d in held}
 
-        async def views(dataset_id: str, words: bool) -> Sequence[object]:
-            return await link_types.dataset_proposal_views(dataset_id, may_read_words=words)
-
         async def words(dataset_id: str) -> bool:
             return await _reads_proposal_words(dataset_id, principal, datasets, scheme)
 
         proposals = await needs_you_module.proposals_to_decide(
-            [d for d in reached if d in held], names, views, words
+            [d for d in reached if d in held], names, link_types.open_proposal_count, words
         )
     return NeedsYou(promotions_overdue=overdue, proposals=proposals)
 

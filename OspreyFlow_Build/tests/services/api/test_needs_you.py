@@ -161,6 +161,12 @@ class _LinkTypes:
         views = self.of.get(dataset_id, [])
         return list(views) if may_read_words else [v.without_words() for v in views]
 
+    async def open_proposal_count(self, dataset_id: str) -> int:
+        """As the real service counts them (`LinkTypeService.open_proposal_count`): a number, never
+        a proposal; recorded as asked with words, since a count is asked only of a cleared reader."""
+        self.asked.append((dataset_id, True))
+        return sum(1 for v in self.of.get(dataset_id, []) if to_decide(v))
+
 
 PROMOTION = PendingPromotion(promotion_id="pr-1", load_id="load-7", dataset_id="ds-a",
                              dataset_name="Prison records", dataset_unit="unit-1",
@@ -260,16 +266,16 @@ def test_the_count_leaves_out_proposals_the_reader_cannot_read(world: SimpleName
     """eng-1 (SECRET, `accept_types`) reaches ds-a (SECRET) and ds-top (TOP SECRET). ds-a's count
     is its pending proposals and the accepted one lost from the model (3), never the declined one
     or the one in the live model. ds-top's two are above eng-1's clearance, so they are neither
-    counted nor described: the entry says only that one or more exist. Red with the clearance
-    filter removed (`_reads_proposal_words` answering True)."""
+    counted nor said at all: the dataset is not asked of. Red with the clearance filter removed
+    (`_reads_proposal_words` answering True)."""
     body = _read(world, "eng-1")
     by = {p["dataset_id"]: p for p in body["proposals"]}
-    assert by["ds-a"] == {"dataset_id": "ds-a", "dataset_name": "Prison records",
-                          "to_decide": 3, "above_clearance": False}  # fmt: skip
-    assert by["ds-top"] == {"dataset_id": "ds-top", "dataset_name": "Border watch",
-                            "to_decide": 0, "above_clearance": True}  # fmt: skip
-    assert "WORDS_OF_t" not in str(body) and "Label of t" not in str(body)
-    assert "Reason of t" not in str(body)
+    assert by["ds-a"] == {"dataset_id": "ds-a", "dataset_name": "Prison records", "to_decide": 3}
+    # The independent review's ruling (ADR-143 Amendment 4 (b), strict): above the reader's clearance,
+    # a dataset's proposals are not asked of at all, and nothing of them is said, not even that one
+    # is open.
+    assert "ds-top" not in by and "Border watch" not in str(body)
+    assert all(d != "ds-top" for d, _ in world.link_types.asked)
 
 
 def test_only_the_datasets_the_readers_cases_load_into_are_asked(world: SimpleNamespace) -> None:
@@ -366,17 +372,6 @@ def test_the_people_are_read_once_a_read(world: SimpleNamespace) -> None:
     world.identity_admin.reads = 0
     assert len(_read(world, "rev-1")["promotions_overdue"]) == 2
     assert world.identity_admin.reads == 1
-
-
-def test_a_dataset_whose_above_clearance_proposals_are_decided_is_not_flagged(
-    world: SimpleNamespace,
-) -> None:
-    """ds-top's two proposals, above eng-1's clearance, both declined since: nothing is left to
-    decide there, so nothing is said of it. Red with the flag raised by any withheld proposal,
-    whatever its status."""
-    world.link_types.of["ds-top"] = [_proposal("t1", "rejected"), _proposal("t2", "promoted")]
-    body = _read(world, "eng-1")
-    assert "ds-top" not in [p["dataset_id"] for p in body["proposals"]]
 
 
 def test_a_dataset_a_case_only_reads_is_not_reached(world: SimpleNamespace) -> None:
