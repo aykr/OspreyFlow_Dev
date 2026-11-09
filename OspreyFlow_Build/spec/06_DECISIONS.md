@@ -30676,3 +30676,77 @@ are; an administrator who is not offered the Studio is recorded as answered ther
 `test_every_route_loading_screening_lists_is_rules_or_the_studio_list_connector_s` finds any route
 asking for it outside the two, red with the Studio's path narrowed to nothing (5 routes found) and
 with a planted Glass route (`test_a_list_loading_route_elsewhere_is_found`).
+
+### ADR-140, Amendment 15 (9 November 2026) — an operator's allow-list in `osprey.yaml` admits named private hosts or networks to the SQL and API connectors
+
+Status: accepted, the owner's ruling (a) of 9 November 2026 (`process/lanes/MORNING.md`, item 7),
+written in the studio-b lane at step L1.6. Amendment 13 is unchanged except where this says so.
+
+**Context.** Amendment 13 (after the orchestrator's review) refuses every SQL or API connection that
+reaches inside the deployment or its network: this machine, a dotless name (one of the deployment's
+own services), and any loopback, private, shared, link-local, reserved, unspecified or multicast
+address, written in any form or resolved to now. That also refuses a client's own database or API on
+a private network, the commonest place a NOMIS replica lives. The owner was asked whether an operator
+may admit one and ruled (a): yes, an allow-list in `osprey.yaml`, installer-level and never Admin's,
+each entry a named host or network the operator admits, everything else still refused.
+
+**Decision.**
+1. **`connectors.private_hosts` in `osprey.yaml`** (`schemas/deployment.py`'s `ConnectorsConfig`),
+   empty by default. Each entry is either a host name in full (with a dot: `nomis-replica.client.internal`)
+   or a network written as address/length (`10.20.0.0/16`, `fd12:3456::/32`), or one address, wholly
+   inside 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 or fc00::/7. The deployment's schema
+   refuses in words anything else: a dotless name, `localhost` or `*.localhost`, a wildcard, a scheme or
+   port, loopback, link-local (a cloud's metadata service), unspecified, multicast, a public address or
+   a network reaching outside those ranges (`10.0.0.0/7`).
+2. **What an entry admits.** A connection's host name is admitted when it resolves only to addresses
+   that are global or admitted: a private address is admitted when the host is listed by name, or the
+   address lies inside a listed network. A network entry admits a name by what it resolves to, never
+   by the name; a name entry admits that name only. Whatever the list holds, the Conduit admits only an
+   address inside the five ranges above, so a hand-edited `deployment.env` cannot reach this machine or
+   the metadata service, and an entry that is not valid admits nothing.
+3. **A connection is still written by name.** A literal private address as a connection's host stays
+   refused as Amendment 13 refuses it (the schema checks a host before any list is known); the operator
+   lists the address's network, and the administrator names the host. Decision taken in the lane, logged
+   for the owner to overrule.
+4. **Where it is read.** `apply` renders the list as `OSPREY_CONNECTOR_PRIVATE` in `deployment.env`
+   (names and networks, never a secret); `refuse_host` reads it at the one call site Amendment 13 built:
+   when an administrator names a connection, and again before every SQL connection and API request,
+   since DNS can change in between. The egress allow-list (`OSPREY_CONNECTOR_EGRESS`) is still asked of
+   a listed host, as of any host. A refusal names the setting: "… and the operator has not admitted it
+   (osprey.yaml's connectors.private_hosts)".
+5. **Nothing else loosens.** The binding of a connection to the datasets an administrator names, a
+   secret to one connection, the read-only bounded session, verify-full TLS and the byte and row caps
+   all hold for an admitted host exactly as for a public one.
+
+**Tests.** `tests/services/api/test_connector_private_hosts.py`, each red by a plant at its real call
+site (`process/lanes/studio-b/L1.6_RED_RECORD.md`, P1–P6): an unlisted private address refused, and a
+name entry or network entry admitting nothing else; a listed host or network admitted for SQL and API,
+the egress list still asked; no list admits this machine or the metadata service, even past the schema;
+`osprey.yaml` refuses every entry no list may hold; `apply` renders the list; the save route keeps a
+listed connection and refuses an unlisted one; the save check and the read check read the same list.
+The administration guide's `osprey.yaml` reference gains the `connectors` section from the schema.
+
+### ADR-133, Amendment 9 (9 November 2026) — L1.6's reference lists are the screening-list store of record; the Lists tab read-only, then retired
+
+Status: accepted, the owner's ruling (a) of 9 November 2026 (`process/lanes/MORNING.md`, item 2),
+written in the studio-b lane at step L1.6. The code it asks for is built in the rules lane's L2.11
+(`process/lanes/CARRIES.md`), not in L1.6.
+
+**Context.** Two deployment-wide screening-list stores existed after L1.6: ADR-133's (Rules and
+Monitoring's Lists tab, which KYC rules screen against) and ADR-140 Amendment 13's (Studio › Sources'
+list connector, each list versioned as a reference list, per Amendment 9 decision 3). Amendment 13 left
+ADR-133's store and Lists tab fully working while the owner ruled which is of record. The owner ruled
+(a): L1.6's.
+
+**Decision.**
+1. **The store of record** for deployment-wide screening lists is ADR-140 Amendment 13's: lists named,
+   imported through a template, versioned only on change, and read by a dataset that subscribes to one
+   by its id. Nothing new is written to ADR-133's store's design.
+2. **ADR-133's Lists tab becomes read-only** (no add, import or refresh of one of its lists), then is
+   **retired** once a rule's list picker reads `GET /v1/datasets/{id}/reference-lists/offered` and
+   re-screening runs against the Studio's lists. Both are built in the rules lane's L2.11; until then
+   ADR-133's store and tab stay as they are, so no running rule loses its list.
+3. **No one's rights change.** `load_screening_lists` keeps acting where ADR-146 Amendment 3 says.
+
+**Tests.** None in L1.6, which changes no code for this amendment. L2.11 owns the tests that the Lists
+tab refuses a write and that a rule screens against a Studio list, each red by a plant (rules 12 and 15).
