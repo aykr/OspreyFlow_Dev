@@ -1,0 +1,84 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/App.tsx b/OspreyFlow_Core/apps/workspace/src/App.tsx
+index c10aa7f..b6b0669 100644
+--- a/OspreyFlow_Core/apps/workspace/src/App.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/App.tsx
+@@ -127,6 +127,7 @@ import { EmbeddedDashboards } from "./reports/EmbeddedDashboards";
+ import { ReportsPlace } from "./reports/ReportsPlace";
+ import { ALERT_MONITORING, AlertMonitoringBoard } from "./reports/AlertMonitoringBoard";
+ import { journeyWords, startJourney, takeJourney, weeksFor, type AlertJourney } from "./reports/journey";
++import { useAlertBadges } from "./reports/alertBadges";
+ import {
+   canDownloadFeed,
+   landingView,
+@@ -768,6 +769,10 @@ export function App() {
+     ? { words: journeyWords(alertJourney.rule), onBack: () => { setAlertJourney(null); setStartChoice("start"); } }
+     : null;
+   const openAlertFromPanel = opensRules ? (alertId: string) => navigate(alertPath(alertId)) : undefined;
++  // ADR-146 decision 9: the canvas's alert badge, from the reader's own queue of the open case.
++  const alertBadges = useAlertBadges(
++    investigationId && bearerToken && rights?.has("read_alert_queue") ? { apiBaseUrl: API_BASE_URL, bearerToken, investigationId } : null,
++  );
+   useEffect(() => {
+     if (!investigationId || !bearerToken || !opensRules) {
+       setAlertCount(undefined);
+@@ -1854,6 +1859,7 @@ export function App() {
+                 strengthLegend={strengthLegend}
+                 onGroupedCountChange={setGroupedCount}
+                 judgementCounts={judgementCounts}
++                alertBadges={alertBadges}
+                 degreeMarks={degreeMarks}
+                 communityHulls={communityHulls}
+                 onEdgeSelect={setSelectedLink}
+diff --git a/OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx b/OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx
+index cb9d2cf..d5e23c5 100644
+--- a/OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/canvas/GlassCanvas.tsx
+@@ -124,7 +124,8 @@ import { LayoutMenu, type BubbleKey } from "./LayoutMenu";
+ import { CommunitiesStatus, CommunitiesToggle } from "./CommunitiesControls";
+ import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
+ import { DegreeMarkOverlay } from "./DegreeMarkOverlay";
+-import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
++import { JudgementBadgeOverlay, type NodeBadge } from "./JudgementBadgeOverlay";
++import { AlertBadgeOverlay } from "../reports/alertBadges";
+ import { activePalette } from "../color/palette";
+ import { onThemeChange } from "../theme/theme";
+ import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
+@@ -289,6 +290,9 @@ export interface GlassCanvasProps {
+   /** ADR-070: how many judgements rest on each node, drawn as a small count beside it. Omitted or
+    * empty, nothing is drawn. */
+   judgementCounts?: ReadonlyMap<string, number>;
++  /** ADR-146 decision 9: a small badge on each item an open alert concerns, from the reader's own
++   * queue (`reports/alertBadges.tsx`). Omitted or empty, nothing is drawn. */
++  alertBadges?: ReadonlyMap<string, NodeBadge>;
+   /** ADR-116: each node of a route put on the canvas from Find connections, with its degree from
+    * From, drawn as a small mark beside it. Omitted or empty, nothing is drawn. */
+   degreeMarks?: ReadonlyMap<string, number>;
+@@ -461,6 +465,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
+       communityHulls,
+       onGroupedCountChange,
+       judgementCounts,
++      alertBadges,
+       degreeMarks,
+       onLinkAction,
+       getEventsWindow,
+@@ -3596,6 +3601,20 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
+             }}
+           />
+         )}
++        {alertBadges && alertBadges.size > 0 && (
++          <AlertBadgeOverlay
++            sigmaRef={sigmaRef}
++            badges={alertBadges}
++            positionOf={(nodeId) => {
++              const sigma = sigmaRef.current;
++              if (!sigma || !graph.hasNode(nodeId) || isHiddenInGroup(nodeId)) return null;
++              return sigma.graphToViewport({
++                x: graph.getNodeAttribute(nodeId, "x") ?? 0,
++                y: graph.getNodeAttribute(nodeId, "y") ?? 0,
++              });
++            }}
++          />
++        )}
+         {communitiesOn && (
+           <CommunityBoxOverlay
+             sigmaRef={sigmaRef}

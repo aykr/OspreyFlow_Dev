@@ -1,0 +1,88 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx
+index 1d5cf14..5bb3a89 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.test.tsx
+@@ -595,3 +595,16 @@ describe("people: join a refused organisation arrival", () => {
+     expect(screen.queryByRole("alert")).toBeNull();
+   });
+ });
++
++describe("Roles, teams and Authors from Admin (ADR-145 Amendment 4 decision 12)", () => {
++  it("opens the one help page and comes back to Admin", () => {
++    serve();
++    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
++    fireEvent.click(screen.getByRole("button", { name: "Roles, teams and Authors" }));
++    expect(screen.getByRole("heading", { level: 2, name: "Roles, teams and Authors" })).toBeTruthy();
++    const back = screen.getByRole("button", { name: "← Back to Admin" });
++    expect(document.activeElement).toBe(back);
++    fireEvent.click(back);
++    expect(screen.getByRole("navigation", { name: "Admin sections" })).toBeTruthy();
++  });
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.tsx b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.tsx
+index cabf95a..dd2df80 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.tsx
+@@ -22,6 +22,8 @@ import { Roles } from "./sections/Roles";
+ import { Schedules } from "./Schedules";
+ import { System } from "./sections/System";
+ import "./admin.css";
++import { HELP_TITLE } from "../help/roles";
++import { RolesHelpPage } from "../help/RolesHelpPage";
+ 
+ export { feedFreshness } from "./sections/Dashboards";
+ export { joinWords, removalWords, ROLES } from "./sections/People";
+@@ -131,9 +133,21 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
+     if (moved.current) heading.current?.focus();
+   }, [chosen]);
+   const govuk = currentBrand() === "govuk";
++  // ADR-145 Amendment 4 decision 12: *Roles, teams and Authors*, the one help page, opened from here.
++  const [help, setHelp] = useState(false);
++  if (help) {
++    return (
++      <section aria-label="Admin" className="admin-place">
++        <RolesHelpPage backTo="Admin" onBack={() => setHelp(false)} />
++      </section>
++    );
++  }
+   return (
+     <section aria-label="Admin" className="admin-place">
+       <h2 className={govuk ? "govuk-heading-l admin-place__title" : "value admin-place__title"}>Admin</h2>
++      <div>
++        <button type="button" className={govuk ? "govuk-link" : "btn"} onClick={() => setHelp(true)}>{HELP_TITLE}</button>
++      </div>
+       {!section && <p className="label">Your account holds no administration right.</p>}
+       {section && (
+         <div className="admin-place__body">
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
+index 497c227..7cb42f7 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
+@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
+ import type { BuiltInRole, CustomRole, CustomRoleVersion, RolesCatalogue, Team } from "../../../../../packages/schemas/generated";
+ import { Button, Input, Select } from "../../design/primitives";
+ import { changeRole, createRole, listRoles, makeTeam, roleVersions, setTeamCover, setTeamLead, type AdminApi } from "../api";
++import { RIGHT_WORDS, type Right } from "../../help/roles";
+ 
+ /** The rights grouped as the places they work in (decision 7); a right named in no group is still
+  * offered, under *Other*, so no right is ever left out of the form. */
+@@ -97,6 +98,9 @@ function RoleForm({
+                 <input
+                   type="checkbox"
+                   aria-label={rightWords(right)}
++                  // ADR-145 Amendment 4 decision 12: every right's tip, from the one source, read with
++                  // the box when it takes focus.
++                  aria-describedby={`right-tip-${right}`}
+                   checked={chosen.has(right)}
+                   onChange={(e) => {
+                     const next = new Set(chosen);
+@@ -106,6 +110,9 @@ function RoleForm({
+                   }}
+                 />{" "}
+                 {rightWords(right)}
++                <span id={`right-tip-${right}`} className="label" style={{ display: "block", opacity: 0.8 }}>
++                  {RIGHT_WORDS[right as Right] ?? ""}
++                </span>
+               </label>
+             ))}
+           </div>
