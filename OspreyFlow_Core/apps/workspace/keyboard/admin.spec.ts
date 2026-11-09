@@ -49,7 +49,7 @@ const PLAN = { person: "u1", not_yet_listed: ["boards"],
 const COLLEAGUE = { ...PERSON, id: "u3", username: "bea", name: "Bea Engineer", roles: ["data_engineer"] };
 
 // L2.6: an audit page of the stream (one entry's words withheld), a rule audit, and Operations' ageing.
-const AUDIT_ENTRY = { recorded_at: "2026-11-08T09:00:00Z", principal_id: "u1", principal_name: "Demo Analyst",
+const AUDIT_ENTRY = { recorded_at: "2026-11-08T09:00:00Z", who: "Demo Analyst",
                       action: "confirm_node", kind: "assertions", held_in: "case_and_admin", investigation_id: "c1",
                       case_name: "Op Kestrel", detail: null, words_withheld: true, result_cardinality: null };  // prettier-ignore
 const AGEING = { alert_after_days: 3, promotions_recorded: false, waiting: [],
@@ -71,7 +71,8 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
       const rules = path === "audit/rules";
       const entry = rules ? { ...AUDIT_ENTRY, action: "rule_deployed", kind: "rules", held_in: "rules",
                               detail: { rule_id: "r1" }, words_withheld: false, result_cardinality: 1 } : AUDIT_ENTRY;  // prettier-ignore
-      return json(200, { entries: [entry], total: rules ? 1 : 120, offset, limit: 50, note: null });
+      return json(200, { entries: [entry], total: rules ? 1 : 120, offset, limit: 50, note: null,
+                         people: ["Demo Analyst", "Zed Reviewer"] });  // prettier-ignore
     }
     if (path === "operations/ageing") return json(200, AGEING);
     if (path === "settings/promotion-alert-days" && request.method() === "PUT") return json(200, request.postDataJSON());
@@ -677,11 +678,13 @@ test("the audit is read by kind and person by keyboard", async ({ page }) => {
   await kind.focus();
   await page.keyboard.type("Analyst");
   await expect(kind).toHaveValue("assertions");
-  await page.getByLabel("Person (account id)").focus();
-  await page.keyboard.type("u1");
+  const person = page.getByLabel("Person");
+  await person.focus();
+  await page.keyboard.type("Zed");
+  await expect(person).toHaveValue("Zed Reviewer");
   await press(page, "Show entries");
   await expect.poll(() => asked.filter((a) => a.startsWith("AUDIT"))).toContainEqual(
-    expect.stringContaining("AUDIT audit kind=assertions&who=u1"),
+    expect.stringContaining("AUDIT audit kind=assertions&who=Zed+Reviewer"),
   );
   registerCovered(REGISTRY, "read-the-audit-by-kind-and-person-by-keyboard");
 });

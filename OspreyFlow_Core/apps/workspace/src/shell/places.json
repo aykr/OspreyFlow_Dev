@@ -72,8 +72,7 @@
         "administer_system",
         "manage_dashboards",
         "manage_people",
-        "operate_schedules",
-        "read_audit"
+        "operate_schedules"
       ]
     }
   ]

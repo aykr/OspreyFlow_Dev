@@ -97,7 +97,7 @@ export function Ageing({ api }: { api: AdminApi }) {
               <tr key={p.promotion_id}>
                 <td>{p.load_id}</td>
                 <td>{p.dataset_name}</td>
-                <td>{p.proposed_by}</td>
+                <td>{p.proposed_by_name}</td>
                 <td>{when(p.proposed_at)}</td>
                 <td>{p.overdue ? `${days(p.age_days)}, overdue` : days(p.age_days)}</td>
               </tr>

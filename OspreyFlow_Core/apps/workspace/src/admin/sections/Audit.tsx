@@ -80,7 +80,7 @@ export function queryOf(form: Form, offset: number): AuditQuery {
   return {
     held_in: form.held_in,
     kind: stream ? form.kind || undefined : undefined,
-    who: form.who.trim() || undefined,
+    who: form.who || undefined,
     case: form.held_in !== "models" ? form.case.trim() || undefined : undefined,
     dataset: stream ? form.dataset.trim() || undefined : undefined,
     since: day(form.since, false),
@@ -94,6 +94,7 @@ export function Audit({ api }: { api: AdminApi }) {
   const [form, setForm] = useState<Form>(EMPTY);
   const [asked, setAsked] = useState<{ form: Form; offset: number } | null>({ form: EMPTY, offset: 0 });
   const [page, setPage] = useState<AuditSectionPage | null>(null);
+  const [pageRecord, setPageRecord] = useState<AuditQuery["held_in"] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const set = (part: Partial<Form>) => setForm((f) => ({ ...f, ...part }));
 
@@ -102,7 +103,11 @@ export function Audit({ api }: { api: AdminApi }) {
     let live = true;
     setProblem(null);
     readAudit(api, queryOf(asked.form, asked.offset))
-      .then((p) => live && setPage(p))
+      .then((p) => {
+        if (!live) return;
+        setPage(p);
+        setPageRecord(asked.form.held_in);
+      })
       .catch((e: Error) => {
         if (!live) return;
         setPage(null);
@@ -123,6 +128,9 @@ export function Audit({ api }: { api: AdminApi }) {
     }
     setAsked({ form, offset: 0 });
   };
+  // The picker offers the people of the record last read, by name: the Conduit sends no account's
+  // id (rule 7), and a name chosen here is sent back as the person filter.
+  const people = page && pageRecord === form.held_in ? (page.people ?? []) : [];
   const offset = page?.offset ?? 0;
   // Only the named fields are read; a page missing its entries is read as none.
   const entries = page?.entries ?? [];
@@ -139,7 +147,7 @@ export function Audit({ api }: { api: AdminApi }) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "end" }}>
           <label style={{ display: "grid", gap: "var(--sp-4)" }}>
             <span>Record</span>
-            <Select value={form.held_in} onChange={(e) => set({ held_in: e.target.value as Form["held_in"] })}>
+            <Select value={form.held_in} onChange={(e) => set({ held_in: e.target.value as Form["held_in"], who: "" })}>
               {RECORDS.map((r) => (
                 <option key={r.value} value={r.value}>
                   {r.label}
@@ -160,8 +168,15 @@ export function Audit({ api }: { api: AdminApi }) {
             </label>
           )}
           <label style={{ display: "grid", gap: "var(--sp-4)" }}>
-            <span>Person (account id)</span>
-            <Input value={form.who} onChange={(e) => set({ who: e.target.value })} />
+            <span>Person</span>
+            <Select value={form.who} onChange={(e) => set({ who: e.target.value })}>
+              <option value="">Anyone</option>
+              {people.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </Select>
           </label>
           {form.held_in !== "models" && (
             <label style={{ display: "grid", gap: "var(--sp-4)" }}>
@@ -216,10 +231,10 @@ export function Audit({ api }: { api: AdminApi }) {
                 {entries.map((e, i) => (
                   <tr key={`${e.recorded_at}-${i}`}>
                     <td>{when(e.recorded_at)}</td>
-                    <td>{e.principal_name ?? e.principal_id}</td>
+                    <td>{e.who}</td>
                     <td>{actionWords(e.action)}</td>
                     <td>{KIND_LABEL[e.kind]}</td>
-                    <td>{e.case_name ?? (e.investigation_id ? e.investigation_id : "—")}</td>
+                    <td>{e.case_name ?? "—"}</td>
                     <td>{entryWords(e)}</td>
                   </tr>
                 ))}

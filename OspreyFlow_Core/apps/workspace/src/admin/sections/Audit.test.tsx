@@ -16,12 +16,12 @@ afterEach(() => {
 
 const API = { apiBaseUrl: "http://x", bearerToken: "t" };
 const ENTRY = {
-  recorded_at: "2026-11-08T09:00:00Z", principal_id: "ana-1", principal_name: "Ana Analyst", action: "confirm_node",
+  recorded_at: "2026-11-08T09:00:00Z", who: "Ana Analyst", action: "confirm_node",
   kind: "assertions", held_in: "case_and_admin", investigation_id: "c1", case_name: "Op Kestrel", detail: null,
   words_withheld: true, result_cardinality: null,
 } as const; // prettier-ignore
 const PEOPLE = { ...ENTRY, action: "set_person_roles", kind: "people_and_roles", investigation_id: null, case_name: null,
-                 detail: { user_id: "ana-2", roles: ["analyst"] }, words_withheld: false, result_cardinality: 1 } as const; // prettier-ignore
+                 detail: { person: "Bea Analyst", roles: ["analyst"] }, words_withheld: false, result_cardinality: 1 } as const; // prettier-ignore
 
 function serve(answer: (url: URL, init?: RequestInit) => Response) {
   const asked: URL[] = [];
@@ -45,17 +45,17 @@ describe("Admin › Audit", () => {
     expect(table.textContent).toContain("Ana Analyst");
     expect(table.textContent).toContain("confirm node");
     expect(table.textContent).toContain("Withheld: your own read of this record would not show them");
-    expect(table.textContent).toContain("user id: ana-2; roles: [\"analyst\"]");
+    expect(table.textContent).toContain("person: Bea Analyst; roles: [\"analyst\"]");
     expect(screen.getByRole("status").textContent).toBe("Entries 1–2 of 2, newest first.");
     expect(screen.getByText("Entries about another unit's cases are not shown.")).toBeTruthy();
   });
 
   it("sends every filter to the Conduit and filters nothing itself", async () => {
-    const asked = serve(() => json(200, { entries: [ENTRY], total: 1, offset: 0, limit: 50 }));
+    const asked = serve(() => json(200, { entries: [ENTRY], total: 1, offset: 0, limit: 50, people: ["Ana Analyst", "Dee Engineer"] }));
     render(<Audit api={API} />);
     await screen.findByRole("table", { name: "Audit entries" });
     fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "assertions" } });
-    fireEvent.change(screen.getByLabelText("Person (account id)"), { target: { value: "eng-1" } });
+    fireEvent.change(screen.getByLabelText("Person"), { target: { value: "Dee Engineer" } });
     fireEvent.change(screen.getByLabelText("Case (id)"), { target: { value: "c9" } });
     fireEvent.change(screen.getByLabelText("Dataset (id)"), { target: { value: "ds-b" } });
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-11-01" } });
@@ -65,11 +65,22 @@ describe("Admin › Audit", () => {
     const q = asked[1]!.searchParams;
     expect(asked[1]!.pathname).toBe("/v1/admin/audit");
     expect(Object.fromEntries(q)).toEqual({
-      kind: "assertions", who: "eng-1", case: "c9", dataset: "ds-b",
+      kind: "assertions", who: "Dee Engineer", case: "c9", dataset: "ds-b",
       since: "2026-11-01T00:00:00.000Z", until: "2026-11-09T00:00:00.000Z", offset: "0", limit: "50",
     }); // prettier-ignore
-    // The entry the Conduit sent is shown though it is not eng-1's: the screen narrows nothing.
+    // The entry the Conduit sent is shown though it is not Dee Engineer's: the screen narrows nothing.
     expect((await screen.findByRole("table", { name: "Audit entries" })).textContent).toContain("Ana Analyst");
+  });
+
+  it("offers people by name from the page alone, never asks for an id, and forgets them on another record", async () => {
+    serve(() => json(200, { entries: [ENTRY], total: 1, offset: 0, limit: 50, people: ["Ana Analyst"] }));
+    render(<Audit api={API} />);
+    await screen.findByRole("table", { name: "Audit entries" });
+    const picker = screen.getByLabelText("Person") as HTMLSelectElement;
+    expect([...picker.options].map((o) => o.textContent)).toEqual(["Anyone", "Ana Analyst"]);
+    expect(screen.queryByText(/account id/)).toBeNull();
+    fireEvent.change(screen.getByLabelText("Record"), { target: { value: "models" } });
+    expect([...(screen.getByLabelText("Person") as HTMLSelectElement).options].map((o) => o.textContent)).toEqual(["Anyone"]);
   });
 
   it("asks for a case before reading the rule audit, then reads it for that case", async () => {
@@ -135,13 +146,14 @@ describe("Operations' ageing", () => {
 
   it("lists each waiting promotion with its age, overdue ones said so", async () => {
     serve(() => json(200, { ...AGEING, promotions_recorded: true, waiting: [
-      { promotion_id: "p1", load_id: "load-7", dataset_id: "ds-a", dataset_name: "Prison records", proposed_by: "ana-1",
+      { promotion_id: "p1", load_id: "load-7", dataset_id: "ds-a", dataset_name: "Prison records", proposed_by_name: "Ana Analyst",
         proposed_at: "2026-11-01T09:00:00Z", age_days: 4, overdue: true },
     ] })); // prettier-ignore
     render(<Ageing api={API} />);
     const table = await screen.findByRole("table", { name: "Promotions waiting for review" });
     expect(table.textContent).toContain("load-7");
     expect(table.textContent).toContain("4 days, overdue");
+    expect(table.textContent).toContain("Ana Analyst");
   });
 
   it("saves N days, refusing what the Conduit would", async () => {

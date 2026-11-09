@@ -440,9 +440,7 @@
    "rights": [
     "read_audit"
    ],
-   "places": [
-    "admin"
-   ],
+   "places": [],
    "answered_hidden": []
   },
   "right:read_data_feeds": {
