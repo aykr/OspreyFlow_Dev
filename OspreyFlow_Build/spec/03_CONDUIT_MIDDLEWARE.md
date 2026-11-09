@@ -272,6 +272,40 @@ the connection; an answer, a name that does not resolve or a timeout refuses
 (`test_the_revert_is_refused_unless_the_conduit_is_known_stopped`). Its resting links are read inside
 its own transaction. There is no online revert: the owner ruled (a) on ADR-143 open question 2.
 
+**Merging a drawn dataset** (ADR-143 Amendment 2 decisions 6 and 7; Amendment 3 decision 2; L3.9),
+from the Ingest Studio opened on the drawing (its Runs tab, *Merge into a dataset…*), behind the
+dataset's gate (the merger reads the drawing through its home case, shared with them) and
+merge_datasets on every route:
+
+```
+GET    /v1/datasets/{drawn}/merge-targets              the datasets this reader may merge the drawing into (`MergeTargets`): each a source dataset of the drawing's unit that they are an Author of (its home case's), never a composite, a gazetteer, a drawn dataset or a layer; `refused` once it has been merged
+GET    /v1/datasets/{drawn}/merge-sheet?target=        map and match (`DrawnMergeSheet`): each drawn type and the target type it goes in as (the same name), or why not; the *Looks like a loaded item* pairs read through the merger scoped to the target alone; the drawn items with every check each fails against the target (its highest marking, its model, a grading and source); audited as read_drawn_merge_sheet
+POST   /v1/datasets/{drawn}/merges/dry-run              the dry run (`DrawnMergeInput` → `DrawnMergeDryRun`): every check, what would be added and matched counting only what the merger may see, nothing written
+POST   /v1/datasets/{drawn}/merges                      the merge (`DrawnMergeInput` → `Promotion`): one promotion (`promotion-<id>`, trigger drawn_merge) into the target under its policy, reviewed in the target's *Analyst promotions*; audited as merge_drawn_dataset
+```
+
+A target not offered to this reader (none of that id, another unit's, one they are no Author of, a
+composite, a gazetteer) answers 404 `not_a_target`, the same for each, so neither its existence nor
+its kind is told (`test_a_composite_a_gazetteer_and_another_units_dataset_are_answered_as_for_none`).
+A drawn type goes in only as the target's type of the same name: an element keeps its type (the
+store's class) for good, and the merge keeps the same element (rule 6); a type the target lacks is
+left out, saying so, and may be proposed on the target's Model tab. A chosen match must be one the
+sheet offers now, of a drawn node that goes (422 `not_a_match`, the same for a node the merger may
+not see, another dataset's and none); it is written with the load, in the same transaction, as a
+`SAME_AS` that is `inferred` and scored (`model_version` drawn_merge), in the target alone, marked as
+the stricter of its ends and within the target's highest (rule 5: a person confirms it later; rule 6:
+both nodes stay). An item above the target's highest marking refuses the merge, 422 `check_failed`,
+nothing written. A drawing with a merge waiting is refused another (409 `merge_waiting`). Once
+committed (decision 7) the drawing's home case reads the target, and the drawn dataset read-only
+(`DatasetStore.merge_drawn`, once: `already_merged`), so the Studio reaches the drawing no more; its
+boards become views (drawing off, layout and sharing kept, the drawn nodes added to the selection);
+and opening such a view answers `annotations` beside its items (`ViewAnnotation`: the label, the
+marking and grading as drawn, the source note, and "Drawn by …, merged as load …" or "not merged"),
+read through the reader's own principal, so an item they may not see has none. The revert is the
+promotion's (`scripts.revert_promotion`), which also withdraws the merge's matches in its
+transaction and then puts the case back on the drawing and its views back to boards; without those
+stores it refuses a drawn merge (`no_merge`).
+
 A deleted view's conversation stays in the store, read by no route: the questions are listed only
 through a view the reader may open, so they go with the view. Its pending proposals stay pending
 and read by no route either, since each candidate store read leaves out one kept with a view the

@@ -854,6 +854,14 @@ The invariants, each with the test that fails if it is broken (rule 12):
 - **A drawing with no case** (Amendment 2 decision 5) makes a drawn dataset, its home case and its
   board in one step; what is drawn there is written to the drawn dataset and to no layer.
   - `test_a_drawing_with_no_case_makes_its_dataset_case_and_board`, red with the writer aimed at a layer.
+- **Merged into another dataset** (Amendment 2 decisions 6 and 7; Amendment 3 decision 2; L3.9) by an
+  Author of the target holding `merge_datasets`, as one load (trigger `drawn_merge`): its elements gain
+  the target, each keeping its type (a drawn type goes in only as the target's type of the same name);
+  a chosen match is written as an `inferred`, scored `SAME_AS`, never collapsed; afterwards its case
+  reads the target and the drawing read-only, and its boards are views with annotations. Spec 03,
+  *Merging a drawn dataset*, has the routes.
+  - `tests/services/api/test_drawn_merge.py`, each check red by its plant
+    (`process/lanes/case/gates/L3.9-plants.txt`).
 - **Watched** (Amendment 2 decision 8): drawing an item sets one watch (`DrawnWatch`, kind
   `drawn_watch`) on the case's dataset, owned by its author; withdrawing it ends the watch; a watch on
   an item the reader may not see is withheld whole. Its alerts' queue is L3.6's with L2.10.
