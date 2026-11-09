@@ -10,7 +10,7 @@ studio	L1.2b	M	done	Phase 6's exit: from scratch in guided mode, an expert-mode 
 studio	L1.3	L	done	Phase 7a: the staging catalogue's engine; screening lists in it
 studio	L1.4	M	done	Phase 7b: the drawers for each step
 studio	L1.5	L	building	Phase 8: expert steps
-studio-b	L1.6	L	todo	Phase 9: connectors; the screening-list connector and templates
+studio-b	L1.6	L	building	Phase 9: connectors; the screening-list connector and templates
 studio	L1.7	L	todo	Phase 10: Operations, external orchestration; Releases as YAML
 studio-b	L1.8	S	todo	The Studio's tips and who-can refusals; Domain model wording
 glass	L2.1	M	done	The alerts gap map
@@ -20,7 +20,7 @@ glass	L2.4	M	done	Admin regrouped into sections (part 1)
 admin	L2.4p2	L	done	Datasets' columns, Authors, linked cases, promotion policy; System's owners setting
 admin	L2.5	L	done	People and roles; custom roles; Rule author; teams and leads; Disable (what is owned today)
 admin	L2.5b	S	todo	Disable…'s full transfer list, from case's ownership route (after L3.8)
-admin	L2.6	M	building	Operations' promotions and ageing; Audit
+admin	L2.6	M	review	Operations' promotions and ageing; Audit
 admin	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	done	Alerts: G2, G3 and G9 fixed (access first)
 glass	L2.8b	M	done	Old records under the new check: audit words, held rows, pack items, Alert node re-marking
@@ -29,7 +29,7 @@ rules	L2.8d	S	done	An alert naming a corrected node in referent_node_ids is list
 rules	L2.9	L	done	Four places: Rules and Monitoring; /alerts/<id>; the way back
 rules	L2.10	L	building	One queue; What raises alerts; watches; team routing; Raise an alert
 rules	L2.11	L	todo	The rule editor: declared dataset, BPMN and DMN, draft-test-live
-rules-b	L2.12	M	building	Reporting folded: Figures, Alert monitoring, the Reports Viewer
+rules-b	L2.12	M	review	Reporting folded: Figures, Alert monitoring, the Reports Viewer
 case	L3.1	L	done	Phase 5 as amended: one dataset per case, composites, the analyst layer; no branch layers
 case	L3.1b	L	done	Phase 5's model half; Make live's owner step; home cases; drawn kind
 case	L3.2	L	done	Case views; the migration; the Conduit without branches; no_branches_check (Conduit half)
@@ -44,7 +44,9 @@ case	L3.9	L	todo	Merging a drawn dataset; the drawing as a case view (L5, L6 rul
 platform	P1	L	done	Models in Admin: engines, each job's model, keys write-only, connection test (ADR-135 Am 2)
 platform	P2	M	done	Model usage and limits
 platform	P3	L	done	Maps in Admin: providers and keys, basemap build and verify, prefetch, map CLI (ADR-147)
-platform	P4	M	building	The analyst's map: basemap switch, place search, contrast in three themes
+platform	P4	M	done	The analyst's map: basemap switch, place search, contrast in three themes
+platform	P5	M	building	The owner's map rulings: Java runtime, gazetteer copies in a case's dataset, the unit a setting (ADR-147 Am 2)
+platform	P6	S	todo	The case's gazetteer panel beside place search, by keyboard
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2a	M	todo	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed)
 docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)
