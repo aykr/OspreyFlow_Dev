@@ -16,6 +16,7 @@ import type { AccessLevel } from "../../investigation/cases";
 import { PublishScreen } from "../publish/PublishScreen";
 import { isDeployed } from "../studio/useStudioData";
 import { statusWords } from "../studio/vocabulary";
+import { AnalystPromotions } from "./promotions";
 import { type DayCell, type DayState, STATE_WORDS, lastDays, rowCells } from "./runsGrid";
 
 /** How many days the grid shows, today last (the prototype's nine). */
@@ -241,6 +242,18 @@ export function RunsTab(props: RunsTabProps) {
             onRan={props.onChanged}
           />
         </section>
+      )}
+
+      {/* ADR-143 decision 10 (case's L3.4, in `runs/promotions*` by agreement): promotions as their
+          own list, under the grid. */}
+      {props.datasetId && (
+        <AnalystPromotions
+          apiBaseUrl={props.apiBaseUrl}
+          bearerToken={props.bearerToken}
+          datasetId={props.datasetId}
+          canRevert={props.canRevert}
+          username={props.username}
+        />
       )}
 
       {deployed.length > 0 && (
