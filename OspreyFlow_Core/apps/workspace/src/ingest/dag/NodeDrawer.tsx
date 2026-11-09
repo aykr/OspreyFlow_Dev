@@ -260,7 +260,7 @@ function NodeSettings({
       );
     case "map":
       return (
-        <StagePanel title="Map" words="Bind the source's columns to the target model. The pipeline stays across the top.">
+        <StagePanel title="Map" words="Bind the source's columns to the domain model. The pipeline stays across the top.">
           <Button onClick={onOpenMapEditor}>Open map editor</Button>
         </StagePanel>
       );

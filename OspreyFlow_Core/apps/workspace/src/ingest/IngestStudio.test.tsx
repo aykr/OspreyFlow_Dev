@@ -58,7 +58,7 @@ function serve({ sourcesRefused = false }: { sourcesRefused?: boolean } = {}) {
       if (path.endsWith("/v1/datasets/prison-intelligence/sources"))
         return json([PIN_SOURCE]);
       // The screening-subscriptions route answers its own shape, never the fallthrough's `[]` (L1.6's
-      // Sources tab reads `lists` off it; studio-b's fix from L1.8, taken onto main at once).
+      // Sources tab read `lists` off an array and the Studio's own suite failed on main at f510744).
       if (path.endsWith("/screening-subscriptions")) return json({ lists: [], subscribed: [] });
       if (path.endsWith("/v1/handling-scheme")) return json({ name: "uk", classification: ["OFFICIAL"], handling_codes: {} });
       if (path.endsWith("/ingest/recipes/r1/runs"))
@@ -127,11 +127,15 @@ describe("IngestStudio: four places", () => {
     expect(onOpenCase).toHaveBeenCalledWith("inv-2");
   });
 
-  it("shows the target model on Model, and the registered sources with their marking on Sources", async () => {
+  it("shows the domain model on Model, and the registered sources with their marking on Sources", async () => {
     serve();
     open();
     fireEvent.click(screen.getByRole("tab", { name: "1 Model" }));
     expect(await screen.findByText("POLE core + Crime case analysis (NIEM)")).toBeTruthy();
+    // ADR-140 Amendment 9 decision 1: the screens say "domain model", never "target model".
+    const model = screen.getByRole("region", { name: "Domain model" });
+    expect(within(model).getByRole("heading", { level: 2 }).textContent).toMatch(/^Domain model for /);
+    expect(model.textContent).not.toMatch(/target\s+model/i);
     fireEvent.click(screen.getByRole("tab", { name: "2 Sources" }));
     const sources = await screen.findByRole("region", { name: "Sources" });
     expect(await within(sources).findByRole("button", { name: "Open source PIN calls file" })).toBeTruthy();
