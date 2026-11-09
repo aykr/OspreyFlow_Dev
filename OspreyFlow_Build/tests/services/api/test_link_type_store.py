@@ -26,6 +26,28 @@ async def store():
     await s.close()
 
 
+@pytest.fixture
+async def own_store():
+    """A store over a schema of its own, dropped afterwards whatever the test did: a status main's
+    schema does not know yet (`accepted`, ADR-143 decision 9) must never be left in the shared
+    table, where it stops every other lane's Conduit from starting (8 November 2026)."""
+    base = PostgresConfig.from_env().dsn
+    schema = f"link_types_{new_id().lower()}"
+    admin = await asyncpg.connect(base)
+    await admin.execute(f'CREATE SCHEMA "{schema}"')
+    held = None
+    try:
+        held = await LinkTypeProposalStore.connect(
+            f"{base}{'&' if '?' in base else '?'}search_path={schema}"
+        )
+        yield held
+    finally:
+        if held is not None:
+            await held.close()
+        await admin.execute(f'DROP SCHEMA "{schema}" CASCADE')
+        await admin.close()
+
+
 def _proposal(
     unit: str = "unit-1", case: str | None = None, name: str = "KNOWN_TO"
 ) -> LinkTypeProposal:
@@ -124,32 +146,33 @@ async def test_a_proposal_keeps_its_dataset_and_is_found_for_it_and_no_other(
 
 
 async def test_the_model_tab_reads_its_own_datasets_proposals_and_no_other(
-    store: LinkTypeProposalStore,
+    own_store: LinkTypeProposalStore,
 ) -> None:
     """ADR-143 decision 9 in the database itself (rule 3): the Model tab's list and its decisions
     read by `dataset_id` in the query, so another dataset's proposal is never read and answers as
     a missing one. An `accepted` status is kept (the check was replaced whole), and a case reads
-    its own proposals whatever their status, by name or all."""
+    its own proposals whatever their status, by name or all. In a schema of its own
+    (`own_store`), so no `accepted` row is ever left in the shared table."""
     mine, theirs = new_id(), new_id()
     case = new_id()
     p = _proposal(case=case, name="BRIBED").model_copy(update={"dataset_id": mine})
     other = _proposal(name="BRIBED").model_copy(update={"dataset_id": theirs})
     for proposal in (p, other):
-        await store.create(proposal)
-    assert [q.id for q in await store.for_dataset(mine)] == [p.id]
-    assert (await store.get_for_dataset(p.id, mine)).id == p.id
+        await own_store.create(proposal)
+    assert [q.id for q in await own_store.for_dataset(mine)] == [p.id]
+    assert (await own_store.get_for_dataset(p.id, mine)).id == p.id
     with pytest.raises(ProposalNotFoundError):
-        await store.get_for_dataset(other.id, mine)
-    await store.decide(
+        await own_store.get_for_dataset(other.id, mine)
+    await own_store.decide(
         p.id, status=ProposalStatus.ACCEPTED, by="dan", at=p.proposed_at, reason="r",
         promoted_name="BRIBED",
     )  # fmt: skip
-    assert (await store.get(p.id)).status is ProposalStatus.ACCEPTED
-    assert [q.id for q in await store.accepted_for_datasets([mine])] == [p.id]
-    assert await store.accepted_for_datasets([theirs]) == []
-    assert [q.id for q in await store.named_in_case(case, ["BRIBED"])] == [p.id]
-    assert [q.id for q in await store.named_in_case(case, None)] == [p.id]
-    assert await store.named_in_case(case, ["OTHER"]) == []
+    assert (await own_store.get(p.id)).status is ProposalStatus.ACCEPTED
+    assert [q.id for q in await own_store.accepted_for_datasets([mine])] == [p.id]
+    assert await own_store.accepted_for_datasets([theirs]) == []
+    assert [q.id for q in await own_store.named_in_case(case, ["BRIBED"])] == [p.id]
+    assert [q.id for q in await own_store.named_in_case(case, None)] == [p.id]
+    assert await own_store.named_in_case(case, ["OTHER"]) == []
 
 
 async def test_a_table_made_before_accepted_takes_it_after_connect() -> None:
