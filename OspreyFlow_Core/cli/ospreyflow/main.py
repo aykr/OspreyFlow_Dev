@@ -1553,10 +1553,9 @@ def main(
         if args.verb in ("backup", "restore"):
             module = f"harness.{args.verb}"
             # ADR-138: a deployment kept by name is named to the harness by its own osprey.yaml and
-            # rendered folder; its backups are kept in its own folder, never mixed with another's.
+            # rendered folder. Its sets go to its own subfolder of its backups folder, which the
+            # harness reads there (ADR-114 Amendment 37 decision 3), never mixed with another's.
             pointed = ctx.named_args("--generated-root")
-            if target.named and args.verb == "backup" and "--out-root" not in passthrough:
-                pointed += ["--out-root", str(target.folder / "backups")]
             return ctx.run([*ctx.python, "-m", module, *pointed, *passthrough], cwd=product)
         return _dispatch(args, ctx)
     except (CommandRefused, AnswersRefused) as refusal:

@@ -412,6 +412,22 @@ def test_name_on_every_verb_reaches_only_that_deployment(
     assert str(checkout) not in said, f"{verb} reached the checkout's deployment"
 
 
+def test_a_named_deployments_backup_goes_to_its_subfolder_of_the_backups_folder(
+    machine: Machine,
+) -> None:
+    """ADR-114 Amendment 37 decision 3 replaces ADR-138's `<deployment folder>/backups`: the backup
+    is pointed at the deployment's own `osprey.yaml` and given no `--out-root`, so `harness.backup`
+    writes to `<components.storage.backups>/<deployment name>/` — by the name it reads there."""
+    assert machine.install("bravo") == 0
+    machine.docker.calls.clear()
+    assert machine("backup", "--name", "bravo") == 0
+    (argv,) = [a for a, _e, _c in machine.docker.calls if "harness.backup" in a]
+    assert "--out-root" not in argv
+    assert argv[argv.index("--config") + 1] == str(machine.root / "bravo" / "osprey.yaml")
+    assert machine.config("bravo")["deployment"]["name"] == "bravo"  # type: ignore[index]
+    assert str(machine.root / "bravo" / "backups") not in " ".join(argv)
+
+
 def test_a_verb_without_name_acts_on_the_one_last_used(machine: Machine) -> None:
     machine.docker.checkout_deployment(machine.product)
     assert machine.install("alpha") == 0
