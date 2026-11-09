@@ -1,7 +1,8 @@
 """The Conduit's image must carry what the Conduit needs at runtime — round 13bf.
 
 Two things it did not: the `connectors/` profile directory it reads at import, and the `git`
-binary it execs to publish a recipe. Both were found by asking what the image actually contains
+binary it execed to publish a recipe (until the dulwich swap of 9 November 2026, after which the
+image must carry nothing that execs it). Both were found by asking what the image actually contains
 rather than assuming, and neither was visible to any test running against the source tree.
 
 **Why this is its own file rather than a line in an existing one.** Connector profiles are *data*
@@ -23,6 +24,7 @@ by a machine that has no Docker.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from tools.layout import REPO as REPO_ROOT
@@ -64,32 +66,63 @@ def test_the_conduit_image_carries_the_connector_profiles() -> None:
     )
 
 
-def test_the_conduit_image_carries_the_binaries_the_conduit_shells_out_to() -> None:
-    """**The second thing the image did not have, found the same way — round 13bf.**
+#: A call that runs the `git` binary: a process API whose first argument (or first list element) is
+#: the literal "git", across line breaks — the shape `studio_publish._run_git` had before the
+#: dulwich swap, `asyncio.create_subprocess_exec(\n        "git",`.
+_GIT_EXEC = re.compile(
+    r"(create_subprocess_exec|create_subprocess_shell|Popen|run|call|check_call|check_output"
+    r"|system|exec\w*|spawn\w*|which)\(\s*\[?\s*[\"']git\b"
+)
 
-    `services/api/studio_publish.py` runs `git` with `asyncio.create_subprocess_exec` to satisfy
-    §6's "Publishing writes the recipe to version control". The runtime stage installed no
-    packages at all, so `git` was absent and Publish returned a bare 500 — `FileNotFoundError`
-    from the exec itself — in **every rendered deployment this project has ever built**.
+#: The code the Conduit's image carries (services/api/Dockerfile's COPY lines).
+_IMAGE_CODE = ("packages", "services", "scripts", "connectors")
 
-    It stayed invisible for the reason rule 15 names. The one test of publishing
-    (`tests/ingest/test_studio_publish_pipeline.py`) runs on the host, where `git` is on `PATH`,
-    and hands `write_and_commit_recipe` a `git_repo` fixture it has just `git init`ed. So the test
-    environment supplied both things the real deployment lacked — the binary and the repository —
-    and agreed with the code perfectly while the deployed article could not publish at all.
 
-    An executable a service shells out to is a runtime dependency exactly as an imported package
-    is; the difference is only that nothing type-checks it. This is that check.
-    """
-    dockerfile = (REPO_ROOT / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
-    installed = " ".join(
-        line.strip() for line in dockerfile.splitlines() if "apt-get install" in line
+def _git_execs(source: str) -> list[str]:
+    return [m.group(0) for m in _GIT_EXEC.finditer(source)]
+
+
+def test_the_git_scan_finds_the_call_the_conduit_used_to_make() -> None:
+    """Rule 15: the scan below shown red on the real shape it exists to catch — the exact
+    `_run_git` body `services/api/studio_publish.py` had until the dulwich swap — and on the
+    one-line list form `subprocess.run(["git", ...])` the harness uses."""
+    before_the_swap = (
+        "async def _run_git(*args: str, cwd: Path) -> tuple[int, str]:\n"
+        "    proc = await asyncio.create_subprocess_exec(\n"
+        '        "git",\n'
+        "        *args,\n"
+        "        cwd=cwd,\n"
     )
-    assert "git" in installed.split(), (
-        "services/api/Dockerfile's runtime stage does not install `git`, but "
-        "services/api/studio_publish.py execs it to commit a published recipe — Publish will "
-        f"500 with FileNotFoundError in every rendered deployment. apt-get install lines: "
-        f"{installed!r}"
+    assert _git_execs(before_the_swap)
+    assert _git_execs('subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"])')
+    assert not _git_execs('Repo.init(str(repo_root), default_branch=b"main")')
+    assert not _git_execs('subprocess.run(["gitleaks", "detect"])')
+
+
+def test_nothing_the_conduit_image_carries_execs_git() -> None:
+    """**Round 13bf, then the owner's ruling of 9 November 2026 (MORNING item 89).**
+
+    Round 13bf found Publish returned a bare 500 in every rendered deployment, because
+    `services/api/studio_publish.py` execed `git` and the image had none; the image gained `git`
+    and this test asserted it was installed. `git` is GPL-2.0-only, and the owner ruled it leaves
+    the image: Publish now commits with dulwich (Apache-2.0), and
+    `tests/services/api/test_recipe_repository.py` proves the publish path spawns no process and
+    that real `git` reads what dulwich writes.
+
+    So the runtime dependency this test guarded is gone, and the invariant turns round: nothing
+    the image carries may exec `git`, or removing it from the image (platform's carry) brings the
+    bare 500 back. An executable a service shells out to is a runtime dependency exactly as an
+    imported package is; this is the check that none of the Conduit's is `git`.
+    """
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}: {call!r}"
+        for directory in _IMAGE_CODE
+        for path in sorted((REPO_ROOT / directory).rglob("*.py"))
+        for call in _git_execs(path.read_text(encoding="utf-8"))
+    ]
+    assert offenders == [], (
+        "code the Conduit's image carries execs `git`, which leaves the image (the owner's ruling "
+        f"of 9 November 2026); commit with dulwich as studio_publish.py does: {offenders}"
     )
 
 
