@@ -1,0 +1,8 @@
+# The lanes' test stacks that run on another machine (the owner, 9 November 2026: "ssh ospreyflow-test").
+# Tab-separated: stack, the ssh host alias (from the owner's ~/.ssh/config; no address or key is written
+# here). Read by scripts/stack_lease.sh: such a stack's containers are started and stopped on that host
+# (docker with DOCKER_HOST=ssh://<host>), bound to 127.0.0.1 there, and `up` opens one ssh tunnel carrying
+# each of its ports to this machine's 127.0.0.1, so tests and tests/port_guard.py see localhost ports as for a
+# local stack. A stack not listed here runs on this machine.
+d	ospreyflow-test
+e	ospreyflow-test

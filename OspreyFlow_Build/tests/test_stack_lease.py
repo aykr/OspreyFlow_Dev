@@ -55,23 +55,21 @@ def lease(tmp_path: Path):
 
 
 def test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder(lease) -> None:
-    """ADR-142 Amendments 3 and 4: three throwaway stacks, one holder each. The first three lanes get a, b and
-    c; the fourth is refused and told who holds each (red against the two-stack table, which gave case none)."""
-    first = lease("acquire", "studio", "phase 6 route tests")
-    assert first.returncode == 0, first.stderr
-    assert "stack a" in first.stdout
-    second = lease("acquire", "rules", "axe scans")
-    assert second.returncode == 0, second.stderr
-    assert "stack b" in second.stdout
-    third = lease("acquire", "case", "conformance")
-    assert third.returncode == 0, third.stderr
-    assert "stack c" in third.stdout
-    fourth = lease("acquire", "admin", "store cases")
-    assert fourth.returncode == 1
-    assert "holder=studio" in fourth.stderr and "holder=rules" in fourth.stderr and "holder=case" in fourth.stderr
-    assert "purpose=phase 6 route tests" in fourth.stderr
+    """ADR-142 Amendments 3 and 4: throwaway stacks, one holder each, a, b and c on this machine and d and e on
+    the owner's test server (9 November 2026). The first five lanes get a to e in order; the sixth is refused
+    and told who holds each."""
+    lanes = ["studio", "rules", "case", "admin", "platform"]
+    for lane, stack in zip(lanes, "abcde"):
+        taken = lease("acquire", lane, f"{lane} run")
+        assert taken.returncode == 0, taken.stderr
+        assert f"stack {stack}" in taken.stdout
+    sixth = lease("acquire", "docs", "screens")
+    assert sixth.returncode == 1
+    for lane in lanes:
+        assert f"holder={lane}" in sixth.stderr
+    assert "purpose=studio run" in sixth.stderr
     status = lease("status").stdout
-    assert "holder=studio" in status and "holder=rules" in status and "holder=case" in status
+    assert all(f"holder={lane}" in status for lane in lanes)
 
 
 def test_a_lane_holds_one_stack_at_a_time(lease) -> None:
@@ -135,7 +133,7 @@ def test_the_holder_releases_once_the_stack_is_down(lease) -> None:
     lease("acquire", "case", "conformance")
     done = lease("release", "case", docker="down")
     assert done.returncode == 0, done.stderr
-    assert lease("status").stdout.strip() == "a: free\nb: free\nc: free"
+    assert lease("status").stdout.strip() == "a: free\nb: free\nc: free\nd: free\ne: free"
     assert lease("acquire", "rules", "axe scans").returncode == 0
 
 
@@ -242,3 +240,90 @@ def test_acquire_pins_the_stack_s_own_object_store(lease, first: bool, stack: st
     taken = lease("acquire", "rules", "axe scans")
     assert f"stack {stack}" in taken.stdout
     assert f"MINIO_ENDPOINT={endpoint}" in taken.stdout
+
+
+# --- Stacks on the owner's test server (9 November 2026) ---------------------------------------------------
+# scripts/lane_stack_hosts.tsv names a remote stack's ssh host. Its containers are started and stopped there
+# (docker with DOCKER_HOST=ssh://<host>), and `up` opens one ssh tunnel carrying each of the stack's ports
+# to this machine's localhost, so a test and the port guard see the same localhost ports as for a local stack.
+
+_STACK_D_PORTS = ("2494", "55436", "6382", "9006")
+
+
+def _recording_tools(tmp_path: Path) -> tuple[str, str, Path]:
+    log = tmp_path / "tools.log"
+    docker = f'#!/bin/sh\necho "docker host=${{DOCKER_HOST:-local}} $*" >> "{log}"\nexit 0\n'
+    ssh = f'#!/bin/sh\necho "ssh $*" >> "{log}"\nexit 0\n'
+    return docker, ssh, log
+
+
+def _take_stack_d(lease) -> None:
+    for lane in ("studio", "rules", "case"):
+        lease("acquire", lane, "a local run")
+    taken = lease("acquire", "admin", "a remote run")
+    assert "stack d" in taken.stdout, taken.stdout + taken.stderr
+
+
+def test_a_remote_stack_is_started_on_its_host_and_tunnelled_to_localhost(lease, tmp_path: Path) -> None:
+    _take_stack_d(lease)
+    docker, ssh, log = _recording_tools(tmp_path)
+    _DOCKER["recording"] = docker
+    (tmp_path / "bin" / "ssh").write_text(ssh)
+    (tmp_path / "bin" / "ssh").chmod(0o755)
+    try:
+        assert lease("up", "admin", docker="recording").returncode == 0
+    finally:
+        del _DOCKER["recording"]
+    calls = log.read_text().splitlines()
+    start = [c for c in calls if c.startswith("docker") and " start " in c]
+    assert start and all("host=ssh://ospreyflow-test" in c for c in start), calls
+    assert "osprey-test-d-arcadedb" in start[0]
+    tunnel = [c for c in calls if c.startswith("ssh") and " -L " in c]
+    assert len(tunnel) == 1, calls
+    for port in _STACK_D_PORTS:
+        assert f"-L 127.0.0.1:{port}:127.0.0.1:{port}" in tunnel[0], tunnel
+    assert "ospreyflow-test" in tunnel[0]
+
+
+def test_a_remote_stack_s_down_closes_its_tunnel_and_stops_it_on_its_host(lease, tmp_path: Path) -> None:
+    _take_stack_d(lease)
+    docker, ssh, log = _recording_tools(tmp_path)
+    _DOCKER["recording"] = docker
+    (tmp_path / "bin" / "ssh").write_text(ssh)
+    (tmp_path / "bin" / "ssh").chmod(0o755)
+    try:
+        assert lease("down", "admin", docker="recording").returncode == 0
+    finally:
+        del _DOCKER["recording"]
+    calls = log.read_text().splitlines()
+    assert any(c.startswith("ssh") and "-O exit" in c for c in calls), calls
+    stop = [c for c in calls if c.startswith("docker") and " stop " in c]
+    assert stop and all("host=ssh://ospreyflow-test" in c for c in stop), calls
+
+
+def test_a_local_stack_never_reaches_the_server(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a local run")
+    docker, ssh, log = _recording_tools(tmp_path)
+    _DOCKER["recording"] = docker
+    (tmp_path / "bin" / "ssh").write_text(ssh)
+    (tmp_path / "bin" / "ssh").chmod(0o755)
+    try:
+        assert lease("up", "studio", docker="recording").returncode == 0
+        assert lease("down", "studio", docker="recording").returncode == 0
+    finally:
+        del _DOCKER["recording"]
+    calls = log.read_text().splitlines()
+    assert not any(c.startswith("ssh") for c in calls), calls
+    assert all("host=local" in c for c in calls if c.startswith("docker")), calls
+
+
+def test_a_remote_stack_s_release_asks_its_own_host(lease, tmp_path: Path) -> None:
+    _take_stack_d(lease)
+    docker, ssh, log = _recording_tools(tmp_path)
+    _DOCKER["recording"] = docker
+    try:
+        assert lease("release", "admin", docker="recording").returncode == 0
+    finally:
+        del _DOCKER["recording"]
+    ps = [c for c in log.read_text().splitlines() if " ps " in c]
+    assert ps and all("host=ssh://ospreyflow-test" in c for c in ps), ps

@@ -20,3 +20,11 @@ c	arcadedb	osprey-test-c-arcadedb	2493	ARCADEDB_HTTP_PORT	yes
 c	postgres	osprey-test-c-pg	55435	POSTGRES_PORT	yes
 c	valkey	osprey-test-c-valkey	6381	VALKEY_PORT	yes
 c	objectstore	osprey-test-c-objectstore	9004	MINIO_ENDPOINT	yes
+d	arcadedb	osprey-test-d-arcadedb	2494	ARCADEDB_HTTP_PORT	yes
+d	postgres	osprey-test-d-pg	55436	POSTGRES_PORT	yes
+d	valkey	osprey-test-d-valkey	6382	VALKEY_PORT	yes
+d	objectstore	osprey-test-d-objectstore	9006	MINIO_ENDPOINT	yes
+e	arcadedb	osprey-test-e-arcadedb	2495	ARCADEDB_HTTP_PORT	yes
+e	postgres	osprey-test-e-pg	55437	POSTGRES_PORT	yes
+e	valkey	osprey-test-e-valkey	6383	VALKEY_PORT	yes
+e	objectstore	osprey-test-e-objectstore	9008	MINIO_ENDPOINT	yes

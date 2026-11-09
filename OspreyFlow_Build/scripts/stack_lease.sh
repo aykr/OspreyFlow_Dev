@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The lanes' throwaway test stacks, each used by one lane at a time (spec/06_DECISIONS.md ADR-142 decision 4
-# and Amendment 3; process/CLAUDE.md rule 14). Two stacks, a and b, listed in scripts/lane_stacks.tsv.
+# and Amendment 3; process/CLAUDE.md rule 14). Stacks a, b and c on this machine and d and e on the owner's
+# test server, listed in scripts/lane_stacks.tsv; scripts/lane_stack_hosts.tsv names a remote stack's host.
 #
 #   OspreyFlow_Build/scripts/stack_lease.sh acquire <lane> "<purpose>" [a|b]   take a free stack (a first),
 #                                                                          or the one named; or say who holds each
@@ -22,6 +23,7 @@ set -euo pipefail
 
 DIR="${OSPREY_LEASE_DIR:-$HOME/.ospreyflow}"
 TABLE="$(cd "$(dirname "$0")" && pwd)/lane_stacks.tsv"
+HOSTS="$(cd "$(dirname "$0")" && pwd)/lane_stack_hosts.tsv"
 STACKS="$(grep -v '^#' "$TABLE" | cut -f1 | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
 mkdir -p "$DIR"
 
@@ -35,6 +37,29 @@ ports_line() {
   [ "$1" = a ] || printf ' CLICKHOUSE_HTTP_PORT=59994'
   echo
 }
+# The ssh host a stack runs on (scripts/lane_stack_hosts.tsv), or nothing for one on this machine.
+host_of() { [ -f "$HOSTS" ] || return 0; grep -v '^#' "$HOSTS" | awk -F'\t' -v s="$1" '$1 == s { print $2; exit }'; }
+# docker for a stack: on its own host when it has one, here otherwise.
+docker_for() {
+  local h; h="$(host_of "$1")"; shift
+  if [ -n "$h" ]; then DOCKER_HOST="ssh://$h" docker "$@"; else docker "$@"; fi
+}
+tunnel_sock() { echo "$DIR/tunnel-$1.sock"; }
+# One ssh connection carrying each of a remote stack's ports to this machine's 127.0.0.1.
+tunnel_open() {
+  local s="$1" h fwd="" p
+  h="$(host_of "$s")"
+  for p in $(grep -v '^#' "$TABLE" | awk -F'\t' -v s="$s" '$1 == s && $4 != "-" { print $4 }'); do
+    fwd="$fwd -L 127.0.0.1:$p:127.0.0.1:$p"
+  done
+  # shellcheck disable=SC2086
+  ssh -f -N -M -S "$(tunnel_sock "$s")" -o ExitOnForwardFailure=yes -o BatchMode=yes $fwd "$h"
+}
+tunnel_close() {
+  local s="$1"
+  ssh -S "$(tunnel_sock "$s")" -O exit "$(host_of "$s")" >/dev/null 2>&1 || true
+}
+
 # The stack a lane holds, or nothing.
 held_by() {
   local s
@@ -64,7 +89,7 @@ stack_state() {
   fi
   for c in $(containers_of "$stack"); do filters="$filters --filter name=^/?$c\$"; done
   # shellcheck disable=SC2086
-  if ! more="$(docker ps -q $filters 2>&1)"; then
+  if ! more="$(docker_for "$stack" ps -q $filters 2>&1)"; then
     echo "docker could not say whether test stack $stack is up: $more" >&2
     return 1
   fi
@@ -133,8 +158,13 @@ case "$cmd" in
     fi
     if [ "$cmd" = up ]; then verb=start; else verb=stop; fi
     read -r -a these <<< "$(containers_of "$s")"
-    docker "$verb" "${these[@]}" >/dev/null || { echo "docker could not $verb test stack $s." >&2; exit 1; }
-    echo "Test stack $s ${cmd} for $who: ${these[*]}"
+    remote="$(host_of "$s")"
+    [ "$cmd" = down ] && [ -n "$remote" ] && tunnel_close "$s"
+    docker_for "$s" "$verb" "${these[@]}" >/dev/null || { echo "docker could not $verb test stack $s." >&2; exit 1; }
+    if [ "$cmd" = up ] && [ -n "$remote" ]; then
+      tunnel_open "$s" || { echo "Test stack $s started on $remote, but its ssh tunnel did not open: run down, then up." >&2; exit 1; }
+    fi
+    echo "Test stack $s ${cmd} for $who: ${these[*]}${remote:+ (on $remote, tunnelled to 127.0.0.1 here)}"
     ;;
   ports)
     who="${2:?usage: stack_lease.sh ports <lane>}"

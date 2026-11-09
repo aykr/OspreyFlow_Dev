@@ -440,6 +440,14 @@ New ones are added at the bottom as they happen.
     and a later revert of a load whose link was regraded is refused for that link; a scheme file is never edited
     in place once items are graded in it (a change makes a new scheme).
 
+72. **Two more test stacks, d and e, on your test server (`ospreyflow-test`, 9 November about 12:00 UTC, your word).**
+    Nothing on it was wiped: its existing `osprey-small` deployment (about 12 GB of 62) was left running. d and e
+    are built like stack b, bound to 127.0.0.1 there, and reached through one ssh tunnel per stack that
+    `stack_lease.sh up` opens and `down` closes, so the tests and the port guard see localhost ports as before.
+    Checked live under a lease: ArcadeDB, Postgres, Valkey and the object store all answered. **For you:** on that
+    server port 1099 (likely the `osprey-small` ArcadeDB's JMX) listens on every interface and its firewall
+    (ufw) is inactive, so it may be reachable from outside. Not changed by me; worth closing.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
