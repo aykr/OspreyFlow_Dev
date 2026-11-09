@@ -13,13 +13,17 @@ every grade of each part of the old scheme to one of the new:
 
 `change` first reports how many items each mapping line moves (the plan; a dry run stops there and
 writes nothing), then rewrites each grade, keeping the grade and scheme the item had before its
-first change (`DrawnAssertion.original_grading`) for good, and is audited. It is refused whole,
-before anything is written, for a mapping that does not cover the old scheme, a mapping from
-another scheme than the deployment's, an item in another scheme, or a registered item that cannot
-be read back (rule 2: an item is never skipped silently).
+first change (`DrawnAssertion.original_grading`) for good. It is audited before the first write
+(the plan) and after the last (what was written). It is refused whole, before anything is written
+and on a dry run too, for a mapping that does not cover the old scheme, a mapping from another
+scheme than the deployment's, an item in another scheme, a registered item that cannot be read
+back (rule 2: an item is never skipped silently), or an item its rewrite would be refused for (a
+type not in the ontology in force, a property it no longer allows, a link whose end is gone, a body
+read with its sources or board withheld): every check a write would make is made first.
 
-A change stopped part way (`GradingIncomplete`) is finished by running it again: an item already
-in the new scheme with an original kept is counted as already changed and left.
+A change stopped part way (`GradingIncomplete`, a store failure mid-run) is finished by running it
+again: an item already in the new scheme with an original kept is counted as already changed and
+left.
 
 Withdrawn items are not changed: they are kept as they were drawn, in the audit's sense (decision
 5), and are never shown as live. Under 3x5x2 the handling code (P or C) is part of the grade and is
@@ -36,7 +40,9 @@ from typing import Any, Protocol
 
 import yaml
 
+from ontology.errors import OntologyError
 from ontology.handling import HandlingScheme, sources_in_full
+from ontology.validation import validate_edge_endpoints, validate_properties
 from ports.graph import GraphPort
 from schemas.domain import (
     GRADING_PARTS,
@@ -45,6 +51,7 @@ from schemas.domain import (
     Grading,
     Node,
     NodeWrite,
+    OntologySchema,
     Principal,
 )
 
@@ -150,6 +157,8 @@ class Inventory:
 
 class GradedItems(Protocol):
     async def inventory(self) -> Inventory: ...
+    #: What a rewrite of each item would be refused for, found before any is written.
+    async def check(self, items: Sequence[GradedItem]) -> list[str]: ...
     async def rewrite(self, item: GradedItem, grading: Grading, original: Grading) -> None: ...
 
 
@@ -180,6 +189,8 @@ class BoardGradedItems:
     registered: Registered
     reader: Principal
     written_by: str
+    #: The ontology in force, as the graph adapter holds it: the one every write is checked against.
+    ontology: OntologySchema
 
     async def inventory(self) -> Inventory:
         live = [
@@ -208,18 +219,61 @@ class BoardGradedItems:
             items.append(GradedItem(element, drawn.grading, drawn.original_grading))
         return Inventory(items=items, unread=unread)
 
+    async def check(self, items: Sequence[GradedItem]) -> list[str]:
+        """Every refusal the rewrite's own write would meet, found for all the items before any is
+        written: a body read as a reader is shown it, a type the ontology in force no longer holds
+        or properties it no longer allows, a link whose end cannot be read or no longer fits."""
+        problems: list[str] = []
+        ends: set[str] = set()
+        for item in items:
+            element: Node | Edge = item.ref
+            if isinstance(element, Edge):
+                ends.update((element.source, element.target))
+        end_types: dict[str, str] = {}
+        if ends:
+            with sources_in_full():
+                found = await self.graph.get_nodes(sorted(ends), self.reader)
+            end_types = {n.id: n.type for n in found}
+        for item in items:
+            element = item.ref
+            drawn = element.provenance.drawn
+            said = drawn.item_id if drawn is not None else element.id
+            if drawn is None or element.provenance.sources_withheld or not drawn.board_id:
+                # Read as a reader is shown it, not as stored: written back, it would lose them.
+                problems.append(f"{said}: read with its sources or board withheld")
+                continue
+            if isinstance(element, Node):
+                type_def: Any = self.ontology.entity_type(element.type)
+            else:
+                type_def = self.ontology.edge_type(element.type)
+            if type_def is None:
+                problems.append(f"{said}: {element.type} is not a type in the ontology in force")
+                continue
+            try:
+                validate_properties(type_def, element.properties)
+                if isinstance(element, Edge):
+                    source, target = end_types.get(element.source), end_types.get(element.target)
+                    if source is None or target is None:
+                        problems.append(f"{said}: an end of the link cannot be read")
+                        continue
+                    validate_edge_endpoints(type_def, source_type=source, target_type=target)
+            except OntologyError as refused:
+                problems.append(f"{said}: {refused}")
+        return problems
+
     async def rewrite(self, item: GradedItem, grading: Grading, original: Grading) -> None:
-        """The element written again under its own id, as `Boards.edit` writes an edit: only its
-        drawn grade and original change; marking, datasets and properties are its own."""
+        """The element written again under its own id: only its drawn grade and original change.
+        Its marking, datasets, properties, resolution state and load are its own, and a link's
+        occurrences are not counted again (the write adds none). Called only after `check`."""
         element: Node | Edge = item.ref
         drawn = element.provenance.drawn
         assert drawn is not None
         if element.provenance.sources_withheld or not drawn.board_id:
-            # Read as a reader is shown it, not as it is stored: written back, it would lose them.
             raise GradingRefused(
                 f"a drawn item ({drawn.item_id}) was read with its sources or board withheld; "
                 "it is not written back so"
             )
+        audit = element.audit
         provenance = element.provenance.model_copy(
             update={
                 "drawn": drawn.model_copy(update={"grading": grading, "original_grading": original})
@@ -234,6 +288,8 @@ class BoardGradedItems:
                         id=element.id, type=element.type, properties=element.properties,
                         provenance=provenance, handling=element.handling,
                         created_by=self.written_by, created_at=now, datasets=element.datasets,
+                        resolution=element.resolution, load_id=audit.load_id,
+                        recipe_id=audit.recipe_id, recipe_version=audit.recipe_version,
                     )],
                     tx,
                 )  # fmt: skip
@@ -247,6 +303,8 @@ class BoardGradedItems:
                         interval=element.interval, basis=element.basis,
                         provenance=provenance, handling=element.handling,
                         created_by=self.written_by, created_at=now, datasets=element.datasets,
+                        occurrences=0, load_id=audit.load_id, recipe_id=audit.recipe_id,
+                        recipe_version=audit.recipe_version,
                     )],
                     tx,
                 )  # fmt: skip
@@ -270,6 +328,8 @@ class GradingPlan:
     already_changed: int = 0
     written: int = 0
     dry_run: bool = True
+    #: The audit's two records: `started` before the first write, then `finished` or `stopped`.
+    stage: str = "planned"
 
     def lines(self) -> list[str]:
         said = [
@@ -281,6 +341,7 @@ class GradingPlan:
             for (p, old, new), count in sorted(self.moves.items()):
                 if p == part:
                     said.append(f"{part} {old} → {new}: {count} item(s)")
+        said.append("Withdrawn items keep the grade they were drawn with and are not counted.")
         return said
 
     def record(self) -> dict[str, Any]:
@@ -294,10 +355,12 @@ class GradingPlan:
             "to_change": self.to_change,
             "already_changed": self.already_changed,
             "written": self.written,
+            "stage": self.stage,
         }
 
 
 Audit = Callable[[GradingPlan], Awaitable[None]]
+Announce = Callable[[GradingPlan], None]
 
 
 async def change(
@@ -307,9 +370,11 @@ async def change(
     current: str,
     dry_run: bool,
     audit: Audit,
+    announce: Announce | None = None,
 ) -> GradingPlan:
-    """The plan, and unless `dry_run` the change itself, audited once it is whole. `current` is
-    the deployment's scheme (`grading.scheme`)."""
+    """The plan, and unless `dry_run` the change itself. `current` is the deployment's scheme
+    (`grading.scheme`). `announce` is told the plan once every check has passed and before the
+    first write; the audit is written before the first write and after the last."""
     if mapping.from_scheme != current:
         raise GradingRefused(
             f"the mapping is from {mapping.from_scheme}, but this deployment grades in {current}"
@@ -343,16 +408,30 @@ async def change(
             "Nothing was changed."
         )
     plan.to_change = len(pending)
+    problems = await items.check(pending)
+    if problems:
+        more = len(problems) - 5
+        shown = "; ".join(problems[:5]) + (f"; and {more} more" if more > 0 else "")
+        raise GradingRefused(
+            f"{len(problems)} drawn item(s) could not be written back: {shown}. "
+            "Nothing was changed."
+        )
+    if announce is not None:
+        announce(plan)
     if dry_run:
         return plan
+    if pending:
+        plan.stage = "started"
+        await audit(plan)  # before any write: never a changed grade with no record of the change
     for done, item in enumerate(pending):
         try:
             await items.rewrite(item, mapping.apply(item.grading), item.original or item.grading)
         except Exception as failed:
-            # What was written is audited too, so the record holds every changed grade.
-            if done:
-                await audit(plan)
+            plan.stage = "stopped"
+            await audit(plan)
             raise GradingIncomplete(done, len(pending), failed) from failed
         plan.written += 1
-    await audit(plan)
+    if pending:
+        plan.stage = "finished"
+        await audit(plan)
     return plan

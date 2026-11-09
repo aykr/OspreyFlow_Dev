@@ -28,9 +28,24 @@ from services.api.grading import (
     parse_mapping,
 )
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from services.api.app import app
+from services.api.config import GradingSettings
+
 from schemas.domain import Grading, Node, Principal
 
-from .test_boards import SCHEME, K, _as, _board, _item, _link, world  # noqa: F401  (a fixture)
+from .test_boards import (  # noqa: F401  (a fixture)
+    ONTOLOGY,
+    SCHEME,
+    K,
+    _as,
+    _board,
+    _item,
+    _link,
+    world,
+)
 
 FIVE_TO_THREE = """
 from: 5x5x5
@@ -56,13 +71,30 @@ def _registered(world: SimpleNamespace) -> Any:
     return registered
 
 
-def _port(world: SimpleNamespace, reader: Principal | None = None) -> BoardGradedItems:
+def _port(
+    world: SimpleNamespace, reader: Principal | None = None, ontology: Any = None
+) -> BoardGradedItems:
     return BoardGradedItems(
         world.graph,
         _registered(world),
         reader or operator_reader(SCHEME, org_unit="unit-1"),
         written_by="ops-1",
+        ontology=ontology or ONTOLOGY,
     )
+
+
+@contextmanager
+def _deployment_grading_in(scheme: str) -> Iterator[None]:
+    """Draw while the deployment grades in `scheme` (the board routes refuse any other)."""
+    held = getattr(app.state, "grading", None)
+    app.state.grading = GradingSettings(scheme=scheme)  # type: ignore[arg-type]
+    try:
+        yield
+    finally:
+        if held is None:
+            del app.state.grading
+        else:
+            app.state.grading = held
 
 
 def _drawn(world: SimpleNamespace, **grade: str) -> tuple[str, str]:
@@ -89,11 +121,16 @@ def _writes(world: SimpleNamespace) -> int:
 
 
 class _Audit:
+    """Each audit record as it was written (the plan is one object, changed as the run goes)."""
+
     def __init__(self) -> None:
-        self.plans: list[Any] = []
+        self.plans: list[dict[str, Any]] = []
 
     async def __call__(self, plan: Any) -> None:
-        self.plans.append(plan)
+        self.plans.append(plan.record())
+
+    def stages(self) -> list[tuple[str, int]]:
+        return [(r["stage"], r["written"]) for r in self.plans]
 
 
 # --- the dry run writes nothing ---------------------------------------------------------------
@@ -146,7 +183,7 @@ async def test_every_item_keeps_its_original_grade_and_scheme_through_two_change
             Grading(scheme="5x5x5", source="A", intelligence="2", handling="1"),
             original,
         )
-    assert [p.written for p in audit.plans] == [2, 2]
+    assert audit.stages() == [("started", 0), ("finished", 2), ("started", 0), ("finished", 2)]
 
 
 async def test_the_change_keeps_the_items_other_drawn_fields_and_its_marking(
@@ -197,7 +234,9 @@ async def test_a_mapping_from_another_scheme_than_the_deployments_is_refused(
     # Every item in the mapping's own old scheme, so nothing but the deployment's setting can
     # refuse it: an item in another scheme would be refused by its own check, for its own reason.
     board = _board(start="blank")
-    _item(board, grading={"scheme": "3x5x2", "source": "A", "intelligence": "1", "handling": "P"})
+    with _deployment_grading_in("3x5x2"):
+        _item(board, grading={"scheme": "3x5x2", "source": "A", "intelligence": "1",
+                              "handling": "P"})  # fmt: skip
     before = _writes(world)
     with pytest.raises(GradingRefused) as refused:
         await change(
@@ -213,7 +252,9 @@ async def test_an_item_in_another_scheme_refuses_the_whole_change_before_any_wri
 ) -> None:
     first, _ = _drawn(world)  # in 5x5x5, drawn first, so a loop writing as it goes reaches it
     board = _board(start="blank")
-    _item(board, grading={"scheme": "3x5x2", "source": "A", "intelligence": "1", "handling": "P"})
+    with _deployment_grading_in("3x5x2"):  # drawn before a change, say, then the setting put back
+        _item(board, grading={"scheme": "3x5x2", "source": "A", "intelligence": "1",
+                              "handling": "P"})  # fmt: skip
     before = _writes(world)
     audit = _Audit()
     with pytest.raises(GradingRefused) as refused:
@@ -229,21 +270,75 @@ async def test_an_item_in_another_scheme_refuses_the_whole_change_before_any_wri
 async def test_a_registered_item_that_cannot_be_read_back_refuses_the_whole_change(
     world: SimpleNamespace,
 ) -> None:
-    """The operator reads as the deployment's top clearance with every handling code, but a
-    restricted code is also scoped to the reader's unit (`01_DOMAIN_MODEL.md` §2.2): an item the
-    reader cannot read is never skipped silently (rule 2), and nothing is written."""
-    first, _ = _drawn(world)
+    """The board registry names an item the graph no longer gives back to the operator's reader
+    (its element gone from the store under it): never skipped silently (rule 2), and nothing is
+    written, though the other items could be."""
+    person, link = _drawn(world)
+    del world.graph._graph_nodes[person]
     before = _writes(world)
-    # A reader of no dataset the items are in: the adapter returns neither of them.
-    elsewhere = Principal(id="ops-1", clearance="SECRET", org_unit="unit-1", datasets=["nothing"])
     with pytest.raises(GradingRefused) as refused:
         await change(
-            _port(world, elsewhere), parse_mapping(FIVE_TO_THREE), current="5x5x5",
-            dry_run=False, audit=_Audit(),
+            _port(world), parse_mapping(FIVE_TO_THREE), current="5x5x5", dry_run=False,
+            audit=_Audit(),
         )  # fmt: skip
-    assert "2 drawn item(s) could not be read back" in str(refused.value)
+    assert "drawn item(s) could not be read back" in str(refused.value)
     assert _writes(world) == before
-    assert _grade_of(world, first)[1] is None
+    assert _grade_of(world, link)[1] is None
+
+
+async def test_an_item_whose_rewrite_would_be_refused_refuses_the_whole_change_first(
+    world: SimpleNamespace,
+) -> None:
+    """Every check the rewrite's own write would make is made for every item first: here the
+    link's type is no longer in the ontology in force (a proposal withdrawn after the link was
+    drawn). The node, drawn first, is not written, and a dry run says so too."""
+    person, _ = _drawn(world)
+    without = ONTOLOGY.model_copy(
+        update={"edge_types": [t for t in ONTOLOGY.edge_types if t.name != "ASSOCIATE_OF"]}
+    )
+    before = _writes(world)
+    for dry_run in (True, False):
+        audit = _Audit()
+        with pytest.raises(GradingRefused) as refused:
+            await change(
+                _port(world, ontology=without), parse_mapping(FIVE_TO_THREE), current="5x5x5",
+                dry_run=dry_run, audit=audit,
+            )  # fmt: skip
+        assert "1 drawn item(s) could not be written back" in str(refused.value)
+        assert "ASSOCIATE_OF is not a type in the ontology in force" in str(refused.value)
+        assert _writes(world) == before and audit.plans == []
+    assert _grade_of(world, person)[1] is None
+
+
+async def test_the_plan_is_said_and_audited_before_the_first_write(
+    world: SimpleNamespace,
+) -> None:
+    """Decision 11: it reports how many items each mapping line moves, then rewrites; C13: never
+    a changed grade with no record of the change."""
+    from scripts.grading_change import run
+
+    _drawn(world)
+    port = _port(world)
+    real = port.rewrite
+    said: list[str] = []
+    audit = _Audit()
+    seen_at_first_write: list[tuple[list[str], list[tuple[str, int]]]] = []
+
+    async def rewrite(*args: Any, **kwargs: Any) -> None:
+        if not seen_at_first_write:
+            seen_at_first_write.append((list(said), audit.stages()))
+        await real(*args, **kwargs)
+
+    port.rewrite = rewrite  # type: ignore[method-assign]
+    code = await run(
+        to="3x5x2", mapping_text=FIVE_TO_THREE, current="5x5x5", dry_run=False, items=port,
+        audit=audit, say=said.append,
+    )  # fmt: skip
+    assert code == 0
+    lines, stages = seen_at_first_write[0]
+    assert "source B → A: 2 item(s)" in lines and "5x5x5 to 3x5x2: 2 item(s) to change." in lines
+    assert stages == [("started", 0)]
+    assert audit.stages() == [("started", 0), ("finished", 2)]
 
 
 async def test_a_withdrawn_item_keeps_the_grade_it_was_drawn_with(world: SimpleNamespace) -> None:
@@ -251,10 +346,12 @@ async def test_a_withdrawn_item_keeps_the_grade_it_was_drawn_with(world: SimpleN
     made = _item(board)
     withdrawn = _as("alice").post(f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw")
     assert withdrawn.status_code == 200, withdrawn.text
+    element = made["element_id"]
     plan = await change(
         _port(world), parse_mapping(FIVE_TO_THREE), current="5x5x5", dry_run=False, audit=_Audit()
     )
     assert plan.to_change == 0
+    assert _grade_of(world, element) == (Grading(source="B", intelligence="2", handling="1"), None)
 
 
 # --- a stop part way, and the run again that finishes it ---------------------------------------
@@ -280,10 +377,12 @@ async def test_a_change_stopped_part_way_finishes_when_run_again(world: SimpleNa
             port, parse_mapping(FIVE_TO_THREE), current="5x5x5", dry_run=False, audit=audit
         )
     assert stopped.value.done == 1 and stopped.value.total == 2
+    assert audit.stages() == [("started", 0), ("stopped", 1)]
     again = await change(
         _port(world), parse_mapping(FIVE_TO_THREE), current="5x5x5", dry_run=False, audit=audit
     )
     assert again.already_changed == 1 and again.written == 1
+    assert audit.stages()[2:] == [("started", 0), ("finished", 1)]
     original = Grading(source="B", intelligence="2", handling="1")
     assert _grade_of(world, person)[1] == original and _grade_of(world, link)[1] == original
 
@@ -311,7 +410,7 @@ async def test_the_command_says_each_mapping_lines_count_and_a_dry_run_writes_no
         to="3x5x2", mapping_text=FIVE_TO_THREE, current="5x5x5", dry_run=False,
         items=_port(world), audit=audit, say=said.append,
     )  # fmt: skip
-    assert code == 0 and [p.written for p in audit.plans] == [2]
+    assert code == 0 and audit.stages() == [("started", 0), ("finished", 2)]
     assert any("set grading.scheme: 3x5x2 in osprey.yaml" in line for line in said)
 
 

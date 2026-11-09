@@ -1007,6 +1007,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = ApiConfig.from_env()
+    # ADR-143 decision 11: `grading.scheme`, read first, so an unknown scheme stops the start
+    # before anything is opened or written (a guessed scheme would grade every new drawing wrongly).
+    grading_settings = GradingSettings.from_env()
 
     # ADR-127 Amendment 23: what a recipe run is built from (the stamping graph and its hooks, the
     # stores a run writes, analytics, media, jobs, the principal resolver) is built by the one
@@ -1108,8 +1111,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.config = config
     # ADR-133 ruling 3: `osprey.yaml`'s `monitoring` section, read once.
     app.state.monitoring = MonitoringSettings.from_env()
-    # ADR-143 decision 11: `grading.scheme`, read once; an unknown scheme stops the start.
-    app.state.grading = GradingSettings.from_env()
+    app.state.grading = grading_settings
     app.state.graph = graph
     app.state.ontology = ontology
     app.state.valkey = valkey
@@ -1752,7 +1754,10 @@ def get_handling_scheme(request: Request) -> HandlingScheme:
 
 
 def get_grading_settings(request: Request) -> GradingSettings:
-    return getattr(request.app.state, "grading", None) or GradingSettings()
+    """The setting the start read; with none (an app not started through `lifespan`, as in a
+    test), read from the environment the same way, refusing an unknown scheme, never a default."""
+    held = getattr(request.app.state, "grading", None)
+    return held if held is not None else GradingSettings.from_env()
 
 
 def get_yardstick(request: Request) -> Yardstick:

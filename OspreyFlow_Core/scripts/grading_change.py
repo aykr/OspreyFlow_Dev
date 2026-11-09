@@ -26,6 +26,15 @@ new scheme there and start the deployment again (`ospreyflow start`), so the boa
 scheme's grades. Until then a run of the same change finds every item already changed and writes
 nothing. (`ospreyflow grading change`, the verb decision 11 names, is to wrap both steps.)
 
+**The ontology it writes under** is the one the Conduit runs with: the deployment's, composed with
+every link-type proposal (`services/api/link_types.compose_ontology`), taken in memory only
+(`use_schema`: no DDL, no backfill), so the graph adapter checks each rewrite as the Conduit's own
+writes are checked. Every such check is made for every item before the first write.
+
+**What it reads.** The board registry of every case (`board_store`'s own columns), the one read of
+`board_items` that names no case: an operator's change of the whole deployment's scheme, outside
+the Conduit, never answered to any reader.
+
 Exit codes: 0 changed, or the dry run's plan; 1 refused (nothing was changed); 2 stopped part way
 (run it again to finish it); 64 a usage error, or no store settings.
 """
@@ -37,10 +46,10 @@ import asyncio
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from services.api.audit import AuditWriter
-from services.api.board_store import BoardItem
+from services.api.board_store import _ITEM_COLUMNS, BoardItem, _item
 from services.api.config import GradingSchemeUnknown, GradingSettings, PostgresConfig
 from services.api.grading import (
     SCHEMES,
@@ -56,7 +65,11 @@ from services.api.grading import (
     parse_mapping,
 )
 
-from schemas.domain import Principal
+from schemas.domain import OntologySchema, Principal
+
+if TYPE_CHECKING:
+    from adapters.graph_arcadedb.client import ArcadeDBClient
+    from ontology.handling import HandlingScheme
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,6 +111,12 @@ async def run(
     if mapping.to_scheme != to:
         say(f"--to is {to}, but the mapping is to {mapping.to_scheme}. Nothing was changed.")
         return 1
+
+    def announce(plan: GradingPlan) -> None:
+        # Said before the first write: what each mapping line moves.
+        for line in plan.lines():
+            say(line)
+
     try:
         plan = await change(
             items,
@@ -105,6 +124,7 @@ async def run(
             current=current,
             dry_run=dry_run,
             audit=audit,  # type: ignore[arg-type]
+            announce=announce,
         )
     except GradingRefused as refused:
         say(f"Refused: {refused}")
@@ -112,8 +132,6 @@ async def run(
     except GradingIncomplete as stopped:
         say(str(stopped))
         return 2
-    for line in plan.lines():
-        say(line)
     if dry_run:
         say("A dry run: nothing was written.")
         return 0
@@ -136,8 +154,7 @@ NO_STORE_SETTINGS = (
 #: The board registry's live drawn nodes and links (`board_store`): a withdrawn item keeps the grade
 #: it was drawn with, and pictures and match links carry none.
 REGISTERED_SQL = (
-    "SELECT item_id, board_id, case_id, kind, element_id, author, dataset_id, created_at, "
-    "withdrawn_at, withdrawn_by, source, target, promoted_at FROM board_items "
+    f"SELECT {_ITEM_COLUMNS} FROM board_items "
     "WHERE withdrawn_at IS NULL AND kind IN ('node', 'link') ORDER BY created_at, item_id"
 )
 
@@ -148,9 +165,43 @@ def registry_reader(pool: Any) -> Registered:
     async def registered() -> list[BoardItem]:
         async with pool.acquire() as conn:
             rows = await conn.fetch(REGISTERED_SQL)
-        return [BoardItem(**dict(row)) for row in rows]
+        return [_item(row) for row in rows]
 
     return registered
+
+
+def graded_items(
+    client: ArcadeDBClient,
+    scheme: HandlingScheme,
+    ontology: OntologySchema,
+    registered: Registered,
+    reader: Principal,
+    written_by: str,
+) -> BoardGradedItems:
+    """The command's port: the bare graph adapter, holding the ontology in force in memory (a
+    write with none is refused by the adapter), over the board registry."""
+    from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
+
+    adapter = GraphArcadeDBAdapter(client, scheme)
+    adapter.use_schema(ontology)
+    return BoardGradedItems(adapter, registered, reader, written_by=written_by, ontology=ontology)
+
+
+async def ontology_in_force(dsn: str) -> OntologySchema:
+    """The deployment's ontology composed with every link-type proposal, as the Conduit's start
+    composes it (`LinkTypeService.refresh`)."""
+    from services.api.link_type_store import LinkTypeProposalStore
+    from services.api.link_types import compose_ontology
+
+    from ontology.packs import load_deployment_ontology
+
+    store = await LinkTypeProposalStore.connect(dsn)
+    try:
+        return compose_ontology(
+            load_deployment_ontology(), await store.all(), revision=await store.revision()
+        )
+    finally:
+        await store.close()
 
 
 async def _main(args: argparse.Namespace) -> int:
@@ -170,7 +221,6 @@ async def _main(args: argparse.Namespace) -> int:
 
     import asyncpg
 
-    from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
     from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
     from ontology.handling import load_uk_le_scheme
 
@@ -193,11 +243,13 @@ async def _main(args: argparse.Namespace) -> int:
         )
 
     try:
-        items = BoardGradedItems(
-            GraphArcadeDBAdapter(client, scheme),
+        items = graded_items(
+            client,
+            scheme,
+            await ontology_in_force(dsn),
             registry_reader(pool),
             operator_reader(scheme, org_unit=args.org_unit, by=args.changed_by),
-            written_by=args.changed_by,
+            args.changed_by,
         )
         return await run(
             to=args.to,

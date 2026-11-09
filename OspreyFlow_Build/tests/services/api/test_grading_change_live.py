@@ -5,12 +5,14 @@ proved against ArcadeDB itself).
 **Live, against a lane's leased stack** (`scripts/stack_lease.sh`): a throwaway ArcadeDB database
 (`conformance_*`, dropped afterwards). Two people and a link between them are drawn through the board
 service under case K's real scope, so what is changed is what a board writes; the change is run
-through `BoardGradedItems` over the bare adapter, as `scripts/grading_change.py` runs it.
+through the command's own port (`scripts.grading_change.graded_items`): a second, bare adapter on
+the same database holding the ontology in memory only, as the command builds it.
 
 What a mistake would do, and the case that catches it:
-- a dry run that writes, a rewrite that loses the item's marking, datasets, properties or the rest of
-  its assertion, a link rewritten as a second link beside the first, or an original overwritten at a
-  second change: `test_the_change_rewrites_each_grade_in_the_store_keeping_its_original_and_the_rest`.
+- a command whose adapter holds no ontology (every write refused), a dry run that writes, a rewrite
+  that loses the item's marking, datasets, properties, resolution state or the rest of its
+  assertion, a link rewritten as a second link beside the first or its occurrences counted again,
+  or an original overwritten at a second change: `test_the_change_rewrites_each_grade_in_the_store_keeping_its_original_and_the_rest`.
 """
 
 from __future__ import annotations
@@ -27,21 +29,25 @@ from adapters.media_objectstore.testing import InMemoryMediaStore
 from ontology.handling import load_uk_le_scheme, sources_in_full
 from ontology.packs import load_deployment_ontology
 from schemas.boards import DrawnItemInput, DrawnLinkInput
-from schemas.domain import Grading, Principal
+from schemas.domain import Grading, Node, Principal
 from services.api.board_store import BoardItem, InMemoryBoardItemStore
 from services.api.boards import Boards
 from services.api.case_views import InMemoryCaseViewStore
 from services.api.dataset_scope import scope_to_case, stamping
 from services.api.datasets import Dataset, InMemoryDatasetStore
-from services.api.grading import BoardGradedItems, change, operator_reader, parse_mapping
+from scripts.grading_change import graded_items
+from services.api.grading import change, operator_reader, parse_mapping
 
 UNIT = "unit-1"
 K = "case-k"
 ALICE = Principal(id="alice", clearance="SECRET", org_unit=UNIT, roles=["analyst"])
 
+#: As `tests/harness/test_restore_drawn_layer.py`'s: a leased lane stack, or CI's live job, which
+#: names its ArcadeDB service's container.
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("OSPREY_LANE") and not os.environ.get("CI"),
-    reason="needs a leased lane stack's ArcadeDB (OSPREY_LANE and its pinned ARCADEDB_HTTP_PORT)",
+    not os.environ.get("OSPREY_LANE") and not os.environ.get("OSPREY_TEST_ARCADEDB_CONTAINER"),
+    reason="needs a leased lane stack's ArcadeDB (OSPREY_LANE and its pinned ARCADEDB_HTTP_PORT), "
+    "or CI's live job",
 )
 
 FIVE_TO_THREE = """
@@ -91,6 +97,14 @@ async def drawn() -> AsyncIterator[SimpleNamespace]:
             return made.element_id
 
         tall = await person("Tall", Grading(source="B", intelligence="2", handling="1"))
+        # A resolution state of its own (a cluster it was resolved into), which a rewrite that
+        # wrote a fresh one would lose.
+        held = await adapter._holders("vertex", [tall])
+        await adapter._client.sql(
+            f"UPDATE `{held[0][0]}` SET resolution = :r WHERE id = :id",
+            params={"r": {"cluster_id": "cl-1", "cluster_score": 0.9, "resolution_run": None,
+                          "manually_linked": [], "manually_split": []}, "id": tall},
+        )  # fmt: skip
         short = await person("Short", Grading(source="C", intelligence="3", handling="4"))
         link = await boards.link(
             board,
@@ -105,9 +119,10 @@ async def drawn() -> AsyncIterator[SimpleNamespace]:
 
         yield SimpleNamespace(
             adapter=adapter, nodes=[tall, short], edge=link.element_id,
-            port=BoardGradedItems(
-                adapter, registered, operator_reader(scheme, org_unit=UNIT), written_by="ops-1"
-            ),
+            port=graded_items(
+                adapter._client, scheme, ontology, registered,
+                operator_reader(scheme, org_unit=UNIT), "ops-1",
+            ),  # fmt: skip
             reader=operator_reader(scheme, org_unit=UNIT),
         )
 
@@ -127,6 +142,7 @@ async def _stored(world: SimpleNamespace) -> dict[str, dict[str, Any]]:
             "kept": (
                 element.type, element.properties, element.handling, element.datasets,
                 drawn.model_dump(exclude={"grading", "original_grading"}),
+                element.resolution if isinstance(element, Node) else element.occurrences,
             ),
         }
     return found
@@ -145,11 +161,12 @@ async def test_the_change_rewrites_each_grade_in_the_store_keeping_its_original_
     drawn: SimpleNamespace,
 ) -> None:
     async def audit(plan: Any) -> None:
-        audited.append(plan)
+        audited.append(plan.record())
 
     audited: list[Any] = []
     before = await _stored(drawn)
     assert len(before) == 3 and all(v["original"] is None for v in before.values())
+    assert before[drawn.nodes[0]]["kept"][-1].cluster_id == "cl-1"  # the planted state is read
 
     planned = await change(
         drawn.port, parse_mapping(FIVE_TO_THREE), current="5x5x5", dry_run=True, audit=audit
@@ -160,7 +177,7 @@ async def test_the_change_rewrites_each_grade_in_the_store_keeping_its_original_
     done = await change(
         drawn.port, parse_mapping(FIVE_TO_THREE), current="5x5x5", dry_run=False, audit=audit
     )
-    assert done.written == 3 and len(audited) == 1
+    assert done.written == 3 and len(audited) == 2  # started, then finished (the one plan)
     after = await _stored(drawn)
     tall, short = drawn.nodes
     assert after[tall]["grading"] == Grading(
