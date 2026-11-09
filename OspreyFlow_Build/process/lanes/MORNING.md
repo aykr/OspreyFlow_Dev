@@ -422,6 +422,11 @@ New ones are added at the bottom as they happen.
   `allmynoggins*` (3), plus earlier one exited `osprey-test-tls-*`. No volumes or images touched;
   `buildx_buildkit_noggin-release0` (exited) left, as its name starts `buildx_`.
 
+- **Accounts, 9 November about 09:05 UTC (your word):** every lane moves to the default account (`ayan`) at its next
+  changeover. The sisters (studio-b, case-b, rules-b) stay on `sol` until their current step merges or their
+  session ends, then reopen on `ayan`. `~/.ospreyflow/accounts.conf` still names `sol` for some lanes, so I
+  pass `--account ayan` explicitly; edit it to match if you like.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
