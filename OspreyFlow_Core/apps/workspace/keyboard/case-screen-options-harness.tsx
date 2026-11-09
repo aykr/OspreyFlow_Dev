@@ -101,7 +101,7 @@ function Harness() {
     rail("dashboards", "Dashboards", "dashboards"),
   ]; // prettier-ignore
   const railItems = variant === "b" ? fullRail.filter((r) => ["cases", "explore"].includes(r.id)) : fullRail;
-  const allViews = ["Graph", "Map", "Matrix", "Reports"];
+  const allViews = ["Graph", "Map", "Matrix", "Figures"];
   const views = (variant === "b" || variant === "c" ? ["Graph", "Map"] : allViews).map((label) => ({
     id: label.toLowerCase(), label, pressed: view === label.toLowerCase(), onSelect: () => setView(label.toLowerCase()),
   })); // prettier-ignore
@@ -123,7 +123,7 @@ function Harness() {
         views={views}
         actions={
           <>
-            {(variant === "b" || variant === "c") && <MoreMenu label="More views" items={["Matrix", "Reports"]} />}
+            {(variant === "b" || variant === "c") && <MoreMenu label="More views" items={["Matrix", "Figures"]} />}
             <button type="button" className="btn" aria-haspopup="dialog">Export <span aria-hidden="true">▾</span></button>
           </>
         }

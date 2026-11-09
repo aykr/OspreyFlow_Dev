@@ -45,3 +45,13 @@ describe("ReportsPlace's starting tab", () => {
     expect(selected()).toBe("Figures");
   });
 });
+
+describe("the second dashboards door (ADR-145 Amendment 4 decision 8, D1)", () => {
+  it("is gone: the case's Figures offer no Dashboards tab, even with every right assumed", async () => {
+    serve(answers);
+    place({ rights: null });
+    await screen.findByRole("tab", { name: "Figures" });
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Figures", "Trends", "Packs", "Published", "Data feeds"]);
+    expect(screen.queryByRole("region", { name: "Dashboards" })).toBeNull();
+  });
+});

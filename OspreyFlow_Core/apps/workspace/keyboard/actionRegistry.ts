@@ -1026,10 +1026,23 @@ export const SESSION_PROMPT_ACTIONS = defineActionRegistry("SESSION_PROMPT_ACTIO
 export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
   "change-the-reports-period-by-keyboard",
   "download-the-figures-by-keyboard",
-  // ADR-111 Amendment 3: the Dashboards tab, and choosing one of several boards.
-  "open-the-dashboards-tab-and-choose-a-board-by-keyboard",
-  // ADR-110 decision 9 (D5): the Data feeds tab.
+  // ADR-110 decision 9 (D5): the Data feeds tab. (The Dashboards tab went with the second door,
+  // ADR-145 Amendment 4 decision 8; choosing a board is ALERT_FIGURES_ACTIONS'.)
   "open-the-data-feeds-tab-by-keyboard",
+] as const);
+
+// L2.12 (ADR-145 Amendment 4 decisions 8–10 and 12; ADR-146 decision 9): the Figures' Alerts panel,
+// the Alert monitoring board first on the Dashboards, the Reports Viewer's journey from an alert and
+// its way back, and the Roles, teams and Authors page. `alert-figures.spec.ts`.
+export const ALERT_FIGURES_ACTIONS = defineActionRegistry("ALERT_FIGURES_ACTIONS", [
+  "open-the-newest-alert-from-the-alerts-panel-by-keyboard",
+  "go-back-to-your-alerts-from-the-figures-by-keyboard",
+  "choose-the-alert-monitoring-board-and-a-superset-board-by-keyboard",
+  "filter-the-alert-monitoring-board-by-keyboard",
+  "go-back-to-your-alerts-from-the-board-by-keyboard",
+  "open-an-alerts-case-figures-from-home-by-keyboard",
+  "open-an-alerts-dashboard-from-home-by-keyboard",
+  "go-back-from-the-roles-help-page-by-keyboard",
 ] as const);
 
 // ADR-113 stage 5: the Trends tab, built and driven with the keyboard alone.

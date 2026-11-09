@@ -1,0 +1,7 @@
+Mon  9 Nov 2026 06:41:21 UTC
+# at 72a87a8, no patch: the phase 7 case alone, three times
+    Error Context: test-results/ingest-studio-phase-7-s-ex-85d46-d-table-tested-and-deployed-repeat2/error-context.md
+
+  1 failed
+    keyboard/ingest-studio.spec.ts:882:1 › phase 7's exit: Visits and contacts is built by keys, mapped over its staged table, tested and deployed 
+  2 passed (22.1s)

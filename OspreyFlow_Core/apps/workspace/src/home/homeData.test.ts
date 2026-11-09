@@ -201,3 +201,15 @@ describe("the queue as counts alone", () => {
     expect(asked.filter((p) => p.endsWith("/counts") && p.includes("alert-queue"))).toEqual([]);
   });
 });
+
+describe("an alert row's rule group (ADR-145 Amendment 4 decision 10)", () => {
+  it("names the group the figures count the alert under, for the Reports Viewer's Open the dashboard", () => {
+    const hotlist = { ...alert("h1", "open", null, "2026-10-13T08:00:00Z"), kind: "hotlist" };
+    const read = summariseHome({ ...BASE, perCase: { c1: { alerts: [alert("a1", "open", null, "2026-10-13T06:46:00Z"), hotlist] } } });
+    const rules = read.attention.filter((a) => a.alertId).map((a) => [a.alertId, a.alertRule]);
+    expect(rules).toEqual(expect.arrayContaining([
+      ["a1", { label: "typology", typology: alert("a1", "open", null, "").alert.typology ?? "" }],
+      ["h1", { label: "hotlists", typology: "" }],
+    ]));  // prettier-ignore
+  });
+});

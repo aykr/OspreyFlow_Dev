@@ -98,7 +98,7 @@ function Harness() {
           place === "glass"
             ? (["matrix", "reports"] as const).map((v) => ({
                 id: v,
-                label: { matrix: "Matrix", reports: "Reports" }[v],
+                label: { matrix: "Matrix", reports: "Figures" }[v],
                 pressed: view === v,
                 onSelect: () => setView(v),
               }))

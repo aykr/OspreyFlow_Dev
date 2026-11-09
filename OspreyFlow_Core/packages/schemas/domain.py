@@ -1344,6 +1344,48 @@ class LabelledWeekCount(BaseModel):
     count: int = Field(ge=0)
 
 
+#: The four age bands of `open_by_age` and `time_to_close` (`services/api/reports.py` `AGE_LABELS`),
+#: closed so the feed can carry no other words in their place.
+AgeBand = Literal["under a day", "1 to 7 days", "7 to 30 days", "over 30 days"]
+
+
+class AgeCount(BaseModel):
+    """How many alerts of one rule group are open in one age band (ADR-146 decision 9: the
+    *Alerts* panel's open by source and age). `label` and `typology` are `LabelledWeekCount`'s;
+    `age` is one of the `open_by_age` bands. Never a rule's own name or an alert's words."""
+
+    label: str
+    typology: str = ""
+    age: AgeBand
+    count: int = Field(ge=0)
+
+
+class TeamCount(BaseModel):
+    """The team view of one rule group (ADR-145 Amendment 4 decision 9): its alerts still in the
+    queue with no one on them, those claimed by the reader, those open longer than seven days, and
+    those closed in the period, of which closed as not of interest (False positive or No further
+    action). Counted as the reader, from the same queue as every other figure."""
+
+    label: str
+    typology: str = ""
+    unassigned: int = Field(default=0, ge=0)
+    mine: int = Field(default=0, ge=0)
+    older_than_week: int = Field(default=0, ge=0)
+    closed: int = Field(default=0, ge=0)
+    not_of_interest: int = Field(default=0, ge=0)
+
+
+class DrawingFigures(BaseModel):
+    """A case's drawing figures (ADR-145 Amendment 4 decision 8): items drawn on its boards,
+    promoted into the dataset, awaiting review, and withdrawn. Served once drawing boards and
+    promotions are built (L3.3, L3.4); until then `ReportFigures.drawing` is `None`."""
+
+    drawn: int = Field(ge=0)
+    promoted: int = Field(ge=0)
+    awaiting_review: int = Field(ge=0)
+    withdrawn: int = Field(ge=0)
+
+
 class MonitoringFigures(BaseModel):
     """The monitoring dashboard's figures (ADR-134 decision 2): every kind of alert the one queue
     holds for the reader — typology, hotlist and monitor — counted as them, per case. A hotlist
@@ -1354,6 +1396,11 @@ class MonitoringFigures(BaseModel):
     #: Alerts closed in the period, by how long they took, in the `open_by_age` bands.
     time_to_close: list[ReportCount] = Field(default_factory=list)
     hotlist_matches: list[LabelledWeekCount] = Field(default_factory=list)
+    #: ADR-146 decision 9: alerts still in the queue (open, claimed or closing) by rule group and
+    #: age band.
+    open_by_source: list[AgeCount] = Field(default_factory=list)
+    #: ADR-145 Amendment 4 decision 9: the *Alert monitoring* board's team view, by rule group.
+    team: list[TeamCount] = Field(default_factory=list)
 
 
 class HeldFigures(BaseModel):
@@ -1441,6 +1488,9 @@ class ReportFigures(BaseModel):
     kyc: KycFigures | None = None
     #: Set when the case's packs are anything other than exactly `[fibo]`.
     pole: PoleFigures | None = None
+    #: ADR-145 Amendment 4 decision 8: `None` until drawing boards and promotions are built (L3.4);
+    #: the Figures tab draws no Drawing panel while it is.
+    drawing: DrawingFigures | None = None
 
 
 ReportOption = Literal["shorter_period", "fewer_typologies"]

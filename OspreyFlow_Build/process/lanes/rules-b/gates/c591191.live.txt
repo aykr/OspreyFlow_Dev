@@ -1,0 +1,114 @@
+# Live run at c591191 (before review round 1), under the rules-b lease on stack b, 9 November 2026 00:18:13Z–00:24:28Z
+# Pinned: ARCADEDB_HTTP_PORT=2492 POSTGRES_PORT=55434 VALKEY_PORT=6380 MINIO_ENDPOINT=localhost:9002 POSTGRES_PASSWORD=throwaway OSPREY_LANE=rules-b CLICKHOUSE_HTTP_PORT=59994
+F....................................................................... [ 12%]
+........................................................................ [ 24%]
+......................F................................................. [ 37%]
+........................................................................ [ 49%]
+........................................................................ [ 61%]
+........................................................................ [ 74%]
+........................................................................ [ 86%]
+........................................................................ [ 99%]
+.....                                                                    [100%]
+=================================== FAILURES ===================================
+_____________ test_every_route_names_the_right_the_table_gives_it ______________
+
+    def test_every_route_names_the_right_the_table_gives_it() -> None:
+        routes = _routes()
+>       assert set(routes) == set(ROUTE_RIGHTS), (
+            f"in the app, not the table: {sorted(set(routes) - set(ROUTE_RIGHTS))}; "
+            f"in the table, not the app: {sorted(set(ROUTE_RIGHTS) - set(routes))}"
+        )
+E       AssertionError: in the app, not the table: ['models_admin_limits_route', 'models_admin_usage_route']; in the table, not the app: []
+E       assert {'accept_docu...nection', ...} == {'accept_docu...nection', ...}
+E         
+E         Extra items in the left set:
+E         'models_admin_limits_route'
+E         'models_admin_usage_route'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py:411: AssertionError
+_ test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum _
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x16167ce10>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x16167d050>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x16161e120>
+
+    def test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum(
+        api_env: None, keypair: tuple, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from services.api import rules_place
+        from services.api.app import app
+    
+        private_key, _ = keypair
+        me, them = f"addr-{new_id()}", f"addr-other-{new_id()}"
+        reader = {"Authorization": f"Bearer {sign_token(private_key, default_claims(sub=me))}"}
+        other = {"Authorization": f"Bearer {sign_token(private_key, default_claims(sub=them))}"}
+        with TestClient(app) as client:
+            made = [client.post("/v1/investigations", headers=h, json=new_case()) for h in (reader, other)]
+            assert [m.status_code for m in made] == [201, 201], [m.text for m in made]
+            case, other_case = (m.json()["id"] for m in made)
+            ids = client.portal.call(_seed, app, case, other_case, me)  # type: ignore[union-attr]
+    
+            # Through the real `get_principal` and `case_of`: the alert, in its own case, with its node.
+            opened = client.get(f"/v1/alerts/{ids['readable']}", headers=reader)
+            assert opened.status_code == 200, opened.text
+            assert opened.json()["investigation_id"] == case
+            assert len(opened.json()["explanation"]["nodes"]) == 1, opened.json()
+    
+            # Refused alike: the same status and the same bytes.
+            missing = client.get(f"/v1/alerts/no-such-alert-{new_id()}", headers=reader)
+            answers = {
+                "hidden": client.get(f"/v1/alerts/{ids['hidden']}", headers=reader),
+                "elsewhere": client.get(f"/v1/alerts/{ids['elsewhere']}", headers=reader),
+            }
+            assert missing.status_code == 404 and "alert_not_found" in missing.text, missing.text
+            for name, refused in answers.items():
+                assert (refused.status_code, refused.content) == (404, missing.content), (name, refused.text)
+    
+            paths = {"missing": f"/v1/alerts/no-such-alert-{new_id()}", "elsewhere": f"/v1/alerts/{ids['elsewhere']}",
+                     "hidden": f"/v1/alerts/{ids['hidden']}"}  # fmt: skip
+            # The reads alone, the wait switched off; then as served.
+            monkeypatch.setattr(rules_place, "sleep", _no_wait)
+            raw = {name: _times(client, path, reader) for name, path in paths.items()}
+            monkeypatch.undo()
+            held = {name: _times(client, path, reader) for name, path in paths.items()}
+    
+        q = rules_place.ADDRESS_REFUSAL_QUANTUM
+        lines = [f"quantum {q * 1000:.0f} ms; {N} timed requests each, after 3 to warm"]
+        lines += ["without the wait:"] + [f"  {_line(k, v)}" for k, v in raw.items()]
+        lines += ["with the wait:"] + [f"  {_line(k, v)}" for k, v in held.items()]
+        out = os.environ.get("OSPREY_ADDRESS_TIMING_OUT")
+        if out:
+            with open(out, "a") as f:
+                f.write("\n".join(lines) + "\n")
+        # Every refusal's work fits in one quantum, so each is answered on the first.
+>       assert max(max(v) for v in raw.values()) < q, lines
+E       AssertionError: ['quantum 250 ms; 15 timed requests each, after 3 to warm', 'without the wait:', '  missing: n=15 median=9.5 ms q1=7.2...n=9.0 ms q1=8.3 q3=10.4 max=12.9', '  hidden: n=15 median=140.5 ms q1=124.5 q3=157.3 max=465.9', 'with the wait:', ...]
+E       assert 0.46590875019319355 < 0.25
+E        +  where 0.46590875019319355 = max(<generator object test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum.<locals>.<genexpr> at 0x1607aa260>)
+
+../OspreyFlow_Build/tests/services/api/test_alert_address_live.py:154: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 00:21:21] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 41 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py::test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum
+2 failed, 579 passed, 1 warning in 373.66s (0:06:13)
+
+# Re-take of test_alert_address_live.py alone, same lease, after the run:
+.                                                                        [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 26.51s

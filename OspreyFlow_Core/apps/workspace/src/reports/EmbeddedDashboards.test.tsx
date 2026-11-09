@@ -106,12 +106,10 @@ describe("Superset dashboards in the Glass", () => {
     expect(embed).not.toHaveBeenCalled();
   });
 
-  it("is the Reports view's second tab, beside the figures", async () => {
+  it("has one door, the Glass's rail: the case's Figures offer it as no tab (ADR-145 Amendment 4 decision 8)", async () => {
     serve(() => json(200, BOARDS), granted);
-    const embed = vi.fn<Embed>(async () => ({}));
-    render(<ReportsPlace apiBaseUrl="http://api" bearerToken="t" investigationId="c1" canDownload={false} embed={embed} />);
+    render(<ReportsPlace apiBaseUrl="http://api" bearerToken="t" investigationId="c1" canDownload={false} />);
     expect(screen.getByRole("tab", { name: "Figures" }).getAttribute("aria-selected")).toBe("true");
-    fireEvent.click(screen.getByRole("tab", { name: "Dashboards" }));
-    await waitFor(() => expect(embed).toHaveBeenCalled());
+    expect(screen.queryByRole("tab", { name: "Dashboards" })).toBeNull();
   });
 });
