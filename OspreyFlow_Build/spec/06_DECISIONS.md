@@ -31211,8 +31211,9 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    items carry only a permitted handling code, so the classification is the whole of their audience
    beyond the dataset.
 7. **A removed case's layer is merged or deleted from the Ingest Studio's Runs**, by the dataset's
-   Authors, who need not be administrators. An administrator deletes through Admin's route after its
-   dry run.
+   Authors, who need not be administrators. An administrator's *Delete* in Admin › Datasets is the
+   admin lane's to build (`process/lanes/case/admin-delete-L3.4.patch`: the route, its positive and
+   open-case tests; its screen makes the dry run come first, which the route does not enforce).
    - The merge sheet opens a read grant to that one layer, for that Author and that merge. The grant
      closes when the merge is committed, rejected or cancelled, when the layer is deleted, or after
      eight hours, and is never reopened. A case restored since the sheet was opened is not merged.
@@ -31260,7 +31261,8 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    none loosening access):
    - **A restored case is merged no more, and read no more, at every step.** Each use of a merge's
      grant (reading the sheet again, merging) checks the case is still removed; one restored since
-     is refused 409 `case_open` and its grant closed for good. An approval of a waiting
+     is refused (404 `case_not_linked` since decision 12, as an id no case reading the dataset
+     has) and its grant closed for good. An approval of a waiting
      `layer_merge` checks it too, and a restored case's merge is recorded rejected, nothing
      written. *Cancel* closes the holder's grant whatever the case's state.
    - **The grant ends however the merge ends**: committed, rejected by a reviewer, rejected by the
@@ -31294,6 +31296,16 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
      an id no case reading it has (the lane review's minor 12, reversed from "left" to fixed).
    - **An ambiguous id refuses the load in words** (409 `ambiguous_item`), the board fake refusing
      it as the adapter's `_holders` does; the removed cases' list is audited.
+   - **A case's own proposed type is read by the name it reads as**: its links are stored under the
+     proposal's storage label (`<NAME>__<id>`), which `promotion_refusals` does not know; the label
+     is translated through `LinkTypeService.case_types` first, so a type accepted and live is
+     promoted (found by the lane review through the real service, from proposal to promotion).
+   - **The revert fails closed on the Conduit**: it goes on only when the Conduit's address resolves
+     and refuses the connection; any answer, an unresolved name or a timeout refuses.
+   - **Found, not fixed here**: a case's own type accepted and live is no longer offered for *new*
+     links on its boards (`Boards.case_link_types` keeps only a type carrying a `proposal_id`, and a
+     live one carries none, while `model_link_types` reads packs, not the model's extensions). Its
+     links drawn while it waited promote; drawing more needs that fix (the case lane's, next step).
    - **Left to their owners**: the administrator's *Delete* route (`admin-delete-L3.4.patch`, for
      admin), the promotion-writer gate read as syntax over both triggers
      (`case-b-writer-gate-L3.4.patch`, for case-b), and `placesByRole.json` regenerated at the

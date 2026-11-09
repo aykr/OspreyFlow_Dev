@@ -1,7 +1,7 @@
-diff --git b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
-index 94cb4f6..ad50a92 100644
---- b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
-+++ a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+diff --git a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+index 5429ce1..11b5407 100644
+--- a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
++++ b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
 @@ -220,6 +220,7 @@ POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked
  DELETE /v1/datasets/{dataset}/layer-merges/{grant}              *Cancel*: the grant closes, nothing merged
  POST   /v1/datasets/{dataset}/removed-cases/{case}/delete/dry-run   *Delete*'s dry run for one of the dataset's Authors (`LayerDryRun`): the layer's counts as their own handling takes them, promoted items included, and that deleting withdraws those not promoted, in words, nothing written but its audit entry (dry_run_layer_delete)
@@ -10,10 +10,10 @@ index 94cb4f6..ad50a92 100644
  ```
  
  A promotion adds the dataset to the drawn elements themselves (`GraphPort.promote_elements`,
-diff --git b/OspreyFlow_Build/tests/services/api/test_admin_sections.py a/OspreyFlow_Build/tests/services/api/test_admin_sections.py
+diff --git a/OspreyFlow_Build/tests/services/api/test_admin_sections.py b/OspreyFlow_Build/tests/services/api/test_admin_sections.py
 index f6ef1e2..f7611dc 100644
---- b/OspreyFlow_Build/tests/services/api/test_admin_sections.py
-+++ a/OspreyFlow_Build/tests/services/api/test_admin_sections.py
+--- a/OspreyFlow_Build/tests/services/api/test_admin_sections.py
++++ b/OspreyFlow_Build/tests/services/api/test_admin_sections.py
 @@ -62,6 +62,12 @@ NOT_WALKED = ("design/", "brand/")
  NOT_A_SECTION_S = {
      # Monitoring › Lists in the Glass calls these (`test_place_routes.py`'s first rule).
@@ -27,10 +27,10 @@ index f6ef1e2..f7611dc 100644
  }
  
  
-diff --git b/OspreyFlow_Build/tests/services/api/test_investigation_levels.py a/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
+diff --git a/OspreyFlow_Build/tests/services/api/test_investigation_levels.py b/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
 index 95a7f0d..14df024 100644
---- b/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
-+++ a/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
+--- a/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
++++ b/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
 @@ -337,6 +337,9 @@ OUTSIDE_CASE_LEVELS: dict[tuple[str, str], str] = {
      # the counts are under the administrator's own handling.
      ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/{action}/dry-run"):
@@ -41,23 +41,44 @@ index 95a7f0d..14df024 100644
  }  # fmt: skip
  
  
-diff --git b/OspreyFlow_Build/tests/services/api/test_promotions.py a/OspreyFlow_Build/tests/services/api/test_promotions.py
-index fb3bacd..23b0479 100644
---- b/OspreyFlow_Build/tests/services/api/test_promotions.py
-+++ a/OspreyFlow_Build/tests/services/api/test_promotions.py
-@@ -888,6 +888,8 @@ def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace)
+diff --git a/OspreyFlow_Build/tests/services/api/test_promotions.py b/OspreyFlow_Build/tests/services/api/test_promotions.py
+index 522dcf9..6a1b72f 100644
+--- a/OspreyFlow_Build/tests/services/api/test_promotions.py
++++ b/OspreyFlow_Build/tests/services/api/test_promotions.py
+@@ -976,6 +976,29 @@ def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace)
      assert pw.items.items[spare["item_id"]].withdrawn_at is not None
      actions = [r["action"] for r in pw.audit.records]
      assert "delete_layer" in actions
 +    # An administrator deletes too; a non-administrator not through Admin's route.
 +    assert _as("fred").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 403
++
++
++def test_an_administrator_deletes_a_removed_cases_layer_and_never_an_open_ones(
++    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Admin's own Delete (Admin › Datasets): an open case's layer answers 404 and nothing is
++    withdrawn; once the case is removed, its layer goes, audited before it is written."""
++    monkeypatch.setitem(PEOPLE, "ada", Principal(
++        id="ada", clearance="SECRET", org_unit=UNIT, roles=["osprey-admin"]
++    ))  # fmt: skip
++    board = _board()
++    drawn = _item(board)
++    refused = _as("ada").post(f"/v1/admin/datasets/src/cases/{K}/delete")
++    assert refused.status_code == 404, refused.text
++    assert not pw.graph.node(drawn["element_id"]).audit.reverted
++    pw.removed.add(K)
++    deleted = _as("ada").post(f"/v1/admin/datasets/src/cases/{K}/delete")
++    assert deleted.status_code == 200, deleted.text
++    assert set(deleted.json()) == {"investigation_id", "words"}
++    assert pw.graph.node(drawn["element_id"]).audit.reverted
++    assert "delete_layer" in [r["action"] for r in pw.audit.records]
  
  
  def test_the_delete_check_fails_with_the_layer_withdrawn_whole(
-diff --git b/OspreyFlow_Build/tests/services/api/test_route_rights.py a/OspreyFlow_Build/tests/services/api/test_route_rights.py
+diff --git a/OspreyFlow_Build/tests/services/api/test_route_rights.py b/OspreyFlow_Build/tests/services/api/test_route_rights.py
 index b899e3e..7e076e0 100644
---- b/OspreyFlow_Build/tests/services/api/test_route_rights.py
-+++ a/OspreyFlow_Build/tests/services/api/test_route_rights.py
+--- a/OspreyFlow_Build/tests/services/api/test_route_rights.py
++++ b/OspreyFlow_Build/tests/services/api/test_route_rights.py
 @@ -97,6 +97,7 @@ ROUTE_RIGHTS = {
      "cancel_layer_merge": None,
      "delete_removed_case_layer": None,
@@ -66,11 +87,11 @@ index b899e3e..7e076e0 100644
      "start_a_drawing": "create_case",
      "seed": "investigate",
      "expand": "investigate",
-diff --git b/OspreyFlow_Core/services/api/app.py a/OspreyFlow_Core/services/api/app.py
-index b04a751..9ca3666 100644
---- b/OspreyFlow_Core/services/api/app.py
-+++ a/OspreyFlow_Core/services/api/app.py
-@@ -9655,6 +9655,26 @@ async def delete_removed_case_layer(
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 5ac218e..fe91907 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -9660,6 +9660,26 @@ async def delete_removed_case_layer(
                                 graph, promotions, audit)  # fmt: skip
  
  

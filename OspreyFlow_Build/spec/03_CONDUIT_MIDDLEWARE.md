@@ -265,8 +265,11 @@ A promotion is reverted like any load, with the Conduit stopped: `python -m scri
 (`GraphPort.revert_promotion`), clears their `promoted_at` and records the promotion `reverted`. It is
 refused while a live link other than its own and the case's own unpromoted drawing rests on one of its
 nodes (`test_a_revert_is_refused_while_another_link_rests_on_its_items`); a promotion from a layer
-deleted since takes its elements out with the layer. An online revert waits for the owner's ruling on
-ADR-143 open question 2.
+deleted since takes its elements out with the layer. It goes on only when it can tell the Conduit is
+stopped: the Conduit's address (`OSPREY_CONDUIT_URL`, default `http://api:8000`) resolves and refuses
+the connection; an answer, a name that does not resolve or a timeout refuses
+(`test_the_revert_is_refused_unless_the_conduit_is_known_stopped`). Its resting links are read inside
+its own transaction. There is no online revert: the owner ruled (a) on ADR-143 open question 2.
 
 A deleted view's conversation stays in the store, read by no route: the questions are listed only
 through a view the reader may open, so they go with the view. Its pending proposals stay pending
