@@ -220,7 +220,7 @@ cannot be told from here. The orchestrator's independent review of 211a6dc (§14
   the case's own typology alerts reach the reader the case gate lets in, and the other unit is refused at
   that gate, not here.
 
-## 14. The orchestrator's independent review of 211a6dc, at the rebase onto main 0a4051d
+## 14. The orchestrator's independent review of 211a6dc, at the rebase onto main (0a4051d, then a06d114)
 
 - **Item 1, the new route that names no right.** Rebased with no conflict; `make schemas-check` matched
   (504 types) with nothing regenerated. `test_every_route_naming_no_right_is_one_weighed_for_the_viewer`
@@ -231,8 +231,9 @@ cannot be told from here. The orchestrator's independent review of 211a6dc (§14
   L1.6's and L3.7's included; its red half (`test_the_sweep_finds_a_right_given_beyond_the_list`) still red
   by its plant. The four patches each pass `git apply --check` at the rebased head.
 - **The other unit's figures pinned whole** (`test_monitoring_dashboard.py`, the audience case): its Alerts
-  panel and team view equal the case's typology rows, not a subset of the typology label. Run under the
-  lease (the live run, `gates/`).
+  panel and team view equal the case's typology rows, not a subset of the typology label. It needs
+  Postgres: not yet run when this was written; its run and its red (a plant that takes a row away, the
+  shape the old `<=` could not see) are recorded with the live run below.
 - **`AGE_BANDS` typed against the generated `AgeBand`** (`reports/figureParts.tsx`), both ways: a band
   dropped from the list (`"over 30 days"` removed) → `tsc` TS2322 at `_EVERY_BAND`; a band the schema does
   not have (`"over 31 days"`) → TS2820. Restored: `tsc` clean.
@@ -240,9 +241,18 @@ cannot be told from here. The orchestrator's independent review of 211a6dc (§14
   mount's render guard each enough, so no behaviour told one from the other. The effect's check is gone
   (with no mount it never ran); the mount's render guard is the one guard, and `is the first board …` now
   also asserts no Superset mount is drawn. Render guard removed → FAILED (`expected <div …(3)></div> to be
-  null`); restored, 6 passed.
+  null`); with that assertion also removed, the plant still FAILED on the next one (`expected true to be
+  false`: a guest token asked for), so the behaviour itself is caught, not only its restatement; restored,
+  6 passed.
 - **The board's Rule and Period selects by keys** (`alert-figures.spec.ts`, rule 13), not `selectOption`:
   typed letters, as `keyboard.spec.ts`'s `chooseOption` does (ArrowDown opens the menu on macOS). Rule's
   `onChange` removed → FAILED (`Expected "hotlists:"`, `Received ""`); Period's removed → FAILED
   (`Expected "26"`, `Received "12"`); restored, 8 passed with `registry-L2.12.patch` applied. The ids are
   unchanged (the Period select is part of `filter-the-alert-monitoring-board-by-keyboard`).
+- **Left, not capped: the Alerts panel's whole-queue read** (`reports/api.ts`'s `fetchNewestAlerts`). It reads
+  the reader's whole active queue to show the newest few. A cap belongs on rules' `read_alert_queue` (a
+  `limit` the queue route does not have), and a client-side slice of a capped read would be rule 2's silent
+  truncation; carried to rules in `CARRIES.md`, and said in the report.
+- **Lane-reviewer on this delta** found the code sound; its records findings (this section's claims of a
+  live run not yet taken, the base hash, the guard's second assertion, the carry's scope, the report not
+  updated, the docstring's "each still asks the case's level") are fixed here and in the report.

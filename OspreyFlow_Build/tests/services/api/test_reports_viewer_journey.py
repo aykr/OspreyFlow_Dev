@@ -256,8 +256,9 @@ def test_the_reached_half_sees_the_case_s_refusal(journey: Any) -> None:
 #: two that are the reader's own (`set_tab_state`, a tab's state; `issue_ws_ticket`, a connection
 #: ticket). `get_grading_scheme_route` (L3.7, ADR-143 decision 11) weighed at L2.12's rebase on
 #: 9 November: the deployment's grading scheme, reference settings as the yardstick is, no record's
-#: content, so the Reports Viewer reading it is within decision 10. Pinned, so a route added with no right, or a right taken off one, fails here until it is
-#: weighed against decision 10 (rule 12: the sweep below cannot see a route that names nothing).
+#: content, so the Reports Viewer reading it is within decision 10. Pinned, so a route added with no
+#: right, or a right taken off one, fails here until it is weighed against decision 10 (rule 12: the
+#: sweep below cannot see a route that names nothing).
 OPEN_TO_ANY_SIGNED_IN = {
     "list_datasets_route", "case_datasets_route", "list_investigations", "set_tab_state",
     "get_investigation", "list_case_views", "open_case_view", "readiness_route", "liveness_route",
@@ -328,8 +329,8 @@ def test_a_reports_viewer_is_refused_every_route_beyond_its_rights(client: TestC
     the app's own declarations, so a route another lane adds is asked too): each whose right is not
     on the Reports Viewer's list answers 403 with `right_required` or `place_required`, the right's
     own refusal, not some other 403. The routes naming no right are the pin above
-    (`test_every_route_naming_no_right_is_one_weighed_for_the_viewer`); each still asks the case's
-    level, which `test_route_rights.py` and `test_investigation_levels.py` hold."""
+    (`test_every_route_naming_no_right_is_one_weighed_for_the_viewer`); those whose path names a
+    case still ask its level, which `test_route_rights.py` and `test_investigation_levels.py` hold."""
     routes = _guarded_routes()
     assert len(routes) > 200 and {"deploy_typology_rule", "claim_alert"} <= set(routes)
     from schemas.rights import ROLE_RIGHTS
