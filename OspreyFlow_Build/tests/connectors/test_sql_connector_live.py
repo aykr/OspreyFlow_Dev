@@ -288,7 +288,9 @@ async def test_a_row_past_the_byte_cap_is_never_held(
 
     with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
         await read_sql(_settings(), NOTES, secret=PASSWORD, watermark=watermark, connect=counted)
-    assert held and held[0].received <= 1000, held[0].received
+    # The lower bound keeps the case honest: `_Counted` counts what comes through `conn.cursor(...)`,
+    # so a reader moved to `fetch` or `fetchrow` would read 0 here and pass without testing anything.
+    assert held and 0 < held[0].received <= 1000, held[0].received
     monkeypatch.setattr(reads, "MAX_BYTES", 400_000)
     got = await read_sql(_settings(), NOTES, secret=PASSWORD, watermark=watermark, connect=_no_tls)
     assert [r["note_id"] for r in got.rows] == ["1", "2", "3", "4", "5", "6"]
@@ -302,8 +304,10 @@ async def test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_i
     reads about one fetch of the table, never all of it, as Postgres's own count of the rows its scan
     read says (`pg_stat_user_tables.seq_tup_read`). A filter on the running total would make the
     server read every row looking for rows to send (the lane review of L1.8). A statement timeout
-    could not tell the two apart on this machine: a full scan of two million rows finished inside
-    half a second."""
+    could not tell the two apart: a full scan of two million rows finished inside half a second
+    (measured under lease studio-b on stack b, 9 November 2026, `l1.8/red-carry-byte-cap.txt`'s second
+    run). A whole read only: an incremental read's window sorts what its watermark admits before the
+    cursor stops (the connector's own comment says why that is not a scan past the cap)."""
     from services.ingest.connectors import reads
 
     await nomis.execute(f"""

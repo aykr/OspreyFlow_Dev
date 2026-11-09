@@ -262,9 +262,12 @@ async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | N
     # The byte cap is kept by the server, before any row's values are sent (rule 2; the independent
     # review of L1.6): each row's size is its text in bytes as the database writes it, with a
     # running total in the read's own order. A row whose total is past the cap is sent without its
-    # values, so the read refuses at the first such row having held no more than the cap; nothing
-    # past it is read, since the cursor stops there (no filter on the total, which would make the
-    # server scan the whole table looking for rows to send, the lane review of L1.8). The database's
+    # values, so the read refuses at the first such row having held no more than the cap; for a
+    # whole read nothing past it is read, since the cursor stops there (no filter on the total,
+    # which would make the server scan the whole table looking for rows to send, the lane review
+    # of L1.8). An incremental read's `WHERE` on an unindexed watermark reads every row at main
+    # too; the window then sorts what it admits, where main's `LIMIT` kept a bounded top-N: a cost
+    # in memory on the server, never a row past the cap sent or held. The database's
     # count is close to the file's, not equal (`t` for `true`, its own date format, its own
     # encoding), so the read also counts each row in UTF-8 bytes as the file will hold it, and
     # refuses on either.
