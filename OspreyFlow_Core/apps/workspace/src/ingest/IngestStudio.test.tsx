@@ -57,6 +57,9 @@ function serve({ sourcesRefused = false }: { sourcesRefused?: boolean } = {}) {
         return { ok: false, status: 404, json: async () => ({ detail: "not_found" }) } as Response;
       if (path.endsWith("/v1/datasets/prison-intelligence/sources"))
         return json([PIN_SOURCE]);
+      // The screening-subscriptions route answers its own shape, never the fallthrough's `[]` (L1.6's
+      // Sources tab reads `lists` off it; studio-b's fix from L1.8, taken onto main at once).
+      if (path.endsWith("/screening-subscriptions")) return json({ lists: [], subscribed: [] });
       if (path.endsWith("/v1/handling-scheme")) return json({ name: "uk", classification: ["OFFICIAL"], handling_codes: {} });
       if (path.endsWith("/ingest/recipes/r1/runs"))
         return json([{ run_id: "x", trigger: "manual", started_at: "2026-11-05T18:39:00Z", outcome: "succeeded", run_as: "e" }]);
