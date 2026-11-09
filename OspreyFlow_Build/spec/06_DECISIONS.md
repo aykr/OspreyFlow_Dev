@@ -30997,7 +30997,9 @@ Open: none.
 Status: built in Lane 2's L2.6 (admin), recorded for review; the lane's decisions are logged in
 `process/lanes/admin/REPORT.md` for the owner to overrule. Records decisions 9 and 10 and Amendment 4
 decision 11 as built, and what they left open. Amendment 3 decision 3 is now met: Audit is built, so
-`read_audit` alone opens the Admin place.
+`read_audit` alone opens the Admin place (its entry in `shell/places.json` and `placesByRole.json`,
+which are rules' and case's files, goes in at the merge from `process/lanes/admin/places.diff`).
+Revised 9 November after the orchestrator's independent review (the strict option throughout).
 
 1. **Three records, read one at a time, each by a route declaring every right it needs** (so the route
    tests see each; `services/api/audit_section.py`): the stream `GET /v1/admin/audit` (`read_audit`);
@@ -31018,17 +31020,21 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
      platform's own principals' units (`operator`, `system`) are recorded as `system:<unit>`, so a
      real unit of the same name never reads their entries (and reads none of its own written without a
      case: fail closed).
-   - **The indexes** Audit reads by (`audit_log_org_unit_idx`, `audit_log_recorded_at_idx`) are
-     built at start `CONCURRENTLY`, each in a statement of its own outside the bootstrap's
-     transaction (`audit.build_indexes`), so a large `audit_log` keeps taking audit writes, and so
-     every route keeps answering, while they build; one left invalid by a crash is dropped and built
-     again at the next start (`test_an_index_left_invalid_by_a_crashed_build_is_built_again`). An audit
-     write goes through while a build waits on an open one, which a plain `CREATE INDEX` would queue it
-     behind (`test_audit_writes_go_on_while_the_indexes_build`). An index another start is building
-     reads invalid exactly as a crashed one does, so the builder holds a session advisory lock keyed by
-     its schema, which a crashed builder's session lets go; a start that cannot take it leaves the
-     indexes alone and goes on, never dropping a build under way, and never waiting for it
-     (`test_a_start_never_drops_an_index_another_start_is_building`).
+   - **The indexes.** `audit_log`'s four (the stream's own two, by case and by writer, and Audit's
+     two, by unit and by date) are built `CONCURRENTLY`, each in a statement of its own outside any
+     transaction (`audit.build_indexes`), so a large `audit_log` keeps taking audit writes, and every
+     route keeps answering, while they build (`test_audit_writes_go_on_while_the_indexes_build`). **A
+     start asks the catalogue first and issues no DDL at all when the table and every index are built**:
+     a `CREATE INDEX IF NOT EXISTS`, the stream's two indexes' old bootstrap, takes `SHARE` on
+     `audit_log` before it reads the name, so at every start it would queue behind any build under
+     way and every audit write would queue behind it. A build is held under a session advisory lock
+     keyed by its schema; a start that cannot take it issues nothing, logs it, and asks again every
+     minute until the indexes are built, so it never serves without them until a restart
+     (`test_a_start_never_waits_on_or_drops_a_build_under_way`, against a real build held up by an
+     open write; `test_a_start_that_left_the_indexes_builds_them_once_free`). An index another start
+     is building reads invalid exactly as a crashed one does: only a start holding the lock drops an
+     invalid one, since only a crash leaves one then
+     (`test_an_index_left_invalid_by_a_crashed_build_is_built_again`).
    - **The rule audit** (ADR-109 ruling 1; ADR-146 Amendment 2 returns it here) is never read from the
      stream. It is read for one case, through `readable_rule_audit` itself, behind the case rule-audit
      route's own gate and only for the Administrator (`osprey-admin`): an Author holding both rights is
@@ -31043,7 +31049,16 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
      holder of `manage_models` too (the orchestrator's ruling at review, the strict default: it names
      people of every unit, which a reader of one unit's entries must not read). Paged with its true
      total, where *Models*' own history reads the latest 200.
-2. **An entry's words.** No read of the stream existed to decide what an entry's `resolved_query` may
+2. **No account's id reaches the Glass** (rule 7; ADR-106 Amendment 1). Who acted is served as
+   `who`, a display name asked of the directory only for the accounts the page serves (ADR-106
+   decision 3), or the fixed words *An account with no name on record*; never the id. The person
+   filter is a picker of names: each page carries `people`, the names of everyone who wrote an entry
+   of that record the reader may read (whatever the other filters), and a chosen name is sent back and
+   read as the accounts of that name among them (two people of one name are both kept; an account with
+   no name is not offered). Operations names a promotion's proposer the same way
+   (`proposed_by_name`). `test_no_account_id_reaches_the_glass` plants an id in every place one is
+   written and searches each route's whole response for it.
+3. **An entry's words.** No read of the stream existed to decide what an entry's `resolved_query` may
    tell, and it can name nodes, documents and queries. Its words and count are withheld
    (`words_withheld`) except for the two kinds whose words the reader's own section already shows: *People
    and roles* to `manage_people`, *Datasets* to `administer_system`. Its existence (who, when, the
@@ -31052,19 +31067,30 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
    reader is shown: it never tells which withheld entries name a dataset. A load's entry names its
    recipe and load, not its dataset, so a dataset filter finds no load (left for a dataset column).
    Dashboard identities' entries are not *People and roles*: their own section asks
-   `manage_dashboards`, so their words are withheld here.
-3. **Kinds.** Decision 10's five (*Analyst assertions*, *Loads and promotions*, *Types*, *People and
+   `manage_dashboards`, so their words are withheld here. **Shown words pass an allowlist**
+   (`audit_section.shown_words`): a word naming a person (`user_id`, `account`, a team's lead and cover,
+   a dataset's owners, a transfer's ends) is served as that person's name; the plain words named in
+   `_PLAIN_WORDS` as they are; and nothing else, so an identity provider's `subject`, a `username`, an
+   `email`, or a word a later action writes, is never served until it is named there.
+4. **Kinds.** Decision 10's five (*Analyst assertions*, *Loads and promotions*, *Types*, *People and
    roles*, *Datasets*), by the actions the stream records under each (`KIND_ACTIONS`), and *Reads and
    refusals* for every other action. The run ledger's loads appear as their audit entries; the Studio's
    run history keeps its own narrowed read (Amendment 1), and is not merged here.
    `test_every_kinds_action_is_one_the_conduit_records` holds each listed action to one the Conduit
-   writes. **Not built:** decision 10's link from each entry to the record holding it (a case's entry
+   writes; **`test_audit_kinds.py` the converse**: it reads `services/`' syntax tree for every action
+   written (a string, a conditional, a local or module constant, a helper's argument, an f-string's
+   prefix) and fails on any in no list, so every action is classified on purpose
+   (`READS_AND_OTHER` names the rest). Case's L3.4 actions (`promote_drawn_items`,
+   `approve_promotion`, `reject_promotion`, `delete_layer`) are classified under *Loads and
+   promotions* before they are written (`AWAITED_ACTIONS`). The note names this deployment's own date
+   for entries recorded without a unit (`audit_log_units_from`, written once when the column is added,
+   or at the earliest entry recording one). **Not built:** decision 10's link from each entry to the record holding it (a case's entry
    names its case; the link needs each record's own screen to open at an entry); dates are whole days
    from midnight UTC.
-4. **Operations' ageing** (decision 9; `services/api/promotion_ageing.py`): *What ages, and when* above the
+5. **Operations' ageing** (decision 9; `services/api/promotion_ageing.py`): *What ages, and when* above the
    schedules, the promotions waiting for review with their age, and *Alert the reviewers and
    administrators after N days* (1 to 90, default 3, audited), all behind `operate_schedules`.
-5. ***Promotions overdue*** (Amendment 4 decision 11): raised once per promotion at N whole days, by the
+6. ***Promotions overdue*** (Amendment 4 decision 11): raised once per promotion at N whole days, by the
    database (`ON CONFLICT DO NOTHING` on its id), to the dataset's Authors holding `review_promotions` and
    the administrators (`administer_system`) of the dataset's unit — enabled people only, never a service
    account, never the proposer, and, where the dataset has a highest marking, only those cleared to it,
@@ -31072,15 +31098,18 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
    the dataset, never what it adds (rule 7).
    **Promotions are case's L3.4:** everything reads them through one seam, `WaitingPromotions` (its
    record `PendingPromotion`), which the Conduit fills with `NoPromotionsYet` until then. L3.4 provides
-   `waiting_for_review(reader)` filtered in its own store as the reader, `all_waiting()` for the sweep,
-   and the call to `sweep` with its `recipients` callable: the dataset's home-case Authors, the people
-   directory and custom roles' current rights handed to `recipients_of` (the reads
-   `admin_dataset_authors_route` makes); L2.7's *Needs you* reads `alerts_for(person)`. A team's Author
-   grant does not yet make its members recipients, and an alert's recipients are fixed when it is
-   raised (one raised while the dataset has no reviewer reaches only the administrators).
+   `waiting_for_review(reader)` filtered in its own store as the reader, and `all_waiting()`, and sets
+   `app.state.waiting_promotions`. **The sweep is admin's own**: `PromotionSweep`, a lifespan task every
+   minute (`OSPREY_PROMOTION_SWEEP_SECONDS`), reads that source at each tick and its recipients at
+   the sweep (`_promotion_recipients`: the dataset's home-case Authors, the people directory, custom
+   roles' current rights); a tick whose people cannot be read raises nothing, and the next tries again
+   (`test_promotion_sweep_live.py`, the real lifespan on real Postgres). L2.7's *Needs you* reads
+   `alerts_for(person)`, which serves the alert without its other recipients. A team's Author grant
+   does not make its members recipients, and an alert's recipients are fixed when it is raised (one
+   raised while the dataset has no reviewer reaches only the administrators).
 
 Tests: `test_audit_section_store.py` (real Postgres: by unit, filters never widen, the rule audit never
-from the stream, the engines' true total, once by the database); `test_audit_section_routes.py` (each
-route's right; words withheld; the rule audit as its own read serves it and behind its gate; filters
-after withholding); `test_promotion_ageing.py` (at N days and not before, once, the load not its
+from the stream, the engines' true total, once by the database, the indexes); `test_audit_section_routes.py` (each
+route's right; words withheld; no account's id served; the rule audit as its own read serves it and behind its gate; filters
+after withholding); `test_audit_kinds.py` (every action written is classified); `test_promotion_sweep_live.py` (the sweep in the real lifespan); `test_promotion_ageing.py` (at N days and not before, once, the load not its
 contents, the recipients). Each red at its call site (`process/lanes/admin/L2.6_RED_RECORD.md`).
