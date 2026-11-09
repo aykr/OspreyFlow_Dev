@@ -80,6 +80,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-146 Amendment 3 | load_screening_lists acts in Rules and Monitoring and in Studio › Sources' list connector, reconciling decision 2 with ADR-140 Amendment 9 decision 3; no one's rights change (L1.6) | studio-b | 2026-11-09 | reserved |
 | ADR-143 Amendment 5 | Promotion and a removed case's layer as built (L3.4) | case | 2026-11-09 | reserved |
 | ADR-146 Amendment 4 | L2.10 as built: team routing (a routed alert read by the team's members and the home case's Authors, in the queue's query, trends and packs), one queue, filters, the lead's hand-off and Suppress until…, Raise an alert…, What raises alerts, watched patterns on a schedule | rules | 2026-11-09 | reserved |
+| ADR-147 Amendment 1 | The analyst's map: the basemap switch, place search over the case's gazetteer, the three themes' contrast (P4) | platform | 2026-11-09 | reserved |
 
 ## Baseline
 

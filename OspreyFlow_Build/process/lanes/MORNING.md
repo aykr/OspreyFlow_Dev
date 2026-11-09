@@ -71,6 +71,16 @@ who may hold no level on that case. Should the case's marking limit that?
 - **(b) Built meanwhile, the strict default:** the text shows only to an accepter cleared for the case's marking;
   others see that a proposal exists above their clearance, without its words.
 
+**And one more (platform's P4; amending ADR-099, so yours):** place search reads the gazetteer as a dataset. But a
+case reads exactly one dataset (ADR-099 Amendment 12), so adding the gazetteer means a composite of the case's
+dataset and the gazetteer, and a composite case is read-only for loads (Amendment 15): place search would cost a
+working case its loads.
+- **(a) Recommended:** treat a gazetteer as reference data a case reads beside its own dataset, through the same
+  access step (handling kept), without making the case a composite (an ADR-099 amendment).
+- (b) Leave it: place search only in cases that read a composite including the gazetteer.
+- (c) Copy gazetteer places into each case's dataset at load.
+Built meanwhile: (b), the gazetteer as a dataset, nothing read across the dataset boundary.
+
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
