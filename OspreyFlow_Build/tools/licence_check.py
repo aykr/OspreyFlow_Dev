@@ -207,7 +207,9 @@ _GIT_IN_IMAGE = re.compile(
 #: (another image, another licence) is an offender as usual.
 AWAITING_OWNER: dict[tuple[str, str, str], str] = {
     ("services/api/Dockerfile", "git", "GPL-2.0-only"): "the Conduit runs it to publish recipes "
-    "(09_INGEST_STUDIO.md §6, services/api/studio_publish.py); put to the owner, 9 November 2026",
+    "(09_INGEST_STUDIO.md §6, services/api/studio_publish.py); the owner's ruling of 9 November "
+    "2026: replaced by dulwich under its Apache-2.0 licence, studio's carry in L1.7, and then "
+    "removed from the image",
 }
 
 

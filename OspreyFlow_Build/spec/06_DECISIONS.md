@@ -31497,7 +31497,10 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    - **A copy** is a `Location` of its own (rule 6), its id made from the place's and the dataset's, with
      the place's properties and **the gazetteer's handling**; its one source is the gazetteer
      (`gazetteer:<dataset>`, locator `place`: no node id, path or row, rule 7); and **its provenance names
-     the gazetteer** (`Provenance.gazetteer`), kept through every later write by `merge_provenance`.
+     the gazetteer** (`Provenance.gazetteer`), kept through every later write by `merge_provenance`:
+     the dataset id of the gazetteer it was copied from, always of the copy's own dataset's unit (a
+     gazetteer of another unit is never added). **Only a place the gazetteer's dataset holds alone
+     is copied** (a node it shares with another dataset is not the gazetteer's place).
      **Decision 3b holds for a copy, keyed on that provenance**, not on a `gazetteer-*` dataset name:
      `ontology.handling.is_gazetteer_held` withholds its source identifiers from every request reader, and
      `builders.match_any_field` matches it on its name alone (`__.values("provenance").select("gazetteer")`
@@ -31525,6 +31528,8 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
      second set. **A re-build reverts nothing either**: the copy of a place the gazetteer no longer
      holds stays, as the dataset's own, still offered, since reverting it would carry the same
      signal. No link read at the highest clearance decides anything.
+   - **Audited before the copy**: the addition's audit entry is written once the record is, before
+     the first page, so a copy that fails part way, its pages committed, is never unaudited.
    - **Failures.** A copy that fails part way leaves its pages committed and the record in place, so
      the dataset is said to hold the gazetteer and adding it again finishes the copy, or removing it
      stops it. Any refresh failure (one dataset's copy, or the records' own read) is said in the
@@ -31542,7 +31547,9 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
 
 3. **The gazetteer's unit a build setting (ruling 8).** The recipe's `unit-1` is no longer what a build
    uses: *Admin › Maps*' Build takes a unit (empty: the administrator's own), and `ospreyflow map build`
-   and `python -m scripts.build_local_basemap` take `--unit` (required). A unit that holds no case and no
+   and `python -m scripts.build_local_basemap` take `--unit` (required), as does the set-up
+   console's Build (a field on its Geospatial screen, refused in words before anything runs
+   without one; `harness/geospatial.build_basemap_step`). A unit that holds no case and no
    dataset here, and is not the administrator's own, is refused in words before anything is fetched or
    written (`map_places.check_unit`, `UNKNOWN_UNIT`, which names no other unit); otherwise the places,
    their points and their dataset are that unit's. **A re-build is for the unit the region was first

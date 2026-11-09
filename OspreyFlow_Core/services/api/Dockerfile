@@ -69,7 +69,8 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 # `git` is GPL-2.0-only, which the licence register does not pass: declared, so `make licence-check`
-# names it on every run as awaiting the owner's ruling (the orchestrator's review of P5, item 8).
+# names it on every run. The owner's ruling of 9 November 2026: replaced by dulwich (Apache-2.0),
+# studio's carry in L1.7, and then removed from this image.
 LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"
 
 COPY --from=java /opt/jre /opt/java
