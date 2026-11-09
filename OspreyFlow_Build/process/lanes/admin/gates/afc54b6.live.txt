@@ -1,0 +1,14 @@
+# Leased live set at afc54b6: stack a, lease "L2.6 fix round's live set at b3cdc5e" (taken at b3cdc5e, its tests corrected to afc54b6 under the same lease), 2026-11-09T11:06Z. Each file alone, 900 s alarm; then each plant alone, 300 s alarm, the file restored after. Columns: exit, seconds, file, summary.
+0 7s services/api/test_audit_section_store.py 19 passed in 6.29s
+0 12s services/api/test_promotion_sweep_live.py 1 passed in 11.62s
+0 13s services/api/test_promotion_sweep_live.py 1 passed in 12.16s
+0 29s services/api/test_route_rights.py 4 passed in 27.80s
+U14 exit=1 E       assert 188899 == 188898
+U15 exit=1 E   asyncio.exceptions.CancelledError
+U16 exit=1 E           asyncpg.exceptions._base.InterfaceError: cannot perform operation: connection is closed
+U17 exit=1 E           asyncio.exceptions.CancelledError
+U18 exit=1 E       assert datetime.datetime(2026, 11, 9, 11, 8, 12, 306840, tzinfo=datetime.timezone.utc) == datetime.datetime(2026, 11, 2, 8, 0, tzinfo=datetime.timezone.utc)
+S5 exit=1 E       AssertionError: assert [] == ['swefc0b71c-old']
+S6 exit=1 E       AssertionError: assert ['sw-adm', 's...op', 'sw-rev'] == ['sw-adm', 'sw-rev']
+S4 exit=1 E       AssertionError: assert [] == ['sw1ff04f15-old'] E         Right contains one more item: 'sw1ff04f15-old' 
+U13 exit=1 E   asyncio.exceptions.CancelledError E               TimeoutError 
