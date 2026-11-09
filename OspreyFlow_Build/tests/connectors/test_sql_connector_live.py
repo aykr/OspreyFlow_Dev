@@ -28,7 +28,9 @@ What a mistake would do, and the case that catches it:
 - a refused sign-in or a missing table read as no rows — `test_refusals_are_refused_in_words`;
 - a server without TLS accepted — `test_a_server_without_tls_is_refused`;
 - the byte cap counted in characters, or checked only after a row past it is held —
-  `test_the_byte_cap_counts_bytes_not_characters`, `test_a_row_past_the_byte_cap_is_never_held`.
+  `test_the_byte_cap_counts_bytes_not_characters`, `test_a_row_past_the_byte_cap_is_never_held`;
+- a byte cap kept by a filter that makes the server scan the whole table —
+  `test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_it`.
 """
 
 from __future__ import annotations
@@ -291,6 +293,27 @@ async def test_a_row_past_the_byte_cap_is_never_held(
     got = await read_sql(_settings(), NOTES, secret=PASSWORD, watermark=watermark, connect=_no_tls)
     assert [r["note_id"] for r in got.rows] == ["1", "2", "3", "4", "5", "6"]
     assert got.columns == ["note_id", "note"]
+
+
+async def test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_it(
+    nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A million rows, a 1,000-byte cap and a reader whose statements time out after 1.5 seconds: the
+    read stops at the first row past the cap and says so in the cap's words. A filter on the running
+    total would make the server scan every row looking for one to send, and time out, so the read
+    would say the database refused it instead (the lane review of L1.8)."""
+    from services.ingest.connectors import reads
+
+    await nomis.execute(f"""
+        CREATE TABLE nomis_replica_fixture.case_notes (note_id integer PRIMARY KEY, note text NOT NULL);
+        INSERT INTO nomis_replica_fixture.case_notes
+            SELECT n, 'synthetic note ' || n FROM generate_series(1, 1000000) AS n;
+        GRANT SELECT ON nomis_replica_fixture.case_notes TO {READER};
+        ALTER ROLE {READER} SET statement_timeout = '1500ms';
+    """)
+    monkeypatch.setattr(reads, "MAX_BYTES", 1000)
+    with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
+        await read_sql(_settings(), NOTES, secret=PASSWORD, connect=_no_tls)
 
 
 async def test_refusals_are_refused_in_words(nomis: asyncpg.Connection) -> None:

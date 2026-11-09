@@ -259,11 +259,15 @@ async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | N
     cap = reads.MAX_BYTES
     args.append(cap)
     limit = f"${len(args)}::bigint"
-    # The byte cap is kept by the server, before any row is sent (rule 2; the independent review of
-    # L1.6): each row's size is its text in bytes, as the database writes it (a little over what the
-    # file will hold, never under), with a running total in the read's own order. A row whose total
-    # before it is past the cap is never sent, and the row that crosses the cap is sent without its
-    # values, so the read can say it was refused having held no more than the cap.
+    # The byte cap is kept by the server, before any row's values are sent (rule 2; the independent
+    # review of L1.6): each row's size is its text in bytes as the database writes it, with a
+    # running total in the read's own order. A row whose total is past the cap is sent without its
+    # values, so the read refuses at the first such row having held no more than the cap; nothing
+    # past it is read, since the cursor stops there (no filter on the total, which would make the
+    # server scan the whole table looking for rows to send, the lane review of L1.8). The database's
+    # count is close to the file's, not equal (`t` for `true`, its own date format, its own
+    # encoding), so the read also counts each row in UTF-8 bytes as the file will hold it, and
+    # refuses on either.
     columns = ", ".join(_quoted(n) for n in names)
     size = f"octet_length(ROW({columns})::text)"
     inner = (
@@ -273,10 +277,7 @@ async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | N
     shown = ", ".join(
         f"CASE WHEN s.{_TAKEN} <= {limit} THEN s.{_quoted(n)} END AS {_quoted(n)}" for n in names
     )
-    sql = (
-        f"SELECT {shown}, s.{_TAKEN} FROM ({inner}) AS s "
-        f"WHERE s.{_TAKEN} - s.{_ROW_BYTES} <= {limit}"
-    )
+    sql = f"SELECT {shown}, s.{_TAKEN} FROM ({inner}) AS s"
     if watermark is not None:
         sql += f" ORDER BY s.{_quoted(watermark)}, s.{_TAKEN}"
     sql += f" LIMIT {reads.MAX_ROWS + 1}"

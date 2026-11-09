@@ -39,6 +39,11 @@ PLANTS = {
     "ingest/x/Wrapped.tsx": "      <p>\n        Change the target\n        model here.\n      </p>\n",
     "ingest/x/single.ts": "const s = 'the TARGET MODEL';\n",
     "shell/copy.json": '{ "about": "Edit the target model of a dataset." }\n',
+    # The lane review of L1.8's shapes.
+    "ingest/y/Hyphen.tsx": '<p>The target-model tab</p>\n',
+    "ingest/y/Spaced.tsx": '<p>Open the target{" "}model.</p>\n',
+    "ingest/y/Nested.tsx": "const t = `${ready ? `the target model` : 'none'}`;\n",
+    "ingest/y/AfterNested.tsx": "const u = `${a ? `x` : y} // not a comment`; const w = 'the target model';\n",
 }
 
 
@@ -80,6 +85,11 @@ def test_an_apostrophe_in_jsx_text_does_not_swallow_the_next_line(tmp_path: Path
     # `don't` opens no string that runs on: a quoted string never spans a line in TS or JSX attributes.
     root = _tree(tmp_path, {"a/x.tsx": "<p>You don't have it.</p>\n<p>Open the target model.</p>\n"})
     assert [line for _, line, _ in find_banned(root)] == [2]
+
+
+def test_a_comment_inside_a_template_s_expression_is_a_comment(tmp_path: Path) -> None:
+    root = _tree(tmp_path, {"a/x.tsx": "const t = `${n /* target model */} rows`;\n"})
+    assert find_banned(root) == []
 
 
 def test_strip_comments_keeps_line_numbers() -> None:
