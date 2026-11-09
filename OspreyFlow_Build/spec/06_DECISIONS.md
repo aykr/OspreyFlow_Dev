@@ -31125,9 +31125,12 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    pass (rule 1: it adds its factory to `STORES`), run until then against `ReferenceWaiting`.
 6. ***Promotions overdue*** (Amendment 4 decision 11): raised once per promotion at N whole days, by the
    database (`ON CONFLICT DO NOTHING` on its id), to the dataset's Authors holding `review_promotions` and
-   the administrators (`administer_system`) of the dataset's unit — enabled people only, never a service
-   account, never the proposer, and, where the dataset has a highest marking, only those cleared to it,
-   since the alert names the dataset (`recipients_of`'s `classification`). Its words name the load and
+   the administrators (`administer_system`) of the dataset's unit — **all of the dataset's unit**
+   (`may_review`): an Author grant held by a person of another unit is not one the case recognises
+   (`get_authorized` asks `owning_unit`, and a grant outlives a move), so it lists and alerts nothing
+   (contract C4; A8's *an Author moved to another unit*). Enabled people only, never a service
+   account, never the proposer, and, where the dataset has a highest marking, only those cleared to
+   it by the deployment's `scheme` (`HandlingScheme.clears`), since the alert names the dataset. Its words name the load and
    the dataset, never what it adds (rule 7).
    **Promotions are case's L3.4:** everything reads them through one seam, `WaitingPromotions` (its
    record `PendingPromotion`), which the Conduit fills with `NoPromotionsYet` until then. L3.4 provides
@@ -31146,12 +31149,15 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    the person is still one of them**: the store keeps the promotion with the alert and asks `still`
    again at the read. L2.7 passes the sweep's own `_promotion_recipients`, so a person since disabled,
    no longer an Author holding `review_promotions` or the unit's administrator, or no longer cleared to
-   the marking, is served nothing. An Author's own unit is not asked: decision 11 names the dataset's
-   Authors, so one granted from another unit is one of them; the unit is asked of administrators alone
+   the marking, or moved to another unit, is served nothing
    (`test_an_alert_is_read_only_while_its_reader_is_still_a_recipient`;
-   live, `test_an_alert_is_served_only_while_its_reader_is_still_a_recipient`). A team's Author grant
-   does not make its members recipients, and an alert's recipients are fixed when it is raised (one
-   raised while the dataset has no reviewer reaches only the administrators).
+   live, `test_an_alert_is_served_only_while_its_reader_is_still_a_recipient`).
+   `_promotion_recipients` reads the dataset's unit and marking as they stand at that moment, not as
+   the promotion recorded them, and a dataset no longer held has no recipients
+   (`test_recipients_are_asked_of_the_dataset_as_it_stands_now`). A team's Author grant
+   does not make its members recipients. Who an alert is **raised to** is fixed when it is raised (one
+   raised while the dataset has no reviewer goes to the administrators alone; while it has neither,
+   it is not raised, as above); who it is **served to** is that set narrowed at every read.
 
 Tests: `test_audit_section_store.py` (real Postgres: by unit, filters never widen, the rule audit never
 from the stream, the engines' true total, once by the database, the indexes); `test_audit_section_routes.py` (each

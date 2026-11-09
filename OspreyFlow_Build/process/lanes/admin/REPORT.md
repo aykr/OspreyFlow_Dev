@@ -23,8 +23,8 @@ points. All are done below, each with a test shown red by a plant at its real ca
    - `test_waiting_promotions_contract.py` is the contract L3.4's store must pass: L3.4 adds its factory to `STORES`. It runs against `ReferenceWaiting` until then, and is red as C1–C3.
    - Recorded in Amendment 6 decision 5 and in the module's docstring.
 3. **Governance words withheld.** A source's governance edit no longer serves its handling, its legal basis or what follows from them. W10 is red with them back.
-4. **`alerts_for` checks again.** The store keeps each alert's promotion. Each read asks `still` (the sweep's own recipients, read now), so a reader who has since been disabled, lost `review_promotions`, moved unit or dropped below the marking is served nothing.
-   - Offline: A8, red on 4 of 5 cases. Live: U20.
+4. **`alerts_for` checks again.** The store keeps each alert's promotion. Each read asks `still` (the sweep's own `_promotion_recipients`), which reads the dataset's unit and marking as they stand now (A11). So a reader who has since been disabled, lost `review_promotions`, dropped below the marking, or moved unit (an administrator or an Author alike, since (j) is withdrawn) is served nothing.
+   - Offline: A8, red on 5 of 6 cases (5 of 5 before the Author's move was added). Live: U20 and A8's Author move.
    - L2.7 passes `_promotion_recipients` as `still`.
 5. **Records** (`gates/`):
    - `ac69f9a.keyboard.txt`, `ac69f9a.axe.txt`: Playwright on this Mac.
@@ -57,7 +57,7 @@ points. All are done below, each with a test shown red by a plant at its real ca
    - (g) `read_audit` opens Admin;
    - (h) a start never waits on or drops another start's index build;
    - (i) `grading_change` is filed under *Reads and refusals*, `read_connector_source` under *Loads*;
-   - (j) new: an Author's own unit is not asked. Decision 11 names the dataset's Authors, so an Author granted from another unit is listed and alerted; the unit is asked only of administrators.
+   - (j), withdrawn at the orchestrator's re-review: it loosened access, so it should have stopped the piece rather than been logged as a decision. An Author grant held by a person of another unit is not one the case recognises (`get_authorized` asks `owning_unit`), so `may_review` now asks the dataset's unit of Authors too (C4, A8).
 10. **Requests at the merge:**
     - Apply `places.diff` (two place cases are red without it), `registry.diff` and `ci-wiring.diff`. All three apply cleanly to a06d114.
     - Land `packages/schemas/admin.py` (and its generated types) as a separate schemas commit first.
