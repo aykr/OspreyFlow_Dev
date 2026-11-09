@@ -31027,11 +31027,15 @@ Revised 9 November after the orchestrator's independent review (the strict optio
      start asks the catalogue first and issues no DDL at all when the table and every index are built**:
      a `CREATE INDEX IF NOT EXISTS`, the stream's two indexes' old bootstrap, takes `SHARE` on
      `audit_log` before it reads the name, so at every start it would queue behind any build under
-     way and every audit write would queue behind it. A build is held under a session advisory lock
-     keyed by its schema; a start that cannot take it issues nothing, logs it, and asks again every
-     minute until the indexes are built, so it never serves without them until a restart
-     (`test_a_start_never_waits_on_or_drops_a_build_under_way`, against a real build held up by an
-     open write; `test_a_start_that_left_the_indexes_builds_them_once_free`). An index another start
+     way and every audit write would queue behind it. **A start never builds inside its start**:
+     what the catalogue lacks is built by a background task, so a Conduit or a script opening the
+     audit is never held for a build's length, and a start killed mid-build leaves nothing for the
+     next to loop on (`test_a_start_returns_before_its_own_build`). A build is held under a session
+     advisory lock keyed by its schema; a task that cannot take it issues nothing, and it, or one
+     whose try failed for any reason, asks again every minute until the indexes are built, so no
+     start serves without them until a restart (`test_a_start_never_waits_on_or_drops_a_build_under_way`,
+     against a real build held up by an open write; `test_a_start_that_left_the_indexes_builds_them_once_free`;
+     `test_the_build_survives_any_failure_and_close_still_closes`). An index another start
      is building reads invalid exactly as a crashed one does: only a start holding the lock drops an
      invalid one, since only a crash leaves one then
      (`test_an_index_left_invalid_by_a_crashed_build_is_built_again`).
@@ -31050,12 +31054,19 @@ Revised 9 November after the orchestrator's independent review (the strict optio
      people of every unit, which a reader of one unit's entries must not read). Paged with its true
      total, where *Models*' own history reads the latest 200.
 2. **No account's id reaches the Glass** (rule 7; ADR-106 Amendment 1). Who acted is served as
-   `who`, a display name asked of the directory only for the accounts the page serves (ADR-106
-   decision 3), or the fixed words *An account with no name on record*; never the id. The person
+   `who`, a name asked of the directory for the accounts the page serves (ADR-106 decision 3) from
+   the account's name parts alone (`PrincipalNameDirectory.full_names`: never its username, which is
+   the identity provider's identifier, as `display_names` falls back to elsewhere), or the fixed
+   words *An account with no name on record*; never the id. A team's grant (`team:<role>`) is *A
+   team*. The person
    filter is a picker of names: each page carries `people`, the names of everyone who wrote an entry
    of that record the reader may read (whatever the other filters), and a chosen name is sent back and
    read as the accounts of that name among them (two people of one name are both kept; an account with
-   no name is not offered). Operations names a promotion's proposer the same way
+   no name, or one the directory could not be asked about, is not offered). **This reads ADR-106
+   decision 3 as covering the record the reader may read, not only the page**: the picker's names are
+   asked for every writer of the reader's readable record, each already the reader's to page through,
+   and of no other account. Its cost is a `SELECT DISTINCT` over the unit's entries and one directory
+   read per writer not cached (five minutes), on every page. Operations names a promotion's proposer the same way
    (`proposed_by_name`). `test_no_account_id_reaches_the_glass` plants an id in every place one is
    written and searches each route's whole response for it.
 3. **An entry's words.** No read of the stream existed to decide what an entry's `resolved_query` may
@@ -31071,7 +31082,8 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    (`audit_section.shown_words`): a word naming a person (`user_id`, `account`, a team's lead and cover,
    a dataset's owners, a transfer's ends) is served as that person's name; the plain words named in
    `_PLAIN_WORDS` as they are; and nothing else, so an identity provider's `subject`, a `username`, an
-   `email`, or a word a later action writes, is never served until it is named there.
+   `email`, a refusal's free text (`why`), or a word a later action writes, is never served until it
+   is named there.
 4. **Kinds.** Decision 10's five (*Analyst assertions*, *Loads and promotions*, *Types*, *People and
    roles*, *Datasets*), by the actions the stream records under each (`KIND_ACTIONS`), and *Reads and
    refusals* for every other action. The run ledger's loads appear as their audit entries; the Studio's
@@ -31082,7 +31094,9 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    prefix) and fails on any in no list, so every action is classified on purpose
    (`READS_AND_OTHER` names the rest). Case's L3.4 actions (`promote_drawn_items`,
    `approve_promotion`, `reject_promotion`, `delete_layer`) are classified under *Loads and
-   promotions* before they are written (`AWAITED_ACTIONS`). The note names this deployment's own date
+   promotions* before they are written (`AWAITED_ACTIONS`). The guard reads `scripts/` too, which write
+   through the same `AuditWriter` (`case_brief_seed`, `close_paysim_instants`), and shows a writer it
+   cannot read failing as unresolved. The note names this deployment's own date
    for entries recorded without a unit (`audit_log_units_from`, written once when the column is added,
    or at the earliest entry recording one). **Not built:** decision 10's link from each entry to the record holding it (a case's entry
    names its case; the link needs each record's own screen to open at an entry); dates are whole days
@@ -31103,7 +31117,9 @@ Revised 9 November after the orchestrator's independent review (the strict optio
    minute (`OSPREY_PROMOTION_SWEEP_SECONDS`), reads that source at each tick and its recipients at
    the sweep (`_promotion_recipients`: the dataset's home-case Authors, the people directory, custom
    roles' current rights); a tick whose people cannot be read raises nothing, and the next tries again
-   (`test_promotion_sweep_live.py`, the real lifespan on real Postgres). L2.7's *Needs you* reads
+   (`test_promotion_sweep_live.py`, the real lifespan on real Postgres;
+   `test_a_failed_tick_raises_nothing_and_the_next_tries_again`). A promotion already alerted is
+   skipped before its recipients are read (`raised_of`), so a tick re-reads no one for it. L2.7's *Needs you* reads
    `alerts_for(person)`, which serves the alert without its other recipients. A team's Author grant
    does not make its members recipients, and an alert's recipients are fixed when it is raised (one
    raised while the dataset has no reviewer reaches only the administrators).
