@@ -1,0 +1,58 @@
+# Round 6 short live run at e67aed5 (on main 1145687): stack f on the owner's test server, admin lease "L2.6 round 6 short live run at e67aed5: U20, sweep, A8, U20 plant", run there by stack_lease.sh remote, 2026-11-09T16:33Z.
+## U20's case, the lifespan sweep (now re-reading the dataset from the real store), and A8 (every case, the Author's move among them):
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin/.runs/20261109T163326Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py -k "still_a_recipient or raised_once" ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_promotion_ageing.py
+........                                                                 [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+8 passed, 30 deselected, 1 warning in 2.72s
+
+## The first call's -k applied to every file and deselected the sweep and most of A8's file (8 passed: the store's two and A8's six). Both files again, whole:
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin/.runs/20261109T163354Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_promotion_ageing.py
+.................                                                        [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+17 passed, 1 warning in 11.01s
+
+## U20 plant: PromotionAgeingStore.alerts_for on the stored recipient alone, reverted after:
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin/.runs/20261109T163430Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py -k still_a_recipient
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_an_alert_is_served_only_while_its_reader_is_still_a_recipient ______
+
+world = namespace(cases=<services.api.investigations.InvestigationStore object at 0x7053a71420c0>, audit=<services.api.audit.A...s=[], domains_chosen=False), dsn='postgresql://osprey:throwaway@localhost:55438/ospreyflow?search_path=l26_1727ce04b0')
+
+    async def test_an_alert_is_served_only_while_its_reader_is_still_a_recipient(
+        world: SimpleNamespace,
+    ) -> None:
+        """`PromotionAgeingStore.alerts_for` asks again, over the promotion it kept, who the alert is
+        for now: one raised to `eng-1` is not served to `eng-1` once they are no recipient (here, no
+        longer cleared to the dataset's SECRET), and the promotion handed to that question is the one
+        raised. Red with `alerts_for` matching on the stored recipient alone."""
+        alert = PromotionOverdueAlert(promotion_id="p1", load_id="load-1", dataset_id="ds-a",
+                                      raised_at=datetime.now(UTC), recipients=["eng-1", "adm-a"],
+                                      words="Promotion load-1 into Prison records has waited 3 days for review.")  # fmt: skip
+        assert await world.ageing.raise_once(alert, _PROMOTION)
+        asked: list[PendingPromotion] = []
+    
+        async def now(p: PendingPromotion) -> list[str]:
+            asked.append(p)
+            return ["adm-a"]  # eng-1's clearance lowered since the alert was raised
+    
+>       assert await world.ageing.alerts_for("eng-1", now) == []
+E       AssertionError: assert [PromotionOve...for review.')] == []
+E         
+E         Left contains one more item: PromotionOverdueNotice(promotion_id='p1', load_id='load-1', dataset_id='ds-a', raised_at=datetime.datetime(2026, 11, 9... 34, 946592, tzinfo=datetime.timezone.utc), words='Promotion load-1 into Prison records has waited 3 days for review.')
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_audit_section_store.py:234: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py::test_an_alert_is_served_only_while_its_reader_is_still_a_recipient
+1 failed, 20 deselected in 1.64s
