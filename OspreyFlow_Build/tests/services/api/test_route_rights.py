@@ -198,6 +198,8 @@ ROUTE_RIGHTS = {
     "get_map_providers_route": None,
     "get_map_tile_route": None,
     "get_map_local_source_route": None,
+    # ADR-147 Amendment 1 (P4): the map's place search over the case's gazetteer, as its other searches.
+    "map_place_search_route": "investigate",
     "build_basemap_route": "manage_geospatial",
     "verify_map_route": "manage_geospatial",
     "histogram_route": "investigate",
