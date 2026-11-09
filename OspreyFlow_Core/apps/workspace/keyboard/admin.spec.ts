@@ -150,9 +150,18 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
     if (path === "settings/dataset-owners" && request.method() === "PUT") return json(200, request.postDataJSON());
     if (path === "settings/dataset-owners") return json(200, { owners_may_be: "people_and_teams" });
     // ADR-140 Amendment 4: the Connections tab.
-    if (path === "connections" && request.method() === "POST")
-      return json(201, { id: "c2", kind: "files", name: "Second folder", created_by: "admin-1", created_at: "" });
-    if (path === "connections") return json(200, [{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "" }]);
+    if (path === "connections" && request.method() === "POST") {
+      const sent = request.postDataJSON() as { kind: string; name: string };
+      return json(201, { ...sent, id: "c2", created_by: "admin-1", created_at: "" });
+    }
+    // L2.7 (ADR-140 Amendment 13): an API connection, its Test connection answered in words.
+    if (path === "connections/c-api/test" && request.method() === "POST")
+      return json(200, { ok: true, words: "The host is allowed and the secret is set." });
+    if (path === "connections") return json(200, [
+      { id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "" },
+      { id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "admin-1", created_at: "", datasets: ["enron"],
+        settings: { kind: "api", base_url: "https://telco.example", auth: "bearer", secret: "TELCO", pagination: "none" } },
+    ]); // prettier-ignore
     if (path === "schedules") return json(200, [SCHEDULE]);
     if (path === "schedules/feed/pause") return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1" });
     if (path === "schedules/feed/resume") return json(200, SCHEDULE);
@@ -479,12 +488,44 @@ test("a connection is named by keyboard", async ({ page }) => {
   await page.goto("/keyboard/admin-harness.html?rights=administer_system");
   await open(page, "Connections");
   await expect(page.getByText("Files: the ingest root")).toBeVisible();
-  await page.getByRole("textbox", { name: "New Files connection" }).focus();
+  await page.getByRole("textbox", { name: "Connection name" }).focus();
   await page.keyboard.type("Second folder");
   await press(page, "Name the connection");
   await expect(page.getByText("Named Second folder.")).toBeVisible();
   expect(asked).toContain("POST connections");
   registerCovered(REGISTRY, "name-a-connection-by-keyboard");
+});
+
+// L2.7 (ADR-140 Amendments 13 and 15; rule 13): an API connection's fields filled by keyboard, its
+// dataset ticked by Space, its secret by name with the tip read with it; then Test connection.
+test("an API connection is named with its fields, and a connection tested, by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent = sentTo(page, "POST", "/v1/admin/connections");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "Connections");
+  await page.getByLabel("Kind").selectOption("api"); // a native select, as the other walkthroughs drive one
+  await page.getByRole("textbox", { name: "Connection name" }).focus();
+  await page.keyboard.type("Carrier API (synthetic)");
+  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.keyboard.press("Space");
+  const base = page.getByRole("textbox", { name: "Base URL" });
+  await base.focus();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("https://carrier.example");
+  await page.getByLabel("Sign-in").selectOption("bearer");
+  const secret = page.getByRole("textbox", { name: "Secret's name (the token)" });
+  await secret.focus();
+  await expect(secret).toHaveAccessibleDescription(/never the password or token itself/);
+  await page.keyboard.type("CARRIER_API");
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Carrier API (synthetic).")).toBeVisible();
+  expect(sent).toEqual([{ kind: "api", name: "Carrier API (synthetic)", datasets: ["enron"],
+                          settings: { kind: "api", base_url: "https://carrier.example", auth: "bearer", secret: "CARRIER_API", pagination: "none" } }]); // prettier-ignore
+  registerCovered(REGISTRY, "name-an-api-connection-by-keyboard");
+  await press(page, "Test Telco lookup (synthetic)");
+  await expect(page.getByRole("status").filter({ hasText: "The host is allowed" })).toBeVisible();
+  expect(asked).toContain("POST connections/c-api/test");
+  registerCovered(REGISTRY, "test-a-connection-by-keyboard");
 });
 
 // ADR-145 decision 5 (rule 13): the side list is walked by Tab and a section opened by Enter; focus

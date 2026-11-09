@@ -5,6 +5,7 @@ import type {
   AccessInput,
   AdminPeopleRows,
   AuditSectionPage,
+  ConnectionTest,
   OperationsAgeing,
   PromotionAlertSetting,
   CustomRole,
@@ -123,6 +124,9 @@ export const listDemoPacks = (api: AdminApi) => call<DemoPackStatus[]>(api, "dem
 export const systemStatus = (api: AdminApi) => call<SystemStatus>(api, "system");
 // ADR-136 decision 2: each dataset's egress, set by an administrator, audited by the Conduit.
 export const listDatasets = (api: AdminApi) => call<AdminDataset[]>(api, "datasets");
+// ADR-140 Amendment 13 (L2.7): *Test connection*, in words; nothing read is answered.
+export const testConnection = (api: AdminApi, connectionId: string) =>
+  call<ConnectionTest>(api, `connections/${encodeURIComponent(connectionId)}/test`, { method: "POST" });
 export const setDatasetEgress = (api: AdminApi, datasetId: string, egress: AdminDataset["egress"]) =>
   call<AdminDataset>(api, `datasets/${encodeURIComponent(datasetId)}/egress`, {
     method: "PUT",

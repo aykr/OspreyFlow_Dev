@@ -9341,15 +9341,43 @@ async def test_admin_connection(
     return result
 
 
+async def _connection_body(request: Request) -> ConnectionInput:
+    """Admin › Connections' body, read here rather than by FastAPI, whose 422 carries each refused
+    input back: a secret's value pasted into the field for its name, or into any other, would be
+    answered to the screen (L2.7; ADR-140 Amendment 13: a secret is never answered). The refusal
+    names each field and why, never what was sent, as `_model_admin_body` does for Models."""
+    raw = await request.body()
+    try:
+        return ConnectionInput.model_validate_json(raw)
+    except ValidationError as invalid:
+        try:
+            sent = model_admin_module.sent_values(json.loads(raw))
+        except ValueError:
+            sent = {raw.decode("utf-8", "replace")}
+        words = "; ".join(
+            f"{'.'.join(str(p) for p in e['loc'])}: "
+            + str(e.get("msg", "")).removeprefix("Value error, ")
+            for e in invalid.errors(include_input=False, include_context=False, include_url=False)
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "connection_refused",
+                    "detail": model_admin_module.redacted(words, sent)},
+        ) from None  # fmt: skip
+
+
 @app.post(
     "/v1/admin/connections",
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
 )
 async def add_admin_connection(
-    body: ConnectionInput, principal: PrincipalDep, sources: SourcesDep, audit: AuditDep
+    request: Request, principal: PrincipalDep, sources: SourcesDep, audit: AuditDep
 ) -> Connection:
-    """An administrator names a connection (ADR-140 Amendment 4). Files only until phase 9."""
+    """An administrator names a connection (ADR-140 Amendments 4 and 13): files, SQL, API or JSON,
+    each naming its secret, never carrying it. The body is read here (`_connection_body`), so a
+    value pasted into a field the schema refuses is never answered back (L2.7)."""
+    body = await _connection_body(request)
     # ADR-140 Amendment 13 (the orchestrator's review of L1.6): a host that is, or resolves to, an
     # address inside the deployment is refused before it is kept; the schema refuses written forms.
     try:
