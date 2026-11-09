@@ -839,12 +839,25 @@ def test_every_promotion_route_refuses_a_non_member_as_a_missing_case(pw: Simple
         assert _studio("zed", path).status_code == 404
     assert _studio("zed", f"/{promotion}/decision", "post", approve=True).status_code == 404
     assert _as("zed").get("/v1/datasets/src/removed-cases").status_code == 404
+    # ...and every removed-case route of the dataset, whatever the ids (the independent review).
+    for method, path in (
+        ("post", f"/v1/datasets/src/removed-cases/{K}/merge-sheet"),
+        ("delete", f"/v1/datasets/src/removed-cases/{K}/layer"),
+        ("get", "/v1/datasets/src/layer-merges/any-grant"),
+        ("post", "/v1/datasets/src/layer-merges/any-grant"),
+        ("delete", "/v1/datasets/src/layer-merges/any-grant"),
+    ):
+        kwargs = {"json": {"item_ids": []}} if path.endswith("any-grant") and method == "post" else {}
+        assert getattr(_as("zed"), method)(path, **kwargs).status_code == 404, (method, path)
     # A promotion of another dataset is not found through this one.
     assert _as("dana").get("/v1/datasets/src/promotions/no-such").status_code == 404
     # Bob, K's Editor, may not promote (Author level, I12); Rita, a Viewer, neither.
     assert (
         _as("bob").get(f"/v1/investigations/{K}/boards/{board}/promotion-sheet").status_code == 403
     )
+    bob_sends = _as("bob").post(f"/v1/investigations/{K}/boards/{board}/promotions",
+                                json={"item_ids": [made["item_id"]]})  # fmt: skip
+    assert bob_sends.status_code == 403 and len(pw.store.records) == 1
 
 
 # --- a removed case's layer (Amendment 2 decision 1) -----------------------------------------
