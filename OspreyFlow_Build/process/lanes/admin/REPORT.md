@@ -27,7 +27,7 @@ pass over round 2.
      read gives them; spec 02 records this (rule 11).
    - An overdue promotion opens nothing for an Author without `operate_schedules` until L3.4's review screen exists.
    - The top bar re-reads on its minute.
-   - Case wires `items_marking` into its store once this lands. It has been told; the contract's case is `p-item`. The orchestrator carries the contract's derivation gap to case.
+   - Done on top of case's L3.4, by agreement: `WaitingFromStore._as_pending` passes `items_marking`, the highest current marking of its items. The contract's case is now `p-item-high`, with a derivation test (round 5 of the red record).
 3. **Commits:** `git log e76cef9..HEAD`. The two schemas commits (`NeedsYou`, then the flag's removal) go before their code.
 4. **Requests at the merge:**
    - Apply `registry-L2.7.diff`: 16 ids in all, made at this tree (the `index` line is its blob, 86c45ad).
@@ -39,7 +39,7 @@ pass over round 2.
      - studio's: `ingest/IngestStudio.tsx`, `keyboard/ingest-studio-harness.tsx`;
      - case-b's: `linktypes/ModelProposals.tsx`, `services/api/{link_type_store,link_types}.py` (the narrowing and
        `open_proposal_count`), `test_link_type_{routes,service,store}.py`, `test_analyst_link_types.py`;
-     - case's (L3.4's seam): `test_waiting_promotions_contract.py`, `test_promotion_sweep_live.py`;
+     - case's (L3.4's seam): `services/api/promotion_store.py` (`_as_pending`, the probe), `test_waiting_promotions_contract.py`, `test_promotion_sweep_live.py`;
      - no listed owner: `App.tsx`, `a11y/every-harness.spec.ts`, `test_route_rights.py`, `test_reports_viewer_journey.py`,
        `keyboard/{admin.spec.ts,admin-harness.tsx,needs-you.spec.ts,needs-you-harness.*,answers-harness.*}`, spec 02 and 03;
      - from the two patches: `help/roles.ts`, `help/rightNames.test.ts`.
