@@ -833,7 +833,7 @@ class AnalyticsClickHouseAdapter:
             [*unbounded.params, *upper_params, *subjects,
              *unbounded.params, *upper_params, *subjects],
         )  # fmt: skip
-        refuse_an_amount_total_out_of_range(*(float(guard) for *_, guard in rows))
+        refuse_an_amount_total_out_of_range(*(None if g is None else float(g) for *_, g in rows))
         found = {
             str(node): (int(n), None if total is None else float(total))
             for node, n, total, _ in rows
@@ -884,7 +884,10 @@ class AnalyticsClickHouseAdapter:
              *unbounded.params, window.valid_to, *subjects,
              *unbounded.params, window.valid_to, *subjects],
         )  # fmt: skip
-        refuse_an_amount_total_out_of_range(*(float(t) for row in rows for t in (row[2], row[5])))
+        # A sumIf over amounts none of which is present is NULL, not 0: no total to refuse.
+        refuse_an_amount_total_out_of_range(
+            *(None if t is None else float(t) for row in rows for t in (row[2], row[5]))
+        )
         nodes: dict[str, NodeActivity] = {}
         for row in rows:
             node, n_recent, t_recent, a_recent, n_base, t_base, a_base, first, last, n_before = row
