@@ -54,7 +54,7 @@ from services.ingest.recipe_loader import load_recipe
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from ontology.handling import load_uk_le_scheme, sources_in_full
+from ontology.handling import HandlingScheme, load_uk_le_scheme, sources_in_full
 from ontology.loader import load_default_ontology
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
@@ -524,12 +524,10 @@ async def _run(args: argparse.Namespace) -> int:
         print(f"Tiles written to {pmtiles}. Restart the deployment to mount them.")
         return 0
     from services.api.map_places import (
-        NO_POINTS_HERE,
         DatasetsUnreachable,
         UnknownUnit,
         check_unit_from_env,
         gazetteer_dataset_id,
-        register_gazetteer_dataset_from_env,
     )
 
     # ADR-147 Amendment 2 (the owner's ruling 8): the unit is the build's setting, checked before
@@ -581,9 +579,31 @@ async def _run(args: argparse.Namespace) -> int:
         await graph.commit_transaction(tx)
     except Exception:
         await graph.rollback_transaction(tx)
+        await client.aclose()
         raise
+    try:
+        return await _after_the_commit(args, result, graph=graph, scheme=scheme, by=principal.id)
     finally:
         await client.aclose()
+
+
+async def _after_the_commit(
+    args: argparse.Namespace,
+    result: BasemapBuildResult,
+    *,
+    graph: GraphArcadeDBAdapter,
+    scheme: HandlingScheme,
+    by: str,
+) -> int:
+    """What follows the places' commit: the dataset registered, then every case that added the
+    gazetteer given its places again (ADR-147 Amendments 1 and 2)."""
+    from services.api.map_places import (
+        NO_POINTS_HERE,
+        DatasetsUnreachable,
+        gazetteer_dataset_id,
+        refresh_case_copies_from_env,
+        register_gazetteer_dataset_from_env,
+    )
 
     print(f"PMTiles written to {result.pmtiles_path}")
     print(
@@ -595,10 +615,12 @@ async def _run(args: argparse.Namespace) -> int:
     # ADR-147 Amendment 1, decision 2: the dataset registered once the places are committed, so a
     # failed build leaves none. Its places are stamped already; registering again later is harmless.
     try:
-        await register_gazetteer_dataset_from_env(args.region, by=principal.id, unit=args.unit)
+        await register_gazetteer_dataset_from_env(args.region, by=by, unit=args.unit)
+        cases = await refresh_case_copies_from_env(graph, scheme, gazetteer_dataset_id(args.region))
     except DatasetsUnreachable as unreachable:
         print(str(unreachable), file=sys.stderr)
         return 1
+    print(f"Cases given the places again: {cases}.")
     return 1 if result.gazetteer_report.rejections else 0
 
 

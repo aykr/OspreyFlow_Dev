@@ -79,6 +79,12 @@ def events(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) 
             raise map_places.UnknownUnit(f"No case or dataset ... {unit!r}")
 
     monkeypatch.setattr(map_places, "check_unit_from_env", check)
+
+    async def refresh(_graph: object, _scheme: object, gazetteer: str) -> int:
+        events.seen.append(f"refresh {gazetteer}")
+        return 0
+
+    monkeypatch.setattr(map_places, "refresh_case_copies_from_env", refresh)
     monkeypatch.setattr(script, "ArcadeDBClient", _Client)
     monkeypatch.setattr(script, "GraphArcadeDBAdapter", _graph_class(events))
     monkeypatch.setattr(graph_client_module, "ArcadeDBClient", _Client)
@@ -128,7 +134,7 @@ async def test_the_script_registers_after_the_places_commit(
     assert await script._run(_script_args()) == 0
     assert events.seen == [
         "check unit-7", "begin", "load into gazetteer-osm-rutland", "commit", "points words",
-        "register rutland for unit-7",
+        "register rutland for unit-7", "refresh gazetteer-osm-rutland",
     ]  # fmt: skip
 
 
@@ -172,7 +178,7 @@ async def test_the_cli_build_registers_after_the_places_commit(
         assert code == 0
         assert events.seen == [
             "check unit-7", "begin", "load into gazetteer-osm-rutland", "commit", "points words",
-            "register rutland for unit-7",
+            "register rutland for unit-7", "refresh gazetteer-osm-rutland",
         ]  # fmt: skip
 
 

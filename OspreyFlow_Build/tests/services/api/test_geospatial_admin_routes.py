@@ -37,6 +37,7 @@ from services.api.app import (
     get_config,
     get_datasets,
     get_graph,
+    get_handling_scheme,
     get_map_config,
     get_ontology,
     get_principal,
@@ -45,6 +46,7 @@ from services.api.app import (
 from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.map_admin import InMemoryMapAdminAudit, MapAdmin, MapKeyFile, MapSettingsFile
 
+from ontology.handling import load_uk_le_scheme
 from schemas.domain import Principal, TxId
 from schemas.mapconfig import MapConfig, MapProvider
 
@@ -150,6 +152,7 @@ def client(graph: _FakeGraph, map_admin: MapAdmin) -> TestClient:
     app.dependency_overrides[get_audit] = lambda: _RecordingAudit()
     app.dependency_overrides[get_analytics] = lambda: ANALYTICS
     app.dependency_overrides[get_datasets] = lambda: DATASETS
+    app.dependency_overrides[get_handling_scheme] = load_uk_le_scheme
     test_client = TestClient(app)
     try:
         yield test_client

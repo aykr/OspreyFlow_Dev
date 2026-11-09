@@ -34,6 +34,7 @@ from typing import Any, Protocol
 import asyncpg
 from services.ingest.geometries import POINT_GEOMETRY_VERSION
 
+from ontology.handling import HandlingScheme, is_gazetteer_held
 from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.analytics import GeometryKind
@@ -51,6 +52,7 @@ from .datasets import Dataset
 #: gazetteer's own: enough that a case's own locations rarely crowd the places out, and when they do
 #: `more` says so (counted on names alone, never on an identifier).
 SCAN_LIMIT = 200
+
 
 def gazetteer_dataset_id(region: str) -> str:
     """The dataset a region's gazetteer is loaded into."""
@@ -183,13 +185,14 @@ async def register_gazetteer_dataset_from_env(
 
 
 def is_gazetteer_place(node: Node, query: str) -> bool:
-    """A gazetteer's place (in a gazetteer dataset: what the gazetteer holds, not a case's own
-    location with a postcode) with a point, whose **name** holds `query`. The store is asked by name
+    """A gazetteer's place (a case's own copy of one, `provenance.gazetteer`, ADR-147 Amendment 2;
+    or one in a gazetteer dataset: what the gazetteer holds, not a case's own location with a
+    postcode) with a point, whose **name** holds `query`. The store is asked by name
     alone already (`suggest_locations`); the name is checked again here, ignoring case, since the
     store's match keeps case and is asked in several casings."""
     if node.type != "Location" or not node.properties.get("geometry_ref"):
         return False
-    if not any(d.startswith(GAZETTEER_DATASET_PREFIX) for d in node.datasets):
+    if not is_gazetteer_held(node):
         return False
     name = node.properties.get("name")
     return isinstance(name, str) and query.casefold() in name.casefold()
@@ -245,3 +248,26 @@ async def search_places(
         )
     )
     return PlaceSearchResponse(places=places[: body.limit], more=len(places) > body.limit or more)
+
+
+#: ADR-147 Amendment 2: a command-line build that could not refresh the cases' copies says so.
+UNREFRESHED_COPIES = (
+    "The places are committed, but the cases that added this gazetteer were not given them again: "
+    "the Conduit's database could not be reached ({error}). Run the build again once the "
+    "deployment is up."
+)
+
+
+async def refresh_case_copies_from_env(
+    graph: GraphPort, scheme: HandlingScheme, gazetteer: str
+) -> int:
+    """The command-line builds' refresh of every case's copies of `gazetteer` (ADR-147 Amendment
+    2: a re-build refreshes them), once its places are committed. Returns how many cases. The
+    working sets are the Conduit's: a copy reverted here (its place gone) leaves an open case's
+    canvas when the case is next opened. An unreachable database is said in words."""
+    from .case_gazetteers import refresh_cases_from_env
+
+    try:
+        return await refresh_cases_from_env(graph, scheme, gazetteer)
+    except (OSError, asyncpg.PostgresError) as exc:
+        raise DatasetsUnreachable(UNREFRESHED_COPIES.format(error=type(exc).__name__)) from None

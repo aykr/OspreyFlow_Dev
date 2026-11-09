@@ -330,3 +330,17 @@ def test_an_identifier_fragment_finds_no_place_and_says_no_more(world: World) ->
     ]  # fmt: skip
     for fragment in ("31337", "1000", "osm-node"):
         assert _search(fragment).json() == {"places": [], "more": False}, fragment
+
+
+def test_a_case_s_copy_of_a_gazetteer_place_is_offered(world: World) -> None:
+    """ADR-147 Amendment 2 (the owner's ruling 6): a case that added a gazetteer reads its places as
+    copies in its own dataset, known by their provenance; a case's own location stays the case's."""
+    graph, analytics, _audit = world
+    copy = _location("loc-copy", dataset="case-data", name="Cranwell", osm_id=OSM_ID,
+                     geometry_ref="g-copy")  # fmt: skip
+    copy.provenance.gazetteer = "gazetteer-osm-rutland"
+    graph.nodes = [YARD, copy]
+    analytics.points["g-copy"] = _point("g-copy", -0.5, 53.0)
+    body = _search().json()
+    assert body["places"] == [{"id": "loc-copy", "name": "Cranwell", "lon": -0.5, "lat": 53.0}]
+    assert OSM_ID not in str(body)
