@@ -74,6 +74,16 @@ def _needs(show: subprocess.CompletedProcess[str]) -> list[str]:
     return [line.strip()[2:] for line in section.splitlines() if line.strip()]
 
 
+def _mine(show: subprocess.CompletedProcess[str]) -> list[str]:
+    """The orchestrator's own queue: shown, never notified (the owner, 9 November 2026: a quiet lane and a
+    long-held stack are the orchestrator's to settle in its own check, not the owner's)."""
+    out = show.stdout
+    if "FOR THE ORCHESTRATOR" not in out:
+        return []
+    section = out.split("FOR THE ORCHESTRATOR")[1].split("\n", 1)[1]
+    return [line.strip()[2:] for line in section.splitlines() if line.strip().startswith("- ")]
+
+
 def _all_beat(hb, state: str = "working") -> None:
     for lane in ("studio", "glass", "case"):
         assert hb("beat", lane, state, f"{lane} at work").returncode == 0
@@ -90,10 +100,12 @@ def test_fresh_working_lanes_need_nothing(hb) -> None:
     assert _needs(hb("show")) == []
 
 
-def test_a_working_beat_older_than_the_quiet_limit_needs_you(hb) -> None:
+def test_a_working_beat_older_than_the_quiet_limit_is_the_orchestrators(hb) -> None:
     _all_beat(hb)
     hb.age("glass", 46)
-    [line] = _needs(hb("show"))
+    show = hb("show")
+    assert _needs(show) == []
+    [line] = _mine(show)
     assert line.startswith("glass has been quiet since ") and line.endswith(" while working")
 
 
@@ -103,10 +115,12 @@ def test_a_waiting_for_owner_beat_needs_you(hb) -> None:
     assert _needs(hb("show")) == ["case is waiting for you: question on open question 1"]
 
 
-def test_a_lease_older_than_its_limit_needs_you(hb) -> None:
+def test_a_lease_older_than_its_limit_is_the_orchestrators(hb) -> None:
     _all_beat(hb)
     hb.hold_lease("studio", 121)
-    [line] = _needs(hb("show"))
+    show = hb("show")
+    assert _needs(show) == []
+    [line] = _mine(show)
     assert line.startswith("Test stack a has been leased by studio since ")
 
 
@@ -129,26 +143,29 @@ def test_a_needs_line_reads_the_same_ten_minutes_later(hb) -> None:
     _all_beat(hb)
     hb.age("glass", 46)
     hb("beat", "case", "ready-to-merge", "L3.1 done")
-    hb.hold_lease("studio", 121)
+    hb("beat", "studio", "waiting-for-owner", "question on open question 1")
+    hb.age("studio", 46)
     now = int(datetime.now(UTC).timestamp())
     first = _needs(hb("show", OSPREY_NOW=str(now)))
     later = _needs(hb("show", OSPREY_NOW=str(now + 600)))
-    assert len(first) == 2  # the ready-to-merge line is the orchestrator's, not under NEEDS YOU
+    assert len(first) == 1  # the quiet and ready-to-merge lines are the orchestrator's, not under NEEDS YOU
     assert later == first
 
 
 def test_watch_notifies_once_per_new_line_not_on_every_pass(hb) -> None:
     _all_beat(hb)
-    hb.age("glass", 46)
+    hb.age("glass", 46)  # quiet: the orchestrator's, never notified (the owner, 9 November 2026)
+    hb.hold_lease("studio", 121)  # long-held: the orchestrator's too
     hb("beat", "case", "waiting-for-owner", "a question")
     hb("watch", "1", OSPREY_WATCH_PASSES="3")
     notes = hb.notified.read_text().splitlines()
-    assert len(notes) == 2, notes
-    hb.age("studio", 50)
+    assert len(notes) == 1, notes
+    hb("beat", "studio", "waiting-for-owner", "another question")
     hb("watch", "1", OSPREY_WATCH_PASSES="2")
     notes = hb.notified.read_text().splitlines()
-    # A new watch starts with nothing seen, so all three are new to it, once each.
-    assert len(notes) == 5, notes
+    # A new watch starts with nothing seen, so both owner lines are new to it, once each.
+    assert len(notes) == 3, notes
+    assert not any("quiet" in n or "leased" in n for n in notes), notes
 
 
 def _repo_with_lane(base: Path, ahead: int, behind: int) -> Path:
@@ -314,10 +331,12 @@ def test_each_test_stack_is_shown_with_its_holder(hb) -> None:
     assert "Test stack b: leased by rules for 'phase 6 route tests', 20 minutes" in out
 
 
-def test_a_stack_b_lease_older_than_its_limit_needs_you(hb) -> None:
+def test_a_stack_b_lease_older_than_its_limit_is_the_orchestrators(hb) -> None:
     _all_beat(hb)
     hb.hold_lease("rules", 121, "b")
-    [line] = _needs(hb("show"))
+    show = hb("show")
+    assert _needs(show) == []
+    [line] = _mine(show)
     assert line.startswith("Test stack b has been leased by rules since ")
 
 

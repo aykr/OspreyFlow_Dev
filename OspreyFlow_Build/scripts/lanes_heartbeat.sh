@@ -125,9 +125,10 @@ overall() {
 }
 
 # Prints one tree per lane; writes the lines that need the owner to $DIR/.needs
-# Each test stack on one line; a lease held past its limit goes to the owner's list ($1).
+# Each test stack on one line; a lease held past its limit goes to the orchestrator's list ($1): its own
+# check settles it (the owner, 9 November 2026).
 stacks_lines() {
-  local needs="$1" st lock
+  local queue="$1" st lock
   for st in $STACKS; do
     if [ "$st" = a ]; then lock="$LEASE_DIR/stack.lease"; else lock="$LEASE_DIR/stack-$st.lease"; fi
     if [ -d "$lock" ]; then
@@ -135,7 +136,7 @@ stacks_lines() {
       a=$(age_s "$s")
       echo "Test stack $st: leased by $h for '${p:0:70}', $(mins "$a") minutes"
       if [ "$(mins "$a")" -ge "$LEASE_MAX_MIN" ]; then
-        echo "Test stack $st has been leased by $h since $s ($p)" >> "$needs"
+        echo "Test stack $st has been leased by $h since $s ($p)" >> "$queue"
       fi
     else
       echo "Test stack $st: free"
@@ -152,7 +153,7 @@ show() {
   local needs mine
   needs="$(mktemp "$DIR/.needs.XXXXXX")"; mine="$(mktemp "$DIR/.orchestrator.XXXXXX")"
   if [ -n "$full" ]; then overall plain | sed '/^$/d'; else overall | sed '/^$/d'; fi
-  stacks_lines "$needs"
+  stacks_lines "$mine"
   echo "Claude sessions running: $(sessions)"
   echo
   for lane in $LANES; do
@@ -163,7 +164,7 @@ show() {
       case "$state" in
         working|testing|planning)
           if [ "$(mins "$a")" -ge "$QUIET_MIN" ]; then
-            echo "$lane has been quiet since $at while $state" >> "$needs"
+            echo "$lane has been quiet since $at while $state" >> "$mine"   # the orchestrator's check asks it
           fi ;;
         waiting-for-owner)
           case "$note" in
