@@ -587,6 +587,13 @@ New ones are added at the bottom as they happen.
     studio replaces the git command with dulwich, under its Apache-2.0 licence, in L1.7 (CARRIES). Then git
     leaves the image and the licence gate stops admitting it. Until then git stays declared, waiting on that
     carry.
+90. **The offline verb on main (`ada8460`, fixed at `dc0b7cd`); studio-b's L1.8 merged (`6b63bbb`, onto main as
+    `f8933ae`).** Lanes' `make test` and test-js now run on the server, which passes 9,590 or more with 2 known
+    failures, where this Mac fails 24 with 30 errors for want of Docker. Rules found that a second call rewrote a
+    running lane's copy before refusing it; that cost rules a live result. Now refused before anything is touched,
+    the old run layout included. At studio-b's merge I first applied its registry and harness diffs, which belong
+    with its tips patch. registryCoverage went red, so I took them out again and carried them with the tips
+    (CARRIES). Case-b's L3.8 merges next. Admin has a fresh session on L2.7 (your word).
 
 ## Evening, 7 November: your records of 7 November applied
 
