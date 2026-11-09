@@ -67,8 +67,27 @@ def _counts(rows: Sequence[QueuedAlert]) -> dict[str, _Held]:
     return by
 
 
+def _merged(parts: list[_Held]) -> _Held | None:
+    if not parts:
+        return None
+    held = _Held()
+    for part in parts:
+        if part.last is not None and (held.last is None or part.last > held.last):
+            held.last = part.last
+        held.recent += part.recent
+        held.closed += part.closed
+        held.noi += part.noi
+        held.suppressed.extend(part.suppressed)
+    return held
+
+
 def _with_counts(source: AlertSource, counts: dict[str, _Held]) -> AlertSource:
-    held = counts.get(source.rule_id)
+    # A sentence rule just for its author raises `monitor:sentence:<id>` alerts (K8): its row
+    # counts them as its own.
+    keys = [source.rule_id]
+    if source.source == "rule":
+        keys.append(f"monitor:sentence:{source.id}")
+    held = _merged([counts[k] for k in keys if k in counts])
     if held is None:
         return source
     return source.model_copy(

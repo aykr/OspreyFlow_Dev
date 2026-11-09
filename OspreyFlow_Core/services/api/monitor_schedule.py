@@ -79,15 +79,19 @@ class MonitorScheduleExecutor:
         claim = f"monitor-schedule:claim:{monitor.id}:{latest.isoformat()}"
         if not await reply(self.valkey.set(claim, "1", nx=True, ex=_CLAIM_SECONDS)):
             return
-        await self.monitors.record_slot(monitor.id, latest)
         try:
             owner = await self.resolve_owner(monitor.owner_id)
         except PrincipalRevoked:
+            await self.monitors.record_slot(monitor.id, latest)
             await self.monitors.set_status(monitor.id, "stopped")
             return
         except PrincipalExchangeUnavailable:
+            # Says nothing about the owner: the claim is given back, so the next tick tries the
+            # same slot again rather than losing it.
             log.warning("watch %s: the identity provider could not be reached", monitor.id)
+            await reply(self.valkey.delete(claim))
             return
+        await self.monitors.record_slot(monitor.id, latest)
         if monitor.dataset_id is not None:
             owner = owner.model_copy(update={"datasets": [monitor.dataset_id]})
         else:

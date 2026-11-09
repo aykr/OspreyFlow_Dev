@@ -399,6 +399,49 @@ async def test_one_failing_rule_never_stops_the_daily_sweep_whole(
     assert "could not judge 1 lapsed document" in failed["resolved_query"]["words"]
 
 
+async def test_an_alert_refused_its_node_in_a_composite_case_still_raises_and_the_sweep_goes_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The brief's own shape (L2.10's carry): in a composite case the alert's node is refused by the
+    stamping graph's last word (`CompositeReadOnlyError` from `raise_committed`, the layer planted
+    away). The row is raised without its node, said in the audit, and the sweep ends whole. Red with
+    `raise_committed`'s read-only catch removed: the error reaches the sweep, which says it as a
+    failure and raises nothing."""
+    _no_layer(monkeypatch)
+    _s, graph, queue, report = await _sweep(BOTH)
+    assert report.failures == [] and report.alerts == 1
+    (alert,) = queue.alerts
+    assert alert.alert_node_id is None and graph.written_nodes == []
+    (withheld,) = [e for e in queue.audit if e.get("action") == "alert_node_withheld"]
+    assert "read-only" in withheld["resolved_query"]["reason"]
+
+
+async def test_a_rule_whose_deployer_cannot_be_resolved_is_said_in_its_audit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sweep's failure a person sees, in the rule's *Changes* (`rule_evaluation_failed`, listed
+    in `RULE_AUDIT_ACTIONS`): a deployer who cannot be resolved, as well as a failing customer."""
+    from services.api.rule_evaluation import RULE_AUDIT_ACTIONS
+
+    assert "rule_evaluation_failed" in RULE_AUDIT_ACTIONS
+    real = kyc_sweep.sweep
+
+    async def nobody(owner_id: str) -> None:
+        return None
+
+    async def sweep_as_nobody(**kwargs: Any) -> Any:
+        return await real(**{**kwargs, "principal_for_owner": nobody})
+
+    monkeypatch.setattr(kyc_sweep, "sweep", sweep_as_nobody)
+    import services.api.kyc_sweep as module
+
+    monkeypatch.setattr(module, "sweep", sweep_as_nobody)
+    _s, _g, queue, report = await _sweep(BOTH)
+    assert report.alerts == 0 and len(report.failures) == 1
+    (failed,) = [e for e in queue.audit if e.get("action") == "rule_evaluation_failed"]
+    assert "could not be resolved" in failed["resolved_query"]["words"]
+
+
 async def test_the_daily_sweep_finds_nothing_scoped_as_before(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

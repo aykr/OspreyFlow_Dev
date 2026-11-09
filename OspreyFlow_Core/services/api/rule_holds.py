@@ -82,11 +82,14 @@ async def readable_rule_audit(
     # Amendment 12 point 10, `raiser_read_admits`), so a correction lowering what it cites does
     # not let the audit tell the words the queue refuses.
     admitted = await raiser_reads_admitting(alerts, list(current.values()), reader)
+    # ADR-146 decision 8 (L2.10, the lane-reviewer's finding): a firing's words are a routed alert's
+    # words, read by its team's members and the home case's Authors alone, in the store's query.
+    routed = await alerts.routed_readable(about, reader) if about else set()
 
     def cites(entry: RuleAuditEntry) -> tuple[list[str], list[str], list[str]] | None:
         if entry.action in _ABOUT_AN_ALERT and "alert_id" in entry.detail:
             alert = current.get(str(entry.detail["alert_id"]))
-            if alert is None or alert.id not in admitted:
+            if alert is None or alert.id not in admitted or alert.id not in routed:
                 return None
             return evidence_node_ids(alert), list(alert.edge_ids), list(alert.event_ids)
         return _ids(entry, "node_ids"), _ids(entry, "edge_ids"), _ids(entry, "event_ids")

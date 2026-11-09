@@ -847,12 +847,16 @@ class AlertStore:
         the reader's dataset reach, newest first, whoever deployed the rule. Whether the reader may
         open the case is the route's level check; whether they may see each alert's evidence is
         the caller's (`evidence_available`, all-or-nothing), before anything is shown or counted."""
-        reach, extra = reach_clause(principal, 2)
+        reach, extra = reach_clause(principal, 4)
+        authored = sorted(set(await self._answers_for(principal)))
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM alerts WHERE investigation_id = $1 "
-                f"AND typology IS NOT NULL{reach} ORDER BY created_at DESC",
+                f"AND typology IS NOT NULL AND {_routed_sql('$2', '$3')}{reach} "
+                "ORDER BY created_at DESC",
                 investigation_id,
+                reader_teams(principal),
+                authored,
                 *extra,
             )
         return [_row_to_alert(row) for row in rows]
@@ -860,13 +864,16 @@ class AlertStore:
     async def get_case_alert(
         self, alert_id: str, investigation_id: str, principal: Principal
     ) -> Alert:
-        reach, extra = reach_clause(principal, 3)
+        reach, extra = reach_clause(principal, 5)
+        authored = sorted(set(await self._answers_for(principal)))
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 f"SELECT {_COLUMNS} FROM alerts WHERE id = $1 AND investigation_id = $2 "
-                f"AND typology IS NOT NULL{reach}",
+                f"AND typology IS NOT NULL AND {_routed_sql('$3', '$4')}{reach}",
                 alert_id,
                 investigation_id,
+                reader_teams(principal),
+                authored,
                 *extra,
             )
         if row is None:

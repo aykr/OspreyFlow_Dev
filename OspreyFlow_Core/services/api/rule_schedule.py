@@ -124,6 +124,28 @@ def schedule_view(
     )  # fmt: skip
 
 
+def runs_for_reader(
+    rule: TypologyRule, runs: Sequence[RuleRun], reader: Principal
+) -> list[RuleRun]:
+    """ADR-146 decision 8 (rule 7): a rule routed to a team says how many alerts each run raised to
+    the team's members alone; anyone else reads that it ran, or failed, and not how many."""
+    from .alerts import reader_teams
+    from .sentence_rules import routed_team_of
+
+    team = routed_team_of(rule)
+    if team is None or team in reader_teams(reader):
+        return list(runs)
+    return [
+        r.model_copy(update={
+            "alerts": 0,
+            "words": f"{r.outcome.capitalize()}: its alerts go to its team, who alone see how "
+            "many it raised.",
+        })
+        if r.outcome in ("ran", "failed") else r
+        for r in runs
+    ]
+
+
 class ScheduledRules(Protocol):
     async def scheduled_rules(self) -> list[TypologyRule]: ...
     async def rule_runs(self, rule_id: str, *, limit: int = 20) -> list[RuleRun]: ...
@@ -263,6 +285,7 @@ __all__ = [
     "WEEKDAYS",
     "RuleScheduleExecutor",
     "cron_of",
+    "runs_for_reader",
     "schedule_view",
     "schedule_words",
 ]

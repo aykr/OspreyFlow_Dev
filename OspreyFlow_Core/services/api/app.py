@@ -869,7 +869,7 @@ from .review import (
 from .risk import NeighbourhoodTooLarge
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
-from .rule_schedule import RuleScheduleExecutor, schedule_view
+from .rule_schedule import RuleScheduleExecutor, runs_for_reader, schedule_view
 from .rule_sentences import (
     SentenceContext,
     SentenceRefused,
@@ -13823,6 +13823,11 @@ async def read_alert_teams(
         return []
     today = datetime.now(UTC).date()
     led = await leads_today(roles, principal, today)
+    # Offered to whoever routes a rule's alerts (`deploy_rules`) and to a lead, for the members of
+    # their own team; a reader who does neither is shown no team (the lane-reviewer's L2.10 note).
+    held = rights_for(principal.roles)
+    if Right.DEPLOY_RULES not in held and Right.AUTHOR_RULES not in held and not led:
+        return []
     out: list[AlertTeam] = []
     for team in await roles.teams(today):
         members: list[str] = []
@@ -14532,6 +14537,7 @@ async def read_rule_schedule(
     if rule.trigger != "schedule":
         raise ReleaseRefused("this rule runs as data loads, not on a schedule")
     runs = await typology_rules.rule_runs(rule.id)
+    runs = runs_for_reader(rule, runs, principal)
     await audit.record(principal=principal, action="read_rule_runs",
                        investigation_id=investigation.id, resolved_query={"rule_id": rule_id},
                        result_cardinality=len(runs))  # fmt: skip

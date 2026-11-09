@@ -273,6 +273,8 @@ RULE_AUDIT_ACTIONS: tuple[str, ...] = (
     "rule_change_rejected",
     "rule_changed",
     "load_checks_set",
+    # L2.10's carry: the daily sweep's failure for a rule, said where a person sees it (*Changes*).
+    "rule_evaluation_failed",
 )
 
 
@@ -481,6 +483,12 @@ class PartlyRaised(Exception):  # noqa: N818 - a run that failed part-way, not a
         self.cause = cause
 
 
+class UnseenAlertReferent(RuntimeError):
+    """A referent node whose marking cannot be read (`_referent_handlings`): no node is written
+    rather than one marked by a guess. A `RuntimeError`, as it always was, so every caller that
+    caught one still does; `raise_committed` catches this alone (the lane-reviewer's L2.10 note)."""
+
+
 class UnreadableAlertLink(RuntimeError):
     """A link an alert cites whose marking cannot be read (reverted or superseded since the
     finding was judged): its node is withheld rather than marked by a guess, wherever the alert is
@@ -526,7 +534,7 @@ async def _referent_handlings(
         elif unseen is not None:
             handlings.append(unseen)
         else:
-            raise RuntimeError(f"alert referent {node_id} could not be read for its marking")
+            raise UnseenAlertReferent(f"alert referent {node_id} could not be read for its marking")
     return handlings
 
 
@@ -1133,7 +1141,7 @@ class RuleGate:
         except _AlertInAReadOnlyLayer:
             await self.graph.rollback_transaction(tx)
             return await self._raise_row(finding, None, withheld="originals_layer")
-        except (CompositeReadOnlyError, RuntimeError) as error:
+        except (CompositeReadOnlyError, UnseenAlertReferent) as error:
             # L2.10's carry: outside a load, as in one, a node that cannot be written (a read-only
             # dataset) or marked (a referent's marking not known, `_referent_handlings`) leaves the
             # row raised without it, said in the audit, so one finding never stops a sweep. Not

@@ -488,6 +488,40 @@ async def test_a_rule_audit_entry_naming_a_hidden_node_is_withheld_from_page_and
         assert seen_by_official.total == seen_by_secret.total - 1
 
 
+async def test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_its_team(
+    stores: dict[str, Any], analytics: AnalyticsPort
+) -> None:
+    """ADR-146 decision 8 (L2.10, the lane-reviewer's finding 1): a `rule_fired` entry carries its
+    alert's words, so the rule audit (*Changes*, read by the case's Authors) withholds the firing of
+    a routed alert, and the rule's count of findings, from a reader outside its team, as the queue
+    withholds the alert. Red with the audit's routing check (`routed_readable`) removed."""
+    from datetime import UTC, datetime
+
+    from schemas.domain import Alert, AlertMode
+
+    case, team, rule_id = f"case-{new_id()}", f"team-{new_id()}", f"r-{new_id()}"
+    alert = Alert(id=new_id(), rule_id=f"typology:{rule_id}", owner_id=ANALYST.id, mode=AlertMode.FULL,
+                  investigation_id=case, created_at=datetime.now(UTC), typology="sentence",
+                  words="Okafor is a listed person", routed_team=team)  # fmt: skip
+    await stores["alerts"].save(alert)
+    for action, detail in (
+        ("rule_fired", {"rule_id": rule_id, "alert_id": alert.id, "words": alert.words,
+                        "node_ids": [], "edge_ids": [], "event_ids": []}),
+        ("rule_evaluated", {"rule_id": rule_id, "trigger": "post_commit", "findings": 1}),
+    ):  # fmt: skip
+        await stores["audit"].record(principal=ANALYST, action=action, investigation_id=case,
+                                     resolved_query=detail, result_cardinality=1)  # fmt: skip
+    member = ANALYST.model_copy(update={"roles": [f"role:{team}"]})
+    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+        outside = await readable_rule_audit(stores["audit"], graph, case, ANALYST, analytics=analytics, alerts=stores["alerts"])
+        inside = await readable_rule_audit(stores["audit"], graph, case, member, analytics=analytics, alerts=stores["alerts"])
+    assert [e.action for e in inside.entries if e.action == "rule_fired"] == ["rule_fired"]
+    assert [e for e in outside.entries if e.action == "rule_fired"] == []
+    assert "Okafor" not in str(outside.entries)
+    (evaluated,) = [e for e in outside.entries if e.action == "rule_evaluated"]
+    assert "findings" not in evaluated.detail and evaluated.detail.get("findings_withheld") is True
+
+
 async def test_an_alert_on_official_flows_into_a_secret_account_is_secret(
     stores: dict[str, Any], analytics: AnalyticsPort
 ) -> None:

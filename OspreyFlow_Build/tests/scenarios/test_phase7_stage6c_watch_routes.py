@@ -278,10 +278,11 @@ def test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavail
 
     with TestClient(app) as client:
         case = _case(client, headers)
-        before = client.get(f"/v1/investigations/{case}/alerts/{alert.id}", headers=headers)
+        # Since L2.10 (ADR-146 decision 1) the one queue's explanation, the inbox gone.
+        assert client.get(f"/v1/investigations/{case}/alerts", headers=headers).status_code == 404
+        before = client.get(f"/v1/investigations/{case}/alert-queue/{alert.id}", headers=headers)
         assert before.status_code == 200, before.text
-        assert before.json()["evidence_available"] is True
-        assert before.json()["referent_node_ids"] == [node_id]
+        assert [n["id"] for n in before.json()["nodes"]] == [node_id]
 
     # Revoke: supersede the node with a replacement this principal can no longer see — the same
     # revocation shape `test_alerts.py::test_alert_evidence_is_unreadable_after_referent_access_
@@ -304,23 +305,20 @@ def test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavail
     asyncio.run(_revoke())
 
     with TestClient(app) as client:
-        after_list = client.get(f"/v1/investigations/{case}/alerts", headers=headers)
+        # The one queue withholds the alert whole once its evidence is hidden (rule 3): not listed,
+        # and its explanation answered as one that does not exist.
+        after_list = client.get(f"/v1/investigations/{case}/alert-queue?status=all", headers=headers)
         assert after_list.status_code == 200, after_list.text
-        matching = [a for a in after_list.json()["alerts"] if a["id"] == alert.id]
-        assert len(matching) == 1
-        assert matching[0]["evidence_available"] is False
-        assert matching[0]["referent_node_ids"] == []
-
-        after_get = client.get(f"/v1/investigations/{case}/alerts/{alert.id}", headers=headers)
-        assert after_get.json()["evidence_available"] is False
-        assert after_get.json()["referent_node_ids"] == []
+        assert alert.id not in [r["alert"]["id"] for r in after_list.json()]
+        after_get = client.get(f"/v1/investigations/{case}/alert-queue/{alert.id}", headers=headers)
+        assert after_get.status_code == 404 and node_id not in after_get.text
 
 
 def test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets(
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
     """ADR-130 Amendment 1, through the real app and the real case scoping (`get_principal`), for
-    both `list_alerts_route` and `get_alert_route`: a node that belongs to a dataset the case does
+    the one queue's explanation (`explain_alert`, since L2.10; the inbox's two routes went): a node that belongs to a dataset the case does
     not read says its type and label and `sources_withheld`, and no file name, row or count; a
     node wholly inside the case's datasets names its file. When the case then reads both datasets,
     the same node is named."""
@@ -362,12 +360,10 @@ def test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets(
     from services.api.app import app
 
     def _both_views(client: TestClient, case: str) -> list[dict[str, object]]:
-        listed = client.get(f"/v1/investigations/{case}/alerts", headers=headers)
-        assert listed.status_code == 200, listed.text
-        (from_list,) = [a for a in listed.json()["alerts"] if a["id"] == alert.id]
-        single = client.get(f"/v1/investigations/{case}/alerts/{alert.id}", headers=headers)
+        # Since L2.10, *what fired it* is on the one queue's explanation (ADR-146 decision 1).
+        single = client.get(f"/v1/investigations/{case}/alert-queue/{alert.id}", headers=headers)
         assert single.status_code == 200, single.text
-        return [from_list, single.json()]
+        return [single.json()]
 
     with TestClient(app) as client:
         case = _case(client, headers)
@@ -1015,7 +1011,7 @@ def test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link
     two numbers they may read and the SECRET call between them, which they may not, read from a
     second case reaching the same dataset. The list and the alert's own read give it with its
     evidence unavailable and neither its words nor its referents; the same alert citing no hidden
-    link gives its words. Red with the words shown whatever the evidence (`alert_to_view`): the
+    link gives its words. Red with the evidence check removed from the queue (since L2.10; the inbox went): the
     numbers it names came through."""
     private_key, _ = keypair
     headers = _bearer(private_key)
@@ -1037,12 +1033,11 @@ def test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link
             asyncio.run(_write_alert(alert))
         other = _case(client, headers)
 
-        listed = client.get(f"/v1/investigations/{other}/alerts", headers=headers)
+        # Since L2.10, the one queue: the alert over the hidden link is withheld whole, words and all.
+        listed = client.get(f"/v1/investigations/{other}/alert-queue?status=all", headers=headers)
         assert listed.status_code == 200, listed.text
-        by_id = {a["id"]: a for a in listed.json()["alerts"]}
-        assert by_id[readable.id]["words"] == words, "the route gives words when all is readable"
-        assert by_id[hidden.id]["evidence_available"] is False
-        assert by_id[hidden.id]["words"] is None and by_id[hidden.id]["referent_node_ids"] == []
-        one = client.get(f"/v1/investigations/{other}/alerts/{hidden.id}", headers=headers)
-        assert one.status_code == 200, one.text
-        assert one.json()["words"] is None and "+4477009001" not in one.text
+        by_id = {r["alert"]["id"]: r for r in listed.json()}
+        assert readable.id in by_id, "the queue lists the alert when all it cites is readable"
+        assert hidden.id not in by_id and "+4477009001" not in listed.text
+        one = client.get(f"/v1/investigations/{other}/alert-queue/{hidden.id}", headers=headers)
+        assert one.status_code == 404 and "+4477009001" not in one.text

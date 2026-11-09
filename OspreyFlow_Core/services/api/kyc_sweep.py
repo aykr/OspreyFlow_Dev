@@ -98,16 +98,25 @@ async def sweep(
                 principal_for_owner=principal_for_owner,
                 loader=sweeper,
             )
-            deployer = await principal_for_owner(rule.owner_id)
+            unjudged_all = sum(len(d) for d in customers.values())
+            try:
+                deployer = await principal_for_owner(rule.owner_id)
+                if deployer is not None and datasets is not None:
+                    # As a request is, by what the case reads: in a case reading a composite its
+                    # alert goes into the case's layer (ADR-099 Amendment 15 item 2).
+                    deployer = await scope_a_monitor(deployer, case, rule.dataset_id, datasets)
+                elif deployer is not None and rule.dataset_id is not None:
+                    deployer = deployer.model_copy(update={"datasets": [rule.dataset_id]})
+            except Exception as error:  # noqa: BLE001 - said, audited, and swept past
+                log.exception("KYC sweep: rule %s, case %s, could not be scoped", rule.id, case)
+                deployer = None
+                why = f"it could not be run as its deployer ({type(error).__name__})"
+            else:
+                why = "its deployer could not be resolved, so it could not run as them"
             if deployer is None:
-                report.failures.append(f"rule {rule.id}: its deployer could not be resolved")
+                report.failures.append(f"rule {rule.id} in case {case}: {why}")
+                await _say_unjudged(audit, sweeper, case, rule.id, day, 0, unjudged_all, why)
                 continue
-            if datasets is not None:
-                # As a request is, by what the case reads: in a case reading a composite its
-                # alert goes into the case's layer (ADR-099 Amendment 15 item 2).
-                deployer = await scope_a_monitor(deployer, case, rule.dataset_id, datasets)
-            elif rule.dataset_id is not None:
-                deployer = deployer.model_copy(update={"datasets": [rule.dataset_id]})
             context = KycContext(
                 graph=graph, scheme=scheme, screening=None, compute=None, today=day
             )
@@ -134,19 +143,7 @@ async def sweep(
                 set_case_datasets(None)
             report.alerts += raised
             if unjudged:
-                # A failure a person sees: in the rule's own audit, which *Changes* lists.
-                await audit.record(
-                    principal=sweeper,
-                    action="rule_evaluation_failed",
-                    investigation_id=case,
-                    resolved_query={
-                        "rule_id": rule.id, "trigger": "daily_sweep", "day": day.isoformat(),
-                        "findings": raised, "documents_not_judged": unjudged,
-                        "words": (f"The daily KYC sweep could not judge {unjudged} lapsed "
-                                  "document(s) for this rule; the rest of the sweep went on."),
-                    },
-                    result_cardinality=raised,
-                )  # fmt: skip
+                await _say_unjudged(audit, sweeper, case, rule.id, day, raised, unjudged, None)
             await audit.record(
                 principal=sweeper,
                 action="rule_evaluated",
@@ -157,6 +154,35 @@ async def sweep(
             )  # fmt: skip
     await reply(valkey.set(_LAST_SWEPT, day.isoformat()))
     return report
+
+
+async def _say_unjudged(
+    audit: AuditWriter,
+    sweeper: Principal,
+    case: str,
+    rule_id: str,
+    day: date,
+    raised: int,
+    unjudged: int,
+    why: str | None,
+) -> None:
+    """A failure a person sees: in the rule's own audit, which *Changes* lists
+    (`RULE_AUDIT_ACTIONS`). The day is closed all the same, so the lapses not judged are said here,
+    by count, and are not judged again: a document that lapsed stays lapsed, and the rule's next
+    load judges its customers afresh."""
+    because = f": {why}" if why else ""
+    await audit.record(
+        principal=sweeper,
+        action="rule_evaluation_failed",
+        investigation_id=case,
+        resolved_query={
+            "rule_id": rule_id, "trigger": "daily_sweep", "day": day.isoformat(),
+            "findings": raised, "documents_not_judged": unjudged,
+            "words": (f"The daily KYC sweep could not judge {unjudged} lapsed document(s) for this "
+                      f"rule{because}; the rest of the sweep went on."),
+        },
+        result_cardinality=raised,
+    )  # fmt: skip
 
 
 async def run_daily(

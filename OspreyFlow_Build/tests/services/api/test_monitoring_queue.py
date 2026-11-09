@@ -401,6 +401,51 @@ async def test_without_an_answer_for_its_datasets_a_routed_alert_reaches_its_tea
     assert await _queued_ids(alerts, case, _person()) == []
 
 
+async def test_the_filters_mine_team_unassigned_and_older_are_in_the_query(stores: Any) -> None:
+    """ADR-146 decision 2 and Amendment 1: *Mine*, *Team* and *Unassigned* each leave out an alert
+    suppressed today, and *All* holds it; *Older than N days* keeps the older alone. Red with the
+    suppressed clause removed, and with `show` ignored."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    me = _person(roles=[f"role:{team}"])
+    today = date(2026, 11, 9)
+    mine = _routed(case, _person(), team, assignee=me.id, status="claimed")
+    quiet = _routed(case, _person(), team, suppressed_until=today, suppress_reason="known")
+    old = _alert("typology:r1", _person(), investigation_id=case, typology="structuring",
+                 referent_node_ids=["n-1"], created_at=datetime.now(UTC) - timedelta(days=20))  # fmt: skip
+    for a in (mine, quiet, old):
+        await alerts.save(a)
+
+    async def ids(**kw: Any) -> set[str]:
+        return {r.alert.id for r in await alerts.list_queue(case, me, today=today, **kw)}
+
+    assert await ids(show="mine") == {mine.id}
+    assert await ids(show="team") == {mine.id}, "the team's alerts, the suppressed one left out"
+    assert await ids(show="unassigned") == {old.id}
+    assert await ids(show="all") == {mine.id, quiet.id, old.id}
+    assert await ids() == {mine.id, quiet.id, old.id}, "no filter named leaves nothing out"
+    assert await ids(older_than_days=7) == {old.id}
+    assert await ids(show="team", today=today + timedelta(days=1)) == {mine.id, quiet.id}, (
+        "a suppression ends by itself after its day")
+
+
+async def test_a_dataset_alert_is_in_every_case_reading_its_dataset_and_no_other(stores: Any) -> None:
+    """ADR-146 decision 7: an analyst's alert to the dataset is raised into its home case and is in
+    the queue of every case reading the dataset; a case reading another dataset is not given it, nor
+    a reader outside any case. Red with the dataset clause reading the reader's reach as unlimited."""
+    _, alerts = stores
+    home, elsewhere = new_id(), new_id()
+    raised = _alert(f"analyst:dataset:ds-1", _person(), investigation_id=home, dataset_id="ds-1",
+                    words="Two at one flat", referent_node_ids=["n-1"])  # fmt: skip
+    await alerts.save(raised)
+    reader = _person()
+    assert raised.id in await _queued_ids(alerts, elsewhere, reader)
+    assert raised.id in await _queued_ids(alerts, home, reader)
+    other = reader.model_copy(update={"datasets": ["ds-2"]})
+    assert raised.id not in await _queued_ids(alerts, elsewhere, other)
+    assert raised.id not in await _queued_ids(alerts, elsewhere, reader.model_copy(update={"datasets": []}))
+
+
 # --- severity, and the filters -----------------------------------------------------------------
 
 
