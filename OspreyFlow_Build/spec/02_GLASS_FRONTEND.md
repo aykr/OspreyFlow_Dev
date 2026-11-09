@@ -1333,7 +1333,7 @@ further action), with the Alerts panel. *Rule* (every rule, or one rule group) a
 figures the report does not count per rule (outcomes, time to close) say "(every rule)" when a rule is
 chosen. *See the trend* in Rules and Monitoring and the Reports Viewer's *Open the dashboard* open it
 filtered to the alert's rule group and the shortest period that holds it (`reports/AlertMonitoringBoard.tsx`;
-*See the trend* is `process/lanes/rules-b/see-the-trend.patch` until the rules lane takes it).
+*See the trend* is held as a patch for the rules lane until it takes it).
 
 **The Reports Viewer's journey (ADR-145 Amendment 4 decision 10).** On Home, a reader the place is not
 offered to sees each alert on the cases they can read with exactly two ways on: *Open in its case*, which
@@ -1346,7 +1346,7 @@ in dark, light and GOV.UK.
 
 **Roles, teams and Authors (ADR-145 Amendment 4 decision 12).** One page of words (`help/RolesHelpPage.tsx`),
 every word from `help/roles.ts`, which says every right `rights.py` declares (`help/roles.test.ts`, red with
-one missing). Admin's tips and its door to the page are `process/lanes/rules-b/admin-tips.patch` until the
+one missing). Admin's tips and its door to the page are held as a patch for the admin lane until the
 admin lane takes them; the Studio's door waits for its review, accept-type and merge screens.
 
 **Trends, report packs and their distribution (ADR-113, Amendments 1 to 3).** The Reports view's

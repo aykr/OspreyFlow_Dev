@@ -1,27 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 4e64076..9f999d2 100644
+index 9c906a2..899fce4 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -768,6 +768,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
-  * address and left by Back, an address the reader may not see left for the queue, and *Open the
-  * evidence* with the way back to the alert, still open. `keyboard/rules-place.spec.ts`. */
- export const RULES_PLACE_ACTIONS = defineActionRegistry("RULES_PLACE_ACTIONS", [
-+  // L2.12 (ADR-145 Amendment 4 decision 9): See the trend, with `see-the-trend.patch`.
-+  "see-the-trend-on-an-alert-by-keyboard",
-   "move-between-the-tabs-by-keyboard",
-   "open-an-alert-at-its-address-by-keyboard",
-   "back-to-the-queue-from-an-address-by-keyboard",
-@@ -793,6 +795,9 @@ export const MODELS_ACTIONS = defineActionRegistry("MODELS_ACTIONS", [
- ] as const);
- 
- export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
-+  // L2.12 (ADR-145 Amendment 4 decision 12): a right's tip, and the help page from Admin.
-+  "read-a-rights-tip-by-keyboard",
-+  "open-and-leave-roles-teams-and-authors-from-admin-by-keyboard",
-   "save-a-persons-roles-by-keyboard",
-   "register-a-dashboard-by-keyboard",
-   "remove-a-dashboard-by-keyboard",
-@@ -954,12 +959,25 @@ export const SESSION_PROMPT_ACTIONS = defineActionRegistry("SESSION_PROMPT_ACTIO
+@@ -1002,12 +1002,25 @@ export const SESSION_PROMPT_ACTIONS = defineActionRegistry("SESSION_PROMPT_ACTIO
  export const REPORTS_ACTIONS = defineActionRegistry("REPORTS_ACTIONS", [
    "change-the-reports-period-by-keyboard",
    "download-the-figures-by-keyboard",

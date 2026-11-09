@@ -1,3 +1,16 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 9c906a2..d65ef9a 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -800,6 +800,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+  * address and left by Back, an address the reader may not see left for the queue, and *Open the
+  * evidence* with the way back to the alert, still open. `keyboard/rules-place.spec.ts`. */
+ export const RULES_PLACE_ACTIONS = defineActionRegistry("RULES_PLACE_ACTIONS", [
++  // L2.12 (ADR-145 Amendment 4 decision 9): See the trend, with `see-the-trend.patch`.
++  "see-the-trend-on-an-alert-by-keyboard",
+   "move-between-the-tabs-by-keyboard",
+   "open-an-alert-at-its-address-by-keyboard",
+   "back-to-the-queue-from-an-address-by-keyboard",
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/rules-place-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/rules-place-harness.tsx
 index faf9af0..7efa8e9 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/rules-place-harness.tsx

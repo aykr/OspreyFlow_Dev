@@ -1,3 +1,17 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 9c906a2..5de7b3a 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -841,6 +841,9 @@ export const MAPS_ACTIONS = defineActionRegistry("MAPS_ACTIONS", [
+ ] as const);
+ 
+ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
++  // L2.12 (ADR-145 Amendment 4 decision 12): a right's tip, and the help page from Admin.
++  "read-a-rights-tip-by-keyboard",
++  "open-and-leave-roles-teams-and-authors-from-admin-by-keyboard",
+   "save-a-persons-roles-by-keyboard",
+   "register-a-dashboard-by-keyboard",
+   "remove-a-dashboard-by-keyboard",
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
 index 82d9db6..5bd0a1b 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
@@ -50,10 +64,10 @@ index 1d5cf14..5bb3a89 100644
 +  });
 +});
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.tsx b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.tsx
-index cabf95a..dd2df80 100644
+index 2fd46ca..f2ae994 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/AdminPlace.tsx
-@@ -22,6 +22,8 @@ import { Roles } from "./sections/Roles";
+@@ -23,6 +23,8 @@ import { Roles } from "./sections/Roles";
  import { Schedules } from "./Schedules";
  import { System } from "./sections/System";
  import "./admin.css";
@@ -62,7 +76,7 @@ index cabf95a..dd2df80 100644
  
  export { feedFreshness } from "./sections/Dashboards";
  export { joinWords, removalWords, ROLES } from "./sections/People";
-@@ -131,9 +133,21 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
+@@ -134,9 +136,21 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
      if (moved.current) heading.current?.focus();
    }, [chosen]);
    const govuk = currentBrand() === "govuk";

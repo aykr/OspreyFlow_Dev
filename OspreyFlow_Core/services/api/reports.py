@@ -28,6 +28,7 @@ from ports.graph import GraphPort
 from schemas.domain import (
     CLOSING_REASONS,
     POLE_CLASS_ORDER,
+    AgeBand,
     AgeCount,
     Alert,
     ExpandRequest,
@@ -62,7 +63,7 @@ ALERT_BOUND = 10_000
 CUSTOMER_BOUND = 2_000
 #: How many documents' holders one expansion asks for.
 _EXPAND_BATCH = 200
-AGE_LABELS = ("under a day", "1 to 7 days", "7 to 30 days", "over 30 days")
+AGE_LABELS: tuple[AgeBand, ...] = ("under a day", "1 to 7 days", "7 to 30 days", "over 30 days")
 #: The Outcomes figures, in the order the feed carries them: open, claimed, each closing reason
 #: (ADR-133 Amendment 5), and closed with none.
 OUTCOME_FIGURES = ("open", "claimed", *CLOSING_REASONS, "closed")
@@ -75,7 +76,7 @@ class ReportLimitExceededError(Exception):
         self.detail = detail
 
 
-def _age_label(created: datetime, now: datetime) -> str:
+def _age_label(created: datetime, now: datetime) -> AgeBand:
     days = (now - created).total_seconds() / 86400
     if days < 1:
         return AGE_LABELS[0]
@@ -155,7 +156,7 @@ def _panel_figures(
 ) -> tuple[list[AgeCount], list[TeamCount]]:
     """The *Alerts* panel's open by source and age (ADR-146 decision 9) and the board's team view
     (ADR-145 Amendment 4 decision 9), by rule group, over the same rows as every other figure."""
-    ages: Counter[tuple[str, str, str]] = Counter()
+    ages: Counter[tuple[str, str, AgeBand]] = Counter()
     team: dict[tuple[str, str], TeamCount] = {}
     for q in visible:
         label, typology = _group(q)
