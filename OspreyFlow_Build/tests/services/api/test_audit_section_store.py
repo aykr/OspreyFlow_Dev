@@ -17,8 +17,9 @@ What a mistake would do, and the case that catches it (each shown red at its rea
   `test_no_case_entry_without_the_safety_net`;
 - a system principal's unit (`operator`) read by a real unit of that name, or the writer's unit not
   recorded at all: `test_a_system_unit_is_never_a_real_units`;
-- the indexes built inside the bootstrap's transaction, or left invalid:
-  `test_the_indexes_are_built_concurrently_and_valid`;
+- the indexes built inside the bootstrap's transaction: `test_the_indexes_are_built_concurrently_and_valid`;
+  one left invalid by a crashed build kept: `test_an_index_left_invalid_by_a_crashed_build_is_built_again`
+  (a plain build outside the transaction is not told apart from a concurrent one: ADR-145 Am. 6);
 - `org_unit` added by an unconditional `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, which takes
   `ACCESS EXCLUSIVE` even when the column is there, so a second Conduit starting waits behind every
   read of `audit_log` (and in one process deadlocks):
@@ -254,3 +255,25 @@ async def test_a_second_start_does_not_wait_behind_a_read_of_the_audit(world: Si
     finally:
         await held.rollback()
         await reading.close()
+
+
+async def test_an_index_left_invalid_by_a_crashed_build_is_built_again(world: SimpleNamespace) -> None:
+    """A `CREATE INDEX CONCURRENTLY` that fails leaves an invalid index of its name behind, which
+    `IF NOT EXISTS` would then keep for ever. Made here the way a real failure makes one (a unique
+    build over duplicate rows), under the real index's name; the next start drops and rebuilds it."""
+    await _record(world, A, "set_person_roles", None, {"user_id": "ana-a"})
+    await _record(world, A, "set_person_roles", None, {"user_id": "ana-b"})
+    await world.raw.execute("DROP INDEX CONCURRENTLY audit_log_org_unit_idx")
+    with pytest.raises(asyncpg.UniqueViolationError):
+        await world.raw.execute(
+            "CREATE UNIQUE INDEX CONCURRENTLY audit_log_org_unit_idx ON audit_log (action)")
+    left = await world.raw.fetchval(
+        "SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+        "WHERE c.relname = 'audit_log_org_unit_idx' AND pg_table_is_visible(c.oid)")  # fmt: skip
+    assert left is False  # the plant took: an invalid index of the real one's name
+    again = await AuditWriter.connect(world.dsn)
+    await again.close()
+    valid, unique = await world.raw.fetchrow(
+        "SELECT i.indisvalid, i.indisunique FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+        "WHERE c.relname = 'audit_log_org_unit_idx' AND pg_table_is_visible(c.oid)")  # fmt: skip
+    assert (valid, unique) == (True, False)

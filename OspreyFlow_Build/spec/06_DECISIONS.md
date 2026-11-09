@@ -31022,7 +31022,10 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
      built at start `CONCURRENTLY`, each in a statement of its own outside the bootstrap's
      transaction (`audit.build_indexes`), so a large `audit_log` keeps taking audit writes, and so
      every route keeps answering, while they build; one left invalid by a crash is dropped and built
-     again at the next start.
+     again at the next start (`test_an_index_left_invalid_by_a_crashed_build_is_built_again`). What no
+     test tells apart: a plain `CREATE INDEX` outside the transaction from a `CONCURRENTLY` one, since
+     both leave the same valid index; only the wait behind an open write would show it, and that is
+     left to review of `audit.build_indexes`.
    - **The rule audit** (ADR-109 ruling 1; ADR-146 Amendment 2 returns it here) is never read from the
      stream. It is read for one case, through `readable_rule_audit` itself, behind the case rule-audit
      route's own gate and only for the Administrator (`osprey-admin`): an Author holding both rights is
