@@ -9,7 +9,9 @@ promotion `reverted`; clears its board items' `promoted_at`; audits it under `--
 clears the Conduit's kept results (`cache:*` in the shared Valkey), since what was counted included
 the promoted elements. Nothing is deleted.
 
-**Quiesce the Conduit**, as for any load's revert (ADR-127 Amendment 9). There is no online revert:
+**Stop the Conduit**, as for any load's revert (ADR-127 Amendment 9): the command asks the Conduit's
+liveness route (`OSPREY_CONDUIT_URL`, default `http://api:8000`) and refuses while it answers, as
+`seed_internal` refuses a seed. There is no online revert:
 the owner settled ADR-143 open question 2 as (a), this command alone (Amendment 5 decision 8), and
 it must never be routed through the Conduit.
 
@@ -81,19 +83,21 @@ async def revert_promotion(
         i.element_id for i in held
         if i.kind != "node" and i.withdrawn_at is None and i.promoted_at is None
     }  # fmt: skip
-    # Whatever the operator may read (the unfiltered lookup a load's revert asks too): this is
-    # an operator's command, never a route, and the one module outside the load revert that
-    # names it (`test_unfiltered_node_lookup_confined.py`).
-    resting = await graph.live_edges_touching(list(record.node_ids))
-    others = set(resting) - set(record.edge_ids) - own_drawing
-    if others:
-        raise PromotionRefused(
-            "links_rest_on_it",
-            f"{len(others)} link(s) written since rest on its items: revert those first.",
-        )
     layer_deleted = await store.layer_deleted(record.layer_id)
     tx = await graph.begin_transaction()
     try:
+        # Whatever the operator may read (the unfiltered lookup a load's revert asks too): this
+        # is an operator's command, never a route, and the one module outside the load revert
+        # that names it (`test_unfiltered_node_lookup_confined.py`). Read inside the revert's own
+        # transaction, so the check and the writes are one view of the graph (the independent
+        # review of L3.4, item 4).
+        resting = await graph.live_edges_touching(list(record.node_ids), tx=tx)
+        others = set(resting) - set(record.edge_ids) - own_drawing
+        if others:
+            raise PromotionRefused(
+                "links_rest_on_it",
+                f"{len(others)} link(s) written since rest on its items: revert those first.",
+            )
         await graph.revert_promotion(record.load_id, record.dataset_id, tx)
         if layer_deleted:
             await graph.withdraw_layer(
@@ -116,6 +120,31 @@ async def revert_promotion(
     return replace(record, status="reverted")
 
 
+#: Where the Conduit answers inside the deployment's network (`harness/reporting.py`'s
+#: `REPORT_SYNC_CONDUIT_URL`), and its unauthenticated liveness route.
+CONDUIT_URL_SETTING = "OSPREY_CONDUIT_URL"
+DEFAULT_CONDUIT_URL = "http://api:8000"
+CONDUIT_RUNNING = (
+    "Refused: the Conduit is running, and a promotion's revert needs it stopped (ADR-127 "
+    "Amendment 9; ADR-143 Amendment 5 decision 8): a running Conduit could write a link onto its "
+    "items between the check and the revert. Stop it and run again. Nothing was changed."
+)
+
+
+async def conduit_answers() -> bool:
+    """Whether the Conduit answers its liveness route from here, as `seed_internal`'s
+    `_api_running` asks compose from the host: any answer means it runs."""
+    import httpx
+
+    url = os.environ.get(CONDUIT_URL_SETTING, DEFAULT_CONDUIT_URL).rstrip("/") + "/healthz"
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.get(url)
+    except httpx.HTTPError:
+        return False
+    return True
+
+
 def stop_if_dry(dry_run: bool, says: str) -> bool:
     """The dry run's one stop, before the audit and before anything is written."""
     if dry_run:
@@ -133,6 +162,7 @@ async def run(
     items: Any,
     audit: Any,
     invalidate: Any,
+    conduit_running: Any = conduit_answers,
 ) -> int:
     record = await store.by_load(load_id)
     if record is None:
@@ -147,6 +177,9 @@ async def run(
         return 1
     if stop_if_dry(dry_run, says):
         return 0
+    if await conduit_running():
+        print(CONDUIT_RUNNING)
+        return 1
     by = Principal(id=reverted_by, clearance="OFFICIAL", org_unit=record.unit)
     # Audited before anything is written (ADR-127 Amendment 23's order).
     await audit.record(

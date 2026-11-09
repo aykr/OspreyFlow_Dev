@@ -45,7 +45,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from conduit_common.identity import new_id
-from ports.graph import NotPromotable
+from ports.graph import AmbiguousElementId, NotPromotable
 from schemas.domain import NOT_SAME_AS, SAME_AS, Edge, Node, Principal
 from schemas.mapconfig import GAZETTEER_DATASET_PREFIX
 from schemas.promotions import (
@@ -76,6 +76,9 @@ LAYER_DELETER = "layer-delete"
 #: A merge's read grant lasts a working day at most (Amendment 5 decision 7, as reviewed): an
 #: Author who walks away from the sheet does not keep the layer open.
 GRANT_HOURS = 8
+#: A promotion rejected by a check, as its record says it to every reader: fixed words, never an
+#: item's label, a count or a check's own words (rule 3; the independent review of L3.4, blocker 2).
+_CHANGED = "Nothing was written: its items changed since it was sent."
 #: Each check's code, in the order the sheet shows them.
 CHECKS = ("marking", "types", "graded", "ends")
 
@@ -238,7 +241,9 @@ class Promotions:
                 why = refusals.get(element.type)
                 if why is not None:
                     problems.append(("types", why))
-                elif element.type not in model_links and element.type not in refusals:
+                elif self.model_check_applies(element.type, refusals) and (
+                    element.type not in model_links
+                ):
                     problems.append(
                         ("types", f"{element.type} is not a link type of {dataset.name}'s model.")
                     )
@@ -517,6 +522,15 @@ class Promotions:
             )
         return item.source in lands and item.target in lands
 
+    def model_check_applies(self, name: str, refusals: dict[str, str | None]) -> bool:
+        """C14 for a link: a type of the ontology goes only when the dataset's live model holds it,
+        whatever `promotion_refusals` says (it answers `None` for every ontology type, leaving the
+        model to this check: ADR-143 Amendment 5 decision 9). A case's own proposed type, outside
+        the ontology, is decided by `promotion_refusals` alone (`None`: accepted and live)."""
+        held = self.boards.ontology.edge_type(name)
+        in_ontology = held is not None and not held.hidden
+        return in_ontology or name not in refusals
+
     @staticmethod
     def commits_at_once(dataset: Dataset) -> bool:
         """ADR-145 decision 8: *Author promotes* commits at once; otherwise a second person."""
@@ -591,16 +605,28 @@ class Promotions:
             await graph.rollback_transaction(tx)
             await self.reject(
                 record, was="awaiting_review", by=by,
-                reason=f"Nothing was written: {gone.count} of its items changed since it was sent.",
+                reason=_CHANGED,
             )  # fmt: skip
             raise PromotionRefused(
                 "items_changed",
                 "Nothing was promoted: some of its items were withdrawn or changed since it was "
                 "sent. Promote again from the board.",
             ) from gone
+        except AmbiguousElementId as unclear:
+            # An id two stored elements hold (`_holders`): refused whole, said in words.
+            await graph.rollback_transaction(tx)
+            await self.reject(
+                record, was="awaiting_review", by=by,
+                reason="The load was refused, and nothing was written.",
+            )  # fmt: skip
+            raise PromotionRefused(
+                "ambiguous_item",
+                "Nothing was promoted: one of its items cannot be told apart from another stored "
+                "item. Ask an administrator.",
+            ) from unclear
         except Exception:
-            # Whatever refused the load (an ambiguous id, a composite, an unconverted case), the
-            # promotion is not left waiting as if it could still be approved.
+            # Whatever else refused the load (a composite, an unconverted case), the promotion is
+            # not left waiting as if it could still be approved.
             await graph.rollback_transaction(tx)
             await self.reject(
                 record, was="awaiting_review", by=by,
@@ -779,9 +805,9 @@ class Promotions:
                 if failing
                 else "One of its items was withdrawn since it was sent."
             )
-            await self.reject(
-                record, was="awaiting_review", by=reviewer.id, reason=f"Nothing was written. {why}"
-            )
+            # Rule 3: the record keeps fixed words (it is listed to readers who may not read the
+            # layer); the reviewer, who has read every item, is told which one and why.
+            await self.reject(record, was="awaiting_review", by=reviewer.id, reason=_CHANGED)
             raise PromotionRefused("items_changed", f"Nothing was promoted. {why}")
 
     # --- views ----------------------------------------------------------------------------
@@ -800,8 +826,9 @@ class Promotions:
     ) -> Promotion:
         """One promotion for `reader`. What it left out, with its labels as the sheet showed them,
         goes to its proposer alone (rule 3: an unticked item may be one no one else may see). The
-        case is named only where `show_case` says the reader may know it (its own board, one of
-        the dataset's Authors)."""
+        case, its proposer and a reviewer's reason (free words, which may name an item) go only
+        where `show_case` says the reader may know the case (its own board, one of the dataset's
+        Authors, its proposer); to anyone else, the status and its counts alone."""
         held = await self.boards.datasets.egress_of([record.dataset_id])
         dataset = held.get(record.dataset_id)
         people = [p for p in (record.proposed_by, record.reviewed_by) if p]
@@ -815,13 +842,14 @@ class Promotions:
             dataset_name=dataset.name if dataset is not None else record.dataset_id,
             case_id=record.case_id if show_case else "", case_name=case_name,
             board_id=record.board_id if with_board else None,
-            proposed_by=record.proposed_by,
-            proposed_by_name=names.get(record.proposed_by, record.proposed_by),
+            proposed_by=record.proposed_by if show_case else "",
+            proposed_by_name=names.get(record.proposed_by, record.proposed_by)
+            if show_case else "An analyst of a case reading this dataset",
             proposed_at=record.proposed_at, status=record.status,
             reviewed_by=record.reviewed_by,
             reviewed_by_name=names.get(record.reviewed_by, record.reviewed_by)
             if record.reviewed_by else None,
-            reviewed_at=record.reviewed_at, reason=record.reason,
+            reviewed_at=record.reviewed_at, reason=record.reason if show_case else None,
             nodes=counts[0] if counts else len(record.node_ids),
             links=counts[1] if counts else len(record.edge_ids),
             left_out=[LeftOut(item_id=i, label=lab, why=why) for i, lab, why in record.left_out]
@@ -871,9 +899,9 @@ class Promotions:
             # Restored since the sheet was opened: its layer is a live case's again, and the
             # grant ends now, whether it is read, merged or cancelled next.
             await self.store.close_grant(grant.id, datetime.now(UTC))
+            # Strict, as the removed-case routes answer (the lane review's minor 12).
             raise PromotionRefused(
-                "case_open",
-                "Only a removed case's layer can be merged: this case has been restored.",
+                "case_not_linked", "No removed case of that id reads this dataset.", status=404
             )
         return grant
 

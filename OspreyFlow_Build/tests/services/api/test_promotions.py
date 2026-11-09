@@ -754,6 +754,68 @@ def test_a_link_type_outside_the_datasets_live_model_is_not_promoted(
     assert refused.status_code == 422 and refused.json()["error"] == "check_failed"
 
 
+def _the_real_link_types(pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Case-b's `LinkTypeService` itself, the shape production has (ADR-143 Amendment 5 decision
+    9): its `promotion_refusals` answers `None` for every ontology type."""
+    import asyncio
+
+    from services.api.link_types import LinkTypeService
+
+    from .test_link_type_service import Graph, MemoryStore, WorkingSet
+
+    # On the app's own ontology, its packs included, as the lifespan builds it.
+    service = LinkTypeService(
+        MemoryStore(), app.state.ontology, Graph(), WorkingSet(), pw.cases,  # type: ignore[arg-type]
+        models=pw.models,
+    )  # fmt: skip
+    asyncio.run(service.refresh())
+    monkeypatch.setattr(app.state, "link_types", service, raising=False)
+    return service
+
+
+def _an_ontology_type_outside_the_model(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> tuple[str, list[str]]:
+    board = _board()
+    x, y = _item(board), _item(board, label="Y", properties={"family_name": "Y"})
+    linked = _link(board, x["element_id"], y["element_id"], type="CO_DEFENDANT_OF")
+    assert linked.status_code == 201, linked.text
+
+    async def live(dataset_id: str) -> Any:
+        # The model made live without the NIEM pack that type belongs to, as the real store's
+        # `TargetModel` reads (the real service reads its extensions too).
+        return SimpleNamespace(packs=[], extensions=[])
+
+    monkeypatch.setattr(pw.models, "live", live)
+    _the_real_link_types(pw, monkeypatch)
+    return board, [x["item_id"], y["item_id"], linked.json()["item_id"]]
+
+
+def test_c14_holds_through_the_real_link_type_service(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Blocker 1 of the independent review: the real service answers `None` for an ontology
+    type, which must not stand in for the model's own check."""
+    board, ticked = _an_ontology_type_outside_the_model(pw, monkeypatch)
+    (link,) = [i for i in _sheet(board)["items"] if i["kind"] == "link"]
+    assert link["problems"] == ["CO_DEFENDANT_OF is not a link type of Prison intel's model."]
+    refused = _promote(board, *ticked)
+    assert refused.status_code == 422 and refused.json()["error"] == "check_failed"
+    assert pw.graph.promotions == 0
+
+
+def test_the_c14_check_fails_with_refusals_standing_in_for_the_model(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The plant: the shape before the review, any type `promotion_refusals` answered skipping
+    # the model's check.
+    monkeypatch.setattr(
+        Promotions, "model_check_applies", lambda self, name, refusals: name not in refusals
+    )
+    board, ticked = _an_ontology_type_outside_the_model(pw, monkeypatch)
+    assert _promote(board, *ticked).status_code == 201
+
+
 # --- rule 4: every route refuses whom it is not for ------------------------------------------
 
 
@@ -798,6 +860,8 @@ def test_an_author_merges_a_removed_cases_layer_through_a_grant_that_ends_with_t
     first, second = _removed_with_items(pw)
     (row,) = _as("dana").get("/v1/datasets/src/removed-cases").json()["cases"]
     assert row["investigation_id"] == K and row["mergeable"] and row["items"] == 2
+    # Read across cases Dana is no member of: audited, as Admin's own list is (review item 8).
+    assert "list_removed_case_layers" in [r["action"] for r in pw.audit.records]
     sheet = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()
     assert {i["item_id"] for i in sheet["items"]} == {first["item_id"], second["item_id"]}
     assert "open_layer_merge" in [r["action"] for r in pw.audit.records]
@@ -845,7 +909,15 @@ def test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_at_the_dec
 
 def test_a_layer_merge_is_refused_to_a_non_author_and_for_an_open_case(pw: SimpleNamespace) -> None:
     _board()
-    assert _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").status_code == 409
+    # Strict (minor 12): an open case answers exactly as an id no case reading the dataset has.
+    opened = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet")
+    unknown = _as("dana").post("/v1/datasets/src/removed-cases/no-such-case/merge-sheet")
+    assert opened.status_code == unknown.status_code == 404
+    assert opened.json() == unknown.json()
+    for path in (f"removed-cases/{K}/delete/dry-run",):
+        assert _as("dana").post(f"/v1/datasets/src/{path}").json() == _as("dana").post(
+            "/v1/datasets/src/removed-cases/no-such-case/delete/dry-run"
+        ).json()
     pw.removed.add(K)
     answer = _as("fred").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet")
     assert answer.status_code == 403 and answer.json()["error"] == "not_an_author"
@@ -962,7 +1034,9 @@ async def test_the_waiting_seam_lists_only_the_readers_unit_and_clearance(
 # --- the operator command (scripts.revert_promotion) -----------------------------------------
 
 
-async def _run_the_command(pw: SimpleNamespace, load_id: str, *, dry_run: bool) -> int:
+async def _run_the_command(
+    pw: SimpleNamespace, load_id: str, *, dry_run: bool, conduit_running: bool = False
+) -> int:
     from scripts.revert_promotion import run
     from services.api.dataset_scope import stamping
 
@@ -974,10 +1048,14 @@ async def _run_the_command(pw: SimpleNamespace, load_id: str, *, dry_run: bool) 
     code = await run(
         load_id, reverted_by="ops", dry_run=dry_run, store=pw.store,
         graph=stamping(pw.graph, registry=pw.datasets), items=pw.items, audit=pw.audit,
-        invalidate=invalidate,
+        invalidate=invalidate, conduit_running=lambda: _answers(conduit_running),
     )  # fmt: skip
     pw.cleared = cleared
     return code
+
+
+async def _answers(value: bool) -> bool:
+    return value
 
 
 async def test_the_commands_dry_run_writes_nothing_and_the_real_run_reverts(
@@ -1076,7 +1154,7 @@ def test_a_case_restored_since_its_sheet_was_opened_is_not_merged(pw: SimpleName
     pw.removed.discard(K)  # the case is restored
     answer = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
                               json={"item_ids": [first["item_id"]]})  # fmt: skip
-    assert answer.status_code == 409 and answer.json()["error"] == "case_open"
+    assert answer.status_code == 404 and answer.json()["error"] == "case_not_linked"
     assert pw.store.grants[grant].closed_at is not None and pw.graph.promotions == 0
 
 
@@ -1125,7 +1203,7 @@ async def test_the_resting_link_check_fails_with_the_check_removed(
               "source_note": "n", "source": b_drawn, "target": made["element_id"]},
     )  # fmt: skip
 
-    async def none(node_ids: Any) -> set[str]:
+    async def none(node_ids: Any, tx: Any = None) -> set[str]:
         return set()
 
     monkeypatch.setattr(pw.graph, "live_edges_touching", none)  # the plant
@@ -1227,7 +1305,7 @@ def test_a_case_restored_since_its_sheet_was_opened_is_not_read_through_its_gran
     grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
     pw.removed.discard(K)  # the case is restored: its layer is its members' alone again
     answer = _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}")
-    assert answer.status_code == 409 and answer.json()["error"] == "case_open"
+    assert answer.status_code == 404 and answer.json()["error"] == "case_not_linked"
     assert pw.store.grants[grant].closed_at is not None
     # Removed again, the old grant stays closed: it is never reopened.
     pw.removed.add(K)
@@ -1528,3 +1606,120 @@ def test_the_seen_check_fails_with_every_item_listed(
     monkeypatch.setattr(Promotions, "_seen", every)  # the plant
     board, seen, hidden = _above_alices_clearance(pw, monkeypatch)
     assert hidden["item_id"] in [i["item_id"] for i in _sheet(board)["items"]]
+
+
+# --- the independent review of L3.4 ---------------------------------------------------------
+
+
+def _rejected_with_words(pw: SimpleNamespace) -> str:
+    """Sent for review, then rejected by Dana with free words naming the item."""
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    made = _item(board, label="Hidden Name", properties={"family_name": "Hidden"})
+    promotion = _promote(board, made["item_id"]).json()["id"]
+    rejected = _studio("dana", f"/{promotion}/decision", "post", approve=False,
+                       reason="Hidden Name is not who we think")  # fmt: skip
+    assert rejected.status_code == 200, rejected.text
+    return promotion
+
+
+def test_a_rejections_words_and_proposer_reach_no_reader_who_may_not_know_the_case(
+    pw: SimpleNamespace,
+) -> None:
+    """Blocker 2 (rule 3): Fred reads `src` but is none of its Authors and no member of K."""
+    promotion = _rejected_with_words(pw)
+    (freds,) = _studio("fred").json()["promotions"]
+    assert freds["id"] == promotion and freds["status"] == "rejected"
+    assert freds["reason"] is None and freds["proposed_by"] == ""
+    assert "alice" not in freds["proposed_by_name"] and "Hidden" not in str(freds)
+    # The dataset's Authors, who answer for it, read the reason and who sent it.
+    (danas,) = _studio("dana").json()["promotions"]
+    assert danas["reason"] == "Hidden Name is not who we think" and danas["proposed_by"] == "alice"
+
+
+def test_the_withheld_reason_check_fails_with_every_reader_shown_the_case(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = Promotions.view
+
+    async def everyone(self: Promotions, record: Any, reader: Any, **kw: Any) -> Any:
+        return await real(self, record, reader, **{**kw, "show_case": True})
+
+    monkeypatch.setattr(Promotions, "view", everyone)  # the plant, at the routes' call
+    _rejected_with_words(pw)
+    (freds,) = _studio("fred").json()["promotions"]
+    assert freds["reason"] == "Hidden Name is not who we think"
+
+
+def test_a_rejection_by_a_check_records_fixed_words(pw: SimpleNamespace) -> None:
+    """The record keeps no label, count or check's words: the reviewer is told which and why."""
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    made = _item(board, marking="OFFICIAL-SENSITIVE", label="Hidden Name",
+                 properties={"family_name": "Hidden"})  # fmt: skip
+    promotion = _promote(board, made["item_id"]).json()["id"]
+    held = pw.datasets.datasets["src"]
+    pw.datasets.datasets["src"] = held.model_copy(update={"highest_marking": "OFFICIAL"})
+    answer = _studio("dana", f"/{promotion}/decision", "post", approve=True)
+    assert answer.status_code == 409 and "Hidden Name" in answer.json()["detail"]
+    reason = pw.store.records[promotion].reason or ""
+    assert reason == promotions_module._CHANGED
+    assert "Hidden" not in reason and "OFFICIAL" not in reason
+
+
+async def test_the_revert_is_refused_while_the_conduit_runs(pw: SimpleNamespace) -> None:
+    board, made, link_item, _ = _drawn()
+    promoted = _promote(board, made["item_id"], link_item).json()
+    code = await _run_the_command(pw, promoted["load_id"], dry_run=False, conduit_running=True)
+    assert code == 1
+    assert pw.store.records[promoted["id"]].status == "committed"
+    assert _carol_sees_it_from_b(made["element_id"])
+    assert "revert_promotion" not in [r["action"] for r in pw.audit.records]
+    # Its dry run writes nothing and needs no stop.
+    assert await _run_the_command(pw, promoted["load_id"], dry_run=True, conduit_running=True) == 0
+
+
+async def test_the_running_conduit_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scripts.revert_promotion as command
+
+    monkeypatch.setattr(command, "CONDUIT_RUNNING", "")  # keeps its words harmless below
+    board, made, link_item, _ = _drawn()
+    promoted = _promote(board, made["item_id"], link_item).json()
+    from scripts.revert_promotion import run
+    from services.api.dataset_scope import stamping
+
+    async def nothing() -> None:
+        return None
+
+    # The plant at the call site: the command given a check that says the Conduit is stopped.
+    code = await run(
+        promoted["load_id"], reverted_by="ops", dry_run=False, store=pw.store,
+        graph=stamping(pw.graph, registry=pw.datasets), items=pw.items, audit=pw.audit,
+        invalidate=nothing, conduit_running=lambda: _answers(False),
+    )  # fmt: skip
+    assert code == 0 and pw.store.records[promoted["id"]].status == "reverted"
+
+
+def test_a_promotion_with_an_ambiguous_link_id_writes_nothing(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """As the adapter's `_holders`: an id two stored links hold refuses the whole load. The second
+    holder appears after the route's checks (another type's link written under the same id), so
+    only the graph's own refusal can catch it."""
+    board, made, link_item, link = _drawn()
+    graph = pw.graph
+    real = type(graph).promote_elements
+
+    async def racing(*args: Any) -> None:
+        held = next(e for e in graph._graph_edges if e.id == link)
+        graph._graph_edges.append(held.model_copy(update={"type": "KNOWS"}))
+        await real(graph, *args)
+
+    monkeypatch.setattr(graph, "promote_elements", racing)
+    answer = _promote(board, made["item_id"], link_item)
+    assert answer.status_code == 409 and answer.json()["error"] == "ambiguous_item"
+    (record,) = pw.store.records.values()
+    assert record.status == "rejected" and record.reason == "The load was refused, and nothing was written."
+    assert not _carol_sees_it_from_b(made["element_id"])

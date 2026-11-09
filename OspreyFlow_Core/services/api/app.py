@@ -4534,18 +4534,14 @@ def get_promotions(
         store=store,
         investigations=investigations,
         author_level=AccessLevel.AUTHOR,
-        link_types=_promotion_refusals_of(request),
+        # Case-b's `LinkTypeService` (ADR-143 Amendment 4 decision 3), as the app holds it: no
+        # quiet fallback for a service without `promotion_refusals` (the independent review of
+        # L3.4, item 3). A test app holding none refuses every type outside the dataset's model.
+        link_types=getattr(request.app.state, "link_types", None),
         names=directory.display_names if directory is not None else None,
         case_names=case_name,
         on_rejected=rejected,
     )
-
-
-def _promotion_refusals_of(request: Request) -> Any:
-    """Case-b's `LinkTypeService.promotion_refusals` (ADR-143 Amendment 4 decision 3) when the
-    service has it; until L3.5 merges, `None`, and a link type outside the ontology is refused."""
-    service = getattr(request.app.state, "link_types", None)
-    return service if hasattr(service, "promotion_refusals") else None
 
 
 PromotionsDep = Annotated[Promotions, Depends(get_promotions)]
@@ -9934,13 +9930,12 @@ async def _removed_case(
          if c.through is None),
         None,
     )  # fmt: skip
-    if row is None:
-        raise LayerActionRefused(404, "case_not_linked", "That case does not read this dataset.")
-    if row.state != "removed":
+    # Strict (rule 3; the lane review's minor 12): an open case reading the dataset answers as one
+    # that reads it not at all, so the dataset's Authors cannot tell an open case's id by probing.
+    if row is None or row.state != "removed":
         raise LayerActionRefused(
-            409, "case_open",
-            "Only a removed case's layer can be merged or deleted: this case is still open.",
-        )  # fmt: skip
+            404, "case_not_linked", "No removed case of that id reads this dataset."
+        )
     layer = await datasets.layer_of_case(investigation_id)
     if layer is None:
         raise LayerActionRefused(404, "no_layer", "That case holds no layer.")
@@ -9969,11 +9964,18 @@ async def removed_case_layers(
     investigations: InvestigationsDep,
     graph: GraphDep,
     promotions: PromotionsDep,
+    audit: AuditDep,
 ) -> RemovedCaseLayers:
-    """The removed cases reading this dataset, for its Authors: counts only, never contents."""
+    """The removed cases reading this dataset, for its Authors: counts only, never contents.
+    Audited, as Admin's own list of a dataset's cases is (`list_dataset_cases`): it reads across
+    cases the Author is no member of."""
     await _an_author(promotions, dataset_id, principal)
     dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
     rows = await _linked_cases(dataset, datasets, investigations, graph, principal)
+    removed = [r for r in rows if r.state == "removed" and r.through is None]
+    await _audit_promotion(
+        audit, principal, "list_removed_case_layers", None, len(removed), dataset_id=dataset_id,
+    )  # fmt: skip
     composite = dataset.kind == "composite"
     gazetteer = is_gazetteer(dataset)
     why_not = (
@@ -9990,8 +9992,7 @@ async def removed_case_layers(
                 investigation_id=r.investigation_id, name=r.name, items=r.items + r.links,
                 mergeable=why_not is None, why_not=why_not,
             )
-            for r in rows
-            if r.state == "removed" and r.through is None
+            for r in removed
         ],
     )  # fmt: skip
 

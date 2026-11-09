@@ -117,7 +117,9 @@ def services_importing(root: Path, modules: tuple[str, ...] = OPERATOR_ONLY) -> 
             names = (
                 [a.name for a in node.names]
                 if isinstance(node, ast.Import)
-                else [node.module or ""]
+                # `from scripts import revert_promotion` names the module as `scripts` plus the
+                # imported name (the independent review of L3.4, item 6).
+                else [node.module or "", *(f"{node.module}.{a.name}" for a in node.names)]
                 if isinstance(node, ast.ImportFrom)
                 else []
             )
@@ -139,7 +141,11 @@ def test_the_import_check_flags_a_service_importing_the_command(tmp_path: Path) 
     )
     (tmp_path / "services/api/other.py").write_text("import scripts.revert_promotion as r\n")
     (tmp_path / "services/api/quiet.py").write_text("from scripts.revert_load import run\n")
-    assert services_importing(tmp_path) == {"services/api/promotions.py", "services/api/other.py"}
+    (tmp_path / "services/api/package.py").write_text("from scripts import revert_promotion\n")
+    (tmp_path / "services/api/sibling.py").write_text("from scripts import revert_load\n")
+    assert services_importing(tmp_path) == {
+        "services/api/promotions.py", "services/api/other.py", "services/api/package.py"
+    }
 
 
 def test_the_check_flags_each_confined_lookup_outside_its_module(tmp_path: Path) -> None:
