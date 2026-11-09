@@ -31238,6 +31238,13 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    out with the layer. **The owner ruled (a) on open question 2** (9 November 2026, through the
    orchestrator): no online revert; the operator command is the only path. The board shows the
    command to a data engineer and tells an analyst to ask one.
+   **The revert's core lives in the operator command alone** (`scripts/revert_promotion.py`): its
+   guard asks `GraphPort.live_edges_touching`, the unfiltered lookup a load's revert asks, and that
+   module is the second one allowed it (`tests/test_unfiltered_node_lookup_confined.py`'s
+   `CONFINED`; the orchestrator's ratification for L3.4, 9 November 2026). Nothing under
+   `services/` imports it (`test_no_service_imports_the_revert_command`, red by a planted import),
+   the entry fails if the script stops calling it (red with the call dropped), and
+   `services/api/promotions.py` names neither that lookup nor `links_resting_on`.
 9. **A link's type is checked against the dataset's live model**, its packs, as a node's is (C14).
    **A case's own proposed link types are usable on its boards at once** (decision 9), through
    `LinkTypeService.case_types` alone. A proposal's hidden storage label is never offered or accepted
