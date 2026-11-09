@@ -1279,7 +1279,9 @@ def _conduit_running(ctx: _Context, directory: Path) -> bool:
     )
     if code != 0:
         raise CommandRefused("Could not ask Docker about the Conduit. Is Docker running?")
-    return any(str(row.get("State", "")) == "running" for row in _services(output))
+    # Anything but stopped (restarting, paused, starting) may draw: only these are stopped.
+    stopped = {"exited", "created", "dead", ""}
+    return any(str(row.get("State", "")) not in stopped for row in _services(output))
 
 
 def _grading(args: argparse.Namespace, ctx: _Context) -> int:
@@ -1318,15 +1320,16 @@ def _grading(args: argparse.Namespace, ctx: _Context) -> int:
     if running:
         ctx.step("stop the Conduit", [*compose(directory), "stop", "api"])
     code = ctx.run(argv, cwd=ctx.product)
-    if code == 2:
-        print(
-            "The change stopped part way, and the Conduit is left stopped: run the dry run and "
-            "the same change again to finish it. grading.scheme is not changed yet."
-        )
-        return 2
-    if code != 0:
+    if code in grading_verb.NOTHING_CHANGED:
         if running:
             ctx.step("start the Conduit again", [*compose(directory), "up", "-d", "--wait", "api"])
+        return code
+    if code != 0:
+        # A stop part way, an unforeseen failure, a killed one-shot: some items may be changed.
+        print(
+            f"The change did not finish (exit {code}), and the Conduit is left stopped: run the "
+            "dry run and the same change again to finish it. grading.scheme is not changed yet."
+        )
         return code
     value = (
         grading_verb.scheme_file_beside(ctx.config_path, scheme_file) if scheme_file else args.to
@@ -1334,13 +1337,26 @@ def _grading(args: argparse.Namespace, ctx: _Context) -> int:
     config = ctx.config_path
     text = config.read_text(encoding="utf-8") if config.exists() else ""
     config.write_text(grading_verb.with_grading_scheme(text, value), encoding="utf-8")
+    if grading_verb.scheme_set(config.read_text(encoding="utf-8")) != value:
+        raise CommandRefused(
+            f"The items are changed, but grading.scheme in {config} could not be set to {value}: "
+            "set it by hand, then run ospreyflow apply and ospreyflow start. The Conduit is "
+            "left stopped."
+        )
     print(f"grading.scheme is {value} in {config}.")
-    ctx.step(
-        "render the deployment in the new scheme",
-        [*ctx.python, "-m", "harness.apply", "--reapply",
-         "--config", str(config), "--out-root", str(directory.parent)],
-    )  # fmt: skip
-    ctx.step("start the Conduit", [*compose(directory), "up", "-d", "--wait", "api"])
+    try:
+        ctx.step(
+            "render the deployment in the new scheme",
+            [*ctx.python, "-m", "harness.apply", "--reapply",
+             "--config", str(config), "--out-root", str(directory.parent)],
+        )  # fmt: skip
+        ctx.step("start the Conduit", [*compose(directory), "up", "-d", "--wait", "api"])
+    except StepFailed:
+        print(
+            "The items and grading.scheme are changed, but the deployment did not start again: "
+            "the Conduit is stopped. Run ospreyflow apply, then ospreyflow start."
+        )
+        raise
     print("The Conduit is started in the new scheme; the boards offer its grades.")
     return 0
 

@@ -168,7 +168,69 @@ def test_a_missing_mapping_is_refused_before_anything_runs(
             "map:\n  scheme: keep\ngrading:\n  scheme: 5x5x5\n",
             "map:\n  scheme: keep\ngrading:\n  scheme: 3x5x2\n",
         ),
+        (  # a comment at column 0 inside the section does not end it
+            "grading:\n# chosen at install\n  scheme: 5x5x5\nmap: {}\n",
+            "grading:\n# chosen at install\n  scheme: 3x5x2\nmap: {}\n",
+        ),
     ],
 )
 def test_the_setting_is_edited_in_place(text: str, expected: str) -> None:
     assert with_grading_scheme(text, "3x5x2") == expected
+
+
+@pytest.mark.parametrize("code", [2, 137, 3])
+def test_any_failure_but_a_refusal_leaves_the_conduit_stopped(
+    rig: Rig, tmp_path: Path, code: int, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A stop part way (2), a killed one-shot (137), anything unforeseen: some items may be
+    changed, so the Conduit is never started again in the old scheme over them."""
+    mapping = _ready(rig, tmp_path, running=True)
+    rig.runner.fail[SCRIPT] = code
+    assert rig("grading", "change", "--to", "3x5x2", "--mapping", str(mapping),
+               "--confirm", "tok", "--stop-api") == code  # fmt: skip
+    assert [c.argv for c in rig.runner.calls][-1] == _script_call(rig)
+    assert "left stopped" in capsys.readouterr().out
+
+
+def test_a_usage_refusal_starts_the_conduit_again(rig: Rig, tmp_path: Path) -> None:
+    mapping = _ready(rig, tmp_path, running=True)
+    rig.runner.fail[SCRIPT] = 64
+    assert rig("grading", "change", "--to", "3x5x2", "--mapping", str(mapping),
+               "--confirm", "tok", "--stop-api") == 64  # fmt: skip
+    assert [c.argv for c in rig.runner.calls][-1] == [*_compose(rig), "up", "-d", "--wait", "api"]
+
+
+@pytest.mark.parametrize("state", ["running", "restarting", "paused"])
+def test_a_conduit_not_stopped_is_taken_as_running(
+    rig: Rig, tmp_path: Path, state: str
+) -> None:
+    mapping = _ready(rig, tmp_path, running=True)
+    rig.ps_output = f'{{"Service": "api", "State": "{state}"}}'
+    assert rig("grading", "change", "--to", "3x5x2", "--mapping", str(mapping),
+               "--confirm", "t") != 0  # fmt: skip
+    assert rig.runner.calls == []
+
+
+def test_a_setting_the_edit_did_not_take_is_said_and_nothing_started(
+    rig: Rig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from ospreyflow import grading
+
+    mapping = _ready(rig, tmp_path, running=True)
+    monkeypatch.setattr(grading, "with_grading_scheme", lambda text, scheme: text)
+    assert rig("grading", "change", "--to", "3x5x2", "--mapping", str(mapping),
+               "--confirm", "tok", "--stop-api") != 0  # fmt: skip
+    assert "could not be set to 3x5x2" in capsys.readouterr().err
+    assert not any("harness.apply" in c.argv for c in rig.runner.calls)
+    assert [c.argv for c in rig.runner.calls][-1] == _script_call(rig)
+
+
+def test_a_render_that_fails_after_the_change_says_the_conduit_is_stopped(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mapping = _ready(rig, tmp_path, running=True)
+    rig.runner.fail["harness.apply"] = 1
+    assert rig("grading", "change", "--to", "3x5x2", "--mapping", str(mapping),
+               "--confirm", "tok", "--stop-api") != 0  # fmt: skip
+    assert "the Conduit is stopped. Run ospreyflow apply" in capsys.readouterr().out
+    assert "  scheme: 3x5x2\n" in (rig.product / "osprey.yaml").read_text(encoding="utf-8")

@@ -7814,3 +7814,12 @@ async def test_regrade_drawn_changes_the_grade_and_original_alone(
         assert after_c.provenance.drawn is not None and after_c.provenance.drawn.grading == old
         plain_after = (await adapter.get_nodes([plain_id], CLEARED))[0]
         assert plain_after.provenance.drawn is None
+
+        # A superseded element (an older revision) is not regraded: only the live one is.
+        tx = await adapter.begin_transaction()
+        successor = await adapter.supersede_node(
+            c_id, c.model_copy(update={"id": new_node_id()}), tx
+        )
+        await adapter.commit_transaction(tx)
+        assert await adapter.regrade_drawn(c_id, new, old) is False, "superseded"
+        assert await adapter.regrade_drawn(successor, new, old) is True

@@ -25,10 +25,17 @@ import re
 import shutil
 from pathlib import Path
 
+import yaml
+
 #: The command inside the Conduit's image.
 GRADING_PATH = ("-m", "scripts.grading_change")
 #: Where the mapping and a scheme file are mounted in the one-shot.
 IN_CONTAINER = "/grading"
+#: The command's exits that mean nothing was changed: refused before any write (1), a usage
+#: error or no store settings (64). Any other is a change that may have written (2: stopped part
+#: way or failed unforeseen; a killed one-shot's 137), so the Conduit is never restarted in the
+#: old scheme over it.
+NOTHING_CHANGED = (1, 64)
 
 
 def is_scheme_file(to: str) -> bool:
@@ -48,7 +55,8 @@ def scheme_file_beside(config_path: Path, scheme_file: Path) -> str:
 
 
 _SECTION = re.compile(r"^grading:[ \t]*(#.*)?$", re.MULTILINE)
-_TOP_LEVEL = re.compile(r"^\S", re.MULTILINE)
+#: The next top-level key: a comment at column 0 does not end the section.
+_TOP_LEVEL = re.compile(r"^[^\s#]", re.MULTILINE)
 _SCHEME = re.compile(r"^([ \t]+scheme:[ \t]*)([^#\n]*?)([ \t]*(#.*)?)$", re.MULTILINE)
 
 
@@ -69,3 +77,15 @@ def with_grading_scheme(text: str, scheme: str) -> str:
     else:
         body = body[: line.start(2)] + scheme + body[line.end(2) :]
     return text[:start] + body + text[end:]
+
+
+def scheme_set(text: str) -> str | None:
+    """`grading.scheme` as `osprey.yaml`'s text says it, read as YAML reads it (the last of a
+    repeated key wins): the check that the edit took."""
+    try:
+        loaded = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return None
+    section = loaded.get("grading") if isinstance(loaded, dict) else None
+    scheme = section.get("scheme") if isinstance(section, dict) else None
+    return str(scheme) if scheme is not None else None

@@ -11,9 +11,11 @@ The registry plant (`--live`, under a lease) runs against the leased Postgres.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 
 T = "../OspreyFlow_Build/tests/services/api/test_grading_change.py"
 S = "../OspreyFlow_Build/tests/services/api/test_grading_setting.py"
@@ -65,11 +67,14 @@ OFFLINE: list[Plant] = [
      [("    if elsewhere:\n", "    if False:\n")],
      [f"{T}::test_an_item_in_a_third_scheme_refuses_the_whole_change_naming_it"]),
     ("an item drawn in the new scheme refused (no way out)", G,
-     [("        elif scheme == mapping.to_scheme:\n            plan.already_in_new += 1\n", "")],
+     [("            else:\n                plan.already_in_new += 1\n",
+       "            else:\n                elsewhere.setdefault(scheme, []).append(item.id)\n")],
      [f"{T}::test_an_item_drawn_in_the_new_scheme_is_left_and_counted"]),
     ("an item off the deployment's scheme mapped as if on it", G,
-     [("            except ValueError:\n                off_scheme.append(item.id)\n"
-       "                continue\n", "            except ValueError:\n                pass\n")],
+     [("                current.check(item.grading)\n            except ValueError:\n"
+       "                off_scheme.append(item.id)\n                continue\n",
+       "                current.check(item.grading)\n            except ValueError:\n"
+       "                pass\n")],
      [f"{T}::test_an_item_whose_grade_is_not_of_the_deployments_scheme_refuses_naming_it"]),
     ("an item that cannot be read back is skipped silently", G,
      [("    if inventory.unread:\n", "    if False:\n")],
@@ -87,8 +92,8 @@ OFFLINE: list[Plant] = [
        '            if i.kind in ("node", "link")')],
      [f"{T}::test_a_withdrawn_item_keeps_the_grade_it_was_drawn_with"]),
     ("a run again after a stop counts its changed items as drawn in the new scheme", G,
-     [("        elif scheme == mapping.to_scheme and item.original is not None:\n",
-       "        elif False:\n")],
+     [("            if item.original is not None:\n                plan.already_changed += 1\n",
+       "            if False:\n                plan.already_changed += 1\n")],
      [f"{T}::test_a_change_stopped_part_way_finishes_when_run_again"]),
     ("a regrade the store refused counted as changed", G,
      [("        if not await self.graph.regrade_drawn(item.id, grading, original):\n",
@@ -201,14 +206,11 @@ OFFLINE: list[Plant] = [
      [("    if args.dry_run:\n        return ctx.run(argv, cwd=ctx.product)\n", "")],
      [f"{V}::test_the_dry_run_runs_in_a_one_shot_beside_a_running_conduit_and_changes_nothing"]),
     ("the setting changed after a refused change", VERB,
-     [("    if code != 0:\n        if running:\n", "    if code not in (0, 1):\n        if running:\n")],
+     [("    if code in grading_verb.NOTHING_CHANGED:\n", "    if code == 64:\n")],
      [f"{V}::test_a_refused_change_leaves_the_setting_and_starts_the_conduit_again"]),
-    ("a change stopped part way started again in the old scheme", VERB,
-     [("    if code == 2:\n", "    if False:\n")],
-     [f"{V}::test_a_change_stopped_part_way_leaves_the_conduit_stopped_and_the_setting_as_it_was"]),
     ("the Conduit not started in the new scheme", VERB,
-     [('    ctx.step("start the Conduit", [*compose(directory), "up", "-d", "--wait", "api"])\n'
-       '    print("The Conduit is started', '    print("The Conduit is started')],
+     [('        ctx.step("start the Conduit", [*compose(directory), "up", "-d", "--wait", "api"])\n'
+       "    except StepFailed:", "    except StepFailed:")],
      [f"{V}::test_a_change_stops_the_conduit_then_sets_the_scheme_renders_and_starts_it",
       f"{V}::test_a_change_with_the_conduit_already_stopped_starts_it_in_the_new_scheme"]),
     ("the scheme file not kept beside osprey.yaml", EDIT,
@@ -218,15 +220,70 @@ OFFLINE: list[Plant] = [
      [("        body = body[: line.start(2)] + scheme + body[line.end(2) :]",
        '        body = body[: line.start(2)] + scheme + "\\n" + body[line.end() :]')],
      [f"{V}::test_the_setting_is_edited_in_place"]),
+    ("the token blind to the mapping (its schemes alone)", G,
+     [('        "mapping": mapping.canonical(),\n', "")],
+     [f"{T}::test_another_mapping_between_the_same_schemes_gives_another_token"]),
+    ("an item already in the new scheme not checked against it", G,
+     [("            try:\n                target.check(item.grading)\n            except ValueError:\n"
+       "                off_scheme.append(item.id)\n                continue\n", "")],
+     [f"{T}::test_an_item_already_in_the_new_scheme_off_its_grades_refuses_naming_it"]),
+    ("the Conduit check failing open on a timeout", CMD,
+     [("    except httpx.HTTPError:\n        return True\n", "    except httpx.HTTPError:\n        return False\n")],
+     [f"{T}::test_the_conduit_is_taken_as_stopped_only_when_nothing_answers"]),
+    ("the Conduit check taking a 503 as stopped", CMD,
+     [('            await client.get(f"{url.rstrip(\'/\')}/healthz")\n',
+       '            if (await client.get(f"{url.rstrip(\'/\')}/healthz")).status_code != 200:\n'
+       "                return False\n")],
+     [f"{T}::test_the_conduit_is_taken_as_stopped_only_when_nothing_answers"]),
+    ("an unforeseen failure exiting 1, as a refusal", CMD,
+     [("        return STOPPED\n", "        return 1\n")],
+     [f"{T}::test_an_unforeseen_failure_exits_as_stopped_never_as_refused"]),
+    ("a killed or unforeseen exit taken as nothing changed", VERB,
+     [("    if code in grading_verb.NOTHING_CHANGED:\n", "    if code not in (0, 2):\n")],
+     [f"{V}::test_any_failure_but_a_refusal_leaves_the_conduit_stopped"]),
+    ("a restarting Conduit taken as stopped", VERB,
+     [('    stopped = {"exited", "created", "dead", ""}\n'
+       '    return any(str(row.get("State", "")) not in stopped for row in _services(output))',
+       '    return any(str(row.get("State", "")) == "running" for row in _services(output))')],
+     [f"{V}::test_a_conduit_not_stopped_is_taken_as_running"]),
+    ("the setting not read back after the edit", VERB,
+     [('    if grading_verb.scheme_set(config.read_text(encoding="utf-8")) != value:\n',
+       "    if False:\n")],
+     [f"{V}::test_a_setting_the_edit_did_not_take_is_said_and_nothing_started"]),
+    ("a failed render after the change said as nothing", VERB,
+     [("    except StepFailed:\n        print(\n", "    except StepFailed:\n        raise\n        print(\n")],
+     [f"{V}::test_a_render_that_fails_after_the_change_says_the_conduit_is_stopped"]),
+    ("a column-0 comment ends the grading section", EDIT,
+     [('_TOP_LEVEL = re.compile(r"^[^\\s#]", re.MULTILINE)', '_TOP_LEVEL = re.compile(r"^\\S", re.MULTILINE)')],
+     [f"{V}::test_the_setting_is_edited_in_place"]),
+    ("the scheme file left behind by the copy of osprey.yaml", "harness/render.py",
+     [("            write_shared(kept, source.read_text(encoding=\"utf-8\"))\n", "            pass\n")],
+     [f"{S}::test_a_scheme_files_grade_is_safe_in_deployment_env".replace(
+         "test_a_scheme_files_grade_is_safe_in_deployment_env",
+         "test_a_scheme_file_goes_with_the_copy_of_osprey_yaml")]),
+    ("a grade unsafe in deployment.env accepted", "packages/schemas/domain.py",
+     [("            if any(not _GRADE.fullmatch(g) for g in grades):\n", "            if False:\n")],
+     [f"{S}::test_a_scheme_files_grade_is_safe_in_deployment_env"]),
+    ("the Conduit's graph passes regrade_drawn on", "services/api/dataset_scope.py",
+     [('        if name == "regrade_drawn":', '        if name == "regrade_drawn-never":')],
+     [f"{S}::test_the_conduits_graph_never_offers_regrade_drawn"]),
 ]
 
 LIVE: list[Plant] = [
     ("the store's regrade writes no original", ADAPTER,
      [('                "original_grading": original.model_dump(mode="json"),\n', "")],
      [C]),
-    ("the store's regrade takes a reverted element", ADAPTER,
+    ("the store's regrade takes a superseded element (both guards)", ADAPTER,
      [('        if row.get("reverted") is True or row.get("superseded_by") or not isinstance(drawn, dict):',
-       "        if not isinstance(drawn, dict):")],
+       '        if row.get("reverted") is True or not isinstance(drawn, dict):'),
+      ('            "AND (reverted IS NULL OR reverted = false) AND superseded_by IS NULL",',
+       '            "AND (reverted IS NULL OR reverted = false)",')],
+     [C]),
+    ("the store's regrade takes a reverted element (both guards)", ADAPTER,
+     [('        if row.get("reverted") is True or row.get("superseded_by") or not isinstance(drawn, dict):',
+       '        if row.get("superseded_by") or not isinstance(drawn, dict):'),
+      ('            "AND (reverted IS NULL OR reverted = false) AND superseded_by IS NULL",',
+       '            "AND superseded_by IS NULL",')],
      [C]),
     ("the dry run makes the audit's table", CMD,
      [("    audit_writer = None if args.dry_run else await AuditWriter.connect(dsn)",
@@ -252,7 +309,36 @@ LIVE: list[Plant] = [
 ]
 
 
+def _pytest(tests: list[str]) -> subprocess.CompletedProcess[str]:
+    """Each run with a bytecode cache of its own: two plants of one file can leave it the same
+    size within the same second, and Python would then run the first plant's cached bytecode for
+    the second (found 9 November 2026: a plant reported green that fails by hand)."""
+    with tempfile.TemporaryDirectory() as cache:
+        return subprocess.run(
+            [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-q", "-p", "no:warnings",
+             "-p", "no:randomly", "-p", "no:cacheprovider", *tests],
+            capture_output=True, text=True, check=False,
+            env={**os.environ, "PYTHONPYCACHEPREFIX": cache},
+        )  # fmt: skip
+
+
+def _tally(done: subprocess.CompletedProcess[str]) -> str:
+    lines = [ln for ln in done.stdout.splitlines() if " passed" in ln or " failed" in ln
+             or " error" in ln]  # fmt: skip
+    return lines[-1].strip("= ") if lines else f"exit {done.returncode}"
+
+
 def run(plants: list[Plant]) -> int:
+    """Each plant red, for the right reason: the named tests pass unplanted first (the suite is
+    green before), and a plant counts as red only when pytest reports failed tests and no error
+    (exit 1): a collection, import or fixture error the plant causes proves nothing."""
+    every = sorted({t for _, _, _, tests in plants for t in tests})
+    baseline = _pytest(every)
+    if baseline.returncode != 0:
+        print(f"Not green unplanted: {_tally(baseline)}")
+        print(baseline.stdout[-3000:])
+        return len(plants)
+    print(f"Unplanted: {_tally(baseline)}")
     held = 0
     for title, file, swaps, tests in plants:
         path = pathlib.Path(file)
@@ -263,18 +349,14 @@ def run(plants: list[Plant]) -> int:
             after = after.replace(old, new)
         path.write_text(after)
         try:
-            done = subprocess.run(
-                [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-q", "-p",
-                 "no:warnings", "-p", "no:randomly", *tests],
-                capture_output=True, text=True, check=False,
-            )  # fmt: skip
+            done = _pytest(tests)
         finally:
             path.write_text(before)
-        tally = [line for line in done.stdout.splitlines() if " passed" in line or " failed" in line]
-        red = done.returncode != 0
+        tally = _tally(done)
+        red = done.returncode == 1 and " failed" in tally and " error" not in tally
         held += 0 if red else 1
         names = ", ".join(t.split("::")[1] for t in tests)
-        print(f"| {title} | `{file}` | {names} | {tally[-1].strip('= ') if tally else done.returncode} |")
+        print(f"| {title} | `{file}` | {names} | {tally}{'' if red else ' (NOT RED)'} |")
     return held
 
 

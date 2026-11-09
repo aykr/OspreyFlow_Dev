@@ -11,24 +11,21 @@ export interface Position {
   y: number;
 }
 
-/** The grades of each scheme (decision 11), as the Conduit checks them. */
-export const GRADES: Record<string, { source: string[]; intelligence: string[]; handling: string[] }> = {
-  "5x5x5": { source: ["A", "B", "C", "D", "E"], intelligence: ["1", "2", "3", "4", "5"], handling: ["1", "2", "3", "4", "5"] },
-  "3x5x2": { source: ["A", "B", "C"], intelligence: ["1", "2", "3", "4", "5"], handling: ["P", "C"] },
-};
-
 type SchemeGrades = { source: string[]; intelligence: string[]; handling: string[] };
 const offered: Record<string, SchemeGrades> = {};
+/** Before a board is open: no grade to offer. */
+export const NO_GRADES: SchemeGrades = { source: [], intelligence: [], handling: [] };
 
-/** ADR-143 Amendment 6: the grades an opened board offers (`grading_grades`). A scheme file's are
- * known only from here; a built-in scheme's are the same as `GRADES`. */
+/** ADR-143 decision 11 and Amendment 6: the grades an opened board offers (`grading_grades`), the
+ * deployment's scheme's as the Conduit checks them. The Glass keeps no list of its own: the
+ * Conduit's (`GRADING_PARTS`, or the scheme file's) is the one. */
 export function offerGrades(grades: ({ scheme: string } & SchemeGrades) | null | undefined): void {
   if (grades) offered[grades.scheme] = { source: grades.source, intelligence: grades.intelligence, handling: grades.handling };
 }
 
-/** A scheme's grades: those an opened board offered, else a built-in scheme's. */
+/** A scheme's grades, as an opened board offered them. */
 export function gradesOf(scheme: string): SchemeGrades | undefined {
-  return offered[scheme] ?? GRADES[scheme];
+  return offered[scheme];
 }
 
 const NAME_KEYS = ["name", "family_name", "value_normalised", "account_number", "title"] as const;

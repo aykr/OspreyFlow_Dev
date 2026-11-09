@@ -203,8 +203,8 @@ def operator_reader(
     scheme: HandlingScheme, *, org_unit: str, by: str = "grading-change"
 ) -> Principal:
     """Who the command reads as: the scheme's top clearance, every handling code, every dataset.
-    A restricted code is also scoped to the reader's unit, so an item of another unit's may still
-    be unreadable, and then the change is refused whole, naming it, rather than run past it."""
+    An item it still cannot read back refuses the change whole, naming it, rather than run past
+    it."""
     return Principal(
         id=by,
         clearance=scheme.classification[-1],
@@ -389,10 +389,18 @@ async def change(
             for part in PARTS:
                 old = getattr(item.grading, part)
                 plan.moves[(part, old, mapping.parts[part][old])] += 1
-        elif scheme == mapping.to_scheme and item.original is not None:
-            plan.already_changed += 1
         elif scheme == mapping.to_scheme:
-            plan.already_in_new += 1
+            # Already in the new scheme: changed by a stopped run, or drawn in it. Its grade must
+            # be one of the new scheme's as it is now (a scheme file is never edited in place).
+            try:
+                target.check(item.grading)
+            except ValueError:
+                off_scheme.append(item.id)
+                continue
+            if item.original is not None:
+                plan.already_changed += 1
+            else:
+                plan.already_in_new += 1
         else:
             elsewhere.setdefault(scheme, []).append(item.id)
     if elsewhere:
@@ -406,8 +414,8 @@ async def change(
         )
     if off_scheme:
         raise GradingRefused(
-            f"{len(off_scheme)} item(s) carry a grade that is not one of {current.scheme}'s: "
-            f"{named(off_scheme)}. Nothing was changed."
+            f"{len(off_scheme)} item(s) carry a grade of their scheme that it does not hold (a "
+            f"scheme file edited since they were graded): {named(off_scheme)}. Nothing was changed."
         )
     plan.to_change = len(pending)
     plan.token = dry_run_token(mapping, current, target, inventory.items)
@@ -428,9 +436,11 @@ async def change(
     for done, item in enumerate(pending):
         try:
             await items.rewrite(item, mapping.apply(item.grading), item.original or item.grading)
-        except Exception as failed:
+        except BaseException as failed:
             plan.stage = "stopped"
             await audit(plan)
+            if not isinstance(failed, Exception):
+                raise  # a cancelled run, audited as stopped, ends as it was asked to
             raise GradingIncomplete(done, len(pending), failed) from failed
         plan.written += 1
     if pending:

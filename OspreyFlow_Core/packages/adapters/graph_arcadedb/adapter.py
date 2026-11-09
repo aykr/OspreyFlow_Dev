@@ -134,7 +134,7 @@ from .builders import (
     suggestion_scope,
 )
 from .bulk import BulkEdgeLoader, BulkTransport, GremlinBulkTransport
-from .client import ArcadeDBClient
+from .client import ArcadeDBClient, ArcadeDBError
 from .gremlin_literals import (
     groovy_identifier,
     groovy_string_list_literal,
@@ -2140,11 +2140,14 @@ class GraphArcadeDBAdapter:
                 "original_grading": original.model_dump(mode="json"),
             },
         }
-        await self._client.sql(
-            f"UPDATE `{quoted}` SET provenance = :provenance WHERE id = :id",
+        # Guarded in the write itself, not only by the read before it: a record reverted or
+        # superseded between the two is not changed, and the count says so.
+        written = await self._client.sql(
+            f"UPDATE `{quoted}` SET provenance = :provenance WHERE id = :id "
+            "AND (reverted IS NULL OR reverted = false) AND superseded_by IS NULL",
             params={"provenance": changed, "id": element_id},
         )
-        return True
+        return _updated_count(written) == 1
 
     # --- supersession --------------------------------------------------------
 
@@ -2485,3 +2488,12 @@ def _logical_counts(results: list[Any]) -> dict[str, int]:
         name = logical_type_name(label)
         counts[name] = counts.get(name, 0) + int(count)
     return counts
+
+
+def _updated_count(rows: Any) -> int:
+    """How many records an ArcadeDB `UPDATE` changed, from its answer (`[{"count": n}]`)."""
+    if isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict):
+        count = rows[0].get("count")
+        if isinstance(count, int):
+            return count
+    raise ArcadeDBError(f"an UPDATE answered {rows!r}, not its count")

@@ -474,6 +474,8 @@ class DatasetStampingGraph:
             raise AttributeError(name)
         if name == "restore_link_state":  # a write: declared above, with its guard, or absent
             raise AttributeError(name)
+        if name == "regrade_drawn":  # ADR-143 Amendment 6: the operator's command alone, never
+            raise AttributeError(name)  # the Conduit's graph, so no route can reach it
         return getattr(self._inner, name)
 
     async def _refuse_into_a_read_only_layer(self, datasets: set[str]) -> None:

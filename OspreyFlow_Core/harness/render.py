@@ -1994,6 +1994,20 @@ def write_config_copy(config_path: Path, out_dir: Path) -> Path:
         )
     # The Conduit mounts it, and it holds no secret (05_DEPLOYMENT.md §7: never in osprey.yaml).
     write_shared(target, content)
+    # ADR-143 Amendment 6: a scheme file it names beside it goes with it, so the copy reads as the
+    # original does (every later `load_config` of the copy, `harness.apply`'s among them).
+    scheme = (yaml.safe_load(content) or {}).get("grading", {}) if content else {}
+    named = scheme.get("scheme") if isinstance(scheme, dict) else None
+    if (
+        isinstance(named, str)
+        and named.endswith((".yaml", ".yml"))
+        and not Path(named).is_absolute()
+    ):
+        source = config_path.parent / named
+        if source.is_file():
+            kept = out_dir / named
+            kept.parent.mkdir(parents=True, exist_ok=True)
+            write_shared(kept, source.read_text(encoding="utf-8"))
     return target
 
 

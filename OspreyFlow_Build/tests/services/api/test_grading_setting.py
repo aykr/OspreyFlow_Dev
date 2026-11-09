@@ -115,20 +115,24 @@ def test_the_route_never_answers_a_default_for_a_scheme_it_cannot_read(
 
 def test_the_built_in_schemes_names_are_listed_once() -> None:
     """Finding 8 of the orchestrator's review: `GRADING_PARTS` (`schemas/domain.py`) is the one
-    list of the built-in schemes. No module of the product writes a list of the names of its own,
-    as `config.py` and `answers.py` once did (`("5x5x5", "3x5x2")`)."""
+    list of the built-in schemes. No other module of the product, Python or the Glass's TypeScript,
+    names both as code (a tuple, a list, a dict's keys), as `config.py`, `answers.py` and the
+    Glass's `boardModel.ts` once did; prose naming them inside a longer string is not a list."""
     import re
 
     core = Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
-    names = r"""["'](?:5x5x5|3x5x2)["']"""
-    a_list = re.compile(rf"[(\[{{]\s*{names}\s*,\s*{names}")
-    owners = [
+    five, three = (re.compile(rf"""["']{n}["']""") for n in ("5x5x5", "3x5x2"))
+    owners = sorted(
         str(path.relative_to(core))
-        for folder in ("packages", "services", "scripts", "cli", "harness")
-        for path in (core / folder).rglob("*.py")
-        if a_list.search(path.read_text(encoding="utf-8"))
-    ]
-    assert owners == [], owners
+        for folder in ("packages", "services", "scripts", "cli", "harness", "apps/workspace/src")
+        for suffix in ("*.py", "*.ts", "*.tsx")
+        for path in (core / folder).rglob(suffix)
+        if not {"node_modules", ".venv", "generated"} & set(path.parts)
+        and ".test." not in path.name
+        and five.search(text := path.read_text(encoding="utf-8"))
+        and three.search(text)
+    )
+    assert owners == ["packages/schemas/domain.py"], owners
 
 
 FORCE = {"scheme": "force-4x3", "source": ["W", "X", "Y", "Z"], "intelligence": ["1", "2", "3"],
@@ -181,3 +185,36 @@ def test_the_conduit_reads_a_scheme_files_grades_and_fails_closed_without_them(
     monkeypatch.setenv("OSPREY_GRADING_GRADES", '{"scheme": "force-4x3"}')
     with pytest.raises(GradingSchemeUnknown, match="not a scheme"):
         GradingSettings.from_env()
+
+
+def test_a_scheme_file_goes_with_the_copy_of_osprey_yaml(tmp_path: Path) -> None:
+    """Every later `load_config` of the rendered copy (`harness.apply --reapply`'s) finds the file
+    the setting names beside it."""
+    from harness.render import load_config, write_config_copy
+
+    source = tmp_path / "product"
+    source.mkdir()
+    (source / "grading-scheme.yaml").write_text(yaml.safe_dump(FORCE), encoding="utf-8")
+    (source / "osprey.yaml").write_text("grading:\n  scheme: grading-scheme.yaml\n", "utf-8")
+    out = tmp_path / "rendered"
+    copy = write_config_copy(source / "osprey.yaml", out)
+    assert load_config(copy).grading.resolved().model_dump() == FORCE
+
+
+@pytest.mark.parametrize("grade", ["A$B", "A #", "A B", "'A'", ""])
+def test_a_scheme_files_grade_is_safe_in_deployment_env(grade: str) -> None:
+    with pytest.raises(ValueError, match="letters, digits or hyphens"):
+        GradingSchemeAnswer(scheme="x-1", source=[grade], intelligence=["1"], handling=["H"])
+
+
+def test_the_conduits_graph_never_offers_regrade_drawn() -> None:
+    """Amendment 6 decision 7: the operator's command alone regrades; the Conduit's stamping
+    graph, the one every route writes through, refuses the name, so no route can reach it."""
+    from services.api.dataset_scope import stamping
+
+    class Inner:
+        async def regrade_drawn(self, *_: object) -> bool:
+            raise AssertionError("reached")
+
+    with pytest.raises(AttributeError, match="regrade_drawn"):
+        stamping(Inner()).regrade_drawn  # type: ignore[arg-type]  # noqa: B018

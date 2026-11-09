@@ -390,7 +390,7 @@ async def test_an_item_whose_grade_is_not_of_the_deployments_scheme_refuses_nami
         await change(
             _port(world), mapping, current=narrowed, target=THREE, dry_run=True, audit=_Audit()
         )
-    assert "1 item(s) carry a grade that is not one of force-4x3's" in str(refused.value)
+    assert "1 item(s) carry a grade of their scheme that it does not hold" in str(refused.value)
     assert made in str(refused.value) and _writes(world) == before
 
 
@@ -646,3 +646,79 @@ def test_a_target_that_is_no_scheme_is_refused_in_words(
     good = tmp_path / "force.yaml"
     good.write_text(FORCE.model_dump_json(), encoding="utf-8")
     assert target_scheme(str(good)) == FORCE
+
+
+async def test_another_mapping_between_the_same_schemes_gives_another_token(
+    world: SimpleNamespace,
+) -> None:
+    """Amendment 6 decision 2: the token names the mapping itself, not only its two schemes."""
+    _drawn(world)
+    one_line_changed = FIVE_TO_THREE.replace("B: A,", "B: B,")
+    first, second = await _dry(world, FIVE_TO_THREE), await _dry(world, one_line_changed)
+    assert first.token != second.token
+    with pytest.raises(GradingRefused, match="a dry run of this mapping"):
+        await change(
+            _port(world), parse_mapping(one_line_changed, SCHEMES), current=FIVE, target=THREE,
+            dry_run=False, confirm=first.token, audit=_Audit(),
+        )  # fmt: skip
+
+
+async def test_an_item_already_in_the_new_scheme_off_its_grades_refuses_naming_it(
+    world: SimpleNamespace,
+) -> None:
+    """A stopped run into a scheme file, the file then edited before the finishing run: an item
+    already changed must still be one of the new scheme's grades, or the setting would name a
+    scheme its items are not in."""
+    _drawn(world)
+    board = _board(start="blank")
+    with _deployment_grading_in(FORCE):
+        made = _item(board, grading={"scheme": "force-4x3", "source": "W", "intelligence": "1",
+                                     "handling": "H"})["element_id"]  # fmt: skip
+    narrowed = FORCE.model_copy(update={"source": ["X", "Y", "Z"]})
+    text = FIVE_TO_FORCE.replace("A: W, B: W,", "A: X, B: X,")
+    mapping = parse_mapping(text, {**SCHEMES, FORCE.scheme: narrowed})
+    with pytest.raises(GradingRefused) as refused:
+        await change(
+            _port(world), mapping, current=FIVE, target=narrowed, dry_run=True, audit=_Audit()
+        )
+    assert made in str(refused.value) and "it does not hold" in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    ("answer", "running"),
+    [
+        ("refused", False),  # nothing listening: stopped
+        (200, True),
+        (503, True),  # any answer is a running Conduit
+        ("timeout", True),  # not known to be stopped: fails closed
+    ],
+)
+async def test_the_conduit_is_taken_as_stopped_only_when_nothing_answers(
+    answer: Any, running: bool
+) -> None:
+    import httpx
+    from scripts.grading_change import conduit_answers
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if answer == "refused":
+            raise httpx.ConnectError("connection refused", request=request)
+        if answer == "timeout":
+            raise httpx.ReadTimeout("no answer", request=request)
+        return httpx.Response(answer)
+
+    assert await conduit_answers("http://api:8000", httpx.MockTransport(handle)) is running
+
+
+def test_an_unforeseen_failure_exits_as_stopped_never_as_refused(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Exit 1 means nothing was written, and the verb restarts the Conduit on it: an audit or
+    store failure after a write must never end in it."""
+    from scripts import grading_change
+
+    async def fails(*_: Any, **__: Any) -> int:
+        raise RuntimeError("the audit store went away after a write")
+
+    monkeypatch.setattr(grading_change, "_main", fails)
+    assert grading_change.main(_argv(tmp_path, "--confirm", "t")) == 2
+    assert "stopped unexpectedly" in capsys.readouterr().out

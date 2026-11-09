@@ -8,6 +8,9 @@ then sets `grading.scheme` and starts the deployment again; run directly it does
     python -m scripts.grading_change --to <scheme or scheme file> --mapping <file> \
         --confirm <the dry run's token> --changed-by <id>
 
+Run it only inside the deployment, as the verb does: on the host its stores and its Conduit check
+cannot reach the deployment's own.
+
 The mapping file names `from`, `to` and, for each part of a grade (`source`, `intelligence`,
 `handling`), every grade of the old scheme and the one of the new it becomes. `--to` is a built-in
 scheme (5x5x5, 3x5x2) or a scheme file (`scheme`, `source`, `intelligence`, `handling`).
@@ -22,17 +25,17 @@ that does not cover the old scheme, a mapping from another scheme than the deplo
 (`OSPREY_GRADING_SCHEME`), an item in a third scheme, or a drawn item it cannot read back, naming
 the items.
 
-**The Conduit stopped.** The change is refused while the Conduit answers at `--conduit-url`
-(default `http://api:8000`, its name on the deployment's network): a drawing or an edit made during
+**The Conduit stopped.** The change is refused unless the Conduit is known to be stopped: no
+connection can be made to `--conduit-url` (default `http://api:8000`, its name on the deployment's
+network). Any answer, a timeout or any other failure refuses it: a drawing or an edit made during
 the run, or between the run and the restart in the new scheme, would be in the old scheme.
 `ospreyflow grading change --stop-api` stops it, and starts it again in the new scheme.
 
 **Who it reads as.** The deployment's top clearance with every handling code and every dataset,
-as `--changed-by` in the unit `--org-unit` (default `operator`). A restricted handling code is also
-scoped to the reader's unit, so an item under another unit's restricted code is unreadable, and the
-change is then refused, naming it (rule 2). `--changed-by` is recorded in the audit trail as typed,
-and said to be (`changed_by_as_typed`): this command runs outside the Conduit, where no sign-in
-says who someone is. The verb passes `cli:<the operator's account>`.
+as `--changed-by` in the unit `--org-unit` (default `operator`). An item it cannot read back, for
+any reason, refuses the change, naming it (rule 2). `--changed-by` is recorded in the audit trail
+as typed, and said to be (`changed_by_as_typed`): this command runs outside the Conduit, where no
+sign-in says who someone is. The verb passes `cli:<the operator's account>`.
 
 **No ontology.** The change writes the grade alone (`GraphPort.regrade_drawn`), which no ontology
 checks, and reads only what is stored, a proposed link type's links among them (read under their
@@ -41,8 +44,9 @@ every case's board registry
 (`board_store`'s own columns), the one read of `board_items` that names no case: an operator's
 change of the whole deployment, outside the Conduit, answered to no reader.
 
-Exit codes: 0 changed, or the dry run's plan; 1 refused (nothing was changed); 2 stopped part way
-(the dry run and the same change again finish it); 64 a usage error, or no store settings.
+Exit codes: 0 changed, or the dry run's plan; 1 refused before any write (nothing was changed); 2
+stopped part way, or failed unforeseen (the dry run and the same change again finish it); 64 a
+usage error, or no store settings (nothing was opened).
 """
 
 from __future__ import annotations
@@ -50,6 +54,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import traceback
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -230,14 +235,19 @@ def graded_items(
     return BoardGradedItems(GraphArcadeDBAdapter(client, scheme), registered, reader)
 
 
-async def conduit_answers(url: str) -> bool:
-    """Whether a Conduit answers its liveness route at `url`."""
+async def conduit_answers(url: str, transport: httpx.AsyncBaseTransport | None = None) -> bool:
+    """Whether a Conduit may be running at `url`. Only a connection that cannot be made (no
+    Conduit listening, or none by that name on the deployment's network: it is stopped) says no.
+    Any answer, of any status, is a running Conduit, and a timeout or any other failure is not
+    known to be stopped: both say yes, so the check fails closed."""
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            answer = await client.get(f"{url.rstrip('/')}/healthz")
-    except httpx.HTTPError:
+        async with httpx.AsyncClient(timeout=3.0, transport=transport) as client:
+            await client.get(f"{url.rstrip('/')}/healthz")
+    except httpx.ConnectError:
         return False
-    return answer.status_code == 200
+    except httpx.HTTPError:
+        return True
+    return True
 
 
 CONDUIT_RUNNING = (
@@ -287,12 +297,16 @@ async def _main(
         ArcadeDBConfig.from_env(os.environ.get("ARCADEDB_DATABASE", "ospreyflow"))
     )
     pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=2)
-    # The audit's table is made by its `connect()`: a dry run writes nothing, so opens none.
-    audit_writer = None if args.dry_run else await AuditWriter.connect(dsn)
+    # The audit's table is made by its `connect()`, so it is opened only at the first record: a
+    # dry run, or a change refused before any write, makes nothing.
+    audit_writer: AuditWriter | None = None
     operator = Principal(id=args.changed_by, clearance="OFFICIAL", org_unit=args.org_unit)
 
     async def audit(plan: GradingPlan) -> None:
-        assert audit_writer is not None, "a dry run is never audited"
+        nonlocal audit_writer
+        assert not args.dry_run, "a dry run is never audited"
+        if audit_writer is None:
+            audit_writer = await AuditWriter.connect(dsn)
         await audit_writer.record(
             principal=operator,
             action="grading_change",
@@ -323,8 +337,24 @@ async def _main(
             await audit_writer.close()
 
 
+#: An unforeseen failure: not known to have written nothing, so never a refusal's exit (1).
+STOPPED = 2
+
+
 def main(argv: list[str] | None = None) -> int:
-    return asyncio.run(_main(build_parser().parse_args(argv)))
+    """Exit 1 is said only by a refusal made before any write; anything unforeseen (a store or
+    audit failure, a bug) exits 2, "stopped part way", so the verb never treats a failure after a
+    write as nothing changed."""
+    args = build_parser().parse_args(argv)
+    try:
+        return asyncio.run(_main(args))
+    except Exception:
+        traceback.print_exc()
+        print(
+            "The change stopped unexpectedly; some items may be changed. Run the dry run and the "
+            "same change again to finish it."
+        )
+        return STOPPED
 
 
 if __name__ == "__main__":
