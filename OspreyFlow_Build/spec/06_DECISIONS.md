@@ -30370,8 +30370,9 @@ theme only, and its reference image could not fail there.
    proxied provider's tiles from the Conduit's tile route, so **no provider's key or key-bearing address is
    ever in the Glass**: every map read route answers without either, whether the key was entered in
    Admin or is the installer's `env:` reference. **A provider the browser fetches (`proxy: none`) takes no
-   key** (`MapProvider`), by reference or typed into its address as a key-named parameter, since its
-   address is the Glass's: refused as `osprey.yaml` is read, as Admin already refused it (the lane's
+   key** (`MapProvider`), by reference, typed into its address as a key-named parameter, as a user part
+   (`https://user:…@host`) or as a key-like path segment (`/key/…`, read as a word, so `monkey.pmtiles`
+   stands), since its address is the Glass's: refused as `osprey.yaml` is read, as Admin already refused it (the lane's
    review found an installer's `credential: env:` provider with no `proxy` line served whole).
    **Every provider is offered to every reader**: the deployment has no per-reader map entitlement (a
    `per-seat` licence is the deployment's to honour by whom it lets sign in), so "the providers the
@@ -30381,21 +30382,31 @@ theme only, and its reference image could not fail there.
    stamped on every place as it is written (`load_gazetteer` requires the dataset; its lookups read that
    dataset alone, so a rebuild makes no second copy). A case reads the gazetteer when its Author adds
    that dataset, as any other (ADR-099 Amendment 12: a composite of the two). The dataset is registered
-   once the places are committed, so a failed build leaves none. **The places' points** are written beside
+   once the places are committed, by the Admin route and by both command-line builds, so a failed build
+   leaves none; a command-line build says the points' words after the load. **The places' points** are written beside
    them into the geometry partition (at `POINT_GEOMETRY_VERSION`, which the search reads) by a build from
    *Admin › Maps*; the command-line builds cannot open the Conduit's analytics store while it runs, and
    say so in words after the load (`map_places.NO_POINTS_HERE`); a database they cannot reach to register
    the dataset is said in words too.
 3. **Place search** is `POST /v1/investigations/{id}/map/places` (`investigate`, Viewer, audited as the
-   case's other searches): the case's principal reads, in the store, `Location`s by contains and ignoring
-   case (`GraphPort.suggest_nodes`, rule 3), of which only the gazetteer's own places are kept: **in a
-   gazetteer dataset** (`gazetteer-*`), with a point, and whose **name** holds the words. The store also
-   matches a `Location` on its identifiers; a match on an `osm_id` or a `uprn` alone is dropped, so a run
-   of searches cannot rebuild a place's identifier (rule 7). `more` says when more matched than are shown
+   case's other searches): the case's principal reads, in the store, `Location`s **by name alone**
+   (`GraphPort.suggest_locations`, the access step in the traversal, rule 3; its match keeps case, so
+   the words are asked as typed, capitalised and in lower case), never by an identifier, so neither the
+   places nor `more` answer on an `osm_id` or a `uprn` (rule 7, the independent review). Of those, only
+   the gazetteer's own places are kept: **in a gazetteer dataset** (`gazetteer-*`), with a point. `more` says when more matched than are shown
    (rule 2), and an empty answer with `more` is said as "more match", never as "no such place". A query
    is measured without its surrounding spaces. **The answer never carries the gazetteer's identifier** for a place (rule 7),
    and **no hosted geocoder is called**, whatever the deployment names (§3.5); its words say the places
    come from the gazetteer datasets the case reads. Choosing a place moves the map there.
+3a. **A gazetteer's identifiers never reach the Glass** (rule 7; the orchestrator's ruling, 9 November
+   2026): once a case adds a gazetteer, its ordinary search, expansion and every other node read send
+   the gazetteer's places, so `ontology.handling.withhold_sources`, the per-reader projection every node
+   read passes through (the adapter's serialisation and the working set's projection), leaves
+   `osm_id`, `uprn`, `os_place_id`, `gss_code`, `gnis_feature_id`, `tiger_geoid` and `nad_address_id`
+   (`GAZETTEER_SOURCE_IDENTIFIERS`) off a node in a `gazetteer-*` dataset for every request reader.
+   `postcode` is an address and stays. The Conduit's own work (`datasets is None`: a build's lookup,
+   resolution) and a read written back (`sources_in_full`) keep them, so a rebuild still finds a place
+   by its `osm_id` and a correction does not lose it. A case's own `Location` with a `uprn` keeps it.
 4. **The map's colours meet WCAG's floors in the dark, light and GOV.UK themes**, measured from their own
    call sites (the bundled style, `map/overlayColours.ts`, the controls' CSS): text 4.5:1, a marker, link
    or trail 3:1, over land and over water. In the dark theme a marker on the ramp's second step was 2.7:1,
@@ -30422,6 +30433,10 @@ built, a composite; (c) the places copied into each case's own dataset. (b) stan
 - **The contrast check is not a CI gate**: `make glass-map-verify` is in neither `make ci` nor the CI
   workflow (the owner's files), and its reference images are this machine's (darwin); the measured floors
   do not depend on the platform, the images do. A request to the orchestrator.
+- **A search by an identifier's value still matches**: the case's ordinary search (`search_nodes`,
+  exact on the ontology's identifiers) finds a gazetteer place by its `osm_id` typed in, though the
+  answer no longer carries it; a reader who already holds the identifier learns which place it is. A
+  change to the adapter's search fields (the case lane's and the store's), put to the orchestrator.
 - **The command-line builds load the places without their points**: DuckDB has one writer, and the
   Conduit holds its analytics store while it runs, so `ospreyflow map build` and
   `python -m scripts.build_local_basemap` cannot open it. A place they load is found by name but is not
@@ -30439,6 +30454,11 @@ built, a composite; (c) the places copied into each case's own dataset. (b) stan
   (a case that added the gazetteer finds the place, one that did not finds nothing; no second copy on a
   rebuild); the build's dataset and points, `test_geospatial_admin_routes.py`; the stamp,
   `tests/ingest/test_{map_admin,build_local}_build_end_to_end.py`.
+- **A gazetteer's identifiers in no node read**: `tests/ontology/test_gazetteer_identifiers_withheld.py`;
+  live through search, seed and expansion, `tests/ingest/test_gazetteer_ids_withheld_live.py`. Names
+  alone at the store, `more` included: `test_map_places_route.py` and the live
+  `test_an_identifier_fragment_finds_no_place_and_no_more`; a place above the reader's clearance
+  absent, `more` included, live.
 - **Contrast in three themes**: `map-verify/contrast.spec.ts`; `map/style.test.ts`. **Axe** in the dark,
   light and GOV.UK themes on `map-view-harness.html`, with the search's answer drawn.
 

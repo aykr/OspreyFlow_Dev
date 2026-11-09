@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 9c906a2..0cef176 100644
+index f5c9d0c..ee55235 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -840,6 +840,13 @@ export const MAPS_ACTIONS = defineActionRegistry("MAPS_ACTIONS", [
+@@ -851,6 +851,13 @@ export const MAPS_ACTIONS = defineActionRegistry("MAPS_ACTIONS", [
    "fetch-every-prefetch-area-now-by-keyboard",
  ] as const);
  

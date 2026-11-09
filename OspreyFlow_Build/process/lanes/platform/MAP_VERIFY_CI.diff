@@ -1,0 +1,40 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index cf66829..c16748b 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1102,6 +1102,13 @@ jobs:
+       - run: npm run test:perf --workspace apps/workspace
+       - run: npm run test:a11y --workspace apps/workspace
+       - run: npm run test:keyboard --workspace apps/workspace
++      # ADR-147 Amendment 1 (P4): the map's colours at WCAG's floors in the dark, light and GOV.UK
++      # themes, measured from their call sites (`map-verify/contrast.spec.ts`). The floor checks only:
++      # the reference images are macOS's (`*-darwin.png`); make Linux ones once on a runner
++      # (`npx playwright test --config map-verify/playwright.config.ts --update-snapshots`, committed)
++      # and drop the `-g` to gate the pictures too.
++      - run: npx playwright test --config map-verify/playwright.config.ts -g "contrast floor"
++        working-directory: OspreyFlow_Core/apps/workspace
+ 
+   # `06_DECISIONS.md` ADR-049 Stage 2 §6 part A, amendment 21 — the setup screens' own keyboard
+   # spec, against a real `harness.webapp` server (`apps/harness/keyboard/playwright.config.ts`'s
+diff --git a/OspreyFlow_Core/Makefile b/OspreyFlow_Core/Makefile
+index e0e31d1..eb6c91f 100644
+--- a/OspreyFlow_Core/Makefile
++++ b/OspreyFlow_Core/Makefile
+@@ -132,11 +132,12 @@ glass-a11y:
+ glass-keyboard:
+ 	npm run test:keyboard --workspace apps/workspace
+ 
+-# `spec/00_ARCHITECTURE.md` §1.2.1's Verify contrast-floor check — a
+-# rendered-pixel/reference-image comparison of a fixture graph over the
+-# basemap's own chrome colours (`apps/workspace/map-verify/contrast.spec.ts`),
+-# genuinely different from `glass-a11y`'s axe-core DOM-rule check. Dark
+-# theme only for now — see `map-verify/showcase.tsx`'s own docstring.
++# `spec/00_ARCHITECTURE.md` §1.2.1's Verify contrast-floor check, in the dark, light and GOV.UK
++# themes (ADR-147 Amendment 1): each colour the map draws, read from its own call site, against
++# WCAG's floors (4.5:1 text, 3:1 a marker, link or trail), and each theme's picture against its
++# stored reference (`apps/workspace/map-verify/contrast.spec.ts`), genuinely different from
++# `glass-a11y`'s axe-core DOM-rule check. The references are per OS (macOS's committed); CI runs
++# the floor checks alone until Linux references are made there.
+ glass-map-verify:
+ 	npm run test:map-verify --workspace apps/workspace
+ 
