@@ -288,6 +288,7 @@ export type { AgeingRule } from "./AgeingRule";
 export type { WaitingPromotion } from "./WaitingPromotion";
 export type { OperationsAgeing } from "./OperationsAgeing";
 export type { PromotionOverdueAlert } from "./PromotionOverdueAlert";
+export type { PromotionOverdueNotice } from "./PromotionOverdueNotice";
 export type { ExtractionRequest } from "./ExtractionRequest";
 export type { ExtractionResult } from "./ExtractionResult";
 export type { TranscribeRequest } from "./TranscribeRequest";

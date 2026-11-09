@@ -4,7 +4,7 @@ export type PromotionId = string;
 export type LoadId = string;
 export type DatasetId = string;
 export type DatasetName = string;
-export type ProposedBy = string;
+export type ProposedByName = string;
 export type ProposedAt = string;
 export type AgeDays = number;
 export type Overdue = boolean;
@@ -18,7 +18,7 @@ export interface WaitingPromotion {
   load_id: LoadId;
   dataset_id: DatasetId;
   dataset_name: DatasetName;
-  proposed_by: ProposedBy;
+  proposed_by_name: ProposedByName;
   proposed_at: ProposedAt;
   age_days: AgeDays;
   overdue: Overdue;

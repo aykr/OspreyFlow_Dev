@@ -1,8 +1,7 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type RecordedAt = string;
-export type PrincipalId = string;
-export type PrincipalName = string | null;
+export type Who = string;
 export type Action = string;
 export type Kind =
   | "assertions"
@@ -26,6 +25,7 @@ export type Total = number;
 export type Offset = number;
 export type Limit = number;
 export type Note = string | null;
+export type People = string[];
 
 /**
  * `GET /v1/admin/audit`: a page, newest first, with the total of what this reader may see under
@@ -37,6 +37,7 @@ export interface AuditSectionPage {
   offset: Offset;
   limit: Limit;
   note?: Note;
+  people?: People;
   [k: string]: unknown;
 }
 /**
@@ -46,8 +47,7 @@ export interface AuditSectionPage {
  */
 export interface AuditSectionEntry {
   recorded_at: RecordedAt;
-  principal_id: PrincipalId;
-  principal_name?: PrincipalName;
+  who: Who;
   action: Action;
   kind: Kind;
   held_in: HeldIn;

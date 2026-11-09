@@ -1,8 +1,7 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type RecordedAt = string;
-export type PrincipalId = string;
-export type PrincipalName = string | null;
+export type Who = string;
 export type Action = string;
 export type Kind =
   | "assertions"
@@ -29,8 +28,7 @@ export type ResultCardinality = number | null;
  */
 export interface AuditSectionEntry {
   recorded_at: RecordedAt;
-  principal_id: PrincipalId;
-  principal_name?: PrincipalName;
+  who: Who;
   action: Action;
   kind: Kind;
   held_in: HeldIn;

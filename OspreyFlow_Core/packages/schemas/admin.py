@@ -622,8 +622,9 @@ class AuditSectionEntry(BaseModel):
     is null and `words_withheld` says so, and the entry's count is withheld with them."""
 
     recorded_at: datetime
-    principal_id: str
-    principal_name: str | None = None
+    #: Who acted, by name, or fixed words where the identity provider gives none: never an
+    #: account's id (rule 7, ADR-106 Amendment 1).
+    who: str
     action: str
     kind: AuditKind
     held_in: AuditRecord
@@ -644,6 +645,9 @@ class AuditSectionPage(BaseModel):
     limit: int = Field(ge=1)
     #: What this record leaves out and why, said rather than left silent (rule 2).
     note: str | None = None
+    #: The person picker's choices: the names of everyone who wrote an entry of this record the
+    #: reader may read, whatever the other filters; a filter by person sends one of these back.
+    people: list[str] = Field(default_factory=list)
 
 
 class PromotionAlertSetting(BaseModel):
@@ -671,7 +675,8 @@ class WaitingPromotion(BaseModel):
     load_id: str
     dataset_id: str
     dataset_name: str
-    proposed_by: str
+    #: The proposer by name, or fixed words where there is none: never an account's id (rule 7).
+    proposed_by_name: str
     proposed_at: datetime
     age_days: int = Field(ge=0)
     overdue: bool
@@ -700,6 +705,17 @@ class PromotionOverdueAlert(BaseModel):
     words: str
 
 
+class PromotionOverdueNotice(BaseModel):
+    """One *Promotions overdue* alert as its recipient reads it (L2.7's *Needs you*): the alert
+    without its recipients, since who else was alerted is not that person's to read."""
+
+    promotion_id: str
+    load_id: str
+    dataset_id: str
+    raised_at: datetime
+    words: str
+
+
 ALL_MODELS: list[type[BaseModel]] = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
@@ -712,5 +728,5 @@ ALL_MODELS: list[type[BaseModel]] = [
     RolesCatalogue, TeamLeadInput, TeamCoverInput, OwnedItem, DisablePlan, OwnedTransfer,
     DisableInput, PersonCaseLevel, AdminPersonRow, CaseWithoutAuthor, AdminPeopleRows,
     AuditSectionEntry, AuditSectionPage, PromotionAlertSetting, AgeingRule, WaitingPromotion,
-    OperationsAgeing, PromotionOverdueAlert,
+    OperationsAgeing, PromotionOverdueAlert, PromotionOverdueNotice,
 ]  # fmt: skip
