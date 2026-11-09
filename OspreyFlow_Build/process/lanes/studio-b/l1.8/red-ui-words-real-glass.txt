@@ -1,0 +1,6 @@
+ingest/dag/NodeDrawer.tsx:263: "target model" on screen: the screens say "domain model" (ADR-140 Amendment 9)
+ingest/dag/NodePreview.tsx:37: "target model" on screen: the screens say "domain model" (ADR-140 Amendment 9)
+ingest/studio/ModelTab.tsx:9: "Target model" on screen: the screens say "domain model" (ADR-140 Amendment 9)
+ingest/studio/ModelTab.tsx:10: "Target model" on screen: the screens say "domain model" (ADR-140 Amendment 9)
+ui-words-check: 4 violation(s)
+exit 1
