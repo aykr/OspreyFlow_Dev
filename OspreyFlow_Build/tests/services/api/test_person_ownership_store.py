@@ -102,6 +102,8 @@ async def _case(conn: asyncpg.Connection, case_id: str, name: str, *, unit: str 
 
 
 async def _dataset(conn: asyncpg.Connection, dataset_id: str, marking: str | None) -> None:
+    # Only a marking the scheme holds (rule 15): an unknown one is refused for being unknown.
+    assert marking is None or marking in SCHEME.classification, marking
     await conn.execute(
         "INSERT INTO datasets (id, name, owning_unit, created_at, created_by, highest_marking) "
         "VALUES ($1, $1, 'unit-1', $2, 'seed', $3)",
@@ -345,10 +347,28 @@ async def test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withh
     with pytest.raises(WithheldRefused) as refused:
         await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
     assert refused.value.error == WITHHELD_ERROR == "withheld_items"
-    words = refused.value.words
-    assert hidden not in words and "Kestrel" not in words and "proposal" not in words
-    assert "link type" not in words and "1" not in words
+    words = refused.value.words.lower()
+    # That some exist, and nothing else: no id, case, kind, count, unit, marking or reason.
+    told = [hidden.lower(), "kestrel", "c-k", "proposal", "link type", "view", "board", "watch",
+            "unit", "clearance", "marking", *(m.lower() for m in SCHEME.classification)]  # fmt: skip
+    assert not [t for t in told if t in words], words
+    assert not any(ch.isdigit() for ch in words), words
     # An administrator who may see it is not refused.
+    top = ADMIN.model_copy(update={"clearance": "SECRET"})
+    await refuse_if_withheld(conn, "ana-1", admin=top, scheme=SCHEME)
+
+
+@pytest.mark.parametrize("dataset", ["ds-unmarked", None])
+async def test_disable_is_refused_for_an_item_on_an_unmarked_dataset_or_none(
+    conn: asyncpg.Connection, dataset: str | None
+) -> None:
+    """Read at the scheme's highest, as the list reads it (`reach`): refused here exactly when the
+    list says withheld."""
+    await _case(conn, "c-k", "Kestrel")
+    await _dataset(conn, "ds-unmarked", None)
+    await _watch(conn, "c-k", "ana-1", dataset=dataset)
+    with pytest.raises(WithheldRefused):
+        await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
     top = ADMIN.model_copy(update={"clearance": "SECRET"})
     await refuse_if_withheld(conn, "ana-1", admin=top, scheme=SCHEME)
 

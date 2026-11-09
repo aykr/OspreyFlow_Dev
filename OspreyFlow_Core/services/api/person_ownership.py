@@ -123,14 +123,15 @@ async def refuse_if_withheld(
     """For *Transfer and disable* (L2.5b), inside its own transaction before the identity provider
     is asked: refused while the person owns any item of these kinds the administrator may not
     see."""
-    if await withheld(
-        conn,
-        person,
-        admin_unit=admin.org_unit,
-        cleared=cleared_markings(admin, scheme),
-        top=scheme.classification[-1],
-    ):
+    unit, cleared, top = reach(admin, scheme)
+    if await withheld(conn, person, admin_unit=unit, cleared=cleared, top=top):
         raise WithheldRefused
+
+
+def reach(admin: Principal, scheme: HandlingScheme) -> tuple[str | None, list[str], str]:
+    """What every read here is asked with, from one place: the administrator's unit, the markings
+    they clear, and the scheme's highest, at which an unmarked dataset (or none) is read."""
+    return admin.org_unit, cleared_markings(admin, scheme), scheme.classification[-1]
 
 
 def cleared_markings(admin: Principal, scheme: HandlingScheme) -> list[str]:
@@ -223,8 +224,7 @@ class PostgresOwnershipStore:
     async def owned_by(
         self, person: str, *, admin: Principal, scheme: HandlingScheme
     ) -> PersonOwnership:
-        unit, top = admin.org_unit, scheme.classification[-1]
-        cleared = cleared_markings(admin, scheme)
+        unit, cleared, top = reach(admin, scheme)
         async with (
             self._pool.acquire() as conn,
             conn.transaction(isolation="repeatable_read", readonly=True),
@@ -244,6 +244,7 @@ __all__ = [
     "owned_items",
     "ownership_of",
     "promotion_items",
+    "reach",
     "refuse_if_withheld",
     "withheld",
 ]
