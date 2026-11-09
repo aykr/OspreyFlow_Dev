@@ -205,6 +205,8 @@ WORDS_SHOWN_ACTIONS = frozenset({
     "set_dataset_promotion_policy", "change_dataset_owners", "set_dataset_owner_setting",
     "register_dataset_source", "edit_dataset_source_governance", "make_home_case",
     "make_drawn_dataset", "set_case_datasets",
+    # Platform's P5: a gazetteer added to a dataset and removed (only `dataset_id` shown).
+    "add_dataset_gazetteer", "remove_dataset_gazetteer",
 })  # fmt: skip
 
 
