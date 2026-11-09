@@ -660,3 +660,52 @@ def test_a_sources_governance_words_stay_withheld(world: SimpleNamespace) -> Non
     assert entry["detail"] == {"dataset_id": "ds-a", "source_id": "src-1"}
     assert "Nightjar" not in str(entry) and "pipe-1" not in str(entry)
 
+
+
+def test_recipients_are_asked_of_the_dataset_as_it_stands_now() -> None:
+    """`_promotion_recipients`, which the sweep and every read of `alerts_for` ask, reads the
+    dataset's unit and marking now, not as the promotion recorded them: a dataset moved to another
+    unit and marked SECRET since alerts that unit's cleared administrator alone, and one no longer
+    held alerts no one. Red with the promotion's recorded unit and marking used."""
+    import asyncio
+
+    from ontology.handling import HandlingScheme
+    from services.api.app import _promotion_recipients
+    from services.api.datasets import Dataset
+
+    from schemas.admin import PersonAccount
+
+    recorded = PendingPromotion(promotion_id="p1", load_id="load-7", dataset_id="ds-a",
+                                dataset_name="Prison records", dataset_unit="unit-1",
+                                proposed_by="ana-1", proposed_at=T0)  # fmt: skip
+    now = Dataset(id="ds-a", name="Prison records", owning_unit="unit-2", created_at=T0,
+                  created_by="seed", highest_marking="SECRET")  # fmt: skip
+
+    class _Datasets:
+        held: dict[str, Dataset] = {"ds-a": now}
+
+        async def egress_of(self, ids: Any) -> dict[str, Dataset]:
+            return {i: self.held[i] for i in ids if i in self.held}
+
+        async def home_case_of(self, dataset_id: str) -> None:
+            return None
+
+    def _adm(pid: str, unit: str, clearance: str) -> PersonAccount:
+        return PersonAccount(id=pid, username=pid, name=pid, enabled=True, roles=["osprey-admin"],
+                             org_unit=unit, clearance=clearance)  # fmt: skip
+
+    class _People:
+        async def list_people(self) -> list[PersonAccount]:
+            return [_adm("adm-1", "unit-1", "SECRET"), _adm("adm-2", "unit-2", "SECRET"),
+                    _adm("adm-2low", "unit-2", "OFFICIAL")]  # fmt: skip
+
+    datasets = _Datasets()
+    state = SimpleNamespace(
+        datasets=datasets, identity_admin=_People(), custom_roles=None, investigations=None,
+        handling_scheme=HandlingScheme(name="t", classification=["OFFICIAL", "SECRET"],
+                                       handling_codes={}, action_codes={}, sanitisation_codes={}),
+    )  # fmt: skip
+    fake = SimpleNamespace(state=state)
+    assert asyncio.run(_promotion_recipients(fake, recorded)) == ["adm-2"]  # type: ignore[arg-type]
+    datasets.held = {}
+    assert asyncio.run(_promotion_recipients(fake, recorded)) == []  # type: ignore[arg-type]

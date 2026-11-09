@@ -34,6 +34,7 @@ from collections import Counter
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from dataclasses import replace as dataclass_replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast, get_args
@@ -16637,9 +16638,17 @@ async def _admin_dataset_of(datasets: DatasetStore, dataset_id: str) -> Dataset:
 async def _promotion_recipients(
     app: FastAPI, p: promotion_ageing_module.PendingPromotion
 ) -> list[str]:
-    """Decision 11's recipients of one overdue promotion, read at the sweep: the dataset's home
-    case's Authors holding `review_promotions` and its unit's administrators, cleared to its
-    marking (`promotion_ageing.recipients_of`). A team's grant is not expanded to its members."""
+    """Decision 11's recipients of one overdue promotion, read now (at the sweep, and again at
+    each read of `alerts_for`): the dataset's home case's Authors holding `review_promotions` and
+    its unit's administrators, cleared to its marking (`promotion_ageing.recipients_of`). The
+    dataset's unit and marking are read as they stand now, not as the promotion recorded them, and
+    a dataset no longer held has no recipients. A team's grant is not expanded to its members."""
+    current = (await app.state.datasets.egress_of([p.dataset_id])).get(p.dataset_id)
+    if current is None:
+        return []
+    p = dataclass_replace(
+        p, dataset_unit=current.owning_unit, dataset_marking=current.highest_marking
+    )
     home = await app.state.datasets.home_case_of(p.dataset_id)
     authors = await _authors_of(app.state.investigations, home.investigation_id) if home else []
     people = await app.state.identity_admin.list_people()

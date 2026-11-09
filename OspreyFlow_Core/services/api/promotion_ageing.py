@@ -13,12 +13,12 @@ one Protocol, `WaitingPromotions`, whose record is `PendingPromotion`; until L3.
 Conduit holds `NoPromotionsYet`, which says so (`recorded = False`) and lists none. L3.4 provides:
 
 - `waiting_for_review(reader)`: the promotions waiting, **filtered in its own store** (rule 3) to
-  those this reader may review: a promotion into a dataset whose Authors include the reader with
-  `review_promotions`, or, for an administrator (`administer_system`), one into a dataset of the
-  reader's own unit; and in either case only where the reader is cleared to the dataset's highest
-  marking (Amendment 4 decision 11; `may_review`, the same predicate the alert's recipients are
-  chosen by). Holding `operate_schedules`, which opens Operations, lists none on its own.
-  `test_waiting_promotions_contract.py` is the contract L3.4's store must pass (rule 1);
+  those this reader may review: a promotion into a dataset of the reader's own unit whose Authors
+  include the reader with `review_promotions`, or, for an administrator (`administer_system`), any
+  into a dataset of the reader's own unit; and in either case only where the reader is cleared to
+  the dataset's highest marking (Amendment 4 decision 11; `may_review`, the same predicate the
+  alert's recipients are chosen by). Holding `operate_schedules`, which opens Operations, lists none
+  on its own. `test_waiting_promotions_contract.py` is the contract L3.4's store must pass (rule 1);
 - `all_waiting()`: every one waiting, for the sweep that raises the alerts (the system, not a
   reader; the alert is delivered only to its recipients, and its words name nothing a recipient's
   own read of the dataset would not).
@@ -162,17 +162,18 @@ def may_review(
     custom: Mapping[str, Iterable[Right]] | None = None,
     scheme: HandlingScheme | None = None,
 ) -> bool:
-    """Amendment 4 decision 11's people for one waiting promotion: one of the dataset's Authors
-    (its home case's, `authors`) whose rights hold `review_promotions`, or an administrator
-    (`administer_system`) of the dataset's unit; and, where the dataset has a highest marking,
-    only one cleared to it. The Operations read lists a promotion to these people alone, and the
-    alert goes to them (`recipients_of`)."""
-    if not cleared_to(clearance, p.dataset_marking, scheme):
+    """Amendment 4 decision 11's people for one waiting promotion, all of the dataset's unit: one
+    of the dataset's Authors (its home case's, `authors`) whose rights hold `review_promotions`, or
+    an administrator (`administer_system`); and, where the dataset has a highest marking, only one
+    cleared to it. The unit is asked of an Author too: the case recognises an Author grant only for
+    a person of its own unit (`get_authorized`'s `owning_unit`), and a grant outlives a move. The
+    Operations read lists a promotion to these people alone, and the alert goes to them."""
+    if org_unit != p.dataset_unit or not cleared_to(clearance, p.dataset_marking, scheme):
         return False
     rights = rights_for(list(roles), custom)
     if person_id in set(authors) and Right.REVIEW_PROMOTIONS in rights:
         return True
-    return Right.ADMINISTER_SYSTEM in rights and org_unit == p.dataset_unit
+    return Right.ADMINISTER_SYSTEM in rights
 
 
 def recipients_of(

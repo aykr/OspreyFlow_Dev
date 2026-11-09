@@ -254,6 +254,7 @@ SCHEME_ORDER = ["OFFICIAL", "SECRET", "TOP SECRET"]
                                                       clearance="OFFICIAL")),
         ("an administrator moved to another unit", _account("adm-1", ["osprey-admin"],
                                                             unit="unit-9")),
+        ("an Author moved to another unit", _account("rev-1", ["data_engineer"], unit="unit-9")),
     ],
 )  # fmt: skip
 async def test_an_alert_is_read_only_while_its_reader_is_still_a_recipient(

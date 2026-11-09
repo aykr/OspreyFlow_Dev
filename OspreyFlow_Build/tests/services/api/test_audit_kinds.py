@@ -229,3 +229,12 @@ def test_only_the_named_actions_ever_show_their_words() -> None:
     shown = {a for a in actions | named if words_shown(kind_of(a), every)}
     assert shown == WORDS_SHOWN_ACTIONS
     assert set(shown_actions(every)) == WORDS_SHOWN_ACTIONS
+
+
+def test_no_withheld_word_is_a_plain_word() -> None:
+    """`_WITHHELD_WORDS` names the words a shown kind's entries write but no Admin read serves; the
+    allowlist `shown_words` reads is `_PLAIN_WORDS`, so the two never meet."""
+    from services.api.audit_section import _PLAIN_WORDS, _WITHHELD_WORDS
+
+    assert _WITHHELD_WORDS and not (_PLAIN_WORDS & _WITHHELD_WORDS)
+

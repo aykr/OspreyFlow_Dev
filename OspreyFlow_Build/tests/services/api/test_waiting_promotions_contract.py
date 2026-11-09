@@ -10,7 +10,7 @@ test, not the route's.
 **Case's L3.4 adds its store to `STORES`** (a factory taking the promotions and each dataset's
 Authors, and setting them up in that store) and must pass every case here. Until then the suite runs
 against `ReferenceWaiting`, the shape the contract describes, and is shown red with each check
-dropped from it (`L2.6_RED_RECORD.md`, C1–C3).
+dropped from it (`L2.6_RED_RECORD.md`, C1–C4).
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ PROMOTIONS = [
                      proposed_by="ana-1", proposed_at=SENT),
 ]  # fmt: skip
 AUTHORS: dict[str, list[str]] = {
-    "ds-s": ["rev-1", "rev-low", "ana-2"],
-    "ds-p": ["rev-1", "ana-2"],
+    "ds-s": ["rev-1", "rev-low", "ana-2", "rev-9"],
+    "ds-p": ["rev-1", "ana-2", "rev-9"],
 }
 
 
@@ -77,6 +77,9 @@ READERS: list[tuple[str, Principal, set[str]]] = [
     ("an Author holding review_promotions, below the marking",
      _p("rev-low", ["data_engineer"], clearance="OFFICIAL"), set()),
     ("an Author without review_promotions", _p("ana-2", ["analyst"]), set()),
+    # A grant outlives a move, but the case recognises it only in its own unit (`get_authorized`).
+    ("an Author of another unit holding review_promotions",
+     _p("rev-9", ["data_engineer"], unit="unit-9"), set()),
     ("review_promotions but no Author", _p("eng-9", ["data_engineer"]), set()),
     ("the dataset's unit's administrator, cleared", _p("adm-1", ["osprey-admin"]),
      {"p-secret", "p-plain"}),
