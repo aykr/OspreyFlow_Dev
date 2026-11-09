@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-index 7fc941b..33b854a 100644
+index 701ce00..81e8bdb 100644
 --- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
 +++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-@@ -107,6 +107,16 @@ const EXTRA_STATES: Record<string, string[]> = {
+@@ -125,6 +125,16 @@ const EXTRA_STATES: Record<string, string[]> = {
    ],
    // ADR-133 decision 6, stage (d): the Checks on load step (the default) and Verify's would-be alerts.
    "checks-on-load-harness.html": ["view=verify"],

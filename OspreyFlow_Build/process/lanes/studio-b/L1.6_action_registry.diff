@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 4e64076..b02745c 100644
+index 452ef6f..e33069e 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -1043,3 +1043,23 @@ export const MATRIX_ACTIONS = defineActionRegistry("MATRIX_ACTIONS", [
+@@ -1075,3 +1075,23 @@ export const MATRIX_ACTIONS = defineActionRegistry("MATRIX_ACTIONS", [
    // ADR-139 decision 6: the link table sorts by connection strength and by its ends' rarity.
    "sort-links-by-strength-and-rarity-by-keyboard",
  ] as const);
