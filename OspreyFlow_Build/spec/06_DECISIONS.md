@@ -30391,7 +30391,7 @@ theme only, and its reference image could not fail there.
 3. **Place search** is `POST /v1/investigations/{id}/map/places` (`investigate`, Viewer, audited as the
    case's other searches): the case's principal reads, in the store, `Location`s **by name alone**
    (`GraphPort.suggest_locations`, the access step in the traversal, rule 3; its match keeps case, so
-   the words are asked as typed, capitalised and in lower case), never by an identifier, so neither the
+   the words are asked as typed, capitalised, in title case and in lower case), never by an identifier, so neither the
    places nor `more` answer on an `osm_id` or a `uprn` (rule 7, the independent review). Of those, only
    the gazetteer's own places are kept: **in a gazetteer dataset** (`gazetteer-*`), with a point. `more` says when more matched than are shown
    (rule 2), and an empty answer with `more` is said as "more match", never as "no such place". A query
@@ -30404,9 +30404,11 @@ theme only, and its reference image could not fail there.
    read passes through (the adapter's serialisation and the working set's projection), leaves
    `osm_id`, `uprn`, `os_place_id`, `gss_code`, `gnis_feature_id`, `tiger_geoid` and `nad_address_id`
    (`GAZETTEER_SOURCE_IDENTIFIERS`) off a node in a `gazetteer-*` dataset for every request reader.
-   `postcode` is an address and stays. The Conduit's own work (`datasets is None`: a build's lookup,
-   resolution) and a read written back (`sources_in_full`) keep them, so a rebuild still finds a place
-   by its `osm_id` and a correction does not lose it. A case's own `Location` with a `uprn` keeps it.
+   `postcode` is an address and stays. The Conduit's own work (`datasets is None`: resolution) keeps
+   them, and so does a read inside `sources_in_full`: a read written back, so a correction does not lose
+   them, and a gazetteer load, which reads its places whole. A case's own `Location` with a `uprn` keeps
+   it. Only the OSM build loads a `gazetteer-*` dataset today, so `osm_id` is the identifier withheld on
+   a shipped path; the others are named for a gazetteer dataset of theirs.
 4. **The map's colours meet WCAG's floors in the dark, light and GOV.UK themes**, measured from their own
    call sites (the bundled style, `map/overlayColours.ts`, the controls' CSS): text 4.5:1, a marker, link
    or trail 3:1, over land and over water. In the dark theme a marker on the ramp's second step was 2.7:1,
@@ -30433,10 +30435,22 @@ built, a composite; (c) the places copied into each case's own dataset. (b) stan
 - **The contrast check is not a CI gate**: `make glass-map-verify` is in neither `make ci` nor the CI
   workflow (the owner's files), and its reference images are this machine's (darwin); the measured floors
   do not depend on the platform, the images do. A request to the orchestrator.
-- **A search by an identifier's value still matches**: the case's ordinary search (`search_nodes`,
-  exact on the ontology's identifiers) finds a gazetteer place by its `osm_id` typed in, though the
-  answer no longer carries it; a reader who already holds the identifier learns which place it is. A
-  change to the adapter's search fields (the case lane's and the store's), put to the orchestrator.
+- **The case's own searches still match a gazetteer place on its identifiers**, though no answer
+  carries them: the exact search (`search_nodes`) finds a place by its `osm_id` typed in, and **the
+  type-ahead (`/suggest`, `suggest_nodes` over `suggestion_scope`) matches by prefix or substring on
+  every identifier and says `more`**, so a case that has added the gazetteer could rebuild an
+  `osm_id` character by character, as the place search allowed before it asked by name alone. The fix
+  is in the store's suggestion scope (`suggestion_scope`: no gazetteer identifier on a `gazetteer-*`
+  node for a request reader), the store's and the case lane's; put to the orchestrator.
+- **A gazetteer loaded through the Studio into a case's own dataset** (OS Open Names' `os_place_id`,
+  Boundary-Line's `gss_code`, the US gazetteers' ids) is the case's data and keeps its identifiers on
+  every read; withholding them on any `Location` would hide a case's own loaded identifiers too. Put to
+  the orchestrator with this amendment's Open.
+- **`python -m scripts.build_local_basemap` writes its provider into `osprey.yaml` before the places
+  commit** (`register_local_provider` inside `build_local_basemap`); `map_admin.build_basemap` commits
+  first. The script is the developer's; a failed commit leaves a provider whose places are absent.
+- **A key typed into a browser-fetched address's host name** is not refused (a host is not a key's
+  place, and `map_admin` refuses a host it cannot resolve outside the deployment).
 - **The command-line builds load the places without their points**: DuckDB has one writer, and the
   Conduit holds its analytics store while it runs, so `ospreyflow map build` and
   `python -m scripts.build_local_basemap` cannot open it. A place they load is found by name but is not
@@ -30462,5 +30476,5 @@ built, a composite; (c) the places copied into each case's own dataset. (b) stan
 - **Contrast in three themes**: `map-verify/contrast.spec.ts`; `map/style.test.ts`. **Axe** in the dark,
   light and GOV.UK themes on `map-view-harness.html`, with the search's answer drawn.
 
-**Cost.** One more dataset per built region; a place search reads up to 200 `Location`s before keeping the
-gazetteer's.
+**Cost.** One more dataset per built region; a place search asks the store up to four times (one for each
+casing), each reading up to 201 `Location`s by name, before keeping the gazetteer's.
