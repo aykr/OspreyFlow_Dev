@@ -16,3 +16,6 @@ pytest exit 0
 pytest exit 0
 2026-11-09T02:30:02Z
 # Run 4 (05:5xZ): NOT A RESULT. `stack_lease.sh up case` failed: stack a's containers (osprey-probe-arcadedb-new, osprey-test-pg, osprey-test-valkey-6379, osprey-test-objectstore) no longer exist on this machine; every live case errored or failed on connection. Lease released; reported to the orchestrator.
+# Run from 2026-11-09T05:48:20Z, lease case on stack a (ArcadeDB 2491, Postgres 55433), OSPREY_LANE=case, at a91ff5e (round-2 fixes, on main 7783935)
+45 passed, 1 warning in 219.15s (0:03:39)
+pytest exit 0; 2026-11-09T05:52:01Z
