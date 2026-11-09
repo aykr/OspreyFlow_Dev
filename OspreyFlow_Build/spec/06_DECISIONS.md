@@ -31330,3 +31330,124 @@ alone; the refusal's words planted with a kind, a count, a reason and a place); 
 (rule 4, the fake refusing what the store refuses); `test_route_rights.py`'s row.
 
 Open: the Author-transfer route and the unknown-marking limit, as decision 4 says.
+
+## ADR-148 — Deploying into a namespace on a shared Kubernetes platform: the `cloud-platform` profile, first for the UK public sector client's Cloud Platform — ACCEPTED (design)
+
+*9 November 2026. **Accepted (design): the owner's decision of 9 November 2026** (the client call of 9 November), written from the owner's record checked against the UK public sector client's Cloud Platform's user guide and this repository at `8e74fc8`. Open questions 1 to 3 stay open for the owner; question 1 waits for P8's report.*
+
+### Context
+
+The client, a UK public sector organisation, will host OspreyFlow on **its Cloud Platform**: a shared EKS cluster in AWS London, run
+by the client's Cloud Platform team. A service does not get a cluster; it gets a **namespace**, created and
+changed only by pull request to the client's environments repository, and its AWS resources (RDS,
+ElastiCache, OpenSearch, S3, ECR, IAM roles for service accounts) are requested the same way. OPA Gatekeeper
+enforces the platform's rules. The platform hosts data up to, but not including, SECRET.
+
+The Cloud Platform team has agreed, in the client's words, that ArcadeDB and ClickHouse may run as
+containers in the namespace: there is no managed equivalent, and Solirius runs and supports them.
+
+Our `cluster` profile (ADR-114 decision 9, `harness/cluster.py`, `deploy/helm/ospreyflow`,
+`deploy/opentofu/cluster/*`) assumes the opposite situation: **we create the cluster** and run every store
+ourselves. What the platform requires, and where `main` stands:
+
+| Their rule (user guide) | `main` at `8e74fc8` |
+| --- | --- |
+| Containers run as a **non-root user named by a numeric UID**, on a port above 1024, timezone UTC | Our six Dockerfiles set `USER` by name (`osprey`, `nginx`, `ner`). Postgres, Valkey, SeaweedFS, Ollama and speaches start as root; `whisper-models` runs as `user: 0` |
+| Traffic enters through the platform's NGINX ingress (ModSecurity available, IP allow-lists by annotation) | No `Ingress` in the chart; Caddy is the front door |
+| Volumes are `ReadWriteOnce` (`gp2-expand`); EFS is not in use | The chart's shared `ReadWriteMany` volume holds `osprey-data`, `osprey-staging`, the model and map settings files and the key file, `ollama-models`, `whisper-models` and `proxy-data`; the recipes repository is a git repository on disk (`studio_publish._REPO_ROOT`) |
+| Egress to the internet is open unless the namespace adds a Calico deny policy | Our NetworkPolicies are Kubernetes ones; nothing denies egress at the namespace |
+| Images come from ECR, scanned on push | Images pinned by digest from Docker Hub and ghcr.io |
+| Managed RDS, ElastiCache, OpenSearch and S3 by pull request; credentials arrive as Kubernetes secrets | We run Postgres, Valkey, OpenSearch and SeaweedFS |
+| No GPUs | Ollama and Whisper |
+| Up to, not including, SECRET | The UK LE scheme's highest marking is SECRET |
+| Sign-in: the client's Entra ID | `principal_auth` reads fixed claim names `clearance`, `org_unit`, `receivable_handling_codes`, which Entra ID does not issue as such |
+
+### Decisions
+
+1. **A fourth deployment profile, `cloud-platform`,** rendered by the harness like the others into
+   `deploy/generated/cloud-platform/`. It renders **values for our Helm chart into an existing namespace**
+   and the **Terraform files for the namespace's AWS resources**, in the shape the environments repository
+   takes, for a person to raise as a pull request. It creates no cluster and no VPC. The `cluster` profile is
+   unchanged. The profile is written for the UK public sector client's Cloud Platform first; its settings (ingress class and
+   annotations, storage class, egress policy kind, registry) are named so that another shared platform is a
+   new settings file, not a new profile.
+2. **The front door is the platform's ingress.** The chart gains an optional `Ingress` (class, host, TLS
+   secret, annotations for ModSecurity and the IP allow-list), rendered by this profile only. No Caddy.
+3. **Every container runs as a numeric non-root user.** Our Dockerfiles change `USER osprey` to a fixed UID
+   (`USER 10001:10001`, one number for all our images); the chart sets `runAsNonRoot: true`, the UID,
+   `allowPrivilegeEscalation: false` and drops all capabilities on every pod this profile renders. The
+   third-party images we still run (ArcadeDB, ClickHouse, ClickHouse Keeper, and LiteLLM if AI is enabled)
+   are proven to start that way; where one cannot, we build a thin image of our own over it, pinned by
+   digest and in the licence register.
+4. **The managed stores replace ours.** Postgres → RDS PostgreSQL 16 (the application and reporting
+   databases); Valkey → ElastiCache (Redis 7); OpenSearch → the platform's OpenSearch 2.x; SeaweedFS → S3.
+   Connection details are read from the Kubernetes secrets the platform's modules create, mapped in the
+   profile's settings, never copied into a file in the repository. TLS to each.
+5. **ArcadeDB and ClickHouse run as StatefulSets** on `gp2-expand` with encryption on, with the copies the
+   `cluster` profile already runs (ArcadeDB 3, ClickHouse 2, Keeper 3; one of each in development), a
+   PodDisruptionBudget allowing one copy down at a time, and a graceful stop long enough for ArcadeDB to
+   close its databases.
+6. **Nothing needs a shared disk.** Uploads, staging Parquet, map tiles and model files live in S3. The
+   model and map settings files and the key file move out of the shared folder; the recipes repository moves
+   off the shared disk. **Where each goes is the owner's to rule** (open questions 1 and 2).
+7. **Egress is denied by default.** The profile renders the platform's Calico deny policy and an allow
+   policy listing only the managed services, Entra ID's endpoints, and what an administrator has enabled
+   (a model provider, a map provider, a connector's host). The allow list is rendered from the same
+   settings that ADR-135 Amendment 2 and ADR-147 already gate, so switching a provider on in Admin and
+   allowing its traffic are one decision, applied by a pull request.
+8. **Images are copied into ECR** by `ospreyflow images push --registry <ecr>`: our images built and pushed,
+   the third-party ones copied by digest. The chart's image references come from the profile.
+9. **Sign-in is Entra ID directly; no Keycloak.** The claims `principal_auth` needs are **mapped, not
+   assumed**: the profile names, for each of clearance, organisational unit and handling codes, the Entra
+   claim that carries it (a directory extension attribute) or a table from Entra group to value. One
+   claims-construction path stays (`principal_auth`'s own rule); only its source names become settings.
+   Roles stay assigned in Admin › People as today.
+10. **The deployment has a marking ceiling.** A setting, `deployment.highest_marking`, defaulting to the
+    scheme's highest; the `cloud-platform` profile sets it to OFFICIAL-SENSITIVE's place in the scheme. A
+    load, a drawn item or an import marked above it is refused before anything is written, in words that say
+    the deployment's limit, never the item's content.
+11. **No GPU work.** Local models and Whisper are not rendered. AI is off unless an administrator enables an
+    engine; Bedrock as an engine is a separate, held step (P11).
+12. **No Java in the Conduit image on this profile.** ADR-147 Amendment 2 (P5) adds a Java runtime to the
+    Conduit image so the basemap can be built in the product. This profile builds the Conduit image without
+    it (a build argument); the basemap is built off-platform with `ospreyflow map build` and uploaded to the
+    tiles bucket with `ospreyflow map upload`. *Admin › Maps*' Build says so in words on this profile.
+13. **Backups go to S3 on a schedule** (a CronJob: ArcadeDB's `BACKUP DATABASE`, ClickHouse's `BACKUP … TO
+    S3`), encrypted, and a restore is rehearsed on the development namespace before production holds real
+    data. The recovery runbook gains this profile's section with measured times.
+14. **A policy check in CI.** `make cp-policy-check` renders the profile and fails on: a pod without
+    `runAsNonRoot` or a numeric UID, a privileged container, a port below 1024, a `ReadWriteMany` claim, a
+    `hostPath`, an image not from the profile's registry, a namespace without the deny-egress policy. Each
+    rule shown red first on a planted fault. Where the Cloud Platform publishes its Gatekeeper constraints,
+    the check runs them too.
+
+### Open questions for the owner
+
+1. **The recipes repository.** It is a git repository on disk, written by the Conduit (`studio_publish`)
+   and read by the Ingest runs, today through the shared volume.
+   - (a) One writer: the repository lives on one pod's own volume, served to the others over HTTP
+     (dulwich's server), backed up to S3 with the rest.
+   - (b) The repository's objects in S3 (a dulwich object store over S3), so every replica reads and
+     writes it without a shared disk.
+   - (c) Recipes stored in Postgres with their history, and git kept only as the export (L1.7's YAML
+     releases).
+   The platform lane reports which components touch the repository, and how, before recommending; the
+   owner rules.
+2. **The settings files and the key file** (model settings, map settings, the write-only keys) that every
+   Conduit replica reads.
+   - (a) Recommended: in Postgres (RDS), the keys encrypted with a KMS key the namespace holds; each replica
+     notified of a change through Redis.
+   - (b) Kubernetes Secrets the Conduit writes (needs a Role allowing it to write Secrets in its own
+     namespace, which the Cloud Platform team may refuse).
+3. **One Conduit image or two.** Decision 12 builds the Conduit without Java on this profile. Confirm, or
+   keep one image everywhere and accept the larger image and its scan findings.
+
+### Consequences
+
+- The `cluster` profile is not touched; `local-lite` and `small` are not touched except for the numeric
+  UIDs (decision 3), which they also take.
+- The acceptance scenarios (`08_ACCEPTANCE_SCENARIOS.md`) must pass on this profile. Until a namespace
+  exists they run on a local kind or k3d cluster set up to the platform's rules (decision 14's checks, a
+  Calico deny policy, no RWX storage class).
+- Solirius runs ArcadeDB and ClickHouse in production: backups, patching, upgrades and monitoring are in
+  the support service, and their runbooks are part of the documentation step (D2c).
