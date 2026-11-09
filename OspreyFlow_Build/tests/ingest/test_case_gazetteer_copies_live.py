@@ -14,7 +14,9 @@ own dataset (`case_gazetteers.copy_places`). A reader of that case alone (its pr
   it) suggests nothing and says no `more` (decision 3b, keyed on the copy's provenance, since a copy
   is in no `gazetteer-*` dataset);
 - **a re-copy writes no second copy**, and a place the gazetteer no longer holds has its copy
-  reverted; **a removal reverts the copies**, but one a case's own link rests on.
+  reverted; **a removal reverts the copies** whatever rests on them, and a re-add brings a
+  case's link to one back; **a case's load writing onto a copy** keeps it a copy, withheld, and
+  makes it the case's, kept by a removal.
 
 Each shown red with its fix removed (`P5_RED_RECORD.md`). The routes themselves, over the
 Conduit's shared database, are `test_case_gazetteer_routes_live.py`. Live, so under `tests/ingest`
@@ -237,11 +239,16 @@ async def test_a_re_copy_writes_no_second_copy_and_reverts_a_place_gone(stores: 
     assert len(named.nodes) == 1
 
 
-async def test_a_removal_reverts_the_copies_but_one_a_case_s_link_rests_on(stores: Stores) -> None:
+async def test_a_removal_reverts_the_copies_and_a_re_add_brings_back_a_link_on_one(
+    stores: Stores,
+) -> None:
+    """A copy goes whatever rests on it (rule 3: never judged on a link a reader may not see); the
+    case's link to it goes out of every read with it, and comes back when the gazetteer is added
+    again, since the copy is written again under the same id."""
     graph, _analytics, _ = stores
     await _plant(stores)
     await _copy(graph)
-    linked = copy_id("01JP5ALIKE0100000000000000", "case-a")
+    linked = copy_id("01JP5ASHWELL00000000000000", "case-a")
     person = _place("01JP5PERSON000000000000000", "x").model_copy(
         update={"type": "Person", "properties": {"family_name": "Quill"}, "datasets": ["case-a"]}
     )
@@ -252,7 +259,44 @@ async def test_a_removal_reverts_the_copies_but_one_a_case_s_link_rests_on(store
     reverted, kept = await remove_copies(
         graph, SCHEME, gazetteer=GAZETTEER, case_dataset="case-a"
     )
-    assert kept == [linked] and linked not in reverted
-    left = await graph.suggest_nodes("Ashwe", CASE, limit=10)
-    assert left.nodes == []
-    assert await graph.get_node(linked, CASE) is not None
+    assert linked in reverted and kept == []
+    assert (await graph.suggest_nodes("Ashwe", CASE, limit=10)).nodes == []
+    around = await graph.expand(ExpandRequest(node_ids=[person.id], depth=1), CASE)
+    assert linked not in {n.id for n in around.nodes} and around.edges == []
+    await _copy(graph)
+    back = await graph.expand(ExpandRequest(node_ids=[person.id], depth=1), CASE)
+    assert linked in {n.id for n in back.nodes} and len(back.edges) == 1
+
+
+async def test_a_case_s_load_writing_onto_a_copy_keeps_it_a_copy_and_the_case_s(
+    stores: Stores,
+) -> None:
+    """ADR-147 Amendment 2: a case's own load may match a copy by its `osm_id` and write onto it,
+    through the store's real merge (`upsert_nodes`). Its provenance keeps the gazetteer, so its
+    identifiers stay withheld and unmatched; and it is now another writer's too, so a removal keeps
+    it (rule 6)."""
+    graph, _analytics, _ = stores
+    await _plant(stores)
+    await _copy(graph)
+    copy = copy_id("01JP5ASHWELL00000000000000", "case-a")
+    loaded = _place(copy, "Ashwell", osm_id=PREFIX, geometry_ref="g-ashwell").model_copy(
+        update={
+            "datasets": ["case-a"],
+            "provenance": Provenance(
+                state=ProvenanceState.ASSERTED,
+                sources=[SourceRef(document_id="case-load", locator="row 7", excerpt_hash="")],
+                first_seen=datetime(2026, 2, 1, tzinfo=UTC),
+            ),
+        }
+    )
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([loaded], tx)
+    await graph.commit_transaction(tx)
+    read = await graph.get_node(copy, CASE)
+    assert read is not None and read.provenance.gazetteer == GAZETTEER
+    assert _no_identifier(read.properties), read.properties
+    assert await graph.search_nodes(PREFIX, CASE) == []
+    _reverted, kept = await remove_copies(
+        graph, SCHEME, gazetteer=GAZETTEER, case_dataset="case-a"
+    )
+    assert copy in kept

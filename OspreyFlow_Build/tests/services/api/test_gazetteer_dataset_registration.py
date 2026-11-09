@@ -95,11 +95,20 @@ def test_a_unit_that_holds_nothing_here_is_refused_in_words_naming_those_that_do
         check_unit("unit-9", {"unit-1", "unit-7"})
     assert str(raised.value) == (
         "No case or dataset in this deployment is held by the unit 'unit-9', so a gazetteer "
-        "cannot be built for it. Name a unit that holds one: unit-1, unit-7."
+        "cannot be built for it. Name a unit that holds one."
     )
     check_unit("unit-7", {"unit-1", "unit-7"})
     # The building administrator's own unit is always one (a deployment with nothing loaded yet).
     check_unit("unit-3", set(), own="unit-3")
+
+
+def test_a_rebuild_for_another_unit_than_the_first_build_s_is_refused_in_words() -> None:
+    """The region's dataset keeps its first unit, so another would leave it holding the places of
+    two units."""
+    with pytest.raises(UnknownUnit) as raised:
+        check_unit("unit-7", {"unit-1", "unit-7"}, built_for="unit-1")
+    assert str(raised.value).startswith("This region's gazetteer is held by the unit 'unit-1'")
+    check_unit("unit-1", {"unit-1", "unit-7"}, built_for="unit-1")
 
 
 async def test_the_command_line_check_asks_the_conduit_s_database_and_closes_it() -> None:
@@ -108,10 +117,19 @@ async def test_the_command_line_check_asks_the_conduit_s_database_and_closes_it(
     async def connect(_dsn: str) -> InMemoryDatasetStore:
         return store
 
-    await check_unit_from_env("unit-7", connect=connect)
+    await check_unit_from_env("unit-7", region="rutland", connect=connect)
     assert store.closed
     with pytest.raises(UnknownUnit):
-        await check_unit_from_env("unit-1", connect=connect)
+        await check_unit_from_env("unit-1", region="rutland", connect=connect)
+    # Built before for unit-7: a rebuild for another unit is refused, though it holds a dataset.
+    store.datasets["gazetteer-osm-rutland"] = store.datasets["d-unit-7"].model_copy(
+        update={"id": "gazetteer-osm-rutland"}
+    )
+    store.datasets["d-unit-8"] = store.datasets["d-unit-7"].model_copy(
+        update={"id": "d-unit-8", "owning_unit": "unit-8"}
+    )
+    with pytest.raises(UnknownUnit):
+        await check_unit_from_env("unit-8", region="rutland", connect=connect)
 
 
 async def test_the_command_line_check_says_an_unreachable_database_in_words() -> None:
@@ -119,5 +137,5 @@ async def test_the_command_line_check_says_an_unreachable_database_in_words() ->
         raise ConnectionRefusedError(61, "Connect call failed ('127.0.0.1', 5432)")
 
     with pytest.raises(DatasetsUnreachable) as raised:
-        await check_unit_from_env("unit-7", connect=connect)
+        await check_unit_from_env("unit-7", region="rutland", connect=connect)
     assert "nothing was built" in str(raised.value) and "127.0.0.1" not in str(raised.value)

@@ -7901,6 +7901,26 @@ async def map_place_search_route(
     return result
 
 
+async def _own_dataset(investigation_id: str, datasets: DatasetStore) -> str | None:
+    """The one source dataset the case reads of its own, where a gazetteer's copies are; `None`
+    for a case reading a composite or nothing (ADR-147 Amendment 2)."""
+    chosen = await datasets.chosen_of_case(investigation_id)
+    if len(chosen) != 1 or chosen[0].kind != SOURCE_DATASET:
+        return None
+    return chosen[0].id
+
+
+async def _refuse_without_own_dataset(investigation_id: str, datasets: DatasetStore) -> str:
+    own = await _own_dataset(investigation_id, datasets)
+    if own is None:
+        chosen = await datasets.chosen_of_case(investigation_id)
+        what = "a composite" if chosen else "no dataset"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_NO_OWN_DATASET.format(what=what)
+        )
+    return own
+
+
 async def _case_gazetteers_view(
     investigation_id: str,
     principal: Principal,
@@ -7909,8 +7929,10 @@ async def _case_gazetteers_view(
     *,
     copies_kept: bool = False,
 ) -> CaseGazetteers:
-    """The gazetteers of the reader's unit, and those the case added (ADR-147 Amendment 2)."""
-    added = {a.gazetteer for a in await store.of_case(investigation_id)}
+    """The gazetteers of the reader's unit, and those the case's own dataset holds copies of
+    (ADR-147 Amendment 2: recorded for the dataset, so every case reading it sees them added)."""
+    own = await _own_dataset(investigation_id, datasets)
+    added = {a.gazetteer for a in await store.of_dataset(own)} if own else set()
     offered = {
         d.id: d.name
         for d in await datasets.list_all()
@@ -7976,23 +7998,19 @@ async def add_case_gazetteer_route(
         or held.owning_unit != principal.org_unit
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_GAZETTEER)
-    chosen = await datasets.chosen_of_case(investigation.id)
-    if len(chosen) != 1 or chosen[0].kind != SOURCE_DATASET:
-        what = "a composite" if chosen else "no dataset"
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=_NO_OWN_DATASET.format(what=what)
-        )
+    own = await _refuse_without_own_dataset(investigation.id, datasets)
     added = case_gazetteers.AddedGazetteer(
-        investigation_id=investigation.id, gazetteer=dataset_id, case_dataset=chosen[0].id,
+        case_dataset=own, gazetteer=dataset_id, added_in=investigation.id,
         added_by=principal.id, added_at=datetime.now(UTC),
     )  # fmt: skip
-    await store.add(added)
+    first = await store.add(added)
     try:
         reverted = await case_gazetteers.copy_places(
-            graph, scheme, gazetteer=dataset_id, case_dataset=added.case_dataset, by=principal.id
+            graph, scheme, gazetteer=dataset_id, case_dataset=own, by=principal.id
         )
     except BaseException:
-        await store.remove(investigation.id, dataset_id)
+        if first:  # an earlier addition's record, and its copies, are left as they were
+            await store.remove(own, dataset_id)
         raise
     if reverted:
         from .working_set_revert import remove_and_publish
@@ -8023,23 +8041,22 @@ async def remove_case_gazetteer_route(
     working_set: WorkingSetDep,
     audit: AuditDep,
 ) -> CaseGazetteers:
-    """Removes a gazetteer from the case (ADR-147 Amendment 2): its copies marked reverted and taken
-    out of the case's working sets, but a copy another writer also wrote or a link rests on, which
-    is the case's data now (rule 6; `case_gazetteers.remove_copies`). `copies_kept` says so, judged
-    on the kept copies the Author may read. Its Author's, audited."""
-    added = next(
-        (a for a in await store.of_case(investigation.id) if a.gazetteer == dataset_id), None
-    )
-    if added is None:
+    """Removes a gazetteer from the case's own dataset, so from every case reading it (ADR-147
+    Amendment 2): its copies marked reverted and taken out of the working sets, but a copy another
+    writer also wrote or an analyst confirmed, which is the case's data now (rule 6;
+    `case_gazetteers.remove_copies`, judged on the copy alone). `copies_kept` says so, judged on the
+    kept copies the Author may read. Its Author's, audited."""
+    own = await _refuse_without_own_dataset(investigation.id, datasets)
+    if dataset_id not in {a.gazetteer for a in await store.of_dataset(own)}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_GAZETTEER)
     reverted, kept = await case_gazetteers.remove_copies(
-        graph, scheme, gazetteer=dataset_id, case_dataset=added.case_dataset
+        graph, scheme, gazetteer=dataset_id, case_dataset=own
     )
     if reverted:
         from .working_set_revert import remove_and_publish
 
         await remove_and_publish(working_set, working_set.publisher, reverted, [])
-    await store.remove(investigation.id, dataset_id)
+    await store.remove(own, dataset_id)
     seen = bool(kept) and bool(await graph.get_nodes(kept, principal))
     await audit.record(
         principal=principal,
@@ -8217,8 +8234,9 @@ async def build_basemap_route(
     gazetteer_unit = body.unit or principal.org_unit
     try:
         map_places.check_unit(
-            gazetteer_unit, await map_places.units_held(datasets), own=principal.org_unit
-        )
+            gazetteer_unit, await map_places.units_held(datasets), own=principal.org_unit,
+            built_for=await map_places.built_for(datasets, body.region),
+        )  # fmt: skip
     except map_places.UnknownUnit as unknown:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(unknown)
@@ -8259,8 +8277,9 @@ async def build_basemap_route(
             copies = getattr(request.app.state, "case_gazetteers", None)
             if copies is not None:
                 reverted = await case_gazetteers.refresh_cases(
-                    graph, handling_scheme, copies, map_places.gazetteer_dataset_id(body.region)
-                )
+                    graph, handling_scheme, copies, datasets,
+                    map_places.gazetteer_dataset_id(body.region),
+                )  # fmt: skip
                 held_sets = getattr(request.app.state, "working_set", None)
                 if reverted and held_sets is not None:
                     from .working_set_revert import remove_and_publish

@@ -253,8 +253,10 @@ def test_copying_again_reverts_the_copy_of_a_place_the_gazetteer_no_longer_holds
 def test_removing_reverts_the_gazetteer_s_own_copies_and_never_another_writer_s(
     world: World,
 ) -> None:
-    """Rule 6: a copy a case's own load also wrote (a source not the gazetteer's), or that a link
-    rests on, is the case's data now and is kept; `copies_kept` says so."""
+    """Rule 6: a copy a case's own load also wrote (a source not the gazetteer's), or an analyst
+    confirmed, is the case's data now and is kept; `copies_kept` says so. A link resting on a copy
+    is no reason (rule 3: it may be one the Author cannot see): the copy goes, and the link with it
+    out of every read, until the gazetteer is added again."""
     graph, _datasets, store, audit, working_set = world
     _client().put(f"/v1/investigations/inv-1/map/gazetteers/{GAZ}")
     alone = copy_id(PLACE.id, "case-a")
@@ -262,19 +264,70 @@ def test_removing_reverts_the_gazetteer_s_own_copies_and_never_another_writer_s(
     written.provenance.sources.append(
         SourceRef(document_id="case-load", locator="row 3", excerpt_hash="")
     )
-    linked = _node("01JLINKED00000000000000000", "case-a", gazetteer=GAZ, name="Oakham")
-    graph.nodes.update({written.id: written, linked.id: linked})
+    confirmed = _node("01JCONFIRMED00000000000000", "case-a", gazetteer=GAZ, name="Oakham")
+    confirmed.provenance.confirmed_by = "analyst-2"
+    confirmed.provenance.last_confirmed = NOW
+    linked = _node("01JLINKED00000000000000000", "case-a", gazetteer=GAZ, name="Exton")
+    graph.nodes.update({n.id: n for n in (written, confirmed, linked)})
     graph.links.append(Edge.model_construct(id="e1", source="someone", target=linked.id))
     response = _client().delete(f"/v1/investigations/inv-1/map/gazetteers/{GAZ}")
     assert response.status_code == 200, response.text
-    assert graph.reverted == [alone]
-    assert working_set.removed == [alone]
+    assert sorted(graph.reverted) == sorted([alone, linked.id])
+    assert sorted(working_set.removed) == sorted(graph.reverted)
     assert response.json() == {
         "gazetteers": [{"dataset_id": GAZ, "name": "Gazetteer-Osm-Rutland", "added": False}],
         "copies_kept": True,
     }
     assert store.added == {}
     assert audit.records[-1]["action"] == "remove_case_gazetteer"
+    # Added again: the same copies written again, so a link that rested on one rests on it again.
+    _client().put(f"/v1/investigations/inv-1/map/gazetteers/{GAZ}")
+    assert alone not in graph.reverted
+
+
+def test_the_addition_is_the_dataset_s_so_every_case_reading_it_sees_it(world: World) -> None:
+    """Copies are in the dataset, which several cases may read (a case opened from an alert reads
+    its case's): each sees the gazetteer added, and none's removal leaves another's record saying
+    copies are there that are not."""
+    graph, datasets, store, *_ = world
+    datasets.cases["inv-2"] = ["case-a"]
+    _client().put(f"/v1/investigations/inv-1/map/gazetteers/{GAZ}")
+    seen = _client().get("/v1/investigations/inv-2/map/gazetteers").json()
+    assert seen["gazetteers"][0]["added"] is True
+    assert [a.added_in for a in store.added.values()] == ["inv-1"]
+    _client().delete(f"/v1/investigations/inv-2/map/gazetteers/{GAZ}")
+    first = _client().get("/v1/investigations/inv-1/map/gazetteers").json()
+    assert first["gazetteers"][0]["added"] is False
+    assert copy_id(PLACE.id, "case-a") in graph.reverted
+
+
+def test_a_failed_copy_again_keeps_the_earlier_addition(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _graph, _datasets, store, *_ = world
+    _client().put(f"/v1/investigations/inv-1/map/gazetteers/{GAZ}")
+
+    async def fails(*_args: Any, **_kwargs: Any) -> list[str]:
+        raise RuntimeError("the store went away")
+
+    monkeypatch.setattr("services.api.case_gazetteers.copy_places", fails)
+    with pytest.raises(RuntimeError):
+        _client().put(f"/v1/investigations/inv-1/map/gazetteers/{GAZ}")
+    assert list(store.added) == [("case-a", GAZ)]
+
+
+async def test_a_rebuild_refreshes_each_dataset_and_drops_one_no_longer_there(
+    world: World,
+) -> None:
+    from services.api.case_gazetteers import AddedGazetteer, refresh_cases
+
+    graph, datasets, store, *_ = world
+    for held in ("case-a", "deleted-ds"):
+        await store.add(AddedGazetteer(case_dataset=held, gazetteer=GAZ, added_in="inv-1",
+                                       added_by="author-1", added_at=NOW))  # fmt: skip
+    await refresh_cases(graph, load_uk_le_scheme(), store, datasets, GAZ)
+    assert {w.datasets[0] for w in graph.written} == {"case-a"}
+    assert list(store.added) == [("case-a", GAZ)]
 
 
 def test_removing_a_gazetteer_the_case_never_added_is_refused(world: World) -> None:

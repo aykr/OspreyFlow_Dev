@@ -183,9 +183,14 @@ _CLASSPATH = re.compile(r"^gpl-2\.0(-only)?\s+with\s+classpath-exception-2\.0$")
 _RUNTIME_LABEL = re.compile(
     r'^LABEL\s+org\.ospreyflow\.runtime\.([a-z0-9-]+)\.licence="([^"]+)"\s*$', re.M
 )
-#: A Java runtime in an image, however it got there: a JDK or JRE stage, or a jlinked runtime.
+#: A Java runtime in an image, however it got there: a JDK or JRE stage, a jlinked runtime, a
+#: runtime copied to `/opt/java`, or a distribution's package (`apt-get install openjdk-21-jre`,
+#: `default-jre`, `apk add openjdk21`).
 _JAVA_IN_IMAGE = re.compile(
-    r"^FROM\s+\S*(temurin|openjdk|jdk|jre|corretto|zulu)\S*|\bjlink\b|/opt/java", re.M | re.I
+    r"^FROM\s+\S*(temurin|openjdk|jdk|jre|corretto|zulu)\S*"
+    r"|\bjlink\b|/opt/java"
+    r"|\b(openjdk-?\d+(-jre|-jdk)?(-headless)?|default-(jre|jdk)(-headless)?)\b",
+    re.M | re.I,
 )
 
 

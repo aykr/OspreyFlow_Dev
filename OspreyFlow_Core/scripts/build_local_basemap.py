@@ -540,7 +540,7 @@ async def _run(args: argparse.Namespace) -> int:
         )
         return 2
     try:
-        await check_unit_from_env(args.unit)
+        await check_unit_from_env(args.unit, region=args.region)
     except (UnknownUnit, DatasetsUnreachable) as refused:
         print(str(refused), file=sys.stderr)
         return 1

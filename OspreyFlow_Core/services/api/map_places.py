@@ -63,7 +63,13 @@ def gazetteer_dataset_id(region: str) -> str:
 #: not the building administrator's own, is refused in words before anything is built.
 UNKNOWN_UNIT = (
     "No case or dataset in this deployment is held by the unit {unit!r}, so a gazetteer cannot be "
-    "built for it. Name a unit that holds one{known}."
+    "built for it. Name a unit that holds one."
+)
+#: A re-build names the unit the gazetteer was first built for: its dataset keeps its first unit,
+#: so another would leave it holding places of two units.
+OTHER_UNIT = (
+    "This region's gazetteer is held by the unit {held!r}, so it is rebuilt for that unit only: "
+    "name {held!r}, or build another region for {unit!r}."
 )
 
 
@@ -88,14 +94,23 @@ async def units_held(store: object) -> set[str]:
     return {d.owning_unit for d in held.values()}
 
 
-def check_unit(unit: str, held: set[str], *, own: str | None = None) -> None:
+def check_unit(
+    unit: str, held: set[str], *, own: str | None = None, built_for: str | None = None
+) -> None:
     """Refuses `unit` in words unless it holds a case or a dataset here, or is `own` (the building
-    administrator's)."""
-    if unit == own or unit in held:
-        return
-    named = sorted(held | ({own} if own else set()))
-    known = f": {', '.join(named)}" if named else ""
-    raise UnknownUnit(UNKNOWN_UNIT.format(unit=unit, known=known))
+    administrator's); and, for a region built before (`built_for`, its dataset's unit), unless it
+    is that unit."""
+    if unit != own and unit not in held:
+        raise UnknownUnit(UNKNOWN_UNIT.format(unit=unit))
+    if built_for is not None and unit != built_for:
+        raise UnknownUnit(OTHER_UNIT.format(held=built_for, unit=unit))
+
+
+async def built_for(store: object, region: str) -> str | None:
+    """The unit the region's gazetteer dataset is held by, or `None` if it was never built."""
+    held = await store.egress_of([gazetteer_dataset_id(region)])  # type: ignore[attr-defined]
+    found = held.get(gazetteer_dataset_id(region))
+    return found.owning_unit if found is not None else None
 
 
 class _Registers(Protocol):
@@ -139,7 +154,7 @@ class DatasetsUnreachable(RuntimeError):
 
 
 async def check_unit_from_env(
-    unit: str, *, connect: Callable[[str], Awaitable[Any]] | None = None
+    unit: str, *, region: str, connect: Callable[[str], Awaitable[Any]] | None = None
 ) -> None:
     """The command-line builds' unit check (`check_unit`), against the Conduit's own database,
     before anything is built. An unreachable database is said in words."""
@@ -153,7 +168,7 @@ async def check_unit_from_env(
         words = UNREACHABLE_FOR_UNIT.format(unit=unit, error=type(exc).__name__)
         raise DatasetsUnreachable(words) from None
     try:
-        check_unit(unit, await units_held(store))
+        check_unit(unit, await units_held(store), built_for=await built_for(store, region))
     finally:
         await store.close()
 

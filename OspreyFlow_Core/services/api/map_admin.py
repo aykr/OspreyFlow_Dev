@@ -1276,7 +1276,7 @@ async def _build_here(admin: MapAdmin, by: str, region: str, unit: str) -> int:
     from services.api.map_places import DatasetsUnreachable, UnknownUnit, check_unit_from_env
 
     try:
-        await check_unit_from_env(unit)
+        await check_unit_from_env(unit, region=region)
     except (UnknownUnit, DatasetsUnreachable) as refused:
         print(str(refused), file=sys.stderr)
         return 1

@@ -282,6 +282,11 @@ def test_the_build_s_unit_is_a_setting_and_an_unknown_one_is_refused_in_words_be
         assert '"returncode": 0' in response.text, response.text
         assert [load["unit"] for load in loads] == ["unit-7"]
         assert DATASETS.datasets["gazetteer-osm-rutland"].owning_unit == "unit-7"
+        # Built for unit-7, so a rebuild for the administrator's own unit is refused in words.
+        again = client.post("/v1/admin/geospatial/build-basemap", json={"region": "rutland"})
+        assert again.status_code == 422
+        assert "held by the unit 'unit-7'" in again.json()["detail"]
+        assert len(loads) == 1
     finally:
         DATASETS.datasets.pop("d-unit-7", None)
         DATASETS.datasets.pop("gazetteer-osm-rutland", None)

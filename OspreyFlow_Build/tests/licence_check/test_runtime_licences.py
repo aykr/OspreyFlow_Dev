@@ -53,8 +53,27 @@ def test_the_exception_is_for_the_recorded_runtime_alone() -> None:
     )
 
 
-def test_a_java_runtime_the_image_does_not_declare_is_refused() -> None:
-    assert find_runtime_offenders({"api": _dockerfile(None)}) == [("api", "java", "undeclared")]
+@pytest.mark.parametrize(
+    "carries",
+    [
+        "FROM eclipse-temurin:21-jre AS java",
+        "RUN jlink --add-modules java.base --output /opt/jre",
+        "COPY --from=other /opt/java /opt/java",
+        "RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless",
+        "RUN apt-get install -y default-jre",
+        "RUN apk add --no-cache openjdk21",
+    ],
+)
+def test_a_java_runtime_the_image_does_not_declare_is_refused(carries: str) -> None:
+    """Each way a Java gets into an image, alone (rule 15: a plant carrying all of them at once
+    would stay red with any one of them undetected)."""
+    planted = f"FROM python:3.12-slim\n{carries}\n"
+    assert find_runtime_offenders({"api": planted}) == [("api", "java", "undeclared")]
+
+
+def test_an_image_with_no_java_is_not_flagged() -> None:
+    planted = "FROM python:3.12-slim\nRUN apt-get install -y git\nCOPY scripts ./scripts\n"
+    assert find_runtime_offenders({"api": planted}) == []
 
 
 def test_a_permissive_runtime_passes_as_the_allowlist_does() -> None:

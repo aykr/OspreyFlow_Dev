@@ -3,13 +3,15 @@
 own dataset, and then, through the routes a case reads its nodes by:
 
 - **the case stays one dataset and keeps its loads**: `GET .../datasets` names its own dataset alone
-  (no composite), and a write a composite case refuses (`POST .../nodes/{id}/confirm`, ADR-099
-  Amendment 15) is made;
+  (no composite), and a load a composite case refuses (`POST .../ingest/source-files`, the Studio's
+  upload behind `NoLoadingInACompositeCase`, ADR-099 Amendment 15) is made; the same upload in the
+  case made to read a composite is refused, so the check is the one a gazetteer composite trips;
 - **no answer carries a copy's identifier**: search by name, the working set's seed and expansion;
 - **the case's own searches never match a copy by an identifier**: `/search` by its `osm_id`, and
   `/suggest` on the identifier's prefix (twelve copies share it, more than a page) in both modes,
   find nothing and say no `more`;
-- `DELETE` reverts the copies, but one the case's own link rests on, and says some were kept.
+- `DELETE` reverts the copies (none another writer's, so none kept), the one the case's own link
+  rests on too: the place leaves the case's search.
 
 Runs the real `services.api.app` over real ArcadeDB, Postgres and Valkey on a leased test stack, as
 `test_gazetteer_ids_withheld_live.py` does. Everything it writes is removed in teardown, pass or
@@ -63,12 +65,14 @@ PLANTED: list[str] = []
 
 
 @pytest.fixture
-def api_env(jwks_url: str) -> Iterator[None]:
-    keys = ("OIDC_JWKS_URL", "OIDC_ALGORITHMS", "ARCADEDB_DATABASE")
+def api_env(jwks_url: str, tmp_path: Any) -> Iterator[None]:
+    keys = ("OIDC_JWKS_URL", "OIDC_ALGORITHMS", "ARCADEDB_DATABASE", "OSPREY_INGEST_ROOT")
     previous = {key: os.environ.get(key) for key in keys}
     os.environ.update(
-        {"OIDC_JWKS_URL": jwks_url, "OIDC_ALGORITHMS": "RS256", "ARCADEDB_DATABASE": "ospreyflow"}
-    )
+        {"OIDC_JWKS_URL": jwks_url, "OIDC_ALGORITHMS": "RS256", "ARCADEDB_DATABASE": "ospreyflow",
+         # The upload lands in this run's own folder, removed with it.
+         "OSPREY_INGEST_ROOT": str(tmp_path)}
+    )  # fmt: skip
     try:
         yield
     finally:
@@ -193,7 +197,10 @@ async def _remove_rows(case_ids: list[str], case_datasets: list[str]) -> None:
             )
         ]
         await connection.execute(
-            "DELETE FROM case_gazetteers WHERE investigation_id = ANY($1::text[])", case_ids
+            "DELETE FROM dataset_gazetteers WHERE case_dataset = ANY($1::text[])", case_datasets
+        )
+        await connection.execute(
+            "DELETE FROM composite_members WHERE composite_id = ANY($1::text[])", case_datasets
         )
         await connection.execute(
             "DELETE FROM investigation_datasets WHERE investigation_id = ANY($1::text[])", case_ids
@@ -207,8 +214,8 @@ async def _remove_rows(case_ids: list[str], case_datasets: list[str]) -> None:
             "SELECT count(*) FROM datasets WHERE id = ANY($1::text[])", gone
         )
         held = await connection.fetchval(
-            "SELECT count(*) FROM case_gazetteers WHERE investigation_id = ANY($1::text[])",
-            case_ids,
+            "SELECT count(*) FROM dataset_gazetteers WHERE case_dataset = ANY($1::text[])",
+            case_datasets,
         )
         assert (left, held) == (0, 0), f"rows of this run left: {left} datasets, {held} additions"
     finally:
@@ -223,7 +230,9 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
     api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
     private_key, _ = keypair
-    headers = {"Authorization": f"Bearer {sign_token(private_key, default_claims())}"}
+    # A Source author too, so the Studio's upload (a load a composite case refuses) is theirs.
+    claims = default_claims(roles=["analyst", "source_author"])
+    headers = {"Authorization": f"Bearer {sign_token(private_key, claims)}"}
     PLANTED.clear()
     cases: list[str] = []
     case_datasets: list[str] = []
@@ -286,7 +295,7 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
             assert not _carries_an_identifier(seeded.text), seeded.text
 
             # The case's own person, present at the copy: expanded from, the copy arrives without
-            # its identifiers; and confirmed, a write a composite case refuses.
+            # its identifiers.
             person_id, person_body = _run(_plant_in_case(own, copy))
             put = client.post(
                 f"/v1/investigations/{case_id}/seed", headers=headers,
@@ -298,23 +307,49 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
                 json={"request": {"node_ids": [person_id], "depth": 1}},
             )  # fmt: skip
             assert expanded.status_code == 200, expanded.text
+            assert copy in {n["id"] for n in expanded.json()["delta"]["nodes"]}, expanded.text
             assert not _carries_an_identifier(expanded.text), expanded.text
-            confirmed = client.post(
-                f"/v1/investigations/{case_id}/nodes/{person_id}/confirm", headers=headers
-            )
-            assert confirmed.status_code == 200, confirmed.text
+
+            # It still loads: the Studio's upload, refused in a case reading a composite.
+            uploaded = client.post(
+                f"/v1/investigations/{case_id}/ingest/source-files", headers=headers,
+                params={"name": f"p5-{TAG}.csv"}, content=b"name,town\nA,Oakham\n",
+            )  # fmt: skip
+            assert uploaded.status_code == 201, uploaded.text
 
             removed = client.delete(
                 f"/v1/investigations/{case_id}/map/gazetteers/{GAZETTEER}", headers=headers
             )
             assert removed.status_code == 200, removed.text
-            # The copy the case's link rests on is kept (rule 6); the others are gone.
-            assert removed.json()["copies_kept"] is True
+            assert removed.json()["copies_kept"] is False
+            gone = client.post(
+                f"/v1/investigations/{case_id}/search", headers=headers, json={"query": NAME}
+            )
+            assert gone.status_code == 200 and gone.json()["nodes"] == [], gone.text
             left = client.post(
                 f"/v1/investigations/{case_id}/suggest", headers=headers,
                 json={"query": f"Elsewhere {TAG}", "mode": "contains"},
             )  # fmt: skip
             assert left.status_code == 200 and left.json()["nodes"] == [], left.text
+
+            # The control: the same upload in a case reading a composite (what adding the gazetteer
+            # as a dataset made, Amendment 1's option (b)) is refused.
+            composite = client.post(
+                "/v1/datasets/composites", headers=headers,
+                json={"name": f"P5 composite {TAG}", "member_ids": [own, GAZETTEER]},
+            )  # fmt: skip
+            assert composite.status_code in (200, 201), composite.text
+            case_datasets.append(composite.json()["id"])
+            chose = client.put(
+                f"/v1/investigations/{case_id}/datasets", headers=headers,
+                json={"dataset_ids": [composite.json()["id"]]},
+            )  # fmt: skip
+            assert chose.status_code == 200, chose.text
+            refused_load = client.post(
+                f"/v1/investigations/{case_id}/ingest/source-files", headers=headers,
+                params={"name": f"p5-{TAG}-b.csv"}, content=b"name\nB\n",
+            )  # fmt: skip
+            assert refused_load.status_code == 409, refused_load.text
     finally:
         refused: list[tuple[str, int]] = []
         with TestClient(app) as client:

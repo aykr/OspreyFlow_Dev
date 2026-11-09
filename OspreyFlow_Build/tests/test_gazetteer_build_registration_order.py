@@ -73,7 +73,7 @@ def events(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) 
     monkeypatch.setattr(
         map_places, "register_gazetteer_dataset_from_env", _recording_registration(events)
     )
-    async def check(unit: str) -> None:
+    async def check(unit: str, *, region: str) -> None:
         events.seen.append(f"check {unit}")
         if unit == "unit-nowhere":
             raise map_places.UnknownUnit(f"No case or dataset ... {unit!r}")
