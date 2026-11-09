@@ -34,7 +34,7 @@ const PREVIEW_ERRORS: Record<string, string> = {
   connector_not_available: "This source's connector has no reader yet, so it cannot be previewed.",
   source_unreadable: "The source could not be read. Check it is still where the source says.",
   source_handling_incomplete: "This source's marking is incomplete, so it cannot be previewed.",
-  ontology_violation: "The map does not match the target model. Open the map editor and check the element named.",
+  ontology_violation: "The map does not match the domain model. Open the map editor and check the element named.",
   right_required: "A graph Preview runs Test's dry run, so it needs the right to test pipelines, which you do not hold.",
 };
 

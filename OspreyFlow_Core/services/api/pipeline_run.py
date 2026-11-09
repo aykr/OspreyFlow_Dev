@@ -547,6 +547,7 @@ async def _run_staged_branch(
             sources=read.tables,
             lists=lists,
             dataset_id=draft.dataset_id or "",
+            subscribed=subscribed_in(references),
             load_id=load_id,
             storage=storage,
         )

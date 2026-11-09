@@ -31164,3 +31164,135 @@ from the stream, the engines' true total, once by the database, the indexes); `t
 route's right; words withheld; no account's id served; the rule audit as its own read serves it and behind its gate; filters
 after withholding); `test_audit_kinds.py` (every action written is classified); `test_promotion_sweep_live.py` (the sweep in the real lifespan); `test_promotion_ageing.py` (at N days and not before, once, the load not its
 contents, the recipients). Each red at its call site (`process/lanes/admin/L2.6_RED_RECORD.md`).
+
+### ADR-145, Amendment 7 (9 November 2026) — the Studio's tips and who-can refusals as decided (built with L2.12's patches, L1.8); "domain model" held by a gate
+
+Status: accepted from the owner's ruling of 9 November 2026 on studio-b's L1.8 question: who can is said by
+naming the roles that hold a right, never the people (option C). ADR-145 Amendment 4 decision 12 is unchanged
+except where this says so, and its example ("D. Engineer and S. Lead have it") is closed by decision 1 below.
+Built in Lane 1 (L1.8), in two parts. Decision 5's wording and gate are on `main` with L1.8's merge. Decisions
+1–4 are built as patches (`process/lanes/studio-b/L1.8_roles_words.patch`, `L1.8_studio_tips.patch`,
+`L1.8_action_registry.diff`, `L1.8_every_harness.diff`; `L1.8_PATCHES.md`). They build on rules-b's
+`help/roles.ts`, so they land on `main` with rules-b's L2.12, after its `admin-tips.patch`. Until then the
+Studio's refused actions are disabled as before, and Admin › Roles still says "Edit target model".
+
+**Decision.**
+
+1. **Who can is said by role, never by person (the owner's ruling).** An action a person can't take says
+   why and who can by naming the built-in roles that hold the right. For example: "You need Review
+   promotions; the Data Engineer role has it. Ask an administrator to give it to you." With several roles:
+   "You need Load screening lists; the Administrator and Data Engineer roles have it. Ask an administrator to
+   give you one." It never
+   names a person, a role id, a role these words do not name (the Studio's older roles, which ADR-112
+   folded into the Data Engineer), or the Super user preset (which is given as three roles). A custom role
+   is an administrator's, so it is not named. Naming the people who hold a right would tell someone who is not an
+   administrator who holds it, which today only `manage_people` may read; the owner ruled against it, so
+   Amendment 4 decision 12's example of named people is closed. No route says who holds a right.
+2. **One source for the words.** `help/roles.ts` gains `rolesHolding(right)` and `whyNotByRole(right)`. It
+   reads which role holds which right from `shell/placesByRole.json`, the record `test_place_routes.py` holds
+   to the routes, so the words cannot drift from the rights. A right whose id is not its name on screen is
+   named in `RIGHT_NAMES`. `edit_target_model` is "Edit domain model" (ADR-140 Amendment 9 decision 1).
+3. **In the Studio, a refused action stays reachable.** Each Studio action whose route checks a right takes
+   it from `ingest/studio/rightsGate.tsx`, 20 buttons in all: Deploy, Deploy and run now, Update and Pause
+   schedule (which ask `publish_pipelines` too, since their routes take the source approver's studio role),
+   Reopen, Run now, Run the test, Run preview, Save the load rules, New pipeline, a pipeline's Choose file…,
+   Register a source, Add files, Import a list, Import rows for one of this dataset's lists, Pause or Resume
+   a refresh, Refresh now, Edit governance, and Open held rows. *Run now or schedule* only opens the
+   controls, each of which says why not on its own, so it is not gated. For a person without the right, the
+   button keeps its focus (`aria-disabled`, never `disabled`). It does nothing when pressed, and its
+   description is the why-and-who words (rule 13). Three whole parts say why in a line instead: the Sources
+   tab, a load's revert command, and the Model tab's proposed link types, whose own panel hides from anyone
+   who cannot accept types. While the person's rights are unknown, every action is offered as before.
+   Either way the route refuses as before (rule 3): this is words, not access control.
+4. **The help page opens from the Studio.** *Roles, teams and Authors* opens from a button in the Studio's
+   header, drawn over the Studio so nothing typed there is lost, and its way back is focused.
+5. **"Target model" never on screen.** `tools/ui_words_check.py` fails on the phrase in the Glass's copy
+   outside comments: in strings, template literals (nested ones too), JSX text across lines, attributes and
+   JSON; its words apart by whitespace, a hyphen or JSX's `{" "}`. It is wired into `make ci` and CI at
+   L1.8's merge (`L1.8_ci_makefile.diff`). It cannot see words computed at run time: a right's name comes
+   through `rightName`, and `rightNames.test.ts` holds it, and Admin › Roles' `rightWords`, to the same rule.
+
+**Tests (each shown red first in the patches' apply check, `process/lanes/studio-b/l1.8/`; on `main` with
+L2.12's patches).** `rightsGate.test.tsx` will render each Studio surface with no rights, and check that every
+listed action is focusable, `aria-disabled` and described by the words, and that pressing every button sends no
+write. Each gate taken out alone turns its case red. A holder of every right will be offered every action.
+`rightNames.test.ts` will be red with the name override removed, with Super user kept, and with a role said by
+its id. `keyboard/studio-tips.spec.ts` (STUDIO_TIPS_ACTIONS, 2 ids) will be red with the button not focusable,
+with the tip untied from it, with no gate, and with no door. `ingest-studio.spec.ts`'s Preview case will say
+the tip before the press. The axe scans will cover six `rights=none` states × dark, light and GOV.UK. On the
+branch now, `tests/test_ui_words_check.py` puts plants at the Glass's own shapes; it was red against the real
+Glass before the wording (four findings).
+
+**Left.** The Studio's review and merge screens' tips arrive with those screens (L3.4, and the drawn-dataset
+merge). Held rows' *Release and load* and its pair live in `alerts/HeldRowsPanel.tsx` (the rules lane's).
+The Studio gates the door to them by `read_held_rows`; the decisions inside still answer after the press.
+The Deploy refusal for a missing *source approver* studio role still says the role in the server's words
+(`require_studio_role`); that is the Conduit's, and outside this step. Admin › Roles names rights through
+its own `rightWords` until rules-b's `admin-tips.patch` lands.
+
+### ADR-140, Amendment 16 (9 November 2026) — a subscribed list read at the sample, at Test and at the run, correcting Amendment 13 point 10 (L1.8)
+
+Status: accepted. Written in the studio-b lane at step L1.8, from the studio lane's review of L1.5 (carried by the
+orchestrator, `process/lanes/CARRIES.md`) and the lane review of L1.8. Amendment 13 is unchanged except point 10,
+which said the seam was built for the save gate, Test, the drawer's sample and the run. It was built for the save
+gate and for `lists_for_run` only, and this amendment builds the rest.
+
+**Context.** `staging_catalogue.run_staging` judges a pipeline's steps again before it runs them. It refuses a
+Lookup of a deployment-wide list that the dataset does not subscribe to, and it read that subscription from its
+own `subscribed` argument, which defaults to `()`. Three callers passed nothing: the drawer's sample
+(`studio_staging.preview_staging`), Test (`studio_verify` through `staged_run.dry_run_staged_recipe`) and the
+run (`pipeline_run` through `staged_run.prepare_staged_load`). So a subscribed Lookup passed save and publish
+and was then refused at each of the three. It failed closed: nothing leaked, but no subscribed Lookup could run.
+`studio_staging.staged_lists` had no caller.
+
+**Decision.**
+1. **Every caller hands the engine the dataset's subscriptions**: `subscribed=subscribed_in(references)`, where
+   `references` is `dataset_reference_lists(...)`'s answer for that dataset. The engine judges the steps by
+   them again. The subscriptions never widen what a Lookup reads: a list another dataset subscribes to and this
+   one does not is still refused, in the same words, at all three.
+2. **`studio_staging.staged_lists` is removed** (it had no caller).
+3. **A static check holds the callers to it.** Every call of an engine entry (`run_staging`,
+   `dry_run_staged_recipe`, `prepare_staged_load`, `lists_for_run`, `run_staged_recipe`) under `services`,
+   `cli`, `scripts` and `packages` names a `subscribed=` that is not empty. That covers a call under another
+   import name, a call handed on through `asyncio.to_thread`, `functools.partial` or `run_in_executor`, and a
+   bare reference the check cannot follow (named, not let through). The engine's own three modules are not
+   asked.
+4. **L1.4's stand-in stays retired, and a test holds it.** No module that a deployment runs refers to
+   `reference_list_import.import_list`, resolved by module. `list_connector.import_list`, a deployment-wide
+   list's import, is a different function.
+5. **The SQL connector's byte cap, its bound stated** (L1.8's other carry, from the independent review of
+   L1.6; rule 2). The server keeps a running total of each row's size in its own count,
+   `octet_length(ROW(...)::text)`, and sends values only for rows within the cap. The read counts each row
+   again in UTF-8 bytes, as the file will hold it, and refuses at the first row that crosses the cap,
+   having held none past it. So the read never holds more than the cap in the file's bytes, for any source.
+   Where the database's count is the smaller (booleans, `t` against the file's `true`; or a non-UTF-8
+   database, where LATIN1 counts one byte for `é` and UTF-8 two), the rows the server sends may come to more
+   than the cap in the file's bytes. At most that is the source's own ratio of file bytes to its bytes:
+   2 for LATIN1 text, and under 2 for booleans. The read's own count is then the one that refuses.
+
+**Tests** (`OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py`; red records in
+`process/lanes/studio-b/l1.8/red-carry-subscribed.txt`):
+- A subscribed list read at each place: `test_the_drawer_s_sample_reads_a_subscribed_list`,
+  `test_test_reads_a_subscribed_list` (its rows joined in, cited as `reference_list:establishments@v1`) and
+  `test_the_run_reads_a_subscribed_list`. Each was red at its own call site before the fix.
+- Another dataset's subscription refused at each place: `test_another_dataset_s_subscription_is_refused_at_the_sample`,
+  `..._at_test` and `..._at_the_run`. All three are red with `dataset_reference_lists`' subscription filter
+  removed.
+- `test_every_caller_hands_the_staging_engine_the_subscriptions`, shown red by twelve plants in the shapes a
+  real caller takes (`test_the_caller_check_finds_a_call_that_forgets_them`). The check as first committed
+  missed nine of them. Its green half is `test_the_caller_check_passes_the_real_callers_shape`.
+- `test_nothing_but_tests_seeds_a_list`, shown red by three plants. Its green half is the list connector's own
+  `import_list`.
+- A subscribed list read by a run against the real stores, Postgres's list store and the object store:
+  `test_subscribed_lookup_live.py`, red with the run's `subscribed=` taken out, live under a lease.
+- The subscribed list's rows withheld from a case that does not read the dataset, at the sample and at Test,
+  including a case whose own dataset subscribes the same list (`test_a_subscribed_list_is_withheld_from_a_case_not_reading_the_dataset_at_the_sample`
+  and `..._at_test`). Test's is red with its guard removed. The sample's two guards (the dataset's, and a
+  Lookup's lists') each back the other, so its case is red only with both removed.
+- The byte cap's own UTF-8 count: `test_the_read_counts_the_file_s_bytes_where_the_database_counts_fewer`
+  (`tests/connectors/test_sql_connector_live.py`), 300 truth values under the cap in the database's count and
+  over it in the file's. It is red with the read's own count removed, live.
+
+**Cost and what is open.** The `subscribed: Collection[str] = ()` defaults remain in `staging_catalogue`,
+`staged_run` and `reference_list_import`, which are the Studio lane's (`services/ingest/**`). Removing them would
+let mypy hold every caller as well. Studio carries that into L1.7 (its L1.5 report); it is not done here.

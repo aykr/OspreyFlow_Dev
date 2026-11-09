@@ -1,0 +1,47 @@
+# L1.8 carry: getaddrinfo off the event loop. Each to_thread taken out alone (the plant), the off-loop suite run, then restored.
+# Offline, closed ports; no lease (no stack touched).
+
+## plant: sql_read
+E       AssertionError: looked up on the event loop: ['db.example.test']
+FAILED test_lookups_off_the_loop.py::test_a_sql_read_looks_its_host_up_off_the_loop
+
+## plant: check_sql
+E       AssertionError: looked up on the event loop: ['db.example.test']
+FAILED test_lookups_off_the_loop.py::test_test_connection_looks_the_host_up_off_the_loop[sql]
+
+## plant: check_api
+E       AssertionError: looked up on the event loop: ['telco.example.test']
+FAILED test_lookups_off_the_loop.py::test_test_connection_looks_the_host_up_off_the_loop[api]
+
+## plant: api_pin
+E       AssertionError: looked up on the event loop: ['telco.example.test']
+FAILED test_lookups_off_the_loop.py::test_an_api_read_looks_each_page_s_host_up_off_the_loop
+
+## plant: name_connection
+E       AssertionError: looked up on the event loop: ['telco.example.test']
+FAILED test_lookups_off_the_loop.py::test_naming_a_connection_looks_its_host_up_off_the_loop
+
+## plant: tile
+E       AssertionError: looked up on the event loop: ['tiles.example.test']
+FAILED test_lookups_off_the_loop.py::test_a_tile_for_an_added_provider_looks_its_host_up_off_the_loop
+
+## plant: add_provider
+E       AssertionError: looked up on the event loop: ['tiles.example.test']
+E       AssertionError: looked up on the event loop: ['tiles.example.test']
+E       AssertionError: looked up on the event loop: ['tiles.example.test']
+E       AssertionError: looked up on the event loop: ['tiles.example.test']
+FAILED test_lookups_off_the_loop.py::test_adding_a_map_provider_looks_its_host_up_off_the_loop
+FAILED test_lookups_off_the_loop.py::test_editing_a_map_provider_looks_its_host_up_off_the_loop
+FAILED test_lookups_off_the_loop.py::test_a_tile_for_an_added_provider_looks_its_host_up_off_the_loop
+FAILED test_lookups_off_the_loop.py::test_the_prefetch_looks_each_provider_s_host_up_off_the_loop
+
+## plant: edit_provider
+E       AssertionError: looked up on the event loop: ['tiles.example.test']
+FAILED test_lookups_off_the_loop.py::test_editing_a_map_provider_looks_its_host_up_off_the_loop
+
+## plant: prefetch
+E       AssertionError: looked up on the event loop: ['tiles.example.test']
+FAILED test_lookups_off_the_loop.py::test_the_prefetch_looks_each_provider_s_host_up_off_the_loop
+
+## restored
+9 passed

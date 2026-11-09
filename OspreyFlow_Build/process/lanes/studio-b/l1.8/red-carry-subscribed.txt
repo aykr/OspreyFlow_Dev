@@ -1,0 +1,78 @@
+# Plant A: studio_staging.dataset_references drops the subscription filter (every deployment list offered)
+diff --git a/OspreyFlow_Core/services/api/studio_staging.py b/OspreyFlow_Core/services/api/studio_staging.py
+index 2036e68..a0b26ba 100644
+--- a/OspreyFlow_Core/services/api/studio_staging.py
++++ b/OspreyFlow_Core/services/api/studio_staging.py
+@@ -95,7 +95,7 @@ async def dataset_reference_lists(
+     if lists is None:
+         return own
+     subscribed = set(await subscribed_list_ids(lists, dataset_id))
+-    return own + [r for r in await deployment_references(lists) if r.id in subscribed]
++    return own + [r for r in await deployment_references(lists)]  # PLANT
+ 
+ 
+ def subscribed_in(references: Sequence[ReferenceList]) -> list[str]:
+../OspreyFlow_Build/tests/services/api/test_subscribed_lists_seam.py:73: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lists_seam.py::test_a_lookup_reads_a_deployment_list_only_while_the_dataset_subscribes
+1 failed, 1 passed in 2.35s
+
+# Plant B: reference_list_import.lists_for_run ignores the subscribed ids a run is given
+diff --git a/OspreyFlow_Core/services/ingest/reference_list_import.py b/OspreyFlow_Core/services/ingest/reference_list_import.py
+index a7a98ed..91464ea 100644
+--- a/OspreyFlow_Core/services/ingest/reference_list_import.py
++++ b/OspreyFlow_Core/services/ingest/reference_list_import.py
+@@ -134,7 +134,7 @@ def lists_for_run(
+     """The lists a run's Lookups read, by name: each one the dataset may read (`readable_lists`),
+     read from its version's file. A Lookup of a list it may not read is refused in the save gate's
+     own words, before any file is opened."""
+-    readable, _clashes = readable_lists(references, dataset_id=dataset_id, subscribed=subscribed)
++    readable, _clashes = readable_lists(references, dataset_id=dataset_id, subscribed=())  # PLANT
+     wanted = [s for s in steps if isinstance(s, LookupStep)]
+     missing = [
+         f"step {s.id!r} looks up {s.list_!r}, which names no list this dataset holds or "
+services/ingest/reference_list_import.py:146: StagingError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lists_seam.py::test_a_subscribed_lists_rows_reach_the_run
+1 failed, 1 passed in 1.76s
+
+# Restored: both green
+2 passed in 1.25s
+
+# The orchestrator's addition (the studio lane's review of L1.5): a subscribed list at the three places a staged pipeline runs. Red before the fix, at main's three callers. Offline; no stack.
+# (A first run of the caller check passed with nothing scanned: its root was one folder short. Fixed and made to name the three modules it must read before it may pass, rule 15.)
+E       AssertionError: ["step 'with_establishment' looks up 'establishments', which names no list this dataset holds or subscribes to"]
+E       AssertionError: {"error":"recipe_rule","problems":["step 'with_establishment' looks up 'establishments', which names no list this dataset holds or subscribes to"]}
+E       assert 422 == 200
+E           services.ingest.staging_catalogue.StagingError: step 'with_establishment' looks up 'establishments', which names no list this dataset holds or subscribes to
+E           services.ingest.recipe_rules.RecipeRuleError: step 'with_establishment' looks up 'establishments', which names no list this dataset holds or subscribes to
+E       AssertionError: ['services/api/pipeline_run.py:545 prepare_staged_load', 'services/api/studio_staging.py:354 lists_for_run', 'services/api/studio_staging.py:313 run_staging', 'services/api/studio_verify.py:220 dry_run_staged_recipe']
+FAILED test_subscribed_lookup_call_sites.py::test_the_drawer_s_sample_reads_a_subscribed_list
+FAILED test_subscribed_lookup_call_sites.py::test_test_reads_a_subscribed_list
+FAILED test_subscribed_lookup_call_sites.py::test_the_run_reads_a_subscribed_list
+FAILED test_subscribed_lookup_call_sites.py::test_every_caller_hands_the_staging_engine_the_subscriptions
+4 failed, 2 passed, 1 warning in 3.62s
+
+# The lane review of L1.8 (items 2-4 and 12), offline on closed ports 59991-59994, no lease, 2026-11-09T12:53:14Z, on ec1cf5e plus the fix
+## red: dataset_reference_lists' subscription filter removed (studio_staging.py, "if r.id in subscribed" dropped), the three new refusals run, then put back
+FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py::test_another_dataset_s_subscription_is_refused_at_the_sample
+FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py::test_another_dataset_s_subscription_is_refused_at_test
+FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lookup_call_sites.py::test_another_dataset_s_subscription_is_refused_at_the_run
+3 failed, 17 deselected, 1 warning in 2.17s
+## red: the twelve caller-check plants against the check as first committed (aa8ffb3's _calls_without_subscriptions); each must be found once
+None             old check finds 0
+aliased          old check finds 0
+attribute        old check finds 0   (run_staged_recipe was not in ENGINE)
+awaited          old check finds 1
+bare reference   old check finds 0
+empty list       old check finds 0
+empty tuple      old check finds 0
+forgotten        old check finds 1
+partial          old check finds 0
+run_in_executor  old check finds 0
+to_thread        old check finds 1
+tuple()          old check finds 0
+## the seed check (CARRIES row 14), first written by name alone: red against the real tree, since list_connector.import_list shares the name
+E       AssertionError: {'services/api/app.py:11806', 'services/api/app.py:9188'}
+## green: the whole file with the check resolved by module (three seed plants red, the list connector's own import let through)
+25 passed, 1 warning in 5.75s

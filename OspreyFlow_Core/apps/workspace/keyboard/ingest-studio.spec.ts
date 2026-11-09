@@ -37,7 +37,7 @@ function asked(page: Page): Promise<{ method: string; path: string; body?: strin
 test("each of the four places opens by keyboard", async ({ page }) => {
   await page.goto(HARNESS);
   await tab(page, "1 Model");
-  await expect(page.getByRole("region", { name: "Target model" })).toContainText("POLE core + Crime case analysis (NIEM)");
+  await expect(page.getByRole("region", { name: "Domain model" })).toContainText("POLE core + Crime case analysis (NIEM)");
   await tab(page, "2 Sources");
   await expect(page.getByRole("region", { name: "Sources" })).toContainText("calls.csv");
   await tab(page, "4 Runs");

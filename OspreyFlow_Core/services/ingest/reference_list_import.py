@@ -13,8 +13,9 @@ one of its own files (`POST /v1/datasets/{id}/reference-lists/{list_id}/import`)
 screening list through its template, each by `services.api.list_connector`. The command line this
 module once had, L1.4's stand-in, is retired. `import_list` stays as the tests' seed of a synthetic
 list this repository names (rule 9, by the SHA-256 in `synthetic_lists.json`), and nothing else
-calls it. A run reads the dataset's own lists and the deployment-wide ones it subscribes to by id
-(`subscribed`, from `studio_staging.subscribed_in`).
+calls it (`test_subscribed_lookup_call_sites.py`'s `test_nothing_but_tests_seeds_a_list`). A run
+reads the dataset's own lists and the deployment-wide ones it subscribes to by id (`subscribed`,
+from `studio_staging.subscribed_in`).
 """
 
 from __future__ import annotations
@@ -100,8 +101,9 @@ def read_list_rows(reference: ReferenceList, *, storage: ObjectStorageConfig) ->
 
 def kept_lists(dataset_id: str, *, storage: ObjectStorageConfig) -> list[ReferenceList]:
     """The lists whose rows are kept for `dataset_id`, each by the record its own file carries, at
-    the highest version kept (ADR-140 Amendment 12): no other store of list records exists until
-    L1.6. Read from each file's schema alone, never its rows."""
+    the highest version kept (ADR-140 Amendment 12). A deployment-wide list's record is the list
+    store's (L1.6, `services.api.list_connector`), not a file's. Read from each file's schema
+    alone, never its rows."""
     fs = _staging.filesystem(storage)
     folder = f"{storage.bucket}/reference_lists/{quote(dataset_id, safe='')}"
     if fs.get_file_info(folder).type == pa_fs.FileType.NotFound:

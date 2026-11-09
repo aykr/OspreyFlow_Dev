@@ -1,0 +1,988 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio-harness.tsx
+index db80e25..3ea15fa 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio-harness.tsx
++++ b/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio-harness.tsx
+@@ -190,6 +190,9 @@ if (startParams.get("pipeline") === "reports-map")
+ // ready (409 `recipe_not_ready_for_profile`) and a row past the sample (404).
+ const RIGHTS = new Set(["edit_pipelines", "verify_pipelines", "publish_pipelines", "run_pipelines", "schedule_pipelines"]);
+ if (startParams.get("rights") === "no-test") RIGHTS.delete("verify_pipelines");
++// `?rights=none` (L1.8): a person holding no Studio right, so every action says why and who can.
++const NO_RIGHTS = startParams.get("rights") === "none";
++if (NO_RIGHTS) RIGHTS.clear();
+ const STUDIO_ROLES = new Set(["source_author", "source_approver", "loader"]);
+ if (startParams.get("rights") === "no-approve") STUDIO_ROLES.delete("source_approver");
+ const KNOWN_KINDS = new Set(["domain_model", "source", "profile", "map", "extract", "enrich", "load",
+@@ -434,7 +437,8 @@ function Host() {
+         bearerToken="unused"
+         investigationId={caseId}
+         onOpenCase={setCaseId}
+-        rights={new Set(["revert_loads"])}
++        // The rights the harness's routes grant, so the Studio offers what they would take (L1.8).
++        rights={NO_RIGHTS ? new Set() : new Set([...RIGHTS, "revert_loads", "add_ingest_files", "load_screening_lists", "accept_types", "read_held_rows", "decide_held_rows"])}
+         username="engineer-1"
+       />
+       <p role="status" aria-label="Case the Studio works through">{caseId}</p>
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts
+index 94432d7..9cc05d5 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts
+@@ -664,8 +664,15 @@ test("a graph Preview is refused in words to a person without the right to test"
+   await openVisits(page, "?rights=no-test");
+   await press(page, "Map: Map");
+   await press(page, "Preview");
+-  await press(page, "Run preview");
+-  await expect(drawer(page).getByRole("alert")).toContainText("needs the right to test pipelines");
++  // Said before the press, not after (ADR-145 Amendment 4 decision 12, L1.8): the button is still
++  // reached by keyboard, described by why and who can, and pressing it asks the server nothing.
++  const run = drawer(page).getByRole("button", { name: "Run preview" });
++  await run.focus();
++  await expect(run).toBeFocused();
++  await expect(run).toHaveAttribute("aria-disabled", "true");
++  await expect(run).toHaveAccessibleDescription(/^You need Verify pipelines; the Data Engineer role has it\./);
++  await page.keyboard.press("Enter");
++  expect((await asked(page)).some((a) => a.path.endsWith("/preview-graph"))).toBe(false);
+ });
+ 
+ // The harness refuses as the routes do (rule 15): the save gate's words, and Deploy without the
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/sources-connectors-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/sources-connectors-harness.tsx
+index 7bf6c10..66ac3c7 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/sources-connectors-harness.tsx
++++ b/OspreyFlow_Core/apps/workspace/keyboard/sources-connectors-harness.tsx
+@@ -4,7 +4,8 @@
+ // `?view=source` a SQL source's page (`&connection=c-sql&step=1` opens the wizard on a connection's
+ // read step), `?view=import&template=blank` and `?view=schedule` the import and
+ // schedule forms drawn open. With `?serve=1` the harness answers its own requests with synthetic data,
+-// for the axe scans of `a11y/every-harness.spec.ts`; `?manage=1` as whoever may load lists.
++// for the axe scans of `a11y/every-harness.spec.ts`; `?manage=1` as whoever may load lists; `?rights=none` as
++// someone holding no Studio right, so each action says why and who can (L1.8).
+ import { createRoot } from "react-dom/client";
+ 
+ import "../src/design/tokens.css";
+@@ -13,6 +14,7 @@ import type { DeploymentList, SourceTable } from "../../../packages/schemas/gene
+ import { RegisterSourceWizard } from "../src/ingest/sources/RegisterSourceWizard";
+ import { ImportListForm, ScheduleForm, ScreeningLists } from "../src/ingest/sources/ScreeningLists";
+ import { SourcePage } from "../src/ingest/sources/SourcePage";
++import { StudioRights } from "../src/ingest/studio/rightsGate";
+ import { applyHarnessBrand } from "./brandHarness";
+ 
+ const API = { apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused" };
+@@ -122,6 +124,8 @@ if (!container) throw new Error("#root not found");
+ createRoot(container).render(
+   <main style={{ padding: "var(--sp-16)" }}>
+     <h1 style={{ fontSize: "var(--fs-16)" }}>Sources</h1>
+-    <Harness />
++    <StudioRights.Provider value={params.get("rights") === "none" ? new Set() : null}>
++      <Harness />
++    </StudioRights.Provider>
+   </main>,
+ );
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/studio-tips.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/studio-tips.spec.ts
+new file mode 100644
+index 0000000..ef4c6cb
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/keyboard/studio-tips.spec.ts
+@@ -0,0 +1,62 @@
++// The Studio's who-can tips and its door to *Roles, teams and Authors* by keyboard alone (rule 13;
++// ADR-145 Amendment 4 decision 12, L1.8): an action the person cannot take is still reached by Tab,
++// says why and who can as its description, and asks the server nothing when pressed; the help page
++// opens from the Studio with its way back focused, and goes back. The harness's routes refuse as the
++// Conduit's do (`?rights=none` clears every right they grant), so a press that reached one would show.
++import { expect, test, type Page } from "@playwright/test";
++
++import { STUDIO_TIPS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
++
++const REGISTRY = "STUDIO_TIPS_ACTIONS";
++const HARNESS = "/keyboard/ingest-studio-harness.html";
++
++type Asked = { method: string; path: string };
++const asked = (page: Page): Promise<Asked[]> =>
++  page.evaluate(() => (window as unknown as { __asked: Asked[] }).__asked);
++
++/** Tab forward until `name` has focus: the keyboard's own route to it, not a jump. */
++async function tabTo(page: Page, name: string) {
++  for (let i = 0; i < 80; i++) {
++    await page.keyboard.press("Tab");
++    const focused = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? "");
++    if (focused === name) return;
++  }
++  throw new Error(`${name} was never reached by Tab`);
++}
++
++test("a refused Studio action is reached by keyboard, says why and who can, and does nothing", async ({ page }) => {
++  await page.goto(`${HARNESS}?rights=none`);
++  await page.getByRole("tab", { name: "2 Sources" }).focus();
++  await page.keyboard.press("Enter");
++  await expect(page.getByRole("tab", { name: "2 Sources" })).toHaveAttribute("aria-selected", "true");
++  await page.getByRole("tab", { name: "2 Sources" }).focus();
++  await tabTo(page, "Register a source");
++  const register = page.getByRole("button", { name: "Register a source" });
++  await expect(register).toBeFocused();
++  await expect(register).toHaveAttribute("aria-disabled", "true");
++  await expect(register).toHaveAccessibleDescription(
++    "You need Add ingest files; the Analyst and Data Engineer roles have it. Ask an administrator to give you one.",
++  );
++  await page.keyboard.press("Enter");
++  await page.keyboard.press("Space");
++  await expect(page.getByRole("region", { name: "Register a source" })).toHaveCount(0);
++  expect((await asked(page)).filter((a) => a.method !== "GET")).toEqual([]);
++  registerCovered(REGISTRY, "reach-a-refused-studio-actions-tip-by-keyboard");
++});
++
++test("Roles, teams and Authors opens from the Studio by keyboard, and goes back", async ({ page }) => {
++  await page.goto(HARNESS);
++  const door = page.getByRole("button", { name: "Roles, teams and Authors" });
++  await door.focus();
++  await page.keyboard.press("Enter");
++  await expect(page.getByRole("heading", { name: "Roles, teams and Authors" })).toBeVisible();
++  const back = page.getByRole("button", { name: "← Back to the Ingest Studio" });
++  await expect(back).toBeFocused();
++  await page.keyboard.press("Enter");
++  await expect(page.getByRole("tab", { name: "3 Pipelines" })).toBeVisible();
++  registerCovered(REGISTRY, "open-roles-teams-and-authors-from-the-studio-by-keyboard");
++});
++
++test("every registered Studio tips action has its own proving test case above", () => {
++  assertAllCovered("STUDIO_TIPS_ACTIONS", STUDIO_TIPS_ACTIONS);
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/ConnectScreen.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/ConnectScreen.tsx
+index f4bdbb6..7df6da6 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/ConnectScreen.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/ConnectScreen.tsx
+@@ -45,6 +45,7 @@ import {
+   type HandlingScheme,
+   type IngestSourceListing,
+ } from "./api";
++import { RightButton } from "./studio/rightsGate";
+ 
+ export interface ConnectScreenProps {
+   apiBaseUrl: string;
+@@ -536,13 +537,14 @@ export function ConnectScreen({
+                   if (file) void handleChosenFile(file);
+                 }}
+               />
+-              <Button
++              <RightButton
++                right="add_ingest_files"
+                 variant="primary"
+                 disabled={uploading}
+                 onClick={() => fileInput.current?.click()}
+               >
+                 {uploading ? "Uploading…" : "Choose file…"}
+-              </Button>
++              </RightButton>
+               <span style={{ color: "var(--text-tertiary)" }}>From your computer</span>
+             </div>
+             {uploadError ? (
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/IngestStudio.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/IngestStudio.tsx
+index c8f81c4..f1c0e25 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/IngestStudio.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/IngestStudio.tsx
+@@ -5,8 +5,11 @@
+ // role and access check is the case's, exactly as before.
+ import { useEffect, useState } from "react";
+ 
++import { Button } from "../design/primitives/Button";
+ import { Select } from "../design/primitives/Select";
+ import { Tabs } from "../design/primitives/Tabs";
++import { HELP_TITLE } from "../help/roles";
++import { RolesHelpPage } from "../help/RolesHelpPage";
+ import { type CaseListing, listCases } from "../investigation/cases";
+ import { PipelineStudio } from "./dag/PipelineStudio";
+ import { RunsTab } from "./runs/RunsTab";
+@@ -14,6 +17,7 @@ import { caseForDataset, currentDataset, studioDatasets } from "./studio/dataset
+ import { ModelProposals } from "../linktypes/ModelProposals";
+ import { ModelTab } from "./studio/ModelTab";
+ import { ReadinessStrip } from "./studio/ReadinessStrip";
++import { StudioRights, WhyNotLine } from "./studio/rightsGate";
+ import { SourcesTab } from "./studio/SourcesTab";
+ import { useRegisteredSources } from "./studio/useRegisteredSources";
+ import { useStudioData } from "./studio/useStudioData";
+@@ -26,7 +30,9 @@ export interface IngestStudioProps {
+   investigationId: string | null;
+   /** Opening the case that serves another dataset, chosen in the switcher. */
+   onOpenCase: (id: string) => void;
+-  /** The person's rights (`GET /v1/me/rights`): `revert_loads` shows a load's revert command. */
++  /** The person's rights (`GET /v1/me/rights`): each action that needs a right says why and who can
++   * when the person lacks it (ADR-145 Amendment 4 decision 12; L1.8), and `revert_loads` shows a load's
++   * revert command. */
+   rights?: ReadonlySet<string> | null;
+   /** The person's user name, for the revert command's `--reverted-by`. */
+   username?: string | null;
+@@ -50,6 +56,7 @@ export function IngestStudio({ apiBaseUrl, bearerToken, investigationId, onOpenC
+     );
+   }
+   return (
++    <StudioRights.Provider value={rights ?? null}>
+     <Studio
+       apiBaseUrl={apiBaseUrl}
+       bearerToken={bearerToken}
+@@ -58,6 +65,7 @@ export function IngestStudio({ apiBaseUrl, bearerToken, investigationId, onOpenC
+       rights={rights ?? null}
+       username={username ?? null}
+     />
++    </StudioRights.Provider>
+   );
+ }
+ 
+@@ -73,6 +81,8 @@ function Studio({
+   const [place, setPlace] = useState<StudioPlace>("pipelines");
+   const [cases, setCases] = useState<CaseListing[] | null>(null);
+   const [problem, setProblem] = useState<string | null>(null);
++  // *Roles, teams and Authors*, the one help page, opened from the Studio as from Admin (decision 12).
++  const [helpOpen, setHelpOpen] = useState(false);
+   const data = useStudioData(apiBaseUrl, bearerToken, investigationId);
+   // Read again when the Sources tab registers or edits one, so the strip counts what the tab lists.
+   const [sourcesGeneration, setSourcesGeneration] = useState(0);
+@@ -104,8 +114,12 @@ function Studio({
+     }
+   }
+ 
++  // The help page is drawn over the Studio, never instead of it: an open pipeline, map or form keeps
++  // what was typed while the page is read (the lane review of L1.8).
+   return (
+-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
++    <>
++    {helpOpen && <RolesHelpPage backTo="the Ingest Studio" onBack={() => setHelpOpen(false)} />}
++    <div hidden={helpOpen} style={{ display: helpOpen ? "none" : "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+       <div
+         style={{
+           display: "flex",
+@@ -131,13 +145,28 @@ function Studio({
+           <span className="label">{`Working through the case “${servingCase.name}”: what loads here goes into ${datasetName}.`}</span>
+         )}
+         {problem && <span role="alert">{problem}</span>}
++        <span style={{ flex: 1 }} />
++        <Button onClick={() => setHelpOpen(true)}>{HELP_TITLE}</Button>
+       </div>
+       <ReadinessStrip packs={servingCase?.domains} pipelines={data.pipelines} sources={sources} runs={data.runs} />
+       <Tabs tabs={STUDIO_PLACES} activeId={place} onChange={(id) => setPlace(id as StudioPlace)} />
+       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+         {data.problem && <p role="alert" style={{ padding: "var(--sp-16)" }}>{data.problem}</p>}
+         {place === "model" && <ModelTab datasetName={datasetName} packs={servingCase?.domains} />}
+-        {place === "model" && datasetId && <div style={{ padding: "0 var(--sp-16) var(--sp-16)", maxWidth: 720 }}><ModelProposals apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} datasetId={datasetId} datasetName={datasetName} /></div>}
++        {place === "model" && datasetId && (
++          <div style={{ padding: "0 var(--sp-16) var(--sp-16)", maxWidth: 720 }}>
++            {/* The proposals' own panel hides itself from whoever cannot accept types; the Studio says
++                why and who can instead (L1.8). */}
++            {rights && !rights.has("accept_types") ? (
++              <section aria-label="Proposed link types" style={{ display: "grid", gap: "var(--sp-8)" }}>
++                <h3 style={{ margin: 0, fontSize: "var(--fs-14)" }}>Proposed link types</h3>
++                <WhyNotLine right="accept_types" />
++              </section>
++            ) : (
++              <ModelProposals apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} datasetId={datasetId} datasetName={datasetName} />
++            )}
++          </div>
++        )}
+         {place === "sources" && (
+           <SourcesTab
+             apiBaseUrl={apiBaseUrl}
+@@ -168,5 +197,6 @@ function Studio({
+         )}
+       </div>
+     </div>
++    </>
+   );
+ }
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/checks/ChecksScreen.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/checks/ChecksScreen.tsx
+index a7d0ce5..555d518 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/checks/ChecksScreen.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/checks/ChecksScreen.tsx
+@@ -10,6 +10,7 @@ import type { LoadCheck, LoadChecksView } from "../../../../../packages/schemas/
+ import { Button } from "../../design/primitives/Button";
+ import { Select } from "../../design/primitives/Select";
+ import { fetchChecks, saveChecks } from "../api";
++import { RightButton } from "../studio/rightsGate";
+ 
+ export interface ChecksScreenProps {
+   apiBaseUrl: string;
+@@ -168,9 +169,9 @@ export function ChecksScreen({ apiBaseUrl, investigationId, bearerToken, recipeI
+         </table>
+       )}
+       <div>
+-        <Button variant="primary" disabled={busy || !view} onClick={save}>
++        <RightButton right="edit_pipelines" variant="primary" disabled={busy || !view} onClick={save}>
+           Save the load rules
+-        </Button>
++        </RightButton>
+       </div>
+     </div>
+   );
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/dag/NodePreview.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/dag/NodePreview.tsx
+index a29fbc7..826b664 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/dag/NodePreview.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/dag/NodePreview.tsx
+@@ -17,12 +17,12 @@ import type {
+   VerifyReport,
+ } from "../../../../../packages/schemas/generated";
+ import { GlassCanvas } from "../../canvas/GlassCanvas";
+-import { Button } from "../../design/primitives/Button";
+ import { Table, type TableColumn } from "../../design/primitives/Table";
+ import { OntologyRegistry } from "../../ontology/schema";
+ import type { WorkingSet } from "../../workingset/store";
+ import { workingSetOfDryRun } from "../verify/VerifyScreen";
+ import { ProfileError, fetchOntologySchema, fetchSampleRow, previewGraph } from "../api";
++import { RightButton } from "../studio/rightsGate";
+ 
+ /** The most rows a table Preview reads. The one place this number is written:
+  * `tests/ingest/test_node_preview_access.py` reads it from this line. */
+@@ -128,9 +128,10 @@ export function NodePreview({ apiBaseUrl, bearerToken, investigationId, recipeId
+           : "A dry run up to this step: the graph it would make, at your own clearance. Nothing is written."}
+       </p>
+       <div>
+-        <Button disabled={busy} onClick={() => void run()}>
++        {/* A graph Preview is Test's dry run, so it needs the right to test (L1.8: said before, not after). */}
++        <RightButton right={shape === "graph" ? "verify_pipelines" : "edit_pipelines"} disabled={busy} onClick={() => void run()}>
+           {busy ? "Previewing…" : rows || report ? "Preview again" : "Run preview"}
+-        </Button>
++        </RightButton>
+       </div>
+       {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+       {rows && (
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/dag/PipelineStudio.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/dag/PipelineStudio.tsx
+index 5443e9d..26eda75 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/dag/PipelineStudio.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/dag/PipelineStudio.tsx
+@@ -22,6 +22,7 @@ import { PipelineCanvas } from "./PipelineCanvas";
+ import { addEnrichAfter, addExtractAfter, addSourceChain, removeNode } from "./pipelineGraphEdit";
+ import { STAGING_KIND_NAMES, STAGING_KINDS, addStagingStep, isStagingStep, removeStagingStep, type StagingKind } from "./stagingSteps";
+ import { readStudioMode, writeStudioMode, type StudioMode } from "./studioMode";
++import { RightButton } from "../studio/rightsGate";
+ 
+ export interface PipelineStudioProps {
+   apiBaseUrl: string;
+@@ -163,9 +164,9 @@ function PipelinesHome({
+           maxLength={200}
+           onChange={(e) => setLabel(e.target.value)}
+         />
+-        <Button variant="primary" disabled={!label.trim() || busy} onClick={() => void create()}>
++        <RightButton right="edit_pipelines" variant="primary" disabled={!label.trim() || busy} onClick={() => void create()}>
+           New pipeline
+-        </Button>
++        </RightButton>
+       </section>
+       {problem && <p role="alert">{problem}</p>}
+       <section aria-label="Pipelines" style={{ display: "grid", gap: "var(--sp-4)" }}>
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx
+index 4d2d2b5..5ff7f2e 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx
+@@ -35,6 +35,11 @@ import {
+ } from "../api";
+ import { DEFAULT_TIMEZONE, ScheduleEditor } from "./ScheduleEditor";
+ import { choiceOf, cronOf, type ScheduleChoice } from "./scheduleChoice";
++import { RightButton } from "../studio/rightsGate";
++
++/** A deployed pipeline's schedule: its routes check `schedule_pipelines` and the source approver's studio
++ * role, which `publish_pipelines` gives (`require_studio_role`), so both are asked (the lane review of L1.8). */
++const SCHEDULE_RIGHTS = ["schedule_pipelines", "publish_pipelines"] as const;
+ 
+ /** The run route answers one of two shapes; both carry index signatures in the generated types,
+  * so `in` cannot discriminate them — a pipeline run is the one whose `branches` is a real list. */
+@@ -471,38 +476,38 @@ export function PublishScreen({
+ 
+       <div style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
+         {mode === "deploy" && status === "draft" && draft && (
+-          <Button onClick={() => void handlePublish(false)} variant="primary" disabled={busy}>
++          <RightButton right="publish_pipelines" onClick={() => void handlePublish(false)} variant="primary" disabled={busy}>
+             {busy ? "Deploying…" : `Deploy as v${draft.version}`}
+-          </Button>
++          </RightButton>
+         )}
+         {mode === "deploy" && status === "draft" && (
+-          <Button onClick={() => void handlePublish(true)} disabled={busy || !investigationId}>
++          <RightButton right={["publish_pipelines", "run_pipelines"]} onClick={() => void handlePublish(true)} disabled={busy || !investigationId}>
+             Deploy and run now
+-          </Button>
++          </RightButton>
+         )}
+         {mode === "operate" && canEditSchedule && (
+-          <Button onClick={() => void handleUpdateSchedule()} disabled={busy}>
++          <RightButton right={SCHEDULE_RIGHTS} onClick={() => void handleUpdateSchedule()} disabled={busy}>
+             {busy ? "Saving…" : "Update schedule"}
+-          </Button>
++          </RightButton>
+         )}
+         {mode === "operate" && canEditSchedule && (draft?.schedule_cron || draft?.schedule_watch) && (
+-          <Button onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
++          <RightButton right={SCHEDULE_RIGHTS} onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
+             {draft.schedule_paused ? "Resume schedule" : "Pause schedule"}
+-          </Button>
++          </RightButton>
+         )}
+         {mode === "deploy" && (status === "published" || status === "flagged") && (
+-          <Button onClick={() => void handleReopen()} disabled={busy}>
++          <RightButton right="edit_pipelines" onClick={() => void handleReopen()} disabled={busy}>
+             {busy ? "Reopening…" : "Reopen for editing"}
+-          </Button>
++          </RightButton>
+         )}
+         {mode === "operate" && status === "published" && (
+-          <Button
++          <RightButton right="run_pipelines"
+             onClick={() => void handleRun()}
+             disabled={busy || !investigationId}
+             title={investigationId ? undefined : "No investigation to attribute this load to yet"}
+           >
+             {busy ? "Running…" : "Run now"}
+-          </Button>
++          </RightButton>
+         )}
+       </div>
+ 
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/runs/RunsTab.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/runs/RunsTab.tsx
+index 16365f1..6e9a180 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/runs/RunsTab.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/runs/RunsTab.tsx
+@@ -17,6 +17,7 @@ import { PublishScreen } from "../publish/PublishScreen";
+ import { isDeployed } from "../studio/useStudioData";
+ import { statusWords } from "../studio/vocabulary";
+ import { type DayCell, type DayState, STATE_WORDS, lastDays, rowCells } from "./runsGrid";
++import { RightButton, WhyNotLine } from "../studio/rightsGate";
+ 
+ /** How many days the grid shows, today last (the prototype's nine). */
+ export const GRID_DAYS = 9;
+@@ -108,6 +109,8 @@ export function RunsTab(props: RunsTabProps) {
+             ))}
+           </Select>
+         </label>
++        {/* Opens the controls, where Run now and the schedule each say why not on their own: a holder of
++            either right needs this way in (the lane review of L1.8). */}
+         <Button disabled={!chosen} onClick={() => setOperating(chosen)}>
+           Run now or schedule
+         </Button>
+@@ -212,9 +215,11 @@ export function RunsTab(props: RunsTabProps) {
+               it takes back is put back while it works.
+             </p>
+           )}
++          {/* A load's revert command is shown only to whoever may revert one; anyone else is told who can (L1.8). */}
++          {!props.canRevert && selectedCell.runs.some((r) => r.load_id) && <WhyNotLine right="revert_loads" />}
+           {selectedCell.runs.some((r) => (r.rows_held ?? 0) > 0) && (
+             <div>
+-              <Button onClick={() => setShowHeld((shown) => !shown)}>{showHeld ? "Hide held rows" : "Open held rows"}</Button>
++              <RightButton right="read_held_rows" onClick={() => setShowHeld((shown) => !shown)}>{showHeld ? "Hide held rows" : "Open held rows"}</RightButton>
+             </div>
+           )}
+           {showHeld && (
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/sources/ScreeningLists.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/sources/ScreeningLists.tsx
+index eb95028..2555048 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/sources/ScreeningLists.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/sources/ScreeningLists.tsx
+@@ -30,6 +30,7 @@ import {
+   setSubscribed,
+   type SourcesApi,
+ } from "./api";
++import { RightButton, useWhyNot } from "../studio/rightsGate";
+ 
+ type ListTemplate = DeploymentListInput["template"];
+ 
+@@ -72,6 +73,7 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
+   const [subs, setSubs] = useState<DatasetSubscriptions | null>(null);
+   const [managed, setManaged] = useState<DeploymentList[] | null>(null);
+   const canManage = managed !== null;
++  const whyNotManage = useWhyNot("load_screening_lists");
+   const [offered, setOffered] = useState<OfferedList[] | null>(null);
+   const [status, setStatus] = useState<string | null>(null);
+   const [problem, setProblem] = useState<string | null>(null);
+@@ -106,7 +108,10 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
+     <section aria-label="Screening lists" style={{ display: "grid", gap: "var(--sp-8)" }}>
+       <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+         <h2 style={{ margin: 0, fontSize: "var(--fs-16)", flex: 1 }}>Screening lists</h2>
+-        {canManage && !adding && <Button onClick={() => setAdding(true)}>Import a list</Button>}
++        {/* Shown to whoever may load lists; to anyone else whose rights are known, with why not (L1.8). */}
++        {(canManage || whyNotManage !== null) && !adding && (
++          <RightButton right="load_screening_lists" onClick={() => setAdding(true)}>Import a list</RightButton>
++        )}
+       </div>
+       <p className="label" style={{ margin: 0 }}>
+         Each list is imported once for the deployment. This dataset&apos;s rules and lookups read only the lists it
+@@ -229,7 +234,10 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
+         />
+       ) : (
+         <div>
+-          <Button onClick={() => setImportingOwn(true)}>Import rows for one of this dataset&apos;s lists</Button>
++          {/* Its form reads the lists the dataset reads (edit_pipelines); the import adds the rows (add_ingest_files). */}
++          <RightButton right={["add_ingest_files", "edit_pipelines"]} onClick={() => setImportingOwn(true)}>
++            Import rows for one of this dataset&apos;s lists
++          </RightButton>
+         </div>
+       )}
+     </section>
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/sources/SourcePage.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/sources/SourcePage.tsx
+index 13930f5..5761634 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/sources/SourcePage.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/sources/SourcePage.tsx
+@@ -19,6 +19,7 @@ import {
+   type SourcesApi,
+ } from "./api";
+ import { type Governance, GovernanceFields, governanceOf, handlingOf, missing, refreshInWords } from "./GovernanceFields";
++import { RightButton } from "../studio/rightsGate";
+ 
+ export interface SourcePageProps {
+   api: SourcesApi;
+@@ -168,9 +169,9 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged,
+             {refresh?.trigger === "watch" &&
+               (refresh.paused ? (
+                 <div>
+-                  <Button disabled={busy} onClick={() => void setPaused(false)}>
++                  <RightButton right="schedule_pipelines" disabled={busy} onClick={() => void setPaused(false)}>
+                     Resume the refresh
+-                  </Button>
++                  </RightButton>
+                 </div>
+               ) : (
+                 <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "end", flexWrap: "wrap" }}>
+@@ -178,20 +179,20 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged,
+                     <span className="label">Why pause it (optional)</span>
+                     <Input value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} />
+                   </label>
+-                  <Button disabled={busy} onClick={() => void setPaused(true)}>
++                  <RightButton right="schedule_pipelines" disabled={busy} onClick={() => void setPaused(true)}>
+                     Pause the refresh
+-                  </Button>
++                  </RightButton>
+                 </div>
+               ))}
+             <div style={{ display: "flex", gap: "var(--sp-8)" }}>
+               {source.read && (
+-                <Button disabled={busy} onClick={() => void readNow()}>
++                <RightButton right="add_ingest_files" disabled={busy} onClick={() => void readNow()}>
+                   Refresh now
+-                </Button>
++                </RightButton>
+               )}
+-              <Button onClick={() => setEditing(governanceOf(source.handling ?? {}, source.legal_basis, source.refresh))}>
++              <RightButton right="edit_pipelines" onClick={() => setEditing(governanceOf(source.handling ?? {}, source.legal_basis, source.refresh))}>
+                 Edit governance
+-              </Button>
++              </RightButton>
+             </div>
+           </>
+         )}
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/studio/SourcesTab.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/studio/SourcesTab.tsx
+index 96c1b96..f2a7f83 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/studio/SourcesTab.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/studio/SourcesTab.tsx
+@@ -12,6 +12,7 @@ import { listSources } from "../sources/api";
+ import { RegisterSourceWizard } from "../sources/RegisterSourceWizard";
+ import { ScreeningLists } from "../sources/ScreeningLists";
+ import { SourcePage } from "../sources/SourcePage";
++import { RightButton, WhyNotLine } from "./rightsGate";
+ 
+ export interface SourcesTabProps {
+   apiBaseUrl: string;
+@@ -88,14 +89,16 @@ export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId
+         <section aria-label="Sources" style={{ display: "grid", gap: "var(--sp-8)" }}>
+           <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
+             <h2 style={{ margin: 0, fontSize: "var(--fs-16)", flex: 1 }}>Source tables</h2>
+-            <Button variant="primary" onClick={() => setRegistering(true)}>
++            <RightButton right="add_ingest_files" variant="primary" onClick={() => setRegistering(true)}>
+               Register a source
+-            </Button>
++            </RightButton>
+           </div>
+           <p className="label" style={{ margin: 0 }}>
+             Each source is registered once, with its marking, legal basis and refresh; every pipeline that reads it
+             inherits them.
+           </p>
++          {/* Listing a dataset's sources needs the same right as registering one (L1.8). */}
++          <WhyNotLine right="add_ingest_files" />
+           {problem && <p role="alert">{problem}</p>}
+           {sources === null && !problem && <p className="label">Reading the sources…</p>}
+           {sources?.length === 0 && <p className="label">No source is registered for this dataset yet.</p>}
+@@ -146,7 +149,7 @@ export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId
+           />
+         ) : (
+           <div>
+-            <Button onClick={() => setAdding(true)}>Add files</Button>
++            <RightButton right="add_ingest_files" onClick={() => setAdding(true)}>Add files</RightButton>
+           </div>
+         )}
+       </section>
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.test.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.test.tsx
+new file mode 100644
+index 0000000..384fa77
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.test.tsx
+@@ -0,0 +1,291 @@
++// @vitest-environment jsdom
++// ADR-145 Amendment 4 decision 12 (L1.8): every Studio action a person can't take says why and who can,
++// never only greyed out. What would fail if it were wrong:
++// - an action needing a right offered to someone without it, so their press sends a write the route then
++//   refuses — `pressing every button with no rights sends no write`, per surface;
++// - an action greyed out with no words, or words naming a role id or a person — `refused` below checks
++//   each listed action is focusable, `aria-disabled`, and described by "You need <right>; the <roles>…",
++//   with no `_` (a role or right id) in it;
++// - a holder of the right told they can't — `a holder of every right is offered every action`.
++// Shown red with each gate taken out (`process/lanes/studio-b/l1.8/red-studio-tips.txt`).
++import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
++import type { ReactNode } from "react";
++import { afterEach, describe, expect, it, vi } from "vitest";
++
++import type { ScheduleRunView, SourceTable, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
++import BY_ROLE from "../../shell/placesByRole.json";
++import { ChecksScreen } from "../checks/ChecksScreen";
++import { PipelineStudio } from "../dag/PipelineStudio";
++import { IngestStudio } from "../IngestStudio";
++import { PublishScreen } from "../publish/PublishScreen";
++import { RunsTab } from "../runs/RunsTab";
++import { SourcePage } from "../sources/SourcePage";
++import { VerifyScreen } from "../verify/VerifyScreen";
++import { RightButton, StudioRights } from "./rightsGate";
++import { SourcesTab } from "./SourcesTab";
++
++vi.mock("../../alerts/HeldRowsPanel", () => ({ HeldRowsPanel: () => <p>held-rows-panel</p> }));
++// The map editor and the graph canvas draw with WebGL, which jsdom has not; none of these screens is under test here.
++vi.mock("../map/MapScreen", () => ({ MapScreen: () => null }));
++vi.mock("../ProfileScreen", () => ({ ProfileScreen: () => null }));
++vi.mock("../ConnectScreen", () => ({ ConnectScreen: () => null }));
++vi.mock("../dag/NodePreview", () => ({ NodePreview: () => null }));
++vi.mock("../../canvas/GlassCanvas", () => ({ GlassCanvas: () => null }));
++
++afterEach(() => {
++  cleanup();
++  vi.unstubAllGlobals();
++});
++
++const NONE: ReadonlySet<string> = new Set();
++const EVERY: ReadonlySet<string> = new Set(
++  Object.values((BY_ROLE as { roles: Record<string, { rights?: string[] }> }).roles).flatMap((r) => r.rights ?? []),
++);
++
++type Call = { path: string; method: string };
++
++/** A write is anything but a read: every non-GET, bar the previews the Studio reads by POST. */
++const isWrite = (c: Call) => c.method !== "GET" && !/(-preview|preview-graph)$/.test(c.path);
++
++const json = (status: number, payload: unknown) => ({ ok: status < 400, status, json: async () => payload }) as Response;
++
++function serve(answers: (path: string, method: string) => unknown): Call[] {
++  const calls: Call[] = [];
++  vi.stubGlobal(
++    "fetch",
++    vi.fn(async (url: string, init?: RequestInit) => {
++      const path = new URL(String(url)).pathname;
++      const method = init?.method ?? "GET";
++      calls.push({ path, method });
++      const answer = answers(path, method);
++      return answer === undefined ? json(404, { detail: "not_found" }) : json(200, answer);
++    }),
++  );
++  return calls;
++}
++
++function as(rights: ReadonlySet<string> | null, node: ReactNode) {
++  return render(<StudioRights.Provider value={rights}>{node}</StudioRights.Provider>);
++}
++
++/** The action is offered to the keyboard and refused in words: the right by its name, who holds it. */
++async function refused(name: string | RegExp, right: string) {
++  const button = await screen.findByRole("button", { name });
++  expect(button.getAttribute("aria-disabled")).toBe("true");
++  expect(button.hasAttribute("disabled")).toBe(false); // focusable, so its tip is reachable (rule 13)
++  const tip = document.getElementById(button.getAttribute("aria-describedby") ?? "")?.textContent ?? "";
++  expect(tip).toMatch(new RegExp(`^You need ${right}; the .+ roles? ha(s|ve) it\\. Ask an administrator`));
++  expect(tip).not.toMatch(/_/);
++  return button;
++}
++
++/** Every button on the screen pressed, and no write sent. */
++function pressEverything(calls: Call[]) {
++  for (const button of screen.getAllByRole("button")) fireEvent.click(button);
++  expect(calls.filter(isWrite)).toEqual([]);
++}
++
++const DRAFT = {
++  recipe_id: "r1", version: 3, status: "draft", label: "PIN calls", connector_profile: "generic-csv",
++  source_location: "/in/a.csv", handling: {}, legal_basis: "Synthetic", owning_unit: "u", created_by: "e",
++  created_at: "2026-11-01T09:00:00Z", pipeline: null, unmapped_fields: [], ready_for_profile: true,
++  dataset_id: "ds-a", schedule_cron: "0 6 * * *",
++} as unknown as StudioRecipeDraft;  // prettier-ignore
++const PUBLISHED = { ...DRAFT, status: "published" } as StudioRecipeDraft;
++
++const recipe = (draft: StudioRecipeDraft) => (path: string) => (/\/ingest\/recipes\/r1$/.test(path) ? draft : undefined);
++
++describe("a Studio action the person can't take", () => {
++  it("says why and who can, and does nothing when pressed", () => {
++    const pressed = vi.fn();
++    as(NONE, <RightButton right="review_promotions" onClick={pressed}>Review</RightButton>);
++    fireEvent.click(screen.getByRole("button", { name: "Review" }));
++    expect(pressed).not.toHaveBeenCalled();
++    expect(screen.getByText("You need Review promotions; the Data Engineer role has it. Ask an administrator to give it to you.")).toBeTruthy();
++  });
++
++  it("is offered as before while the person's rights are not known (the route answers for itself)", () => {
++    const pressed = vi.fn();
++    as(null, <RightButton right="review_promotions" onClick={pressed}>Review</RightButton>);
++    fireEvent.click(screen.getByRole("button", { name: "Review" }));
++    expect(pressed).toHaveBeenCalledOnce();
++  });
++
++  it("on Deploy: deploying, and deploying and running", async () => {
++    const calls = serve(recipe(DRAFT));
++    as(NONE, <PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
++    await refused("Deploy as v3", "Publish pipelines");
++    await refused("Deploy and run now", "Publish pipelines");
++    pressEverything(calls);
++  });
++
++  it("on a deployed pipeline's controls: its schedule, pausing it, running it and reopening it", async () => {
++    const calls = serve(recipe(PUBLISHED));
++    as(NONE, <PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);
++    await refused("Update schedule", "Schedule pipelines");
++    await refused("Pause schedule", "Schedule pipelines");
++    await refused("Run now", "Run pipelines");
++    pressEverything(calls);
++    cleanup();
++    const again = serve(recipe(PUBLISHED));
++    as(NONE, <PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
++    await refused("Reopen for editing", "Edit pipelines");
++    pressEverything(again);
++  });
++
++  it("on the schedule, for someone who may schedule but not deploy (its routes take both)", async () => {
++    const calls = serve(recipe(PUBLISHED));
++    as(new Set(["schedule_pipelines", "run_pipelines"]),
++      <PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);  // prettier-ignore
++    await refused("Update schedule", "Publish pipelines");
++    await refused("Pause schedule", "Publish pipelines");
++    expect((await screen.findByRole("button", { name: "Run now" })).hasAttribute("aria-disabled")).toBe(false);
++    for (const name of ["Update schedule", "Pause schedule"]) fireEvent.click(screen.getByRole("button", { name }));
++    expect(calls.filter(isWrite)).toEqual([]);
++  });
++
++  it("on Test and on the load rules", async () => {
++    const calls = serve((path) => (path.endsWith("/v1/ontology") ? { entity_types: [], edge_types: [] } : recipe(DRAFT)(path)));
++    as(NONE, <VerifyScreen apiBaseUrl="http://api" investigationId="inv-1" bearerToken="t" recipeId="r1" onBack={() => undefined} />);
++    await refused("Run the test", "Verify pipelines");
++    pressEverything(calls);
++    cleanup();
++    const view = { recipe_id: "r1", chosen: false, checks: [], available: [] };
++    const checks = serve((path) => (path.endsWith("/checks") ? view : undefined));
++    as(NONE, <ChecksScreen apiBaseUrl="http://api" investigationId="inv-1" bearerToken="t" recipeId="r1" onBack={() => undefined} />);
++    await refused("Save the load rules", "Edit pipelines");
++    pressEverything(checks);
++  });
++
++  it("on Pipelines: a new pipeline", async () => {
++    const calls = serve((path) => (path.endsWith("/recipe-registry") ? [] : undefined));
++    as(NONE, <PipelineStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" />);
++    fireEvent.change(screen.getByRole("textbox", { name: "Pipeline name" }), { target: { value: "PIN calls" } });
++    await refused("New pipeline", "Edit pipelines");
++    pressEverything(calls);
++  });
++
++  it("on Sources: the tab, registering, adding files, importing a list, and a source's own actions", async () => {
++    const source: SourceTable = {
++      id: "s1", dataset_id: "ds-a", connection_id: "c1", name: "Visits", location: "visits", connector_profile: "generic-csv",
++      handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" }, legal_basis: "Synthetic",
++      refresh: { trigger: "watch", pattern: "v-*.csv", mode: "snapshot", dropped_rows: "withdraw", owner: "e", paused: false },
++      read: { kind: "sql", table: "public.visits", columns: [] }, version: 1, created_by: "e", created_at: "2026-11-06T09:00:00Z",
++    } as SourceTable;  // prettier-ignore
++    const calls = serve((path) => {
++      if (path.endsWith("/sources")) return [source];
++      if (path.endsWith("/screening-subscriptions")) return { lists: [], subscribed: [] };
++      if (path.endsWith("/reference-lists/offered")) return [];
++      if (path.endsWith("/lineage")) return [];
++      return undefined;
++    });
++    as(NONE, <SourcesTab apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" datasetId="ds-a" onOpenPipelines={() => undefined} />);
++    // The tab's own line, beside each button's tip.
++    const lines = await screen.findAllByText(/^You need Add ingest files; the Analyst and Data Engineer roles have it/);
++    expect(lines.some((el) => el.tagName === "P")).toBe(true);
++    await refused("Register a source", "Add ingest files");
++    await refused("Add files", "Add ingest files");
++    await refused("Import a list", "Load screening lists");
++    await refused("Import rows for one of this dataset's lists", "Add ingest files");
++    expect(calls.filter(isWrite)).toEqual([]);
++    fireEvent.click(await screen.findByRole("button", { name: /Open source Visits/ }));
++    await refused("Edit governance", "Edit pipelines");
++    await refused("Pause the refresh", "Schedule pipelines");
++    await refused("Refresh now", "Add ingest files");
++    pressEverything(calls);
++  });
++
++  it("on a pipeline's source: uploading a file", async () => {
++    const { ConnectScreen } = await vi.importActual<typeof import("../ConnectScreen")>("../ConnectScreen");
++    const calls = serve((path) => {
++      if (path === "/v1/ingest/connectors") return [{ id: "generic-csv", label: "CSV file", group: "Generic", structured: true, available: true }];
++      if (path === "/v1/handling-scheme") return { name: "uk", classification: ["OFFICIAL"], handling_codes: {} };
++      if (path.endsWith("/ingest/recipes")) return [];
++      if (path.endsWith("/ingest/source-files")) return { root: "/in", files: [] };
++      return undefined;
++    });
++    as(NONE, <ConnectScreen investigationId="inv-1" apiBaseUrl="http://api" bearerToken="t" />);
++    await refused("Choose file…", "Add ingest files");
++    fireEvent.click(screen.getByRole("button", { name: "Choose file…" }));
++    expect(calls.filter(isWrite)).toEqual([]);
++  });
++
++  it("on a paused source: resuming its refresh", async () => {
++    const paused = {
++      id: "s1", dataset_id: "ds-a", connection_id: "files", name: "Cells", location: "/in/ds-a/cells.csv",
++      connector_profile: "generic-csv", handling: { classification: "OFFICIAL", handling_code: "P", originator: "u", owning_unit: "u" },
++      legal_basis: "Synthetic", version: 1, created_by: "e", created_at: "2026-11-06T09:00:00Z",
++      refresh: { trigger: "watch", pattern: "cells-*.csv", mode: "snapshot", dropped_rows: "withdraw", owner: "e", paused: true },
++    } as SourceTable;  // prettier-ignore
++    const calls = serve((path) => (path.endsWith("/lineage") ? [] : undefined));
++    as(NONE,
++      <SourcePage api={{ apiBaseUrl: "http://api", bearerToken: "t" }} datasetId="ds-a" source={paused} scheme={null}
++        onBack={() => undefined} onChanged={() => undefined} onOpenInPipeline={() => undefined} />,
++    );  // prettier-ignore
++    await refused("Resume the refresh", "Schedule pipelines");
++    pressEverything(calls);
++  });
++
++  it("on Runs: a day's held rows, and a load's revert", async () => {
++    const runs: Record<string, ScheduleRunView[]> = {
++      r1: [{ run_id: "a", trigger: "manual", started_at: "2026-11-04T09:00:00Z", outcome: "succeeded", run_as: "e",
++        rows_read: 2, nodes_created: 2, nodes_referenced: 0, rows_rejected: 0, rows_held: 1, load_id: "01LOADA" }],
++    };  // prettier-ignore
++    const calls = serve(() => undefined);
++    as(NONE,
++      <RunsTab apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" datasetId="ds-a" datasetName="Visits"
++        pipelines={[PUBLISHED]} runs={runs} level="editor" canRevert={false} username="e" onChanged={() => undefined}
++        today={new Date("2026-11-05T12:00:00Z")} />,
++    );  // prettier-ignore
++    // Run now or schedule only opens the controls, each of which says why not on its own.
++    expect(screen.getByRole("button", { name: "Run now or schedule" }).hasAttribute("aria-disabled")).toBe(false);
++    fireEvent.click(screen.getByRole("button", { name: /^PIN calls, 4 Nov: / }));
++    const report = screen.getByRole("region", { name: "Run report" });
++    expect(within(report).getByText("You need Revert loads; the Administrator and Data Engineer roles have it. Ask an administrator to give you one.")).toBeTruthy();
++    await refused("Open held rows", "Read held rows");
++    fireEvent.click(screen.getByRole("button", { name: "Open held rows" }));
++    expect(screen.queryByText("held-rows-panel")).toBeNull();
++    expect(calls.filter(isWrite)).toEqual([]);
++  });
++
++  it("on Model: proposed link types, for someone who cannot accept types", async () => {
++    const cases = [{ id: "inv-1", name: "Visits case", level: "editor", created_at: "", created_by: "e", domains: [],
++      datasets: ["Visits"], dataset_ids: ["ds-a"] }];  // prettier-ignore
++    const calls = serve((path) => (path.endsWith("/v1/investigations") ? cases : []));
++    render(<IngestStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" onOpenCase={() => undefined} rights={NONE} />);
++    fireEvent.click(screen.getByRole("tab", { name: "1 Model" }));
++    const region = await screen.findByRole("region", { name: "Proposed link types" });
++    expect(within(region).getByText(/^You need Accept types; the Data Engineer role has it/)).toBeTruthy();
++    expect(calls.some((c) => c.path.includes("/model/proposals"))).toBe(false);
++  });
++
++  it("opens *Roles, teams and Authors* from the Studio, and back", async () => {
++    serve(() => []);
++    render(<IngestStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" onOpenCase={() => undefined} rights={NONE} />);
++    fireEvent.click(screen.getByRole("button", { name: "Roles, teams and Authors" }));
++    expect(screen.getByRole("heading", { name: "Roles, teams and Authors" })).toBeTruthy();
++    const back = screen.getByRole("button", { name: "← Back to the Ingest Studio" });
++    await waitFor(() => expect(document.activeElement).toBe(back));
++    fireEvent.click(back);
++    expect(screen.getByRole("tab", { name: "3 Pipelines" })).toBeTruthy();
++  });
++
++  it("keeps what was typed in the Studio while the help page is read", async () => {
++    serve((path) => (path.endsWith("/recipe-registry") ? [] : []));
++    render(<IngestStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" onOpenCase={() => undefined} rights={EVERY} />);
++    fireEvent.change(await screen.findByRole("textbox", { name: "Pipeline name" }), { target: { value: "Half-typed" } });
++    fireEvent.click(screen.getByRole("button", { name: "Roles, teams and Authors" }));
++    fireEvent.click(screen.getByRole("button", { name: "← Back to the Ingest Studio" }));
++    expect((screen.getByRole("textbox", { name: "Pipeline name" }) as HTMLInputElement).value).toBe("Half-typed");
++  });
++});
++
++describe("a holder of every right", () => {
++  it("is offered every action", async () => {
++    serve(recipe(DRAFT));
++    as(EVERY, <PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} />);
++    const deploy = await screen.findByRole("button", { name: "Deploy as v3" });
++    expect(deploy.hasAttribute("aria-disabled")).toBe(false);
++    expect(document.querySelector("[data-why-not]")).toBeNull();
++  });
++});
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.tsx
+new file mode 100644
+index 0000000..c3b24c8
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.tsx
+@@ -0,0 +1,60 @@
++// An action a person can't take says why and who can, never only greyed out (ADR-145 Amendment 4
++// decision 12; L1.8). The Studio's actions that need a right each take it from here: the button stays
++// focusable (`aria-disabled`, so a keyboard reaches it and its tip, rule 13), does nothing when pressed,
++// and is described by a tip in words from `help/roles.ts` — the right's name and the built-in roles that
++// hold it, never a role id or a person (the owner's ruling of 9 November 2026, ADR-145 Amendment 7).
++// The route refuses all the same (rule 3): this is words, not access control.
++import { createContext, useContext, useId, type MouseEvent } from "react";
++
++import { Button, type ButtonProps } from "../../design/primitives/Button";
++import { whyNotByRole, type Right } from "../../help/roles";
++
++/** The person's rights (`GET /v1/me/rights`) for the Studio's actions. `null` while they are not known:
++ * every action is then offered as before, and the route answers for itself. */
++export const StudioRights = createContext<ReadonlySet<string> | null>(null);
++
++/** Why the person cannot take an action needing `rights` (every one of them), or `null` if they can. */
++export function useWhyNot(rights: Right | readonly Right[]): string | null {
++  const held = useContext(StudioRights);
++  if (held === null) return null;
++  const missing = (typeof rights === "string" ? [rights] : rights).find((r) => !held.has(r));
++  return missing === undefined ? null : whyNotByRole(missing);
++}
++
++export interface RightButtonProps extends ButtonProps {
++  /** The right (or rights) the action's route checks, read from the route's own declaration. */
++  right: Right | readonly Right[];
++}
++
++/** A Studio button that needs a right: as `Button` for whoever holds it; otherwise focusable, inert and
++ * described by why and who can. */
++export function RightButton({ right, onClick, disabled, style, ...rest }: RightButtonProps) {
++  const why = useWhyNot(right);
++  const tip = useId();
++  if (why === null) return <Button {...rest} style={style} disabled={disabled} onClick={onClick} />;
++  const refuse = (event: MouseEvent<HTMLButtonElement>) => event.preventDefault();
++  return (
++    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--sp-8)", flexWrap: "wrap" }}>
++      <Button
++        {...rest}
++        aria-disabled="true"
++        aria-describedby={tip}
++        onClick={refuse}
++        style={{ ...style, color: "var(--text-disabled)", cursor: "not-allowed" }}
++      />
++      <span id={tip} className="label" data-why-not="">
++        {why}
++      </span>
++    </span>
++  );
++}
++
++/** A line saying why a whole part of the Studio is closed to the person, and who can open it. */
++export function WhyNotLine({ right }: { right: Right | readonly Right[] }) {
++  const why = useWhyNot(right);
++  return why === null ? null : (
++    <p className="label" data-why-not="" style={{ margin: 0 }}>
++      {why}
++    </p>
++  );
++}
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/verify/VerifyScreen.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/verify/VerifyScreen.tsx
+index ed4abe0..fd181a6 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/verify/VerifyScreen.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/verify/VerifyScreen.tsx
+@@ -30,6 +30,7 @@ import { createWorkingSet, type WorkingSet } from "../../workingset/store";
+ import { alreadyLoadedWords } from "../alreadyLoaded";
+ import { WouldRaisePanel } from "./WouldRaisePanel";
+ import { ProfileError, fetchDraft, fetchOntologySchema, runVerify } from "../api";
++import { RightButton } from "../studio/rightsGate";
+ 
+ export interface VerifyScreenProps {
+   apiBaseUrl: string;
+@@ -151,9 +152,9 @@ export function VerifyScreen({ apiBaseUrl,
+         {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
+         <h1 style={{ fontSize: "1.1em", margin: 0 }}>Test{draft ? ` — ${draft.label}` : ""}</h1>
+         <div style={{ flex: 1 }} />
+-        <Button onClick={() => void handleRunVerify()} variant="primary" disabled={running}>
++        <RightButton right="verify_pipelines" onClick={() => void handleRunVerify()} variant="primary" disabled={running}>
+           {running ? "Testing…" : "Run the test"}
+-        </Button>
++        </RightButton>
+       </div>
+ 
+       {error && (

@@ -222,6 +222,7 @@ async def run_verify(
                 sources=read.tables,
                 lists=lists,
                 dataset_id=draft.dataset_id or "",
+                subscribed=subscribed_in(staging.references),
                 graph=graph,
                 ontology=ontology,
                 principal=principal,
