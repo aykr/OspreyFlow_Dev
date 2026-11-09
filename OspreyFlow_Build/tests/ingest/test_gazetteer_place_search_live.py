@@ -24,7 +24,7 @@ from pathlib import Path
 import duckdb
 import pytest
 from scripts.build_local_basemap import load_gazetteer
-from services.api.map_places import gazetteer_dataset_id, search_places
+from services.api.map_places import SCAN_LIMIT, gazetteer_dataset_id, search_places
 from services.ingest.geometries import POINT_GEOMETRY_VERSION
 
 from adapters.analytics_duckdb.adapter import AnalyticsDuckDBAdapter
@@ -124,8 +124,8 @@ async def _plant(
 
 
 async def _a_case_yard(graph: GraphArcadeDBAdapter, analytics: AnalyticsDuckDBAdapter) -> None:
-    """A case's own place, named like the gazetteer's, **with a point** and a postcode, in the case's
-    own dataset: only the `gazetteer-*` filter keeps it from being offered."""
+    """A case's own place, named like the gazetteer's, **with a point** and a postcode, in the
+    case's own dataset: only the `gazetteer-*` filter keeps it from being offered."""
     await _plant(
         graph, analytics, node_id="yard-cranford-3", name="Cranford yard 3", dataset="case-a",
         classification="OFFICIAL", lon=-0.46, lat=51.49, site_ref="yard-3", postcode="TW5 9QQ",
@@ -193,6 +193,33 @@ async def test_an_identifier_fragment_finds_no_place_and_no_more(stores: Stores)
         graph, analytics, node_id="ident-place", name="Ashwell", dataset=GAZETTEER,
         classification="OFFICIAL", lon=-0.7, lat=52.7, osm_id="osm-77441", uprn="100077441",
     )  # fmt: skip
+    # More places than one scan reads whose identifiers, not names, hold the fragment: a store asked
+    # on identifiers would fill its scan with them and say `more` (rule 15: with one such place the
+    # name check alone would pass this case).
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes(
+        [
+            NodeWrite(
+                id=f"ident-many-{i}", type="Location",
+                properties={"name": f"Hamlet {i}", "osm_id": f"osm-77441-{i}",
+                            "geometry_ref": f"g-many-{i}"},
+                provenance=Provenance(
+                    state=ProvenanceState.ASSERTED,
+                    sources=[SourceRef(document_id="osm", locator=str(i), excerpt_hash="a" * 64)],
+                    first_seen=datetime(2026, 1, 1, tzinfo=UTC),
+                ),
+                handling={  # type: ignore[arg-type]
+                    "classification": "OFFICIAL", "handling_code": "P",
+                    "originator": "unit-1", "owning_unit": "unit-1",
+                },
+                created_by="loader", created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                datasets=[GAZETTEER],
+            )
+            for i in range(SCAN_LIMIT + 5)
+        ],
+        tx,
+    )  # fmt: skip
+    await graph.commit_transaction(tx)
     for fragment in ("77441", "osm-77", "10007"):
         answer = await search_places(
             graph, analytics, PlaceSearchRequest(query=fragment), WITH_GAZETTEER
