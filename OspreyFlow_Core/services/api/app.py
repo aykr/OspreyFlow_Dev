@@ -310,7 +310,7 @@ from schemas.map_admin import (
     PrefetchRun,
     PrefetchScheduleInput,
 )
-from schemas.mapconfig import MapConfig, PublicMapConfig
+from schemas.mapconfig import MapConfig, PlaceSearchRequest, PlaceSearchResponse, PublicMapConfig
 from schemas.model import OfferedEngines
 from schemas.model_admin import (
     ConnectionTestResult,
@@ -403,7 +403,7 @@ from schemas.trends import (
     TrendOptions,
 )
 
-from . import alert_queue
+from . import alert_queue, map_places
 from . import compute_routes as compute_routes_module
 from . import connections as connections_module
 from . import dossier as dossier_module
@@ -7669,6 +7669,33 @@ async def get_map_providers_route(
     )
 
 
+@app.post(
+    "/v1/investigations/{investigation_id}/map/places",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def map_place_search_route(
+    investigation: InvestigationViewerDep,
+    body: PlaceSearchRequest,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    analytics: AnalyticsDep,
+    audit: AuditDep,
+) -> PlaceSearchResponse:
+    """The map's place search (`02_GLASS_FRONTEND.md` §3.5, ADR-147 Amendment 1): the loaded
+    gazetteer's places in the case's datasets (ADR-099, read with the case's principal in the
+    store, rule 3), each with its point; never a hosted geocoder (`map_places`). Viewer and
+    `investigate`, as the case's other searches are; audited as they are."""
+    result = await map_places.search_places(graph, analytics, body, principal)
+    await audit.record(
+        principal=principal,
+        action="map_place_search",
+        investigation_id=investigation.id,
+        resolved_query={"query": body.query, "limit": body.limit},
+        result_cardinality=len(result.places),
+    )
+    return result
+
+
 @app.get("/v1/map/tiles/{provider_id}/{z}/{x}/{y}")
 async def get_map_tile_route(
     request: Request,
@@ -7812,6 +7839,8 @@ async def build_basemap_route(
     ontology: OntologyDep,
     audit: AuditDep,
     admin: MapAdminDep,
+    datasets: DatasetsDep,
+    analytics: AnalyticsDep,
 ) -> StreamingResponse:
     """ADR-147: a named region only; the tiles folder and the planetiler jar are the deployment's
     own (`map_admin.build_basemap`), never a path typed in the Glass, and the provider is registered
@@ -7836,17 +7865,23 @@ async def build_basemap_route(
             loop.call_soon_threadsafe(queue.put_nowait, line)
 
         async def _load_places(extract: Path) -> tuple[int, int, int]:
+            # ADR-147 Amendment 1: into the region's gazetteer dataset, which a case's Author
+            # adds to a case for its place search; before P4 the places were in no dataset. The
+            # dataset is registered once they are committed (`_settle`), so a failed build leaves
+            # none behind.
             tx = await graph.begin_transaction()
             transaction["tx"] = tx
             report = await load_gazetteer(
                 extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
                 load_id=f"load-osm-gazetteer-{body.region}",
+                dataset=map_places.gazetteer_dataset_id(body.region), analytics=analytics,
             )  # fmt: skip
             return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
         async def _settle() -> None:
             # Committed before the provider is registered (`map_admin.build_basemap`).
             await graph.commit_transaction(transaction.pop("tx"))
+            await map_places.register_gazetteer_dataset(datasets, body.region, by=principal.id)
 
         async def _run_build() -> tuple[tuple[str, int, int, int] | None, BaseException | None]:
             try:

@@ -851,6 +851,13 @@ export const MAPS_ACTIONS = defineActionRegistry("MAPS_ACTIONS", [
   "fetch-every-prefetch-area-now-by-keyboard",
 ] as const);
 
+/** The analyst's map (P4, `02_GLASS_FRONTEND.md` §3.5): the basemap switch and the place search
+ * over the case's gazetteer (`map/MapControls.tsx`), each proven in `map-view.spec.ts`. */
+export const MAP_VIEW_ACTIONS = defineActionRegistry("MAP_VIEW_ACTIONS", [
+  "switch-the-basemap-by-keyboard",
+  "find-a-place-by-keyboard",
+] as const);
+
 export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "save-a-persons-roles-by-keyboard",
   "register-a-dashboard-by-keyboard",

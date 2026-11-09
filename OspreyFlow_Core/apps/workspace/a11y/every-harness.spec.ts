@@ -42,6 +42,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-147: Admin › Maps with a provider being added, a key being entered and an area being added
   // (platform lane P3), and with the basemap built, the glyphs installed and an area run.
   "maps-harness.html": ["open=add", "open=key", "open=area", "built=1"],
+  // P4: the analyst's map with the place search's answer drawn, its "more match" words and its
+  // refusal (its switch and search on every state).
+  "map-view-harness.html": ["searched=1", "searched=more", "searched=fail"],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
   // ADR-145 Amendment 2: Monitoring's badge (inside the GOV.UK notification banner under that
   // brand), and the rail's ⋯ More and the top bar's More views drawn open.

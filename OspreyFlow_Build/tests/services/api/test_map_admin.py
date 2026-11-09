@@ -23,7 +23,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 from services.api.map_admin import (
     PLANETILER_JAR,
     InMemoryMapAdminAudit,
@@ -438,13 +438,17 @@ async def test_a_key_is_given_only_to_the_address_it_was_entered_for(tmp_path: P
 
 
 async def test_a_provider_the_conduit_does_not_fetch_refuses_a_key(tmp_path: Path) -> None:
+    # A browser-fetched provider that takes a key is refused as it is read (ADR-147 Amendment 1),
+    # so Admin never holds one to refuse a key for.
     browser = {**HOSTED, "id": "browser", "proxy": "none"}
+    with pytest.raises(ValidationError, match="must be fetched by the Conduit"):
+        MapConfig.model_validate({"default": "osm-local", "providers": [OSM, browser]})
     profile = {"id": "zoomstack", "label": "OS Open Zoomstack", "kind": "vector",
                "profile": "os-open-zoomstack", "credential": "env:OS_KEY", "attribution": "OS",
                "licence": {"id": "OGL-UK-3.0", "redistributable": True,
                            "client_scope": "open"}}  # fmt: skip
-    w = World(tmp_path, providers=[OSM, browser, profile])
-    for provider_id in ("browser", "zoomstack"):
+    w = World(tmp_path, providers=[OSM, profile])
+    for provider_id in ("zoomstack",):
         with pytest.raises(MapAdminRefused):
             await w.admin.set_key("a", provider_id, SecretStr(PLANTED))
     row = next(p for p in w.admin.view().providers if p.provider.id == "zoomstack")

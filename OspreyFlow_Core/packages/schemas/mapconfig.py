@@ -34,7 +34,7 @@ import re
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class MapSourceKind(StrEnum):
@@ -63,6 +63,40 @@ class ClientScope(StrEnum):
     OPEN = "open"
     PER_DEPLOYMENT = "per-deployment"
     PER_SEAT = "per-seat"
+
+
+#: Every gazetteer a build loads is in a dataset named with this prefix (ADR-147 Amendment 1;
+#: `services/api/map_places.gazetteer_dataset_id`).
+GAZETTEER_DATASET_PREFIX = "gazetteer-"
+
+#: The external gazetteers' own identifiers for a place (`packages/ontology/default.yaml`, v7 and
+#: v9): source-system identifiers (rule 7; the orchestrator's ruling of 9 November 2026). Withheld
+#: from a place in a gazetteer dataset (`gazetteer-*`) for every request reader
+#: (`ontology.handling.withhold_sources`); the Conduit's own work and a load read them whole. Only
+#: the OSM build loads such a dataset today (`osm_id`); the others are named so a gazetteer dataset
+#: of theirs is covered the day one is built. A Studio load of a gazetteer into a case's own
+#: dataset is the case's data and keeps them (ADR-147 Amendment 1, Open). `postcode` is an address
+#: and stays.
+GAZETTEER_SOURCE_IDENTIFIERS: tuple[str, ...] = (
+    "osm_id",
+    "uprn",
+    "os_place_id",
+    "gss_code",
+    "gnis_feature_id",
+    "tiger_geoid",
+    "nad_address_id",
+)
+
+#: A query parameter named like a key (ADR-147 decision 2a's list).
+_KEY_NAMED = re.compile(r"key|token|secret|sig|password|auth", re.I)
+#: A path segment that is a key's name, alone or with its value (`/key/…`, `/api_key=…`, `/token`),
+#: never a segment that merely holds one (`monkey.pmtiles`, `key_west.pmtiles`, `rutland-auth`): a
+#: browser-fetched address carrying one hands its key to every analyst.
+_KEY_SEGMENT = re.compile(
+    r"^(?:api[-_]?key|apikey|key|access[-_]?token|token|secret|sig|signature|password|passwd|"
+    r"auth)(?:=.*)?$",
+    re.I,
+)
 
 
 class ProviderLicence(BaseModel):
@@ -234,6 +268,47 @@ class MapProvider(BaseModel):
                 )
         return self
 
+    @model_validator(mode="after")
+    def _a_browser_fetched_provider_holds_no_key(self) -> MapProvider:
+        """ADR-147 Amendment 1: a provider the browser fetches (`proxy: none`) has its address
+        handed to the Glass (`public_view`), so it may take no key, by reference or typed in.
+        Admin refused both already; `osprey.yaml` did not, and the basemap switch would have
+        offered the address."""
+        if self.proxy != "none" or self.profile is not None:
+            # A profile's own file says how it is fetched; its address is never the Glass's.
+            return self
+        if self.needs_key:
+            raise ValueError(
+                f"provider {self.id!r} takes a key, so it must be fetched by the Conduit "
+                "(proxy: required or recommended): fetched by the browser, its key would be in "
+                "every analyst's browser"
+            )
+        for address in (self.source, self.endpoint):
+            if address is None:
+                continue
+            before, _, rest = address.partition("?")
+            scheme, sep, after_scheme = before.partition("://")
+            authority, _, path = (after_scheme if sep else "").partition("/")
+            if "@" in authority:
+                raise ValueError(
+                    f"provider {self.id!r} is fetched by the browser and its address carries a "
+                    "user part; fetch it through the Conduit with a key set in Admin › Maps"
+                )
+            if any(_KEY_SEGMENT.search(segment) for segment in path.split("/")):
+                raise ValueError(
+                    f"provider {self.id!r} is fetched by the browser and its address carries a "
+                    "key-like path segment; fetch it through the Conduit with {credential}"
+                )
+            query = rest.partition("#")[0]
+            for pair in query.split("&"):
+                name = pair.partition("=")[0]
+                if name and _KEY_NAMED.search(name):
+                    raise ValueError(
+                        f"provider {self.id!r} is fetched by the browser and its address carries "
+                        "a key-named parameter; fetch it through the Conduit with {credential}"
+                    )
+        return self
+
     @property
     def needs_key(self) -> bool:
         """Whether its tiles cannot be fetched without a key (ADR-147)."""
@@ -300,6 +375,40 @@ class PublicMapConfig(BaseModel):
     providers: list[PublicMapProvider]
 
 
+class PlaceSearchRequest(BaseModel):
+    """The analyst's place search (`02_GLASS_FRONTEND.md` §3.5's gazetteer search, ADR-147
+    Amendment 1): words to find among the loaded gazetteer's places, in the case's datasets."""
+
+    query: str = Field(min_length=2, max_length=100, description="Part of a place's name")
+    limit: int = Field(default=10, ge=1, le=25, description="How many places to show at most")
+
+    @field_validator("query", mode="before")
+    @classmethod
+    def _stripped(cls, value: object) -> object:
+        """Measured without its surrounding spaces: "   " is no query (it would be a scan)."""
+        return value.strip() if isinstance(value, str) else value
+
+
+class MapPlace(BaseModel):
+    """One gazetteer place: its node, its name and its point. Never the gazetteer's own
+    identifier for it (an `osm_id`, a `uprn`): a source-system identifier, which the Glass never
+    sees (rule 7)."""
+
+    id: str
+    name: str
+    lon: float = Field(ge=-180, le=180)
+    lat: float = Field(ge=-90, le=90)
+
+
+class PlaceSearchResponse(BaseModel):
+    """The places found, and whether more matched than are shown: a short list is never passed off
+    as every match (rule 2). `more` is counted after the access filter, so it never says that a
+    place the reader may not see exists."""
+
+    places: list[MapPlace]
+    more: bool
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     ProviderLicence,
     PrefetchCache,
@@ -307,4 +416,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     MapConfig,
     PublicMapProvider,
     PublicMapConfig,
+    PlaceSearchRequest,
+    MapPlace,
+    PlaceSearchResponse,
 )

@@ -1293,16 +1293,33 @@ async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
     held: dict[str, str] = {}
 
     async def load_places(extract: Path) -> tuple[int, int, int]:
+        # ADR-147 Amendment 1: into the region's gazetteer dataset, as the Admin route's build.
+        from services.api.map_places import gazetteer_dataset_id
+
         tx = await graph.begin_transaction()
         held["tx"] = tx
         report = await load_gazetteer(
             extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
-            load_id=f"load-osm-gazetteer-{region}",
+            load_id=f"load-osm-gazetteer-{region}", dataset=gazetteer_dataset_id(region),
         )  # fmt: skip
         return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
     async def settle() -> None:
+        # ADR-147 Amendment 1, decision 2: the dataset registered once the places are committed (a
+        # failed build leaves none), and the words about the points said after the load.
+        from services.api.map_places import (
+            NO_POINTS_HERE,
+            DatasetsUnreachable,
+            register_gazetteer_dataset_from_env,
+        )
+
         await graph.commit_transaction(held.pop("tx"))
+        print(NO_POINTS_HERE)
+        try:
+            await register_gazetteer_dataset_from_env(region, by=by)
+        except DatasetsUnreachable as unreachable:
+            # The places are committed; the build goes on, and says how to register them.
+            print(str(unreachable), file=sys.stderr)
 
     try:
         name, created, referenced, rejected = await build_basemap(

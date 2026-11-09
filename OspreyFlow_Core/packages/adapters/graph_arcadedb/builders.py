@@ -8,7 +8,7 @@ added later, with no change to the callers in `adapter.py`.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -22,6 +22,7 @@ from schemas.domain import (
     Principal,
     PropertyType,
 )
+from schemas.mapconfig import GAZETTEER_DATASET_PREFIX
 
 from .access_filter import AccessFilter
 from .gremlin_literals import (
@@ -69,6 +70,34 @@ class FindByIdentifierBuilder:
         )
 
 
+#: The properties a gazetteer's place is found by, for a request reader (ADR-147 Amendment 1).
+GAZETTEER_MATCH_FIELDS: frozenset[str] = frozenset({"name"})
+
+
+def match_any_field(
+    clause: Callable[[str], str], fields: Sequence[str], principal: Principal
+) -> str:
+    """`or(...)` over `fields`, each `clause(field)` a `__.has(...)` step. For a request reader
+    (`principal.datasets` set, ADR-099), a node in a gazetteer dataset (`gazetteer-*`) matches
+    on its name alone, never an identifier (`osm_id`, `uprn`, …: source-system identifiers, rule
+    7; the orchestrator's ruling of 9 November 2026). Inside the traversal, so the rows, the
+    `limit + 1` row that says `more`, and any count follow it: a run of prefix searches cannot
+    rebuild a place's `osm_id`. An unlimited principal (`datasets is None`, which no request
+    carries, ADR-099) matches every field, as before. A load's lookups and a rebuild do not pass
+    here: `find_node` (`FindByIdentifierBuilder`) matches its one named field unguarded."""
+    every = [clause(field) for field in fields]
+    if principal.datasets is None:
+        return f"or({','.join(every)})"
+    names = [clause(field) for field in fields if field in GAZETTEER_MATCH_FIELDS]
+    others = [clause(field) for field in fields if field not in GAZETTEER_MATCH_FIELDS]
+    if not others:
+        return f"or({','.join(every)})"
+    prefix = groovy_string_literal(GAZETTEER_DATASET_PREFIX)
+    off_gazetteer = f'__.not(__.values("datasets").unfold().is(TextP.startingWith({prefix})))'
+    guarded = f"__.and({off_gazetteer},__.or({','.join(others)}))"
+    return f"or({','.join([*names, guarded])})"
+
+
 @dataclass(frozen=True)
 class SearchNodesBuilder:
     """`GraphPort.search_nodes` — exact match against `identifier_fields`
@@ -86,11 +115,12 @@ class SearchNodesBuilder:
     def render_gremlin(self, access: AccessFilter, principal: Principal) -> str:
         has_access = access.gremlin_has_step(principal)
         value_lit = groovy_string_literal(self.query)
-        clauses = ",".join(
-            f"__.has({groovy_string_literal(field)},{value_lit})"
-            for field in self.identifier_fields
+        matched = match_any_field(
+            lambda field: f"__.has({groovy_string_literal(field)},{value_lit})",
+            self.identifier_fields,
+            principal,
         )
-        return f"g.V().or({clauses}).{has_access}.dedup().limit({self.limit}).elementMap()"
+        return f"g.V().{matched}.{has_access}.dedup().limit({self.limit}).elementMap()"
 
 
 @dataclass(frozen=True)
@@ -224,11 +254,13 @@ class SuggestNodesBuilder:
         has_access = access.gremlin_has_step(principal)
         predicate = self._predicate()
         labels = ",".join(groovy_string_literal(label) for label in self.labels)
-        clauses = ",".join(
-            f"__.has({groovy_string_literal(field)},{predicate})" for field in self.fields
+        matched = match_any_field(
+            lambda field: f"__.has({groovy_string_literal(field)},{predicate})",
+            self.fields,
+            principal,
         )
         return (
-            f"g.V().hasLabel({labels}).or({clauses}).{has_access}"
+            f"g.V().hasLabel({labels}).{matched}.{has_access}"
             f".dedup().limit({self.limit + 1}).elementMap()"
         )
 

@@ -353,7 +353,12 @@ class GraphPort(Protocol):
         Access-filtered exactly like every other read: a node whose
         identifier matches but whose handling excludes `principal` must not
         appear, count toward `limit`, or otherwise be detectable — the same
-        existence-leak discipline `find_node` itself already proves."""
+        existence-leak discipline `find_node` itself already proves.
+
+        A node in a `gazetteer-*` dataset matches a request reader on its
+        `name` alone, never on its gazetteer's source identifiers (rule 7,
+        ADR-147 Amendment 1 decision 3b), inside the traversal, so neither
+        a hit nor its absence tells the reader an identifier."""
         ...
 
     async def suggest_locations(
@@ -405,7 +410,11 @@ class GraphPort(Protocol):
 
         Never truncates silently (rule 2): returns at most `limit` nodes and sets `more` when
         another visible node matched. Access-filtered like every read (rule 3): a node whose
-        `handling` excludes `principal` must not appear, count toward `limit` or set `more`."""
+        `handling` excludes `principal` must not appear, count toward `limit` or set `more`.
+
+        A node in a `gazetteer-*` dataset matches a request reader on its `name` alone, never on
+        its gazetteer's source identifiers (rule 7, ADR-147 Amendment 1 decision 3b), inside the
+        traversal, so the rows, `more` and any count follow it."""
         ...
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph: ...

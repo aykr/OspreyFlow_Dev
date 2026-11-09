@@ -1529,8 +1529,8 @@ projection and a node with coordinates sits where it belongs.
 | Convoy analysis | Two or more entities co-located within a distance and time tolerance; tolerances are user-set and shown |
 | Incident comparison | Two or more geo-temporal windows side by side, sharing a colour ramp |
 | Site geospatial | A georeferenced floor plan or aerial image as a raster layer with a drawn grid, for fixed-site analysis |
-| Basemap switching | Layer control listing every provider declared in `osprey.yaml`; attribution and any licence note render with the map and on every export |
-| Gazetteer search | Place and address lookup against the locally ingested gazetteer; no hosted geocoder is ever called |
+| Basemap switching | A switch over the map (a radio group, by keyboard) listing every provider the deployment holds that the map can draw (`GET /v1/map/providers`; ADR-147 Amendment 1); attribution and any licence note render with the map and on every export; a proxied provider's tiles come through the Conduit, so no key or key-bearing address reaches the Glass |
+| Gazetteer search | Place lookup against the gazetteer datasets the case reads (`POST /v1/investigations/{id}/map/places`, ADR-147 Amendment 1), within the case's access; choosing a place moves the map there; no hosted geocoder is ever called |
 | Boundary layers | Administrative, postcode and jurisdiction geometry as toggleable overlays; a drawn or selected boundary is a spatial filter like any other |
 | Offline tiles | PMTiles from a local file or a local tile server; no network call in an air-gapped deployment |
 
@@ -1579,7 +1579,11 @@ The bundled basemap and its overlays (the heat layer, a trail, a boundary) take 
 the themed palette (ADR-070) and are drawn again when the theme changes: land the raised surface,
 water the sequential ramp's second step, lines the strong border, labels the primary text. Until
 9 October 2026 they used the dark theme's constants in either theme, with land and sea barely
-apart, and the map read as a black rectangle in the light theme and in exported screenshots.
+apart, and the map read as a black rectangle in the light theme and in exported screenshots. **In
+the dark theme** the water is the ramp's first step and the land the panel surface, since a marker on
+the second step was 2.7:1, under WCAG 1.4.11's 3:1 (ADR-147 Amendment 1; `map/style.ts`'s
+`landAndWater`). Every colour the map draws meets its floor in the dark, light and GOV.UK themes
+(`map-verify/contrast.spec.ts`).
 
 **What is not decided by this proposal:** whether a `local-lite`/`small`/`cluster` deployment
 profile should instead serve the file from a dedicated static-file sidecar rather than the

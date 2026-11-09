@@ -31,14 +31,17 @@ from fastapi.testclient import TestClient
 from services.api.app import (
     ADMIN_ROLE,
     app,
+    get_analytics,
     get_audit,
     get_config,
+    get_datasets,
     get_graph,
     get_map_config,
     get_ontology,
     get_principal,
     require_admin_role,
 )
+from services.api.datasets import InMemoryDatasetStore
 from services.api.map_admin import InMemoryMapAdminAudit, MapAdmin, MapKeyFile, MapSettingsFile
 
 from schemas.domain import Principal, TxId
@@ -46,6 +49,10 @@ from schemas.mapconfig import MapConfig, MapProvider
 
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-1", roles=[ADMIN_ROLE])
 ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
+#: The analytics store and the dataset store the build route is handed (ADR-147 Amendment 1: the
+#: gazetteer's points and its dataset); a sentinel and the in-memory store, read back below.
+ANALYTICS = object()
+DATASETS = InMemoryDatasetStore()
 
 
 def _principal(*roles: str) -> Principal:
@@ -140,6 +147,8 @@ def client(graph: _FakeGraph, map_admin: MapAdmin) -> TestClient:
     app.dependency_overrides[get_ontology] = lambda: object()
     app.dependency_overrides[get_config] = lambda: _FakeConfig()
     app.dependency_overrides[get_audit] = lambda: _RecordingAudit()
+    app.dependency_overrides[get_analytics] = lambda: ANALYTICS
+    app.dependency_overrides[get_datasets] = lambda: DATASETS
     test_client = TestClient(app)
     try:
         yield test_client
@@ -191,16 +200,44 @@ def test_build_basemap_route_refuses_an_unknown_region(client: TestClient) -> No
     assert "narnia" in response.json()["detail"]
 
 
-def _fake_gazetteer(monkeypatch: pytest.MonkeyPatch) -> None:
+def _fake_gazetteer(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     class _FakeReport:
         nodes_created = 12
         nodes_referenced = 3
         rejections: list[str] = []
 
-    async def _load(*_args: Any, **_kwargs: Any) -> _FakeReport:
+    loads: list[dict[str, Any]] = []
+
+    async def _load(*_args: Any, **kwargs: Any) -> _FakeReport:
+        loads.append(kwargs)
         return _FakeReport()
 
     monkeypatch.setattr("services.api.app.load_gazetteer", _load)
+    return loads
+
+
+def test_the_build_loads_the_places_into_the_regions_gazetteer_dataset_with_their_points(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-147 Amendment 1 (the orchestrator's settlement, 9 November 2026): the places go into
+    `gazetteer-osm-<region>`, registered in the dataset store for the recipe's unit, so a case's
+    Author can add it to a case; and their points go into the Conduit's analytics store, so a place
+    search can take the map to them."""
+    loads = _fake_gazetteer(monkeypatch)
+
+    async def _fake_build(admin: Any, *, load_places: Any, settle: Any, **_kwargs: Any) -> Any:
+        counts = await load_places(Path("/tmp/rutland.osm.pbf"))
+        await settle()
+        return ("rutland.pmtiles", *counts)
+
+    monkeypatch.setattr("services.api.map_admin.build_basemap", _fake_build)
+    response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "rutland"})
+    assert '"returncode": 0' in response.text, response.text
+    assert [(load["dataset"], load["analytics"]) for load in loads] == [
+        ("gazetteer-osm-rutland", ANALYTICS)
+    ]
+    held = DATASETS.datasets["gazetteer-osm-rutland"]
+    assert (held.owning_unit, held.created_by) == ("unit-1", "admin-1")
 
 
 def test_build_basemap_route_streams_real_progress_and_completes(

@@ -54,8 +54,9 @@ from services.ingest.recipe_loader import load_recipe
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
-from ontology.handling import load_uk_le_scheme
+from ontology.handling import load_uk_le_scheme, sources_in_full
 from ontology.loader import load_default_ontology
+from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.deployment import TILES_CONTAINER_PATH
 from schemas.domain import OntologySchema, Principal, TxId
@@ -241,7 +242,9 @@ def run_planetiler(
     output_pmtiles_path.parent.mkdir(parents=True, exist_ok=True)
     subprocess_run(
         [
-            "java", "-jar", str(jar_path),
+            "java",
+            "-jar",
+            str(jar_path),
             f"--osm-path={osm_pbf_path}",
             f"--output={output_pmtiles_path}",
             "--download",
@@ -261,23 +264,60 @@ async def load_gazetteer(
     tx: TxId,
     principal: Principal,
     load_id: str,
+    dataset: str,
+    analytics: AnalyticsPort | None = None,
 ) -> LoadReport:
     """The connector + recipe-engine path — `services/ingest/connectors/
     geo/osm.py`, needing no network or external process, so this is what
-    `tests/test_build_local_basemap.py` actually exercises end to end."""
+    `tests/test_build_local_basemap.py` actually exercises end to end.
+
+    **Into `dataset`, always** (ADR-147 Amendment 1): every place is written with it, and the
+    load's `on_match: reference` lookup reads it alone, so a rebuild finds the places the last one
+    wrote. The caller registers the dataset (`services.api.map_places.register_gazetteer_dataset`).
+    Before P4 the places were in no dataset, which no case reads (ADR-099 decision 5).
+
+    **Their points too, given `analytics`**: each place's point goes into the analytics store's
+    geometry partition under its `geometry_ref`, as a Studio load's do (`services/ingest/
+    geometries.py`). Until P4 no gazetteer build wrote them, so a loaded place had a ref that
+    resolved to nothing and could not be found on the map. Points already held are not written
+    again (a rebuild). The command-line builds pass none: the analytics store is the Conduit's,
+    which a second process cannot open while the Conduit runs."""
+    from services.api.dataset_scope import stamping
+    from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
+
     recipe = load_recipe(_OSM_GAZETTEER_RECIPE_PATH)
-    report, _events = await run_recipe(
-        recipe,
-        read_osm_places(str(osm_pbf_path)),
-        graph=graph,
-        ontology=ontology,
-        tx=tx,
-        principal=principal,
-        load_id=load_id,
-        investigation_scope="reference-data",
-        source=str(osm_pbf_path),
-    )
+    # A load reads its places whole (`sources_in_full`): its lookups are the Conduit's, never the
+    # Glass's, and a gazetteer's identifiers are withheld only from what is sent to a reader.
+    with sources_in_full():
+        report, _events = await run_recipe(
+            recipe,
+            read_osm_places(str(osm_pbf_path)),
+            graph=stamping(graph, dataset=dataset),
+            ontology=ontology,
+            tx=tx,
+            principal=principal.model_copy(update={"datasets": [dataset]}),
+            load_id=load_id,
+            investigation_scope="reference-data",
+            source=str(osm_pbf_path),
+        )
+    if analytics is not None:
+        points = point_geometries(recipe, read_osm_places(str(osm_pbf_path)))
+        for start in range(0, len(points), _POINT_BATCH):
+            batch = points[start : start + _POINT_BATCH]
+            held = {
+                record.geometry_ref
+                for record in await analytics.get_geometries(
+                    [p.geometry_ref for p in batch], principal, version=POINT_GEOMETRY_VERSION
+                )
+            }
+            fresh = [p for p in batch if p.geometry_ref not in held]
+            if fresh:
+                await analytics.load_geometries(fresh)
     return report
+
+
+#: How many points one read of the geometry partition asks after at once.
+_POINT_BATCH = 1000
 
 
 @dataclass(frozen=True)
@@ -371,6 +411,7 @@ async def build_local_basemap(
     downloader: Callable[[str, Path], Path] = download_extract,
     planetiler_runner: Callable[..., Path] = run_planetiler,
     existing_extract: Path | None = None,
+    gazetteer_dataset: str,
 ) -> BasemapBuildResult:
     """The full tier-1 pipeline in one call — `00_ARCHITECTURE.md` §1.2's
     "one button." Each stage's own function is independently callable and
@@ -389,8 +430,13 @@ async def build_local_basemap(
 
     progress("Loading the OSM-derived gazetteer...")
     report = await load_gazetteer(
-        pbf_path, graph=graph, ontology=ontology, tx=tx, principal=principal,
+        pbf_path,
+        graph=graph,
+        ontology=ontology,
+        tx=tx,
+        principal=principal,
         load_id=f"load-osm-gazetteer-{region}",
+        dataset=gazetteer_dataset,
     )
     progress(
         f"Gazetteer load: {report.nodes_created} places created, "
@@ -478,6 +524,13 @@ async def _run(args: argparse.Namespace) -> int:
     await graph.apply_schema(ontology)
 
     principal = Principal(id=args.principal_id, clearance=args.clearance, org_unit=args.org_unit)
+    from services.api.map_places import (
+        NO_POINTS_HERE,
+        DatasetsUnreachable,
+        gazetteer_dataset_id,
+        register_gazetteer_dataset_from_env,
+    )
+
     tx = await graph.begin_transaction()
     try:
         result = await build_local_basemap(
@@ -490,6 +543,7 @@ async def _run(args: argparse.Namespace) -> int:
             ontology=ontology,
             tx=tx,
             principal=principal,
+            gazetteer_dataset=gazetteer_dataset_id(args.region),
         )
         await graph.commit_transaction(tx)
     except Exception:
@@ -504,6 +558,14 @@ async def _run(args: argparse.Namespace) -> int:
         f"{result.gazetteer_report.nodes_referenced} already known, "
         f"{len(result.gazetteer_report.rejections)} rejected."
     )
+    print(NO_POINTS_HERE)
+    # ADR-147 Amendment 1, decision 2: the dataset registered once the places are committed, so a
+    # failed build leaves none. Its places are stamped already; registering again later is harmless.
+    try:
+        await register_gazetteer_dataset_from_env(args.region, by=principal.id)
+    except DatasetsUnreachable as unreachable:
+        print(str(unreachable), file=sys.stderr)
+        return 1
     return 1 if result.gazetteer_report.rejections else 0
 
 

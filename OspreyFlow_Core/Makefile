@@ -132,11 +132,12 @@ glass-a11y:
 glass-keyboard:
 	npm run test:keyboard --workspace apps/workspace
 
-# `spec/00_ARCHITECTURE.md` §1.2.1's Verify contrast-floor check — a
-# rendered-pixel/reference-image comparison of a fixture graph over the
-# basemap's own chrome colours (`apps/workspace/map-verify/contrast.spec.ts`),
-# genuinely different from `glass-a11y`'s axe-core DOM-rule check. Dark
-# theme only for now — see `map-verify/showcase.tsx`'s own docstring.
+# `spec/00_ARCHITECTURE.md` §1.2.1's Verify contrast-floor check, in the dark, light and GOV.UK
+# themes (ADR-147 Amendment 1): each colour the map draws, read from its own call site, against
+# WCAG's floors (4.5:1 text, 3:1 a marker, link or trail), and each theme's picture against its
+# stored reference (`apps/workspace/map-verify/contrast.spec.ts`), genuinely different from
+# `glass-a11y`'s axe-core DOM-rule check. The references are per OS (macOS's committed); CI runs
+# the floor checks alone until Linux references are made there.
 glass-map-verify:
 	npm run test:map-verify --workspace apps/workspace
 

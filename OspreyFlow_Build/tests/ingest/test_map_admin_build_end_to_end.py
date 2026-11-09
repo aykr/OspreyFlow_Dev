@@ -67,7 +67,7 @@ async def test_the_build_loads_the_real_gazetteer_and_commits_only_a_finished_bu
             transactions.append(tx)
             report = await load_gazetteer(
                 extract, graph=graph, ontology=ontology, tx=tx, principal=CLEARED,
-                load_id="load-osm-gazetteer-rutland",
+                load_id="load-osm-gazetteer-rutland", dataset="gazetteer-osm-rutland",
             )  # fmt: skip
             return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
@@ -97,4 +97,9 @@ async def test_the_build_loads_the_real_gazetteer_and_commits_only_a_finished_bu
         assert (name, created, rejected) == ("rutland.pmtiles", 3, 0)
         node = await graph.find_node("Location", "osm_id", "1", CLEARED)
         assert node is not None and node.properties["name"] == "Cranford"
+        # ADR-147 Amendment 1: in the region's gazetteer dataset, which a case adds to read it.
+        in_it = CLEARED.model_copy(update={"datasets": ["gazetteer-osm-rutland"]})
+        elsewhere = CLEARED.model_copy(update={"datasets": ["another-dataset"]})
+        assert await graph.find_node("Location", "osm_id", "1", in_it) is not None
+        assert await graph.find_node("Location", "osm_id", "1", elsewhere) is None
         assert admin.provider("osm-local-rutland").source == "file:///data/tiles/built/rutland.pmtiles"

@@ -1102,6 +1102,13 @@ jobs:
       - run: npm run test:perf --workspace apps/workspace
       - run: npm run test:a11y --workspace apps/workspace
       - run: npm run test:keyboard --workspace apps/workspace
+      # ADR-147 Amendment 1 (P4): the map's colours at WCAG's floors in the dark, light and GOV.UK
+      # themes, measured from their call sites (`map-verify/contrast.spec.ts`). The floor checks only:
+      # the reference images are macOS's (`*-darwin.png`); make Linux ones once on a runner
+      # (`npx playwright test --config map-verify/playwright.config.ts --update-snapshots`, committed)
+      # and drop the `-g` to gate the pictures too.
+      - run: npx playwright test --config map-verify/playwright.config.ts -g "contrast floor"
+        working-directory: OspreyFlow_Core/apps/workspace
 
   # `06_DECISIONS.md` ADR-049 Stage 2 §6 part A, amendment 21 — the setup screens' own keyboard
   # spec, against a real `harness.webapp` server (`apps/harness/keyboard/playwright.config.ts`'s
