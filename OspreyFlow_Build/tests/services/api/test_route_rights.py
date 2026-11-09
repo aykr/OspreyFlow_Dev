@@ -97,7 +97,6 @@ ROUTE_RIGHTS = {
     "cancel_layer_merge": None,
     "delete_removed_case_layer": None,
     "dry_run_delete_removed_case_layer": None,
-    "admin_delete_removed_case_layer": "administer_system",
     "start_a_drawing": "create_case",
     "seed": "investigate",
     "expand": "investigate",

@@ -337,9 +337,6 @@ OUTSIDE_CASE_LEVELS: dict[tuple[str, str], str] = {
     # the counts are under the administrator's own handling.
     ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/{action}/dry-run"):
         "Admin › Datasets: administer_system, never a case level",
-    # L3.4: an administrator deletes a removed case's layer after that dry run, the same way.
-    ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete"):
-        "Admin › Datasets: administer_system, never a case level",
 }  # fmt: skip
 
 

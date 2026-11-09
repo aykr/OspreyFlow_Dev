@@ -10181,26 +10181,6 @@ async def delete_removed_case_layer(
                                graph, promotions, audit)  # fmt: skip
 
 
-@app.post(
-    "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete",
-    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
-)
-async def admin_delete_removed_case_layer(
-    dataset_id: str,
-    investigation_id: str,
-    principal: PrincipalDep,
-    datasets: DatasetsDep,
-    investigations: InvestigationsDep,
-    graph: GraphDep,
-    promotions: PromotionsDep,
-    audit: AuditDep,
-) -> LayerDeleted:
-    """*Delete* by an administrator (Admin › Datasets), after its dry run."""
-    await _admin_dataset_of(datasets, dataset_id)
-    return await _delete_layer(dataset_id, investigation_id, principal, datasets, investigations,
-                               graph, promotions, audit)  # fmt: skip
-
-
 @app.get("/v1/datasets/{dataset_id}/model", dependencies=_EDITS_THE_MODEL)
 async def read_dataset_model(
     dataset_id: StudioDatasetDep, models: TargetModelsDep

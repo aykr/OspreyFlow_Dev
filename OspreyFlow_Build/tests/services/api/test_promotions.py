@@ -888,8 +888,6 @@ def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace) 
     assert pw.items.items[spare["item_id"]].withdrawn_at is not None
     actions = [r["action"] for r in pw.audit.records]
     assert "delete_layer" in actions
-    # An administrator deletes too; a non-administrator not through Admin's route.
-    assert _as("fred").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 403
 
 
 def test_the_delete_check_fails_with_the_layer_withdrawn_whole(

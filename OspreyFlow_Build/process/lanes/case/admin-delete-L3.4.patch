@@ -1,0 +1,99 @@
+diff --git b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+index 94cb4f6..ad50a92 100644
+--- b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
++++ a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+@@ -220,6 +220,7 @@ POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked
+ DELETE /v1/datasets/{dataset}/layer-merges/{grant}              *Cancel*: the grant closes, nothing merged
+ POST   /v1/datasets/{dataset}/removed-cases/{case}/delete/dry-run   *Delete*'s dry run for one of the dataset's Authors (`LayerDryRun`): the layer's counts as their own handling takes them, promoted items included, and that deleting withdraws those not promoted, in words, nothing written but its audit entry (dry_run_layer_delete)
+ DELETE /v1/datasets/{dataset}/removed-cases/{case}/layer        *Delete* by one of the dataset's Authors (`LayerDeleted`, in words, with no count: it would include what the deleter may not see): every element wholly the layer's withdrawn under `layer-delete:<case>`, never deleted; a promoted element is never touched; the layer's open merges closed and its waiting promotions rejected; audited as delete_layer before it is written
++POST   /v1/admin/datasets/{dataset}/cases/{case}/delete         the same *Delete* by an administrator, after its dry run; administer_system
+ ```
+ 
+ A promotion adds the dataset to the drawn elements themselves (`GraphPort.promote_elements`,
+diff --git b/OspreyFlow_Build/tests/services/api/test_admin_sections.py a/OspreyFlow_Build/tests/services/api/test_admin_sections.py
+index f6ef1e2..f7611dc 100644
+--- b/OspreyFlow_Build/tests/services/api/test_admin_sections.py
++++ a/OspreyFlow_Build/tests/services/api/test_admin_sections.py
+@@ -62,6 +62,12 @@ NOT_WALKED = ("design/", "brand/")
+ NOT_A_SECTION_S = {
+     # Monitoring › Lists in the Glass calls these (`test_place_routes.py`'s first rule).
+     r"^/v1/admin/screening-lists": "the Glass's Monitoring › Lists",
++    # L3.4 (ADR-143 Amendment 2 decision 1): an administrator's *Delete* of a removed case's layer,
++    # after Admin's own dry run. Its button in Admin › Datasets is the admin lane's screen, asked for
++    # through the orchestrator; until it lands no section calls it (the Studio's Authors delete
++    # through their own route meanwhile).
++    r"^/v1/admin/datasets/\{dataset_id\}/cases/\{investigation_id\}/delete$":
++        "Admin › Datasets' Delete, the admin lane's screen to come",
+ }
+ 
+ 
+diff --git b/OspreyFlow_Build/tests/services/api/test_investigation_levels.py a/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
+index 95a7f0d..14df024 100644
+--- b/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
++++ a/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
+@@ -337,6 +337,9 @@ OUTSIDE_CASE_LEVELS: dict[tuple[str, str], str] = {
+     # the counts are under the administrator's own handling.
+     ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/{action}/dry-run"):
+         "Admin › Datasets: administer_system, never a case level",
++    # L3.4: an administrator deletes a removed case's layer after that dry run, the same way.
++    ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete"):
++        "Admin › Datasets: administer_system, never a case level",
+ }  # fmt: skip
+ 
+ 
+diff --git b/OspreyFlow_Build/tests/services/api/test_promotions.py a/OspreyFlow_Build/tests/services/api/test_promotions.py
+index fb3bacd..23b0479 100644
+--- b/OspreyFlow_Build/tests/services/api/test_promotions.py
++++ a/OspreyFlow_Build/tests/services/api/test_promotions.py
+@@ -888,6 +888,8 @@ def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace)
+     assert pw.items.items[spare["item_id"]].withdrawn_at is not None
+     actions = [r["action"] for r in pw.audit.records]
+     assert "delete_layer" in actions
++    # An administrator deletes too; a non-administrator not through Admin's route.
++    assert _as("fred").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 403
+ 
+ 
+ def test_the_delete_check_fails_with_the_layer_withdrawn_whole(
+diff --git b/OspreyFlow_Build/tests/services/api/test_route_rights.py a/OspreyFlow_Build/tests/services/api/test_route_rights.py
+index b899e3e..7e076e0 100644
+--- b/OspreyFlow_Build/tests/services/api/test_route_rights.py
++++ a/OspreyFlow_Build/tests/services/api/test_route_rights.py
+@@ -97,6 +97,7 @@ ROUTE_RIGHTS = {
+     "cancel_layer_merge": None,
+     "delete_removed_case_layer": None,
+     "dry_run_delete_removed_case_layer": None,
++    "admin_delete_removed_case_layer": "administer_system",
+     "start_a_drawing": "create_case",
+     "seed": "investigate",
+     "expand": "investigate",
+diff --git b/OspreyFlow_Core/services/api/app.py a/OspreyFlow_Core/services/api/app.py
+index b04a751..9ca3666 100644
+--- b/OspreyFlow_Core/services/api/app.py
++++ a/OspreyFlow_Core/services/api/app.py
+@@ -9655,6 +9655,26 @@ async def delete_removed_case_layer(
+                                graph, promotions, audit)  # fmt: skip
+ 
+ 
++@app.post(
++    "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete",
++    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
++)
++async def admin_delete_removed_case_layer(
++    dataset_id: str,
++    investigation_id: str,
++    principal: PrincipalDep,
++    datasets: DatasetsDep,
++    investigations: InvestigationsDep,
++    graph: GraphDep,
++    promotions: PromotionsDep,
++    audit: AuditDep,
++) -> LayerDeleted:
++    """*Delete* by an administrator (Admin › Datasets), after its dry run."""
++    await _admin_dataset_of(datasets, dataset_id)
++    return await _delete_layer(dataset_id, investigation_id, principal, datasets, investigations,
++                               graph, promotions, audit)  # fmt: skip
++
++
+ @app.get("/v1/datasets/{dataset_id}/model", dependencies=_EDITS_THE_MODEL)
+ async def read_dataset_model(
+     dataset_id: StudioDatasetDep, models: TargetModelsDep

@@ -220,7 +220,6 @@ POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked
 DELETE /v1/datasets/{dataset}/layer-merges/{grant}              *Cancel*: the grant closes, nothing merged
 POST   /v1/datasets/{dataset}/removed-cases/{case}/delete/dry-run   *Delete*'s dry run for one of the dataset's Authors (`LayerDryRun`): the layer's counts as their own handling takes them, promoted items included, and that deleting withdraws those not promoted, in words, nothing written but its audit entry (dry_run_layer_delete)
 DELETE /v1/datasets/{dataset}/removed-cases/{case}/layer        *Delete* by one of the dataset's Authors (`LayerDeleted`, in words, with no count: it would include what the deleter may not see): every element wholly the layer's withdrawn under `layer-delete:<case>`, never deleted; a promoted element is never touched; the layer's open merges closed and its waiting promotions rejected; audited as delete_layer before it is written
-POST   /v1/admin/datasets/{dataset}/cases/{case}/delete         the same *Delete* by an administrator, after its dry run; administer_system
 ```
 
 A promotion adds the dataset to the drawn elements themselves (`GraphPort.promote_elements`,
