@@ -1,6 +1,12 @@
 // The Glass's map view (`map/MapView.tsx`) with three located nodes, close together as a prison's
 // yards are, and a button that shrinks the map's box as opening the timeline does. The map is
 // exposed on `window.__MAP__` so a spec can read where its camera is.
+//
+// P4: two basemaps to switch between (each a raster whose tiles never arrive: what is checked is
+// which source the map is drawn from, not the picture) and a place search answered by a stand-in for
+// the case's place route, which records each query on `window.__PLACE_QUERIES__`. `?searched=1`
+// draws the search's answer already shown, for the axe scan (`a11y/every-harness.spec.ts`);
+// `?brand=govuk` the GOV.UK theme (`brandHarness.ts`).
 import { useState } from "react";
 import Graph from "graphology";
 import type { Map as MapLibreMap } from "maplibre-gl";
@@ -10,11 +16,13 @@ import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { MapView } from "../src/map/MapView";
 import type { WorkingSetGraph } from "../src/workingset/store";
-import type { PublicMapProvider } from "../../../packages/schemas/generated";
+import type { MapPlace, PublicMapProvider } from "../../../packages/schemas/generated";
+import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
   interface Window {
     __MAP__?: MapLibreMap;
+    __PLACE_QUERIES__?: string[];
   }
 }
 
@@ -50,17 +58,40 @@ const PROVIDER = {
   label: "Harness",
   kind: "raster",
   style: "bundled:osprey-raster-overlay",
-  attribution: "Harness",
+  attribution: "Harness tiles ©",
   licence_id: "none",
   licence_note: "",
   client_scope: "open",
   source: "http://map-view.invalid/{z}/{x}/{y}.png",
 } as unknown as PublicMapProvider;
+// A second, hosted one, proxied as a tier-3 provider is: no source of its own in the Glass.
+const HOSTED = {
+  ...PROVIDER,
+  id: "harness-hosted",
+  label: "Hosted streets",
+  attribution: "Hosted streets ©",
+  client_scope: "per-deployment",
+  source: null,
+} as unknown as PublicMapProvider;
+const PROVIDERS = [PROVIDER, HOSTED];
+
+// Synthetic places (rule 9): what the case's gazetteer holds in this harness.
+const GAZETTEER: MapPlace[] = [
+  { id: "place-cranford", name: "Cranford", lon: -0.459, lat: 51.488 },
+  { id: "place-cranbrook", name: "Cranbrook", lon: 0.533, lat: 51.096 },
+];
+window.__PLACE_QUERIES__ = [];
+async function searchPlaces(query: string) {
+  window.__PLACE_QUERIES__!.push(query);
+  const q = query.toLowerCase();
+  return { places: GAZETTEER.filter((p) => p.name.toLowerCase().includes(q)), more: false };
+}
 
 function Harness() {
   const [height, setHeight] = useState(700);
   return (
-    <div>
+    <main>
+      <h1 style={{ position: "absolute", left: -10000 }}>Map view harness</h1>
       <button type="button" onClick={() => setHeight(560)}>
         Shrink the map
       </button>
@@ -68,12 +99,28 @@ function Harness() {
         <MapView
           graph={graph}
           provider={PROVIDER}
+          providers={PROVIDERS}
+          searchPlaces={searchPlaces}
           nodeCoordinates={COORDINATES}
           onMapReady={onMapReady}
         />
       </div>
-    </div>
+    </main>
   );
 }
 
-createRoot(document.getElementById("root")!).render(<Harness />);
+void applyHarnessBrand().then(() => {
+  createRoot(document.getElementById("root")!).render(<Harness />);
+  if (new URLSearchParams(window.location.search).get("searched") === "1") {
+    // The harness's own hand, not the product's: type a name and submit, so the answer is drawn.
+    const fill = () => {
+      const input = document.querySelector<HTMLInputElement>('form[role="search"] input');
+      if (!input) return void setTimeout(fill, 50);
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(input, "cran");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.form!.requestSubmit();
+    };
+    fill();
+  }
+});

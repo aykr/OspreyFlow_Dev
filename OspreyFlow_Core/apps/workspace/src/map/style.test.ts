@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { PublicMapProvider } from "../../../../packages/schemas/generated";
 import { oklabLightness } from "../color/oklab";
 import { paletteFor } from "../color/palette";
+import { contrastRatio } from "./contrast";
 import {
   BUNDLED_DARK_STYLE_ID,
   BUNDLED_RASTER_OVERLAY_STYLE_ID,
@@ -278,7 +279,12 @@ describe("the bundled basemap's colours", () => {
       });
       const land = paintOf(style, "background", "background-color");
       const water = paintOf(style, "water", "fill-color");
-      expect(land).toBe(palette.surfaceRaised);
+      // The raised surface, or in the dark theme the panel surface beside the ramp's first step
+      // (`landAndWater`: a marker on the second step's water was 2.7:1, P4).
+      expect(land).toBe(theme === "light" ? palette.surfaceRaised : palette.surfacePanel);
+      expect(water).toBe(theme === "light" ? palette.seq[1] : palette.seq[0]);
+      expect(contrastRatio(palette.brass, water)).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(palette.brass, land)).toBeGreaterThanOrEqual(3);
       expect(
         Math.abs(oklabLightness(land) - oklabLightness(water)),
       ).toBeGreaterThanOrEqual(0.08);

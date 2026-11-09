@@ -21,6 +21,7 @@
 import type { StyleSpecification } from "maplibre-gl";
 
 import { activePalette, type Palette } from "../color/palette";
+import { contrastRatio, NON_TEXT_FLOOR } from "./contrast";
 import type { PublicMapProvider } from "../../../../packages/schemas/generated";
 
 export const BUNDLED_DARK_STYLE_ID = "bundled:osprey-dark";
@@ -57,6 +58,19 @@ export interface StyleOptions {
   palette?: Palette;
 }
 
+/** The basemap's land and water for a theme's palette (ADR-070). Land is the raised surface and water
+ * the sequential ramp's second step, so the coast reads; but where a marker (brass, `overlayColours`)
+ * on that water falls under WCAG 1.4.11's 3:1 (the dark theme: 2.7:1, found by P4's three themes'
+ * contrast check), water is the ramp's first step and land the panel surface, which keeps the
+ * markers above 3:1 on both and land and water apart. Lines and labels are the theme's border and
+ * text. */
+export function landAndWater(palette: Palette): { land: string; water: string } {
+  if (contrastRatio(palette.brass, palette.seq[1]) >= NON_TEXT_FLOOR) {
+    return { land: palette.surfaceRaised, water: palette.seq[1] };
+  }
+  return { land: palette.surfacePanel, water: palette.seq[0] };
+}
+
 export function buildBundledDarkStyle(
   provider: PublicMapProvider,
   apiBaseUrl: string,
@@ -77,10 +91,7 @@ export function buildBundledDarkStyle(
   const source = sourceIdFor(provider);
   const sourceUrl = resolvePmtilesSourceUrl(provider.source, apiBaseUrl);
   const palette = options.palette ?? activePalette();
-  // Land is the raised surface and water the sequential ramp's second step, so the coast reads in
-  // either theme; lines and labels are the theme's border and text.
-  const land = palette.surfaceRaised;
-  const water = palette.seq[1];
+  const { land, water } = landAndWater(palette);
   const style: StyleSpecification = {
     version: 8,
     name: "osprey-dark",

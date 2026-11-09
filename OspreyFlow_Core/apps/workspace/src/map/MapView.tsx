@@ -48,7 +48,9 @@ import { currentTheme, onThemeChange } from "../theme/theme";
 import type { WorkingSetGraph } from "../workingset/store";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
 import { conduitRequest } from "./conduitRequest";
+import { BasemapSwitch, PlaceSearch, type SearchPlaces } from "./MapControls";
 import { mapStart, type BasemapCentre } from "./mapStart";
+import { overlayColours } from "./overlayColours";
 import { registerAuthorisedPmtilesSource } from "./pmtilesAuth";
 import { glyphsServed, resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
 
@@ -201,7 +203,17 @@ export interface MapViewProps {
    * actually performs A3's own step, per `App.tsx`'s wiring into
    * `crossfilter/store.ts`'s `selectedNodeIds`. */
   onNodeClick?: (nodeId: string) => void;
+  /** P4, the basemap switch (`02_GLASS_FRONTEND.md` §3.5): the providers the analyst may switch
+   * among (`providers.ts`'s `switchableProviders`, from `GET /v1/map/providers` alone). `provider`
+   * is the one the map opens on; with fewer than two here no switch is drawn. */
+  providers?: readonly PublicMapProvider[];
+  /** P4, the place search over the case's gazetteer (`places.ts`'s `searchPlaces`, bound to the
+   * case). Absent, no search is drawn. */
+  searchPlaces?: SearchPlaces;
 }
+
+/** How close a found place is shown: a village fills the view, a city's centre is legible. */
+export const PLACE_ZOOM = 13;
 
 const EMPTY_GEO_BINS: readonly GeoBin[] = [];
 
@@ -217,7 +229,13 @@ export function MapView({
   snailTrail = EMPTY_SIGHTINGS,
   onMapReady,
   onNodeClick,
+  providers,
+  searchPlaces,
 }: MapViewProps) {
+  // The basemap the analyst chose (P4); the caller's `provider` until they choose another. A chosen
+  // id the list no longer holds falls back to the caller's, never to a provider not offered.
+  const [chosenId, setChosenId] = useState(provider.id);
+  const active = providers?.find((p) => p.id === chosenId) ?? provider;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   // Read inside the `load` handler below, which is registered once at map
@@ -258,8 +276,8 @@ export function MapView({
 
     async function mount(): Promise<void> {
       let basemapCentre: BasemapCentre | null = null;
-      if (provider.kind === "vector" && provider.source) {
-        const sourceUrl = resolvePmtilesSourceUrl(provider.source, apiBaseUrl ?? "");
+      if (active.kind === "vector" && active.source) {
+        const sourceUrl = resolvePmtilesSourceUrl(active.source, apiBaseUrl ?? "");
         // Before the availability check, not after: the check can return early on a 404, and the
         // registration has to be in place for *this* provider's URL by the time the style below
         // asks MapLibre to open `pmtiles://<sourceUrl>`. Registering it here rather than in the
@@ -292,17 +310,17 @@ export function MapView({
       setNothingPlaced(mapGraph.order === 0);
       const labels = await glyphsServed();
       if (cancelled || !containerRef.current) return;
-      const style = resolveBundledStyle(provider.style, provider, apiBaseUrl ?? "", { labels });
+      const style = resolveBundledStyle(active.style, active, apiBaseUrl ?? "", { labels });
       const start = mapStart(mapGraph.order, basemapCentre);
       // The overlay takes the theme's palette (owner, 10 October 2026): sigma's own grey
       // defaults were unreadable over the light basemap — markers, links and labels alike.
-      const overlayPalette = activePalette();
+      const overlay = overlayColours(activePalette());
       const sigma =
         start.kind === "fit"
           ? new Sigma<MapNodeAttributes, MapEdgeAttributes>(mapGraph, containerRef.current, {
-              defaultNodeColor: overlayPalette.brass,
-              defaultEdgeColor: overlayPalette.textSecondary,
-              labelColor: { color: overlayPalette.textPrimary },
+              defaultNodeColor: overlay.marker,
+              defaultEdgeColor: overlay.link,
+              labelColor: { color: overlay.label },
               // The markers are drawn at the fixed size 6 above, which sits under sigma's own
               // label threshold — every plotted place deserves its name.
               labelRenderedSizeThreshold: 5,
@@ -409,7 +427,7 @@ export function MapView({
             source: SNAIL_TRAIL_SOURCE_ID,
             filter: ["==", ["geometry-type"], "LineString"],
             // A sighting trail is data: the sequential ramp, not brass (ADR-097).
-            paint: { "line-color": SEQ_HEX[4], "line-width": 2, "line-opacity": 0.85 },
+            paint: { "line-color": overlay.trail, "line-width": 2, "line-opacity": 0.85 },
           });
           layer.map.addLayer({
             id: SNAIL_TRAIL_POINT_LAYER_ID,
@@ -417,7 +435,7 @@ export function MapView({
             source: SNAIL_TRAIL_SOURCE_ID,
             filter: ["==", ["geometry-type"], "Point"],
             paint: {
-              "circle-color": SEQ_HEX[5],
+              "circle-color": overlay.trailPoint,
               "circle-radius": 6,
               "circle-stroke-color": "#ffffff",
               "circle-stroke-width": 1.5,
@@ -452,7 +470,7 @@ export function MapView({
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [graph, provider, nodeCoordinates, apiBaseUrl, bearerToken, onMapReady, theme]);
+  }, [graph, active, nodeCoordinates, apiBaseUrl, bearerToken, onMapReady, theme]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -517,8 +535,8 @@ export function MapView({
             pointerEvents: "none",
           }}
         >
-          {provider.attribution}
-          {provider.licence_note ? ` — ${provider.licence_note}` : ""}
+          {active.attribution}
+          {active.licence_note ? ` — ${active.licence_note}` : ""}
         </div>
       )}
       {!basemapUnavailable && nothingPlaced && (
@@ -548,7 +566,7 @@ export function MapView({
           is itself an intelligence leak independent of tile content (same
           section), so this is a standing analyst-facing caution, not a
           licensing footnote. */}
-      {provider.client_scope !== "open" && (
+      {active.client_scope !== "open" && (
         <div
           style={{
             position: "absolute",
@@ -563,7 +581,22 @@ export function MapView({
             pointerEvents: "none",
           }}
         >
-          Hosted provider — {provider.client_scope}
+          Hosted provider — {active.client_scope}
+        </div>
+      )}
+      {((providers !== undefined && providers.length > 1) || searchPlaces) && (
+        <div className="map-controls">
+          {providers !== undefined && (
+            <BasemapSwitch providers={providers} chosen={active.id} onChoose={setChosenId} />
+          )}
+          {searchPlaces && (
+            <PlaceSearch
+              search={searchPlaces}
+              onGo={(place) =>
+                mapRef.current?.jumpTo({ center: [place.lon, place.lat], zoom: PLACE_ZOOM })
+              }
+            />
+          )}
         </div>
       )}
     </div>
