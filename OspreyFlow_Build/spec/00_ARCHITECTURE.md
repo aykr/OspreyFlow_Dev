@@ -939,10 +939,15 @@ allowlist and assume the tooling honours it.
 **Recorded Classpath exception, a runtime in an image (ADR-147 Amendment 2; the owner's ruling 1 of
 9 November 2026, option A):** the Conduit's image (`services/api/Dockerfile`) carries a Java 21 runtime,
 Eclipse Temurin, licensed `GPL-2.0-only WITH Classpath-exception-2.0`, so *Admin › Maps*' Build runs
-planetiler (Apache-2.0, the owner's jar, never shipped) in the Conduit. The runtime is jlinked from
-the official `eclipse-temurin:21-jdk` image pinned by digest and copied in unmodified; no OspreyFlow
-code links against it, and the Classpath exception keeps a program run on it outside the GPL, as for
-every program on a JVM. **Only that exception, only for a runtime recorded here, and only for
+planetiler (Apache-2.0, the owner's jar, never shipped) in the Conduit. The runtime is made by
+`jlink` from the official `eclipse-temurin:21-jdk` image pinned by digest: a derived runtime (a subset
+of its modules, compressed, debug symbols stripped), its code unchanged. No OspreyFlow code links
+against it, and the Classpath exception keeps a program run on it outside the GPL, as for every
+program on a JVM. **Distributing the image distributes the runtime under GPL-2.0**, so a release
+that ships the Conduit's image carries, with it, the offer of its corresponding source (Temurin's
+published source at the image's tag, `jdk-21.0.12.1+1`, and the `jlink` line that derived it,
+`services/api/Dockerfile`), and its NOTICE names the runtime and its licence; a release step, not
+this register's to perform. **Only that exception, only for a runtime recorded here, and only for
 GPL-2.0:** a plain GPL (any version), a GPL-3.0 with the exception, a GPL with any other exception,
 and AGPL still never pass. A runtime in an image is declared by a `LABEL
 org.ospreyflow.runtime.<name>.licence` in its Dockerfile, which `make licence-check` reads

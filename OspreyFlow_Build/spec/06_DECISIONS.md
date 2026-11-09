@@ -31491,20 +31491,37 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    a `gazetteer-*` dataset name, which a copy is not in: `ontology.handling.is_gazetteer_held` withholds
    its source identifiers from every request reader on every node read, and `builders.match_any_field`
    matches it on its name alone in the case's searches (`__.values("provenance").select("gazetteer")`
-   in the guard). The place search keeps a copy as a gazetteer place. **A re-build refreshes them**: the
-   Admin route and both command-line builds copy the places again into every case that added the
-   gazetteer, once the places commit (`case_gazetteers.refresh_cases`), and revert the copy of a place
-   the gazetteer no longer holds. **`DELETE` removes a gazetteer from a case**: its copies are marked
-   reverted (never deleted) and taken out of the case's working sets, **but never another load's data**:
-   a copy another writer also wrote (a source not the gazetteer's) or that a link rests on is kept, and
-   `copies_kept` says so, judged on the kept copies the Author may read. `GET` lists the gazetteers of
-   the reader's unit and which are added, by name only, never a count of places.
+   in the guard). The place search keeps a copy as a gazetteer place. **An addition is recorded for
+   the dataset that holds the copies** (`dataset_gazetteers`), not for the case: every case reading
+   that dataset (a case opened from an alert reads its case's) reads the copies and sees the
+   gazetteer added, and any of their Authors may remove it, as a load into the dataset is every
+   reader's; a case deleted or moved to another dataset leaves the record with the copies it
+   describes. **A re-build refreshes them**: the Admin route and both command-line builds copy the
+   places again into every dataset recorded for the gazetteer, once the places commit
+   (`case_gazetteers.refresh_cases`), drop the record of a dataset no longer there (never writing
+   into one), and revert the copy of a place the gazetteer no longer holds. **`DELETE` removes a
+   gazetteer**: its copies are marked reverted (never deleted) and taken out of the working sets,
+   **but never another load's data**: a copy another writer also wrote (a source not the
+   gazetteer's) or an analyst confirmed is kept, and `copies_kept` says so, judged on the kept copies
+   the Author may read. **Whether a copy goes is judged on the copy alone, never on the links around
+   it** (rule 3: a link above the Author's clearance, or in a case's analyst layer, would otherwise
+   decide what the Author sees kept): a link resting on a copy goes out of every read with it, and
+   comes back when the gazetteer is added again, since the copy is written again under its same id
+   and writing a reverted node revives it. A failed re-add leaves the earlier record and its copies
+   as they were. **A case's own load may match a copy** by its `osm_id` (`find_node`, a load's
+   lookup, unguarded as decision 3b left it): the identifier is the loader's own source row's, not
+   one told it by the store, and the load is told back a count; the copy so matched carries the
+   load's source as well, keeps its provenance through the store's merge, so its identifiers stay
+   withheld and unmatched, and a removal keeps it as the case's. `GET` lists the gazetteers of the
+   reader's unit and which the case's dataset holds, by name only, never a count of places.
 3. **The gazetteer's unit a build setting (ruling 8).** The recipe's `unit-1` is no longer what a build
    uses: *Admin › Maps*' Build takes a unit (empty: the administrator's own), and `ospreyflow map build`
    and `python -m scripts.build_local_basemap` take `--unit` (required). A unit that holds no case and no
    dataset here, and is not the administrator's own, is refused in words before anything is fetched or
-   written (`map_places.check_unit`, `UNKNOWN_UNIT`); otherwise the places, their points and their dataset
-   are that unit's.
+   written (`map_places.check_unit`, `UNKNOWN_UNIT`, which names no other unit); otherwise the places,
+   their points and their dataset are that unit's. **A re-build is for the unit the region was first
+   built for** (its dataset keeps its first unit, `register`): another is refused in words
+   (`OTHER_UNIT`), so a dataset never holds the places of two units.
 
 **Left, and why:**
 - **The Glass has no control for a case's gazetteers yet**: the routes are built and tested; a panel
@@ -31513,6 +31530,13 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   makes a composite as before (Amendment 1's option (b)).
 - **A case of another unit than the gazetteer's** cannot add it (ADR-099 decision 3); ruling 8 lets an
   administrator build a gazetteer for each unit.
+- **The port's own contract and the graph-port conformance suite** (`ports/graph.py`'s `search_nodes`
+  and `suggest_nodes`; `tests/conformance/graph_port`) do not yet say that a copy matches on its name
+  alone: neither is this lane's file, so the wording is a request to the orchestrator
+  (`process/lanes/platform/PORT_CONTRACT.diff`); the rendered query and the two live files prove it.
+- **The image's source offer and NOTICE** for the Java runtime are a release step (`spec/00` §7).
+- **The copy is made in the request**, one transaction for the region's places, and each re-build
+  refreshes every recorded dataset inside its stream; the timing is in the lane's report.
 - **The command-line builds' refresh leaves an open canvas as it was**: the working sets are the
   Conduit's, so a copy reverted by a command-line re-build (its place gone) leaves an open case's canvas
   when the case is next opened. The Admin route takes it out at once.
@@ -31528,11 +31552,14 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
 - **Copies**: live, `tests/ingest/test_case_gazetteer_copies_live.py` (found by name at its point and a
   SECRET place not; no identifier on a node read, an expansion or a search; never matched by its `osm_id`
   or `uprn`, more than a page sharing the prefix; a re-copy writes no second copy and reverts a place
-  gone; a removal keeps the copy a case's link rests on) and
-  `tests/ingest/test_case_gazetteer_routes_live.py` (through the routes: the case stays one dataset and a
-  write a composite case refuses is made; search, seed, expansion and the type-ahead carry and match no
+  gone; a removal reverts a copy whatever rests on it, and a re-add brings the link back; a case load
+  writing onto a copy through the real merge keeps it one, withheld, and kept by a removal) and
+  `tests/ingest/test_case_gazetteer_routes_live.py` (through the routes: the case stays one dataset
+  and the Studio's upload, a load a composite case refuses, is made, and refused once the case reads a
+  composite; search, seed, expansion and the type-ahead carry and match no
   identifier; `DELETE`); offline, `tests/services/api/test_case_gazetteers_routes.py` (which gazetteers,
-  the refusals and their words, what a copy is written as, what a removal reverts),
+  the refusals and their words, what a copy is written as, what a removal reverts, the dataset's
+  record seen by every case reading it, a failed re-add, a rebuild skipping a dataset gone),
   `tests/ontology/test_gazetteer_identifiers_withheld.py` (a copy, and `merge_provenance` keeping it one),
   `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py`, `test_map_places_route.py`; the
   routes' rights and levels, `test_route_rights.py` and `test_investigation_levels.py`.

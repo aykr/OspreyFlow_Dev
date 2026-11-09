@@ -16,3 +16,15 @@ runs on the closed ports (59991–59994), no lane set.
 | Ruling 1: a plain GPL-2.0 Java refused | `licence_check._CLASSPATH` loosened to `^gpl-2\.0` | `tests/licence_check/test_runtime_licences.py::test_any_other_gpl_java_is_refused` | 4 of 6 cases (plain GPL-2.0, GPL-2.0-only, another exception, the exception AND GPL-3.0) |
 | Ruling 1: the exception for the recorded runtime alone | `runtime_allowed`: the exception for any runtime | `…::test_the_exception_is_for_the_recorded_runtime_alone` | `other-vm` passed |
 | Ruling 1: an undeclared Java refused | `find_runtime_offenders`: the Java detection off | `…::test_a_java_runtime_the_image_does_not_declare_is_refused` | `[] == [('api', 'java', 'undeclared')]` |
+
+After the lane's review (development live run on stack c under the platform lease, 06:10–06:20 UTC):
+
+| Fix | Plant (at the call site) | Test | Red |
+| --- | --- | --- | --- |
+| Review 1: an addition is the dataset's, seen by every case reading it | `app._case_gazetteers_view`: only the adding case's records | `test_case_gazetteers_routes.py::test_the_addition_is_the_dataset_s_so_every_case_reading_it_sees_it` | `assert False is True` |
+| Review 2: a rebuild never writes into a dataset no longer there | `case_gazetteers.refresh_cases`: the dataset check off | `…::test_a_rebuild_refreshes_each_dataset_and_drops_one_no_longer_there` | `{'case-a', 'deleted-ds'} == {'case-a'}` |
+| Review 3: a confirmed copy is kept (and a link is no reason, rule 3) | `remove_copies`: the confirmation not judged | `…::test_removing_reverts_the_gazetteer_s_own_copies_and_never_another_writer_s` | the confirmed copy reverted |
+| Review 4: a failed re-add keeps the earlier record | `add_case_gazetteer_route`: the record removed on any failure | `…::test_a_failed_copy_again_keeps_the_earlier_addition` | `[] == [('case-a', …)]` |
+| Review 5 and 8: a case load's write keeps a copy one, through the real upsert (live) | `merge.merge_provenance`: the incoming write's `gazetteer` alone | `test_case_gazetteer_copies_live.py::test_a_case_s_load_writing_onto_a_copy_keeps_it_a_copy_and_the_case_s` | `gazetteer=None`, `osm_id` on the read |
+| Review 10: a rebuild for another unit refused | `map_places.check_unit`: the first build's unit not judged | `test_geospatial_admin_routes.py::…_before_anything`, `test_gazetteer_dataset_registration.py` (2) | 3 failed |
+| Review 12: each way a Java enters an image, alone | `_JAVA_IN_IMAGE`: the package alternative never matching; then `jlink` dropped | `test_runtime_licences.py::test_a_java_runtime_the_image_does_not_declare_is_refused` | the three package cases; then the `jlink` case |
