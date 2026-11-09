@@ -495,6 +495,9 @@ def _prompted_answers(
         raw["folders"] = {
             "ingest": ctx.ask("Folder the Ingest Studio lists", "~/OspreyFlow/ingest"),
             "tiles": ctx.ask("Folder for the basemap", "~/OspreyFlow/basemap"),
+            # ADR-114 Amendment 37 decision 1: outside the checkout; each deployment's sets in
+            # a subfolder of their own.
+            "backups": ctx.ask("Folder for backups", "~/OspreyFlow/backups"),
         }
     else:
         raw["cloud"] = {
