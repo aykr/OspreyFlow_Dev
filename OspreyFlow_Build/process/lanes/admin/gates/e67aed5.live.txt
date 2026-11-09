@@ -1,4 +1,5 @@
 # Round 6 short live run at e67aed5 (on main 1145687): stack f on the owner's test server, admin lease "L2.6 round 6 short live run at e67aed5: U20, sweep, A8, U20 plant", run there by stack_lease.sh remote, 2026-11-09T16:33Z.
+# Summary: the first call, 8 passed (the store's two, A8's six; -k deselected the rest); the second, 17 passed (the sweep file's 1 and the ageing file's 16 together); the U20 plant, red.
 ## U20's case, the lifespan sweep (now re-reading the dataset from the real store), and A8 (every case, the Author's move among them):
 Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin/.runs/20261109T163326Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py -k "still_a_recipient or raised_once" ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_promotion_ageing.py
 ........                                                                 [100%]

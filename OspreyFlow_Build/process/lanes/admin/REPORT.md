@@ -45,7 +45,7 @@ points. All are done below, each with a test shown red by a plant at its real ca
      - this machine's `osprey.yaml`, Valkey port and `graphify-out`;
      - main's phone-extraction live test;
      - one preflight case that passes alone (a connect to TEST-NET-1 answered once during the run).
-   - The lane's code is unchanged since 0989d88; later commits are records.
+   - The lane's code last changed at e67aed5 (round 6: `may_review`, `_promotion_recipients` and four test files). These offline gates at 0989d88 predate round 6; the orchestrator's merge-time `make -k ci` and `make test` at the merge result stand in for them. Round 6 was run offline (201 passed, plus the two place cases awaiting `places.diff`) and live on stack f (`gates/e67aed5.live.txt`).
 8. **Left for L3.4:** the promotion record, `waiting_for_review` passing the contract suite, `all_waiting`, and setting `app.state.waiting_promotions`. **Left for L2.7:** *Needs you* calls `alerts_for(person, lambda p: _promotion_recipients(app, p))`.
 9. **Decisions taken** (yours to overrule; all in ADR-145 Amendment 6):
    - (a) words withheld except where the reader's own section shows them;
