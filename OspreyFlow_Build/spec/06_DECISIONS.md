@@ -31451,3 +31451,97 @@ ourselves. What the platform requires, and where `main` stands:
   Calico deny policy, no RWX storage class).
 - Solirius runs ArcadeDB and ClickHouse in production: backups, patching, upgrades and monitoring are in
   the support service, and their runbooks are part of the documentation step (D2c).
+
+### ADR-147, Amendment 2 (9 November 2026) — the owner's map rulings: Java in the Conduit, gazetteer places copied into a case, the gazetteer's unit a build setting
+
+Status: accepted 9 November 2026; the owner's rulings 1, 6 and 8 of that day (`process/lanes/MORNING.md`,
+"Your rulings, 9 November"); every other choice the platform lane's, under Prompt L's rule
+(`process/lanes/platform/REPORT.md`, "Decisions taken"). Written by the platform lane in P5. ADR-099,
+ADR-014–017, ADR-147 and its Amendment 1 are otherwise unchanged.
+
+**Context.** Three questions P3 and P4 left with the owner: Java 21, which planetiler needs, was kept out
+of the Conduit's image because its only runtime here, Eclipse Temurin, is GPL-2.0 with the Classpath
+exception and the licence register passed no GPL; adding the gazetteer to a working case made the case
+read a composite, which is read-only for loads (ADR-099 Amendment 15); and the gazetteer's dataset was
+held by the recipe's `unit-1`, so a case of any other unit could not add it.
+
+**Decision.**
+
+1. **Java in the Conduit's image (ruling 1, option A).** `services/api/Dockerfile` jlinks a Java 21
+   runtime from `eclipse-temurin:21-jdk`, pinned by its digest (the multi-architecture index), into
+   `/opt/java` (eighteen modules, no tools, debug symbols, headers or man pages), on the Conduit's
+   `PATH`, so *Admin › Maps*' Build finds `java` and runs planetiler in the Conduit; the jar stays the
+   owner's, placed by `ospreyflow map build --planetiler-jar`. **The licence register records the one
+   exception** (`spec/00_ARCHITECTURE.md` §7): `GPL-2.0-only WITH Classpath-exception-2.0`, for a runtime
+   recorded there, `java` alone. A plain GPL of any version, GPL-3.0 with the exception, a GPL with any
+   other exception, and AGPL still never pass. **`make licence-check` reads it**: an image declares a
+   runtime it carries by `LABEL org.ospreyflow.runtime.<name>.licence`, which a new leg
+   (`tools/licence_check.find_runtime_offenders`) checks over every Dockerfile, and a Java stage, a
+   `jlink` or an `/opt/java` with no such label fails too.
+2. **Gazetteer places copied into a case's own dataset (ruling 6, option C).** A case's Author (the
+   right `share_case`, as for changing what a case reads; a gazetteer of the Author's unit, ADR-099
+   decision 3) adds a gazetteer with `PUT /v1/investigations/{id}/map/gazetteers/{dataset}`: its places
+   are copied into the one source dataset the case reads (`services/api/case_gazetteers.py`), so **the
+   case stays one dataset and keeps its loads**. A case reading a composite or nothing is refused in
+   words. A copy is a `Location` of its own (rule 6), its id made from the place's and the dataset's
+   (so a re-copy writes the same node), with the place's properties and **the gazetteer's handling**;
+   its one source names the gazetteer (`gazetteer:<dataset>`, `place <node id>`: never the extract's
+   path or row), and **its provenance names the gazetteer** (`Provenance.gazetteer`, kept through every
+   later write by `merge_provenance`). **Decision 3b holds for a copy, keyed on that provenance**, not on
+   a `gazetteer-*` dataset name, which a copy is not in: `ontology.handling.is_gazetteer_held` withholds
+   its source identifiers from every request reader on every node read, and `builders.match_any_field`
+   matches it on its name alone in the case's searches (`__.values("provenance").select("gazetteer")`
+   in the guard). The place search keeps a copy as a gazetteer place. **A re-build refreshes them**: the
+   Admin route and both command-line builds copy the places again into every case that added the
+   gazetteer, once the places commit (`case_gazetteers.refresh_cases`), and revert the copy of a place
+   the gazetteer no longer holds. **`DELETE` removes a gazetteer from a case**: its copies are marked
+   reverted (never deleted) and taken out of the case's working sets, **but never another load's data**:
+   a copy another writer also wrote (a source not the gazetteer's) or that a link rests on is kept, and
+   `copies_kept` says so, judged on the kept copies the Author may read. `GET` lists the gazetteers of
+   the reader's unit and which are added, by name only, never a count of places.
+3. **The gazetteer's unit a build setting (ruling 8).** The recipe's `unit-1` is no longer what a build
+   uses: *Admin › Maps*' Build takes a unit (empty: the administrator's own), and `ospreyflow map build`
+   and `python -m scripts.build_local_basemap` take `--unit` (required). A unit that holds no case and no
+   dataset here, and is not the administrator's own, is refused in words before anything is fetched or
+   written (`map_places.check_unit`, `UNKNOWN_UNIT`); otherwise the places, their points and their dataset
+   are that unit's.
+
+**Left, and why:**
+- **The Glass has no control for a case's gazetteers yet**: the routes are built and tested; a panel
+  beside the map's place search, with its keyboard case (rule 13) and a registry id (a shared file), is
+  the next platform step. Until then the case's dataset picker still offers a gazetteer dataset, which
+  makes a composite as before (Amendment 1's option (b)).
+- **A case of another unit than the gazetteer's** cannot add it (ADR-099 decision 3); ruling 8 lets an
+  administrator build a gazetteer for each unit.
+- **The command-line builds' refresh leaves an open canvas as it was**: the working sets are the
+  Conduit's, so a copy reverted by a command-line re-build (its place gone) leaves an open case's canvas
+  when the case is next opened. The Admin route takes it out at once.
+- **planetiler itself was not run in the built image** (no release jar on this machine; tier 1 only, no
+  real tiles fetched in tests): the image's `java -version` and the Conduit's builder check were.
+
+**Tests that would fail if it were broken** (each shown red by a plant at its real call site,
+`process/lanes/platform/P5_RED_RECORD.md`):
+- **Java**: `tests/licence_check/test_runtime_licences.py` (a plain GPL-2.0 Java, GPL-3.0 with the
+  exception, another exception, the exception for an unrecorded runtime, an undeclared Java: each
+  refused; the real Dockerfiles pass); `tests/test_conduit_image_java_licence.py` (the stage pinned by
+  digest, jlinked, declared, on the `PATH`).
+- **Copies**: live, `tests/ingest/test_case_gazetteer_copies_live.py` (found by name at its point and a
+  SECRET place not; no identifier on a node read, an expansion or a search; never matched by its `osm_id`
+  or `uprn`, more than a page sharing the prefix; a re-copy writes no second copy and reverts a place
+  gone; a removal keeps the copy a case's link rests on) and
+  `tests/ingest/test_case_gazetteer_routes_live.py` (through the routes: the case stays one dataset and a
+  write a composite case refuses is made; search, seed, expansion and the type-ahead carry and match no
+  identifier; `DELETE`); offline, `tests/services/api/test_case_gazetteers_routes.py` (which gazetteers,
+  the refusals and their words, what a copy is written as, what a removal reverts),
+  `tests/ontology/test_gazetteer_identifiers_withheld.py` (a copy, and `merge_provenance` keeping it one),
+  `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py`, `test_map_places_route.py`; the
+  routes' rights and levels, `test_route_rights.py` and `test_investigation_levels.py`.
+- **The unit**: `test_geospatial_admin_routes.py` (refused in words, nothing built; a named unit's
+  places and dataset), `test_gazetteer_build_registration_order.py` (both command-line builds check it
+  before anything, and refresh the cases after the registration), `test_gazetteer_dataset_registration.py`,
+  `tests/cli/test_map_verb.py`, `Maps.test.tsx`.
+
+**Cost.** The Conduit's image grows by the jlinked runtime (measured in the lane's report). Each case
+that adds a gazetteer holds a copy of every place (a region's places, once per case), and a re-build
+rewrites every case's copies; a removal reads the case's `Location`s and expands from the copies in
+batches of a hundred.
