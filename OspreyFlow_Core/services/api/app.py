@@ -16646,7 +16646,7 @@ async def _promotion_recipients(
     store = getattr(app.state, "custom_roles", None)
     custom = await store.current_rights() if store is not None else {}
     return promotion_ageing_module.recipients_of(
-        p, authors, people, custom, list(app.state.handling_scheme.classification)
+        p, authors, people, custom, app.state.handling_scheme
     )
 
 

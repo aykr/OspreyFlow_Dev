@@ -209,11 +209,11 @@ WORDS_SHOWN_ACTIONS = frozenset({
 
 
 def test_only_the_named_actions_ever_show_their_words() -> None:
-    """Read the way the stream reads it: `words_shown(kind_of(action), …)` for a reader holding
-    every right, over every action the Conduit writes and every one classified, and
-    `shown_actions`, which the dataset filter looks into. Red with any action moved into
-    *People and roles* or *Datasets* (an operator's regrade there would serve its count of every
-    case's drawn items to an `administer_system` holder: an unfiltered count, rule 7)."""
+    """The actions whose words and count are shown to a reader holding every right are exactly
+    `WORDS_SHOWN_ACTIONS`, asked two ways the stream asks: `words_shown(kind_of(action), …)` over
+    every action written and every action classified, and `shown_actions`, the set the dataset
+    filter looks into. Red with an action added to *People and roles* or *Datasets* (G4), or with
+    another kind made to show words (G5)."""
     from schemas.rights import Right
     from services.api.audit_section import (
         _CLASSIFIED,

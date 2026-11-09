@@ -32,7 +32,12 @@ from services.api import app as app_module
 from services.api.app import app
 from services.api.audit_section import StreamFilters, StreamRow
 from services.api.investigations import Investigation, InvestigationNotFoundError
-from services.api.promotion_ageing import InMemoryAgeingStore, NoPromotionsYet, PendingPromotion
+from services.api.promotion_ageing import (
+    InMemoryAgeingStore,
+    NoPromotionsYet,
+    PendingPromotion,
+    may_review,
+)
 
 from schemas.domain import Principal, RuleAuditEntry, RuleAuditPage
 
@@ -60,6 +65,7 @@ class _Reader:
         self.models: list[Any] = []
         self.asked: list[tuple[Principal, StreamFilters]] = []
         self.cases: list[bool] = []
+        self.unit_of: dict[str, str] = {}
 
     async def stream(self, reader: Principal, filters: StreamFilters, *, offset: int,
                      limit: int, rights: Any = frozenset(),
@@ -73,7 +79,14 @@ class _Reader:
         return rows[offset : offset + limit], len(rows)
 
     async def writers(self, reader: Principal, *, cases: bool) -> set[str]:
-        return {r.principal_id for r in self.rows}
+        """As the real read narrows them (`test_audit_section_store.py` holds its SQL): the reader's
+        unit's writers alone, and a case's writers only with `cases`; a row's unit is
+        `unit_of`'s, the reader's own unless a test says otherwise."""
+        return {
+            r.principal_id for r in self.rows
+            if self.unit_of.get(r.principal_id, reader.org_unit) == reader.org_unit
+            and (cases or r.investigation_id is None)
+        }  # fmt: skip
 
     async def model_writers(self) -> set[str]:
         return {e.who for e in self.models}
@@ -141,7 +154,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     _token("adm-1", ["osprey-admin"])
     _token("aud-1", ["right:read_audit"])
     _token("aud-r", ["right:read_audit", "right:read_rule_audit"])
-    _token("ops-1", ["right:operate_schedules"])
+    _token("ops-1", ["right:operate_schedules", "right:review_promotions"])
     _token("ana-1", ["analyst"])
     _token("adm-9", ["osprey-admin"], unit="unit-2")
     reader, audit, ageing = _Reader(), _Audit(), InMemoryAgeingStore()
@@ -369,10 +382,14 @@ class _Waiting:
         self.proposers = list(proposers)
 
     async def waiting_for_review(self, reader: Principal) -> list[PendingPromotion]:
-        """As L3.4's store must: filtered by the reader's unit in its own read (rule 3)."""
+        """As L3.4's store must (`test_waiting_promotions_contract.py`): filtered in its own read
+        to those who `may_review` (rule 3); `ops-1` is ds-a's Author holding review_promotions."""
         self.readers.append(reader.id)
-        if reader.org_unit != "unit-1":
-            return []
+        return [p for p in self._all()
+                if may_review(reader.id, reader.roles, reader.clearance, reader.org_unit, p,
+                              ["ops-1"])]  # fmt: skip
+
+    def _all(self) -> list[PendingPromotion]:
         return [PendingPromotion(promotion_id=f"p{n}", load_id="load-7", dataset_id="ds-a",
                                  dataset_name="Prison records", dataset_unit="unit-1",
                                  proposed_by=who, proposed_at=datetime.now(UTC) - timedelta(days=4, minutes=1))
@@ -545,12 +562,23 @@ def test_an_overdue_alert_is_read_without_its_other_recipients() -> None:
 
     from schemas.admin import PromotionOverdueAlert
 
+    from services.api.promotion_ageing import PendingPromotion
+
     store = InMemoryAgeingStore()
+    promotion = PendingPromotion(promotion_id="p1", load_id="load-7", dataset_id="ds-a",
+                                 dataset_name="Prison records", dataset_unit="unit-1",
+                                 proposed_by="ana-1", proposed_at=T0)  # fmt: skip
     asyncio.run(store.raise_once(PromotionOverdueAlert(
         promotion_id="p1", load_id="load-7", dataset_id="ds-a", raised_at=T0,
-        recipients=["rev-1", "adm-2"], words="Promotion load-7 into Prison records has waited 3 days.")))  # fmt: skip
-    [notice] = asyncio.run(store.alerts_for("rev-1"))
+        recipients=["rev-1", "adm-2"],
+        words="Promotion load-7 into Prison records has waited 3 days."), promotion))  # fmt: skip
+
+    async def still(p: Any) -> list[str]:
+        return ["rev-1", "adm-2"]
+
+    [notice] = asyncio.run(store.alerts_for("rev-1", still))
     assert "adm-2" not in notice.model_dump_json() and "recipients" not in notice.model_dump()
+    assert "proposed_by" not in notice.model_dump() and "ana-1" not in notice.model_dump_json()
 
 
 def test_the_note_names_the_deployments_own_date(world: SimpleNamespace) -> None:
@@ -575,7 +603,7 @@ def test_operations_ageing_lists_no_other_units_promotions(world: SimpleNamespac
     `operate_schedules` holder of another unit is listed none (red with the reader replaced)."""
     waiting = _Waiting()
     world.monkeypatch.setattr(app.state, "waiting_promotions", waiting)
-    _token("ops-9", ["right:operate_schedules"], unit="unit-2")
+    _token("ops-9", ["right:operate_schedules", "right:review_promotions"], unit="unit-2")
     other = world.client.get("/v1/admin/operations/ageing", headers=_as("ops-9")).json()
     own = world.client.get("/v1/admin/operations/ageing", headers=_as("ops-1")).json()
     assert other["waiting"] == [] and [p["promotion_id"] for p in own["waiting"]] == ["p1"]
@@ -598,3 +626,37 @@ def test_a_person_filter_of_one_bare_string_is_refused() -> None:
         asyncio.run(reader.stream(TOKENS.get("x") or Principal(id="x", clearance="SECRET",
                                   org_unit="u", roles=[]), StreamFilters(who="ana-b"),  # type: ignore[arg-type]
                                   offset=0, limit=1))  # fmt: skip
+
+
+def test_the_picker_offers_no_case_writer_to_a_reader_who_is_not_the_administrator(
+    world: SimpleNamespace,
+) -> None:
+    """The picker's names are asked of `writers` with the same `cases` the stream is read with:
+    a `read_audit` holder who is not the unit's administrator reads no case's entries (ADR-052 §4),
+    so is offered no one who wrote only about cases. Red with `cases=True` forced at the route's
+    call to `writers`."""
+    world.reader.rows = [_row("search", {}, case="c1", who="case-only"),
+                         _row("list_people", {}, case=None, who="plain-1")]  # fmt: skip
+    plain = world.client.get("/v1/admin/audit", headers=_as("aud-1"))
+    assert plain.status_code == 200
+    assert plain.json()["people"] == ["Name plain-1"]
+    admin = world.client.get("/v1/admin/audit", headers=_as("adm-1"))
+    assert admin.json()["people"] == ["Name case-only", "Name plain-1"]
+
+
+def test_a_sources_governance_words_stay_withheld(world: SimpleNamespace) -> None:
+    """*Datasets* shows its entries' words to `administer_system`, but a source's governance edit
+    writes words no Admin read serves: its handling, its legal basis (free text) and the pipelines
+    and drafts that follow. Shown only as the source and dataset it names. Red with any of them
+    back among the plain words."""
+    world.reader.rows = [_row("edit_dataset_source_governance", {
+        "dataset_id": "ds-a", "source_id": "src-1",
+        "handling_before": {"classification": "OFFICIAL"},
+        "handling_after": {"classification": "SECRET"},
+        "legal_basis_before": "RIPA s.28", "legal_basis_after": "Operation Nightjar warrant 7",
+        "pipelines_needing_attention": ["pipe-1"], "drafts_following": ["draft-1"],
+    }, case=None)]  # fmt: skip
+    [entry] = world.client.get("/v1/admin/audit", headers=_as("adm-1")).json()["entries"]
+    assert entry["detail"] == {"dataset_id": "ds-a", "source_id": "src-1"}
+    assert "Nightjar" not in str(entry) and "pipe-1" not in str(entry)
+

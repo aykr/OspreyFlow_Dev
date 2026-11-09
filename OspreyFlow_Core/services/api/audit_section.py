@@ -512,9 +512,14 @@ _PERSON_WORDS: dict[str, dict[str, str]] = {
 _PLAIN_WORDS = frozenset({
     "roles", "clearance", "org_unit", "receivable_handling_codes", "delivery", "transferred",
     "name", "version", "rights", "display_name", "mailbox", "level", "unit_level",
-    "dataset_id", "member_ids", "source_id", "handling_before", "handling_after",
-    "legal_basis_before", "legal_basis_after", "pipelines_needing_attention", "drafts_following",
-    "pack", "highest_marking", "kind", "id",
+    "dataset_id", "member_ids", "source_id", "pack", "highest_marking", "kind", "id",
+})
+#: Never shown, though *Datasets* shows its words: a source's governance edit writes its handling,
+#: its legal basis (free text) and what follows from them, which no Admin read serves
+#: (`test_a_sources_governance_words_stay_withheld`).
+_WITHHELD_WORDS = frozenset({
+    "handling_before", "handling_after", "legal_basis_before", "legal_basis_after",
+    "pipelines_needing_attention", "drafts_following",
 })
 #: Actions whose `before` and `after` are settings, not people.
 _SETTING_CHANGES = frozenset({

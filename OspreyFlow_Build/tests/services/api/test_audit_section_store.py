@@ -47,7 +47,8 @@ from services.api.audit_section import AuditSectionReader, StreamFilters
 from services.api.config import PostgresConfig
 from services.api.investigations import InvestigationStore
 from services.api.model_admin import PostgresModelAdminAudit
-from services.api.promotion_ageing import PromotionAgeingStore
+from services.api.promotion_ageing import PendingPromotion, PromotionAgeingStore
+from services.api.rule_evaluation import RULE_AUDIT_ACTIONS
 
 from schemas.admin import PromotionOverdueAlert
 from schemas.domain import Principal
@@ -197,10 +198,42 @@ async def test_an_overdue_alert_is_raised_once_by_the_database(world: SimpleName
     alert = PromotionOverdueAlert(promotion_id="p1", load_id="load-1", dataset_id="ds-a",
                                   raised_at=datetime.now(UTC), recipients=["eng-1", "adm-a"],
                                   words="Promotion load-1 into Prison records has waited 3 days for review.")  # fmt: skip
-    raised = await asyncio.gather(*(world.ageing.raise_once(alert) for _ in range(4)))
+    raised = await asyncio.gather(*(world.ageing.raise_once(alert, _PROMOTION) for _ in range(4)))
     assert sorted(raised) == [False, False, False, True]
-    assert [a.load_id for a in await world.ageing.alerts_for("eng-1")] == ["load-1"]
-    assert await world.ageing.alerts_for("ana-a") == []
+    assert [a.load_id for a in await world.ageing.alerts_for("eng-1", _both)] == ["load-1"]
+    assert await world.ageing.alerts_for("ana-a", _both) == []
+
+
+_PROMOTION = PendingPromotion(promotion_id="p1", load_id="load-1", dataset_id="ds-a",
+                              dataset_name="Prison records", dataset_unit="unit-a",
+                              proposed_by="ana-a", proposed_at=datetime(2026, 11, 2, tzinfo=UTC),
+                              dataset_marking="SECRET")  # fmt: skip
+
+
+async def _both(p: PendingPromotion) -> list[str]:
+    return ["adm-a", "eng-1"]
+
+
+async def test_an_alert_is_served_only_while_its_reader_is_still_a_recipient(
+    world: SimpleNamespace,
+) -> None:
+    """`PromotionAgeingStore.alerts_for` asks again, over the promotion it kept, who the alert is
+    for now: one raised to `eng-1` is not served to `eng-1` once they are no recipient (here, no
+    longer cleared to the dataset's SECRET), and the promotion handed to that question is the one
+    raised. Red with `alerts_for` matching on the stored recipient alone."""
+    alert = PromotionOverdueAlert(promotion_id="p1", load_id="load-1", dataset_id="ds-a",
+                                  raised_at=datetime.now(UTC), recipients=["eng-1", "adm-a"],
+                                  words="Promotion load-1 into Prison records has waited 3 days for review.")  # fmt: skip
+    assert await world.ageing.raise_once(alert, _PROMOTION)
+    asked: list[PendingPromotion] = []
+
+    async def now(p: PendingPromotion) -> list[str]:
+        asked.append(p)
+        return ["adm-a"]  # eng-1's clearance lowered since the alert was raised
+
+    assert await world.ageing.alerts_for("eng-1", now) == []
+    assert [a.load_id for a in await world.ageing.alerts_for("adm-a", now)] == ["load-1"]
+    assert asked == [_PROMOTION, _PROMOTION]
 
 
 async def test_the_dataset_filter_reads_only_words_the_reader_is_shown(world: SimpleNamespace) -> None:
@@ -224,6 +257,22 @@ async def test_no_case_entry_without_the_safety_net(world: SimpleNamespace) -> N
     rows, total = await world.reader.stream(A, cases=False, rights=FULL, filters=StreamFilters(),
                                             offset=0, limit=50)  # fmt: skip
     assert _seen(rows) == {("adm-a", "set_person_roles", None)} and total == 1
+
+
+async def test_the_pickers_writers_are_the_readers_units_alone(world: SimpleNamespace) -> None:
+    """`writers`, which names the Audit picker's people, reads under the stream's own unit filter:
+    unit A's reader is offered unit A's writers alone, a case's writers only with `cases`, and
+    never a writer of the rule audit. Red with `AND i.owning_unit = $1` dropped from `writers`
+    (unit B's case's own writer offered to unit A)."""
+    await _seed(world)
+    only_b = Principal(id="ana-only-b", clearance="SECRET", org_unit="unit-b", roles=["analyst"])
+    await _record(world, only_b, "confirm_node", world.case_b.id, {"node_ids": ["n9"]})
+    rule_writer = Principal(id="rule-sys", clearance="SECRET", org_unit="unit-a", roles=[])
+    await _record(world, rule_writer, sorted(RULE_AUDIT_ACTIONS)[0], None, {})
+    assert await world.reader.writers(A, cases=True) == {"ana-a", "ana-b", "adm-a"}
+    assert await world.reader.writers(A, cases=False) == {"adm-a"}
+    assert await world.reader.writers(B, cases=True) == {"ana-b", "adm-a", "adm-b", "ana-only-b"}
+    assert await world.reader.writers(B, cases=False) == {"adm-b"}
 
 
 async def test_a_system_unit_is_never_a_real_units(world: SimpleNamespace) -> None:

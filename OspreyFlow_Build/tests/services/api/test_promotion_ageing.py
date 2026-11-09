@@ -20,6 +20,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from services.api.promotion_ageing import (
     InMemoryAgeingStore,
     NoPromotionsYet,
@@ -131,8 +133,11 @@ def test_age_and_overdue_as_operations_lists_them() -> None:
 def test_no_recipient_below_the_datasets_marking() -> None:
     from dataclasses import replace
 
+    from ontology.handling import HandlingScheme
+
     marked = replace(P, dataset_marking="SECRET")
-    scheme = ["OFFICIAL", "SECRET", "TOP SECRET"]
+    scheme = HandlingScheme(name="test", classification=["OFFICIAL", "SECRET", "TOP SECRET"],
+                            handling_codes={}, action_codes={}, sanitisation_codes={})  # fmt: skip
     people = [
         PersonAccount(id="adm-1", username="a", name="a", enabled=True, roles=["osprey-admin"],
                       org_unit="unit-1", clearance="OFFICIAL"),
@@ -143,9 +148,9 @@ def test_no_recipient_below_the_datasets_marking() -> None:
         PersonAccount(id="eng-1", username="d", name="d", enabled=True, roles=["data_engineer"],
                       org_unit="unit-1", clearance="SECRET"),
     ]  # fmt: skip
-    assert recipients_of(marked, ["eng-1"], people, classification=scheme) == ["adm-2", "eng-1"]
+    assert recipients_of(marked, ["eng-1"], people, scheme=scheme) == ["adm-2", "eng-1"]
     # No marking: no clearance asked.
-    assert recipients_of(P, ["eng-1"], people, classification=scheme) == [
+    assert recipients_of(P, ["eng-1"], people, scheme=scheme) == [
         "adm-1", "adm-2", "adm-3", "eng-1"]  # fmt: skip
 
 
@@ -202,3 +207,79 @@ async def test_a_failed_tick_raises_nothing_and_the_next_tries_again() -> None:
         task.cancel()
     assert len(tries) >= 2
     assert [a.recipients for a in store.raised.values()] == [["rev-1", "adm-1"]]
+
+
+async def test_an_overdue_promotion_with_no_recipient_is_not_spent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Rule 2: an alert raised to nobody would be spent on no one and never raised again. It is
+    left unraised, counted in `unreached` and logged once, and raised at the first tick that finds
+    someone who may review it. Red with the sweep raising an alert with no recipients."""
+    from services.api.promotion_ageing import PromotionSweep
+
+    store = InMemoryAgeingStore()
+    store.days = 3
+    who: list[str] = []
+
+    async def recipients(p: PendingPromotion) -> list[str]:
+        return list(who)
+
+    job = PromotionSweep(store, store, lambda: _Source([P]), recipients)
+    with caplog.at_level("WARNING"):
+        assert await job.tick(SENT + timedelta(days=3)) == []
+        assert await job.tick(SENT + timedelta(days=3, minutes=1)) == []
+    assert store.raised == {} and job.unreached == {"p1"}
+    assert sum("p1" in r.getMessage() for r in caplog.records) == 1  # logged once, not each tick
+    who.append("adm-1")
+    [alert] = await job.tick(SENT + timedelta(days=4))
+    assert alert.recipients == ["adm-1"] and job.unreached == set()
+
+
+def _account(pid: str, roles: list[str], *, unit: str = "unit-1", clearance: str = "SECRET",
+             enabled: bool = True) -> PersonAccount:  # fmt: skip
+    return PersonAccount(id=pid, username=pid, name=pid, enabled=enabled, roles=roles,
+                         org_unit=unit, clearance=clearance)  # fmt: skip
+
+
+SCHEME_ORDER = ["OFFICIAL", "SECRET", "TOP SECRET"]
+
+
+@pytest.mark.parametrize(
+    ("change", "now"),
+    [
+        ("still a reviewer", _account("rev-1", ["data_engineer"])),
+        ("disabled since", _account("rev-1", ["data_engineer"], enabled=False)),
+        ("review_promotions lost", _account("rev-1", ["analyst"])),
+        ("cleared below the marking since", _account("rev-1", ["data_engineer"],
+                                                      clearance="OFFICIAL")),
+        ("an administrator moved to another unit", _account("adm-1", ["osprey-admin"],
+                                                            unit="unit-9")),
+    ],
+)  # fmt: skip
+async def test_an_alert_is_read_only_while_its_reader_is_still_a_recipient(
+    change: str, now: PersonAccount
+) -> None:
+    """`alerts_for` asks again who the alert is for, with the sweep's own predicate over the
+    person as they stand now (`recipients_of`): still enabled, still an Author holding
+    `review_promotions` or the dataset's unit's administrator, still cleared to its marking. Red
+    with `alerts_for` matching on the stored recipient alone."""
+    from dataclasses import replace
+
+    from ontology.handling import HandlingScheme
+
+    scheme = HandlingScheme(name="t", classification=SCHEME_ORDER, handling_codes={},
+                            action_codes={}, sanitisation_codes={})  # fmt: skip
+    marked = replace(P, dataset_marking="SECRET")
+    then = [_account("rev-1", ["data_engineer"]), _account("adm-1", ["osprey-admin"])]
+    store = InMemoryAgeingStore()
+    people = list(then)
+
+    async def recipients(p: PendingPromotion) -> list[str]:
+        return recipients_of(p, ["rev-1"], people, scheme=scheme)
+
+    [alert] = await sweep(_Source([marked]), store, recipients, now=SENT + timedelta(days=3),
+                          after_days=3)  # fmt: skip
+    assert alert.recipients == ["adm-1", "rev-1"]
+    people[:] = [now if p.id == now.id else p for p in then]
+    served = await store.alerts_for(now.id, recipients)
+    assert [n.promotion_id for n in served] == (["p1"] if change == "still a reviewer" else [])
