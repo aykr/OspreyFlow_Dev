@@ -26,3 +26,5 @@ takes them (then struck through with the brief's commit). Newest last.
 | docs | Operator prose for the SQL and API connector settings and the private-host allow-list (ADR-140 Amendment 15) | studio-b, L1.6 | D2a |
 | studio-b | getaddrinfo called synchronously in async routes (map_admin.py:381; own_networks in connector_reads.py:185) moved off the event loop | independent review of L1.6 | L1.7 or a hygiene step |
 | studio-b | The SQL connector's byte cap checked before a row is held (prefetch 500 at sql_connector.py:206-217) and counted in bytes, not characters | independent review of L1.6 | L1.7 |
+| release | The Java runtime's NOTICE and GPL-2.0 source offer, before any image carrying it is published (ADR-147 Amendment 2) | platform, P5 | the release step |
+| case | The case dataset picker stops composing a gazetteer-* dataset; a case adds a gazetteer by copy (the owner's ruling 6) | platform, P5 | after L3.4 |
