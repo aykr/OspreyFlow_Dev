@@ -15,6 +15,7 @@ export type ValidTo1 = string | null;
 export type Threshold = number | null;
 export type Drawing = boolean;
 export type ConvertedFromCase = string | null;
+export type MergedLoad = string | null;
 
 /**
  * A view as listed and answered (ADR-144 decisions 1 and 3). Private to `created_by` until
@@ -39,6 +40,7 @@ export interface CaseView {
   threshold?: Threshold;
   drawing?: Drawing;
   converted_from_case?: ConvertedFromCase;
+  merged_load?: MergedLoad;
 }
 /**
  * What a filtered view keeps (ADR-124 decision 2's filter, ADR-144 decision 1): entity types,

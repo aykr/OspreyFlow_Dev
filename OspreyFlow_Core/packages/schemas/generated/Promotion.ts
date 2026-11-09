@@ -2,7 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Id = string;
 export type LoadId = string;
-export type Trigger = "analyst_promotion" | "layer_merge";
+export type Trigger = "analyst_promotion" | "layer_merge" | "drawn_merge";
 export type DatasetId = string;
 export type DatasetName = string;
 export type CaseId = string;
