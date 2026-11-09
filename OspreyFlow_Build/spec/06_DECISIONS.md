@@ -31296,3 +31296,37 @@ and was then refused at each of the three. It failed closed: nothing leaked, but
 **Cost and what is open.** The `subscribed: Collection[str] = ()` defaults remain in `staging_catalogue`,
 `staged_run` and `reference_list_import`, which are the Studio lane's (`services/ingest/**`). Removing them would
 let mypy hold every caller as well. Studio carries that into L1.7 (its L1.5 report); it is not done here.
+
+### ADR-145, Amendment 8 (9 November 2026) — Disable and the items an administrator may not see (L3.8)
+
+**The owner's ruling of 9 November 2026** (case-b's L3.8 question, access): when a person being disabled owns
+an item the disabling administrator may not see (above their clearance in their own unit), "refuse until a
+cleared person acts": Disable is refused until an administrator of that unit cleared to the item's marking, or
+the item's case Authors, transfers it. Nothing is moved by anyone who can't see it.
+
+**Decisions:**
+
+1. **The ownership route.** `GET /v1/admin/people/{user_id}/ownership` (`manage_people`) lists what the
+   person owns that this step can name: views and boards (shared ones too), pending link-type proposals and open
+   drawn-item watches. It reads in the SQL, within the administrator's unit and, for proposals and watches, at
+   the dataset's marking. A dataset with no `highest_marking` reads as the scheme's highest, so an item fails
+   closed. Each item carries its kind, id and case name, nothing more. Promotions waiting for review are a named
+   seam (`promotion_items`, listed under `not_yet_listed`) until L3.4's record is on main.
+2. **`withheld`.** The answer carries `withheld: true` when the person owns items the administrator may not
+   see: never how many, of what kind or where (Amendment 5 decision 8's pattern for other units' items).
+3. **The refusal comes after the visible transfers commit** (the orchestrator's call, matching Amendment 5
+   decision 8 and its built route): the transfers just made stand, and the Disable is refused with 409
+   `withheld_items` (`admin_people.DisableRefused`), whose words name nothing about the items. That is the same
+   behaviour as `other_unit`. It is served by L2.5b's Disable, which calls `refuse_if_withheld` (L3.8 builds
+   it).
+4. **Left, by name:** no route yet lets a case's Author transfer another person's view, board, proposal or
+   watch, though the refusal's words name them (admin, L2.5b, CARRIES). And, a known limit for the owner: a watch
+   with no dataset reads as the scheme's highest, and a dataset whose `highest_marking` is not in the scheme is
+   withheld from every administrator, so such a person cannot be disabled until that is resolved.
+
+**Tests (each red first by a plant at its real call site, `process/lanes/case-b/L3.8_RED_RECORD.md`: 6 offline,
+35 live):** `tests/services/api/test_person_ownership_store.py` (live: the unit and marking clauses each planted
+alone; the refusal's words planted with a kind, a count, a reason and a place); `test_person_ownership_route.py`
+(rule 4, the fake refusing what the store refuses); `test_route_rights.py`'s row.
+
+Open: the Author-transfer route and the unknown-marking limit, as decision 4 says.

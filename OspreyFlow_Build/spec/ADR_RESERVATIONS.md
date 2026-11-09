@@ -84,6 +84,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-147 Amendment 2 | The owner's rulings of 9 November: a Java runtime under the Classpath exception in the Conduit image, gazetteer places copied into a case's dataset at load, the gazetteer's unit a build setting (P5) | platform | 2026-11-09 | reserved |
 | ADR-114 Amendment 37 | Backups in a folder the administrator names at setup, for every install, never inside the checkout (P5b) | platform | 2026-11-09 | written |
 | ADR-140 Amendment 16 | A subscribed list read at the sample, at Test and at the run, correcting Amendment 13 point 10 (L1.8) | studio-b | 2026-11-09 | written |
+| ADR-145 Amendment 8 | Disable and the items an administrator may not see: the ownership route's withheld flag and the refusal (the owner's ruling, L3.8) | orchestrator | 2026-11-09 | written |
 | ADR-133 Amendment 9 | The owner's ruling of 9 November: L1.6's reference lists are the screening-list store of record; the Lists tab read-only, then retired | studio-b | 2026-11-09 | written |
 | ADR-140 Amendment 15 | The owner's ruling of 9 November: an operator's allow-list in osprey.yaml admits named private hosts or networks to the SQL and API connectors | studio-b | 2026-11-09 | written |
 | ADR-143 Amendment 6 | The grading change as built (L3.7): the verb over the scripts module, the dry run enforced (ruling C13), the Conduit stopped, the scheme file, what the change leaves alone | case-b | 2026-11-09 | written |

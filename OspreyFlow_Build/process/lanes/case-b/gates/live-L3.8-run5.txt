@@ -1,0 +1,48 @@
+Running on ospreyflow-test (stack g, osprey-runs/case-b/OspreyFlow_Build/), logged at osprey-runs/case-b/.runs/20261109T182804Z/log: sh -c cd ../OspreyFlow_Core && echo '# the live set at 786f081 (tree 8992a863a9dcb05ae65ed1572ca11280e6e9306f), on main 9db2051, lease case-b on stack g, run 5' && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:randomly ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling ../OspreyFlow_Build/tests/services/api/test_case_views_store.py ../OspreyFlow_Build/tests/services/api/test_board_store.py ../OspreyFlow_Build/tests/services/api/test_link_type_store.py ../OspreyFlow_Build/tests/services/api/test_datasets_store.py; s=$?; echo '# the 35 live plants'; .venv/bin/python ../OspreyFlow_Build/process/lanes/case-b/plants_L3.8.py --live; p=$?; echo "# exits: set $s, plants $p"; [ $s = 0 ] && [ $p = 0 ]
+# the live set at 786f081 (tree 8992a863a9dcb05ae65ed1572ca11280e6e9306f), on main 9db2051, lease case-b on stack g, run 5
+.....................................................                    [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/case-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+53 passed, 1 warning in 39.08s
+# the 35 live plants
+Unplanted: 17 passed in 14.41s
+| the unit clause dropped (every case) | `services/api/person_ownership.py` | test_another_units_items_are_left_out | 1 failed in 2.18s |
+| a proposal's own unit unchecked (the case's alone) | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_of_another_unit_on_this_units_case] | 1 failed in 2.08s |
+| the clearance clause dropped | `services/api/person_ownership.py` | test_an_item_above_the_administrators_clearance_is_never_named_nor_counted | 1 failed in 2.18s |
+| a dataset with no marking read as unmarked | `services/api/person_ownership.py` | test_an_item_above_the_administrators_clearance_is_never_named_nor_counted | 1 failed in 2.20s |
+| a removed case's items listed | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.20s |
+| a decided proposal listed | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.29s |
+| an ended watch listed | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.32s |
+| someone else's view listed | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.25s |
+| the analyst's view name in the label | `services/api/person_ownership.py` | test_labels_name_the_case_and_never_what_the_analyst_wrote | 1 failed in 2.15s |
+| a proposal's case's unit unchecked in the list (its own unit alone) | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_of_this_unit_on_another_units_case] | 1 failed in 2.14s |
+| a watch's unit unchecked in the list | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[watch_elsewhere] | 1 failed in 2.12s |
+| an administrator with no unit reading every unit | `services/api/person_ownership.py` | test_another_units_items_are_left_out | 1 failed in 2.09s |
+| Transfer and disable never refused for a withheld item | `services/api/person_ownership.py` | test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld | 1 failed in 2.13s |
+| the scheme's lowest read as the highest (an unmarked dataset cleared by everyone) | `services/api/person_ownership.py` | test_disable_is_refused_for_an_item_on_an_unmarked_dataset_or_none, test_an_item_above_the_administrators_clearance_is_never_named_nor_counted | 3 failed in 3.70s |
+| the refusal's words naming the kind | `services/api/person_ownership.py` | test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld | 1 failed in 2.16s |
+| the refusal's words counting them | `services/api/person_ownership.py` | test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld | 1 failed in 2.35s |
+| the refusal's words giving the reason | `services/api/person_ownership.py` | test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld | 1 failed in 2.18s |
+| the refusal's words placing them | `services/api/person_ownership.py` | test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld | 1 failed in 2.15s |
+| Transfer and disable always refused | `services/api/person_ownership.py` | test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld | 1 failed in 2.09s |
+| withheld never said | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named | 9 failed in 8.25s |
+| withheld always said | `services/api/person_ownership.py` | test_each_kind_the_person_owns_is_listed_by_its_case | 1 failed in 2.12s |
+| withheld blind to a view elsewhere | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[view_elsewhere] | 1 failed in 2.09s |
+| withheld blind to a proposal's own unit | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_of_another_unit_on_this_units_case] | 1 failed in 2.19s |
+| withheld blind to a watch's unit | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[watch_elsewhere] | 1 failed in 2.20s |
+| withheld blind to a watch's marking | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[watch_above], test_each_item_left_out_is_said_to_be_withheld_and_never_named[watch_on_no_dataset] | 2 failed in 3.01s |
+| withheld asking about anyone's views | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.44s |
+| withheld asking about anyone's proposals | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.42s |
+| withheld asking about anyone's watches | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.54s |
+| withheld blind to a proposal's case's unit | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_of_this_unit_on_another_units_case] | 1 failed in 2.35s |
+| withheld blind to a proposal's marking | `services/api/person_ownership.py` | test_each_item_left_out_is_said_to_be_withheld_and_never_named[proposal_above] | 1 failed in 2.39s |
+| withheld counting a removed case's proposal | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.46s |
+| withheld counting a removed case's watch | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.49s |
+| withheld counting a closed proposal | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.40s |
+| withheld counting an ended watch | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.46s |
+| withheld counting a removed case's view | `services/api/person_ownership.py` | test_what_is_no_longer_theirs_or_no_longer_open_is_left_out | 1 failed in 2.44s |
+# exits: set 0, plants 0

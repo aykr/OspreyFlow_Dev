@@ -38,6 +38,7 @@ from schemas.model import ALL_MODELS as MODEL_PORT_MODELS  # noqa: E402
 from schemas.model_admin import ALL_MODELS as MODEL_ADMIN_MODELS  # noqa: E402
 from schemas.monitoring import ALL_MODELS as MONITORING_MODELS  # noqa: E402
 from schemas.packs import ALL_MODELS as PACK_MODELS  # noqa: E402
+from schemas.person_ownership import ALL_MODELS as OWNERSHIP_MODELS  # noqa: E402
 from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
 from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
@@ -81,6 +82,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *BOARD_MODELS,
     *MODEL_ADMIN_MODELS,
     *MAP_ADMIN_MODELS,
+    *OWNERSHIP_MODELS,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
