@@ -52,3 +52,31 @@ names `git` as awaiting the owner.
 
 **Live:** waiting for a stack in the orchestrator's queue (case, then rules, then rules-b, then platform). Not run at this
 head yet.
+
+
+## P5 at `957ef5d` (tree `23e4abc1`), rebased onto main `3be89a7`
+
+The resumed session rebased round 2 (the code unchanged; the one conflict was `06_DECISIONS.md`, where case-b's
+ADR-143 Amendment 6 and this lane's ADR-147 Amendment 2 both end the file, and both are kept). Run 9 November
+2026, 12:31–12:53 UTC, offline (the closed ports 59991–59994, no `OSPREY_LANE`, no stack held). **Docker Desktop
+is off on this machine** (the stacks are on the owner's test server), so everything that runs `docker` here
+fails at its connection, `failed to connect to the docker API at unix:///…/docker.sock`, and proves nothing either way.
+
+**`make -k ci` (`957ef5d.ci.txt`)**: every target green except the ones that run `docker`: the eight
+`trivy-image-*` scans, `opentofu-check` and `chart-check`. `licence-check` passes and names `git` as awaiting
+the owner. **The api image, with its Java runtime, has not been scanned at any P5 gate** (at round 2 the scans
+met Docker Hub's 429; here there is no daemon). It is open in the report.
+
+**`make test` (`957ef5d.test.txt`)**: 9498 passed, 16 skipped, 24 failed, 30 errors. None is the branch's:
+- **The known six**, as at every earlier gate: `test_deployment_schema.py`, `test_valkey_config.py`
+  (the offline pins), `test_layout.py` (this machine's `graphify-out/`), `test_phone_extraction_fixture.py`
+  (no object store offline) and `test_workspace_proxy.py` ×2.
+- **The rest all fail at the Docker connection.** Each failure's traceback names the socket:
+  `test_helm_chart.py` (16 errors, 1 failure), `test_organisation_sign_in.py` (12 errors),
+  `test_proxy_health.py` (2), `test_proxy_tls_caddy.py` (9), `test_render_memory.py` (3) and
+  `test_tls_check.py` (5). These were checked mechanically: of the report's failure sections, the only ones
+  that do not mention `docker` are the four known failures above.
+
+**`make test-js` (`957ef5d.test-js.txt`)**: workspace 2765 passed and 1 failed, `MatrixView.budget.test.tsx`'s
+first-frame timing under a full run's load. Alone at load average 11, it passed. The harness had 45 passed
+(run after, appended).

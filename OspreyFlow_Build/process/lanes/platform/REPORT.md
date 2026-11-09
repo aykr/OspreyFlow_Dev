@@ -1,16 +1,67 @@
-# Platform lane · P4 · report (9 November 2026, after the independent review and decision 3b)
+# Platform lane · P5 · report (9 November 2026, the owner's map rulings 1, 6 and 8)
 
-P4 (the analyst's map, ADR-147 Amendment 1). Three reviews: the lane's own (2 blockers, 6 must-fixes), the orchestrator's independent one (9 items, strict where noted), the lane's own again on that round (8 must-fixes). All fixed or recorded below, each fix shown red at its call site (`P4_RED_RECORD.md`, plants that proved nothing recorded, not counted).
-- **Basemap switch by keyboard:** `keyboard/map-view.spec.ts` (`MAP_VIEW_ACTIONS`; needs `MAP_VIEW_ACTIONS.diff`, applied at the merge). Met.
-- **No key or key-bearing address in the Glass:** `test_glass_map_reads_carry_no_key.py`; a browser-fetched provider takes no key, user part or key path segment, `osprey.yaml` included (`test_mapconfig.py`). Met.
-- **Place search over the case's gazetteer:** asked by name alone at the store, `more` included; `gazetteer-*` places only; never a geocoder; case level through the real check (`test_map_places_route.py`); live `test_gazetteer_place_search_live.py` (added/not added, a case's yard with a point, a SECRET place absent, an identifier fragment with a filled scan). Met.
-- **A gazetteer's identifiers in no node read (rule 7, strict):** `withhold_sources`; `tests/ontology/test_gazetteer_identifiers_withheld.py`; live `tests/ingest/test_gazetteer_ids_withheld_live.py` (search, seed, expansion). Met for `gazetteer-*` datasets.
-- **The case's own searches match a gazetteer place on its name alone (decision 3b, the orchestrator's ruling):** `builders.match_any_field` for `/suggest` and the exact search, rows and `more` alike; live `test_the_case_s_own_searches…` (12 places by `osm_id` prefix: nothing, no `more`; positive controls: a case's own place by its `uprn` in each mode) and `/search`, `/suggest` in `test_gazetteer_ids_withheld_live.py`; offline `test_gazetteer_name_only_match.py`; the graph-port conformance suite live. Met.
-- **Contrast in three themes; axe:** `map-verify/contrast.spec.ts` (dark found at 2.7:1, fixed); axe 16 on four states, each drawn. Met.
-- **Gates** at `b599708` on main `b64c4e2` (`gates/README.md`): `make -k ci` green (image scans included); `make test` 9116 passed, the known 4 failures and 2 errors, none the branch's; test-js 2755 + 45, the Matrix timing case under load (alone, passed). **Live:** platform lease, stack a, 04:13–04:35 UTC, nothing else running: 688 passed (route rights, graph-port conformance, `test_statelessness.py` with its wait unchanged). Met.
-- **Decisions taken:** strict rule 7 by the per-reader projection, request readers only (a load and a read written back keep them whole); `postcode` kept (an address); four casings at the store (as typed, capitalised, title, lower) since `suggest_locations` keeps case; registration after the load commits, a CLI build going on if the database is out; a key segment matched as a whole segment; `MAP_VIEW_ACTIONS` off the branch, as a diff; dataset `gazetteer-osm-<region>`, the recipe's unit; every drawable provider to every reader; dark water the ramp's first step.
-- **Open (owner):** the composite read-only gap, (b) standing; `unit-1` in the recipe (fails closed, the owner's).
-- **Left, for the orchestrator:** command-line builds load no points; pre-P4 gazetteers unstamped (your refresh); the script writes `osprey.yaml` before its commit; a key in a host name not refused. Studio-loaded gazetteers: a carry to studio (your ruling). The `/suggest` oracle: closed (3b).
-- **Commits:** `2048af8` (the schemas, at the head) to `b599708`, then the gates, record and this report.
-- **Requests:** apply `MAP_VIEW_ACTIONS.diff` and `MAP_VERIFY_CI.diff` (both clean on `b64c4e2`); commit the schemas; ratify `packages/ontology/handling.py`, `packages/adapters/graph_arcadedb/builders.py` (ratified by your ruling), `src/App.tsx`, `a11y/every-harness.spec.ts`, `keyboard/map-view*`, `map-verify/**`, the case-scoped route, `test_route_rights.py`, `test_investigation_levels.py`, spec 02 and 03; mark ADR-147 Amendment 1 written; state 3b in the port's own contract (`ports/graph.py`'s `search_nodes`, `suggest_nodes`: not this lane's file).
+P5 (ADR-147 Amendment 2). Reviews: the lane's own, then the orchestrator's independent one and its ruling (d)
+(a removal deletes no copy), then the lane's own over that round, twice. Every fix is shown red at its call
+site in `P5_RED_RECORD.md`; plants that proved nothing are recorded there and not counted. After a pause the
+session resumed. It found no `HANDOFF.md` and a clean tree, so there was no `wip` commit to rewrite. It
+rebased onto main `3be89a7` (one conflict, both amendments kept), then gated and ran the live set.
+
+- **Ruling 1, Java in the Conduit:** jlinked Temurin 21 pinned by digest (`services/api/Dockerfile`). The
+  register's one Classpath exception is in `spec/00` §7. `licence-check`'s image leg proves it in
+  `tests/licence_check/test_runtime_licences.py`: a plain GPL-2.0 Java is refused, and so are GPL-3.0 with the
+  exception, another exception, the exception for another runtime, and an undeclared Java. Each is red by its
+  plant. `tests/test_conduit_image_java_licence.py` covers the image itself. **Image size:** +61 MB, the image
+  1.33 GB (arm64). Met, but the image scan is open (below).
+- **Ruling 6, copies in the case's dataset:** `services/api/case_gazetteers.py`, through
+  `PUT`/`DELETE /v1/datasets/{dataset}/gazetteers/{gazetteer}` (`run_pipelines`). The copies are matched on
+  their provenance (`Provenance.gazetteer`), never on a dataset name. Proved live:
+  - `test_case_gazetteer_copies_live.py`: no identifier on node detail, expansion or search; never matched by
+    `osm_id` or `uprn`; found by name at its point; a SECRET place absent; a re-build refreshes without a
+    second set; a case's own write is kept.
+  - `test_case_gazetteer_routes_live.py`: the case stays one dataset and still loads; search, seed, expansion
+    and suggest hold no identifier.
+
+  Offline, `test_case_gazetteers_routes.py` (18 cases) and `test_map_places_route.py`. Met, with ruling (d) in
+  place of the brief's removal clause.
+- **Ruling 8, the unit a build setting:** *Admin › Maps*' Build takes a unit, and both command-line builds
+  take `--unit` (required). An unknown unit is refused in words before anything runs (`UNKNOWN_UNIT`), and a
+  re-build for another unit is refused (`OTHER_UNIT`). The tests are `test_geospatial_admin_routes.py`,
+  `test_gazetteer_build_registration_order.py`, `test_gazetteer_dataset_registration.py`,
+  `tests/cli/test_map_verb.py` and `Maps.test.tsx`. Met.
+- **Gates** at `957ef5d` on main `3be89a7` (`gates/README.md`), with Docker Desktop off on this machine:
+  - `make -k ci`: green but its `docker` targets (the image scans, `opentofu-check`, `chart-check`).
+  - `make test`: 9498 passed. The known six failed, and every other failure is at the Docker socket.
+  - test-js: 2765 + 45 passed. The Matrix timing case failed under load and passed alone.
+
+  **Live:** LIVE_LINE
+- **Decisions taken** (in ADR-147 Amendment 2):
+  - adding a gazetteer is a dataset-level action, under `run_pipelines`;
+  - the gazetteer must be of the dataset's unit, and another unit's is answered as none;
+  - copying in pages of 500;
+  - a copy the case has made its own is never written over;
+  - a removal deletes nothing (the orchestrator's ruling (d));
+  - every refresh failure is said without naming a dataset, and never fails a committed build;
+  - the place search takes the removal records as a dependency (503);
+  - `git` is declared and named as awaiting the owner on every `licence-check` run.
+- **Open:**
+  - **The api image with Java has not been scanned by trivy at any P5 gate:** Docker Hub's 429 at round 2,
+    no daemon here now. It wants one `make trivy-image-api` where Docker runs.
+  - `git` under GPL-2.0-only in the image awaits the owner.
+  - planetiler itself has not been run in the built image (no release jar; tier 1 only).
+  - A region of 100,000 places copies in over twenty minutes (a background job is the likely next step).
+- **Left, for the orchestrator:**
+  - the Glass control for a gazetteer (P6);
+  - the case's dataset picker still offers a gazetteer as a composite (a carry to case);
+  - the port's own contract for 3b on a copy (`PORT_CONTRACT.diff`);
+  - the image's source offer and NOTICE (a release step);
+  - ADR-147 Amendment 2 to be marked written in `ADR_RESERVATIONS.md`.
+- **Commits:** `f1c4fe7` (the schemas) to `e624b0b`, rebased onto `3be89a7`: schemas, generated TypeScript,
+  ruling 8, ruling 6, ruling 1, the amendment, then each review's fixes, then gates, records and this report.
+- **Requests:**
+  - apply `PORT_CONTRACT.diff`;
+  - ratify `packages/ontology/handling.py`, `packages/adapters/graph_arcadedb/builders.py`,
+    `packages/schemas/{domain,merge}.py`, `test_route_rights.py`, `test_investigation_levels.py`, spec 00, 03
+    and 06, and `placesByRole.json`;
+  - mark Amendment 2 written;
+  - run the api image's scan where Docker runs.
 - **Questions:** none new. **Running:** nothing; no stack held.
