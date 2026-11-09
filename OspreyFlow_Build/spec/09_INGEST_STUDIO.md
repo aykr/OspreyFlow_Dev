@@ -269,8 +269,10 @@ the orchestrator's review; `tests/services/api/test_studio_staging_routes.py`).
 
 An administrator names a **SQL**, **API** or **JSON** connection (*Admin › Connections*; `POST
 /v1/admin/connections`). A connection holds its settings and **the name of its secret, never its
-value**: the value is the deployment's, `OSPREY_CONNECTION_SECRET_<NAME>` in `deployment.env`, read only
-when a read needs it and never stored, audited or answered.
+value**: the value is the deployment's, `OSPREY_CONNECTION_SECRET_<NAME>` in `deployment.env`, declared
+by name in `osprey.yaml`'s `connectors.secrets` so that only the Conduit is given it (ADR-140 Amendment
+15), read only when a read needs it and never stored, audited or answered. A source author whose read
+is refused is told so in fixed words; why (a host, a schema, a setting) is the administrator's.
 
 - **SQL** (PostgreSQL): host, port, database, a login and its secret, the schemas its sources may
   read (never the server's catalogue), and TLS (`verify-full` by default, or `require`; a server

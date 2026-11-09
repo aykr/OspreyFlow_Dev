@@ -30763,6 +30763,55 @@ connection names; refused for a CA it does not trust and for a certificate namin
 nothing relayed to Postgres. The administration guide's `osprey.yaml` reference gains the `connectors`
 section from the schema.
 
+**After the orchestrator's independent review (9 November 2026).** No blocker; nine items fixed, the
+strict option taken wherever one was offered, each shown red at its real call site
+(`L1.6_RED_RECORD.md`, R1–R12):
+7. **A source author never sees why a read was refused** (Amendment 13 decision 7). Registering a
+   source and *Refresh now* answer a refused read with fixed words that name no host, address,
+   schema or setting, and point to *Test connection* and the audit log; the refusal's own words are
+   audited, and given only to an administrator (`administer_system`). A source's own name, which the
+   author wrote, is still refused in its own words (`source_name_refused`).
+8. **An unbound connection answers as an unknown one** (Amendment 13 decision 1): 404 `not_found`,
+   "There is no such connection.", identical in status and body, when registering a source and on
+   *Refresh now*; the unbound attempt is audited.
+9. **Reserved and site-local IPv6 are inside.** Python counts `::/8` (the deprecated IPv4-compatible
+   `::/96` among it: `::7f00:1` is loopback) and `fec0::/10` as global; both are refused by name, and
+   no list admits either. `::/96` is refused, not carried.
+10. **Each checked address in the resolver's order.** The Conduit resolves with `getaddrinfo`'s own
+    order and `AI_ADDRCONFIG` (a family with no route left out), not sorted as text. A SQL connection
+    and an API request try each checked address in turn, moving on only when one cannot be reached; a
+    TLS, certificate or sign-in refusal, or any answer, stops at once, so no second address is sent
+    the password or the request.
+11. **Connection secrets reach the Conduit alone** (as ADR-135 decision 2 keeps a model key to the
+    gateway). The operator declares each connection's secret by name in `osprey.yaml`'s
+    `connectors.secrets`; render blanks each declared `OSPREY_CONNECTION_SECRET_<NAME>` in the own
+    environment of every other service reading `deployment.env` (Compose) and of every other `envFrom`
+    workload (the chart), and tells the Conduit the declared names (`OSPREY_CONNECTOR_SECRETS`). The
+    Conduit reads only a declared secret, so one set but undeclared, and so not blanked elsewhere, is
+    never used: a read through it is refused as an unset secret, in words naming the setting.
+    Decision taken in the lane (versus a separate file read by the Conduit alone, which the chart's one
+    Secret cannot express), logged for the owner to overrule.
+12. **JSON files:** a link is never followed, wherever it points (a file or a dataset's folder), and
+    each file is read against the room the byte cap leaves, so one that grows after it was sized is
+    stopped while it is read; it is opened with `O_NOFOLLOW`.
+13. **A certificate that fails verification says so** ("the database's (the API's) certificate could
+    not be verified …"), and is not reported as a server that would not speak TLS or could not be
+    reached.
+Carried, not built here (the orchestrator's CARRIES): a lookup that blocks the event loop, and the SQL
+byte cap counted after each fetched row in characters. The shared files (`keyboard/actionRegistry.ts`,
+`OspreyFlow_Build/Makefile`, `.github/workflows/ci.yml`) leave the branch; the orchestrator applies them
+from `process/lanes/studio-b/L1.6_{action_registry,ci_makefile}.diff`.
+
+**Tests added.** `tests/connectors/test_api_tls.py` (the API path's TLS against a real HTTPS server:
+trusted, an untrusted CA and another name, the request never sent when refused);
+`test_connector_routes.py` (an author is told fixed words; the audit holds the reason);
+`test_connection_binding.py::test_an_unbound_connection_answers_as_an_unknown_one`;
+`test_connector_private_hosts.py` (reserved and site-local IPv6; the resolver's order; SQL and API
+trying each checked address and stopping at a refusal; a failed verification's words);
+`test_connector_hosts.py` (a link never followed; a growing file stopped while read; the opener
+spied, not `Path.read_bytes`); `tests/harness/test_connection_secrets_kept.py` (Compose, the chart and
+the Conduit's own read of a declared secret).
+
 ### ADR-133, Amendment 9 (9 November 2026) — L1.6's reference lists are the screening-list store of record; the Lists tab read-only, then retired
 
 Status: accepted, the owner's ruling (a) of 9 November 2026 (`process/lanes/MORNING.md`, item 2),
