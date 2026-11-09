@@ -977,7 +977,7 @@ def format_check(check: Check) -> str:
 #: Python, so it applies the backup's rule to `osprey.yaml` as a mapping;
 #: `test_the_doctor_and_the_backup_agree_on_the_folder` holds the two to one rule.
 LEGACY_BACKUPS_PLACEHOLDER = "/var/lib/osprey/backups"
-SET_NAME = re.compile(r"^(?P<stamp>\d{8}T\d{6}Z)-(?P<name>.+)-(?P<sha>[^-]+)$")
+SET_NAME = re.compile(r"^(?P<stamp>\d{8}T\d{6}Z)-(?P<name>.+)-(?P<sha>[0-9A-Za-z]+)$")
 #: Decision 5: the folders a sync client copies by default, under the home folder, on macOS
 #: (iCloud Drive, the File Provider clients — Google Drive, OneDrive, Dropbox — and iCloud's
 #: Desktop and Documents).
@@ -1005,21 +1005,58 @@ def backups_folder_of(config: Mapping[str, object], *, home: Path) -> Path:
     own_server = config.get("profile") == "small" and not any(
         _section(config, "external").values()
     )
-    if value and (value != LEGACY_BACKUPS_PLACEHOLDER or own_server):
-        text = str(value)
-        return home / text[2:] if text.startswith("~/") else Path(text)
+    text = str(value or "").strip()
+    if text and (text != LEGACY_BACKUPS_PLACEHOLDER or own_server):
+        if text == "~" or text.startswith("~/"):
+            return home / text[2:]
+        return Path(text).expanduser()
     return home / "OspreyFlow" / "backups"
 
 
-def _size(folder: Path) -> int:
-    total = 0
-    for root, _dirs, files in os.walk(folder):
+def _git_checkout(product: Path) -> Path:
+    """`harness.backup.checkout_root`: the folder above the product holding `.git`, else it."""
+    for candidate in (product, product.parent):
+        if (candidate / ".git").exists():
+            return candidate
+    return product
+
+
+def _is_inside(folder: Path, root: Path, *, ignore_case: bool = False) -> bool:
+    """`harness.backup.is_inside`: compared by the folder each existing ancestor is, so a link, a
+    bind mount or another letter case on a disk that ignores case is the folder it shows; a root
+    that does not exist yet is compared by spelling, without case where the disk has none."""
+    target = Path(os.path.abspath(folder.expanduser())).resolve()
+    if root.exists():
+        for candidate in (target, *target.parents):
+            try:
+                if candidate.exists() and os.path.samefile(candidate, root):
+                    return True
+            except OSError:
+                continue
+    spelt = Path(os.path.abspath(root)).resolve()
+    if ignore_case:
+        return str(target).casefold().startswith(str(spelt).casefold().rstrip("/") + "/") or (
+            str(target).casefold() == str(spelt).casefold()
+        )
+    return target.is_relative_to(spelt)
+
+
+def _size(folder: Path) -> tuple[int, bool]:
+    """The bytes this account can read under `folder`, and whether any of it could not be read (a
+    server's sets are 0700, and may be root's)."""
+    total, unread = 0, False
+
+    def note(_error: OSError) -> None:
+        nonlocal unread
+        unread = True
+
+    for root, _dirs, files in os.walk(folder, onerror=note):
         for name in files:
             try:
                 total += (Path(root) / name).lstat().st_size
             except OSError:
-                continue
-    return total
+                unread = True
+    return total, unread
 
 
 def _human(size: int) -> str:
@@ -1043,13 +1080,18 @@ def _left_behind(where: Path, sets: Sequence[Path], destination: Path) -> Check:
 
     to = shlex.quote(str(destination))
     moved = " ".join(shlex.quote(str(s)) for s in sets)
+    sizes = [_size(s) for s in sets]
+    unread = any(u for _b, u in sizes)
+    size = _human(sum(b for b, _u in sizes))
     return Check(
         "backups-left-behind",
         True,
-        f"{len(sets)} backup set{'' if len(sets) == 1 else 's'}, {_human(sum(map(_size, sets)))}, "
-        f"left in {where}: {', '.join(s.name for s in sets)}",
+        f"{len(sets)} backup set{'' if len(sets) == 1 else 's'}, "
+        f"{f'at least {size} (some of it could not be read by this account)' if unread else size}"
+        f", left in {where}: {', '.join(s.name for s in sets)}",
         f"move {'it' if len(sets) == 1 else 'them'} to the backups folder with: "
-        f"mkdir -p {to} && mv {moved} {to}/",
+        f"mkdir -p {to} && mv {moved} {to}/"
+        + (" (as the sets' owner: prefix each command with sudo)" if unread else ""),
         warn=True,
     )
 
@@ -1057,12 +1099,11 @@ def _left_behind(where: Path, sets: Sequence[Path], destination: Path) -> Check:
 def _synced_root(folder: Path, *, home: Path, system: str) -> Path | None:
     """Decision 5: the root a sync client copies that holds `folder`, as given or as its links
     resolve, or None."""
+    if system == "Darwin":
+        for root in MACOS_SYNCED:
+            if _is_inside(folder, home / root, ignore_case=True):
+                return home / root
     for seen in dict.fromkeys((folder, folder.resolve())):
-        if system == "Darwin":
-            for root in MACOS_SYNCED:
-                for base in dict.fromkeys((home / root, (home / root).resolve())):
-                    if seen.is_relative_to(base):
-                        return base
         for index, part in enumerate(seen.parts):
             # OneDrive's own folder: `OneDrive`, or `OneDrive - <organisation>` for a work account.
             if part == "OneDrive" or part.startswith("OneDrive - "):
@@ -1097,7 +1138,19 @@ def backups_checks(
         for found in _sets_in(where):
             grouped.setdefault(home_of(found.name), []).append(found)
         checks += [_left_behind(where, sets, to) for to, sets in grouped.items()]
+    checkout = _git_checkout(product)
     for folder in dict.fromkeys(folders.values()):
+        if _is_inside(folder, checkout, ignore_case=probes.system() == "Darwin"):
+            checks.append(
+                Check(
+                    "backups-in-checkout",
+                    False,
+                    f"The backups folder {folder} is inside the checkout ({checkout}), where "
+                    "every backup, and every update's own, is refused",
+                    "name a folder outside it as components.storage.backups, for example "
+                    "~/OspreyFlow/backups",
+                )
+            )
         root = _synced_root(folder, home=home, system=probes.system())
         if root is not None:
             checks.append(

@@ -572,6 +572,10 @@ def load_answers(
     )
 
 
+#: The schema's `components.storage.backups` default (`harness.backup.LEGACY_PLACEHOLDER`).
+BACKUPS_PLACEHOLDER = "/var/lib/osprey/backups"
+
+
 def _backups(
     folders: Mapping[str, Any], server: Mapping[str, Any], *, cloud: bool, home: Path
 ) -> Path | None:
@@ -589,6 +593,14 @@ def _backups(
             "are the same setting, so give one, or both naming the same folder"
         )
     chosen = named or old
+    if chosen is not None and str(chosen).rstrip("/") == BACKUPS_PLACEHOLDER and not server:
+        # ADR-114 Amendment 38: `ospreyflow backup` reads the placeholder as no folder named off a
+        # server of your own, so a choice of it would be set aside without a word.
+        raise AnswersRefused(
+            f"folders.backups {BACKUPS_PLACEHOLDER} is the settings' placeholder, which a backup "
+            "off a server of your own reads as no folder named; give another folder, for example "
+            "~/OspreyFlow/backups"
+        )
     if chosen is None and not cloud:
         chosen = home / "OspreyFlow" / "backups"
     return Path(chosen) if chosen is not None else None

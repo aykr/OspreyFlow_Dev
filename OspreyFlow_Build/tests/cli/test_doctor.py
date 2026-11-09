@@ -15,6 +15,7 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -484,10 +485,17 @@ def test_doctor_names_sets_left_in_the_checkout_with_the_move_command(
         {**_BASE, "deployment": {"name": "alpha"},
          "components": {"storage": {"backups": str(folder)}}}))  # fmt: skip
     old = _a_set(named / "backups", "20261102T000000Z-alpha-abc1234", size=3 * 1024 * 1024)
+    # Amendment 33's server wrote sets straight into the folder: an old place too.
+    top = _a_set(folder, "20261103T000000Z-local-lite-abc1234")
+    # A failed backup's `.incomplete` is not a set to move.
+    _a_set(rig.product / "backups", "20261104T000000Z-local-lite-abc1234.incomplete")
     assert rig("doctor") == 0
     out = capsys.readouterr().out
     warned = [line for line in out.splitlines() if line.startswith("⚠") and "left" in line]
-    assert len(warned) == 2, out
+    assert len(warned) == 3, out
+    assert "incomplete" not in out
+    top_line = next(line for line in warned if f"left in {folder}:" in line)
+    assert f"mkdir -p {folder}/local-lite && mv {top} {folder}/local-lite/" in top_line
     checkout_line = next(line for line in warned if str(rig.product / "backups") in line)
     assert "1 backup set" in checkout_line and "2.0 KB" in checkout_line
     assert f"mkdir -p {folder}/local-lite && mv {left} {folder}/local-lite/" in checkout_line
@@ -495,7 +503,44 @@ def test_doctor_names_sets_left_in_the_checkout_with_the_move_command(
     assert "3.0 MB" in named_line
     assert f"mkdir -p {folder}/alpha && mv {old} {folder}/alpha/" in named_line
     # Never moved or deleted.
-    assert (left / "graph.tgz").stat().st_size == 2046 and old.is_dir()
+    assert (left / "graph.tgz").stat().st_size == 2046 and old.is_dir() and top.is_dir()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every folder")
+def test_a_set_the_doctor_cannot_read_all_of_is_said_to_be_at_least_its_size(
+    tmp_path: Path,
+) -> None:
+    """A server's sets are 0700 and may be root's: what cannot be read is not counted silently as
+    nothing, and the command says it needs the owner (`sudo`)."""
+    from ospreyflow.doctor import backups_checks
+
+    product = tmp_path / "product"
+    made = _a_set(product / "backups", "20261101T000000Z-local-lite-abc1234")
+    shut = made / "postgres"
+    shut.mkdir()
+    (shut / "dump.sql").write_bytes(b"x" * 4096)
+    shut.chmod(0)
+    try:
+        checks = backups_checks(FakeProbes(), product, [("local-lite", _BASE)], home=tmp_path)
+    finally:
+        shut.chmod(0o700)
+    (check,) = [c for c in checks if c.name == "backups-left-behind"]
+    assert "at least 2.0 KB" in check.says and "could not be read" in check.says
+    assert "sudo" in check.fix
+
+
+def test_a_backups_folder_inside_the_checkout_fails_the_doctor(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every backup would be refused there (and every update with it), so the doctor fails before
+    the operator finds out at the first backup."""
+    (rig.product / ".git").write_text("gitdir: elsewhere\n")
+    (rig.product / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "components": {"storage": {"backups": str(rig.product / "sets")}}}))  # fmt: skip
+    assert rig("doctor") == 1
+    out = capsys.readouterr().out
+    line = next(line for line in out.splitlines() if "inside the checkout" in line)
+    assert line.startswith("✘") and str(rig.product / "sets") in line
 
 
 _BASE = {"profile": "local-lite", "network": {"public_origin": "http://ospreyflow.localhost"}}
@@ -551,6 +596,24 @@ def test_a_plain_backups_folder_or_one_reached_through_a_link_is_judged_by_where
     (home / "Documents" / "real").mkdir(parents=True)
     (home / "Backups").symlink_to(home / "Documents" / "real")
     assert synced(home / "Backups")
+    # In another letter case, which macOS's own disk does not tell apart (lane-reviewer).
+    assert synced(home / "documents" / "osprey")
+    assert synced(home / "DESKTOP" / "osprey")
+
+
+def test_the_doctor_warns_of_the_answers_backups_folder_before_the_install(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`ospreyflow doctor --config <answers>` checks the folder the answers name, before anything
+    is installed (the install runs this doctor first)."""
+    rig.probes.system_name = "Darwin"
+    answers = tmp_path / "answers.yaml"
+    answers.write_text(yaml.safe_dump(
+        {"mode": "lite", "folders": {"backups": "~/Documents/osprey-backups"}}))  # fmt: skip
+    assert rig("doctor", "--config", str(answers)) == 0
+    out = capsys.readouterr().out
+    assert any(line.startswith("⚠") and "osprey-backups" in line and "sync" in line
+               for line in out.splitlines()), out  # fmt: skip
 
 
 @pytest.mark.parametrize(
@@ -559,6 +622,9 @@ def test_a_plain_backups_folder_or_one_reached_through_a_link_is_judged_by_where
         {},
         {"components": {"storage": {"backups": "/var/lib/osprey/backups"}}},
         {"components": {"storage": {"backups": "/srv/mine"}}},
+        {"components": {"storage": {"backups": " "}}},
+        {"components": {"storage": {"backups": "~"}}},
+        {"components": {"storage": {"backups": "~/mine"}}},
         {"profile": "small", "components": {"storage": {"backups": "/var/lib/osprey/backups"}},
          "network": {"public_origin": "https://osprey.example.internal"}},
         {"profile": "small", "network": {"public_origin": "https://osprey.example.org"},

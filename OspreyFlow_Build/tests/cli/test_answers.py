@@ -503,3 +503,18 @@ def test_server_backups_and_folders_backups_differing_is_refused(tmp_path: Path)
     said = str(refused.value)
     assert "/srv/one" in said and "/srv/two" in said
     assert "server.backups" in said and "folders.backups" in said
+
+
+def test_the_schemas_placeholder_named_as_the_backups_folder_is_refused_off_a_server(
+    tmp_path: Path,
+) -> None:
+    """`/var/lib/osprey/backups` is the schema's placeholder, which `ospreyflow backup` reads as
+    no folder named off a server of your own (ADR-114 Amendment 38); naming it at setup would be
+    silently set aside, so it is refused in words. On a server it is a folder like any other."""
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers({"mode": "lite", "folders": {"backups": "/var/lib/osprey/backups"}},
+                     packs=PACKS, home=tmp_path)  # fmt: skip
+    assert "/var/lib/osprey/backups" in str(refused.value) and "placeholder" in str(refused.value)
+    server = _config({"mode": "small", "server": {**SERVER, "backups": "/var/lib/osprey/backups"}},
+                     tmp_path)  # fmt: skip
+    assert server.components.storage.backups == "/var/lib/osprey/backups"

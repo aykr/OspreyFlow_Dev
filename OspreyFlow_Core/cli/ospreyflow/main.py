@@ -409,12 +409,16 @@ def _doctor(
 ) -> int:
     server = None
     base = _product_config(product)
+    made: Mapping[str, Any] = base
     gpu = gpu_plan(base)
     if args.config is not None:
         raw = _file_or_default_answers(args)
-        answers = load_answers(raw, packs=[str(p) for p in raw.get("demo_packs") or ()])
+        home = Path(env["HOME"]) if env.get("HOME") else None
+        answers = load_answers(raw, packs=[str(p) for p in raw.get("demo_packs") or ()], home=home)
         server = server_plan(answers)
         gpu = _gpu_of(answers, base)
+        # ADR-114 Amendment 37: the backups folder these answers name, before the install.
+        made = osprey_config(answers, base)
     ok = _print_checks(
         run_doctor(
             args.mode, probes, product=product, cloud=args.cloud, server=server, gpu=gpu,
@@ -424,7 +428,7 @@ def _doctor(
             # ADR-135 Amendment 2 decision 9: an installed deployment's model keys, as it says.
             model_states=getattr(probes, "model_key_states", lambda: None)(),
         )
-        + _backups_checks(probes, product, base, env)
+        + _backups_checks(probes, product, made, env)
     )  # fmt: skip
     return 0 if ok else 1
 
