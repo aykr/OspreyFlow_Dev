@@ -13,8 +13,7 @@
       "label": "Data",
       "sections": [
         { "id": "datasets", "label": "Datasets", "right": "administer_system", "screen": "admin/sections/Datasets.tsx" },
-        { "id": "connections", "label": "Connections", "right": "administer_system", "screen": "admin/sections/Connections.tsx" },
-        { "id": "proposed-types", "label": "Proposed types", "right": "manage_ontology", "screen": "admin/sections/ProposedTypes.tsx" }
+        { "id": "connections", "label": "Connections", "right": "administer_system", "screen": "admin/sections/Connections.tsx" }
       ]
     },
     {

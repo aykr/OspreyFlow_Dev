@@ -74,6 +74,11 @@ NOT_A_SECTION_S = {
     # through their own route meanwhile).
     r"^/v1/admin/datasets/\{dataset_id\}/cases/\{investigation_id\}/delete$":
         "Admin › Datasets' Delete, the admin lane's screen to come",
+    # ADR-090 Amendment 4 (L2.7): Admin's Proposed types is removed, proposals being decided on the
+    # Studio's Model tab. These routes stay for proposals made before ADR-099 Amendment 3, which name
+    # no dataset (ADR-143 decision 5: the administrator's promotion "remains only" for those), with
+    # no screen of their own; `test_analyst_link_types.py` holds their access cases.
+    r"^/v1/admin/link-types": "the pre-Amendment 3 proposals, decided by the API alone since L2.7",
 }
 
 

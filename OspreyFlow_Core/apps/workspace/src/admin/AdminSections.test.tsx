@@ -47,7 +47,7 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
     place(ALL);
     expect(listed()).toEqual([
       "# People", "People and roles", "Roles", "Dashboard identities",
-      "# Data", "Datasets", "Connections", "Proposed types",
+      "# Data", "Datasets", "Connections",
       "# Running", "Operations", "System", "Models", "Maps",
       "# Policies", "Grading scheme (coming)", "Approval rights (coming)", "Uploads (coming)",
       "Audit",

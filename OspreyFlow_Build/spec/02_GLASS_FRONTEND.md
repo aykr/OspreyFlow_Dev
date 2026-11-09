@@ -1007,19 +1007,17 @@ direction, who proposed it and when, never the case (rule 3), with **Add <type> 
 each asking *Why? (required)* (Ctrl/⌘+Enter decides, Escape cancels and focus goes back to the button;
 the outcome takes focus). To a holder not cleared for the case's marking (ADR-143 Amendment 4's *Open*,
 the strict reading meanwhile) a row says only *A proposed link type above your clearance*, with no words,
-tag or decision, and is left out of the count. Admin's *Proposed types* offers no decision on a proposal that names a
-dataset, saying it is decided on that dataset's Model tab. The tab's count, the reminder above the
-Studio's other tabs and the *Needs you* entry (ADR-090 Amendment 4) are Admin's L2.7. A refusal is said in the Conduit's words; to a person the routes refuse the block
+tag or decision, and is left out of the count. The tab reads *1 Model · n proposed*, n being the
+proposals this person may read and decide in this dataset; a reminder with its tip shows above the
+Studio's other tabs; and the top bar's *Needs you* lists them (ADR-090 Amendment 4, ADR-145 decision 11;
+L2.7), all three from `GET /v1/me/needs-you` (spec 03), which counts none above the reader's clearance
+and says only that such a proposal exists. A refusal is said in the Conduit's words; to a person the routes refuse the block
 is not drawn. Under the GOV.UK brand it is a summary list with tags, GOV.UK buttons and a textarea with an
 error summary. Keyboard: `keyboard/model-proposals.spec.ts` (`MODEL_PROPOSALS_ACTIONS`); axe in dark,
-light and GOV.UK with the form open and its error shown. **A holder of `manage_ontology`** (an
-administrator) still has **Proposed types** as a section of the Admin place, under *Data*, for the
-proposals made before ADR-099 Amendment 3 that name no dataset (its removal is Admin's next step,
-ADR-090 Amendment 5): their own unit's
-proposals, each with its name, ID, ends, proposer, case and reason, to **Promote…** (Direct or
-Probabilistic, no default, and a new ID when the server says the name is taken by a type its links do
-not fit), **Reject…**, or once promoted **Retire…**, each with a reason. Reachable by keyboard
-throughout (`keyboard/link-change.spec.ts`, `keyboard/proposed-types.spec.ts`). A proposal is not yet
+light and GOV.UK with the form open and its error shown. **Admin has no *Proposed types* section**
+since L2.7 (ADR-090 Amendments 4 and 5). The proposals made before ADR-099 Amendment 3, which name no
+dataset, keep their administrator's routes (`/v1/admin/link-types`, behind `manage_ontology`; ADR-143
+decision 5), with no screen of their own. A proposal is not yet
 withdrawn from the Glass: the route exists (spec 03 §3.4) and the form does not offer it.
 
 ### 3.1g Two more layouts: a force-directed tree and clustered bubbles (ADR-083)

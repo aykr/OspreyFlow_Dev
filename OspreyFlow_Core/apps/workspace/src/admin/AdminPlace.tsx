@@ -21,7 +21,6 @@ import { Maps } from "./sections/Maps";
 import { Models } from "./sections/Models";
 import { Operations } from "./sections/Operations";
 import { People } from "./sections/People";
-import { ProposedTypesSection } from "./sections/ProposedTypes";
 import { Roles } from "./sections/Roles";
 import { System } from "./sections/System";
 import "./admin.css";
@@ -57,7 +56,6 @@ export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
   dashboards: (api) => <Dashboards api={api} />,
   datasets: (api) => <Datasets api={api} />,
   connections: (api) => <Connections api={api} />,
-  "proposed-types": (api) => <ProposedTypesSection api={api} />,
   // ADR-145 decision 9 (L2.6): what ages and when, then the schedules.
   operations: (api) => <Operations api={api} />,
   system: (api) => <System api={api} />,

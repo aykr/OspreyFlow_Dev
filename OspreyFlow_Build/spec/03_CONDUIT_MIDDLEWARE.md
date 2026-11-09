@@ -1198,6 +1198,7 @@ blank map.
 
 ```
 GET    /v1/me/rights                                       the signed-in person's rights (ADR-112), so the Glass leaves out what it would be refused; any signed-in person
+GET    /v1/me/needs-you                                    the reader's Needs you (ADR-145 decision 11, A2; L2.7): their Promotions overdue, each served only while they are still a recipient (alerts_for, asking _promotion_recipients now), and, for a holder of accept_types, each dataset their own cases load into with the proposed link types they may read and decide, and a flag (never a count or a word) where one is above their clearance; any signed-in person, each half gated by what it lists (services/api/needs_you.py)
 GET    /v1/models/engines                                  the model engines an analyst may choose for Ask the case and Ask to search (ADR-135): the local engine and each enabled provider with a key, its label, roles and the roles it is the default for; nothing about a key; any signed-in person
 GET    /v1/investigations/{id}/models/engines              the same within a case (ADR-136 decision 3): each engine's privacy-contract mark, and an engine the case's datasets may not reach (a dataset at egress none, or contracted and the provider has no contract) listed available: false with the reason in words; Viewer
 GET    /v1/admin/people                                    every person in the realm with roles, clearance and unit, no service account (ADR-112); manage_people
