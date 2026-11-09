@@ -270,7 +270,14 @@ async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | N
     # in memory on the server, never a row past the cap sent or held. The database's
     # count is close to the file's, not equal (`t` for `true`, its own date format, its own
     # encoding), so the read also counts each row in UTF-8 bytes as the file will hold it, and
-    # refuses on either.
+    # refuses on either. The bound, for any source: the read never holds more than the cap in the
+    # file's UTF-8 bytes; the server sends values only for rows within the cap in its own count.
+    # Where that count is the smaller (booleans; a non-UTF-8 database, LATIN1's one byte for `é`
+    # against UTF-8's two), the rows sent may come to more than the cap in the file's bytes, at
+    # most the source's own ratio of file bytes to its bytes (2 for LATIN1 text), and the read
+    # refuses at the first row whose file bytes cross the cap, having held none past it
+    # (`test_the_read_counts_the_file_s_bytes_where_the_database_counts_fewer`; ADR-140
+    # Amendment 16).
     columns = ", ".join(_quoted(n) for n in names)
     size = f"octet_length(ROW({columns})::text)"
     inner = (

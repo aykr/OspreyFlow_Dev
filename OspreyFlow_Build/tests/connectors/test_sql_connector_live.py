@@ -270,6 +270,36 @@ async def test_the_byte_cap_counts_bytes_not_characters(
     assert [r["note"] for r in got.rows] == ["é" * 600]
 
 
+FLAGS = SqlRead(table="nomis_replica_fixture.flags")
+
+
+async def test_the_read_counts_the_file_s_bytes_where_the_database_counts_fewer(
+    nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """300 rows of one truth value: the database writes each row as `(t)`, 3 bytes, 900 in all, under a
+    1,000-byte cap; the file holds each as `true`, 4 bytes, 1,200 in all. Only the read's own count, in
+    the file's UTF-8 bytes, refuses: the case that is red without it (the orchestrator's review of L1.8,
+    item 5; every other case's database count crosses first in this UTF-8 database). A non-UTF-8
+    source (LATIN1's one byte for `é`, two in the file) is the same shape."""
+    from services.ingest.connectors import reads
+
+    await nomis.execute(f"""
+        CREATE TABLE nomis_replica_fixture.flags (flag boolean NOT NULL);
+        INSERT INTO nomis_replica_fixture.flags SELECT true FROM generate_series(1, 300);
+        GRANT SELECT ON nomis_replica_fixture.flags TO {READER};
+    """)
+    database = await nomis.fetchval(
+        "SELECT sum(octet_length(ROW(flag)::text)) FROM nomis_replica_fixture.flags"
+    )
+    assert database == 900, database  # the server's own count stays under the cap
+    monkeypatch.setattr(reads, "MAX_BYTES", 1000)
+    with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
+        await read_sql(_settings(), FLAGS, secret=PASSWORD, connect=_no_tls)
+    monkeypatch.setattr(reads, "MAX_BYTES", 1200)
+    got = await read_sql(_settings(), FLAGS, secret=PASSWORD, connect=_no_tls)
+    assert len(got.rows) == 300 and got.rows[0] == {"flag": "true"}
+
+
 @pytest.mark.parametrize("watermark", [None, "note_id"], ids=["whole", "incremental"])
 async def test_a_row_past_the_byte_cap_is_never_held(
     nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch, watermark: str | None
