@@ -118,6 +118,7 @@ async def revert_promotion(
             )
         await graph.revert_promotion(record.load_id, record.dataset_id, tx)
         if drawn_merge:
+            assert merge is not None
             await merge.undo_writes(record, tx)
         if layer_deleted:
             await graph.withdraw_layer(
@@ -134,6 +135,7 @@ async def revert_promotion(
     await graph.commit_transaction(tx)
     await items.mark_promoted(record.case_id, list(record.item_ids), None)
     if drawn_merge:
+        assert merge is not None
         await merge.undo(record)
     if layer_deleted:
         await items.withdraw(

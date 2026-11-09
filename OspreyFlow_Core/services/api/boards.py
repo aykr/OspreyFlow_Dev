@@ -841,13 +841,13 @@ class Boards:
         return await self.alike(drawn_nodes, principal, principal)
 
     async def alike(
-        self, drawn_nodes: Sequence[Node], candidates: Principal, decided: Principal
+        self, drawn_nodes: Sequence[Node], reading: Principal, decided: Principal
     ) -> MatchSuggestions:
-        """The matching itself: loaded nodes read through `candidates` alone (the adapter filters
+        """The matching itself: loaded nodes read through `reading` alone (the adapter filters
         each by marking and dataset, so one the reader may not see is never a candidate, never
         counted, never ordered: rule 7), less a pair already decided, read through `decided`. A
         merge of a drawn dataset passes the merger scoped to the target alone (L3.9)."""
-        principal = candidates
+        principal = reading
         found: list[MatchSuggestion] = []
         more = False
         for drawn in drawn_nodes:

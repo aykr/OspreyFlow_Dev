@@ -31,8 +31,8 @@ else.
 **After the merge** (decision 7): the drawing's home case reads the target, and its drawn dataset
 read-only (`DatasetStore.merge_drawn`); each of its boards becomes a view (drawing off, layout and
 sharing kept, `CaseViewStore.merge_boards`); what did not become data is shown on the view as
-annotations, read through each reader's own handling (`annotations`), so an item they may not see
-has none. Drawing again opens a new board, into the case's layer.
+annotations, read through each reader's own handling (`view_annotations`), so an item they may not
+see has none. Drawing again opens a new board, into the case's layer.
 """
 
 from __future__ import annotations
@@ -436,7 +436,7 @@ def _grade(element: Any) -> str | None:
     return f"{g.source}{g.intelligence}{g.handling}" if g is not None else None
 
 
-async def annotations(
+async def view_annotations(
     view: StoredCaseView,
     reader: Principal,
     *,
@@ -483,4 +483,4 @@ async def annotations(
     return out
 
 
-__all__: Sequence[str] = ("DrawnMerges", "MergeCommit", "annotations", "MATCH_MODEL_VERSION")
+__all__: Sequence[str] = ("DrawnMerges", "MergeCommit", "view_annotations", "MATCH_MODEL_VERSION")

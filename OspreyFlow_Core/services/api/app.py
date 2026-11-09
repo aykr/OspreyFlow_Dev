@@ -4090,7 +4090,7 @@ async def open_case_view(
     # A merged drawing (ADR-143 Amendment 2 decision 7): what did not become data, as this reader
     # may see it, read through their own principal (rule 3).
     directory = getattr(request.app.state, "principal_names", None)
-    noted = await drawn_merge_module.annotations(
+    noted = await drawn_merge_module.view_annotations(
         view, principal, graph=graph, items=items,
         names=directory.display_names if directory is not None else None,
     )  # fmt: skip

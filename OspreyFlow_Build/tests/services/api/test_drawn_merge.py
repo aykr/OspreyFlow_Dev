@@ -287,8 +287,8 @@ def test_the_match_check_fails_with_the_candidates_unscoped(
     drawn = _three(mw)
     real = Boards.alike
 
-    async def unscoped(self: Boards, nodes: Any, candidates: Principal, decided: Principal) -> Any:
-        return await real(self, nodes, candidates.model_copy(update={"datasets": None}), decided)
+    async def unscoped(self: Boards, nodes: Any, reading: Principal, decided: Principal) -> Any:
+        return await real(self, nodes, reading.model_copy(update={"datasets": None}), decided)
 
     monkeypatch.setattr(Boards, "alike", unscoped)
     offered = {(m["drawn"], m["loaded"]) for m in _sheet_for(mw, "dana")["matches"]}
