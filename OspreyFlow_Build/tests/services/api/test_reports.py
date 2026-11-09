@@ -423,8 +423,14 @@ def test_the_view_and_the_feed_agree_and_the_feed_is_recorded(
         assert feed.status_code == 200, feed.text
         def strip(body: dict[str, object]) -> dict[str, object]:
             pole = body.get("pole")
+            monitoring = dict(body.get("monitoring") or {})  # type: ignore[call-overload]
+            # The feed leaves the team view's *mine* (the reader's own claims) in the Glass.
+            monitoring["team"] = [
+                {k: v for k, v in t.items() if k != "mine"} for t in monitoring.get("team", [])
+            ]
             return {
-                **{k: v for k, v in body.items() if k not in ("generated_at", "pole")},
+                **{k: v for k, v in body.items() if k not in ("generated_at", "pole", "monitoring")},
+                "monitoring": monitoring,
                 "pole": None
                 if pole is None
                 else {k: v for k, v in pole.items() if k != "counted_at"},  # type: ignore[attr-defined]

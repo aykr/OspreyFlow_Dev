@@ -55,6 +55,10 @@ const EXTRA_STATES: Record<string, string[]> = {
     "badge=1&rights=investigate,triage_alerts,read_alert_queue",
     "place=rules&rights=investigate,triage_alerts,read_alert_queue",
   ],
+  // L2.12 (ADR-145 Amendment 4 decisions 8–10 and 12): the Figures opened from an alert, the Alert
+  // monitoring board first on the Dashboards and as the journey opens it, a Reports Viewer's Home with
+  // an alert's two ways on, and the Roles, teams and Authors page.
+  "alert-figures-harness.html": ["from=alert", "board=1", "board=1&rule=hotlists&from=alert", "home=1", "help=1"],
   // ADR-146 decisions 2 and 6: Rules and Monitoring at an alert's address, and at one the reader may
   // not see.
   "rules-place-harness.html": ["address=a1", "address=not-yours", "evidence=1"],

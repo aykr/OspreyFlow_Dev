@@ -167,9 +167,9 @@ export async function closeOpenedAlert(page: Page, reason: Exclude<ClosingReason
   await page.waitForTimeout(1500);
 }
 
-/** The Reports view on one of its tabs. */
+/** The case's Figures (the Reports view until ADR-145 Amendment 4 decision 8) on one of its tabs. */
 export async function reportsTab(page: Page, tab: string): Promise<void> {
-  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  await page.getByRole("button", { name: "Figures", exact: true }).click();
   await page.getByRole("tab", { name: tab, exact: true }).click();
   await page.waitForTimeout(4000);
 }

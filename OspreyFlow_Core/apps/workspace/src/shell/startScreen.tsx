@@ -5,7 +5,7 @@ import type { ReactElement, ReactNode } from "react";
 import { CasePicker } from "../investigation/CasePicker";
 import { startFor, startPlaces, type Rights, type StartPlace } from "../rights/visibility";
 import { AdminWithoutCase } from "./AdminWithoutCase";
-import { HomePage, type HomePerson } from "../home/HomePage";
+import { HomePage, type AlertJourneyStart, type HomePerson } from "../home/HomePage";
 import type { HomeSummary } from "../home/homeData";
 import { PlaceSwitcher } from "./PlaceSwitcher";
 import { StartBar } from "./StartPage";
@@ -43,6 +43,8 @@ export interface StartScreenInput {
   openAlert: (alertId: string) => void;
   /** Opens a case on Rules and Monitoring (a reload, as every case switch is). */
   openCaseOnRules: (id: string) => void;
+  /** The Reports Viewer's journey from an alert on Home (ADR-145 Amendment 4 decision 10). */
+  openAlertJourney?: (alert: AlertJourneyStart, to: "figures" | "board") => void;
 }
 
 export function startScreen(input: StartScreenInput): ReactElement | null {
@@ -84,6 +86,7 @@ export function startScreen(input: StartScreenInput): ReactElement | null {
         marking={input.marking}
         onOpenCase={(id, place) => input.openCase(id, place === "ingest" ? "ingest" : undefined)}
         onOpenAlert={input.openAlert}
+        onAlertJourney={input.openAlertJourney}
         onChoose={choose}
       />
     );
