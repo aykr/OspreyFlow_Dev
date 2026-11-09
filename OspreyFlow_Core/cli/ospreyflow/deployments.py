@@ -165,7 +165,8 @@ def resolve(
     if creating and name not in installed and (product / "osprey.yaml").is_file():
         own = read_config(product)
         section = own.get("deployment")
-        checkouts = (section.get("name") if isinstance(section, dict) else None) or own.get("profile")
+        given = section.get("name") if isinstance(section, dict) else None
+        checkouts = given or own.get("profile")
         if checkouts == name:
             # Amendment 38 decision 6: the checkout's own deployment goes by `deployment.name`
             # when it gives one (ADR-132 Amendment 1), and its backups by that name.
