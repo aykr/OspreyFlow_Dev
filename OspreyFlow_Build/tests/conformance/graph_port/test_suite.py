@@ -7748,7 +7748,7 @@ async def test_client_parity_scores_equal_a_transcription_of_the_clients_r_funct
 def _drawn(grade: Grading, item: str) -> Provenance:
     return Provenance(
         state=ProvenanceState.ASSERTED,
-        sources=[],
+        sources=[SourceRef(document_id=f"drawn:{item}", locator="drawn", excerpt_hash="")],
         first_seen=now_utc(),
         drawn=DrawnAssertion(
             item_id=item, asserted_by="analyst-1", board_id="board-1", case_id="case-k",

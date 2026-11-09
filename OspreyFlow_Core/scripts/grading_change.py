@@ -34,9 +34,10 @@ change is then refused, naming it (rule 2). `--changed-by` is recorded in the au
 and said to be (`changed_by_as_typed`): this command runs outside the Conduit, where no sign-in
 says who someone is. The verb passes `cli:<the operator's account>`.
 
-**The ontology it reads under** is the one the Conduit runs with: the deployment's, composed with
-every link-type proposal (`services/api/link_types.compose_ontology`), taken in memory only, so a
-link of a proposed type is read under its own name. It reads every case's board registry
+**No ontology.** The change writes the grade alone (`GraphPort.regrade_drawn`), which no ontology
+checks, and reads only what is stored, a proposed link type's links among them (read under their
+stored label's name, `logical_type_name`). So it applies none: no DDL, nothing composed. It reads
+every case's board registry
 (`board_store`'s own columns), the one read of `board_items` that names no case: an operator's
 change of the whole deployment, outside the Conduit, answered to no reader.
 
@@ -72,7 +73,7 @@ from services.api.grading import (
     parse_mapping,
 )
 
-from schemas.domain import GRADING_PARTS, GradingSchemeAnswer, OntologySchema, Principal
+from schemas.domain import GRADING_PARTS, GradingSchemeAnswer, Principal
 
 if TYPE_CHECKING:
     from adapters.graph_arcadedb.client import ArcadeDBClient
@@ -220,37 +221,13 @@ def registry_reader(pool: Any) -> Registered:
 
 
 def graded_items(
-    client: ArcadeDBClient,
-    scheme: HandlingScheme,
-    ontology: OntologySchema,
-    registered: Registered,
-    reader: Principal,
+    client: ArcadeDBClient, scheme: HandlingScheme, registered: Registered, reader: Principal
 ) -> BoardGradedItems:
-    """The command's port: the bare graph adapter, holding the ontology in force in memory (no
-    DDL; a proposed type's links read under their own name), over the board registry."""
+    """The command's port: the bare graph adapter, with no ontology applied (it reads what is
+    stored and writes the grade alone), over the board registry."""
     from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 
-    adapter = GraphArcadeDBAdapter(client, scheme)
-    adapter.use_schema(ontology)
-    return BoardGradedItems(adapter, registered, reader)
-
-
-async def ontology_in_force(pool: Any) -> OntologySchema:
-    """The deployment's ontology composed with every link-type proposal, as the Conduit's start
-    composes it (`LinkTypeService.refresh`), read without `connect()`'s table-making: no
-    proposals where none was ever made."""
-    import asyncpg
-    from services.api.link_type_store import LinkTypeProposalStore
-    from services.api.link_types import compose_ontology
-
-    from ontology.packs import load_deployment_ontology
-
-    store = LinkTypeProposalStore(pool)
-    try:
-        proposals, revision = await store.all(), await store.revision()
-    except asyncpg.UndefinedTableError:
-        proposals, revision = [], 0
-    return compose_ontology(load_deployment_ontology(), proposals, revision=revision)
+    return BoardGradedItems(GraphArcadeDBAdapter(client, scheme), registered, reader)
 
 
 async def conduit_answers(url: str) -> bool:
@@ -327,7 +304,6 @@ async def _main(
         items = graded_items(
             client,
             scheme,
-            await ontology_in_force(pool),
             registry_reader(pool),
             operator_reader(scheme, org_unit=args.org_unit, by=args.changed_by),
         )

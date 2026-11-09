@@ -4,15 +4,14 @@ over a fake, so the whole command is also proved against what it really meets).
 
 **Live, against a lane's leased stack** (`scripts/stack_lease.sh`): a throwaway ArcadeDB database
 (`conformance_*`) and a throwaway Postgres database (`grading_*`), both dropped afterwards. It runs
-`scripts.grading_change._main` as the deployment runs it: its own ontology composed from the
-proposals table (`ontology_in_force`), its own registry read, its own `AuditWriter`, its own bare
-adapter. What is changed: two drawn people, a drawn link between them of an analyst's proposed
-link type (L3.5, stored under its own storage label, which only the composed ontology reads under
-its name), and a drawn `ASSOCIATE_OF` link counted three times.
+`scripts.grading_change._main` as the deployment runs it, in a process with no ontology applied
+and no link-type aliases set, as a one-shot starts: its own registry read, its own `AuditWriter`,
+its own bare adapter. What is changed: two drawn people, a drawn link between them of an analyst's
+proposed link type (L3.5, stored under its own storage label), and a drawn `ASSOCIATE_OF` link
+counted three times; then all four back again, each keeping the original it was drawn with.
 
 What a mistake would do, and the case that catches it:
-- the command's adapter given no ontology, or not the composed one; its dry run writing, or making
-  a table; the change without the dry run's token; a rewrite that loses the item's marking,
+- a proposed type's link not read by the command; its dry run writing, or making a table; the change without the dry run's token; a rewrite that loses the item's marking,
   datasets, properties, resolution state or the rest of its assertion, counts a link again or
   weighs it again; no audit record, or a record of who changed it that does not say it is as typed:
   `test_the_command_changes_every_drawn_grade_in_the_real_stores`.
@@ -29,6 +28,7 @@ from typing import Any
 
 import asyncpg
 import pytest
+from adapters.graph_arcadedb import naming
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_edge_id, new_id, new_node_id
 from ontology.handling import load_uk_le_scheme, sources_in_full
@@ -48,6 +48,7 @@ from schemas.domain import (
     NodeWrite,
     Provenance,
     ProvenanceState,
+    SourceRef,
 )
 
 UNIT = "unit-1"
@@ -59,6 +60,14 @@ pytestmark = pytest.mark.skipif(
     not os.environ.get("OSPREY_LANE") and not os.environ.get("OSPREY_TEST_ARCADEDB_CONTAINER"),
     reason="needs a leased lane stack (OSPREY_LANE and its pinned ports), or CI's live job",
 )
+
+THREE_TO_FIVE = """
+from: 3x5x2
+to: 5x5x5
+source: {A: A, B: C, C: E}
+intelligence: {"1": "1", "2": "2", "3": "3", "4": "4", "5": "5"}
+handling: {P: "1", C: "4"}
+"""
 
 FIVE_TO_THREE = """
 from: 5x5x5
@@ -110,7 +119,9 @@ async def stores(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[SimpleNamespa
 
 def _drawn(grade: Grading, item: str) -> Provenance:
     return Provenance(
-        state=ProvenanceState.ASSERTED, sources=[], first_seen=datetime.now(UTC),
+        state=ProvenanceState.ASSERTED,
+        sources=[SourceRef(document_id=f"drawn:{item}", locator="drawn", excerpt_hash="")],
+        first_seen=datetime.now(UTC),
         drawn=DrawnAssertion(item_id=item, asserted_by="alice", board_id="board-1", case_id=K,
                              label=item, grading=grade, source_note="Wing officer report"),
     )  # fmt: skip
@@ -186,14 +197,22 @@ async def test_the_command_changes_every_drawn_grade_in_the_real_stores(
     ids = await _draw(stores)
     mapping = tmp_path / "mapping.yaml"
     mapping.write_text(FIVE_TO_THREE, encoding="utf-8")
-    argv = ["--to", "3x5x2", "--mapping", str(mapping), "--changed-by", "cli:operator"]
 
     async def quiet(_: str) -> bool:
         return False
 
-    async def main(*more: str) -> int:
-        args = grading_change.build_parser().parse_args([*argv, *more])
-        return await grading_change._main(args, answers=quiet)
+    async def main(*more: str, to: str = "3x5x2", mapping_file: Any = mapping) -> int:
+        args = grading_change.build_parser().parse_args(
+            ["--to", to, "--mapping", str(mapping_file), "--changed-by", "cli:operator", *more]
+        )
+        # As a one-shot process starts: no ontology applied, so no link-type aliases set.
+        held = (dict(naming._CANONICAL), dict(naming._ALIASES_OF))
+        naming.set_edge_aliases({})
+        try:
+            return await grading_change._main(args, answers=quiet)
+        finally:
+            naming._CANONICAL.update(held[0])
+            naming._ALIASES_OF.update(held[1])
 
     before = await _stored(stores, ids)
     assert len(before) == 4
@@ -243,3 +262,21 @@ async def test_the_command_changes_every_drawn_grade_in_the_real_stores(
     assert records[-1]["written"] == 4 and records[-1]["dry_run_token"] == token
     assert all(r["changed_by_as_typed"] is True for r in records)
     assert {r["principal_id"] for r in audited} == {"cli:operator"}
+
+    # And back: the original is the grade drawn, never the middle one.
+    back = tmp_path / "back.yaml"
+    back.write_text(THREE_TO_FIVE, encoding="utf-8")
+    os.environ["OSPREY_GRADING_SCHEME"] = "3x5x2"  # the setting the verb writes after a change
+    try:
+        assert await main("--dry-run", to="5x5x5", mapping_file=back) == 0
+        token = capsys.readouterr().out.strip().rsplit(" ", 1)[-1]
+        assert await main("--confirm", token, to="5x5x5", mapping_file=back) == 0
+    finally:
+        del os.environ["OSPREY_GRADING_SCHEME"]
+    again = await _stored(stores, ids)
+    for element_id, was in before.items():
+        assert again[element_id].provenance.drawn.grading == Grading(
+            source="A", intelligence="2", handling="1"
+        ), element_id
+        assert again[element_id].provenance.drawn.original_grading == original, element_id
+        assert _kept(again[element_id]) == _kept(was), element_id
