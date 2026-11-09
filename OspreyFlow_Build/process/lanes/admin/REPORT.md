@@ -1,6 +1,6 @@
 # admin lane · report · L2.7: *Needs you*, Admin's tips and Home's *What you can do* (9 November 2026)
 
-The branch is rebased onto main f382e12. The gate head is 2cad951. Every case was shown red by a plant at its call site
+The branch is rebased onto main f382e12. The head is in `git log`. Since the offline gates, only test files and records have changed: a keyboard spec's expectation, and the store case moved to its own schema. Every case was shown red by a plant at its call site
 (`L2.7_RED_RECORD.md`), and the lane-reviewer ran before the gates; what it found is fixed (item 9).
 
 | Exit criterion | State | Proving test |
@@ -14,14 +14,14 @@ The branch is rebased onto main f382e12. The gate head is 2cad951. Every case wa
 | axe in dark, light and GOV.UK | met | `gates/405bdf2.axe.txt`: 760/760 (it caught a WCAG 2.5.3 name at f170cfa, fixed) |
 
 1. **Gates.**
-   - `make -k ci` at 2cad951 (`gates/2cad951.ci.txt`): green except main's own E501 (fixed on main since, at b0671be), the 8 image scans, opentofu and chart. Docker is off here.
-   - `make test` and test-js on the server at 405bdf2 (`gates/405bdf2.test.txt`).
-   - Live on stack f (`gates/2cad951.live.txt`).
+   - `make -k ci` at 2cad951 (`gates/2cad951.ci.txt`): green except main's own E501 (fixed on main at b0671be), the 8 image scans, opentofu and chart. Docker is off here.
+   - `make test` on the server at 405bdf2 (`gates/405bdf2.test.txt`): pytest 9,674 passed, and 2 failed, both main's own (the GPU preflight case and Valkey-config); test-js 2,853 of 2,854, `MatrixView.budget` failing under load.
+   - Live on stack f under the admin lease (`gates/bb3e50c.live.txt`): 159 passed, including `test_route_rights.py`. The narrowing's live plant was red. The two rows its first run left in the shared table were removed, and the case now runs over its own schema.
 2. **Left, with why:**
    - Home's *through a team*, *Lead of*, *Covering*, *Owner of watches* and the waiting counts on *Author of* lines. No read gives them; spec 02 records this (rule 11).
    - An overdue promotion opens nothing for an Author without `operate_schedules` until L3.4's review screen exists.
    - The top bar re-reads on its minute, not on a Model tab decision (the review's minor 14).
-3. **Commits:** `git log f382e12..2cad951`. The schemas commit (`NeedsYou`) is first.
+3. **Commits:** `git log f382e12..HEAD`. The schemas commit (`NeedsYou`) is first.
 4. **Requests at the merge:**
    - Apply `registry-L2.7.diff` (`NEEDS_YOU_ACTIONS`, eleven `ADMIN_ACTIONS` ids, and rules-b's two).
    - Land the schemas commit first.
@@ -40,4 +40,4 @@ The branch is rebased onto main f382e12. The gate head is 2cad951. Every case wa
    - (e) Grading scheme exempts its reference read, pinned to that one route.
    - (f) *Why* names the reader's own roles from `placesByRole.json`. A custom role is said as "a role your administrator made".
    - (g) Openings across a reload are held in the session.
-6. **Questions:** none. **Still running:** nothing once the live run ends; stack f is brought down and released.
+6. **Questions:** none. **Still running:** nothing. Stack f is down and its lease released; no agent of mine is running.
