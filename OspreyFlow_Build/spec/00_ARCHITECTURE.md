@@ -956,7 +956,7 @@ fails too, as does a distribution's Java package; the labels are read however th
 (`tests/licence_check/test_runtime_licences.py`, each refusal shown red). **Not yet passed:**
 `git` (GPL-2.0-only), already in the Conduit's image because the Conduit runs it to publish
 recipes (`09_INGEST_STUDIO.md` §6). **The owner's ruling of 9 November 2026:** the `git` command is
-replaced by dulwich, used under its Apache-2.0 licence (studio's carry in L1.7), and `git` then leaves the
+replaced by dulwich, used under its Apache-2.0 licence (studio-b's carry in L1.7a), and `git` then leaves the
 image, so the gate again refuses every GPL package but the recorded Classpath exception. Until that carry
 lands it is declared by the same label, and `make licence-check` names it on every run with that ruling
 and carry, never passing it silently; an undeclared `git` fails.

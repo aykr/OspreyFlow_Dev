@@ -162,5 +162,5 @@ def test_every_run_names_what_awaits_the_owner(
     assert "NOT YET PASSED: services/api/Dockerfile carries 'git'" in said.err
     # The owner's ruling and its carry, said on every run (the orchestrator's review of round 3).
     assert "the owner's ruling of 9 November 2026: replaced by dulwich" in said.err
-    assert "studio's carry in L1.7" in said.err
+    assert "studio-b's carry in L1.7a" in said.err
     assert "1 image runtime(s) not yet passed" in said.out

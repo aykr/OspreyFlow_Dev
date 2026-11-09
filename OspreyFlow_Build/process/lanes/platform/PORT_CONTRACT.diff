@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Build/tests/conformance/graph_port/test_suite.py b/OspreyFlow_Build/tests/conformance/graph_port/test_suite.py
-index 06eef10..ff17eca 100644
+index 06eef10..3a13d2f 100644
 --- a/OspreyFlow_Build/tests/conformance/graph_port/test_suite.py
 +++ b/OspreyFlow_Build/tests/conformance/graph_port/test_suite.py
-@@ -1958,6 +1958,39 @@ async def test_unauthorised_search_matches_a_graph_where_the_node_never_existed(
+@@ -1958,6 +1958,49 @@ async def test_unauthorised_search_matches_a_graph_where_the_node_never_existed(
  # double, and these run it against the real store.
  
  
@@ -13,8 +13,9 @@ index 06eef10..ff17eca 100644
 +    on the copy's provenance (`provenance.gazetteer`), never on a `gazetteer-*` dataset name. A
 +    request reader (one whose `datasets` are set) never matches the copy by a source identifier, by
 +    `search_nodes` or by `suggest_nodes` in any mode, and a node read or suggested by its name
-+    carries none. Positive controls: the case's own place, with no gazetteer mark, is found by the
-+    same field; and the copy by its name."""
++    carries none. More copies than a page share one identifier's prefix, so a guard applied after
++    the page is cut would say `more`: none is suggested and `more` is false. Positive controls: the
++    case's own place, with no gazetteer mark, is found by the same field; and the copy by its name."""
 +    reader = Principal(id="analyst-case", clearance="SECRET", org_unit="unit-1",
 +                       datasets=["case-a"])  # fmt: skip
 +    copy = _node("Location", classification="OFFICIAL", datasets=["case-a"],
@@ -23,8 +24,14 @@ index 06eef10..ff17eca 100644
 +        update={"gazetteer": "gazetteer-osm-conformance"})})  # fmt: skip
 +    own = _node("Location", classification="OFFICIAL", datasets=["case-a"],
 +                name="Conformance Yard", uprn="900000004412")  # fmt: skip
++    alike = [
++        _node("Location", classification="OFFICIAL", datasets=["case-a"],
++              name=f"Conformance Elsewhere {i}", osm_id=f"osm-conf-77{i:02d}")
++        for i in range(8)
++    ]  # fmt: skip
++    alike = [n.model_copy(update={"provenance": copy.provenance}) for n in alike]
 +    async with factory.context() as adapter:
-+        (copy_id, own_id), _ = await _write(adapter, [copy, own], [])
++        (copy_id, own_id, *_alike), _ = await _write(adapter, [copy, own, *alike], [])
 +        assert [n.id for n in await adapter.search_nodes("900000004412", reader)] == [own_id]
 +        for identifier in ("osm-conf-4411", "900000004411"):
 +            assert await adapter.search_nodes(identifier, reader) == [], identifier
@@ -32,6 +39,9 @@ index 06eef10..ff17eca 100644
 +                            SuggestOptions(mode="exact")):  # fmt: skip
 +                hinted = await adapter.suggest_nodes(identifier, reader, options=options)
 +                assert (hinted.nodes, hinted.more) == ([], False), (identifier, options)
++        for options in (None, SuggestOptions(mode="contains", ignore_case=True)):
++            page = await adapter.suggest_nodes("osm-conf-77", reader, limit=3, options=options)
++            assert (page.nodes, page.more) == ([], False), options
 +        named = await adapter.suggest_nodes("Conformance Ash", reader)
 +        assert [n.id for n in named.nodes] == [copy_id]
 +        assert not {"osm_id", "uprn"} & set(named.nodes[0].properties)

@@ -31482,7 +31482,7 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    **`git`** (GPL-2.0-only, already in the image: the Conduit runs it to publish recipes,
    `09_INGEST_STUDIO.md` §6) is declared the same way, and the register does not pass it. **The owner
    ruled on 9 November 2026:** the `git` command is replaced by dulwich, under its Apache-2.0 licence
-   (studio's carry in L1.7), and `git` then leaves the image. Until that carry lands the leg names it on
+   (studio-b's carry in L1.7a), and `git` then leaves the image. Until that carry lands the leg names it on
    every run as **not yet passed** (`AWAITING_OWNER`), with that ruling and carry, never silently, and
    an undeclared `git` fails.
    **trivy does not see the runtime.** A runtime unpacked from Temurin's tarball and derived by `jlink`
@@ -31491,13 +31491,17 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    the test server). So **the runtime's version is a gate of its own**
    (`tools/java_runtime_check.py`): the Dockerfile declares it in `LABEL
    org.ospreyflow.runtime.java.version`, beside the licence label. The built image's
-   `/opt/java/release` (`JAVA_VERSION`) and `java -version` (its build) must be that version, and that
-   version must be Temurin 21's newest general-availability release, from Adoptium's API. Whatever
-   cannot be read (the image, or Adoptium's answer) is a refusal, never a pass. **The policy:** CI goes
-   red whenever Adoptium publishes a newer Temurin 21, until the digest and the label are repinned
-   together, as a scanned package with a fixed CVE would make it. It needs the network and Docker, as
-   the image scans do, so it runs after `core-check` in Build's `make ci`, never in Core's
-   Makefile, which stands alone (ADR-114 Amendment 2). Pinned at **21.0.13+9**, October 2026's update.
+   `/opt/java/release` (`JAVA_VERSION`) and `java -version` (its build) must be that version (CI's
+   `trivy-image-api` job, after its build). **The Java stage's pinned digest must be the one its tag,
+   `eclipse-temurin:21-jdk`, resolves to on Docker Hub now** (Build's `make ci`, after
+   `core-check`); a pin older than the tag's current digest is red. Whatever cannot be read (the
+   image, the Dockerfile's pinned tag, or Docker Hub's answer) is a refusal, never a pass. **The
+   policy, the orchestrator's call on review:** the tag's digest, not Adoptium's release list,
+   because the tag moves only once an image exists to repin to. So CI is never red for days with
+   nothing to take, and an old commit re-run is red only when its pin is no longer the tag's, never
+   merely because a release was announced. Repin the digest and the label together. It needs Docker
+   and the network, as the image scans do, and never runs in Core's Makefile, which stands alone
+   (ADR-114 Amendment 2). Pinned at **21.0.13+9**, October 2026's update.
    Its bundled native libraries' licences, for the NOTICE, are in `spec/00` §7.
 2. **Gazetteer places copied into a case's own dataset (ruling 6, option C).** Adding a gazetteer
    copies its places into a case's own dataset (`services/api/case_gazetteers.py`), so **the case stays
@@ -31585,8 +31589,16 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   (`test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone`) are a request to the orchestrator
   (`process/lanes/platform/PORT_CONTRACT.diff`), proved live with the diff applied, the case red with
   the search guard's copy clause or the suggestion's withholding removed.
-- **The version gate's `make ci` target** is Build's Makefile, a shared file: a request to the
-  orchestrator (`process/lanes/platform/JAVA_RUNTIME_CI.diff`).
+- **The version gate's wiring** is in shared files: CI's step in `.github/workflows/ci.yml`, the
+  owner's (`process/lanes/platform/P5_ci.diff`), and Build's `make ci` target, the orchestrator's
+  (`process/lanes/platform/JAVA_RUNTIME_CI.diff`). Each was shown red over a Temurin 21.0.1 image on
+  the test server.
+- **A fresh install builds its first basemap from *Admin › Maps*.** With no case or dataset yet,
+  the command-line builds and the set-up console's (which runs the command line) refuse every
+  unit, since none holds anything and they have no administrator's own unit to admit. *Admin ›
+  Maps* admits the administrator's own (`test_a_fresh_install_builds_from_admin_maps_alone`).
+  Recorded, not changed: a tiles-only build, without a gazetteer, is the likely next step if the
+  console must build first.
 - **The image's source offer and NOTICE** for the Java runtime are a release step (`spec/00` §7).
 - **The copy is made in the request**, a page at a time; each re-build refreshes every recorded dataset
   inside its stream. Measured under the platform lane's lease on stack a, 9 November 2026 (the
@@ -31603,9 +31615,10 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   exception, another exception, the exception for an unrecorded runtime, an undeclared Java: each
   refused; the real Dockerfiles pass); `tests/test_conduit_image_java_licence.py` (the stage pinned by
   digest, jlinked, declared, on the `PATH`); `tests/licence_check/test_java_runtime_check.py` (the
-  version gate: an update not taken, a label drifted from the image by version or by build, a release
-  file or `java -version` naming none, every way Adoptium's answer can fail, a release of another
-  shape, the label however written, through `main` and the fetch's own code).
+  version gate: a pin its tag has moved on from, a label drifted from the image by version or by
+  build, a release file or `java -version` naming none, a Java stage not pinned by tag and digest,
+  every way Docker Hub's answer can fail, the label however written, through `main` and the
+  fetch's own code).
 - **Copies**: live, `tests/ingest/test_case_gazetteer_copies_live.py` (found by name at its point and a
   SECRET place not; no identifier on a node read, an expansion or a search; never matched by its `osm_id`
   or `uprn`, more than a page sharing the prefix; a re-copy writes no second copy and keeps a place
@@ -31614,7 +31627,9 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   writing onto a copy through the real merge keeps it one, withheld; node detail in bulk and the
   type-ahead by name send none; a retracted copy stays one, withheld),
   `tests/adapters/graph_arcadedb/test_every_read_withholds_by_its_principal.py` (every read in the
-  adapter deserialised with its own caller's principal, so no read path sends a copy's identifier) and
+  adapter's package deserialised with its own caller's principal, through the module or not, and no
+  deserialiser imported under another name or handed on as a value, so no read path sends a copy's
+  identifier), `test_audit_section_routes.py` (*Audit* shows the dataset alone) and
   `tests/ingest/test_case_gazetteer_routes_live.py` (through the routes: the case stays one dataset
   and the Studio's upload, a load a composite case refuses, is made, and refused once the case reads a
   composite; search, seed, expansion and the type-ahead carry and match no
@@ -31636,7 +31651,7 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   runner refusing with the Conduit's own parser) and `GeospatialScreen.test.tsx`.
 
 **Cost.** The Conduit's image grows by the jlinked runtime: 62 MB (`/opt/java`); the image is
-1.86 GB on amd64 (1.33 GB measured on arm64). A Temurin update turns `make ci` red until it is taken. Each
+1.86 GB on amd64 (1.33 GB measured on arm64). A new `21-jdk` image turns `make ci` red until it is taken. Each
 dataset that takes a gazetteer holds a copy of every place, written a page at a time (15 to 21 s per
 1,000 places, measured as above), and keeps them after a removal; a re-build rewrites every recorded
 dataset's copies but those the case made its own. A removal is one record's update.
