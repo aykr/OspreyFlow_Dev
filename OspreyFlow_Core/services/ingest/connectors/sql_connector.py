@@ -231,13 +231,17 @@ async def read_sql(
         await conn.close()
 
 
+#: The two columns the server adds to a read: each row's size, and the running total to it.
+_ROW_BYTES, _TAKEN = '"osprey read row bytes"', '"osprey read bytes taken"'
+
+
 async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | None) -> ReadRows:
     table = _quoted(read.table)
-    columns = ", ".join(_quoted(c) for c in read.columns) if read.columns else "*"
-    if watermark is not None and read.columns and watermark not in read.columns:
-        columns += f", {_quoted(watermark)}"
-    sql = f"SELECT {columns} FROM {table}"
+    names = list(read.columns) if read.columns else await _columns(conn, table, read)
+    if watermark is not None and watermark not in names:
+        names.append(watermark)
     args: list[Any] = []
+    where = order = ""
     if watermark is not None:
         kind = await conn.fetchval(
             "SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a "
@@ -249,33 +253,55 @@ async def _read(conn: Any, read: SqlRead, watermark: str | None, cursor: str | N
                 f"the table has no column {watermark!r} to read past; nothing was written"
             )
         if cursor is not None:
-            sql += f" WHERE {_quoted(watermark)} > $1::text::{kind}"
+            where = f" WHERE {_quoted(watermark)} > $1::text::{kind}"
             args.append(cursor)
-        sql += f" ORDER BY {_quoted(watermark)}"
+        order = f"ORDER BY {_quoted(watermark)} "
+    cap = reads.MAX_BYTES
+    args.append(cap)
+    limit = f"${len(args)}::bigint"
+    # The byte cap is kept by the server, before any row is sent (rule 2; the independent review of
+    # L1.6): each row's size is its text in bytes, as the database writes it (a little over what the
+    # file will hold, never under), with a running total in the read's own order. A row whose total
+    # before it is past the cap is never sent, and the row that crosses the cap is sent without its
+    # values, so the read can say it was refused having held no more than the cap.
+    columns = ", ".join(_quoted(n) for n in names)
+    size = f"octet_length(ROW({columns})::text)"
+    inner = (
+        f"SELECT {columns}, {size} AS {_ROW_BYTES}, "
+        f"sum({size}) OVER ({order}ROWS UNBOUNDED PRECEDING) AS {_TAKEN} FROM {table}{where}"
+    )
+    shown = ", ".join(
+        f"CASE WHEN s.{_TAKEN} <= {limit} THEN s.{_quoted(n)} END AS {_quoted(n)}" for n in names
+    )
+    sql = (
+        f"SELECT {shown}, s.{_TAKEN} FROM ({inner}) AS s "
+        f"WHERE s.{_TAKEN} - s.{_ROW_BYTES} <= {limit}"
+    )
+    if watermark is not None:
+        sql += f" ORDER BY s.{_quoted(watermark)}, s.{_TAKEN}"
     sql += f" LIMIT {reads.MAX_ROWS + 1}"
+    over_bytes = ConnectorRefused(
+        f"the table's rows come to more than {cap} bytes, more than one read may take; nothing "
+        "was written (rule 2)"
+    )
     # Taken through a cursor and stopped at either cap as it is passed, so a table over the cap is
-    # never fetched whole (rule 2; the orchestrator's second review).
-    names: list[str] = []
+    # never fetched whole (rule 2; the orchestrator's second review). Each row is checked before it
+    # is held, in bytes (UTF-8) as the file will hold it, as well as by the server's own count.
     rows: list[dict[str, str | None]] = []
     taken = 0
     async for record in conn.cursor(sql, *args, prefetch=500):
-        if not names:
-            names = list(record.keys())
+        if record[_TAKEN.strip('"')] > cap:
+            raise over_bytes
         row = {n: as_text(_plain(record[n])) for n in names}
-        taken += sum(len(v) for v in row.values() if v)
-        rows.append(row)
-        if len(rows) > reads.MAX_ROWS:
+        taken += sum(len(v.encode("utf-8")) for v in row.values() if v)
+        if taken > cap:
+            raise over_bytes
+        if len(rows) == reads.MAX_ROWS:
             raise ConnectorRefused(
                 f"the table holds more than {reads.MAX_ROWS} rows to read, more than one read "
                 "may hold; nothing was written (rule 2)"
             )
-        if taken > reads.MAX_BYTES:
-            raise ConnectorRefused(
-                f"the table's rows come to more than {reads.MAX_BYTES} bytes, more than one read "
-                "may take; nothing was written (rule 2)"
-            )
-    if not names:
-        names = await _columns(conn, table, read)
+        rows.append(row)
     reached = cursor
     if watermark is not None and rows:
         reached = rows[-1][watermark]
