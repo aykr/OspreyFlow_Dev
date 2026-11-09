@@ -561,6 +561,18 @@ New ones are added at the bottom as they happen.
     `/private/tmp`: my uncommitted offline-on-server work, rebuilt in `~/dev/osprey-wt/orch-offline` and
     committed on `orch/offline-remote` (`b999d10`; three cases red against main, 112 pass). It is being trialled
     now, and rules-b's merge is being gated with it.
+85. **Your ruling, about 17:50 (case-b's L3.8, access):** when a person being disabled owns an item the
+    administrator can't see (above their clearance in their own unit), Disable is refused with its own 409,
+    `withheld_items`, whose words name nothing about the items. It stays refused until an administrator of that
+    unit cleared to the item's marking, or the item's case Authors, transfers it; nothing is moved by anyone who
+    can't see it.
+86. **Rules-b's L2.12 merged (`dcb1406`, brought onto main's later records as `3790da0`).** I gated it at the
+    merge result. `make -k ci` fails only where this machine fails. test-js: 2,813 passed, with
+    `MatrixView.budget` failing under a load of 29 and passing alone. `glass-perf` green: the 50k/250k first
+    frame in 5.4 s. make test's pytest half ran on the server through the offline verb and was no redder than
+    main's own run there. That copy's own failures (no git, no Node, the run folders in its root) are being fixed
+    before the verb reaches main. Platform's P5 and case's L3.4 are ready, and my independent reviews of both are
+    running. Studio-b's L1.8 merges next.
 
 ## Evening, 7 November: your records of 7 November applied
 
