@@ -34,7 +34,13 @@ from conduit_common.identity import new_edge_id
 from ontology.errors import OntologyError
 from ontology.handling import audience_of, load_uk_le_scheme, merge_handling
 from ontology.validation import validate_edge_endpoints, validate_properties
-from ports.graph import NodeSuggestions, NotPromotable, PromotionReverted, SuggestOptions
+from ports.graph import (
+    AmbiguousElementId,
+    NodeSuggestions,
+    NotPromotable,
+    PromotionReverted,
+    SuggestOptions,
+)
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -278,6 +284,12 @@ class BoardGraph(FakeGraphPort):
         tx: str,
     ) -> None:  # fmt: skip
         self.promotions += 1
+        # As the adapter's `_holders`: an id two stored elements of one kind both hold (two link
+        # types' links under one id) refuses the whole call, naming how many, never which.
+        ambiguous = {e for e in set(edge_ids)
+                     if sum(1 for held in self._graph_edges if held.id == e) > 1}  # fmt: skip
+        if ambiguous:
+            raise AmbiguousElementId("link", len(ambiguous))
         # As the adapter: live, and not promoted by another load already.
         nodes = [
             None if n in self.promoted_by else self._live_node(n) for n in set(node_ids)
@@ -338,8 +350,10 @@ class BoardGraph(FakeGraphPort):
         self._later.setdefault(tx, []).append(land)
         return PromotionReverted(nodes=len(nodes), edges=len(edges))
 
-    async def live_edges_touching(self, node_ids: Sequence[str]) -> set[str]:
-        """As the adapter: every live link at one of the nodes, whoever may read it."""
+    async def live_edges_touching(self, node_ids: Sequence[str], tx: str | None = None) -> set[str]:
+        """As the adapter: every live link at one of the nodes, whoever may read it. `tx` is taken
+        as the adapter takes it; this fake writes nothing before its commit, so a read inside an
+        open transaction sees what a read outside it does."""
         wanted = set(node_ids)
         return {
             e.id for e in self._graph_edges

@@ -821,14 +821,18 @@ class GraphPort(Protocol):
         (one promoted from the layer) is never touched."""
         ...
 
-    async def live_edges_touching(self, node_ids: Sequence[NodeId]) -> set[EdgeId]:
+    async def live_edges_touching(
+        self, node_ids: Sequence[NodeId], tx: TxId | None = None
+    ) -> set[EdgeId]:
         """ADR-127 Amendment 6. The ids of the live links (neither reverted nor superseded) with
         one of `node_ids` at either end, **whatever the caller may read**: no principal, no access
         step. For the revert alone, to tell whether a link outside the load being reverted rests on
         a node the load created (a later load may only have referenced the node, which its record
         keeps as a count). A route must never call it
         (`tests/test_unfiltered_node_lookup_confined.py`). Each id once however often given; no ids
-        give the empty set; a bare `str` is a `TypeError`."""
+        give the empty set; a bare `str` is a `TypeError`. Given `tx`, read inside that open
+        transaction (ADR-143 Amendment 5 decision 8: a promotion's revert reads and writes as one
+        view), so what it has written and not yet committed is seen."""
         ...
 
     async def live_nodes_naming_geometry(

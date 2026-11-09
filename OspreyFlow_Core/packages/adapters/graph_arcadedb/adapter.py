@@ -798,7 +798,9 @@ class GraphArcadeDBAdapter:
             )
         ]
 
-    async def _record_ids(self, type_names: Sequence[str], ids: list[str]) -> list[str]:
+    async def _record_ids(
+        self, type_names: Sequence[str], ids: list[str], *, tx: TxId | None = None
+    ) -> list[str]:
         """The record ids of the elements holding `ids`, over each stored type in `type_names`
         (ADR-124 decision 6). One SQL query per type, run together: a type's own unique `id` index
         answers it, which Gremlin's `has("id", within(...))` does not (it scans the store). The
@@ -807,7 +809,7 @@ class GraphArcadeDBAdapter:
         so there is no missing type to read as no rows: any error is raised."""
         found = await asyncio.gather(
             *(
-                self._client.sql(render_record_id_lookup_sql(t), params={"ids": ids})
+                self._client.sql(render_record_id_lookup_sql(t), params={"ids": ids}, session_id=tx)
                 for t in type_names
             )
         )
@@ -1962,19 +1964,22 @@ class GraphArcadeDBAdapter:
             for chunk in _id_chunks(found_ids)
         ]
 
-    async def live_edges_touching(self, node_ids: Sequence[NodeId]) -> set[EdgeId]:
+    async def live_edges_touching(
+        self, node_ids: Sequence[NodeId], tx: TxId | None = None
+    ) -> set[EdgeId]:
         found: set[EdgeId] = set()
         types = None
         for chunk in _id_chunks(node_ids):
             types = types if types is not None else await self._types_with_unique_id("vertex")
-            rids = await self._record_ids(types, chunk)
+            rids = await self._record_ids(types, chunk, tx=tx)
             if not rids:
                 continue
             # By record id, not by `has("id", ...)`: the node is read from its index, and only its
             # own links are walked. Live links only: neither reverted nor superseded, as every read.
             ids_literal = groovy_string_list_literal(rids)
             rows = await self._client.gremlin(
-                f'g.V({ids_literal}).bothE().has("reverted",false).hasNot("superseded_by").values("id")'
+                f'g.V({ids_literal}).bothE().has("reverted",false).hasNot("superseded_by").values("id")',
+                session_id=tx,
             )
             found.update(str(row["result"]) for row in rows)
         return found

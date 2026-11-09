@@ -249,3 +249,29 @@ async def test_withdrawing_a_layer_leaves_what_was_promoted_from_it(
         assert not await adapter.get_edges([kept_link], CASE_A)
         assert await _b_reads(adapter, drawn, link) == (True, True)
         assert await adapter.get_nodes([loaded], CASE_B)
+
+
+async def test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-143 Amendment 5 decision 8 (the independent review of L3.4, item 4): the revert asks
+    `live_edges_touching` inside its own transaction, so the read and the writes that follow are
+    one view of the graph. A link written in that transaction, not yet committed, is seen through
+    it; the same read outside it (the plant: the session dropped) does not see it. Rolled back, so
+    nothing stays."""
+    async with factory.context() as adapter:
+        loaded, drawn, _ = await _drawn(adapter)
+        tx = await adapter.begin_transaction()
+        try:
+            (written,) = await adapter.upsert_edges(
+                [_edge("ASSOCIATE_OF", loaded, drawn, classification="OFFICIAL",
+                       datasets=[LAYER_A])],
+                tx,
+            )  # fmt: skip
+            inside = await adapter.live_edges_touching([drawn], tx=tx)
+            outside = await adapter.live_edges_touching([drawn])
+        finally:
+            await adapter.rollback_transaction(tx)
+        assert written in inside
+        assert written not in outside  # the plant: a read without the session misses it
+        assert written not in await adapter.live_edges_touching([drawn])
