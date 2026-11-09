@@ -19,12 +19,20 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
+import time
 from collections.abc import Collection, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
+from dulwich.errors import NotGitRepository
+from dulwich.index import index_entry_from_stat
+from dulwich.object_store import commit_tree_changes, tree_lookup_path
+from dulwich.objects import ZERO_SHA, Blob, Commit, ObjectID, Tree
+from dulwich.refs import HEADREF
+from dulwich.repo import Repo
 from services.ingest.engine import (
     RowRejected,
     recipe_handlings,
@@ -113,7 +121,8 @@ fixture) and so never exercised this default at all.
 
 
 class GitCommitError(Exception):
-    """Raised when `git add`/`git commit` fails for any reason other than
+    """Raised when committing a published recipe fails (dulwich since the owner's ruling of
+    9 November 2026; the `git` binary before) for any reason other than
     "nothing to commit" (treated as success below — republishing identical
     content is not an error). Never swallowed into a bare 500: the registry
     row is not flipped to `published` unless the commit that makes "the
@@ -240,38 +249,94 @@ def recipe_git_relative_path(recipe_id: str) -> str:
     return f"recipes/{recipe_id}.yaml"
 
 
-async def _run_git(*args: str, cwd: Path) -> tuple[int, str]:
-    proc = await asyncio.create_subprocess_exec(
-        "git",
-        *args,
-        cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-    stdout, _ = await proc.communicate()
-    return proc.returncode or 0, stdout.decode(errors="replace")
+#: The platform's own identity on every publish commit (§6: `published_by` on the registry row
+#: records the accountable human; the commit is the platform's record of what was published).
+_COMMIT_IDENTITY = b"OspreyFlow Ingest Studio <osprey@localhost>"
+
+#: One publish at a time in this process: the compare-and-swap on `HEAD` below refuses a commit
+#: whose parent moved, and this keeps two concurrent publishes from refusing each other.
+_REPOSITORY_LOCK = threading.Lock()
 
 
-async def _ensure_repository(repo_root: Path) -> None:
-    """Make `repo_root` a git repository if it is not one already — round 13bf.
+def _open_repository(repo_root: Path) -> Repo:
+    """The repository at `repo_root`, made on first use — round 13bf.
 
     A rendered deployment's recipe root is an empty directory on a fresh persistent volume, so
-    the first publish would otherwise fail `git add` with "not a git repository" and surface as
-    the same bare 500 this round came to fix. Initialising on first use keeps the operator's
-    install step at "start the deployment", which is what `05_DEPLOYMENT.md` promises.
-
-    The identity is set locally on this repository, never globally: the commits are the
-    platform's own record of what was published, not any person's, and `published_by` on the
-    registry row is where the accountable human is recorded (§6).
+    initialising on first use keeps the operator's install step at "start the deployment", which
+    is what `05_DEPLOYMENT.md` promises. The branch is `main`, as `git init --initial-branch=main`
+    made it before the dulwich swap; a repository the old code (or anyone) made is opened as it is,
+    on whichever branch its `HEAD` names.
     """
-    if (repo_root / ".git").exists():
-        return
-    repo_root.mkdir(parents=True, exist_ok=True)
-    code, output = await _run_git("init", "--initial-branch=main", cwd=repo_root)
-    if code != 0:
-        raise GitCommitError(f"git init in {str(repo_root)!r} failed: {output}")
-    await _run_git("config", "user.email", "osprey@localhost", cwd=repo_root)
-    await _run_git("config", "user.name", "OspreyFlow Ingest Studio", cwd=repo_root)
+    try:
+        return Repo(str(repo_root))
+    except NotGitRepository:
+        repo_root.mkdir(parents=True, exist_ok=True)
+        return Repo.init(str(repo_root), default_branch=b"main")
+
+
+def _commit_file(repo_root: Path, relative_path: str, message: str) -> None:
+    """Commit the working-tree file at `relative_path` exactly as `git add <path>` then
+    `git commit -m <message> -- <path>` did, with dulwich and without the `git` binary (the
+    owner's ruling of 9 November 2026). The commit object is built here rather than through
+    dulwich's porcelain on purpose: porcelain reads the repository's config, and its config can
+    name a pre-commit or post-commit hook or a GPG signer, each an executable it would run.
+
+    Only this one path changes between the parent's tree and the new one, so anything else staged
+    in the index stays staged and out of the commit, as `git commit -- <path>` left it. A file
+    whose bytes are already the committed ones makes no commit (republishing identical content is
+    not an error), but its index entry is still refreshed.
+    """
+    path = relative_path.encode("utf-8")
+    absolute_path = repo_root / relative_path
+    with _REPOSITORY_LOCK, _open_repository(repo_root) as repo:
+        blob = Blob.from_string(absolute_path.read_bytes())
+        head: ObjectID | None
+        try:
+            head = repo.refs[HEADREF]
+        except KeyError:
+            head = None  # `HEAD` names a branch with no commit yet
+        parent: Commit | None = None
+        if head is not None:
+            found = repo[head]
+            if not isinstance(found, Commit):
+                raise GitCommitError(f"HEAD in {str(repo_root)!r} is not a commit")
+            parent = found
+        parent_tree = parent.tree if parent is not None else None
+
+        unchanged = False
+        if parent_tree is not None:
+            try:
+                _, committed = tree_lookup_path(repo.object_store.__getitem__, parent_tree, path)
+                unchanged = committed == blob.id
+            except KeyError:
+                pass
+
+        if not unchanged:
+            repo.object_store.add_object(blob)
+            base: ObjectID | Tree = parent_tree if parent_tree is not None else Tree()
+            commit = Commit()
+            commit.tree = commit_tree_changes(repo.object_store, base, [(path, 0o100644, blob.id)])
+            commit.parents = [head] if head is not None else []
+            commit.author = commit.committer = _COMMIT_IDENTITY
+            commit.author_time = commit.commit_time = int(time.time())
+            commit.author_timezone = commit.commit_timezone = 0
+            commit.encoding = b"UTF-8"
+            commit.message = message.encode("utf-8") + b"\n"  # `git commit -m` ends it so
+            repo.object_store.add_object(commit)
+            if not repo.refs.set_if_equals(
+                HEADREF, head if head is not None else ZERO_SHA, commit.id,
+                committer=_COMMIT_IDENTITY, message=b"commit: " + message.encode("utf-8"),
+            ):  # fmt: skip
+                raise GitCommitError(
+                    f"the branch in {str(repo_root)!r} moved while {relative_path!r} was being "
+                    "committed; publish again"
+                )
+
+        # What `git add` did: the index says the working-tree file is the committed blob, so
+        # `git status` on the volume is clean.
+        index = repo.open_index()
+        index[path] = index_entry_from_stat(os.stat(absolute_path), blob.id)
+        index.write()
 
 
 async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROOT) -> str:
@@ -280,7 +345,7 @@ async def write_and_commit_recipe(recipe: Recipe, *, repo_root: Path = _REPO_ROO
     only to the database." Returns the git-relative path stored as the
     registry row's own `git_path`. A commit with nothing changed
     (republishing byte-identical content) is not an error — every other
-    non-zero exit is.
+    failure is.
 
     **A stated gap, not a silent one**: this commits to whichever local checkout `repo_root` names —
     correct for the single-instance dev deployment this phase targets, not
@@ -302,28 +367,23 @@ async def commit_recipe_file(
     <id> v<version>`, and returns the git-relative path. The Prison Intelligence seed copies each
     committed recipe here byte for byte (ADR-127 Amendment 23), which `serialise_recipe` would not
     keep (it drops comments and reorders). A commit with nothing changed is not an error; every
-    other non-zero exit is."""
+    other failure raises `GitCommitError`.
+
+    The commit is dulwich's (`_commit_file`), run on a worker thread because dulwich's file I/O is
+    synchronous; the repository it writes is an ordinary git repository, which `git log` reads."""
     relative_path = recipe_git_relative_path(recipe_id)
     absolute_path = repo_root / relative_path
-    absolute_path.parent.mkdir(parents=True, exist_ok=True)
-    absolute_path.write_bytes(data)
-
-    await _ensure_repository(repo_root)
-
-    code, output = await _run_git("add", relative_path, cwd=repo_root)
-    if code != 0:
-        raise GitCommitError(f"git add {relative_path!r} failed: {output}")
-
-    code, output = await _run_git(
-        "commit",
-        "-m",
-        f"ingest: publish {recipe_id} v{version}",
-        "--",
-        relative_path,
-        cwd=repo_root,
-    )
-    if code != 0 and "nothing to commit" not in output:
-        raise GitCommitError(f"git commit {relative_path!r} failed: {output}")
+    message = f"ingest: publish {recipe_id} v{version}"
+    try:
+        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        absolute_path.write_bytes(data)
+        await asyncio.to_thread(_commit_file, repo_root, relative_path, message)
+    except GitCommitError:
+        raise
+    except Exception as exc:  # dulwich's errors share no base; any failure is this typed one
+        raise GitCommitError(
+            f"committing {relative_path!r} in {str(repo_root)!r} failed: {exc!r}"
+        ) from exc
     return relative_path
 
 
