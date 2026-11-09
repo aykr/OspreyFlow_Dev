@@ -1,0 +1,41 @@
+# L2.10 after the orchestrator's re-review, at d52fc9f: the plants, then the delta. The rules lease, stack c, by stack_lease.sh remote; base main at 3be89a7; start 2026-11-09T22:13:45Z
+== plant: unjudged_withheld_only_when_hidden.py (services/api/rule_holds.py)
+        (failed,) = [e for e in outside.entries if e.action == "rule_evaluation_failed" and e.detail["rule_id"] == rule_id]
+        assert failed.detail.get("findings_withheld") is True and failed.result_cardinality == 0
+        assert not {"findings", "documents_not_judged"} & failed.detail.keys()
+        assert not any(ch.isdigit() for ch in str(failed.detail["words"]))
+            return [e for e in page.entries if e.action == "rule_evaluation_failed" and e.detail["rule_id"] == rule]
+        (failed_inside,) = failures(inside, rule_id)
+        assert failed_inside.detail["findings"] == 1 and failed_inside.result_cardinality == 1  # its firings it sees
+        for entry in (failed_inside, *failures(inside, quiet_rule), *failures(outside, quiet_rule)):
+E           AssertionError: assert not ({'documents_not_judged', 'words_without_counts'} & dict_keys(['day', 'words', 'rule_id', 'trigger', 'findings', 'documents_not_judged', 'words_without_counts']))
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_its_team
+1 failed, 18 deselected in 32.73s
+== plant: counted_words_kept.py (services/api/rule_holds.py)
+        (failed,) = [e for e in outside.entries if e.action == "rule_evaluation_failed" and e.detail["rule_id"] == rule_id]
+        assert failed.detail.get("findings_withheld") is True and failed.result_cardinality == 0
+        assert not {"findings", "documents_not_judged"} & failed.detail.keys()
+>       assert not any(ch.isdigit() for ch in str(failed.detail["words"]))
+E       assert not True
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_its_team
+1 failed, 18 deselected in 23.71s
+== plant: ch_activity_unrefused.py (packages/adapters/analytics_clickhouse/adapter.py)
+E           Failed: DID NOT RAISE AmountTotalOutOfRange
+E           Failed: DID NOT RAISE AmountTotalOutOfRange
+E           Failed: DID NOT RAISE AmountTotalOutOfRange
+E           Failed: DID NOT RAISE AmountTotalOutOfRange
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-9e+28-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-6e+27-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-9e+28-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-6e+27-analytics_clickhouse]
+4 failed, 266 deselected in 2.74s
+== the delta
+289 passed in 427.61s (0:07:07)
+# end 2026-11-09T22:22:42Z
+# Classification (rules):
+# - Each plant is red for its own reason: the count withheld only when a firing is hidden (the member's and the quiet rule's
+#   entries keep documents_not_judged); the counted words kept (a digit in the words); ClickHouse's activity refusal
+#   removed (DID NOT RAISE, with 6e27 too).
+# - DuckDB's activity refusal removed, offline: 2 failed, 2 passed, 266 deselected in 1.03s (the two 6e27 cases).
+# - The delta, test_typology_rules and the analytics suite whole: 289 passed.
+# - Lease rules, stack c, 22:13Z to 22:23Z, then down and released.

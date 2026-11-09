@@ -315,3 +315,23 @@ It closed the first round's four items and found seven more. Each is built, red 
    which is present is NULL, and the refusal read it with `float()`. Offline, only DuckDB runs, which is why it passed there.
    - Fixed at bb4466d: a NULL sum is no total.
    - The analytics suite whole passed 266. The rounding plant, taken again, was red alone (`1.123456789 == 1.12345679`).
+
+### 12c. The orchestrator's re-review (at 724d297)
+
+1. **A sweep failure's documents not judged.** They are counted across every customer the rule screens, not the reader's.
+   So the count, and the words that hold it, are withheld from every reader of the rule audit; "could not judge some
+   lapsed documents" is kept without the number. The live case now covers two more readers: a team member who sees
+   every firing, and anyone reading a rule that raised nothing.
+   - Red on c, plant 1: the count withheld only when a firing is hidden. The member's and the quiet rule's entries keep
+     `documents_not_judged`.
+   - Red on c, plant 2: the counted words kept. A digit is in the words.
+2. **The keyboard gate after 86366d7** (`chooseByTyping.ts`): `gates/<head>.keyboard.txt`.
+3. **`account_activity`'s own refusal, shown alone.** A total of 1.2 × 10^28, which the decimal holds but the limit
+   refuses, leaves no store overflow to refuse it instead (rule 15).
+   - Red with only that call removed: on DuckDB, offline (DID NOT RAISE, 2); on ClickHouse, on c (DID NOT RAISE, 4).
+- **Minors:**
+  - the comment on ClickHouse's activity sums;
+  - ADR-133 Amendment 10 point 3 narrowed to the port's refusal;
+  - ADR-146 Amendment 4 point 1, and `alert_routing.py`, say a member leaves from their next token;
+  - ruff and mypy on the files changed since `make -k ci` are recorded (`gates/d52fc9f.lint.txt`).
+- **The delta at d52fc9f:** 289 passed (`gates/d52fc9f.live.txt`).
