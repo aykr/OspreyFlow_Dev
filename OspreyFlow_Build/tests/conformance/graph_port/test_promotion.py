@@ -258,16 +258,23 @@ async def test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote(
     `live_edges_touching` inside its own transaction, so the read and the writes that follow are
     one view of the graph. A link written in that transaction, not yet committed, is seen through
     it; the same read outside it (the plant: the session dropped) does not see it. Rolled back, so
-    nothing stays."""
+    nothing stays. The link goes to a third person: one between `loaded` and `drawn` would merge
+    into `_drawn`'s own committed link (same pair, same type) and answer its id, seen everywhere
+    (measured on ArcadeDB at d9436b4)."""
     async with factory.context() as adapter:
-        loaded, drawn, _ = await _drawn(adapter)
+        _, drawn, _ = await _drawn(adapter)
+        (third,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=[SOURCE])], []
+        )
+        held = await adapter.live_edges_touching([drawn])
         tx = await adapter.begin_transaction()
         try:
             (written,) = await adapter.upsert_edges(
-                [_edge("ASSOCIATE_OF", loaded, drawn, classification="OFFICIAL",
+                [_edge("ASSOCIATE_OF", drawn, third, classification="OFFICIAL",
                        datasets=[LAYER_A])],
                 tx,
             )  # fmt: skip
+            assert written not in held, "a new link, not a merge into a committed one"
             inside = await adapter.live_edges_touching([drawn], tx=tx)
             outside = await adapter.live_edges_touching([drawn])
         finally:
