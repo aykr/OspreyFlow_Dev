@@ -45,6 +45,7 @@ from typing import Any, Protocol
 from conduit_common.identity import new_id
 from ports.graph import NotPromotable
 from schemas.domain import NOT_SAME_AS, SAME_AS, Edge, Node, Principal
+from schemas.ingest import LoadRecord
 from schemas.mapconfig import GAZETTEER_DATASET_PREFIX
 from schemas.promotions import (
     DetailItem,
@@ -58,13 +59,14 @@ from schemas.promotions import (
     SheetItem,
 )
 
+from ..ingest.load_revert import links_resting_on
 from .board_store import BoardItem
 from .boards import Boards, ItemNotFound
 from .case_views import StoredCaseView
 from .datasets import COMPOSITE, DRAWN, Dataset
 from .document_content import DOCUMENT_TYPE
 from .evidence_brief import display_name
-from .promotion_store import LayerGrant, PromotionRecord, PromotionStore
+from .promotion_store import LayerGrant, PromotionRecord, PromotionStore, Status
 
 #: The revert command shown to a reader holding `revert_loads` (ADR-127 Amendment 9).
 REVERT_COMMAND = "python -m scripts.revert_promotion {load_id} --reverted-by <your username>"
@@ -540,7 +542,7 @@ class Promotions:
         self,
         record: PromotionRecord,
         *,
-        was: str,
+        was: Status,
         by: str | None,
         reason: str,
         audited_by_route: bool = False,
@@ -555,7 +557,7 @@ class Promotions:
             now="rejected",
             by=by,
             at=now,
-            reason=reason,  # type: ignore[arg-type]
+            reason=reason,
         )
         if record.grant_id is not None:
             await self.store.close_grant(record.grant_id, now)
@@ -682,7 +684,7 @@ class Promotions:
             if read is None:
                 out[record.id] = (len(record.node_ids), len(record.edge_ids))
                 continue
-            groups.setdefault(tuple(read.datasets), []).append(record)
+            groups.setdefault(tuple(read.datasets or ()), []).append(record)
         for datasets, held in groups.items():
             read = reader.model_copy(update={"datasets": list(datasets)})
             node_ids = sorted({n for r in held for n in r.node_ids})
@@ -965,9 +967,9 @@ async def revert_promotion(
     operator command's core (`scripts.revert_promotion`), run with the Conduit stopped (ADR-127
     Amendment 9); never a route (ADR-143 open question 2, settled (a): Amendment 5 decision 8).
 
-    Refused, as a load's revert is (ADR-127 Amendment 6, `live_edges_touching`), while a live link
-    other than the promotion's own and the case's own unpromoted drawing rests on one of its
-    nodes: another case's link or a later load's would be left resting on a node gone from the
+    Refused, as a load's revert is (ADR-127 Amendment 6, through its `links_resting_on`), while a
+    live link other than the promotion's own and the case's own unpromoted drawing rests on one of
+    its nodes: another case's link or a later load's would be left resting on a node gone from the
     dataset. A promotion from a layer since deleted takes its elements out with the layer."""
     if record.status != "committed":
         raise PromotionRefused(
@@ -979,8 +981,15 @@ async def revert_promotion(
         i.element_id for i in held
         if i.kind != "node" and i.withdrawn_at is None and i.promoted_at is None
     }  # fmt: skip
-    resting = await graph.live_edges_touching(list(record.node_ids))
-    others = set(resting) - set(record.edge_ids) - own_drawing
+    # The load revert's own guard (`links_resting_on`, ADR-127 Amendment 23), asked of the
+    # promotion as the load it is: the unfiltered lookup under it stays confined to the revert's
+    # module (`test_unfiltered_node_lookup_confined.py`), never named here.
+    as_load = LoadRecord(
+        load_id=record.load_id, recipe_id=record.trigger, recipe_version=1,
+        source=record.dataset_id, started_at=record.proposed_at, created_by=record.proposed_by,
+        created_node_ids=list(record.node_ids), created_edge_ids=list(record.edge_ids),
+    )  # fmt: skip
+    others = set(await links_resting_on([as_load], graph)) - own_drawing
     if others:
         raise PromotionRefused(
             "links_rest_on_it",
