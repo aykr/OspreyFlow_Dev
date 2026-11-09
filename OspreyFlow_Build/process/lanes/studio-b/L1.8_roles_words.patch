@@ -1,0 +1,113 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/help/roles.ts b/OspreyFlow_Core/apps/workspace/src/help/roles.ts
+index 180474a..d5907b9 100644
+--- a/OspreyFlow_Core/apps/workspace/src/help/roles.ts
++++ b/OspreyFlow_Core/apps/workspace/src/help/roles.ts
+@@ -97,9 +97,18 @@ export const RIGHT_WORDS: Partial<Record<Right, string>> = {
+   manage_models: "Choose the models and their keys.",
+ };
+ 
++/** A right whose id is not its name on screen: the screens say "domain model", the code keeps
++ * `TargetModel` (ADR-140 Amendment 9 decision 1; L1.8). `rightNames.test.ts` holds every right's name
++ * to the screens' words. */
++const RIGHT_NAMES: Partial<Record<Right, string>> = {
++  edit_target_model: "Edit domain model",
++};
++
+ /** A right's name in words: `review_promotions` reads "Review promotions". Admin's labels take it from
+  * here (`admin-tips.patch` makes `admin/sections/Roles.tsx`'s `rightWords` this function). */
+ export function rightName(right: string): string {
++  const named = RIGHT_NAMES[right as Right];
++  if (named) return named;
+   const words = right.replace(/_/g, " ");
+   return words.charAt(0).toUpperCase() + words.slice(1);
+ }
+@@ -132,4 +141,29 @@ export function whyNot(right: Right, holders: readonly string[]): string {
+   return `${need}; ${who} ${holders.length === 1 ? "has" : "have"} it.`;
+ }
+ 
++const RECORDED_RIGHTS = (BY_ROLE as { roles: Record<string, { rights?: string[] }> }).roles;
++
++/** The roles that hold `right`, by name, read from `shell/placesByRole.json` (the record
++ * `test_place_routes.py` holds to the routes, never copied here): each built-in role, worded or said
++ * by its id; never the Super user preset, which is given as three roles, nor a role standing for one
++ * right alone. A custom role is an administrator's, and not named here. */
++export function rolesHolding(right: Right): string[] {
++  return Object.entries(RECORDED_RIGHTS)
++    .filter(([key, role]) => key !== "super" && key !== "none" && !key.startsWith("right:") && role.rights?.includes(right))
++    .map(([key]) => ROLE_WORDS[key]?.name ?? rightName(key))
++    .sort((a, b) => a.localeCompare(b));
++}
++
++/** Why a person cannot take an action, and which roles can (decision 12 as the orchestrator settled it
++ * on 9 November 2026, L1.8's option C: the roles that hold the right, never the people, until the owner
++ * rules on naming people). */
++export function whyNotByRole(right: Right): string {
++  const need = `You need ${rightName(right)}`;
++  const roles = rolesHolding(right);
++  if (roles.length === 0) return `${need}; no built-in role has it. Ask an administrator.`;
++  if (roles.length === 1) return `${need}; the ${roles[0]!} role has it. Ask an administrator to give it to you.`;
++  const named = `${roles.slice(0, -1).join(", ")} and ${roles.at(-1)!}`;
++  return `${need}; the ${named} roles have it. Ask an administrator to give you one.`;
++}
++
+ export const HELP_TITLE = "Roles, teams and Authors";
+diff --git a/OspreyFlow_Core/apps/workspace/src/help/rightNames.test.ts b/OspreyFlow_Core/apps/workspace/src/help/rightNames.test.ts
+new file mode 100644
+index 0000000..3fc1b85
+--- /dev/null
++++ b/OspreyFlow_Core/apps/workspace/src/help/rightNames.test.ts
+@@ -0,0 +1,54 @@
++// L1.8: a right's name on screen, and who can, from `roles.ts`. What would fail if each were wrong:
++// - a right's name saying "target model" where the screens say "domain model" (ADR-140 Amendment 9
++//   decision 1), as `edit_target_model` did — `every right's name says what the screens say`;
++// - who-can naming a role id, a person, the Super user preset or a role that does not hold the right —
++//   `who can is the built-in roles that hold the right, by name`, read from `placesByRole.json`, the
++//   record `test_place_routes.py` holds to the routes.
++import { readFileSync } from "node:fs";
++import { dirname, join } from "node:path";
++import { fileURLToPath } from "node:url";
++
++import { describe, expect, it } from "vitest";
++
++import BY_ROLE from "../shell/placesByRole.json";
++import { rightName, rolesHolding, ROLE_WORDS, whyNotByRole, type Right } from "./roles";
++
++const RIGHTS_PY = join(dirname(fileURLToPath(import.meta.url)), "../../../../packages/schemas/rights.py");
++const DECLARED = (() => {
++  const source = readFileSync(RIGHTS_PY, "utf8");
++  const body = source.slice(source.indexOf("class Right(StrEnum):"), source.indexOf("\nR = Right"));
++  return [...body.matchAll(/^\s+[A-Z_]+ = "([a-z_]+)"/gm)].map((m) => m[1]!) as Right[];
++})();
++const RECORDED = (BY_ROLE as { roles: Record<string, { rights?: string[] }> }).roles;
++
++describe("a right's name and who can", () => {
++  it("every right's name says what the screens say", () => {
++    expect(DECLARED).toContain("edit_target_model");
++    expect(DECLARED.filter((r) => /target\s+model/i.test(rightName(r)))).toEqual([]);
++    expect(rightName("edit_target_model")).toBe("Edit domain model");
++    expect(rightName("review_promotions")).toBe("Review promotions");
++  });
++
++  it("who can is the built-in roles that hold the right, by name", () => {
++    for (const right of DECLARED) {
++      const holders = Object.entries(RECORDED)
++        .filter(([key, role]) => key !== "super" && key !== "none" && !key.startsWith("right:") && role.rights?.includes(right))
++        .map(([key]) => ROLE_WORDS[key]?.name ?? rightName(key));
++      expect(rolesHolding(right).slice().sort()).toEqual(holders.slice().sort());
++      const words = whyNotByRole(right);
++      expect(words.startsWith(`You need ${rightName(right)}; `)).toBe(true);
++      expect(words).not.toMatch(/_|Super user|target model/i);
++    }
++  });
++
++  it("says one role, several roles, and none, in plain words", () => {
++    expect(whyNotByRole("review_promotions")).toBe(
++      "You need Review promotions; the Data Engineer role has it. Ask an administrator to give it to you.",
++    );
++    expect(whyNotByRole("edit_pipelines")).toBe(
++      "You need Edit pipelines; the Data Engineer and Source author roles have it. Ask an administrator to give you one.",
++    );
++    const nobody = DECLARED.find((r) => rolesHolding(r).length === 0);
++    if (nobody) expect(whyNotByRole(nobody)).toBe(`You need ${rightName(nobody)}; no built-in role has it. Ask an administrator.`);
++  });
++});

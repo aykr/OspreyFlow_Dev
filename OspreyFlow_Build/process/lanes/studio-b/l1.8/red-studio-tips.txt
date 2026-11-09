@@ -1,0 +1,178 @@
+# L1.8 step 1: each Studio gate taken out alone (RightButton back to Button), rightsGate.test.tsx run, restored. Offline vitest; no stack.
+
+## plant: Deploy (publish/PublishScreen.tsx, gate 0)
+     × on Deploy: deploying, and deploying and running
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Deploy-and-run (publish/PublishScreen.tsx, gate 1)
+     × on Deploy: deploying, and deploying and running
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Update-schedule (publish/PublishScreen.tsx, gate 2)
+     × on a deployed pipeline's controls: its schedule, pausing it, running it and reopening it
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Pause-schedule (publish/PublishScreen.tsx, gate 3)
+     × on a deployed pipeline's controls: its schedule, pausing it, running it and reopening it
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Reopen (publish/PublishScreen.tsx, gate 4)
+     × on a deployed pipeline's controls: its schedule, pausing it, running it and reopening it
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Run-now (publish/PublishScreen.tsx, gate 5)
+     × on a deployed pipeline's controls: its schedule, pausing it, running it and reopening it
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Run-the-test (verify/VerifyScreen.tsx, gate 0)
+     × on Test and on the load rules
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Save-load-rules (checks/ChecksScreen.tsx, gate 0)
+     × on Test and on the load rules
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: New-pipeline (dag/PipelineStudio.tsx, gate 0)
+     × on Pipelines: a new pipeline
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Register (studio/SourcesTab.tsx, gate 0)
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Add-files (studio/SourcesTab.tsx, gate 1)
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Import-a-list (sources/ScreeningLists.tsx, gate 0)
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Resume-refresh (sources/SourcePage.tsx, gate 0)
+      Tests  11 passed (11)
+
+## plant: Pause-refresh (sources/SourcePage.tsx, gate 1)
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Refresh-now (sources/SourcePage.tsx, gate 2)
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Edit-governance (sources/SourcePage.tsx, gate 3)
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant: Run-now-or-schedule (runs/RunsTab.tsx, gate 0)
+     × on Runs: running or scheduling, and a load's revert
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 10 passed (11)
+
+## plant again, after the paused-source case was added: Resume-refresh (sources/SourcePage.tsx, gate 0)
+     × on a paused source: resuming its refresh
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 11 passed (12)
+
+## plant: RIGHT_NAMES without edit_target_model (the right said 'Edit target model') (roles.ts)
+     × every right's name says what the screens say
+     × who can is the built-in roles that hold the right, by name
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 13 passed (15)
+
+## plant: rolesHolding keeps the Super user preset (roles.ts)
+     × who can is the built-in roles that hold the right, by name
+     × says one role, several roles, and none, in plain words
+     × says why and who can, and does nothing when pressed
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+     × on Runs: running or scheduling, and a load's revert
+     × on Model: proposed link types, for someone who cannot accept types
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  6 failed | 9 passed (15)
+
+## plant: rolesHolding names a role by its id (roles.ts)
+     × who can is the built-in roles that hold the right, by name
+     × says one role, several roles, and none, in plain words
+     × says why and who can, and does nothing when pressed
+     × on Deploy: deploying, and deploying and running
+     × on a deployed pipeline's controls: its schedule, pausing it, running it and reopening it
+     × on Test and on the load rules
+     × on Pipelines: a new pipeline
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+     × on a paused source: resuming its refresh
+     × on Runs: running or scheduling, and a load's revert
+     × on Model: proposed link types, for someone who cannot accept types
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  11 failed | 4 passed (15)
+
+## plant: RightButton offers the action to everyone (the gate's own branch) (../ingest/studio/rightsGate.tsx)
+     × says why and who can, and does nothing when pressed
+     × on Deploy: deploying, and deploying and running
+     × on a deployed pipeline's controls: its schedule, pausing it, running it and reopening it
+     × on Test and on the load rules
+     × on Pipelines: a new pipeline
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+     × on a paused source: resuming its refresh
+     × on Runs: running or scheduling, and a load's revert
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  8 failed | 7 passed (15)
+
+## plant: RightButton greys out with native disabled, not focusable (../ingest/studio/rightsGate.tsx)
+     × on Deploy: deploying, and deploying and running
+     × on a deployed pipeline's controls: its schedule, pausing it, running it and reopening it
+     × on Test and on the load rules
+     × on Pipelines: a new pipeline
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+     × on a paused source: resuming its refresh
+     × on Runs: running or scheduling, and a load's revert
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  7 failed | 8 passed (15)
+
+## restored
+      Tests  22 passed (22)
+
+## plant: keyboard: the refused button natively disabled (not focusable) (src/ingest/studio/rightsGate.tsx), studio-tips.spec.ts
+  ✘  1 keyboard/studio-tips.spec.ts:27:1 › a refused Studio action is reached by keyboard, says why and who can, and does nothing
+  ✘  3 keyboard/studio-tips.spec.ts:60:1 › every registered Studio tips action has its own proving test case above (3ms)
+  2 failed
+  1 passed
+
+## plant: keyboard: the tip not tied to its button (src/ingest/studio/rightsGate.tsx), studio-tips.spec.ts
+  ✘  1 keyboard/studio-tips.spec.ts:27:1 › a refused Studio action is reached by keyboard, says why and who can, and does nothing
+  ✘  3 keyboard/studio-tips.spec.ts:60:1 › every registered Studio tips action has its own proving test case above (4ms)
+    Error: expect(locator).toHaveAccessibleDescription(expected) failed
+  2 failed
+  1 passed
+
+## plant: keyboard: the gate offers the action to everyone (src/ingest/studio/rightsGate.tsx), studio-tips.spec.ts
+  ✘  1 keyboard/studio-tips.spec.ts:27:1 › a refused Studio action is reached by keyboard, says why and who can, and does nothing
+  ✘  3 keyboard/studio-tips.spec.ts:60:1 › every registered Studio tips action has its own proving test case above (5ms)
+    Error: expect(locator).toHaveAttribute(expected) failed
+  2 failed
+  1 passed
+
+## restored
+  3 passed (2.8s)
+
+## plant: the Studio's door to Roles, teams and Authors is words, not a button (src/ingest/IngestStudio.tsx)
+  ✘  2 keyboard/studio-tips.spec.ts:47:1 › Roles, teams and Authors opens from the Studio by keyboard, and goes back (1.0m)
+  ✘  3 keyboard/studio-tips.spec.ts:60:1 › every registered Studio tips action has its own proving test case above (5ms)
+  2 failed
+  1 passed (1.1m)
+     × opens *Roles, teams and Authors* from the Studio, and back
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 11 passed (12)
