@@ -579,7 +579,9 @@ def _backups(
     `server.backups` as the same setting, refused when both are given and differ. With neither,
     `~/OspreyFlow/backups` on this machine or a server of your own; a cloud's server is built
     elsewhere, so nothing is written for it and its own `osprey.yaml` decides."""
-    named = _host_path("folders.backups", folders["backups"], home) if folders.get("backups") else None
+    named = None
+    if folders.get("backups"):
+        named = _host_path("folders.backups", folders["backups"], home)
     old = server.get("backups")
     if named is not None and old is not None and Path(named) != Path(old):
         raise AnswersRefused(
