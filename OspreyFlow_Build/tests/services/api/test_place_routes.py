@@ -58,6 +58,9 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     # Held rows are worked in the Studio's Runs too (ADR-140), and read by Home.
     (r"/held-rows(/|$)", frozenset({"ingest", "rules"}),
      "Rules and Monitoring's Held rows; the Studio's Runs (ingest/runs/RunsTab.tsx)"),
+    # ADR-146 Amendment 2: the rule audit left Rules and Monitoring for the Administrator, read in
+    # Admin › Audit (L2.6), so its route is Admin's though its path ends in `rules`.
+    (r"^/v1/admin/audit(/|$)", frozenset({"admin"}), "Admin › Audit (admin/sections/Audit.tsx)"),
     (r"/alert-queue|/alert-assignees|/alerts(/|$)|/hotlists|/monitors"
      r"|/rules(/|$)",
      frozenset({"rules"}), "Rules and Monitoring (alerts/, watches/)"),
@@ -807,12 +810,49 @@ def test_a_list_loading_route_elsewhere_is_found() -> None:
     assert _misplaced_list_routes(planted) == [victim.path]
 
 
+#: The one route asking for a right of the place that is not the place's, with its reason: ADR-145
+#: Amendment 6 decision 1's exception to ADR-146 Amendment 2 point 3, the rule audit returned to
+#: Admin › Audit for the Administrator. It holds only while the route asks for the administrator's
+#: role (`test_the_rule_audit_outside_the_place_is_the_administrators_alone`).
+RULES_RIGHT_OUTSIDE = {
+    "read_audit_section_rules": "Admin › Audit's rule audit, for the Administrator (ADR-145 Am. 6)",
+}
+
+
 def _unplaced_rules_routes(checks: Callable[[APIRoute], frozenset[str]] = _checks) -> list[str]:
     return sorted(
         r.path
         for r in _routes()
         if checks(r) & RULES_ONLY_RIGHTS and "rules" not in places_of(r.path)
+        and r.endpoint.__name__ not in RULES_RIGHT_OUTSIDE
     )
+
+
+def _outside_not_the_administrators(
+    checks: Callable[[APIRoute], frozenset[str]] = _checks,
+) -> list[str]:
+    from services.api import app as conduit
+
+    names = {r.endpoint.__name__: r for r in _routes()}
+    return sorted(
+        name for name in RULES_RIGHT_OUTSIDE
+        if name not in names or f"role:{conduit.ADMIN_ROLE}" not in checks(names[name])
+    )  # fmt: skip
+
+
+def test_the_rule_audit_outside_the_place_is_the_administrators_alone() -> None:
+    """The exception above is no wider than its ruling: the route exists and asks for the
+    administrator's role; red with that role read off its checks (below)."""
+    assert _outside_not_the_administrators() == []
+
+
+def test_the_exception_without_the_administrators_role_is_found() -> None:
+    from services.api import app as conduit
+
+    def without_role(route: APIRoute) -> frozenset[str]:
+        return _checks(route) - {f"role:{conduit.ADMIN_ROLE}"}
+
+    assert _outside_not_the_administrators(without_role) == sorted(RULES_RIGHT_OUTSIDE)
 
 
 def test_every_route_asking_for_a_right_of_the_place_alone_is_the_place_s() -> None:
