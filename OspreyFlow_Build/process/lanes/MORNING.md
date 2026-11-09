@@ -346,6 +346,11 @@ New ones are added at the bottom as they happen.
     are counted per rule (a small follow-up); "closed as not of interest" means false positive or no further
     action.
 
+66. **The gazetteer becomes a dataset (platform's P4, settled within the rules):** the loaded place names sat in no
+    dataset, so no case could search them. The build now stamps them as a dataset, `gazetteer-osm-<region>`,
+    which a case's Author adds like any other; nothing is read across the dataset boundary. Platform's P3 merged
+    (`246b51d`); platform is on P4, its last step.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
