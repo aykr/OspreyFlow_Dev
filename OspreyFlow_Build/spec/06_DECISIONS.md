@@ -30516,7 +30516,20 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    before every connection or request, since DNS can change in between. A host must also be on the
    egress allow-list at each read. This applies to SQL as well as API connections, so a client
    database on a private network cannot be reached; whether an operator may admit one is put to the
-   owner.
+   owner. "Inside" is judged as `not is_global` (shared addresses, `100.64.0.0/10`, among them), and an
+   IPv6 address carrying an IPv4 one (mapped, NAT64's `64:ff9b::/96`, 6to4) by the address it
+   carries. An API request is sent to the address that was checked, the name kept for `Host` and
+   TLS, so a name rebound between the check and the request reaches nothing new.
+   **Whose a connection is** (the orchestrator's ruling on the second review, rule 3: the strict
+   default). A SQL, API or JSON connection is **bound to the datasets an administrator names** when
+   making it (`Connection.datasets`, by id; the schema refuses such a connection naming none, and a
+   files connection naming any). A source may name only a connection bound to its own dataset, refused
+   in words otherwise at registration, at *Refresh now* and in the one read path every connector read
+   passes (`refuse_unbound` in `read_into_file`); the refusal is audited. A run, a sample and *Test*
+   read the landed file, never the connection, so that one path covers them. **A secret belongs to
+   one connection**: a second connection naming a secret already named is refused, so a secret given
+   for one host or database is never reused for another. An unknown connection is a 404, and no reply
+   names a path on the server.
 2. **SQL: a read-only login over TLS, within named schemas**, checked twice. The connection names the
    schemas its sources may read (`public` by default; never the server's own catalogue), and a
    source's table is always schema-qualified in one of them. *Test connection* and every read refuse a
@@ -30525,7 +30538,8 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    from its first statement with each statement bounded (`statement_timeout`, 60 seconds). TLS is
    always asked for, and by default the server's certificate and name are verified (`verify-full`);
    a server without it is refused. Incremental reads take rows past the source's **cursor**, compared in
-   the column's own type from the server's catalogue, its value bound.
+   the column's own type from the server's catalogue, its value bound. The cursor's column is a plain
+   column name, and every quoted name doubles its own `"`.
 3. **API: behind the egress allow-list.** An HTTPS base URL, a bearer secret or none, paging by `page`
    (until an empty page) or by a next link at a dotted path, which must keep the base URL's scheme,
    host and port (a next link over plain HTTP would carry the bearer secret in clear). The host
@@ -30543,9 +30557,14 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    have been loaded yet (a paused watch, a failed run), and leaves the file as it was when it finds
    nothing; each run's own watermark (ADR-110 Amendment 6) then reads only what that pipeline has not
    loaded, so nothing is dropped and nothing loads twice. A read, or a file, past 500,000 rows, or an
-   API past 1,000 pages, or more than 256 MiB taken in or written, is refused whole (rule 2). The two settings the connectors read
+   API past 1,000 pages, or more than 256 MiB taken in or written, is refused whole (rule 2), and the
+   byte cap stops the read where it is passed: an API's body is streamed, JSON files are sized before
+   any is opened, and SQL rows come through a cursor. A JSON pattern never lists or reads a name
+   starting with a dot (a read's half-written temporary file among them). The two settings the connectors read
    (`OSPREY_CONNECTION_SECRET_<NAME>`, `OSPREY_CONNECTOR_EGRESS`) reach the Conduit as every
-   `deployment.env` line does (each owned service's `env_file`, `harness/render.py`).
+   `deployment.env` line does (each owned service's `env_file`, `harness/render.py`); `apply` keeps
+   both as it keeps every secret, and a restore names each connection secret and the egress list to
+   set again (`05_DEPLOYMENT.md` §6.1).
 5. **The screening-list connector** (`services/api/list_connector.py`). A list is **imported once for
    the deployment** from a file in the ingest folder, through its format's **template** (OFAC SDN,
    OFSI consolidated, the UK Sanctions List, UN, EU, OpenSanctions;
@@ -30572,7 +30591,9 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    name or id, and a name two readable lists share is offered as neither (the gate refuses it). A
    source author is shown each deployment list's name, template, version, entries, last import and
    whether it failed (`SubscribableList`), never its file, who added it, its real dataset, its mapping
-   or its failure's words; a connection's settings likewise only to an administrator.
+   or its failure's words. Of connections, a source author is shown the name and kind of those bound
+   to their dataset only (decision 1's ruling); a connection's settings and datasets are shown only to
+   an administrator.
 8. **A dataset's own list's rows from its own file** (`POST …/reference-lists/{id}/import`). The file
    must be one the dataset's listing offers, refused in the same words whether or not it exists. The
    list must be one its live model names; a first import gives its name and key column, and a later one
@@ -30600,6 +30621,8 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
 | `tests/connectors/test_api_and_json_connectors.py` | egress; the API's refusals in words; every page; a next link off the host; the cap; JSON at its records path; a read landing whole |
 | `tests/services/api/test_connector_hosts.py` | no connection reaches inside the deployment, in any written form or by resolution, at save and before every read or page; a table outside the connection's schemas; each session bounded and read-only; the byte caps |
 | `tests/services/api/test_connector_routes.py` | a secret never answered or audited; only an administrator names or tests a connection; a refused first read registers nothing; *Refresh now* behind the dataset's gate |
+| `tests/services/api/test_connection_binding.py` | a connection bound to the datasets an administrator names: a source of another dataset refused at registration, *Refresh now* and the one read path, and audited; a secret named by one connection only |
+| `tests/harness/test_connection_secrets_kept.py` | `apply` keeps every connection secret and the egress list; a restore names each to set again |
 | `tests/connectors/test_sql_connector_live.py` (live) | **the phase's exit**: `visit_bookings` registered and refreshed through the routes over the Postgres source store and its cursor; a SQL source's file loaded through the source-refresh path into ArcadeDB, the refresh loading only the new row; a writing login refused; refusals in words; a server without TLS refused |
 | `tests/services/api/test_list_rows_parquet_live.py` (live) | the real keeper keeps and refuses what its twin does: blank cells, never replaced, another list's file |
 | `tests/services/api/test_subscribed_lists_seam.py` | a Lookup reads a deployment list only while its dataset subscribes, at the gate and in the run |
