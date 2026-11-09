@@ -18,11 +18,32 @@ function declaredRights(source = readFileSync(RIGHTS_PY, "utf8")): string[] {
   return [...body.matchAll(/^\s+[A-Z_]+ = "([a-z_]+)"/gm)].map((m) => m[1]!);
 }
 
+/** The rights worded when L2.12 was built: each keeps its own words (deleting one is red), whatever
+ * another lane adds to `rights.py` after (said by its name until worded, not red). */
+const WORDED = [
+  "create_case", "share_case", "remove_case", "export", "export_override", "investigate", "edit_graph",
+  "confirm_inferred", "extract_files", "resolve_entities", "record_assessment", "ask_model", "run_analysis",
+  "propose_link_type", "draw_on_boards", "promote_to_dataset", "propose_types", "read_alert_queue",
+  "triage_alerts", "deploy_rules", "read_rule_audit", "read_held_rows", "decide_held_rows",
+  "trace_ownership", "keep_watches", "load_screening_lists", "author_rules", "manage_strength_influencers",
+  "edit_pipelines", "verify_pipelines", "publish_pipelines", "run_pipelines", "schedule_pipelines",
+  "add_ingest_files", "revert_loads", "edit_target_model", "review_promotions", "accept_types",
+  "merge_datasets", "read_reports", "read_report_feed", "read_data_feeds", "administer_system",
+  "manage_people", "manage_dashboards", "operate_schedules", "manage_ontology", "manage_geospatial",
+  "read_audit", "read_export_ledger", "manage_models",
+];
+
 describe("the words for roles, teams and Authors", () => {
   it("say only rights rights.py declares, read from it at test time", () => {
     const declared = declaredRights();
     expect(declared).toContain("create_case");
     expect(Object.keys(RIGHT_WORDS).filter((r) => !declared.includes(r))).toEqual([]);
+  });
+
+  it("keep their own words for every right worded when they were written", () => {
+    expect(WORDED).toHaveLength(51);
+    expect(WORDED.filter((r) => !RIGHT_WORDS[r as keyof typeof RIGHT_WORDS])).toEqual([]);
+    expect(WORDED.filter((r) => !declaredRights().includes(r))).toEqual([]);
   });
 
   it("stay green when another lane adds a right to rights.py, and say it by its name", () => {

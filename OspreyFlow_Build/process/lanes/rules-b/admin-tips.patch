@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 9c906a2..5de7b3a 100644
+index ee55235..3f4f1d8 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -841,6 +841,9 @@ export const MAPS_ACTIONS = defineActionRegistry("MAPS_ACTIONS", [
+@@ -859,6 +859,9 @@ export const MAP_VIEW_ACTIONS = defineActionRegistry("MAP_VIEW_ACTIONS", [
  ] as const);
  
  export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
@@ -99,14 +99,14 @@ index 2fd46ca..f2ae994 100644
        {section && (
          <div className="admin-place__body">
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
-index 497c227..74d9856 100644
+index 497c227..60923e3 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Roles.tsx
 @@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
  import type { BuiltInRole, CustomRole, CustomRoleVersion, RolesCatalogue, Team } from "../../../../../packages/schemas/generated";
  import { Button, Input, Select } from "../../design/primitives";
  import { changeRole, createRole, listRoles, makeTeam, roleVersions, setTeamCover, setTeamLead, type AdminApi } from "../api";
-+import { RIGHT_WORDS, rightName, type Right } from "../../help/roles";
++import { rightName, rightSays } from "../../help/roles";
  
  /** The rights grouped as the places they work in (decision 7); a right named in no group is still
   * offered, under *Other*, so no right is ever left out of the form. */
@@ -146,7 +146,7 @@ index 497c227..74d9856 100644
                  {rightWords(right)}
                </label>
 +              <span id={`right-tip-${right}`} className="label">
-+                {RIGHT_WORDS[right as Right] ?? ""}
++                {rightSays(right)}
 +              </span>
 +              </span>
              ))}

@@ -192,3 +192,26 @@ names of 6) before the change; `analyst` is *Raised by an analyst*, a later kind
 **Item 8, `team_mine` out of the feed.** `test_the_feed_carries_the_panel_sections_as_figures_only` now asserts
 no `team_mine` row: FAILED before the change, green after. The feed is pulled by a board as its dashboard
 identity (`report_sync` reads the CSV), and a reader's own claims mean nothing there; spec 03 says so.
+
+## 13. My lane-reviewer on the fix round's delta
+
+- **Item 8, the JSON feed too.** The JSON feed (the default) answered the figures whole, *mine* included.
+  New `test_neither_feed_format_carries_the_reader_s_own_claims` (through the real feed route, a claimed
+  alert of the reader's in the queue): FAILED on the JSON feed (`'mine': 1`) before the route left it out;
+  green after; the reader's own Figures still carry it (`[1]`). `test_reports.py`'s live view-equals-feed
+  case now compares without *mine*.
+- **Item 10, the routes that name no right.** The sweep asked only routes naming a right, and read them from
+  `test_route_rights.py`'s table. It now reads each route's right from the app (`_declared`), and
+  `test_every_route_naming_no_right_is_one_weighed_for_the_viewer` pins the 23 routes that name none (all
+  GETs but the reader's own tab state and connection ticket). Red: `share_case` taken off
+  `rename_investigation` in `app.py` → `named no right, not weighed: ['rename_investigation']`; restored.
+- **Item 6, the words kept.** The subset check let any of today's words be deleted. `WORDED` pins the 51
+  rights worded at this step: one deleted from `roles.ts` (`share_case`) → `keep their own words …` FAILED;
+  restored. Admin's tip (`admin-tips.patch`) now says a right with no words yet by its name (`rightSays`),
+  not blank; the help page lists the worded rights only, since the Glass has no runtime list of rights.
+- The fake case store's `effective_level` gives a level only where `get_authorized` would.
+- All four patches applied together at this head: 866 unit and 87 keyboard cases passed.
+- Not changed: the board's two Superset guards stay held together by one case (each alone is enough, so no
+  behaviour tells one from the other); the other unit's checks bound the groups to typology (`<=`), since
+  the case's own typology alerts reach the reader the case gate lets in, and the other unit is refused at
+  that gate, not here.

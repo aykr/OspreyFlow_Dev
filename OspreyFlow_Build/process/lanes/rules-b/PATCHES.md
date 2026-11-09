@@ -6,9 +6,10 @@ branch lands, not to `main` alone:** each is made against the branch's own files
 its own (`git apply --check`), and to `main` once L2.12 is merged; the orchestrator passes the three to
 their owners then (the orchestrator's review, 9 November). Together, apply them in this order with `git apply --3way`
 (the badge's and the trend's `App.tsx` hunks are neighbours): `see-the-trend`, `canvas-badge`,
-`admin-tips`, `registry-L2.12`. All four applied: 850 unit cases (App, alerts, admin, canvas, reports,
-home, help) and 87 keyboard cases (rules-place, admin, alert-figures, reports, shell) passed, after review
-round 1. `registry-L2.12.patch` goes in with the merge itself (the branch's keyboard coverage needs it).
+`admin-tips`, `registry-L2.12`. All four applied together, after the orchestrator's review's fix round
+(Admin's tip now `rightSays`): 866 unit cases (App, alerts, admin, canvas, reports, home, help) and 87
+keyboard cases (rules-place, admin, alert-figures, reports, shell) passed. Reversing them in turn fails
+at `App.tsx`'s neighbouring hunks; restore those files from the branch instead. `registry-L2.12.patch` goes in with the merge itself (the branch's keyboard coverage needs it).
 
 | Patch | Owner | What | Its test, red first |
 | --- | --- | --- | --- |

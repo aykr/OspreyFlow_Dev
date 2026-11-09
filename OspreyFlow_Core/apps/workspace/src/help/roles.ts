@@ -1,9 +1,10 @@
 // *Roles, teams and Authors* in one set of words (ADR-145 Amendment 4 decision 12): the tips in Admin
 // and the Ingest Studio, the help page, and the guides' sections (Lane 4) all take their wording from
-// here, so they cannot drift. Each right's words are written here; a right another lane adds in
-// `packages/schemas/rights.py` before its words are is said by its name (`rightSays`), so neither the
-// type check nor `roles.test.ts` goes red for it, and `roles.test.ts` refuses words for a right
-// `rights.py` no longer declares.
+// here, so they cannot drift. Each right's words are written here, and every right worded when L2.12
+// was built must keep them (`roles.test.ts` pins the list); a right another lane adds in
+// `packages/schemas/rights.py` before its words are is said by its name (`rightSays`) in Admin's tips,
+// red nowhere, and is missing from the help page's list until worded (the Glass holds no runtime list
+// of rights to draw it from). `roles.test.ts` refuses words for a right `rights.py` no longer declares.
 //
 // Plain words, British English; what a role or right lets a person do, never how it is checked.
 import type { BuiltInRole } from "../../../../packages/schemas/generated";
