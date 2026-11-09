@@ -817,6 +817,13 @@ def test_a_list_loading_route_elsewhere_is_found() -> None:
 RULES_RIGHT_OUTSIDE = {
     "read_audit_section_rules": "Admin › Audit's rule audit, for the Administrator (ADR-145 Am. 6)",
 }
+#: The exception by endpoint and path together, so a second path mounted on the same function is
+#: not excepted with it.
+RULES_RIGHT_OUTSIDE_AT = frozenset({("read_audit_section_rules", "/v1/admin/audit/rules")})
+#: Everything the excepted route may ask for, and no more.
+RULES_RIGHT_OUTSIDE_CHECKS = frozenset(
+    {"read_audit", "read_rule_audit", "role:osprey-admin"}
+)
 
 
 def _unplaced_rules_routes(checks: Callable[[APIRoute], frozenset[str]] = _checks) -> list[str]:
@@ -824,7 +831,7 @@ def _unplaced_rules_routes(checks: Callable[[APIRoute], frozenset[str]] = _check
         r.path
         for r in _routes()
         if checks(r) & RULES_ONLY_RIGHTS and "rules" not in places_of(r.path)
-        and r.endpoint.__name__ not in RULES_RIGHT_OUTSIDE
+        and (r.endpoint.__name__, r.path) not in RULES_RIGHT_OUTSIDE_AT
     )
 
 
@@ -844,6 +851,16 @@ def test_the_rule_audit_outside_the_place_is_the_administrators_alone() -> None:
     """The exception above is no wider than its ruling: the route exists and asks for the
     administrator's role; red with that role read off its checks (below)."""
     assert _outside_not_the_administrators() == []
+
+
+def test_the_exception_is_pinned_to_one_route_and_its_checks() -> None:
+    """No wider than its ruling: one endpoint, one path, and exactly its three checks. Another name
+    added to the exception, or a second path on the same function, or a check added or dropped,
+    fails here."""
+    assert set(RULES_RIGHT_OUTSIDE) == {"read_audit_section_rules"}
+    mounted = [r for r in _routes() if r.endpoint.__name__ in RULES_RIGHT_OUTSIDE]
+    assert {(r.endpoint.__name__, r.path) for r in mounted} == RULES_RIGHT_OUTSIDE_AT
+    assert [_checks(r) for r in mounted] == [RULES_RIGHT_OUTSIDE_CHECKS]
 
 
 def test_the_exception_without_the_administrators_role_is_found() -> None:
