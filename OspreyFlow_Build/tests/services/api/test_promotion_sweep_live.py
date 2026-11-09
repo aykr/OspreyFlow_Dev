@@ -60,11 +60,11 @@ class _Source:
         now = datetime.now(UTC)
         self.items = [
             PendingPromotion(promotion_id=f"{tag}-old", load_id=f"{tag}-load-1",
-                             dataset_id=dataset_id, dataset_name="Synthetic custody",
+                             dataset_id=dataset_id, dataset_name=f"Synthetic custody {tag}",
                              dataset_unit="unit-sw", proposed_by=PROPOSER.id,
                              proposed_at=now - timedelta(days=3, minutes=5)),
             PendingPromotion(promotion_id=f"{tag}-new", load_id=f"{tag}-load-2",
-                             dataset_id=dataset_id, dataset_name="Synthetic custody",
+                             dataset_id=dataset_id, dataset_name=f"Synthetic custody {tag}",
                              dataset_unit="unit-sw", proposed_by=PROPOSER.id,
                              proposed_at=now - timedelta(days=1)),
         ]  # fmt: skip
@@ -119,7 +119,7 @@ async def _home(dataset_id: str, case_id: str) -> int | None:
     try:
         await conn.execute(
             "INSERT INTO datasets (id, name, owning_unit, created_at, created_by) "
-            "VALUES ($1, 'Synthetic custody', 'unit-sw', now(), $2)", dataset_id, PROPOSER.id)  # fmt: skip
+            "VALUES ($1, $1, 'unit-sw', now(), $2)", dataset_id, PROPOSER.id)  # fmt: skip
         await conn.execute(
             "INSERT INTO home_cases (dataset_id, investigation_id, made_at, made_by) "
             "VALUES ($1, $2, now(), $3)", dataset_id, case_id, PROPOSER.id)  # fmt: skip
@@ -184,4 +184,5 @@ def test_the_lifespans_own_sweep_raises_r7s_alert_once_at_n_days(api_env: None) 
     assert [r["promotion_id"] for r in rows] == [f"{tag}-old"]  # once, and only the one at N days
     [row] = rows
     assert sorted(__import__("json").loads(row["recipients"])) == ["sw-adm", "sw-rev"]
-    assert row["words"] == f"Promotion {tag}-load-1 into Synthetic custody has waited 3 days for review."
+    assert row["words"] == (
+        f"Promotion {tag}-load-1 into Synthetic custody {tag} has waited 3 days for review.")

@@ -329,6 +329,9 @@ async def test_audit_writes_go_on_while_the_indexes_build(world: SimpleNamespace
     assert valid == dict.fromkeys(_NAMES, True)
 
 
+_INDEX_OID = "SELECT c.oid FROM pg_class c WHERE c.relname = $1 AND pg_table_is_visible(c.oid)"
+
+
 async def _waiting_on_a_lock(world: SimpleNamespace, conn: asyncpg.Connection) -> None:
     pid = conn.get_server_pid()
     for _ in range(200):
@@ -363,6 +366,7 @@ async def test_a_start_never_waits_on_or_drops_a_build_under_way(world: SimpleNa
         await _audit_insert(held, "ana-a")
         building = asyncio.create_task(audit_module.build_indexes(builder))
         await _waiting_on_a_lock(world, builder)
+        under_way = await world.raw.fetchval(_INDEX_OID, "audit_log_org_unit_idx")
         second = await asyncio.wait_for(AuditWriter.connect(world.dsn, index_retry_seconds=0.2), 5)
         await later.execute("SET lock_timeout = '2s'")
         await _audit_insert(later, "ana-b")
@@ -378,6 +382,8 @@ async def test_a_start_never_waits_on_or_drops_a_build_under_way(world: SimpleNa
         for conn in (held, builder, later):
             await conn.close()
     assert await world.raw.fetchval(audit_module._INDEX_STATE_SQL, "audit_log_org_unit_idx") is True
+    # The very index that was under way, not one dropped and built again by the second start.
+    assert await world.raw.fetchval(_INDEX_OID, "audit_log_org_unit_idx") == under_way
 
 
 async def test_a_start_that_left_the_indexes_builds_them_once_free(world: SimpleNamespace) -> None:
@@ -442,8 +448,8 @@ async def test_a_start_returns_before_its_own_build(world: SimpleNamespace) -> N
 async def test_the_build_survives_any_failure_and_close_still_closes(
     world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Item 8: a connection lost mid-build (`InterfaceError`, not a `PostgresError`) is logged and
-    tried again; and a build that only ever fails never stops `close` closing the pool."""
+    """Item 8: an `InterfaceError` mid-build (asyncpg's "connection is closed", which is no
+    `PostgresError`, unlike `ConnectionDoesNotExistError`) is logged and tried again; and a build that only ever fails never stops `close` closing the pool."""
     await world.raw.execute("DROP INDEX CONCURRENTLY audit_log_org_unit_idx")
     real = audit_module.build_indexes
     calls: list[int] = []
@@ -451,7 +457,7 @@ async def test_the_build_survives_any_failure_and_close_still_closes(
     async def lost_once(conn: asyncpg.Connection) -> bool:
         calls.append(1)
         if len(calls) == 1:
-            raise asyncpg.exceptions.ConnectionDoesNotExistError("connection was closed")
+            raise asyncpg.InterfaceError("cannot perform operation: connection is closed")
         return await real(conn)
 
     monkeypatch.setattr(audit_module, "build_indexes", lost_once)
