@@ -53,6 +53,15 @@ on P5). Three orphaned live pytest runs were left to finish; their leases pass t
 removing it took stack a down. Platform, holding a's lease, recreated it at 05:42 (127.0.0.1:2491, arcadedb
 26.10.1, empty databases). The lesson: I check `lane_stacks.tsv` before calling any container unused. The sisters (studio-b, case-b, rules-b) stay on `sol`: about 30% of the steps left.
 
+**A new question for you (studio-b's L1.8; access, so yours):** ADR-145 Amendment 4 decision 12 says a disabled
+action says who can, with people's names ("You need Review promotions; D. Engineer and S. Lead have it"). No
+route today tells anyone but an administrator who holds a right.
+- (a) Studio-b's recommendation: a route listing, by display name only, the holders of a right among the people
+  who hold a level in the dataset's home case, for a reader who can read that case.
+- **(c) Built meanwhile, my strict default:** name the roles that hold the right ("the Data engineer and Studio
+  lead roles have it; ask an administrator"), never people.
+- (b) Name no one at all.
+
 **A question for you (platform's P3; the licence register, so yours):** building the local basemap needs Java 21
 (planetiler). The only runtime here is Eclipse Temurin, GPL-2.0 with the Classpath exception, and spec/00 §7 says
 "GPL and AGPL never pass".
