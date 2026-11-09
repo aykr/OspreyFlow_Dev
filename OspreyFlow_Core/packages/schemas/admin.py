@@ -716,6 +716,27 @@ class PromotionOverdueNotice(BaseModel):
     words: str
 
 
+class NeedsYouProposals(BaseModel):
+    """One dataset's proposed link types in the reader's *Needs you* (ADR-145 decision 11, A2;
+    ADR-090 Amendment 4): how many the reader may read and decide, and whether any exist above
+    their clearance. That is a flag, not a count, with no word of the proposal (ADR-143
+    Amendment 4's *Open*, the strict reading)."""
+
+    dataset_id: str
+    dataset_name: str
+    to_decide: int
+    above_clearance: bool
+
+
+class NeedsYou(BaseModel):
+    """The reader's *Needs you* (L2.7): their overdue promotions, served only while they are still a
+    recipient (Amendment 4 decision 11), and the proposed link types of the datasets their cases
+    load into, for a holder of `accept_types`."""
+
+    promotions_overdue: list[PromotionOverdueNotice]
+    proposals: list[NeedsYouProposals]
+
+
 ALL_MODELS: list[type[BaseModel]] = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
     ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
@@ -728,5 +749,5 @@ ALL_MODELS: list[type[BaseModel]] = [
     RolesCatalogue, TeamLeadInput, TeamCoverInput, OwnedItem, DisablePlan, OwnedTransfer,
     DisableInput, PersonCaseLevel, AdminPersonRow, CaseWithoutAuthor, AdminPeopleRows,
     AuditSectionEntry, AuditSectionPage, PromotionAlertSetting, AgeingRule, WaitingPromotion,
-    OperationsAgeing, PromotionOverdueAlert, PromotionOverdueNotice,
+    OperationsAgeing, PromotionOverdueAlert, PromotionOverdueNotice, NeedsYouProposals, NeedsYou,
 ]  # fmt: skip
