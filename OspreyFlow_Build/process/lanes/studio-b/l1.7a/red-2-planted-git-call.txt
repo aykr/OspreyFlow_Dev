@@ -1,0 +1,19 @@
+# head 5ff3f0a; plant: a `git status` exec after the commit in commit_recipe_file
+# command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
+# must fail: test_publish_never_execs_a_binary, test_the_module_names_no_process_api; all failed: yes
+ERROR    services.api.studio_publish:studio_publish.py:406 committing recipes/alpha.yaml in /private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-507/test_publish_never_execs_a_bin0/repo failed
+ERROR    services.api.studio_publish:studio_publish.py:406 committing recipes/alpha.yaml in /private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-507/test_a_failure_after_staging_l0/repo failed
+ERROR    services.api.studio_publish:studio_publish.py:406 committing recipes/alpha.yaml in /private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-507/test_a_failed_write_is_a_typed0/repo failed
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_second_publish_keeps_the_first_in_the_history
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_republishing_identical_bytes_makes_no_commit
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_commits_on_top_of_a_repository_real_git_made
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_concurrent_publishes_each_commit_their_own_bytes
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_root_inside_another_repository_gets_its_own
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_detached_head_moves_as_git_commit_moved_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_dulwich_is_admitted_by_the_licence_gate_through_its_apache_alternative
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_never_execs_a_binary
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api
+2 failed, 10 passed in 2.11s

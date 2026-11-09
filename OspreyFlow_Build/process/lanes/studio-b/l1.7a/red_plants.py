@@ -1,0 +1,115 @@
+"""L1.7a's red-then-green record (rules 12 and 15): each plant is one exact edit to the code under
+test; the script applies it, runs the named test files, restores the file byte for byte and writes
+what ran to `red-<n>-<slug>.txt` beside it, headed by the commit, the plant and the command.
+
+Run from OspreyFlow_Core with the closed offline ports pinned (no stack):
+    .venv/bin/python ../OspreyFlow_Build/process/lanes/studio-b/l1.7a/red_plants.py
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+CORE = HERE.parents[4] / "OspreyFlow_Core"
+PUBLISH = CORE / "services/api/studio_publish.py"
+REPO_TESTS = "../OspreyFlow_Build/tests/services/api/test_recipe_repository.py"
+COMMIT_TESTS = "../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py"
+IMAGE_TESTS = "../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py"
+
+INDEX_BLOCK = """    repo.object_store.add_object(blob)
+    index = repo.open_index()
+    index[path] = index_entry_from_stat(os.stat(absolute_path), blob.id)
+    index.write()
+"""
+AFTER_REF = """                "committed; publish again"
+            )
+"""
+
+#: (slug, what the plant does, [(old, new)], test files, the tests that must go red)
+PLANTS = [
+    ("write-removed", "the commit never written: `if not unchanged:` -> `if False:`",
+     [("    if not unchanged:\n", "    if False:  # PLANT\n")], [REPO_TESTS, COMMIT_TESTS],
+     ["test_publish_writes_a_commit_real_git_reads",
+      "test_a_second_publish_keeps_the_first_in_the_history",
+      "test_the_file_is_committed_at_the_path_the_registry_row_will_name"]),
+    ("planted-git-call", "a `git status` exec after the commit in commit_recipe_file",
+     [("        await asyncio.to_thread(_commit_file, repo_root, relative_path, data, message)\n",
+       "        await asyncio.to_thread(_commit_file, repo_root, relative_path, data, message)\n"
+       "        await (await asyncio.create_subprocess_exec(\"git\", \"status\", cwd=repo_root))"
+       ".wait()  # PLANT\n")], [REPO_TESTS],
+     ["test_publish_never_execs_a_binary", "test_the_module_names_no_process_api"]),
+    ("identical-bytes-committed", "identical bytes committed again: `unchanged = committed == "
+     "blob.id` -> `unchanged = False`",
+     [("            unchanged = committed == blob.id\n", "            unchanged = False  # PLANT\n")],
+     [REPO_TESTS, COMMIT_TESTS],
+     ["test_republishing_identical_bytes_makes_no_commit",
+      "test_committing_the_same_bytes_again_is_not_an_error"]),
+    ("broad-except-removed", "a dulwich or filesystem failure left untyped: `except Exception` "
+     "-> `except ZeroDivisionError`",
+     [("    except Exception as exc:  # dulwich", "    except ZeroDivisionError as exc:  # dulwich")],
+     [REPO_TESTS], ["test_a_failed_write_is_a_typed_error_not_a_bare_500"]),
+    ("index-not-written", "the index never written: `index.write()` -> `pass`",
+     [("    index.write()\n", "    pass  # PLANT\n")], [REPO_TESTS, COMMIT_TESTS],
+     ["test_publish_writes_a_commit_real_git_reads",
+      "test_the_file_is_committed_at_the_path_the_registry_row_will_name"]),
+    ("index-after-head", "the index written after HEAD moves (the order the review flagged)",
+     [(INDEX_BLOCK, ""), (AFTER_REF, AFTER_REF + "\n" + INDEX_BLOCK)], [REPO_TESTS],
+     ["test_a_failure_after_staging_leaves_nothing_committed"]),
+    ("lock-removed", "no serialisation: `with _REPOSITORY_LOCK:` -> `with threading.Lock():`",
+     [("    with _REPOSITORY_LOCK:\n", "    with threading.Lock():  # PLANT\n")], [REPO_TESTS],
+     ["test_concurrent_publishes_each_commit_their_own_bytes"]),
+    ("refusal-ignored", "a refused compare-and-swap ignored: `if not repo.refs.set_if_equals(` "
+     "-> `if False and not repo.refs.set_if_equals(`",
+     [("        if not repo.refs.set_if_equals(", "        if False and not repo.refs.set_if_equals(")],
+     [COMMIT_TESTS], ["test_a_failed_commit_is_an_error_not_a_quiet_success"]),
+]
+
+
+def run(files: list[str]) -> str:
+    done = subprocess.run(
+        [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-p", "no:cacheprovider",
+         "-q", "-rA", *files],
+        cwd=CORE, capture_output=True, text=True,
+    )  # fmt: skip
+    keep = ("PASSED", "FAILED", "ERROR")
+    lines = [line for line in done.stdout.splitlines() if line.startswith(keep)]
+    return "\n".join(lines + [done.stdout.strip().splitlines()[-1]])
+
+
+def main() -> int:
+    head = subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"], cwd=CORE, capture_output=True, text=True
+    ).stdout.strip()
+    original = PUBLISH.read_bytes()
+    missed = []
+    for n, (slug, what, edits, files, must_fail) in enumerate(PLANTS, start=1):
+        text = original.decode()
+        for old, new in edits:
+            assert text.count(old) == 1, (slug, old)
+            text = text.replace(old, new)
+        PUBLISH.write_text(text)
+        try:
+            out = run(files)
+        finally:
+            PUBLISH.write_bytes(original)
+        failed = {line.split("::")[-1].split(" ")[0] for line in out.splitlines()
+                  if line.startswith("FAILED")}  # fmt: skip
+        absent = [t for t in must_fail if t not in failed]
+        missed += [(slug, t) for t in absent]
+        (HERE / f"red-{n}-{slug}.txt").write_text(
+            f"# head {head}; plant: {what}\n# command: pytest -q -rA {' '.join(files)}\n"
+            f"# must fail: {', '.join(must_fail)}; all failed: {'yes' if not absent else absent}\n"
+            f"{out}\n"
+        )
+    assert PUBLISH.read_bytes() == original
+    green = run([REPO_TESTS, COMMIT_TESTS, IMAGE_TESTS])
+    (HERE / "green.txt").write_text(f"# head {head}; no plant\n{green}\n")
+    print("missed:", missed or "none")
+    return 1 if missed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
