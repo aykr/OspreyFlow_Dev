@@ -412,6 +412,12 @@ New ones are added at the bottom as they happen.
     is built in the Conduit by P5, but nothing in the Glass can add or remove a gazetteer yet. P6 is that panel
     beside the place search, reachable by keyboard. Overrule it if you'd rather it waited.
 
+70. **Removing a gazetteer from a case deletes nothing, on my strict default (platform's P5).** Deleting copies
+    except those a case's link rests on would let an Author infer a link they can't see, from a place that stays.
+    So every copy stays as the dataset's own place, still with its identifiers withheld. Removal stops the
+    gazetteer's refresh and takes its places out of place search, the same for every copy. Overrule it if you
+    would rather removal deleted unlinked copies and accepted that small existence signal.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
