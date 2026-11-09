@@ -53,4 +53,5 @@ pass over round 2.
    - (f) *Why* names the reader's own roles.
    - (g) Openings across a reload are held in the session.
    - (h) `items_marking` is required with no default, read from the seam at each read, and not copied into the alert store.
+   - On case's L3.4 (round 5): `make test` on the server at fbd0722 (`gates/fbd0722.test.txt`): pytest 9,839 passed and 2 failed (main's GPU and Valkey cases), plus 2 errors from Docker Hub's pull limit on the server; test-js 2,884/2,885 (`MatrixView.budget`). Live at dbf925c on stack f (`gates/dbf925c.live.txt`): 25 passed.
 6. **Questions:** none. **Still running:** nothing. Stack f is down and its lease released; no agent of mine is running.
