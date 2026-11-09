@@ -332,6 +332,12 @@ New ones are added at the bottom as they happen.
     record, puts the deployment-wide list connector in Studio › Sources. Settled: the right acts in both (ADR-146
     Amendment 3); no one's rights change. Tied to your open question on which store is the store of record.
 
+65. **Rules-b's L2.12 display choices (logged by the lane; overrule if you wish):** the Reports Viewer's banner
+    reads "From alert: ‹its title›" (no short alert numbers exist; adding them is its own step); on the
+    alert-monitoring board filtered to a rule, the outcomes and time-to-close panels say "(every rule)" until they
+    are counted per rule (a small follow-up); "closed as not of interest" means false positive or no further
+    action.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
