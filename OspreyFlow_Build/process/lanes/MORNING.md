@@ -533,6 +533,9 @@ New ones are added at the bottom as they happen.
     the lane's last is alive. I stopped studio's orphaned pytest on the server. Five cases were red against the
     previous script, and 109 lane-tooling tests pass. Live on f: ClickHouse answered as `osprey` on 18128, 25
     tests passed in 28 s with the copy, and `remote-log` reattached with the same exit code.
+80. **Docker started again at 16:19 UTC** (launched as an app, with no containers; not by me, and no lane
+    record shows a start). Quit again on your word, and every lane told never to start it. The Docker setting
+    "Start Docker Desktop when you sign in" is still yours to turn off.
 
 ## Evening, 7 November: your records of 7 November applied
 
