@@ -81,6 +81,14 @@ working case its loads.
 - (c) Copy gazetteer places into each case's dataset at load.
 Built meanwhile: (b), the gazetteer as a dataset, nothing read across the dataset boundary.
 
+**And one more (studio-b's L1.6; it would admit private addresses, so yours):** the Studio's SQL and API connectors
+refuse every loopback, private, link-local and inside address, so a client's database on a private network can't
+be reached. Should an operator be able to admit one?
+- **(a) Recommended:** yes, an allow-list in `osprey.yaml` (installer-level, not Admin), each entry a named host or
+  network the operator admits, everything else still refused.
+- (b) No: connectors reach only public addresses.
+Built meanwhile: (b).
+
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
