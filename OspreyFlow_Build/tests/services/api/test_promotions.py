@@ -1,0 +1,742 @@
+"""Promotion into a dataset, and a removed case's layer merged or deleted, through the real app
+(ADR-143 decisions 8 and 10; Amendment 2 decision 1; ADR-145 decision 8; L3.4).
+
+The world is `test_boards.py`'s: case K (Alice its Author) and case B (Carol) read the source
+dataset `src` (highest allowed marking OFFICIAL-SENSITIVE). Added here: `src`'s home case, whose
+Authors are Dana (a data engineer, SECRET), Erin (a data engineer, cleared to OFFICIAL) and Sam (the
+Super user preset, also K's Author); Fred, a data engineer reading `src` through case F but no
+Author of it; and Zed, of another unit.
+
+What a mistake here would do, and the case that catches it (each red by its plant below, and in
+`process/lanes/case/L3.4_RED_RECORD.md`):
+
+- a promotion written as several loads, or half of one (decision 8): `test_author_promotes_...`
+  and `test_a_promotion_with_an_item_changed_writes_nothing`, red with the load committed item by
+  item;
+- a link promoted without both its ends: `test_a_link_whose_drawn_end_does_not_go_...`, red with
+  the end check removed;
+- a marking above the dataset's highest allowed promoted: `test_a_marking_above_...`, red with the
+  route's check removed (the sheet bypassed: the test posts with no sheet);
+- a promoted item readable before review where the policy asks for one: `test_under_review_...`,
+  red with the commit made at once whatever the policy;
+- the proposer approving their own promotion: `test_the_proposer_cannot_approve_...`, red with the
+  check removed;
+- a reviewer approving what they may not see: `test_a_reviewer_who_may_not_see_...`, red with the
+  check removed;
+- the merge's read grant outliving the merge (Amendment 2 decision 1): `test_the_merge_grant_...`,
+  red with the grant kept;
+- a delete touching what was promoted: `test_deleting_a_layer_leaves_...`, red with the layer
+  withdrawn whole;
+- any route reachable by a non-member, a member of another case of the same dataset, or someone
+  the dataset's gate is not for (rule 4): `test_every_promotion_route_refuses_...`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator, Sequence
+from dataclasses import replace
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from ports.graph import DatasetFootprint, PromotionReverted
+from schemas.dataset_model import HomeCase
+from schemas.domain import Principal
+from services.api import promotions as promotions_module
+from services.api.app import app
+from services.api.datasets import COMPOSITE, Dataset
+from services.api.investigations import AccessLevel
+from services.api.promotion_store import InMemoryPromotionStore, WaitingFromStore
+from services.api.promotions import Promotions
+
+from .test_boards import (
+    B,
+    K,
+    PEOPLE,
+    UNIT,
+    _as,
+    _board,
+    _carol_sees_it_from_b,
+    _item,
+    _link,
+    world,  # noqa: F401  (the fixture)
+)
+
+HOME, F = "home-src", "case-f"
+PEOPLE.update(
+    {
+        "dana": Principal(id="dana", clearance="SECRET", org_unit=UNIT, roles=["data_engineer"]),
+        "erin": Principal(id="erin", clearance="OFFICIAL", org_unit=UNIT, roles=["data_engineer"]),
+        "fred": Principal(id="fred", clearance="SECRET", org_unit=UNIT, roles=["data_engineer"]),
+        "sam": Principal(
+            id="sam", clearance="SECRET", org_unit=UNIT, roles=["analyst", "data_engineer"]
+        ),
+        "zed": Principal(id="zed", clearance="SECRET", org_unit="unit-2", roles=["data_engineer"]),
+    }
+)
+
+
+@pytest.fixture
+def pw(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:  # noqa: F811
+    cases, datasets = world.cases, world.datasets
+    cases.seed(HOME, {"dana": AccessLevel.AUTHOR, "erin": AccessLevel.AUTHOR,
+                      "sam": AccessLevel.AUTHOR})  # fmt: skip
+    cases.seed(F, {"fred": AccessLevel.VIEWER})
+    cases.grants[K]["sam"] = AccessLevel.AUTHOR
+    datasets.cases[HOME] = ["src"]
+    datasets.cases[F] = ["src"]
+    datasets.homes["src"] = HomeCase(
+        dataset_id="src", investigation_id=HOME, made_at=datetime.now(UTC), made_by="dana"
+    )
+    removed: set[str] = set()
+
+    async def admin_states(ids: Sequence[str]) -> dict[str, tuple[str, bool]]:
+        return {c: (c, c in removed) for c in ids if c in cases.made}
+
+    cases.admin_states = admin_states
+    graph = world.graph
+
+    async def dataset_footprints(
+        ids: Sequence[str], reader: Principal
+    ) -> dict[str, DatasetFootprint]:
+        out = {}
+        for d in ids:
+            nodes = [n for n in graph._graph_nodes.values() if not n.audit.reverted
+                     and d in n.datasets]  # fmt: skip
+            edges = [e for e in graph._graph_edges if not e.audit.reverted and d in e.datasets]
+            out[d] = DatasetFootprint(nodes=len(nodes), edges=len(edges))
+        return out
+
+    graph.dataset_footprints = dataset_footprints
+    store = InMemoryPromotionStore()
+    monkeypatch.setattr(app.state, "promotions", store, raising=False)
+    monkeypatch.setattr(app.state, "link_types", None, raising=False)
+    yield SimpleNamespace(**vars(world), store=store, removed=removed)
+
+
+def _policy(pw: SimpleNamespace, policy: str) -> None:
+    held = pw.datasets.datasets["src"]
+    pw.datasets.datasets["src"] = held.model_copy(update={"promotion_policy": policy})
+
+
+def _drawn(who: str = "alice") -> tuple[str, dict[str, Any], str, str]:
+    """A board of K from a selection holding the loaded Mercer; a drawn person linked to him."""
+    board = _board(who, start="selection", node_ids=["p-loaded"])
+    made = _item(board, who)
+    linked = _as(who).post(
+        f"/v1/investigations/{K}/boards/{board}/links",
+        json={"type": "ASSOCIATE_OF", "label": "seen together", "marking": "OFFICIAL",
+              "grading": {"source": "B", "intelligence": "2", "handling": "1"},
+              "source_note": "Visits log", "source": made["element_id"], "target": "p-loaded"},
+    )  # fmt: skip
+    assert linked.status_code == 201, linked.text
+    return board, made, linked.json()["item_id"], linked.json()["element_id"]
+
+
+def _sheet(board: str, who: str = "alice") -> dict[str, Any]:
+    answer = _as(who).get(f"/v1/investigations/{K}/boards/{board}/promotion-sheet")
+    assert answer.status_code == 200, answer.text
+    return dict(answer.json())
+
+
+def _promote(board: str, *item_ids: str, who: str = "alice") -> Any:
+    return _as(who).post(
+        f"/v1/investigations/{K}/boards/{board}/promotions", json={"item_ids": list(item_ids)}
+    )
+
+
+def _studio(who: str, path: str = "", method: str = "get", **body: Any) -> Any:
+    client = _as(who)
+    url = f"/v1/datasets/src/promotions{path}"
+    return client.post(url, json=body) if method == "post" else client.get(url)
+
+
+def _node_datasets(pw: SimpleNamespace, node_id: str) -> list[str]:
+    return list(pw.graph.node(node_id).datasets)
+
+
+# --- one load, the same element (decision 8; rule 6) -----------------------------------------
+
+
+def test_author_promotes_commits_one_load_and_case_b_reads_the_same_element(
+    pw: SimpleNamespace,
+) -> None:
+    board, made, link_item, link = _drawn()
+    assert not _carol_sees_it_from_b(made["element_id"])
+    sheet = _sheet(board)
+    assert {i["item_id"] for i in sheet["items"]} == {made["item_id"], link_item}
+    assert all(not i["problems"] for i in sheet["items"]) and all(c["passed"] for c in sheet["checks"])
+    nodes_before = len(pw.graph._graph_nodes)
+
+    answer = _promote(board, made["item_id"], link_item)
+
+    assert answer.status_code == 201, answer.text
+    body = answer.json()
+    assert body["status"] == "committed" and (body["nodes"], body["links"]) == (1, 1)
+    assert pw.graph.promotions == 1
+    assert len(pw.graph._graph_nodes) == nodes_before  # the same element, never a copy
+    layer = pw.items.items[made["item_id"]].dataset_id
+    assert _node_datasets(pw, made["element_id"]) == sorted([layer, "src"])
+    assert _carol_sees_it_from_b(made["element_id"])
+    # The withdrawal rule's input (spec 03): the registry says it was promoted.
+    assert pw.items.items[made["item_id"]].promoted_at is not None
+    assert pw.items.items[link_item].promoted_at is not None
+    # It stays drawn for good.
+    assert pw.graph.node(made["element_id"]).provenance.drawn is not None
+
+
+def _item_by_item(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The plant: the load committed item by item, each element in its own transaction."""
+
+    async def by_item(self: Promotions, record: Any, *, by: str | None) -> Any:
+        graph = self.boards.graph
+        for node in record.node_ids:
+            tx = await graph.begin_transaction()
+            try:
+                await graph.promote_elements([node], [], record.dataset_id, record.load_id, tx)
+            except Exception:
+                await graph.rollback_transaction(tx)
+                continue
+            await graph.commit_transaction(tx)
+        for edge in record.edge_ids:
+            tx = await graph.begin_transaction()
+            await graph.promote_elements([], [edge], record.dataset_id, record.load_id, tx)
+            await graph.commit_transaction(tx)
+        await self.store.decide(record.id, was="awaiting_review", now="committed", by=by,
+                                at=datetime.now(UTC))  # fmt: skip
+        return await self.store.get(record.id)
+
+    monkeypatch.setattr(Promotions, "_commit", by_item)
+
+
+def test_the_one_load_check_fails_with_the_load_committed_item_by_item(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _item_by_item(monkeypatch)
+    board, made, link_item, _ = _drawn()
+    assert _promote(board, made["item_id"], link_item).status_code == 201
+    assert pw.graph.promotions != 1
+
+
+def _withdrawn_behind_the_sheet(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, node_id: str
+) -> None:
+    """The element taken out after the route's checks and before the load is written (another
+    tab's withdrawal, say), so only the graph's own all-or-nothing can catch it."""
+    graph = pw.graph
+    real = type(graph).promote_elements
+
+    async def racing(*args: Any) -> None:
+        held = graph.node(node_id)
+        graph._graph_nodes[node_id] = held.model_copy(
+            update={"audit": held.audit.model_copy(update={"reverted": True})}
+        )
+        await real(graph, *args)
+
+    monkeypatch.setattr(graph, "promote_elements", racing)
+
+
+def test_a_promotion_with_an_item_changed_writes_nothing(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    board, made, _, _ = _drawn()
+    other = _item(board, label="Other", properties={"family_name": "Other"})
+    _withdrawn_behind_the_sheet(pw, monkeypatch, other["element_id"])
+    answer = _promote(board, made["item_id"], other["item_id"])
+    assert answer.status_code == 409 and answer.json()["error"] == "items_changed"
+    assert _node_datasets(pw, made["element_id"]) == [pw.items.items[made["item_id"]].dataset_id]
+    assert not _carol_sees_it_from_b(made["element_id"])
+    (record,) = pw.store.records.values()
+    assert record.status == "rejected" and "Nothing was written" in (record.reason or "")
+
+
+def test_the_all_or_nothing_check_fails_with_the_load_committed_item_by_item(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _item_by_item(monkeypatch)
+    board, made, _, _ = _drawn()
+    other = _item(board, label="Other", properties={"family_name": "Other"})
+    _withdrawn_behind_the_sheet(pw, monkeypatch, other["element_id"])
+    _promote(board, made["item_id"], other["item_id"])
+    assert _carol_sees_it_from_b(made["element_id"])
+
+
+# --- links follow their ends (decision 8; rule 2) --------------------------------------------
+
+
+def _two_drawn_and_a_link(pw: SimpleNamespace) -> tuple[str, dict[str, Any], dict[str, Any], str]:
+    board = _board()
+    x, y = _item(board), _item(board, label="Unknown female", properties={"family_name": "Y"})
+    linked = _link(board, x["element_id"], y["element_id"])
+    assert linked.status_code == 201, linked.text
+    return board, x, y, linked.json()["item_id"]
+
+
+def test_a_link_whose_drawn_end_does_not_go_is_left_out_and_listed(pw: SimpleNamespace) -> None:
+    board, x, _, link_item = _two_drawn_and_a_link(pw)
+    answer = _promote(board, x["item_id"], link_item)
+    assert answer.status_code == 201, answer.text
+    left = {i["item_id"]: i["why"] for i in answer.json()["left_out"]}
+    assert "will not be in the dataset" in left[link_item]
+    (record,) = pw.store.records.values()
+    assert record.edge_ids == ()
+
+
+def test_the_end_check_fails_with_the_end_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Promotions, "ends_land", staticmethod(lambda item, lands: True))
+    board, x, _, link_item = _two_drawn_and_a_link(pw)
+    _promote(board, x["item_id"], link_item)
+    (record,) = pw.store.records.values()
+    assert record.edge_ids != ()
+
+
+def test_a_link_to_a_loaded_item_goes_and_an_unticked_item_is_listed(pw: SimpleNamespace) -> None:
+    board, made, link_item, _ = _drawn()
+    spare = _item(board, label="Spare", properties={"family_name": "Spare"})
+    answer = _promote(board, made["item_id"], link_item)
+    assert answer.json()["links"] == 1
+    assert {i["item_id"]: i["why"] for i in answer.json()["left_out"]} == {
+        spare["item_id"]: "Not ticked."
+    }
+
+
+# --- the dataset's highest allowed marking (ADR-145 decision 8) ------------------------------
+
+
+def _lowered(pw: SimpleNamespace) -> tuple[str, dict[str, Any]]:
+    """An item drawn at OFFICIAL-SENSITIVE; then an administrator lowers `src`'s highest allowed
+    marking to OFFICIAL, so the item is above it."""
+    board = _board()
+    made = _item(board, marking="OFFICIAL-SENSITIVE")
+    held = pw.datasets.datasets["src"]
+    pw.datasets.datasets["src"] = held.model_copy(update={"highest_marking": "OFFICIAL"})
+    return board, made
+
+
+def test_a_marking_above_the_datasets_highest_is_refused_at_the_sheet_and_at_the_route(
+    pw: SimpleNamespace,
+) -> None:
+    board, made = _lowered(pw)
+    sheet = _sheet(board)
+    (item,) = sheet["items"]
+    assert "above Prison intel's highest allowed marking, OFFICIAL" in item["problems"][0]
+    assert not next(c for c in sheet["checks"] if c["name"] == "marking")["passed"]
+    # The sheet bypassed: posted with no sheet, refused at the route in words.
+    answer = _promote(board, made["item_id"])
+    assert answer.status_code == 422 and answer.json()["error"] == "check_failed"
+    assert "highest allowed marking" in answer.json()["detail"]
+    assert not pw.store.records and pw.graph.promotions == 0
+
+
+def test_the_route_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def no_problems(self: Promotions, reads: Any, *_: Any) -> dict[str, list[str]]:
+        return {r.item.item_id: [] for r in reads}
+
+    monkeypatch.setattr(Promotions, "_problems", no_problems)
+    board, made = _lowered(pw)
+    assert _promote(board, made["item_id"]).status_code == 201
+
+
+# --- types (decision 9; ADR-143 Amendment 4 decision 3) -------------------------------------
+
+
+class _LinkTypes:
+    def __init__(self, why: str | None) -> None:
+        self.why = why
+
+    async def promotion_refusals(
+        self, case_id: str, principal: Principal, names: Sequence[str]
+    ) -> dict[str, str | None]:
+        return dict.fromkeys(names, self.why)
+
+
+def test_a_link_of_a_type_not_yet_live_is_refused_and_promotable_once_live(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    board, made, link_item, _ = _drawn()
+    why = "ASSOCIATE_OF is accepted into the draft domain model, version 2: its links can be promoted once that version is made live."  # noqa: E501
+    monkeypatch.setattr(app.state, "link_types", _LinkTypes(why), raising=False)
+    (link,) = [i for i in _sheet(board)["items"] if i["item_id"] == link_item]
+    assert link["problems"] == [why]
+    assert _promote(board, made["item_id"], link_item).status_code == 422
+    monkeypatch.setattr(app.state, "link_types", _LinkTypes(None), raising=False)
+    assert _promote(board, made["item_id"], link_item).json()["links"] == 1
+
+
+# --- the policy and its review (ADR-145 decision 8; ADR-133 Amendment 8) ---------------------
+
+
+def test_under_review_nothing_is_readable_outside_the_case_until_a_second_person_approves(
+    pw: SimpleNamespace,
+) -> None:
+    _policy(pw, "second_person_reviews")
+    board, made, link_item, _ = _drawn()
+    answer = _promote(board, made["item_id"], link_item)
+    assert answer.json()["status"] == "awaiting_review"
+    assert not _carol_sees_it_from_b(made["element_id"]) and pw.graph.promotions == 0
+
+    (listed,) = _studio("dana").json()["promotions"]
+    assert listed["may_review"] and listed["board_id"] is None and listed["case_name"] == K
+    details = _studio("dana", f"/{listed['id']}").json()
+    assert {i["label"] for i in details["items"]} >= {"Unknown male “Tall”"}
+    assert not details["withheld"]
+    decided = _studio("dana", f"/{listed['id']}/decision", "post", approve=True)
+    assert decided.status_code == 200 and decided.json()["status"] == "committed"
+    assert decided.json()["reviewed_by"] == "dana"
+    assert _carol_sees_it_from_b(made["element_id"])
+    board_list = _as("alice").get(f"/v1/investigations/{K}/boards/{board}/promotions").json()
+    assert board_list["promotions"][0]["status"] == "committed"
+
+
+def test_the_review_check_fails_with_the_commit_made_at_once(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Promotions, "commits_at_once", staticmethod(lambda dataset: True))
+    _policy(pw, "second_person_reviews")
+    board, made, link_item, _ = _drawn()
+    _promote(board, made["item_id"], link_item)
+    assert _carol_sees_it_from_b(made["element_id"])
+
+
+def test_a_rejection_writes_nothing_and_says_why(pw: SimpleNamespace) -> None:
+    _policy(pw, "second_person_reviews")
+    board, made, link_item, _ = _drawn()
+    promotion = _promote(board, made["item_id"], link_item).json()["id"]
+    assert _studio("dana", f"/{promotion}/decision", "post", approve=False).status_code == 422
+    rejected = _studio("dana", f"/{promotion}/decision", "post", approve=False,
+                       reason="Source note too thin")  # fmt: skip
+    assert rejected.json()["status"] == "rejected"
+    assert rejected.json()["reason"] == "Source note too thin"
+    assert pw.graph.promotions == 0 and not _carol_sees_it_from_b(made["element_id"])
+    again = _studio("dana", f"/{promotion}/decision", "post", approve=True)
+    assert again.status_code == 409 and again.json()["error"] == "already_decided"
+
+
+def _sams_promotion(pw: SimpleNamespace) -> str:
+    _policy(pw, "second_person_reviews")
+    board = _board("sam")
+    made = _item(board, "sam")
+    return str(_promote(board, made["item_id"], who="sam").json()["id"])
+
+
+def test_the_proposer_cannot_approve_their_own_promotion(pw: SimpleNamespace) -> None:
+    promotion = _sams_promotion(pw)
+    (listed,) = _studio("sam").json()["promotions"]
+    assert not listed["may_review"] and "a second person" in listed["why_not"]
+    answer = _studio("sam", f"/{promotion}/decision", "post", approve=True)
+    assert answer.status_code == 403 and answer.json()["error"] == "own_promotion"
+    assert pw.graph.promotions == 0
+
+
+def test_the_own_promotion_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(Promotions, "refuse_own_promotion", staticmethod(lambda r, p: None))
+    promotion = _sams_promotion(pw)
+    assert _studio("sam", f"/{promotion}/decision", "post", approve=True).status_code == 200
+
+
+def test_only_an_author_of_the_dataset_holding_review_promotions_decides(
+    pw: SimpleNamespace,
+) -> None:
+    _policy(pw, "second_person_reviews")
+    board, made, link_item, _ = _drawn()
+    promotion = _promote(board, made["item_id"], link_item).json()["id"]
+    # Fred: a data engineer reading `src`, no Author of it.
+    (listed,) = _studio("fred").json()["promotions"]
+    assert not listed["may_review"] and "not one of its Authors" in listed["why_not"]
+    assert _studio("fred", f"/{promotion}").status_code == 403
+    assert _studio("fred", f"/{promotion}/decision", "post", approve=True).status_code == 403
+    # Alice: K's Author, but without `review_promotions`.
+    assert _studio("alice").status_code == 403
+    assert pw.graph.promotions == 0
+
+
+def test_a_reviewer_who_may_not_see_every_item_may_not_approve(pw: SimpleNamespace) -> None:
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    seen = _item(board)
+    hidden = _item(board, marking="OFFICIAL-SENSITIVE", label="Hidden",
+                   properties={"family_name": "Hidden"})  # fmt: skip
+    promotion = _promote(board, seen["item_id"], hidden["item_id"]).json()["id"]
+    # Erin is cleared to OFFICIAL: the promotion's marking is above her, so it is not listed.
+    assert _studio("erin").json()["promotions"] == []
+    assert _studio("erin", f"/{promotion}").status_code == 404
+    # At OFFICIAL-SENSITIVE's own level she would see it; with one item above her she may not.
+    pw.store.records[promotion] = replace(pw.store.records[promotion], marking="OFFICIAL")
+    details = _studio("erin", f"/{promotion}").json()
+    assert details["withheld"]
+    assert {i["label"] for i in details["items"]} == {"Unknown male “Tall”"}
+    answer = _studio("erin", f"/{promotion}/decision", "post", approve=True)
+    assert answer.status_code == 403 and answer.json()["error"] == "not_all_seen"
+    assert pw.graph.promotions == 0
+
+
+def test_the_unseen_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def sees(self: Promotions, record: Any, reviewer: Any) -> bool:
+        return True
+
+    monkeypatch.setattr(Promotions, "reviewer_sees_all", sees)
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    seen = _item(board)
+    hidden = _item(board, marking="OFFICIAL-SENSITIVE", label="Hidden",
+                   properties={"family_name": "Hidden"})  # fmt: skip
+    promotion = _promote(board, seen["item_id"], hidden["item_id"]).json()["id"]
+    pw.store.records[promotion] = replace(pw.store.records[promotion], marking="OFFICIAL")
+    assert _studio("erin", f"/{promotion}/decision", "post", approve=True).status_code == 200
+
+
+# --- rule 4: every route refuses whom it is not for ------------------------------------------
+
+
+def test_every_promotion_route_refuses_a_non_member_as_a_missing_case(pw: SimpleNamespace) -> None:
+    _policy(pw, "second_person_reviews")
+    board, made, link_item, _ = _drawn()
+    promotion = _promote(board, made["item_id"], link_item).json()["id"]
+    # Carol: a member of B, reading the same source, no level on K.
+    for answer in (
+        _as("carol").get(f"/v1/investigations/{K}/boards/{board}/promotion-sheet"),
+        _as("carol").post(f"/v1/investigations/{K}/boards/{board}/promotions",
+                          json={"item_ids": [made["item_id"]]}),
+        _as("carol").get(f"/v1/investigations/{K}/boards/{board}/promotions"),
+    ):  # fmt: skip
+        assert answer.status_code == 404, answer.text
+    # Zed: another unit; the dataset's gate is not for him, whatever the id.
+    for path in ("", f"/{promotion}"):
+        assert _studio("zed", path).status_code == 404
+    assert _studio("zed", f"/{promotion}/decision", "post", approve=True).status_code == 404
+    assert _as("zed").get("/v1/datasets/src/removed-cases").status_code == 404
+    # A promotion of another dataset is not found through this one.
+    assert _as("dana").get("/v1/datasets/src/promotions/no-such").status_code == 404
+    # Bob, K's Editor, may not promote (Author level, I12); Rita, a Viewer, neither.
+    assert _as("bob").get(f"/v1/investigations/{K}/boards/{board}/promotion-sheet").status_code == 403
+
+
+# --- a removed case's layer (Amendment 2 decision 1) -----------------------------------------
+
+
+def _removed_with_items(pw: SimpleNamespace) -> tuple[dict[str, Any], dict[str, Any]]:
+    board = _board()
+    first, second = _item(board), _item(board, label="Second", properties={"family_name": "S"})
+    pw.removed.add(K)
+    return first, second
+
+
+def test_an_author_merges_a_removed_cases_layer_through_a_grant_that_ends_with_the_merge(
+    pw: SimpleNamespace,
+) -> None:
+    first, second = _removed_with_items(pw)
+    (row,) = _as("dana").get("/v1/datasets/src/removed-cases").json()["cases"]
+    assert row["investigation_id"] == K and row["mergeable"] and row["items"] == 2
+    sheet = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()
+    assert {i["item_id"] for i in sheet["items"]} == {first["item_id"], second["item_id"]}
+    assert "open_layer_merge" in [r["action"] for r in pw.audit.records]
+    grant = sheet["grant_id"]
+    merged = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                              json={"item_ids": [first["item_id"]]})  # fmt: skip
+    assert merged.status_code == 201 and merged.json()["trigger"] == "layer_merge"
+    assert merged.json()["status"] == "committed"
+    assert _carol_sees_it_from_b(first["element_id"])
+    assert not _carol_sees_it_from_b(second["element_id"])
+    reread = _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}")
+    assert reread.status_code == 403 and reread.json()["error"] == "no_open_grant"
+
+
+def test_the_merge_grant_check_fails_with_the_grant_kept(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def kept(self: InMemoryPromotionStore, grant_id: str, at: datetime) -> None:
+        return None
+
+    monkeypatch.setattr(InMemoryPromotionStore, "close_grant", kept)
+    first, _ = _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}", json={"item_ids": [first["item_id"]]})
+    assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 200
+
+
+def test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_at_the_decision(
+    pw: SimpleNamespace,
+) -> None:
+    _policy(pw, "second_person_reviews")
+    first, _ = _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    merged = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                              json={"item_ids": [first["item_id"]]}).json()  # fmt: skip
+    assert merged["status"] == "awaiting_review" and not _carol_sees_it_from_b(first["element_id"])
+    assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 200
+    assert _studio("dana", f"/{merged['id']}/decision", "post", approve=True).status_code == 403
+    assert _studio("sam", f"/{merged['id']}/decision", "post", approve=True).status_code == 200
+    assert _carol_sees_it_from_b(first["element_id"])
+    assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 403
+
+
+def test_a_layer_merge_is_refused_to_a_non_author_and_for_an_open_case(pw: SimpleNamespace) -> None:
+    _board()
+    assert _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").status_code == 409
+    pw.removed.add(K)
+    answer = _as("fred").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet")
+    assert answer.status_code == 403 and answer.json()["error"] == "not_an_author"
+    assert "open_layer_merge" not in [r["action"] for r in pw.audit.records]
+
+
+def test_a_composite_cases_layer_is_never_merged_only_deleted(pw: SimpleNamespace) -> None:
+    pw.datasets.add(
+        Dataset(id="mix", name="Mixed", owning_unit=UNIT, created_by="eng",
+                created_at=datetime(2026, 11, 1, tzinfo=UTC), kind=COMPOSITE, members=["src"])
+    )  # fmt: skip
+    pw.datasets.cases[HOME + "-mix"] = ["mix"]
+    pw.cases.seed(HOME + "-mix", {"dana": AccessLevel.AUTHOR})
+    pw.datasets.homes["mix"] = HomeCase(
+        dataset_id="mix", investigation_id=HOME + "-mix", made_at=datetime.now(UTC), made_by="dana"
+    )
+    pw.cases.seed("case-c", {"alice": AccessLevel.AUTHOR})
+    pw.datasets.cases["case-c"] = ["mix"]
+    board = _board(case="case-c")
+    _item(board, case="case-c")
+    pw.removed.add("case-c")
+    (row,) = _as("dana").get("/v1/datasets/mix/removed-cases").json()["cases"]
+    assert not row["mergeable"] and "never merged" in row["why_not"]
+    refused = _as("dana").post("/v1/datasets/mix/removed-cases/case-c/merge-sheet")
+    assert refused.status_code == 409 and refused.json()["error"] == "composite_never_merged"
+    deleted = _as("dana").delete("/v1/datasets/mix/removed-cases/case-c/layer")
+    assert deleted.status_code == 200 and deleted.json()["nodes"] == 1
+
+
+def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace) -> None:
+    board, made, link_item, _ = _drawn()
+    assert _promote(board, made["item_id"], link_item).json()["status"] == "committed"
+    spare = _item(board, label="Spare", properties={"family_name": "Spare"})
+    pw.removed.add(K)
+    deleted = _as("dana").delete(f"/v1/datasets/src/removed-cases/{K}/layer")
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["nodes"] == 1
+    assert pw.graph.node(spare["element_id"]).audit.reverted
+    assert _carol_sees_it_from_b(made["element_id"])
+    assert pw.items.items[spare["item_id"]].withdrawn_at is not None
+    actions = [r["action"] for r in pw.audit.records]
+    assert "delete_layer" in actions
+    # An administrator deletes too; a non-administrator not through Admin's route.
+    assert _as("fred").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 403
+
+
+def test_the_delete_check_fails_with_the_layer_withdrawn_whole(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    graph = pw.graph
+
+    async def whole(dataset_id: str, withdrawal: str, tx: str) -> PromotionReverted:
+        nodes = [n.id for n in graph._graph_nodes.values() if dataset_id in n.datasets]
+        edges = [e.id for e in graph._graph_edges if dataset_id in e.datasets]
+        graph._pending[tx][2].append((nodes, edges, withdrawal))
+        return PromotionReverted(nodes=len(nodes), edges=len(edges))
+
+    monkeypatch.setattr(graph, "withdraw_layer", whole)
+    board, made, link_item, _ = _drawn()
+    _promote(board, made["item_id"], link_item)
+    pw.removed.add(K)
+    _as("dana").delete(f"/v1/datasets/src/removed-cases/{K}/layer")
+    assert not _carol_sees_it_from_b(made["element_id"])
+
+
+# --- revert (the operator command's core) ----------------------------------------------------
+
+
+async def test_reverting_a_promotion_leaves_the_items_in_the_layer_and_clears_the_registry(
+    pw: SimpleNamespace,
+) -> None:
+    board, made, link_item, _ = _drawn()
+    promotion = _promote(board, made["item_id"], link_item).json()["id"]
+    from services.api.app import get_boards  # the board service as a route builds it
+    from services.api.dataset_scope import stamping
+
+    boards = get_boards(SimpleNamespace(app=app), stamping(pw.graph, registry=pw.datasets),
+                        pw.views, pw.items, pw.datasets, app.state.ontology,
+                        app.state.handling_scheme, pw.models)  # type: ignore[arg-type]  # fmt: skip
+    service = Promotions(boards=boards, store=pw.store, investigations=pw.cases,
+                         author_level=AccessLevel.AUTHOR)  # fmt: skip
+    reverted = await service.revert(pw.store.records[promotion])
+    assert reverted.status == "reverted"
+    layer = pw.items.items[made["item_id"]].dataset_id
+    assert _node_datasets(pw, made["element_id"]) == [layer]
+    assert not _carol_sees_it_from_b(made["element_id"])
+    assert pw.items.items[made["item_id"]].promoted_at is None
+    with pytest.raises(promotions_module.PromotionRefused):
+        await service.revert(pw.store.records[promotion])
+
+
+# --- admin's ageing seam (ADR-145 Amendment 6) -----------------------------------------------
+
+
+async def test_the_waiting_seam_lists_only_the_readers_unit_and_clearance(
+    pw: SimpleNamespace,
+) -> None:
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    _promote(board, _item(board, marking="OFFICIAL-SENSITIVE")["item_id"])
+    seam = WaitingFromStore(
+        store=pw.store, datasets=pw.datasets, pending=SimpleNamespace,
+        clears=lambda c: [m for m in ("OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET")[
+            : ("OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET").index(c) + 1]],
+    )  # fmt: skip
+    assert len(await seam.waiting_for_review(PEOPLE["dana"])) == 1
+    assert await seam.waiting_for_review(PEOPLE["erin"]) == []
+    assert await seam.waiting_for_review(PEOPLE["zed"]) == []
+    (waiting,) = await seam.all_waiting()
+    assert waiting.dataset_name == "Prison intel" and waiting.proposed_by == "alice"
+
+
+# --- the operator command (scripts.revert_promotion) -----------------------------------------
+
+
+async def _run_the_command(pw: SimpleNamespace, load_id: str, *, dry_run: bool) -> int:
+    from scripts.revert_promotion import run
+    from services.api.dataset_scope import stamping
+
+    cleared: list[bool] = []
+
+    async def invalidate() -> None:
+        cleared.append(True)
+
+    code = await run(
+        load_id, reverted_by="ops", dry_run=dry_run, store=pw.store,
+        graph=stamping(pw.graph, registry=pw.datasets), items=pw.items, audit=pw.audit,
+        invalidate=invalidate,
+    )  # fmt: skip
+    pw.cleared = cleared
+    return code
+
+
+async def test_the_commands_dry_run_writes_nothing_and_the_real_run_reverts(
+    pw: SimpleNamespace,
+) -> None:
+    board, made, link_item, _ = _drawn()
+    promoted = _promote(board, made["item_id"], link_item).json()
+
+    assert await _run_the_command(pw, promoted["load_id"], dry_run=True) == 0
+    assert "revert_promotion" not in [r["action"] for r in pw.audit.records] and not pw.cleared
+    assert _carol_sees_it_from_b(made["element_id"])
+    assert pw.store.records[promoted["id"]].status == "committed"
+
+    assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 0
+    assert not _carol_sees_it_from_b(made["element_id"])
+    assert pw.store.records[promoted["id"]].status == "reverted" and pw.cleared
+    assert "revert_promotion" in [r["action"] for r in pw.audit.records]
+    assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 1
+    assert await _run_the_command(pw, "promotion-none", dry_run=False) == 1
+
+
+async def test_the_dry_run_check_fails_with_the_dry_run_writing(pw: SimpleNamespace) -> None:
+    board, made, link_item, _ = _drawn()
+    promoted = _promote(board, made["item_id"], link_item).json()
+    # The plant: the dry run's flag ignored, as a dry run that writes would be.
+    await _run_the_command(pw, promoted["load_id"], dry_run=False)
+    assert not _carol_sees_it_from_b(made["element_id"])

@@ -371,6 +371,19 @@ from schemas.packs import (
     ReportPack,
 )
 from schemas.profile import SourceProfile
+from schemas.promotions import (
+    LayerDeleted,
+    LayerMergeInput,
+    LayerMergeSheet,
+    Promotion,
+    PromotionDecision,
+    PromotionDetails,
+    PromotionInput,
+    PromotionSheet,
+    RemovedCaseLayer,
+    RemovedCaseLayers,
+)
+from schemas.promotions import Promotions as PromotionsList
 from schemas.rights import (
     CUSTOM_ROLE_PREFIX,
     ROLE_RIGHTS,
@@ -777,6 +790,8 @@ from .pipeline_run import (
     RecogniserFor,
 )
 from .principal_names import PrincipalNameDirectory
+from .promotion_store import InMemoryPromotionStore, PostgresPromotionStore, PromotionStore
+from .promotions import PromotionNotFound, PromotionRefused, Promotions
 from .questions import (
     AskRequest,
     NoDocumentsError,
@@ -1084,6 +1099,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     case_view_store = await PostgresCaseViewStore.connect(config.postgres.dsn)
     # ADR-143 decisions 4 and 5: what each board holds, by id, and the watches drawing sets.
     board_item_store = await PostgresBoardItemStore.connect(config.postgres.dsn)
+    promotion_store = await PostgresPromotionStore.connect(config.postgres.dsn)
     app.state.datasets = datasets_store
     litellm_client = LiteLLMClient(LiteLLMConfig.from_env())
     # `embed_model` is the only model this adapter needs fixed at construction — `extract()`'s own
@@ -1266,6 +1282,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.target_models = target_model_store
     app.state.case_views = case_view_store
     app.state.board_items = board_item_store
+    app.state.promotions = promotion_store
     app.state.extraction_candidates = extraction_candidates
     app.state.model = model
     # ADR-135 Amendment 2: *Admin › Models*. The engines it holds route the next request, with no
@@ -1425,6 +1442,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.case_views = None
         await board_item_store.close()
         app.state.board_items = None
+        await promotion_store.close()
+        app.state.promotions = None
         # Every case's level check reads it (its packs, ADR-126 Amendment 2): a closed store left
         # on the state would answer a later app (a test's, with no lifespan) "pool is closed".
         app.state.target_models = None
@@ -1626,6 +1645,19 @@ def get_board_items(request: Request) -> BoardItemStore:
 
 
 BoardItemsDep = Annotated[BoardItemStore, Depends(get_board_items)]
+
+
+def get_promotion_store(request: Request) -> PromotionStore:
+    """ADR-143 decision 8 (L3.4). The lifespan sets the Postgres store; a test app with no
+    lifespan gets an in-memory one."""
+    store = getattr(request.app.state, "promotions", None)
+    if store is None:
+        store = InMemoryPromotionStore()
+        request.app.state.promotions = store
+    return store
+
+
+PromotionStoreDep = Annotated[PromotionStore, Depends(get_promotion_store)]
 
 
 def get_ontology(request: Request) -> OntologySchema:
@@ -4438,6 +4470,151 @@ async def list_drawn_watches(
     """The watches drawing set in this case (Amendment 2 decision 8): one withheld whole from a
     reader who may not see its item."""
     return await boards.watches(investigation.id, principal)
+
+
+# --- promotion (ADR-143 decisions 8 and 10; Amendment 2 decision 1; spec 03 §3.1d; L3.4) --------
+#
+# Promoting needs the case's Author level and `promote_to_dataset` (ADR-112 Amendment 4, I12), on
+# the promoter's own board. The Studio's *Analyst promotions* list is behind the dataset's own gate
+# and `review_promotions`; deciding also needs to be one of the dataset's Authors, never the
+# proposer. A removed case's layer is merged or deleted by one of the dataset's Authors (ADR-145
+# Amendment 4 decision 3: owning, no Studio right), or deleted by an administrator.
+
+_PROMOTES = [
+    Depends(require_right(Right.PROMOTE_TO_DATASET)),
+    Depends(require_right(Right.INVESTIGATE)),
+]
+_REVIEWS = [Depends(require_right(Right.REVIEW_PROMOTIONS))]
+
+
+def get_promotions(
+    request: Request,
+    boards: BoardsDep,
+    store: PromotionStoreDep,
+    investigations: InvestigationsDep,
+) -> Promotions:
+    # The people directory's names; ids where the app holds none (a test app with no lifespan).
+    directory = getattr(request.app.state, "principal_names", None)
+
+    async def case_name(case_id: str) -> str | None:
+        held = await investigations.admin_states([case_id])
+        return held[case_id][0] if case_id in held else None
+
+    return Promotions(
+        boards=boards,
+        store=store,
+        investigations=investigations,
+        author_level=AccessLevel.AUTHOR,
+        link_types=_promotion_refusals_of(request),
+        names=directory.display_names if directory is not None else None,
+        case_names=case_name,
+    )
+
+
+def _promotion_refusals_of(request: Request) -> Any:
+    """Case-b's `LinkTypeService.promotion_refusals` (ADR-143 Amendment 4 decision 3) when the
+    service has it; until L3.5 merges, `None`, and a link type outside the ontology is refused."""
+    service = getattr(request.app.state, "link_types", None)
+    return service if hasattr(service, "promotion_refusals") else None
+
+
+PromotionsDep = Annotated[Promotions, Depends(get_promotions)]
+
+
+@app.exception_handler(PromotionRefused)
+async def _promotion_refused_handler(request: Request, exc: PromotionRefused) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status, content={"error": exc.code, "detail": exc.message}
+    )
+
+
+@app.exception_handler(PromotionNotFound)
+async def _promotion_not_found_handler(request: Request, exc: PromotionNotFound) -> JSONResponse:
+    """Another dataset's promotion, and none at all, alike (rule 3)."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "promotion_not_found"}
+    )
+
+
+async def _audit_promotion(
+    audit: AuditWriter,
+    principal: Principal,
+    action: str,
+    case_id: str | None,
+    count: int,
+    **query: Any,
+) -> None:
+    await audit.record(
+        principal=principal,
+        action=action,
+        investigation_id=case_id,
+        resolved_query=query,
+        result_cardinality=count,
+    )
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/promotion-sheet",
+    dependencies=_PROMOTES,
+)
+async def promotion_sheet(
+    investigation: InvestigationAuthorDep,
+    board_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    promotions: PromotionsDep,
+) -> PromotionSheet:
+    """*Promote…* (decision 8): the board's drawn items not yet promoted, each with every check it
+    fails, the undecided matches as warnings, and how it will be recorded."""
+    board = await boards.own_board(investigation.id, board_id, principal.id)
+    return await promotions.sheet(board, principal)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/promotions",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_PROMOTES,
+)
+async def promote_drawn_items(
+    investigation: InvestigationAuthorDep,
+    board_id: str,
+    body: PromotionInput,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> Promotion:
+    """*Promote*: every check run again here, then one load, committed at once or sent for review
+    under the dataset's policy (ADR-145 decision 8)."""
+    board = await boards.own_board(investigation.id, board_id, principal.id)
+    record = await promotions.promote(board, body.item_ids, principal)
+    await _audit_promotion(
+        audit, principal, "promote_drawn_items", investigation.id,
+        len(record.node_ids) + len(record.edge_ids), board_id=board_id,
+        promotion_id=record.id, load_id=record.load_id, dataset_id=record.dataset_id,
+        status=record.status, node_ids=list(record.node_ids), edge_ids=list(record.edge_ids),
+    )  # fmt: skip
+    return await promotions.view(record, principal, with_board=True)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/boards/{board_id}/promotions",
+    dependencies=_READS_BOARDS,
+)
+async def list_board_promotions(
+    investigation: InvestigationViewerDep,
+    board_id: str,
+    principal: PrincipalDep,
+    boards: BoardsDep,
+    promotions: PromotionsDep,
+) -> PromotionsList:
+    """*Promotions from this board* (decision 10): the outcome of each, for a reader who may see
+    the board."""
+    board = await boards.board(investigation.id, board_id, principal.id)
+    held = await promotions.store.of_board(investigation.id, board.id)
+    return PromotionsList(
+        promotions=[await promotions.view(r, principal, with_board=True) for r in held]
+    )
 
 
 async def _record_history_step(
@@ -9585,6 +9762,334 @@ _EDITS_THE_MODEL = [Depends(require_right(Right.EDIT_TARGET_MODEL))]
 #: models (phase 5 item 4), and a composite is read-only for now (ADR-099 Amendment 14), so its
 #: model is read, not changed.
 _CHANGES_THE_MODEL = [*_EDITS_THE_MODEL, Depends(refuse_changing_a_composites_model)]
+
+
+# --- promotion: the Studio's Analyst promotions and a removed case's layer (L3.4) -----------
+# After the dataset's own gate (`StudioDatasetDep`), which a route above it would not resolve.
+
+
+async def _may_review(
+    promotions: Promotions, dataset_id: str, principal: Principal
+) -> tuple[bool, str | None]:
+    if await promotions.is_author_of(dataset_id, principal):
+        return True, None
+    return False, (
+        "Only one of the dataset's Authors who may review promotions can decide this: you are not "
+        "one of its Authors."
+    )
+
+
+@app.get("/v1/datasets/{dataset_id}/promotions", dependencies=_REVIEWS)
+async def list_dataset_promotions(
+    dataset_id: StudioDatasetDep,
+    principal: PrincipalDep,
+    promotions: PromotionsDep,
+) -> PromotionsList:
+    """The Ingest Studio's *Analyst promotions* (decision 10): every promotion into the dataset,
+    as counts and words; the items themselves only through *Details*. A promotion marked above the
+    reader's clearance is not listed (rule 3)."""
+    author, why = await _may_review(promotions, dataset_id, principal)
+    reverts = Right.REVERT_LOADS in rights_for(principal.roles)
+    scheme = promotions.boards.scheme
+    out = []
+    for record in await promotions.store.into(dataset_id):
+        if not scheme.clears(principal.clearance, record.marking):
+            continue
+        own = record.proposed_by == principal.id
+        out.append(
+            await promotions.view(
+                record, principal, may_review=author and not own, reverts=reverts,
+                why_not="You sent this promotion: a second person must review it." if own
+                else why,
+            )
+        )  # fmt: skip
+    return PromotionsList(promotions=out)
+
+
+async def _reviewable(
+    promotions: Promotions, dataset_id: str, promotion_id: str, principal: Principal
+) -> Any:
+    record = await promotions.of_dataset(dataset_id, promotion_id)
+    if not promotions.boards.scheme.clears(principal.clearance, record.marking):
+        raise PromotionNotFound
+    if not await promotions.is_author_of(dataset_id, principal):
+        raise PromotionRefused(
+            "not_an_author",
+            "Only one of the dataset's Authors who may review promotions can read or decide this.",
+            status=403,
+        )
+    return record
+
+
+@app.get("/v1/datasets/{dataset_id}/promotions/{promotion_id}", dependencies=_REVIEWS)
+async def promotion_details(
+    dataset_id: StudioDatasetDep,
+    promotion_id: str,
+    principal: PrincipalDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> PromotionDetails:
+    """*Details*: the promotion's own items, read from its layer through the reviewer's own
+    handling (Amendment 2 decision 1: a reviewer reads what they review), audited."""
+    record = await _reviewable(promotions, dataset_id, promotion_id, principal)
+    details = await promotions.details(record, principal)
+    await _audit_promotion(
+        audit, principal, "read_promotion", record.case_id, len(details.items),
+        promotion_id=record.id, dataset_id=dataset_id,
+    )  # fmt: skip
+    return details
+
+
+@app.post("/v1/datasets/{dataset_id}/promotions/{promotion_id}/decision", dependencies=_REVIEWS)
+async def decide_promotion(
+    dataset_id: StudioDatasetDep,
+    promotion_id: str,
+    body: PromotionDecision,
+    principal: PrincipalDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> Promotion:
+    """*Approve and commit* or *Reject with a reason* (C9, C11; ADR-133 Amendment 8)."""
+    record = await _reviewable(promotions, dataset_id, promotion_id, principal)
+    decided = await promotions.decide(record, principal, approve=body.approve, reason=body.reason)
+    await _audit_promotion(
+        audit, principal, "approve_promotion" if body.approve else "reject_promotion",
+        record.case_id, len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
+        load_id=record.load_id, dataset_id=dataset_id, reason=body.reason,
+    )  # fmt: skip
+    return await promotions.view(decided, principal)
+
+
+# --- a removed case's layer (ADR-143 Amendment 2 decision 1) ---------------------------------
+
+
+async def _removed_case(
+    dataset_id: str,
+    investigation_id: str,
+    principal: Principal,
+    datasets: DatasetStore,
+    investigations: InvestigationStore,
+    graph: GraphPort,
+) -> tuple[Dataset, AdminLinkedCase, str]:
+    """The dataset, the removed case reading it directly, and its layer; refused in words for a
+    case that is open, not linked to this dataset, or holding no layer."""
+    dataset = (await datasets.egress_of([dataset_id])).get(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    row = next(
+        (c for c in await _linked_cases(dataset, datasets, investigations, graph, principal,
+                                        only=investigation_id)
+         if c.through is None),
+        None,
+    )  # fmt: skip
+    if row is None:
+        raise LayerActionRefused(404, "case_not_linked", "That case does not read this dataset.")
+    if row.state != "removed":
+        raise LayerActionRefused(
+            409, "case_open",
+            "Only a removed case's layer can be merged or deleted: this case is still open.",
+        )  # fmt: skip
+    layer = await datasets.layer_of_case(investigation_id)
+    if layer is None:
+        raise LayerActionRefused(404, "no_layer", "That case holds no layer.")
+    return dataset, row, layer
+
+
+async def _an_author(promotions: Promotions, dataset_id: str, principal: Principal) -> None:
+    if not await promotions.is_author_of(dataset_id, principal):
+        raise LayerActionRefused(
+            403, "not_an_author",
+            "Only one of the dataset's Authors may merge or delete a removed case's layer.",
+        )  # fmt: skip
+
+
+_COMPOSITE_NEVER_MERGED = (
+    "A composite case's layer is never merged into a dataset, only deleted: its items were drawn "
+    "over several datasets at once."
+)
+
+
+@app.get("/v1/datasets/{dataset_id}/removed-cases")
+async def removed_case_layers(
+    dataset_id: StudioDatasetDep,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    promotions: PromotionsDep,
+) -> RemovedCaseLayers:
+    """The removed cases reading this dataset, for its Authors: counts only, never contents."""
+    await _an_author(promotions, dataset_id, principal)
+    dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
+    rows = await _linked_cases(dataset, datasets, investigations, graph, principal)
+    composite = dataset.kind == "composite"
+    return RemovedCaseLayers(
+        dataset_id=dataset_id,
+        cases=[
+            RemovedCaseLayer(
+                investigation_id=r.investigation_id, name=r.name, items=r.items + r.links,
+                mergeable=not composite, why_not=_COMPOSITE_NEVER_MERGED if composite else None,
+            )
+            for r in rows
+            if r.state == "removed" and r.through is None
+        ],
+    )  # fmt: skip
+
+
+@app.post("/v1/datasets/{dataset_id}/removed-cases/{case_id}/merge-sheet")
+async def open_layer_merge(
+    dataset_id: StudioDatasetDep,
+    case_id: str,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> LayerMergeSheet:
+    """*Merge into the dataset*: opening it grants this Author read access to that one layer, for
+    this merge alone, recorded in the audit before anything of it is read."""
+    await _an_author(promotions, dataset_id, principal)
+    dataset, row, layer = await _removed_case(
+        dataset_id, case_id, principal, datasets, investigations, graph
+    )
+    if dataset.kind == "composite":
+        raise LayerActionRefused(409, "composite_never_merged", _COMPOSITE_NEVER_MERGED)
+    await _audit_promotion(
+        audit, principal, "open_layer_merge", case_id, 0, dataset_id=dataset_id,
+        layer_id=layer,
+    )  # fmt: skip
+    return await promotions.open_merge(dataset, case_id, row.name, layer, principal)
+
+
+async def _merge_grant_case(promotions: Promotions, grant_id: str) -> tuple[str, str]:
+    grant = await promotions.store.grant(grant_id)
+    if grant is None:
+        raise PromotionRefused("no_open_grant", "This merge is closed.", status=403)
+    case = await promotions._case_name(grant.case_id)
+    return grant.case_id, case
+
+
+@app.get("/v1/datasets/{dataset_id}/layer-merges/{grant_id}")
+async def read_layer_merge(
+    dataset_id: StudioDatasetDep,
+    grant_id: str,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    promotions: PromotionsDep,
+) -> LayerMergeSheet:
+    """The merge sheet again, through its grant: refused once the merge has closed."""
+    await _an_author(promotions, dataset_id, principal)
+    dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
+    grant = await promotions.store.grant(grant_id)
+    if grant is None:
+        raise PromotionRefused("no_open_grant", "This merge is closed.", status=403)
+    _, case_name = await _merge_grant_case(promotions, grant_id)
+    return await promotions.merge_sheet(grant, dataset, case_name, principal)
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/layer-merges/{grant_id}", status_code=status.HTTP_201_CREATED
+)
+async def merge_removed_case_layer(
+    dataset_id: StudioDatasetDep,
+    grant_id: str,
+    body: LayerMergeInput,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> Promotion:
+    """*Merge*: the ticked items as one promotion (trigger `layer_merge`) under the dataset's
+    policy; the grant closes with the merge."""
+    await _an_author(promotions, dataset_id, principal)
+    dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
+    record = await promotions.merge(grant_id, dataset, body.item_ids, principal)
+    await _audit_promotion(
+        audit, principal, "merge_layer", record.case_id,
+        len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
+        load_id=record.load_id, dataset_id=dataset_id, status=record.status,
+    )  # fmt: skip
+    return await promotions.view(record, principal)
+
+
+@app.delete(
+    "/v1/datasets/{dataset_id}/layer-merges/{grant_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def cancel_layer_merge(
+    dataset_id: StudioDatasetDep,
+    grant_id: str,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> None:
+    """*Cancel*: the grant closes and nothing is merged."""
+    await _an_author(promotions, dataset_id, principal)
+    dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
+    await promotions.cancel_merge(grant_id, dataset, principal)
+    await _audit_promotion(
+        audit, principal, "cancel_layer_merge", None, 0, dataset_id=dataset_id, grant_id=grant_id
+    )
+
+
+async def _delete_layer(
+    dataset_id: str,
+    investigation_id: str,
+    principal: Principal,
+    datasets: DatasetStore,
+    investigations: InvestigationStore,
+    graph: GraphPort,
+    promotions: Promotions,
+    audit: AuditWriter,
+) -> LayerDeleted:
+    _, _, layer = await _removed_case(
+        dataset_id, investigation_id, principal, datasets, investigations, graph
+    )
+    # Audited before anything is written (ADR-127 Amendment 23's order).
+    await _audit_promotion(
+        audit, principal, "delete_layer", investigation_id, 0, dataset_id=dataset_id,
+        layer_id=layer,
+    )  # fmt: skip
+    return await promotions.delete_layer(investigation_id, layer)
+
+
+@app.delete("/v1/datasets/{dataset_id}/removed-cases/{case_id}/layer")
+async def delete_removed_case_layer(
+    dataset_id: StudioDatasetDep,
+    case_id: str,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> LayerDeleted:
+    """*Delete* by one of the dataset's Authors: every item wholly the layer's withdrawn; promoted
+    items never touched."""
+    await _an_author(promotions, dataset_id, principal)
+    return await _delete_layer(dataset_id, case_id, principal, datasets, investigations,
+                               graph, promotions, audit)  # fmt: skip
+
+
+@app.post(
+    "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete",
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def admin_delete_removed_case_layer(
+    dataset_id: str,
+    investigation_id: str,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    investigations: InvestigationsDep,
+    graph: GraphDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> LayerDeleted:
+    """*Delete* by an administrator (Admin › Datasets), after its dry run."""
+    await _admin_dataset_of(datasets, dataset_id)
+    return await _delete_layer(dataset_id, investigation_id, principal, datasets, investigations,
+                               graph, promotions, audit)  # fmt: skip
 
 
 @app.get("/v1/datasets/{dataset_id}/model", dependencies=_EDITS_THE_MODEL)

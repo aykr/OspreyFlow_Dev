@@ -65,6 +65,10 @@ class BoardItemStore(Protocol):
         self, case_id: str, item_ids: Sequence[str], by: str, at: datetime
     ) -> int: ...
     async def active_watches(self, case_id: str) -> list[DrawnWatch]: ...
+    #: L3.4: a promotion's items marked when it commits, cleared when it is reverted.
+    async def mark_promoted(
+        self, case_id: str, item_ids: Sequence[str], at: datetime | None
+    ) -> None: ...
 
 
 def new_item(
@@ -155,6 +159,14 @@ class InMemoryBoardItemStore:
             (w for w in self.watches.values() if w.case_id == case_id and w.ended_at is None),
             key=lambda w: (w.created_at, w.id),
         )
+
+    async def mark_promoted(
+        self, case_id: str, item_ids: Sequence[str], at: datetime | None
+    ) -> None:
+        for item_id in item_ids:
+            item = self.items.get(item_id)
+            if item is not None and item.case_id == case_id:
+                self.items[item_id] = replace(item, promoted_at=at)
 
 
 _BOOTSTRAP_SQL = """
@@ -299,3 +311,15 @@ class PostgresBoardItemStore:
                 case_id,
             )
         return [_watch(r) for r in rows]
+
+    async def mark_promoted(
+        self, case_id: str, item_ids: Sequence[str], at: datetime | None
+    ) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE board_items SET promoted_at = $3 "
+                "WHERE case_id = $1 AND item_id = ANY($2::text[])",
+                case_id,
+                list(item_ids),
+                at,
+            )

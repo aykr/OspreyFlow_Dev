@@ -79,6 +79,24 @@ ROUTE_RIGHTS = {
     "board_pictures": "investigate",
     "board_picture_file": "investigate",
     "list_drawn_watches": "investigate",
+    # ADR-143 decisions 8 and 10 (L3.4): promoting at the case's Author level with
+    # promote_to_dataset; the Studio's Analyst promotions behind the dataset's gate and
+    # review_promotions; a removed case's layer merged or deleted by one of the dataset's Authors
+    # (ADR-145 Amendment 4 decision 3: owning needs no Studio right; the route asks it), or deleted
+    # by an administrator.
+    "promotion_sheet": "promote_to_dataset",
+    "promote_drawn_items": "promote_to_dataset",
+    "list_board_promotions": "investigate",
+    "list_dataset_promotions": "review_promotions",
+    "promotion_details": "review_promotions",
+    "decide_promotion": "review_promotions",
+    "removed_case_layers": None,
+    "open_layer_merge": None,
+    "read_layer_merge": None,
+    "merge_removed_case_layer": None,
+    "cancel_layer_merge": None,
+    "delete_removed_case_layer": None,
+    "admin_delete_removed_case_layer": "administer_system",
     "start_a_drawing": "create_case",
     "seed": "investigate",
     "expand": "investigate",
@@ -488,14 +506,13 @@ def test_every_right_guards_at_least_one_route() -> None:
     area (ADR-110 Amendment 1, ADR-112); reverting a load has no route (spec 09 §6). Screening
     lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b. A
     promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
-    dataset's approvers in Admin › Datasets; its review route arrives with the promotion (L3.4).
+    dataset's approvers in Admin › Datasets and guards the promotion's review (L3.4).
     `manage_models` (ADR-112 Amendment 7) guards *Admin › Models*' routes (platform's P1).
     `draw_on_boards` guards the boards' routes (L3.3); `read_audit` guards Admin › Audit (L2.6)."""
     not_yet = {"revert_loads",
-               "export_override", "review_promotions",
-               # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (boards,
-               # promotion, proposed types, the drawn-dataset merge, Rules and Monitoring).
-               "promote_to_dataset",
+               "export_override",
+               # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (the
+               # drawn-dataset merge, Rules and Monitoring).
                "merge_datasets", "author_rules",
                # Superseded at L3.5 by `propose_types` (ADR-112 Amendment 4); its removal from
                # the rights and the role screens is the orchestrator's (case-b's report).
