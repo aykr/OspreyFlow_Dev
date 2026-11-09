@@ -552,6 +552,15 @@ New ones are added at the bottom as they happen.
     (Docker, the local `osprey.yaml` and Valkey) and on main's phone-extraction case. test-js: 2,775 passed;
     `MatrixView.budget` failed under a load of 18 and passed alone twice. Also: case-b reopened on L3.8 (your
     word), and two carries for studio from studio-b's review. Rules-b's and studio-b's fix rounds are in review.
+84. **The Mac restarted again at about 17:09 UTC**, the third time today. The load averages read 26–27 on 12 cores
+    just before: every lane's `make test`, vitest and Playwright at once, plus my rules-b merge gates; Kandji's
+    file-scanning agent works harder under that load. A restart helper session (`ospreyflow-73`) resumed me and
+    the eight lanes, and released stack c (rules' run there was lost). Detached runs on the server survived:
+    studio on b, platform on d, case on e. **New, my call:** a lane asks me before any heavy local run (`make
+    test`, `make -k ci`, test-js, Playwright, glass-perf), and at most two run on this Mac at once. Lost with
+    `/private/tmp`: my uncommitted offline-on-server work, rebuilt in `~/dev/osprey-wt/orch-offline` and
+    committed on `orch/offline-remote` (`b999d10`; three cases red against main, 112 pass). It is being trialled
+    now, and rules-b's merge is being gated with it.
 
 ## Evening, 7 November: your records of 7 November applied
 
