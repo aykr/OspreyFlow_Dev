@@ -30515,8 +30515,8 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
    Conduit refuses a name resolving inside when an administrator names the connection, and again
    before every connection or request, since DNS can change in between. A host must also be on the
    egress allow-list at each read. This applies to SQL as well as API connections, so a client
-   database on a private network cannot be reached; whether an operator may admit one is put to the
-   owner. "Inside" is judged as `not is_global` (shared addresses, `100.64.0.0/10`, among them), and an
+   database on a private network cannot be reached unless the operator admits it (Amendment 15, the
+   owner's ruling of 9 November). "Inside" is judged as `not is_global` (shared addresses, `100.64.0.0/10`, among them), and an
    IPv6 address carrying an IPv4 one (mapped, NAT64's `64:ff9b::/96`, 6to4) by the address it
    carries. An API request is sent to the address that was checked, the name kept for `Host` and
    TLS, so a name rebound between the check and the request reaches nothing new.
@@ -30628,7 +30628,7 @@ by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for t
 | `tests/services/api/test_subscribed_lists_seam.py` | a Lookup reads a deployment list only while its dataset subscribes, at the gate and in the run |
 | `apps/workspace/src/ingest/sources/connectors.test.tsx` | the wizard's read; subscription by id; *Manage* only for whoever may load lists; the blank mapping |
 | `keyboard/sources-connectors.spec.ts` | each action by keyboard (rule 13), `SOURCES_CONNECTORS_ACTIONS` |
-| `a11y/every-harness.spec.ts` | the harness's seven states in dark, light and GOV.UK |
+| `a11y/every-harness.spec.ts` | the harness's ten states (the default and nine variants) in dark, light and GOV.UK |
 
 **Phase 9's exit is met:** `visit_bookings` is registered from the fixture Postgres with an incremental
 watermark through the register route, and a refresh reads only the new rows into its file; a SQL
@@ -30636,7 +30636,8 @@ source's file loaded through the source-refresh path loads only the new row
 (`test_sql_connector_live.py`, under the lease named in the lane's report). The load half reads a
 payments-shaped synthetic table, the only recipe the live source-refresh path publishes. The fixture
 lacks TLS, so its cases connect without it; that is the fixture's one named difference, and the real
-connector is shown refusing that same server.
+connector is shown refusing that same server. `verify-full` itself is shown live through a TLS front
+before the same Postgres (Amendment 15's tests).
 
 **Not built.** Scheduled polling of a SQL or API source waits on R17's poll floor; it is read at
 registration and by *Refresh now*. *Admin › Connections*' fields for the new kinds are the admin lane's
@@ -30644,11 +30645,10 @@ registration and by *Refresh now*. *Admin › Connections*' fields for the new k
 Re-screening a dataset's customers against a Studio list's changed entries is the rules': the import
 counts what it added, changed and delisted for them. **Two deployment-wide list stores** now stand side
 by side: ADR-133's (the Lists tab, which the rules screen against) and this one (Studio › Sources,
-versions as reference lists). Which is the store of record is the owner's to rule, since retiring
-ADR-133's Lists tab would change an accepted ADR. This step builds to the recommendation (this store,
-with the rules reading it once ruled), but leaves ADR-133's store, its refresh, its schedule and its
-Lists tab exactly as they were, so either other answer stays open. The rules lane's switch-over waits
-for the ruling. An incremental source's file
+versions as reference lists). The owner ruled on 9 November that this one is the store of record
+(ADR-133 Amendment 9). This step leaves ADR-133's store, its refresh, its schedule and its Lists tab
+exactly as they were; the rules lane's L2.11 moves the picker and re-screening, makes the Lists tab
+read-only in that same change, and migrates its lists. An incremental source's file
 grows with each read; pruning rows every pipeline has loaded is not built (a file past the cap is
 refused in words). A torn write of a read's file has no test that could catch it in one process; the
 rename is recorded as untested.
@@ -30695,15 +30695,32 @@ each entry a named host or network the operator admits, everything else still re
    empty by default. Each entry is either a host name in full (with a dot: `nomis-replica.client.internal`)
    or a network written as address/length (`10.20.0.0/16`, `fd12:3456::/32`), or one address, wholly
    inside 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 or fc00::/7. The deployment's schema
-   refuses in words anything else: a dotless name, `localhost` or `*.localhost`, a wildcard, a scheme or
-   port, loopback, link-local (a cloud's metadata service), unspecified, multicast, a public address or
-   a network reaching outside those ranges (`10.0.0.0/7`).
+   refuses in words anything else: a dotless name, `localhost` or `*.localhost`, Docker's and a
+   cluster's own names (`*.docker.internal`, `*.svc`, `*.cluster.local`), a wildcard, a scheme or port,
+   loopback, link-local (a cloud's metadata service), unspecified, multicast, a public address, a
+   network reaching outside those ranges (`10.0.0.0/7`), and a network wholly inside the metadata
+   services of decision 2 (`fd00:ec2::/32`, `100.100.0.0/16`).
 2. **What an entry admits.** A connection's host name is admitted when it resolves only to addresses
    that are global or admitted: a private address is admitted when the host is listed by name, or the
    address lies inside a listed network. A network entry admits a name by what it resolves to, never
-   by the name; a name entry admits that name only. Whatever the list holds, the Conduit admits only an
-   address inside the five ranges above, so a hand-edited `deployment.env` cannot reach this machine or
-   the metadata service, and an entry that is not valid admits nothing.
+   by the name; a name entry admits that name only. Every address a name resolves to is judged; one
+   not admitted refuses the name. An IPv6 address carrying an IPv4 one (mapped, NAT64, 6to4) is judged
+   by the IPv4 address it carries. **Never admitted, whatever the list holds** (checked by the Conduit
+   on every check, so a hand-edited `deployment.env` cannot change it, and an entry that is not valid
+   admits nothing):
+   - anything outside the five ranges: this machine, link-local (169.254.169.254, the metadata service
+     of most clouds), unspecified, multicast, reserved;
+   - the metadata services that sit inside them: AWS's IPv6 instance metadata service and resolver
+     (`fd00:ec2::/32`) and Alibaba Cloud's metadata and internal services (`100.100.0.0/16`);
+   - **the deployment's own networks**, which only the Conduit can see: each network its container's
+     interfaces reach and each gateway (on Docker, the host itself), from the kernel's route tables;
+     the addresses its own service names (`postgres`, `keycloak`, `api` …; a cluster's resolve through
+     the pod's search domain) and Docker's names for this machine (`host.docker.internal`,
+     `gateway.docker.internal`) resolve to; and the cluster's API (`KUBERNETES_SERVICE_HOST`). Looked
+     up at most once a minute, and only when a listed entry would admit a private address.
+   **Limit, recorded:** a cluster's service network is refused only where one of the deployment's own
+   names resolves into it; a service of another product in the same cluster, inside a listed network,
+   is not seen. An operator lists the client's own networks, not the cluster's.
 3. **A connection is still written by name.** A literal private address as a connection's host stays
    refused as Amendment 13 refuses it (the schema checks a host before any list is known); the operator
    lists the address's network, and the administrator names the host. Decision taken in the lane, logged
@@ -30711,20 +30728,40 @@ each entry a named host or network the operator admits, everything else still re
 4. **Where it is read.** `apply` renders the list as `OSPREY_CONNECTOR_PRIVATE` in `deployment.env`
    (names and networks, never a secret); `refuse_host` reads it at the one call site Amendment 13 built:
    when an administrator names a connection, and again before every SQL connection and API request,
-   since DNS can change in between. The egress allow-list (`OSPREY_CONNECTOR_EGRESS`) is still asked of
+   since DNS can change in between. **Each connection goes to the address that was checked** (the
+   lane review's item 3): an API request as Amendment 13 already sends it, and a SQL connection too,
+   with the host's name kept for TLS's name check (`NamedTls`), so a name rebound after the check is
+   never connected to. A SQL host that does not resolve is refused. The egress allow-list (`OSPREY_CONNECTOR_EGRESS`) is still asked of
    a listed host, as of any host. A refusal names the setting: "… and the operator has not admitted it
    (osprey.yaml's connectors.private_hosts)".
 5. **Nothing else loosens.** The binding of a connection to the datasets an administrator names, a
-   secret to one connection, the read-only bounded session, verify-full TLS and the byte and row caps
-   all hold for an admitted host exactly as for a public one.
+   secret to one connection, the read-only bounded session, TLS as the connection sets it
+   (`verify-full` by default; `require` stays the administrator's choice, as Amendment 13 left it) and
+   the byte and row caps all hold for an admitted host exactly as for a public one.
+6. **A client's own CA** (the lane review's item 12). A server on a client's private network usually
+   holds a certificate its internal CA signed, which no system trust store holds; without a way to
+   trust it, `verify-full` would refuse it and `require` would send the password to a server nobody
+   verified. A SQL or API connection may name `ca_certificate`: the CA's certificate in PEM, public and
+   never a secret, checked at save to load as one or more certificates and to hold no private key, and
+   trusted beside the system's store for that connection alone. On a SQL connection it is taken only
+   with `verify-full`. Its field in *Admin › Connections* rides with the admin lane's carry for the
+   connection settings' fields.
 
 **Tests.** `tests/services/api/test_connector_private_hosts.py`, each red by a plant at its real call
-site (`process/lanes/studio-b/L1.6_RED_RECORD.md`, P1–P6): an unlisted private address refused, and a
-name entry or network entry admitting nothing else; a listed host or network admitted for SQL and API,
-the egress list still asked; no list admits this machine or the metadata service, even past the schema;
-`osprey.yaml` refuses every entry no list may hold; `apply` renders the list; the save route keeps a
-listed connection and refuses an unlisted one; the save check and the read check read the same list.
-The administration guide's `osprey.yaml` reference gains the `connectors` section from the schema.
+site (`process/lanes/studio-b/L1.6_RED_RECORD.md`, P1–P6 and N1–N9): an unlisted private address
+refused, and a name entry or network entry admitting nothing else; a listed host or network admitted
+for SQL and API, the egress list still asked; no list admits this machine, the link-local metadata
+service, the metadata services inside a range, or the deployment's own networks (and those are read
+from a synthetic route table); every address a name resolves to judged; IPv6 forms judged by the IPv4
+address they carry; `osprey.yaml` refuses every entry no list may hold; `apply` renders the list; the
+save route keeps a listed connection and refuses an unlisted one; *Test connection* and every read go
+through the list, and a SQL connection is sent to the checked address with its name kept for TLS; a
+SQL host that does not resolve refused; a CA certificate that is not one refused.
+`tests/connectors/test_sql_connector_live.py`'s three `verify-full` cases, live, through a TLS front
+before the leased Postgres (the server itself untouched): read over TLS from a server whose CA the
+connection names; refused for a CA it does not trust and for a certificate naming another host, with
+nothing relayed to Postgres. The administration guide's `osprey.yaml` reference gains the `connectors`
+section from the schema.
 
 ### ADR-133, Amendment 9 (9 November 2026) — L1.6's reference lists are the screening-list store of record; the Lists tab read-only, then retired
 
@@ -30742,11 +30779,21 @@ ADR-133's store and Lists tab fully working while the owner ruled which is of re
 1. **The store of record** for deployment-wide screening lists is ADR-140 Amendment 13's: lists named,
    imported through a template, versioned only on change, and read by a dataset that subscribes to one
    by its id. Nothing new is written to ADR-133's store's design.
-2. **ADR-133's Lists tab becomes read-only** (no add, import or refresh of one of its lists), then is
-   **retired** once a rule's list picker reads `GET /v1/datasets/{id}/reference-lists/offered` and
-   re-screening runs against the Studio's lists. Both are built in the rules lane's L2.11; until then
-   ADR-133's store and tab stay as they are, so no running rule loses its list.
-3. **No one's rights change.** `load_screening_lists` keeps acting where ADR-146 Amendment 3 says.
+2. **The order, so screening never goes stale** (the lane review's item 11). Until a rule's list picker
+   reads `GET /v1/datasets/{id}/reference-lists/offered` and re-screening runs against the Studio's
+   lists, ADR-133's store, its Lists tab and its scheduled refresh stay exactly as they are. The Lists
+   tab becomes read-only (no add or import of a new list; existing lists keep their scheduled refresh)
+   **in the same change** that moves the picker and re-screening, and never before it. It is
+   **retired** once no rule reads an ADR-133 list. All of it is built in the rules lane's L2.11.
+3. **The lists already in ADR-133's store** are migrated, not dropped: L2.11 imports each one's current
+   rows once into the Studio's store as a deployment-wide list of the same name (version 1, through the
+   blank template's column picks, rule 9's check before anything is kept), and repoints each rule that
+   read it to the new list's id. ADR-133's own history stays readable in the audit trail. A clashing
+   name is refused in words for an administrator to settle, never merged. Decision taken in the lane,
+   logged for the owner to overrule.
+4. **No one's rights change.** `load_screening_lists` keeps acting where ADR-146 Amendment 3 says.
 
-**Tests.** None in L1.6, which changes no code for this amendment. L2.11 owns the tests that the Lists
-tab refuses a write and that a rule screens against a Studio list, each red by a plant (rules 12 and 15).
+**Tests.** None in L1.6, which changes no code for this amendment. L2.11 owns them, each red by a plant
+(rules 12 and 15): the Lists tab refuses a new list only once a rule screens against a Studio list; an
+existing ADR-133 list keeps refreshing until then; each migrated list holds its rows and its rules
+point at it by id; a clashing name is refused.

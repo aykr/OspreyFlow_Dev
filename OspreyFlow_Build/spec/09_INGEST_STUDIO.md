@@ -274,14 +274,20 @@ when a read needs it and never stored, audited or answered.
 
 - **SQL** (PostgreSQL): host, port, database, a login and its secret, the schemas its sources may
   read (never the server's catalogue), and TLS (`verify-full` by default, or `require`; a server
-  without TLS is refused). Each session is read-only from its first statement, and each statement is
+  without TLS is refused), with the client's own CA certificate if an internal CA signed the server's
+  (ADR-140 Amendment 15). Each session is read-only from its first statement, and each statement is
   bounded at 60 seconds. The login must be **read-only**: *Test connection* and every read
   refuse a superuser, a login owning a table, or one with a write privilege on any table it can see,
   and the read runs in a `READ ONLY` transaction. A source names a table or view and, optionally, its
   columns; never an expression (a sandboxed SELECT is expert mode's, L1.5).
 - **API**: an HTTPS base URL, no sign-in or a bearer secret, and paging by `page` or by a next link
   named at a dotted path (which must keep the base URL's scheme, host and port). Its host must be on the deployment's
-  egress allow-list, `OSPREY_CONNECTOR_EGRESS`, which only an operator sets.
+  egress allow-list, `OSPREY_CONNECTOR_EGRESS`, which only an operator sets; a client's own CA
+  certificate may be named as for SQL.
+- **Private networks.** No SQL or API connection reaches inside the deployment or its network unless
+  the operator admits the host by name or network in `osprey.yaml`'s `connectors.private_hosts`
+  (ADR-140 Amendment 15); this machine, a cloud's metadata services and the deployment's own networks
+  are never admitted, whatever is listed.
 - **JSON**: files in the dataset's folder whose names match a pattern, their records at a dotted path.
 
 **No connection reaches inside the deployment:** not this machine, the deployment's own services
