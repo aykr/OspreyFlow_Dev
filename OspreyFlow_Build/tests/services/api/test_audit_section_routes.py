@@ -475,7 +475,7 @@ PLANTED = [
     "nameless-r1", "mod-w", "nameless-m1", "prop-1", "nameless-p2",
     # The identity provider's usernames, served by `display_names` for an account with no name.
     "uname-w1", "uname-u1", "uname-r1", "uname-m1", "uname-p2", "uname-lead-a", "uname-own-a",
-    "uname-from-1", "uname-prop-1", "uname-mod-w",
+    "uname-from-1", "uname-prop-1", "uname-mod-w", "grp-team-7",
 ]  # fmt: skip
 
 
@@ -505,6 +505,7 @@ def test_no_account_id_reaches_the_glass(world: SimpleNamespace, directory: Any)
         _row("transfer_owned_item", {"from": "from-1", "to": "nameless-to-1", "kind": "board",
              "id": "b-1"}, None),
         _row("grant_access", {"account": "nameless-acct-1", "level": "author"}),
+        _row("revoke_access", {"account": "team:grp-team-7"}),
     ]  # fmt: skip
     world.reader.models = [
         AuditSectionEntry(recorded_at=T0, who=w, action="engine_changed", kind="models",
@@ -531,6 +532,7 @@ def test_no_account_id_reaches_the_glass(world: SimpleNamespace, directory: Any)
     assert by_action["set_team_lead"]["detail"] == {"before": "Lee Ann", "after": NO_NAME}
     assert by_action["change_dataset_owners"]["detail"]["before"] == ["Owen Hart"]
     assert by_action["transfer_owned_item"]["detail"]["from"] == "Fran Ode"
+    assert by_action["revoke_access"]["detail"] == {"person": "A team"}
     assert stream["people"] == ["Kim Lee"]  # an account with no name is not offered
     assert [p["proposed_by_name"] for p in answers[3].json()["waiting"]] == ["Pat Ross", NO_NAME]
 
@@ -578,3 +580,21 @@ def test_operations_ageing_lists_no_other_units_promotions(world: SimpleNamespac
     own = world.client.get("/v1/admin/operations/ageing", headers=_as("ops-1")).json()
     assert other["waiting"] == [] and [p["promotion_id"] for p in own["waiting"]] == ["p1"]
     assert waiting.readers == ["ops-9", "ops-1"]
+
+
+def test_a_person_filter_of_one_bare_string_is_refused() -> None:
+    """A bare id would be read as its letters (`ANY(['a','n','a',...])`), a filter that matches
+    nothing and so passes for narrowing: refused where the filter is read."""
+    import asyncio
+
+    from services.api.audit_section import AuditSectionReader
+
+    class _NoPool:
+        def acquire(self) -> Any:
+            raise AssertionError("never reached: the filter is refused first")
+
+    reader = AuditSectionReader(_NoPool())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="never one string"):
+        asyncio.run(reader.stream(TOKENS.get("x") or Principal(id="x", clearance="SECRET",
+                                  org_unit="u", roles=[]), StreamFilters(who="ana-b"),  # type: ignore[arg-type]
+                                  offset=0, limit=1))  # fmt: skip
