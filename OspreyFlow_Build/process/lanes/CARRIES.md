@@ -33,3 +33,4 @@ takes them (then struck through with the brief's commit). Newest last.
 | admin | Admin's read-only display of the grading scheme (GET /v1/grading-scheme is ready) | case-b, L3.7 | L2.7 |
 | platform | The backup set includes grading-scheme.yaml (harness/backup.py) | case-b, L3.7 | P6 |
 | case | Export board_store's item columns and row helper for the grading change (instead of case-b's copy) | case-b, L3.7 | L3.6 |
+| studio-b | A subscribed list's Lookup passes save and publish but is refused at the drawer's sample, Test and the run: staging_catalogue.run_staging re-judges with subscribed=(); studio_staging's sample, studio_verify (dry_run_staged_recipe) and pipeline_run (prepare_staged_load) pass none; staged_lists has no callers. Thread subscribed through all three, with a live test through run_staging, red first (rule 12) | studio, L1.5 review | L1.8 |
