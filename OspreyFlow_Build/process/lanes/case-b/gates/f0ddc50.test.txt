@@ -1,0 +1,1212 @@
+# make test at f0ddc50 (tree 2a3049ce36929f16b952fe970c9f4f4093fbee9d), on main 451a648, offline, GRADING_CI.diff applied.
+# 9168 passed, 4 failed, 2 errors, each this machine's (the list L3.5's gate explained), none in a file
+# this lane changed:
+# - test_the_committed_osprey_yaml_still_validates: the owner's local osprey.yaml.
+# - test_the_deployments_own_valkey_is_reached_plainly: reads VALKEY_PORT, pinned for the offline run.
+# - test_no_product_folder_is_left_at_the_root: graphify-out at the repository root (local, gitignored).
+# - test_the_extraction_loads_as_documents_held_by_the_phones: needs an object store; none offline.
+# - test_workspace_proxy (2 errors): its image build needs Docker Hub.
+# test-js, run on its own (make test stops after pytest): 2756 passed, 1 failed, MatrixView.budget's
+# first-frame timing under load; alone it passes (1 passed). Its output is appended.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build/pytest.ini --ignore=../OspreyFlow_Build/tests/conformance/graph_port --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py --ignore=../OspreyFlow_Build/tests/test_media_blob.py --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness_clickhouse.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_runs.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_executor.py --ignore=../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py --ignore=../OspreyFlow_Build/tests/services/api/test_recipe_pins_lifespan.py --ignore=../OspreyFlow_Build/tests/services/api/test_schedule_notice.py --ignore=../OspreyFlow_Build/tests/conformance/model_port --ignore=../OspreyFlow_Build/tests/golden --ignore=../OspreyFlow_Build/tests/ingest --ignore=../OspreyFlow_Build/tests/scenarios/test_hmp_graph.py --ignore=../OspreyFlow_Build/tests/scenarios/test_witness_statement_extraction.py --ignore=../OspreyFlow_Build/tests/services/api/test_sites_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_tile_cache.py --ignore=../OspreyFlow_Build/tests/services/api/test_prefetch.py --ignore=../OspreyFlow_Build/tests/geocoder/test_match_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_assessments.py --ignore=../OspreyFlow_Build/tests/test_case_seed.py --ignore=../OspreyFlow_Build/tests/services/api/test_investigation_access_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_notes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_brief_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_entity_pictures.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_type_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_suppression.py --ignore=../OspreyFlow_Build/tests/services/api/test_assessment_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_export.py --ignore=../OspreyFlow_Build/tests/services/api/test_export_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_valkey_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_ws_ticket.py --ignore=../OspreyFlow_Build/tests/services/api/test_statelessness.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py --ignore=../OspreyFlow_Build/tests/services/api/test_change_stream.py --ignore=../OspreyFlow_Build/tests/services/api/test_alerts.py --ignore=../OspreyFlow_Build/tests/services/api/test_pattern_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_hotlists.py --ignore=../OspreyFlow_Build/tests/services/api/test_history_relabel.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitors.py --ignore=../OspreyFlow_Build/tests/services/api/test_evaluation.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6_extraction_and_resolution.py --ignore=../OspreyFlow_Build/tests/resolve/test_projection_access_control.py --ignore=../OspreyFlow_Build/tests/resolve/test_trigger.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase6a_glass_surfaces.py --ignore=../OspreyFlow_Build/tests/services/api/test_access.py --ignore=../OspreyFlow_Build/tests/services/api/test_pid_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_dossier_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_review.py --ignore=../OspreyFlow_Build/tests/services/api/test_review_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_compute_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_no_corpus_count_reveals_a_secret_link.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_seed_against_the_vault.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_link_weight_on_the_wire.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_explain_cluster_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold_access_control.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py --ignore=../OspreyFlow_Build/tests/scenarios/test_fixture_corp_shape.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker.py --ignore=../OspreyFlow_Build/tests/services/api/test_worker_replicas.py --ignore=../OspreyFlow_Build/tests/services/api/test_revoked_principal_precheck.py --ignore=../OspreyFlow_Build/tests/harness/test_restore_exit_test.py --ignore=../OspreyFlow_Build/tests/harness/test_workspace_bundle.py --ignore=../OspreyFlow_Build/tests/harness/test_sustained_load.py --ignore=../OspreyFlow_Build/tests/harness/test_bundle_exit_test.py --ignore=../OspreyFlow_Build/tests/harness/test_harness_image.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py --ignore=../OspreyFlow_Build/tests/scenarios/test_phase8_exit_over_the_wire.py --ignore=../OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_row_limit.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_datasets_index.py --ignore=../OspreyFlow_Build/tests/harness/test_identity.py --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_graph.py --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_names_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_dataset_egress_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_explore_whats_new.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_export.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_packs.py --ignore=../OspreyFlow_Build/tests/services/api/test_questions_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_report_freshness.py --ignore=../OspreyFlow_Build/tests/services/api/test_reports.py --ignore=../OspreyFlow_Build/tests/services/api/test_route_rights.py --ignore=../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_live.py --ignore=../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_sources_withheld_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_address_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_pid_scale_seed_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_starter_run.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_trend_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_facts.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py --ignore=../OspreyFlow_Build/tests/services/api/test_pack_store_query.py --ignore=../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py --ignore=../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_refresh.py --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_strength_influencer_routes.py --ignore=../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_connection_strength_access_control.py --ignore=../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py --ignore=../OspreyFlow_Build/tests/services/api/test_rule_schedule.py --ignore=../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py --ignore=../OspreyFlow_Build/tests/services/api/test_load_checks.py --ignore=../OspreyFlow_Build/tests/services/api/test_pin_calls_refresh_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_row_key_withdrawal_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_incremental_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py --ignore=../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py --ignore=../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_writes_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_composite_writes_live.py --ignore=../OspreyFlow_Build/tests/test_migrate_cases_to_one_dataset_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_target_models_store.py --ignore=../OspreyFlow_Build/tests/test_seed_target_models_store.py --ignore=../OspreyFlow_Build/tests/test_make_home_cases_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_case_views_store.py --ignore=../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py --ignore=../OspreyFlow_Build/tests/resolve/test_trigger_layers.py --ignore=../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py --ignore=../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py --ignore=../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py --ignore=../OspreyFlow_Build/tests/test_seed_links_replace.py --ignore=../OspreyFlow_Build/tests/test_stamp_datasets.py --ignore=../OspreyFlow_Build/tests/test_stamp_records.py --ignore=../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py --ignore=../OspreyFlow_Build/tests/harness/test_apply_env.py --ignore=../OspreyFlow_Build/tests/services/api/test_object_transfer.py --ignore=../OspreyFlow_Build/tests/harness/test_first_admin.py --ignore=../OspreyFlow_Build/tests/services/api/test_postgres_dsn.py --ignore=../OspreyFlow_Build/tests/conformance/media_store/test_suite.py --ignore=../OspreyFlow_Build/tests/conformance/recognise_port/test_suite.py --ignore=../OspreyFlow_Build/tests/services/api/test_board_store.py --ignore=../OspreyFlow_Build/tests/services/api/test_grading_registry.py --ignore=../OspreyFlow_Build/tests/services/api/test_grading_change_live.py --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py ../OspreyFlow_Build/tests
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 9177 items
+
+../OspreyFlow_Build/tests/adapters/analytics_duckdb/test_event_time_zone.py . [  0%]
+                                                                         [  0%]
+../OspreyFlow_Build/tests/adapters/analytics_duckdb/test_load_id_migration.py . [  0%]
+.                                                                        [  0%]
+../OspreyFlow_Build/tests/adapters/compute_rustworkx/test_communities.py . [  0%]
+..                                                                       [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_bulk_edge_loader.py . [  0%]
+........................................                                 [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_commit_retry.py . [  0%]
+...                                                                      [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_follows_leader.py . [  0%]
+.......                                                                  [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_client_map_results.py . [  0%]
+...                                                                      [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_stats_ignore_stray_records.py . [  0%]
+..                                                                       [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_corpus_total_read_once_per_call.py . [  0%]
+..                                                                       [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_counting_store_self_loop.py . [  0%]
+                                                                         [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_audience_merge.py . [  0%]
+..............                                                           [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_basis_serialisation.py . [  0%]
+..                                                                       [  0%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edge_write_count.py . [  0%]
+.......                                                                  [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_element_map_withholds_sources.py . [  1%]
+.....                                                                    [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_find_by_identifier_kind.py . [  1%]
+.                                                                        [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_find_node_bound.py . [  1%]
+...                                                                      [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py . [  1%]
+..                                                                       [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_get_by_id_reads.py . [  1%]
+...............................                                          [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_gremlin_bulk_transport_shapes.py . [  1%]
+.....                                                                    [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_legacy_weight_components.py . [  1%]
+.                                                                        [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_match_where_adapter.py . [  1%]
+.....                                                                    [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_match_where_compile.py . [  1%]
+..........                                                               [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_merge_rules_shared_by_both_paths.py . [  1%]
+............                                                             [  1%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_revert_elements_by_type.py . [  1%]
+..............                                                           [  2%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_schema_backfill.py . [  2%]
+.....                                                                    [  2%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_strip_provenance.py . [  2%]
+.....                                                                    [  2%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_suggest_nodes.py . [  2%]
+.....                                                                    [  2%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_suggest_options.py . [  2%]
+..........                                                               [  2%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_transaction_keepalive.py . [  2%]
+...................                                                      [  2%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_use_schema_writes_nothing.py . [  2%]
+..                                                                       [  2%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_weight_rules.py . [  2%]
+..........................................                               [  3%]
+../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_write_onto_a_reverted_node.py . [  3%]
+....                                                                     [  3%]
+../OspreyFlow_Build/tests/adapters/model_litellm/test_client_refusals.py . [  3%]
+..                                                                       [  3%]
+../OspreyFlow_Build/tests/adapters/model_litellm/test_connection_check.py . [  3%]
+.........                                                                [  3%]
+../OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_gateway.py . [  3%]
+............                                                             [  3%]
+../OspreyFlow_Build/tests/adapters/model_litellm/test_stand_in_gateway_usage.py . [  3%]
+.............                                                            [  3%]
+../OspreyFlow_Build/tests/adapters/model_litellm/test_usage.py ......... [  3%]
+........                                                                 [  3%]
+../OspreyFlow_Build/tests/authorized_query_check/test_principal_predicate_required.py . [  3%]
+.......                                                                  [  3%]
+../OspreyFlow_Build/tests/cli/test_answers.py .......................... [  4%]
+...........................                                              [  4%]
+../OspreyFlow_Build/tests/cli/test_apply_verb.py ........                [  4%]
+../OspreyFlow_Build/tests/cli/test_bootstrap.py ......                   [  4%]
+../OspreyFlow_Build/tests/cli/test_cloud_install.py ........             [  4%]
+../OspreyFlow_Build/tests/cli/test_cluster_cloud_install.py ...........  [  4%]
+../OspreyFlow_Build/tests/cli/test_demo.py ..........                    [  4%]
+../OspreyFlow_Build/tests/cli/test_demo_enron.py .............           [  5%]
+../OspreyFlow_Build/tests/cli/test_demo_public.py .....                  [  5%]
+../OspreyFlow_Build/tests/cli/test_doctor.py ........................... [  5%]
+.........                                                                [  5%]
+../OspreyFlow_Build/tests/cli/test_doctor_model_keys.py ...              [  5%]
+../OspreyFlow_Build/tests/cli/test_gpu.py ........................       [  5%]
+../OspreyFlow_Build/tests/cli/test_grading_answers.py .....              [  5%]
+../OspreyFlow_Build/tests/cli/test_home.py .......                       [  5%]
+../OspreyFlow_Build/tests/cli/test_install.py .....................      [  6%]
+../OspreyFlow_Build/tests/cli/test_install_gui.py ..........             [  6%]
+../OspreyFlow_Build/tests/cli/test_install_small_server.py ........      [  6%]
+../OspreyFlow_Build/tests/cli/test_lifecycle.py ..................       [  6%]
+../OspreyFlow_Build/tests/cli/test_map_verb.py ....                      [  6%]
+../OspreyFlow_Build/tests/cli/test_models_verb.py ...............        [  6%]
+../OspreyFlow_Build/tests/cli/test_named_deployments.py ................ [  6%]
+...................                                                      [  7%]
+../OspreyFlow_Build/tests/cli/test_no_make_for_operators.py ...          [  7%]
+../OspreyFlow_Build/tests/cli/test_pid_resolution.py ......              [  7%]
+../OspreyFlow_Build/tests/cli/test_repair_sign_in.py ...                 [  7%]
+../OspreyFlow_Build/tests/cli/test_run.py .....                          [  7%]
+../OspreyFlow_Build/tests/cli/test_service_name_never_a_demo.py ....     [  7%]
+../OspreyFlow_Build/tests/cli/test_starters.py ......................... [  7%]
+.......                                                                  [  7%]
+../OspreyFlow_Build/tests/cli/test_uninstall.py ...                      [  7%]
+../OspreyFlow_Build/tests/conduit_common/test_message_text.py .....      [  7%]
+../OspreyFlow_Build/tests/conduit_common/test_s3_settings.py ....        [  7%]
+../OspreyFlow_Build/tests/conformance/compute_port/test_guard.py ..      [  7%]
+../OspreyFlow_Build/tests/conformance/compute_port/test_suite.py ....... [  8%]
+.............................................                            [  8%]
+../OspreyFlow_Build/tests/conformance/media_store/test_guard.py ..       [  8%]
+../OspreyFlow_Build/tests/conformance/media_store/test_reference_check.py . [  8%]
+..                                                                       [  8%]
+../OspreyFlow_Build/tests/conformance/recognise_port/test_guard.py ...   [  8%]
+../OspreyFlow_Build/tests/demo_fixtures/test_cyber_intrusion.py .....    [  8%]
+../OspreyFlow_Build/tests/demo_fixtures/test_datasets.py .......         [  8%]
+../OspreyFlow_Build/tests/demo_fixtures/test_public_dataset.py ......... [  8%]
+...                                                                      [  8%]
+../OspreyFlow_Build/tests/demo_fixtures/test_public_dataset_recipes.py . [  8%]
+.                                                                        [  8%]
+../OspreyFlow_Build/tests/demo_fixtures/test_reports_map_fixture.py ...  [  8%]
+../OspreyFlow_Build/tests/demo_packs/test_demo_packs.py ..............   [  9%]
+../OspreyFlow_Build/tests/demo_registry/test_enron_manifest.py ....      [  9%]
+../OspreyFlow_Build/tests/demo_registry/test_fail_closed.py ......       [  9%]
+../OspreyFlow_Build/tests/demo_registry/test_operation_ledger_manifest.py . [  9%]
+.                                                                        [  9%]
+../OspreyFlow_Build/tests/demo_registry/test_paysim_manifest.py ..       [  9%]
+../OspreyFlow_Build/tests/demo_registry/test_prison_intelligence_manifest.py . [  9%]
+...                                                                      [  9%]
+../OspreyFlow_Build/tests/extract/test_candidates.py ..........          [  9%]
+../OspreyFlow_Build/tests/extract/test_profile.py .......                [  9%]
+../OspreyFlow_Build/tests/extract/test_recognised.py ......              [  9%]
+../OspreyFlow_Build/tests/extract/test_windows.py .....                  [  9%]
+../OspreyFlow_Build/tests/extract/test_writer.py ........                [  9%]
+../OspreyFlow_Build/tests/geo/test_bilinear.py .......                   [  9%]
+../OspreyFlow_Build/tests/geo/test_image_dimensions.py ......            [  9%]
+../OspreyFlow_Build/tests/geo/test_wkb.py ...                            [  9%]
+../OspreyFlow_Build/tests/geocoder/test_match.py ...                     [  9%]
+../OspreyFlow_Build/tests/harness/test_apply_changed_settings.py ....... [  9%]
+.............................                                            [ 10%]
+../OspreyFlow_Build/tests/harness/test_apply_keeps_secrets.py .....      [ 10%]
+../OspreyFlow_Build/tests/harness/test_apply_release_images.py .....     [ 10%]
+../OspreyFlow_Build/tests/harness/test_arcadedb_shell.py ....            [ 10%]
+../OspreyFlow_Build/tests/harness/test_backup.py ....                    [ 10%]
+../OspreyFlow_Build/tests/harness/test_backup_fresh_deployment.py ...... [ 10%]
+                                                                         [ 10%]
+../OspreyFlow_Build/tests/harness/test_backup_object_ownership.py ...    [ 10%]
+../OspreyFlow_Build/tests/harness/test_backup_whole_deployment.py ...... [ 10%]
+..........                                                               [ 10%]
+../OspreyFlow_Build/tests/harness/test_bundle.py ....................... [ 10%]
+.                                                                        [ 10%]
+../OspreyFlow_Build/tests/harness/test_cluster_install.py ...........    [ 11%]
+../OspreyFlow_Build/tests/harness/test_cluster_render.py ............... [ 11%]
+............                                                             [ 11%]
+../OspreyFlow_Build/tests/harness/test_create_investigation_packs.py ... [ 11%]
+.....                                                                    [ 11%]
+../OspreyFlow_Build/tests/harness/test_deployment_folder_mode.py ...     [ 11%]
+../OspreyFlow_Build/tests/harness/test_deployment_guard.py .........     [ 11%]
+../OspreyFlow_Build/tests/harness/test_deployment_models.py .........    [ 11%]
+../OspreyFlow_Build/tests/harness/test_deployment_name.py ...........    [ 11%]
+../OspreyFlow_Build/tests/harness/test_deployment_schema.py F........... [ 11%]
+................................................                         [ 12%]
+../OspreyFlow_Build/tests/harness/test_dev_compose_arcadedb_heap.py ...  [ 12%]
+../OspreyFlow_Build/tests/harness/test_egress_consequence.py .....       [ 12%]
+../OspreyFlow_Build/tests/harness/test_front_proxy.py .................. [ 12%]
+....                                                                     [ 12%]
+../OspreyFlow_Build/tests/harness/test_gateway_backup.py ......          [ 12%]
+../OspreyFlow_Build/tests/harness/test_geospatial_packaging_boundary.py . [ 12%]
+..                                                                       [ 12%]
+../OspreyFlow_Build/tests/harness/test_gpu_render.py .............       [ 13%]
+../OspreyFlow_Build/tests/harness/test_harness_frontend_copies.py ..     [ 13%]
+../OspreyFlow_Build/tests/harness/test_harness_main.py .......           [ 13%]
+../OspreyFlow_Build/tests/harness/test_helm_chart.py ................... [ 13%]
+                                                                         [ 13%]
+../OspreyFlow_Build/tests/harness/test_host_tools_reach_the_server.py .. [ 13%]
+.                                                                        [ 13%]
+../OspreyFlow_Build/tests/harness/test_image_references.py ...........   [ 13%]
+../OspreyFlow_Build/tests/harness/test_images.py .....                   [ 13%]
+../OspreyFlow_Build/tests/harness/test_ingest_uploads.py ............... [ 13%]
+......                                                                   [ 13%]
+../OspreyFlow_Build/tests/harness/test_install_page.py ................. [ 13%]
+.............                                                            [ 14%]
+../OspreyFlow_Build/tests/harness/test_install_page_build.py .........   [ 14%]
+../OspreyFlow_Build/tests/harness/test_install_page_keys.py ............ [ 14%]
+.                                                                        [ 14%]
+../OspreyFlow_Build/tests/harness/test_keycloak_persisted.py .....       [ 14%]
+../OspreyFlow_Build/tests/harness/test_keycloak_theme.py ............... [ 14%]
+.............                                                            [ 14%]
+../OspreyFlow_Build/tests/harness/test_keycloak_theme_govuk.py ......... [ 14%]
+                                                                         [ 14%]
+../OspreyFlow_Build/tests/harness/test_map_settings_backup.py ...        [ 14%]
+../OspreyFlow_Build/tests/harness/test_map_settings_render.py ..         [ 14%]
+../OspreyFlow_Build/tests/harness/test_model_engines.py ................ [ 15%]
+.                                                                        [ 15%]
+../OspreyFlow_Build/tests/harness/test_model_provider.py ...........     [ 15%]
+../OspreyFlow_Build/tests/harness/test_named_render.py .......           [ 15%]
+../OspreyFlow_Build/tests/harness/test_object_backup.py .....            [ 15%]
+../OspreyFlow_Build/tests/harness/test_oidc.py ......................... [ 15%]
+..................                                                       [ 15%]
+../OspreyFlow_Build/tests/harness/test_organisation_first_sign_in.py ... [ 15%]
+..............                                                           [ 15%]
+../OspreyFlow_Build/tests/harness/test_organisation_sign_in.py ......... [ 16%]
+...                                                                      [ 16%]
+../OspreyFlow_Build/tests/harness/test_preflight.py .................... [ 16%]
+....................................                                     [ 16%]
+../OspreyFlow_Build/tests/harness/test_profiles.py ..........            [ 16%]
+../OspreyFlow_Build/tests/harness/test_proxy_health.py ..                [ 16%]
+../OspreyFlow_Build/tests/harness/test_proxy_tls_caddy.py .........      [ 16%]
+../OspreyFlow_Build/tests/harness/test_realm.py ........................ [ 17%]
+...                                                                      [ 17%]
+../OspreyFlow_Build/tests/harness/test_register_sign_in.py ............. [ 17%]
+...............................                                          [ 17%]
+../OspreyFlow_Build/tests/harness/test_relative_storage_paths.py ......  [ 17%]
+../OspreyFlow_Build/tests/harness/test_release.py ...................... [ 18%]
+.....                                                                    [ 18%]
+../OspreyFlow_Build/tests/harness/test_release_chart.py ....             [ 18%]
+../OspreyFlow_Build/tests/harness/test_release_lock.py ....              [ 18%]
+../OspreyFlow_Build/tests/harness/test_release_matrix.py ....            [ 18%]
+../OspreyFlow_Build/tests/harness/test_release_render.py ...             [ 18%]
+../OspreyFlow_Build/tests/harness/test_render.py ....................... [ 18%]
+..................................................                       [ 19%]
+../OspreyFlow_Build/tests/harness/test_render_clickhouse.py .....        [ 19%]
+../OspreyFlow_Build/tests/harness/test_render_egress.py .........        [ 19%]
+../OspreyFlow_Build/tests/harness/test_render_external.py ...........    [ 19%]
+../OspreyFlow_Build/tests/harness/test_render_memory.py .....            [ 19%]
+../OspreyFlow_Build/tests/harness/test_render_objectstore.py ......      [ 19%]
+../OspreyFlow_Build/tests/harness/test_rendered_files_readable.py ...    [ 19%]
+../OspreyFlow_Build/tests/harness/test_reporting.py ....                 [ 19%]
+../OspreyFlow_Build/tests/harness/test_restore_identity_provider.py ...  [ 19%]
+../OspreyFlow_Build/tests/harness/test_service_inventory.py ............ [ 19%]
+............                                                             [ 19%]
+../OspreyFlow_Build/tests/harness/test_sign_in_mail.py ....              [ 19%]
+../OspreyFlow_Build/tests/harness/test_signatures.py ................... [ 20%]
+.......                                                                  [ 20%]
+../OspreyFlow_Build/tests/harness/test_store_volumes.py ................ [ 20%]
+........                                                                 [ 20%]
+../OspreyFlow_Build/tests/harness/test_tls_check.py ..................   [ 20%]
+../OspreyFlow_Build/tests/harness/test_update_apply.py ................. [ 20%]
+...................                                                      [ 20%]
+../OspreyFlow_Build/tests/harness/test_update_check.py ......            [ 21%]
+../OspreyFlow_Build/tests/harness/test_wait_for_ports_bindable.py ....   [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_admin_access.py ........   [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_artefacts.py ..........    [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_config_errors.py .         [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_geospatial.py ........     [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_governance_panel.py ...... [ 21%]
+.....                                                                    [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_launch.py ........         [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_loopback.py ............   [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_mode.py ......             [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_models.py ....             [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_preflight.py ......        [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_profile_filtering.py ..... [ 21%]
+....                                                                     [ 21%]
+../OspreyFlow_Build/tests/harness/test_webapp_screens.py .........       [ 22%]
+../OspreyFlow_Build/tests/harness/test_webapp_sign_in.py ............... [ 22%]
+.............                                                            [ 22%]
+../OspreyFlow_Build/tests/harness/test_welcome_settings.py ...           [ 22%]
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py .EE            [ 22%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_account_ref.py ....... [ 22%]
+...........................                                              [ 22%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_address.py ....        [ 22%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_coordinates.py ....... [ 22%]
+......                                                                   [ 22%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_datetime.py .......... [ 23%]
+                                                                         [ 23%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_derive.py ............ [ 23%]
+....................................................................     [ 23%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_email.py .......       [ 24%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_grid_ref.py .......... [ 24%]
+.                                                                        [ 24%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_iban_card.py .....     [ 24%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_imei.py ........       [ 24%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_imsi.py .....          [ 24%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_msisdn.py ............ [ 24%]
+....................                                                     [ 24%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_person_name.py ....... [ 24%]
+                                                                         [ 24%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_postcode.py ......     [ 24%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_screening_lists.py ... [ 24%]
+....................                                                     [ 25%]
+../OspreyFlow_Build/tests/knowledge_adapters/test_split.py ............. [ 25%]
+                                                                         [ 25%]
+../OspreyFlow_Build/tests/licence_check/test_data_licence_offenders.py . [ 25%]
+.........                                                                [ 25%]
+../OspreyFlow_Build/tests/licence_check/test_gpl_rejection.py ..         [ 25%]
+../OspreyFlow_Build/tests/licence_check/test_licence_expressions.py .... [ 25%]
+.......................                                                  [ 25%]
+../OspreyFlow_Build/tests/licence_check/test_own_licence_and_notice.py . [ 25%]
+....                                                                     [ 25%]
+../OspreyFlow_Build/tests/ontology/test_alert_ontology.py ..             [ 25%]
+../OspreyFlow_Build/tests/ontology/test_audience.py ........             [ 25%]
+../OspreyFlow_Build/tests/ontology/test_client_parity.py .........       [ 25%]
+../OspreyFlow_Build/tests/ontology/test_content_ontology.py ............ [ 26%]
+....                                                                     [ 26%]
+../OspreyFlow_Build/tests/ontology/test_gazetteer_identifiers_withheld.py . [ 26%]
+...                                                                      [ 26%]
+../OspreyFlow_Build/tests/ontology/test_handling.py ..............       [ 26%]
+../OspreyFlow_Build/tests/ontology/test_icon_by_value.py ............... [ 26%]
+..                                                                       [ 26%]
+../OspreyFlow_Build/tests/ontology/test_icons.py ........                [ 26%]
+../OspreyFlow_Build/tests/ontology/test_influencers.py ................. [ 26%]
+                                                                         [ 26%]
+../OspreyFlow_Build/tests/ontology/test_kyc_ontology.py .                [ 26%]
+../OspreyFlow_Build/tests/ontology/test_loader.py .............          [ 26%]
+../OspreyFlow_Build/tests/ontology/test_merge_handling.py ......         [ 26%]
+../OspreyFlow_Build/tests/ontology/test_niem_pack_v3.py ................ [ 27%]
+..........                                                               [ 27%]
+../OspreyFlow_Build/tests/ontology/test_pack_versions.py .............   [ 27%]
+../OspreyFlow_Build/tests/ontology/test_packs.py .............           [ 27%]
+../OspreyFlow_Build/tests/ontology/test_pattern_where.py ............... [ 27%]
+....                                                                     [ 27%]
+../OspreyFlow_Build/tests/ontology/test_paysim_ontology.py ...           [ 27%]
+../OspreyFlow_Build/tests/ontology/test_relationship_basis.py .......... [ 27%]
+...........................................                              [ 28%]
+../OspreyFlow_Build/tests/ontology/test_resolution_functions.py ........ [ 28%]
+.....                                                                    [ 28%]
+../OspreyFlow_Build/tests/ontology/test_searchable_names.py ............ [ 28%]
+..                                                                       [ 28%]
+../OspreyFlow_Build/tests/ontology/test_sources_in_full.py .....         [ 28%]
+../OspreyFlow_Build/tests/ontology/test_validation.py ..........         [ 28%]
+../OspreyFlow_Build/tests/ontology/test_withhold_sources.py .........    [ 28%]
+../OspreyFlow_Build/tests/ontology/test_yardstick.py .....               [ 28%]
+../OspreyFlow_Build/tests/packaging/test_internal_demo_exclusion.py .... [ 29%]
+............                                                             [ 29%]
+../OspreyFlow_Build/tests/profiler/test_profiler.py .................... [ 29%]
+...........                                                              [ 29%]
+../OspreyFlow_Build/tests/resolve/test_conflict_pipeline.py ..           [ 29%]
+../OspreyFlow_Build/tests/resolve/test_conflicts.py .....                [ 29%]
+../OspreyFlow_Build/tests/resolve/test_duckdb_setup.py .........         [ 29%]
+../OspreyFlow_Build/tests/resolve/test_projection.py ..........          [ 29%]
+../OspreyFlow_Build/tests/resolve/test_projection_perf.py .              [ 29%]
+../OspreyFlow_Build/tests/resolve/test_resolution_accuracy.py ......     [ 29%]
+../OspreyFlow_Build/tests/resolve/test_resolver.py .........             [ 29%]
+../OspreyFlow_Build/tests/resolve/test_same_as_writer.py ......          [ 30%]
+../OspreyFlow_Build/tests/scenarios/fixtures/test_scenario_cohorts.py .. [ 30%]
+......                                                                   [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_hmp_fixture_shape.py ....       [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_hmp_network.py ................ [ 30%]
+.                                                                        [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_batches.py .. [ 30%]
+....                                                                     [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_paysim_fixture.py ............. [ 30%]
+......                                                                   [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_pid_client_parity.py ......     [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_pid_cohort_list.py .........    [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_pid_connection_strength.py .... [ 30%]
+...                                                                      [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_pid_cyclical.py ......          [ 30%]
+../OspreyFlow_Build/tests/scenarios/test_pid_files.py .................. [ 31%]
+...................................                                      [ 31%]
+../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_batches.py ..... [ 31%]
+.                                                                        [ 31%]
+../OspreyFlow_Build/tests/scenarios/test_pid_picture_marking.py ...      [ 31%]
+../OspreyFlow_Build/tests/scenarios/test_pid_plan.py ................... [ 31%]
+......................................................                   [ 32%]
+../OspreyFlow_Build/tests/scenarios/test_pid_scale_cohort.py .....       [ 32%]
+../OspreyFlow_Build/tests/scenarios/test_seizure_fixture_shape.py ...... [ 32%]
+                                                                         [ 32%]
+../OspreyFlow_Build/tests/schemas/test_analytics.py .......              [ 32%]
+../OspreyFlow_Build/tests/schemas/test_boards.py .........               [ 32%]
+../OspreyFlow_Build/tests/schemas/test_dataset_model.py .....            [ 32%]
+../OspreyFlow_Build/tests/schemas/test_domain.py ............            [ 32%]
+../OspreyFlow_Build/tests/schemas/test_drift_gate.py ..                  [ 32%]
+../OspreyFlow_Build/tests/schemas/test_ingest_connect.py .........       [ 32%]
+../OspreyFlow_Build/tests/schemas/test_mapconfig.py .................... [ 33%]
+.....                                                                    [ 33%]
+../OspreyFlow_Build/tests/schemas/test_model_admin_limits.py .........   [ 33%]
+../OspreyFlow_Build/tests/schemas/test_placeholder_lifecycle.py ..       [ 33%]
+../OspreyFlow_Build/tests/schemas/test_provider_profile.py .....         [ 33%]
+../OspreyFlow_Build/tests/schemas/test_recipe_staging.py ............... [ 33%]
+..............                                                           [ 33%]
+../OspreyFlow_Build/tests/schemas/test_rights.py ............            [ 33%]
+../OspreyFlow_Build/tests/schemas/test_staging_report_schemas.py .....   [ 33%]
+../OspreyFlow_Build/tests/services/api/test_a_hidden_stored_item_does_not_move_a_refusals_figure.py . [ 33%]
+.                                                                        [ 33%]
+../OspreyFlow_Build/tests/services/api/test_add_by_identifiers.py ...... [ 34%]
+...........                                                              [ 34%]
+../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_route.py . [ 34%]
+..........                                                               [ 34%]
+../OspreyFlow_Build/tests/services/api/test_add_by_identifiers_service.py . [ 34%]
+....                                                                     [ 34%]
+../OspreyFlow_Build/tests/services/api/test_admin_dataset_cases.py ..... [ 34%]
+.................................................                        [ 34%]
+../OspreyFlow_Build/tests/services/api/test_admin_roles_routes.py ...... [ 34%]
+........................................................................ [ 35%]
+....                                                                     [ 35%]
+../OspreyFlow_Build/tests/services/api/test_admin_routes.py ............ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+.....                                                                    [ 37%]
+../OspreyFlow_Build/tests/services/api/test_admin_sections.py .......... [ 37%]
+.....................                                                    [ 37%]
+../OspreyFlow_Build/tests/services/api/test_alert_address.py ........... [ 37%]
+....                                                                     [ 38%]
+../OspreyFlow_Build/tests/services/api/test_alert_closing_is_open.py ... [ 38%]
+..                                                                       [ 38%]
+../OspreyFlow_Build/tests/services/api/test_alert_evidence_withheld.py . [ 38%]
+....................................                                     [ 38%]
+../OspreyFlow_Build/tests/services/api/test_alert_node_marking.py ...... [ 38%]
+...                                                                      [ 38%]
+../OspreyFlow_Build/tests/services/api/test_alert_queue_counts.py .....  [ 38%]
+../OspreyFlow_Build/tests/services/api/test_alert_trends.py ......       [ 38%]
+../OspreyFlow_Build/tests/services/api/test_alert_view_explains.py ..... [ 38%]
+.................                                                        [ 38%]
+../OspreyFlow_Build/tests/services/api/test_alerts_and_the_layer.py .... [ 38%]
+........                                                                 [ 39%]
+../OspreyFlow_Build/tests/services/api/test_aml_rules.py ........        [ 39%]
+../OspreyFlow_Build/tests/services/api/test_analyst_layer.py ........... [ 39%]
+............                                                             [ 39%]
+../OspreyFlow_Build/tests/services/api/test_analyst_link_types.py ...... [ 39%]
+.........................                                                [ 39%]
+../OspreyFlow_Build/tests/services/api/test_analytics_case_routes.py ... [ 39%]
+..........                                                               [ 39%]
+../OspreyFlow_Build/tests/services/api/test_analytics_store.py ........  [ 39%]
+../OspreyFlow_Build/tests/services/api/test_app.py ........              [ 40%]
+../OspreyFlow_Build/tests/services/api/test_ask_to_search_egress.py .... [ 40%]
+..                                                                       [ 40%]
+../OspreyFlow_Build/tests/services/api/test_auth.py ...........          [ 40%]
+../OspreyFlow_Build/tests/services/api/test_boards.py .................. [ 40%]
+...................................................                      [ 41%]
+../OspreyFlow_Build/tests/services/api/test_cache_access_class.py ....   [ 41%]
+../OspreyFlow_Build/tests/services/api/test_case_brief.py .............. [ 41%]
+..................                                                       [ 41%]
+../OspreyFlow_Build/tests/services/api/test_case_brief_resolvers.py .... [ 41%]
+......                                                                   [ 41%]
+../OspreyFlow_Build/tests/services/api/test_case_brief_routes.py ....... [ 41%]
+.............................................                            [ 42%]
+../OspreyFlow_Build/tests/services/api/test_case_brief_status.py ....... [ 42%]
+...                                                                      [ 42%]
+../OspreyFlow_Build/tests/services/api/test_case_domains.py ............ [ 42%]
+..........                                                               [ 42%]
+../OspreyFlow_Build/tests/services/api/test_case_events.py .......       [ 42%]
+../OspreyFlow_Build/tests/services/api/test_case_tabs_routes.py .....    [ 42%]
+../OspreyFlow_Build/tests/services/api/test_case_views.py .............. [ 42%]
+.......................                                                  [ 42%]
+../OspreyFlow_Build/tests/services/api/test_case_writes.py ............. [ 43%]
+...                                                                      [ 43%]
+../OspreyFlow_Build/tests/services/api/test_change_stream_cap.py ..      [ 43%]
+../OspreyFlow_Build/tests/services/api/test_composite_monitors.py ...... [ 43%]
+.....                                                                    [ 43%]
+../OspreyFlow_Build/tests/services/api/test_composite_read_only.py ..... [ 43%]
+.............................................                            [ 43%]
+../OspreyFlow_Build/tests/services/api/test_composite_schedules.py ..... [ 43%]
+.................................                                        [ 44%]
+../OspreyFlow_Build/tests/services/api/test_connections_route.py ....... [ 44%]
+....                                                                     [ 44%]
+../OspreyFlow_Build/tests/services/api/test_credentials.py ..            [ 44%]
+../OspreyFlow_Build/tests/services/api/test_custom_roles.py ............ [ 44%]
+.                                                                        [ 44%]
+../OspreyFlow_Build/tests/services/api/test_data_feeds_route.py ...      [ 44%]
+../OspreyFlow_Build/tests/services/api/test_dataset_egress.py .......... [ 44%]
+............                                                             [ 44%]
+../OspreyFlow_Build/tests/services/api/test_dataset_integrity.py .....   [ 44%]
+../OspreyFlow_Build/tests/services/api/test_dataset_model_routes.py .... [ 44%]
+.......................                                                  [ 45%]
+../OspreyFlow_Build/tests/services/api/test_dataset_scope.py ........    [ 45%]
+../OspreyFlow_Build/tests/services/api/test_dataset_sources.py ......... [ 45%]
+..............                                                           [ 45%]
+../OspreyFlow_Build/tests/services/api/test_datasets.py ...........      [ 45%]
+../OspreyFlow_Build/tests/services/api/test_delta_wire.py .........      [ 45%]
+../OspreyFlow_Build/tests/services/api/test_demo_packs_route.py ....     [ 45%]
+../OspreyFlow_Build/tests/services/api/test_document_content.py ........ [ 45%]
+..........                                                               [ 45%]
+../OspreyFlow_Build/tests/services/api/test_document_reader.py ......... [ 46%]
+.........                                                                [ 46%]
+../OspreyFlow_Build/tests/services/api/test_document_upload_route.py ... [ 46%]
+........                                                                 [ 46%]
+../OspreyFlow_Build/tests/services/api/test_drawn_datasets.py .......... [ 46%]
+....                                                                     [ 46%]
+../OspreyFlow_Build/tests/services/api/test_email_extraction.py ........ [ 46%]
+....................                                                     [ 46%]
+../OspreyFlow_Build/tests/services/api/test_entity_picture_removal_provenance.py . [ 46%]
+.                                                                        [ 46%]
+../OspreyFlow_Build/tests/services/api/test_entity_picture_removal_withheld.py . [ 46%]
+..                                                                       [ 46%]
+../OspreyFlow_Build/tests/services/api/test_entity_picture_routes.py ... [ 46%]
+.......                                                                  [ 46%]
+../OspreyFlow_Build/tests/services/api/test_entity_picture_seed.py ..... [ 46%]
+.................                                                        [ 47%]
+../OspreyFlow_Build/tests/services/api/test_entity_picture_size.py .     [ 47%]
+../OspreyFlow_Build/tests/services/api/test_entity_picture_stored_link_ids.py . [ 47%]
+                                                                         [ 47%]
+../OspreyFlow_Build/tests/services/api/test_evaluation_touched_nodes.py . [ 47%]
+..........                                                               [ 47%]
+../OspreyFlow_Build/tests/services/api/test_explore_cache.py ........... [ 47%]
+..                                                                       [ 47%]
+../OspreyFlow_Build/tests/services/api/test_explore_routes.py .......... [ 47%]
+........                                                                 [ 47%]
+../OspreyFlow_Build/tests/services/api/test_export_withheld.py ........  [ 47%]
+../OspreyFlow_Build/tests/services/api/test_folder_watch.py ............ [ 47%]
+...........                                                              [ 47%]
+../OspreyFlow_Build/tests/services/api/test_gazetteer_dataset_registration.py . [ 47%]
+..                                                                       [ 47%]
+../OspreyFlow_Build/tests/services/api/test_geospatial_admin_routes.py . [ 47%]
+............                                                             [ 48%]
+../OspreyFlow_Build/tests/services/api/test_glass_map_reads_carry_no_key.py . [ 48%]
+..                                                                       [ 48%]
+../OspreyFlow_Build/tests/services/api/test_grading_boards.py .....      [ 48%]
+../OspreyFlow_Build/tests/services/api/test_grading_change.py .......... [ 48%]
+.............                                                            [ 48%]
+../OspreyFlow_Build/tests/services/api/test_grading_setting.py ......... [ 48%]
+.....                                                                    [ 48%]
+../OspreyFlow_Build/tests/services/api/test_history_labels.py .......... [ 48%]
+....................                                                     [ 48%]
+../OspreyFlow_Build/tests/services/api/test_history_routes.py .....      [ 48%]
+../OspreyFlow_Build/tests/services/api/test_home_cases.py .............. [ 49%]
+..                                                                       [ 49%]
+../OspreyFlow_Build/tests/services/api/test_hotlist_identifier.py ...... [ 49%]
+..............                                                           [ 49%]
+../OspreyFlow_Build/tests/services/api/test_identifier_reading.py ...... [ 49%]
+............................                                             [ 49%]
+../OspreyFlow_Build/tests/services/api/test_identity_admin.py .......... [ 49%]
+.................                                                        [ 50%]
+../OspreyFlow_Build/tests/services/api/test_ingest_sources.py .......... [ 50%]
+.........................................                                [ 50%]
+../OspreyFlow_Build/tests/services/api/test_investigation_access_routes.py . [ 50%]
+.................                                                        [ 50%]
+../OspreyFlow_Build/tests/services/api/test_investigation_levels.py .... [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+.....                                                                    [ 53%]
+../OspreyFlow_Build/tests/services/api/test_link_change_routes.py ...... [ 53%]
+...........                                                              [ 53%]
+../OspreyFlow_Build/tests/services/api/test_link_changes.py ............ [ 53%]
+.........................................                                [ 54%]
+../OspreyFlow_Build/tests/services/api/test_link_changes_withheld.py ... [ 54%]
+.                                                                        [ 54%]
+../OspreyFlow_Build/tests/services/api/test_link_events.py .......       [ 54%]
+../OspreyFlow_Build/tests/services/api/test_link_notes.py .............. [ 54%]
+.........                                                                [ 54%]
+../OspreyFlow_Build/tests/services/api/test_link_prior_state_never_told.py . [ 54%]
+..                                                                       [ 54%]
+../OspreyFlow_Build/tests/services/api/test_link_type_overlay.py ......  [ 54%]
+../OspreyFlow_Build/tests/services/api/test_link_type_routes.py ......   [ 54%]
+../OspreyFlow_Build/tests/services/api/test_link_type_service.py ....... [ 54%]
+................                                                         [ 54%]
+../OspreyFlow_Build/tests/services/api/test_liveness_route.py ........   [ 54%]
+../OspreyFlow_Build/tests/services/api/test_load_published_recipe_sites.py . [ 54%]
+.............                                                            [ 55%]
+../OspreyFlow_Build/tests/services/api/test_load_records.py ............ [ 55%]
+..........                                                               [ 55%]
+../OspreyFlow_Build/tests/services/api/test_map_admin.py ............... [ 55%]
+.......                                                                  [ 55%]
+../OspreyFlow_Build/tests/services/api/test_map_admin_routes.py ........ [ 55%]
+.............................................                            [ 56%]
+../OspreyFlow_Build/tests/services/api/test_map_local_source_route.py .. [ 56%]
+....                                                                     [ 56%]
+../OspreyFlow_Build/tests/services/api/test_map_places_route.py ........ [ 56%]
+....                                                                     [ 56%]
+../OspreyFlow_Build/tests/services/api/test_map_providers_route.py ...   [ 56%]
+../OspreyFlow_Build/tests/services/api/test_map_tile_route.py ....       [ 56%]
+../OspreyFlow_Build/tests/services/api/test_mapconfig_loader.py ..       [ 56%]
+../OspreyFlow_Build/tests/services/api/test_media_store_choice.py ...    [ 56%]
+../OspreyFlow_Build/tests/services/api/test_model_admin_routes.py ...... [ 56%]
+......................                                                   [ 56%]
+../OspreyFlow_Build/tests/services/api/test_model_engine_keys.py ....... [ 56%]
+.                                                                        [ 56%]
+../OspreyFlow_Build/tests/services/api/test_model_engines.py ........... [ 56%]
+...                                                                      [ 56%]
+../OspreyFlow_Build/tests/services/api/test_model_gateway_live.py sss    [ 56%]
+../OspreyFlow_Build/tests/services/api/test_model_refusal_routes.py .... [ 57%]
+                                                                         [ 57%]
+../OspreyFlow_Build/tests/services/api/test_model_routing.py ........    [ 57%]
+../OspreyFlow_Build/tests/services/api/test_model_usage_and_limits.py .. [ 57%]
+........................                                                 [ 57%]
+../OspreyFlow_Build/tests/services/api/test_no_corpus_counts_on_the_wire.py . [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+............................................................             [ 69%]
+../OspreyFlow_Build/tests/services/api/test_no_role_no_dataset_list.py . [ 69%]
+..............................                                           [ 70%]
+../OspreyFlow_Build/tests/services/api/test_ontology_route.py ..         [ 70%]
+../OspreyFlow_Build/tests/services/api/test_openapi_published.py .....   [ 70%]
+../OspreyFlow_Build/tests/services/api/test_overview.py ..............   [ 70%]
+../OspreyFlow_Build/tests/services/api/test_pack_alert_list_entry.py .   [ 70%]
+../OspreyFlow_Build/tests/services/api/test_pack_export_withheld.py .... [ 70%]
+...                                                                      [ 70%]
+../OspreyFlow_Build/tests/services/api/test_pack_versions_for.py ....    [ 70%]
+../OspreyFlow_Build/tests/services/api/test_paths_route.py ...           [ 70%]
+../OspreyFlow_Build/tests/services/api/test_pattern_ask.py ............. [ 70%]
+..........................                                               [ 70%]
+../OspreyFlow_Build/tests/services/api/test_pattern_conditions_routes.py . [ 71%]
+................                                                         [ 71%]
+../OspreyFlow_Build/tests/services/api/test_patterns.py .....            [ 71%]
+../OspreyFlow_Build/tests/services/api/test_pipeline_enrich_journal.py . [ 71%]
+..                                                                       [ 71%]
+../OspreyFlow_Build/tests/services/api/test_place_routes.py ............ [ 71%]
+........................................................................ [ 72%]
+...............                                                          [ 72%]
+../OspreyFlow_Build/tests/services/api/test_prefetch_follows_admin.py .  [ 72%]
+../OspreyFlow_Build/tests/services/api/test_principal_names.py ......... [ 72%]
+.                                                                        [ 72%]
+../OspreyFlow_Build/tests/services/api/test_question_handling.py ..      [ 72%]
+../OspreyFlow_Build/tests/services/api/test_questions.py .............   [ 72%]
+../OspreyFlow_Build/tests/services/api/test_questions_graph_facts.py ... [ 72%]
+................................                                         [ 73%]
+../OspreyFlow_Build/tests/services/api/test_readiness.py .......         [ 73%]
+../OspreyFlow_Build/tests/services/api/test_recipe_run_module.py .....   [ 73%]
+../OspreyFlow_Build/tests/services/api/test_recipe_run_path.py ..        [ 73%]
+../OspreyFlow_Build/tests/services/api/test_recipe_runs_unreverted.py .. [ 73%]
+...                                                                      [ 73%]
+../OspreyFlow_Build/tests/services/api/test_recogniser_for_deployment.py . [ 73%]
+..                                                                       [ 73%]
+../OspreyFlow_Build/tests/services/api/test_remove_and_publish.py ...    [ 73%]
+../OspreyFlow_Build/tests/services/api/test_repoint_journal_stand_in.py . [ 73%]
+..                                                                       [ 73%]
+../OspreyFlow_Build/tests/services/api/test_report_outcomes.py .         [ 73%]
+../OspreyFlow_Build/tests/services/api/test_report_pole_figures.py ..... [ 73%]
+.............................                                            [ 73%]
+../OspreyFlow_Build/tests/services/api/test_resolution_routes.py ....... [ 73%]
+................                                                         [ 73%]
+../OspreyFlow_Build/tests/services/api/test_resolution_trigger.py ...... [ 74%]
+...                                                                      [ 74%]
+../OspreyFlow_Build/tests/services/api/test_restore_link_state_through_the_wrapper.py . [ 74%]
+..                                                                       [ 74%]
+../OspreyFlow_Build/tests/services/api/test_revert_closes_alerts.py ..   [ 74%]
+../OspreyFlow_Build/tests/services/api/test_revert_working_sets.py ..... [ 74%]
+.                                                                        [ 74%]
+../OspreyFlow_Build/tests/services/api/test_review_routes.py ........... [ 74%]
+.....                                                                    [ 74%]
+../OspreyFlow_Build/tests/services/api/test_rule_evaluation.py ......... [ 74%]
+............                                                             [ 74%]
+../OspreyFlow_Build/tests/services/api/test_rule_sentence_routes.py .... [ 74%]
+.....                                                                    [ 74%]
+../OspreyFlow_Build/tests/services/api/test_rule_sentences.py .......... [ 74%]
+........                                                                 [ 74%]
+../OspreyFlow_Build/tests/services/api/test_run_counts_withheld.py ..... [ 74%]
+........................                                                 [ 75%]
+../OspreyFlow_Build/tests/services/api/test_run_ledger_read_side.py .... [ 75%]
+.....                                                                    [ 75%]
+../OspreyFlow_Build/tests/services/api/test_run_resources.py ..........  [ 75%]
+../OspreyFlow_Build/tests/services/api/test_schedule_admin_routes.py ... [ 75%]
+.................                                                        [ 75%]
+../OspreyFlow_Build/tests/services/api/test_schedule_slots.py .......... [ 75%]
+........                                                                 [ 75%]
+../OspreyFlow_Build/tests/services/api/test_screening.py .......         [ 75%]
+../OspreyFlow_Build/tests/services/api/test_search_normalisation.py .... [ 75%]
+.....                                                                    [ 75%]
+../OspreyFlow_Build/tests/services/api/test_search_route.py ..           [ 75%]
+../OspreyFlow_Build/tests/services/api/test_sentence_rules.py .......    [ 76%]
+../OspreyFlow_Build/tests/services/api/test_sites_routes.py ..........   [ 76%]
+../OspreyFlow_Build/tests/services/api/test_source_confinement.py .....  [ 76%]
+../OspreyFlow_Build/tests/services/api/test_source_refresh.py ..         [ 76%]
+../OspreyFlow_Build/tests/services/api/test_source_refresh_wiring.py ... [ 76%]
+.                                                                        [ 76%]
+../OspreyFlow_Build/tests/services/api/test_starter_questions.py ......  [ 76%]
+../OspreyFlow_Build/tests/services/api/test_stream_scope.py ...          [ 76%]
+../OspreyFlow_Build/tests/services/api/test_studio_blank_classification.py . [ 76%]
+.........                                                                [ 76%]
+../OspreyFlow_Build/tests/services/api/test_studio_map_routes.py ....... [ 76%]
+........                                                                 [ 76%]
+../OspreyFlow_Build/tests/services/api/test_studio_preview_routes.py ... [ 76%]
+.........                                                                [ 76%]
+../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py . [ 76%]
+.....                                                                    [ 76%]
+../OspreyFlow_Build/tests/services/api/test_studio_publish_routes.py ... [ 76%]
+...................                                                      [ 77%]
+../OspreyFlow_Build/tests/services/api/test_studio_recipe_routes.py .... [ 77%]
+...........................                                              [ 77%]
+../OspreyFlow_Build/tests/services/api/test_studio_recipes_seed_refusals.py . [ 77%]
+............................................                             [ 77%]
+../OspreyFlow_Build/tests/services/api/test_studio_roles.py ...          [ 77%]
+../OspreyFlow_Build/tests/services/api/test_studio_schedule_routes.py .. [ 77%]
+......                                                                   [ 78%]
+../OspreyFlow_Build/tests/services/api/test_studio_staging_routes.py ... [ 78%]
+...................                                                      [ 78%]
+../OspreyFlow_Build/tests/services/api/test_studio_verify_routes.py .... [ 78%]
+......                                                                   [ 78%]
+../OspreyFlow_Build/tests/services/api/test_suggest_route.py ........... [ 78%]
+                                                                         [ 78%]
+../OspreyFlow_Build/tests/services/api/test_supersede.py ..              [ 78%]
+../OspreyFlow_Build/tests/services/api/test_superset_embed.py ........   [ 78%]
+../OspreyFlow_Build/tests/services/api/test_target_models.py ........... [ 78%]
+.....                                                                    [ 78%]
+../OspreyFlow_Build/tests/services/api/test_tier4_registration.py .....  [ 78%]
+../OspreyFlow_Build/tests/services/api/test_tile_key_in_no_log.py ...... [ 78%]
+..........                                                               [ 79%]
+../OspreyFlow_Build/tests/services/api/test_tile_math.py ........        [ 79%]
+../OspreyFlow_Build/tests/services/api/test_tile_proxy.py .............. [ 79%]
+....                                                                     [ 79%]
+../OspreyFlow_Build/tests/services/api/test_trend_domains.py ........... [ 79%]
+.............                                                            [ 79%]
+../OspreyFlow_Build/tests/services/api/test_trends.py ..........         [ 79%]
+../OspreyFlow_Build/tests/services/api/test_unconverted_case_layer.py .. [ 79%]
+......                                                                   [ 79%]
+../OspreyFlow_Build/tests/services/api/test_unconverted_case_writes.py . [ 79%]
+.......                                                                  [ 79%]
+../OspreyFlow_Build/tests/services/api/test_valkey_config.py F..         [ 79%]
+../OspreyFlow_Build/tests/services/api/test_verify_and_run_read_one_file.py . [ 79%]
+....                                                                     [ 79%]
+../OspreyFlow_Build/tests/services/api/test_websocket_auth.py ......     [ 80%]
+../OspreyFlow_Build/tests/services/api/test_worker_registration.py ..... [ 80%]
+...                                                                      [ 80%]
+../OspreyFlow_Build/tests/services/api/test_write_paths_use_the_stores_link_ids.py . [ 80%]
+.....                                                                    [ 80%]
+../OspreyFlow_Build/tests/services/api/test_written_back_reads_in_full.py . [ 80%]
+...                                                                      [ 80%]
+../OspreyFlow_Build/tests/services/api/test_written_back_reads_in_full_stages.py . [ 80%]
+.                                                                        [ 80%]
+../OspreyFlow_Build/tests/services/api/test_ws_ticket_route.py ...       [ 80%]
+../OspreyFlow_Build/tests/services/api/working_set/test_access_index.py . [ 80%]
+...................................                                      [ 80%]
+../OspreyFlow_Build/tests/services/api/working_set/test_cap_counts_the_readers_view.py . [ 80%]
+....................                                                     [ 80%]
+../OspreyFlow_Build/tests/services/api/working_set/test_delta_decoding.py . [ 80%]
+...                                                                      [ 80%]
+../OspreyFlow_Build/tests/services/api/working_set/test_delta_projection.py . [ 80%]
+..........................................                               [ 81%]
+../OspreyFlow_Build/tests/services/api/working_set/test_fake_graph_matches_the_adapter_on_sources.py . [ 81%]
+...                                                                      [ 81%]
+../OspreyFlow_Build/tests/services/api/working_set/test_fake_graph_reads.py . [ 81%]
+........................                                                 [ 81%]
+../OspreyFlow_Build/tests/services/api/working_set/test_hidden_count.py . [ 81%]
+.....                                                                    [ 81%]
+../OspreyFlow_Build/tests/services/api/working_set/test_links_among.py . [ 81%]
+.............                                                            [ 81%]
+../OspreyFlow_Build/tests/services/api/working_set/test_links_among_hides_hidden_ids.py . [ 81%]
+........                                                                 [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_manual_assertion_uses_the_stores_link_id.py . [ 82%]
+                                                                         [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_manual_resolution.py . [ 82%]
+......                                                                   [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_remove_reverted.py . [ 82%]
+.......                                                                  [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_resolution_threshold.py . [ 82%]
+......                                                                   [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_restore_and_remove.py . [ 82%]
+.................                                                        [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_returning_node_brings_its_links.py . [ 82%]
+.                                                                        [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_seed_verifies_against_the_vault.py . [ 82%]
+.............                                                            [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_service.py ..... [ 82%]
+.........                                                                [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_sources_withheld.py . [ 82%]
+.....                                                                    [ 82%]
+../OspreyFlow_Build/tests/services/api/working_set/test_view_over_cap.py . [ 82%]
+........................                                                 [ 83%]
+../OspreyFlow_Build/tests/services/api/working_set/test_visible_link.py . [ 83%]
+.....                                                                    [ 83%]
+../OspreyFlow_Build/tests/services/api/working_set/test_withheld_flag.py . [ 83%]
+.................                                                        [ 83%]
+../OspreyFlow_Build/tests/test_admin_guide.py .......................... [ 83%]
+...................................                                      [ 84%]
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 84%]
+../OspreyFlow_Build/tests/test_analytics_clickhouse_migration.py ....    [ 84%]
+../OspreyFlow_Build/tests/test_analytics_clickhouse_statement_bounds.py . [ 84%]
+                                                                         [ 84%]
+../OspreyFlow_Build/tests/test_arcadedb_pin_agrees.py ..                 [ 84%]
+../OspreyFlow_Build/tests/test_ask_to_search_golden_gate.py ............ [ 84%]
+....................................                                     [ 84%]
+../OspreyFlow_Build/tests/test_build_local_basemap.py .................. [ 84%]
+...                                                                      [ 84%]
+../OspreyFlow_Build/tests/test_case_collision_check.py ......            [ 85%]
+../OspreyFlow_Build/tests/test_case_seed_packs.py ............           [ 85%]
+../OspreyFlow_Build/tests/test_changelog_check.py ..........             [ 85%]
+../OspreyFlow_Build/tests/test_ci_status_check.py ......                 [ 85%]
+../OspreyFlow_Build/tests/test_clear_shared_stores.py ...............    [ 85%]
+../OspreyFlow_Build/tests/test_close_paysim_instants_script.py ......... [ 85%]
+.....                                                                    [ 85%]
+../OspreyFlow_Build/tests/test_colour_drift_check.py .......             [ 85%]
+../OspreyFlow_Build/tests/test_compare_vaults.py ....................... [ 85%]
+..                                                                       [ 86%]
+../OspreyFlow_Build/tests/test_conduit_image_java_licence.py ..          [ 86%]
+../OspreyFlow_Build/tests/test_connector_profile_settings_reach_the_recipe.py . [ 86%]
+.....                                                                    [ 86%]
+../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py . [ 86%]
+....                                                                     [ 86%]
+../OspreyFlow_Build/tests/test_core_gitignore.py ...................     [ 86%]
+../OspreyFlow_Build/tests/test_core_stands_alone.py .....                [ 86%]
+../OspreyFlow_Build/tests/test_data_folder.py .......                    [ 86%]
+../OspreyFlow_Build/tests/test_decision_log_publication_check.py ....... [ 86%]
+                                                                         [ 86%]
+../OspreyFlow_Build/tests/test_demo_fixtures_are_product.py ............ [ 86%]
+..............                                                           [ 86%]
+../OspreyFlow_Build/tests/test_demo_guide_registry_check.py ...........  [ 86%]
+../OspreyFlow_Build/tests/test_demo_osprey_config_is_tier_1_only.py .... [ 87%]
+                                                                         [ 87%]
+../OspreyFlow_Build/tests/test_design_check.py ...                       [ 87%]
+../OspreyFlow_Build/tests/test_doc_citations_check.py ..........         [ 87%]
+../OspreyFlow_Build/tests/test_doc_site.py ............                  [ 87%]
+../OspreyFlow_Build/tests/test_dockerignore.py ......................... [ 87%]
+.................                                                        [ 87%]
+../OspreyFlow_Build/tests/test_docs_pdf.py ..................            [ 87%]
+../OspreyFlow_Build/tests/test_domain_model_coverage_check.py .........  [ 88%]
+../OspreyFlow_Build/tests/test_enron_fixture.py ...................      [ 88%]
+../OspreyFlow_Build/tests/test_enron_seed_admission.py .....             [ 88%]
+../OspreyFlow_Build/tests/test_fetch_basemap_glyphs.py ....              [ 88%]
+../OspreyFlow_Build/tests/test_friction_assemble.py ......               [ 88%]
+../OspreyFlow_Build/tests/test_gazetteer_build_registration_order.py ... [ 88%]
+.                                                                        [ 88%]
+../OspreyFlow_Build/tests/test_image_imports_are_carried.py ....         [ 88%]
+../OspreyFlow_Build/tests/test_images_built_fresh.py ...............     [ 88%]
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py ...................... [ 88%]
+                                                                         [ 88%]
+../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 89%]
+...                                                                      [ 89%]
+../OspreyFlow_Build/tests/test_layout.py ....................F           [ 89%]
+../OspreyFlow_Build/tests/test_load_revert_resting.py ....               [ 89%]
+../OspreyFlow_Build/tests/test_make_home_cases.py ........               [ 89%]
+../OspreyFlow_Build/tests/test_migrate_branches_to_views.py ...........  [ 89%]
+../OspreyFlow_Build/tests/test_migrate_cases_to_one_dataset.py ......... [ 89%]
+...                                                                      [ 89%]
+../OspreyFlow_Build/tests/test_migrate_sources.py ..........             [ 89%]
+../OspreyFlow_Build/tests/test_named_deployment_scripts.py ...           [ 89%]
+../OspreyFlow_Build/tests/test_ner_licence_gate.py .................     [ 90%]
+../OspreyFlow_Build/tests/test_no_branches_check.py ............         [ 90%]
+../OspreyFlow_Build/tests/test_no_test_module_shadows_the_product.py ..  [ 90%]
+../OspreyFlow_Build/tests/test_old_entry_points_removed.py ....          [ 90%]
+../OspreyFlow_Build/tests/test_osprey_bundle.py ............             [ 90%]
+../OspreyFlow_Build/tests/test_phone_extraction_fixture.py .F            [ 90%]
+../OspreyFlow_Build/tests/test_pid_naming_check.py ..................... [ 90%]
+....                                                                     [ 90%]
+../OspreyFlow_Build/tests/test_pid_scale_seed.py ......                  [ 90%]
+../OspreyFlow_Build/tests/test_port_guard.py ........................... [ 91%]
+                                                                         [ 91%]
+../OspreyFlow_Build/tests/test_post_ingest_resolution_setting.py ....... [ 91%]
+.......                                                                  [ 91%]
+../OspreyFlow_Build/tests/test_principal_precheck_reads.py ............. [ 91%]
+...........                                                              [ 91%]
+../OspreyFlow_Build/tests/test_probe_lookup_cost.py .......              [ 91%]
+../OspreyFlow_Build/tests/test_product_tree_link_check.py ...            [ 91%]
+../OspreyFlow_Build/tests/test_provenance_annotation_check.py .......    [ 91%]
+../OspreyFlow_Build/tests/test_publish_seed.py .........                 [ 91%]
+../OspreyFlow_Build/tests/test_publish_user_repo.py ................     [ 91%]
+../OspreyFlow_Build/tests/test_real_data_acknowledgement.py ....         [ 92%]
+../OspreyFlow_Build/tests/test_real_data_exceptions.py ................. [ 92%]
+.........                                                                [ 92%]
+../OspreyFlow_Build/tests/test_refresh.py .............................. [ 92%]
+.                                                                        [ 92%]
+../OspreyFlow_Build/tests/test_repro_paysim_duplicates.py .............. [ 92%]
+..                                                                       [ 92%]
+../OspreyFlow_Build/tests/test_revert_load_script.py ................... [ 93%]
+                                                                         [ 93%]
+../OspreyFlow_Build/tests/test_route_coverage_check.py .......           [ 93%]
+../OspreyFlow_Build/tests/test_seed_bulk_method.py ..................... [ 93%]
+                                                                         [ 93%]
+../OspreyFlow_Build/tests/test_seed_enron.py .............               [ 93%]
+../OspreyFlow_Build/tests/test_seed_ingest_folder.py .............       [ 93%]
+../OspreyFlow_Build/tests/test_seed_internal.py ........................ [ 93%]
+.................................................................        [ 94%]
+../OspreyFlow_Build/tests/test_seed_ledger_monitoring.py ........        [ 94%]
+../OspreyFlow_Build/tests/test_seed_paysim.py ......................     [ 94%]
+../OspreyFlow_Build/tests/test_seed_pid.py ............................. [ 95%]
+........................................................................ [ 96%]
+........................................................................ [ 96%]
+...................                                                      [ 97%]
+../OspreyFlow_Build/tests/test_seed_pid_brief.py .................       [ 97%]
+../OspreyFlow_Build/tests/test_seed_recipe_methods_confined.py ......... [ 97%]
+...                                                                      [ 97%]
+../OspreyFlow_Build/tests/test_seed_scenarios.py .............           [ 97%]
+../OspreyFlow_Build/tests/test_seed_support.py ......................... [ 97%]
+.........................                                                [ 98%]
+../OspreyFlow_Build/tests/test_seed_target_models.py ......              [ 98%]
+../OspreyFlow_Build/tests/test_seed_without_demo_accounts.py ........... [ 98%]
+                                                                         [ 98%]
+../OspreyFlow_Build/tests/test_shipped_provider_profiles.py ......       [ 98%]
+../OspreyFlow_Build/tests/test_simple_markdown.py ...................... [ 98%]
+                                                                         [ 98%]
+../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [ 98%]
+../OspreyFlow_Build/tests/test_spike_bulk_transport.py ..........        [ 98%]
+../OspreyFlow_Build/tests/test_stack_lease.py ................           [ 98%]
+../OspreyFlow_Build/tests/test_stray_edge_records.py ................... [ 99%]
+...                                                                      [ 99%]
+../OspreyFlow_Build/tests/test_strip_change_provenance.py ........       [ 99%]
+../OspreyFlow_Build/tests/test_superset_label_colours.py ...             [ 99%]
+../OspreyFlow_Build/tests/test_superset_theme.py .....                   [ 99%]
+../OspreyFlow_Build/tests/test_test_file_coverage_check.py ............. [ 99%]
+........                                                                 [ 99%]
+../OspreyFlow_Build/tests/test_tier2_swap_demo_config.py ...             [ 99%]
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py ...... [ 99%]
+..                                                                       [ 99%]
+../OspreyFlow_Build/tests/test_verify_map.py .......                     [ 99%]
+../OspreyFlow_Build/tests/test_website_wording.py ...................... [ 99%]
+.........                                                                [100%]
+
+==================================== ERRORS ====================================
+_ ERROR at setup of test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api] _
+
+    @pytest.fixture(scope="module")
+    def workspace_image() -> str:
+        tag = "osprey-test-workspace:proxy"
+>       _docker("build", "-q", "-f", str(WORKSPACE / "Dockerfile"), "-t", tag, str(REPO_ROOT))
+
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+check = True
+args = ('build', '-q', '-f', '/Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/Dockerfile', '-t', 'osprey-test-workspace:proxy', ...)
+
+    def _docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        done = subprocess.run(
+            ["docker", *args], capture_output=True, text=True, timeout=120, check=False
+        )
+        if check:
+>           assert done.returncode == 0, done.stderr or done.stdout
+E           AssertionError: Dockerfile:52
+E             --------------------
+E               50 |     RUN npm run build --workspace apps/workspace
+E               51 |     
+E               52 | >>> FROM nginx:1.30-alpine
+E               53 |     
+E               54 |     # Base-image OS packages lag the upstream image's own last-published point
+E             --------------------
+E             ERROR: failed to build: failed to solve: nginx:1.30-alpine: failed to resolve source metadata for docker.io/library/nginx:1.30-alpine: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests
+E             
+E           assert 1 == 0
+E            +  where 1 = CompletedProcess(args=['docker', 'build', '-q', '-f', '/Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/worksp...tus from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests\n").returncode
+
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py:33: AssertionError
+_ ERROR at setup of test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api.osprey.svc.cluster.local] _
+
+    @pytest.fixture(scope="module")
+    def workspace_image() -> str:
+        tag = "osprey-test-workspace:proxy"
+>       _docker("build", "-q", "-f", str(WORKSPACE / "Dockerfile"), "-t", tag, str(REPO_ROOT))
+
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+check = True
+args = ('build', '-q', '-f', '/Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/Dockerfile', '-t', 'osprey-test-workspace:proxy', ...)
+
+    def _docker(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        done = subprocess.run(
+            ["docker", *args], capture_output=True, text=True, timeout=120, check=False
+        )
+        if check:
+>           assert done.returncode == 0, done.stderr or done.stdout
+E           AssertionError: Dockerfile:52
+E             --------------------
+E               50 |     RUN npm run build --workspace apps/workspace
+E               51 |     
+E               52 | >>> FROM nginx:1.30-alpine
+E               53 |     
+E               54 |     # Base-image OS packages lag the upstream image's own last-published point
+E             --------------------
+E             ERROR: failed to build: failed to solve: nginx:1.30-alpine: failed to resolve source metadata for docker.io/library/nginx:1.30-alpine: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests
+E             
+E           assert 1 == 0
+E            +  where 1 = CompletedProcess(args=['docker', 'build', '-q', '-f', '/Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/worksp...tus from HEAD request to https://registry-1.docker.io/v2/library/nginx/manifests/1.30-alpine: 429 Too Many Requests\n").returncode
+
+../OspreyFlow_Build/tests/harness/test_workspace_proxy.py:33: AssertionError
+=================================== FAILURES ===================================
+________________ test_the_committed_osprey_yaml_still_validates ________________
+
+    def test_the_committed_osprey_yaml_still_validates() -> None:
+        """The constraint the review imposed on this schema, as a test rather than a promise. This is
+        the real file, not a copy of its shape — a copy would keep passing after someone edited the
+        original."""
+        raw = yaml.safe_load(COMMITTED_CONFIG.read_text(encoding="utf-8"))
+        config = OspreyConfig.model_validate(raw)
+    
+        # It began as a map-only file; since 39a80d0 it is the described example of every option, so
+        # the premise is now that the whole example validates and names only sections that exist.
+        assert set(raw) <= set(OspreyConfig.model_fields), set(raw) - set(OspreyConfig.model_fields)
+        assert config.map is not None
+>       assert config.map.default == "osm-local"
+E       AssertionError: assert 'osm-local-great-britain' == 'osm-local'
+E         
+E         - osm-local
+E         + osm-local-great-britain
+
+../OspreyFlow_Build/tests/harness/test_deployment_schema.py:38: AssertionError
+______________ test_the_deployments_own_valkey_is_reached_plainly ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x38be86030>
+
+    def test_the_deployments_own_valkey_is_reached_plainly(monkeypatch: pytest.MonkeyPatch) -> None:
+        for name in ("VALKEY_PASSWORD", "VALKEY_TLS"):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("VALKEY_HOST", "valkey")
+>       assert ValkeyConfig.from_env().client_kwargs() == {"host": "valkey", "port": 6379, "db": 0}
+E       AssertionError: assert {'host': 'val...': 1, 'db': 0} == {'host': 'val...6379, 'db': 0}
+E         
+E         Omitting 2 identical items, use -vv to show
+E         Differing items:
+E         {'port': 1} != {'port': 6379}
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_valkey_config.py:19: AssertionError
+__________________ test_no_product_folder_is_left_at_the_root __________________
+
+    def test_no_product_folder_is_left_at_the_root() -> None:
+        """Catches the half-finished move (ADR-054 step 5): a product folder or manifest still at the
+        root beside the three folders, found by `layout.home` in the wrong place or by nobody."""
+        stayed = {"Makefile", ".git", ".gitignore", ".github", ".claude", "CLAUDE.md", ".trivyignore"}
+        allowed = stayed | {"OspreyFlow_Core", "OspreyFlow_Build", "OspreyFlow_Data"}
+        untracked_or_machine = {".venv", "data", "Icon\r", ".DS_Store", ".playwright-mcp"}
+        left = {
+            p.name
+            for p in layout.ROOT.iterdir()
+            if p.name not in allowed
+            and p.name not in untracked_or_machine
+            and not p.name.endswith("_cache")
+            and not p.name.startswith("Icon")
+        }
+>       assert left == set(), f"still at the root: {sorted(left)}"
+E       AssertionError: still at the root: ['graphify-out']
+E       assert {'graphify-out'} == set()
+E         
+E         Extra items in the left set:
+E         'graphify-out'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/test_layout.py:95: AssertionError
+__________ test_the_extraction_loads_as_documents_held_by_the_phones ___________
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-6608/test_the_extraction_loads_as_d0')
+
+    @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg makes the media")
+    async def test_the_extraction_loads_as_documents_held_by_the_phones(tmp_path: Path) -> None:
+        path, _ = write_phone_extraction(tmp_path)
+        assert (path.parent / "IMG_0001.png").read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+        assert (path.parent / "VID_0001.mp4").read_bytes()[4:8] == b"ftyp"
+        rows = list(csv.DictReader(path.read_text(encoding="utf-8").splitlines()))
+        media = InMemoryMediaStore()
+        graph = RecordingGraph()
+>       report, _ = await run_recipe(
+            load_recipe(RECIPE),
+            iter(rows),
+            graph=graph,  # type: ignore[arg-type]
+            ontology=ONTOLOGY,
+            tx="tx-1",  # type: ignore[arg-type]
+            principal=LOADER,
+            load_id="load-1",
+            investigation_scope="case-1",
+            source=str(path),
+            media=media,
+        )
+
+../OspreyFlow_Build/tests/test_phone_extraction_fixture.py:39: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/ingest/engine.py:2460: in run_recipe
+    await asyncio.to_thread(
+../../../../miniconda3/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/ingest/staging.py:126: in stage_raw_rows
+    fs.create_dir(storage.bucket)
+pyarrow/_fs.pyx:638: in pyarrow._fs.FileSystem.create_dir
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   OSError: When creating bucket 'ospreyflow-staging': AWS Error NETWORK_CONNECTION during HeadBucket operation: curlCode: 7, Could not connect to server; Details: Failed to connect to localhost port 59995 after 0 ms: Could not connect to server
+
+pyarrow/error.pxi:92: OSError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/scenarios/test_pid_plan.py::test_no_pid_number_is_produced_by_any_other_fixture_or_seed
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build/tests/scenarios/test_pid_plan.py:1971: UserWarning: no generator produces a prison-number-shaped value, so the prison numbers' disjointness from other generators is untested
+    warnings.warn(
+
+tests/services/api/test_analyst_layer.py: 4 warnings
+tests/services/api/test_datasets.py: 4 warnings
+tests/services/api/test_drawn_datasets.py: 3 warnings
+tests/services/api/test_link_change_routes.py: 3 warnings
+tests/services/api/test_pattern_ask.py: 3 warnings
+tests/services/api/test_pattern_conditions_routes.py: 9 warnings
+tests/services/api/test_resolution_routes.py: 1 warning
+tests/services/api/test_rule_sentence_routes.py: 3 warnings
+tests/services/api/test_schedule_admin_routes.py: 1 warning
+tests/services/api/test_sites_routes.py: 1 warning
+tests/services/api/test_studio_map_routes.py: 1 warning
+tests/services/api/test_studio_publish_routes.py: 4 warnings
+tests/services/api/test_studio_recipe_routes.py: 2 warnings
+tests/services/api/test_studio_schedule_routes.py: 4 warnings
+tests/services/api/test_studio_staging_routes.py: 2 warnings
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+tests/services/api/test_dataset_sources.py::test_a_file_outside_the_datasets_files_is_refused_whether_or_not_it_exists
+tests/services/api/test_sites_routes.py::test_grid_cannot_be_set_before_control_points
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/services/api/test_dataset_sources.py::test_a_refreshing_policy_is_refused_where_a_deployed_keyless_pipeline_reads_the_source
+tests/services/api/test_dataset_sources.py::test_a_keyed_or_draft_reader_does_not_refuse_the_policy_nor_an_edit_to_one
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:8909: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key(keyless)
+
+tests/services/api/test_drawn_datasets.py::test_its_highest_marking_is_within_the_makers_clearance
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:8995: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await _make_drawn(
+
+tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
+tests/services/api/test_investigation_access_routes.py::test_a_grantee_name_must_be_a_plain_non_empty_account_name
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:3742: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    grantee = _grantee(account_id)
+
+tests/services/api/test_model_engines.py::test_a_request_naming_a_refused_engine_is_answered_in_words_with_a_4xx
+  /Users/ayankar/miniconda3/lib/python3.12/asyncio/events.py:88: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    self._context.run(self._callback, *self._args)
+
+tests/services/api/test_no_corpus_counts_on_the_wire.py::test_a_delta_the_stream_sends_never_carries_corpus_counts[DeltaViewOverCap]
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/pydantic/main.py:587: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Unexpected too few items present in tuple)
+    return self.__pydantic_serializer__.to_json(
+
+tests/services/api/test_studio_recipe_routes.py::test_deploy_refuses_a_keyless_pipeline_over_a_watched_source_in_words
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:10636: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    raise refresh_needs_a_key([recipe.label])
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9959: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, recipe.dataset_id)
+
+tests/services/api/test_studio_staging_routes.py::test_connect_refuses_another_dataset_s_file
+  /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py:9893: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    _refuse_a_file_not_offered(body.source_location, made_in(principal))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_deployment_schema.py::test_the_committed_osprey_yaml_still_validates
+FAILED ../OspreyFlow_Build/tests/services/api/test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly
+FAILED ../OspreyFlow_Build/tests/test_layout.py::test_no_product_folder_is_left_at_the_root
+FAILED ../OspreyFlow_Build/tests/test_phone_extraction_fixture.py::test_the_extraction_loads_as_documents_held_by_the_phones
+ERROR ../OspreyFlow_Build/tests/harness/test_workspace_proxy.py::test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api]
+ERROR ../OspreyFlow_Build/tests/harness/test_workspace_proxy.py::test_the_workspace_reaches_the_conduit_by_the_name_it_is_given[api.osprey.svc.cluster.local]
+= 4 failed, 9168 passed, 3 skipped, 59 warnings, 2 errors in 1048.19s (0:17:28) =
+make: *** [test] Error 1
+test exit 2
+
+# --- make test-js ---
+npm test --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+ ❯ src/matrix/MatrixView.budget.test.tsx (1 test | 1 failed) 5467ms
+   ❯ MatrixView at 50,000 nodes and 250,000 links (1)
+     × opens inside §5's first-frame budget, drawing one page of each table and saying so 5465ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+AssertionError: opened in 3126 ms: expected 3125.7551250000006 to be less than 2500
+ ❯ src/matrix/MatrixView.budget.test.tsx:50:60
+     48|     expect(entities.querySelector("caption")?.textContent).toContain("…
+     49|     expect(links.querySelector("caption")?.textContent).toContain("Row…
+     50|     expect(elapsed, `opened in ${Math.round(elapsed)} ms`).toBeLessTha…
+       |                                                            ^
+     51|   }, 60_000);
+     52| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 330 passed (331)
+      Tests  1 failed | 2756 passed (2757)
+   Start at  07:29:32
+   Duration  28.59s (environment 50%, tests 36%, import 10%, transform 2%, setup 1%, worker 1%)
+
+    Isolate  331 workers spawned · ~510ms startup each (spawn + environment, per file)
+             at least ~14.85s faster with isolate: false — reuses workers across files instead of one per file
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c vitest run
+make: *** [test-js] Error 1
+js exit 2
