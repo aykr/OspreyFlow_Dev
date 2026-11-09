@@ -8,7 +8,7 @@ P5 (ADR-147 Amendment 2). Reviews:
 - **the orchestrator's review sending P5 back (round 3)**;
 - **the lane's own review of round 3**, which sent it back again (defects 1–14), all answered.
 
-Every fix is shown red at its call site in `P5_RED_RECORD.md`. Plants that proved nothing are recorded there and not counted. The session resumed after compaction and found no `HANDOFF.md`. **Head `HEAD_FILL`, rebased onto main `b368f86`.**
+Every fix is shown red at its call site in `P5_RED_RECORD.md`. Plants that proved nothing are recorded there and not counted. The session resumed after compaction and found no `HANDOFF.md`. **Head: this commit's, the code gated at `b9d5aeb`, rebased onto main `b368f86`.**
 
 ## The brief
 
