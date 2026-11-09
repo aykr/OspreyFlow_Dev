@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.27** · 2026-11-05 · For OspreyFlow v0.4.12 · Issued
+**Version 1.28** · 2026-11-09 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.28 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §1: the four places; the architecture has its own guide. §3: the Studio's four steps (1 Model, 2 Sources, 3 Pipelines, 4 Runs), the readiness strip, guided and expert mode; *Make live* and its owner step; SQL, API and JSON sources and screening lists in 2 Sources; staging steps with a live sample; expert steps coming. §6: held rows in Rules and Monitoring and 4 Runs; Admin → Operations. New §7.8: a case's analyst layer, drawn datasets, link types proposed by analysts, and promotion (coming). §9.1: the routes of views, boards, drawings, link types, an alert's address, dataset models, ownership, model and map administration and the grading scheme. §9.3: the commands. Coming, and said so: releases between environments. |
 | 1.27 | 2026-11-05 | Describes v0.4.12 (v0.4.11 was not released). No change to its content. |
 | 1.26 | 2026-11-05 | Describes v0.4.11. No change to its content. |
 | 1.25 | 2026-11-04 | The owner's rulings (build order step 30; spec 09 §5; ADR-127 Amendment 47): §3.8, Verify reads the files a run reads (a source node's own file included) and records each with a hash of its contents; §3.9, **Run now** runs on exactly the file Verify checked, and refuses in words, loading nothing, when that file has changed since or another file is named — the Run panel no longer takes a file; the run's answer no longer carries the server's path to the file. §3.6, the Map names each link type by its label ("Held at"), never its key. |
@@ -55,14 +56,14 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 
 ![Level 0: the people who use OspreyFlow, its three tiers joined by four ports, and the identity provider, reporting, data in and the optional outside services beside it](images/architecture/level-0.svg)
 
-The administration guide has the level 1 diagram, with the technology in each component, and
-every interface with what crosses it.
+The [architecture guide](architecture-guide.md) has the level 1 diagram, with the technology in each
+component, and every interface with what crosses it.
 
 Three tiers; everything that passes between them crosses one of four typed ports:
 
 | Tier | What it is |
 | --- | --- |
-| **The Glass** | The browser workspace. The Ingest Studio is one of its places, shown to anyone holding `edit_pipelines` |
+| **The Glass** | The browser workspace, with four places: the Glass, the Ingest Studio (shown to anyone holding `edit_pipelines`), Rules and Monitoring, and Admin |
 | **The Conduit** | The API. It holds the rights, the case levels and the audit, runs the loads, and judges each load with the case's rules |
 | **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB, or ClickHouse), graph compute, the models, Valkey, the object store, OpenSearch, and PostgreSQL for the Conduit's own records |
 
@@ -91,62 +92,78 @@ act), and their **rights** (what they may do). A right never widens what a perso
 | `verify_pipelines`, `publish_pipelines`, `run_pipelines`, `schedule_pipelines` | Verify, publish, run and schedule them |
 | `add_ingest_files` | List and upload source files |
 | `read_held_rows`, `decide_held_rows` | See, release and reject rows a rule held |
-| `read_data_feeds`, `operate_schedules` | See what feeds a case; Admin → Schedules and runs |
+| `read_data_feeds`, `operate_schedules` | See what feeds a case; Admin → Operations |
 | `load_screening_lists`, `deploy_rules`, `read_rule_audit`, `read_alert_queue` | Screening lists and the rules that judge loads |
 | `create_case`, `share_case`, `investigate`, `run_analysis`, `read_reports` | Work in cases alongside analysts |
 
 It also carries `revert_loads`, for reverting a load — which no screen or command uses yet (section
 6.4). It attaches rules to a pipeline (section 3.8a) but does not write them: a rule written as a
 sentence needs the analyst's `keep_watches` as well as `deploy_rules`, so an analyst writes it in
-Monitoring. It does **not** hold `edit_graph`, `confirm_inferred`, `extract_files`, `resolve_entities`,
+Rules and Monitoring. It does **not** hold `edit_graph`, `confirm_inferred`, `extract_files`, `resolve_entities`,
 `export` or `read_report_feed`: those are the Analyst's and Reports Viewer's. An administrator can
 grant any single right on its own.
 
 ## 3. The Ingest Studio
 
-The Studio is an editor for a **recipe**: a declarative YAML description of how one source becomes
-part of a case's graph. It works only inside a case — with no case open it says so — and what it
-loads goes into that case's dataset. A recipe belongs to the first dataset of the case it was made
-in, and is listed, verified, published and run only in cases that read that dataset.
+The Studio is one of the four places (key `I`). It works for one **dataset** at a time, chosen in its
+**Dataset** switch, and is reached for a case: the context banner says "You are in the Ingest Studio",
+and **← Back to case ‹name› in the Glass** returns to it. Under the switch, a **readiness strip** says
+where the dataset stands: its domain model, its sources (and how many files are not registered), its
+pipelines (and how many are untested) and its last run. Its four steps are tabs:
+
+| Step | What it holds |
+| --- | --- |
+| **1 Model** | The dataset's **domain model**: the POLE core and the packs over it (section 3.3), and the link types analysts proposed, to accept into the draft or decline (section 7.8) |
+| **2 Sources** | **Source tables**, each registered with **Register a source** and given a page of its own; the **screening lists** (section 8); and **Files added to the dataset**, with **Add files** |
+| **3 Pipelines** | Each pipeline, built in a drawer beside it: **guided** mode (a numbered list of steps, the default) or **expert** mode (the canvas). The choice is kept for you in this browser |
+| **4 Runs** | One row per deployed pipeline and one cell per day; **Run now**, its schedule and its folder watch; held rows; and the command that reverts a load |
+
+**A recipe** is what a pipeline is stored as: a declarative YAML description of how one source
+becomes part of the dataset's graph. What it loads goes into the dataset. *Coming:* **Releases**,
+moving a dataset's definitions (its domain model, pipelines and reference lists, never data,
+credentials, membership or owners) between environments as YAML, with `ospreyflow release export`
+and `import --dry-run`.
 
 ### 3.1 Pipelines
 
-![The Ingest Studio's Pipelines list: name a pipeline, or open one](images/developer/01-studio-pipelines.png)
+![The Ingest Studio's Pipelines list: name a pipeline, or open one (captured before the four steps)](images/developer/01-studio-pipelines.png)
 
-**Name the pipeline** and choose **New pipeline**: the canvas opens with a whole chain to fill in.
-Each existing pipeline is listed with its version and status (draft, published or flagged), and
-**Open** takes you to it.
+**Name the pipeline** and choose **New pipeline**. Each existing pipeline is listed with its version
+and status (draft, published or flagged), and **Open** takes you to it, with its drawer beside it.
 
-### 3.2 The canvas
+### 3.2 The steps of a pipeline
 
-![A pipeline on the canvas: domain model, source, profile, map and load](images/developer/02-pipeline-canvas.png)
+![A pipeline in expert mode: domain model, source, profile, map and load (captured before the four steps)](images/developer/02-pipeline-canvas.png)
 
-A pipeline is a chain of stages, each with one job:
+A pipeline is a chain of steps, each with one job:
 
-| Stage | What it does |
+| Step | What it does |
 | --- | --- |
-| **Domain model** | What the data means: the core model, and the pack it adds. Exactly one, at the root |
-| **Source** | The file, its connector, its handling marking and its legal basis |
+| **Domain model** | What the data means: the core model, and the packs it adds. Exactly one, at the root |
+| **Source** | The registered source or file, its handling marking and its legal basis |
+| **Staging steps** | Optional: shape the rows before they are mapped (section 3.4a) |
 | **Profile** | What the source holds, column by column |
 | **Map** | How one row becomes entities and links |
 | **Extract** | Optional: finds entities in the text of Documents a map made |
 | **Enrich** | Optional: geocodes places — the local gazetteer first |
-| **Load** | Writes into the case's dataset. It has no settings |
+| **Load** | Writes into the dataset. It has no settings |
 
-- **+ Source** adds another whole source → profile → map → load branch. Each source is its own
+- **+ Source** adds another whole source → profile → map → load chain. Each source is its own
   load, revertible on its own, and inherits the first source's marking and legal basis.
 - **+ Extract** and **+ Enrich** go after the last map. **Remove selected** never removes the
   domain model.
-- **Verify** and **Publish** are buttons at the top, not stages.
 - Every change is saved as you make it. A pipeline with a cycle, a second domain model, a source
   that reaches no load, or an extract not fed by a map is refused, in words, before it is saved.
+- *Coming:* the **expert steps**, a SQL transform and a fuzzy match. The canvas names them and
+  shows them read-only; their editor is not built.
 
 ### 3.3 Domain model
 
 ![Choosing the domain pack: the core model, or a pack over it](images/developer/03-domain-model.png)
 
-Every pipeline maps into the **POLE core** — people, objects, locations, events, organisations —
-and may add one pack over it:
+Every dataset has one **domain model**: the **POLE core** (people, objects, locations, events,
+organisations) and the packs over it. The Studio's 1 Model shows it ("Domain model for ‹dataset›").
+Its packs:
 
 | Pack | Adds |
 | --- | --- |
@@ -157,24 +174,51 @@ and may add one pack over it:
 
 A pack only adds types, or widens which types a link may join; it cannot change the core.
 
-### 3.4 Source and connectors
+**Draft and live.** A dataset's model has a draft and a live version, changed under
+`edit_target_model` (the Data Engineer holds it; the API is in section 9.1): a draft is edited, its
+impact read, then **made live**, and a live version can be reverted. A composite's model is never made
+live. **The first *Make live* in an environment asks who answers for the dataset**: people, a team, or
+both, as Admin → System allows, never a service account. It refuses to go live without them ("who
+answers for this dataset?"), makes the dataset's **home case**, named for it, and makes them its
+Authors. *Coming:* a *Make live* screen in the Studio; until then the route is the way.
 
-![The Source stage: where the data comes from](images/developer/04-source.png)
+### 3.4 Sources and connectors
 
-**Open source settings** asks three things before anything else can happen:
+![A source's settings: where the data comes from (captured before the four steps)](images/developer/04-source.png)
+
+A source answers three things before anything else can happen:
 
 1. **Where the data is**: a file from the ingest folder, a file from your computer (uploaded into
-   the folder for you), one already on the server, or a path or address you type.
+   the folder for you), one already on the server, or a connection (below).
 2. **Its handling marking**: the classification and handling code everything from it will carry. A
    classification left blank is recorded as the scheme's lowest level, and the screen says so.
 3. **Its legal basis**: the power or consent the data is held under.
 
-**Connectors.** The catalogue lists every kind of source OspreyFlow is designed for —
+**Register a source** (2 Sources) offers three kinds of read beside files: a **SQL** table (its
+columns), an **API** path (where its records are in the answer) and **JSON** (a file pattern and where
+its records are). Each read lands as its source's own file under the ingest folder's `uploaded/`
+folder, so a pipeline reads it like any file. A connection is
+named by an administrator (`/v1/admin/connections`, with a test), and its secret is given to the
+Conduit alone (`OSPREY_CONNECTION_SECRET_<NAME>`), never written into a recipe. A connector reaches no
+private host, this machine or the cloud's metadata service unless the operator admits that host or
+network in `osprey.yaml`'s `connectors.private_hosts` (administration guide, appendix A). A source's
+refresh can be paused and resumed. *Coming:* defining a database or API connection on Admin
+→ Connections' screen, which today names file connections.
+
+**File connectors.** The catalogue lists every kind of source OspreyFlow is designed for —
 communications records, mobile-device extractions, financial records, vehicle and movement data,
-generic files, documents and media — and marks each as available or not. **Available today: four
-connectors, all reading CSV**: generic CSV, call records (day-first dates), cell sites (WGS 84
-co-ordinates) and seizure records. The others are shown as not yet available. A connector is a
-small profile file in `connectors/`; adding one needs the Conduit restarted.
+generic files, documents and media — and marks each as available or not. Available among them: generic
+CSV, call records (day-first dates), cell sites (WGS 84 co-ordinates) and seizure records. A connector
+is a small profile file in `connectors/`; adding one needs the Conduit restarted.
+
+### 3.4a Staging steps
+
+Between a source and its map, a pipeline may shape its rows with **staging steps**, each a step of
+the pipeline with a drawer of typed settings (no expressions in guided mode): **lookup**, **join**,
+**filter**, **derive** (concatenate, split, substring, parse a date, arithmetic, a case-by-case value,
+normalise), **union** and **dedupe**. Each drawer shows a **live sample** over the first ten rows of
+each source, refused in the same words a save would be, and the Map maps the last step's table,
+profiled. A run records each step's counts; *coming:* drawing them on the run's report.
 
 ### 3.5 Profile
 
@@ -289,7 +333,7 @@ as it loads, each with its sentence or typology in words, its severity and when 
 
 **Save the checks** records your choice, with your name; it is read at every run, scheduled or not,
 and when held rows are released. You attach rules here; you do not write them. Rules are written by
-analysts in Monitoring, as sentences or from templates.
+analysts in Rules and Monitoring, as sentences or from templates.
 
 ### 3.9 Publish, versions and running
 
@@ -344,11 +388,11 @@ OspreyFlow takes; or if a file of that name is already there — **nothing is ev
 
 ### 6.1 Held rows
 
-![Alerts → Held rows](images/developer/11-held-rows.png)
+![Held rows (captured before Rules and Monitoring)](images/developer/11-held-rows.png)
 
 A case's rules judge every load before it commits. A row a rule could not judge is **held**: it
-reaches no store until someone decides it, in the Glass under **Alerts → Held rows**, which shows why
-each row was held. **Release and load** writes it under a new load (it is judged again, and never
+reaches no store until someone decides it, in Rules and Monitoring's **Held rows** (shared with the
+Studio's 4 Runs), which shows why each row was held. **Release and load** writes it under a new load (it is judged again, and never
 held a second time); **Reject** needs a written reason. Listing held rows needs Editor on the case;
 **deciding them needs Author**.
 
@@ -360,9 +404,9 @@ are indexed from 0 too.
 
 ### 6.2 Data feeds
 
-![Reports → Data feeds: the pipelines that load into this case, and when each last ran](images/developer/10-data-feeds.png)
+![Data feeds: the pipelines that load into this case, and when each last ran](images/developer/10-data-feeds.png)
 
-Under **Reports → Data feeds**, anyone holding `read_data_feeds` with Viewer on a case sees the
+Beside the case's **Figures**, under **Data feeds**, anyone holding `read_data_feeds` with Viewer on a case sees the
 pipelines that load into it,
 how they run (by hand or on a schedule), and when each last ran. A run's counts are shown only to
 someone cleared for its source.
@@ -380,7 +424,7 @@ It can also run when a **file arrives** in its dataset's own folder, matching a 
 Either way it runs **as the person who last set it**, with every check their own run would get. A
 run that is refused — they can no longer sign in, have lost the right, are no longer an Editor, or
 are cleared below the source — tells them on their alerts; **three refusals in a row pause it**.
-Admin → Schedules and runs lists every one.
+Admin → Operations lists every one, and 4 Runs every one of the dataset's.
 
 ### 6.4 Reverting a load
 
@@ -657,10 +701,39 @@ OspreyFlow's one kind; `test_a_table_mixing_kinds_is_the_shape_that_does_not_map
 a figure), nor when several direct rows carry one value (OspreyFlow stores one link per pair and type).
 Both are open questions for the client (ADR-139 Amendment 3).
 
+### 7.8 A case's analyst layer, drawn datasets and promotion
+
+**Each case has its own analyst layer**, made with the case, read together with its dataset and never
+written into it. These go into the layer: an entity marked by hand, a `SAME_AS` or `NOT_SAME_AS` made by
+hand, a drawing board's items and links, and an alert resting on any of them. Accepted model proposals,
+accepted extractions and loads go into the dataset, as before. No other case reads a layer, and none
+can infer it from a degree, a path length or a count.
+
+**A drawn dataset** is made by a drawing begun with no case (`POST /v1/drawings`, or
+`POST /v1/datasets/drawn`): the dataset, its home case, its board and a live model at version 1.
+No pipeline loads into it and no rule runs on it.
+
+**Link types proposed by analysts.** An analyst who finds no link type that fits proposes one in the
+case; it is usable there at once, marked proposed. A holder of `accept_types` who may work on the
+dataset decides it in 1 Model: **accept** writes it into the draft domain model (never by its proposer),
+and it goes live with the next *Make live*; **decline** ends it. A proposal made before proposals named a
+dataset is decided in Admin → Proposed types, with `manage_ontology`.
+
+**Coming:** promoting drawn items into a dataset **as a load** (checked against the dataset's highest
+marking and its model, reviewed by a second person where the dataset's promotion policy asks for it,
+revertible like any load); merging a drawn dataset into another; and merging or deleting a removed
+case's layer, which Admin → Datasets offers as a dry run today. The settings are built: a dataset's
+promotion policy, and the days after which a waiting promotion is overdue.
+
 ## 8. Screening lists
 
-Sanctions, PEP and adverse-media lists are kept beside the graph, not in it, deployment-wide, and
-replaced a whole list at a time. They are loaded from a YAML file on the server:
+Sanctions, PEP and adverse-media lists are kept beside the graph, not in it, deployment-wide. In the
+Studio, **2 Sources → screening lists** imports a list once for the deployment through a template for
+its publisher's format, each import that changes its rows a new version, refreshed by hand or on a
+schedule (`load_screening_lists`); each dataset then **subscribes** to the lists its rules read
+(`add_ingest_files`). A list of real people is refused unless this device's real-data exceptions name
+it. How lists raise alerts is rewritten with the alerts journey (coming). A list can also be loaded,
+whole, from a YAML file on the server:
 
 ```
 python -m scripts.load_screening_list <file.yaml>
@@ -704,6 +777,24 @@ signed in like every other route. Its `info.version` is the release the deployme
 | `GET …/strength-influencers` | `investigate`, Viewer: the legend and the case's override |
 | `PUT …/strength-influencers` | `investigate`, Author: the case's override |
 | `GET`, `POST /v1/strength-influencers`; `POST /v1/strength-influencers/{version}/approve`, `…/send-back` | `manage_strength_influencers`; never the proposer's approval |
+| `GET`, `POST …/views`; `GET …/views/{view_id}`; `POST …/views/{view_id}/share`; `DELETE …/views/{view_id}` | A level on the case to list and open; `investigate` to save, share or delete, and only the view's creator shares or deletes it |
+| `GET …/boards` and a board's reads, its matches, pictures and `…/drawn-watches` | `investigate` |
+| `POST …/boards`, a board's share and delete, `…/items`, `…/links`, `…/layout`, its matches and pictures | `draw_on_boards` and `investigate`; only the board's creator draws |
+| `POST /v1/drawings`; `POST /v1/datasets/drawn` | `create_case` (a drawing also `draw_on_boards` and `investigate`) |
+| `GET …/link-types`; `POST …/link-types/promotable` | `investigate` |
+| `POST …/link-types`; `POST …/link-types/{proposal_id}/withdraw` | `propose_types`, Editor |
+| `GET /v1/datasets/{dataset_id}/model/proposals`; `POST …/proposals/{proposal_id}/accept`, `…/decline` | `accept_types`, behind the dataset's own gate |
+| `GET /v1/datasets/{dataset_id}/model`; `POST`, `PUT`, `DELETE …/model/draft`; `…/impact`; `…/make-live`; `…/revert` | `edit_target_model`, behind the dataset's own gate |
+| `GET /v1/alerts/{alert_id}` | `read_alert_queue`: an alert's own address, answered as a missing alert to anyone who may not open its case |
+| `GET …/ownership/{node_id}`; `POST …/ownership/{node_id}/canvas` | `trace_ownership` |
+| `GET /v1/admin/people/{user_id}/ownership` | `manage_people` |
+| `GET`, `POST /v1/admin/connections`; `POST …/connections/{id}/test`; `GET /v1/ingest/connections` | `administer_system`; the last `add_ingest_files` |
+| `/v1/studio/screening-lists` and its refresh, imports and schedule | `load_screening_lists` |
+| `…/screening-subscriptions` | `add_ingest_files` |
+| `PUT /v1/admin/datasets/{dataset_id}/owners`; `…/promotion-policy`; `GET`, `PUT /v1/admin/settings/dataset-owners` | `administer_system` |
+| `/v1/admin/models` and its engines, keys, limits, tests, defaults, usage and history | `manage_models` |
+| `/v1/admin/maps` and its providers, keys, default, areas, schedule, prefetch and history | `manage_geospatial` |
+| `GET /v1/grading-scheme` | Signed in |
 | `GET /v1/me/rights` | Signed in: your own rights |
 | `GET /v1/openapi.json` | Signed in: the OpenAPI document |
 
@@ -723,6 +814,9 @@ signed in like every other route. Its `info.version` is the release the deployme
 | `ospreyflow demo list`, `ospreyflow demo add <id>` | The synthetic demo packs, each loaded into its own case |
 | `python -m scripts.seed_ingest_folder` | Writes the demo packs' synthetic source files into the ingest folder |
 | `python -m scripts.load_screening_list <file.yaml>` | Loads or replaces a screening list (section 8) |
+| `python -m scripts.make_home_cases` | Gives every existing dataset its home case, dry run first |
+| `ospreyflow grading change` | Changes the deployment's grading scheme, regrading every drawn item, with its dry run (administration guide, section 8) |
+| `ospreyflow models`, `ospreyflow map` | Model engines and map providers from the command line, beside Admin → Models and Maps |
 
 ### 9.4 The local engine on an NVIDIA GPU
 
