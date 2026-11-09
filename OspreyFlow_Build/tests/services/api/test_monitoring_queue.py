@@ -423,15 +423,17 @@ async def test_the_filters_mine_team_unassigned_and_older_are_in_the_query(store
     case, team = new_id(), f"team-{new_id()}"
     me = _person(roles=[f"role:{team}"])
     today = date(2026, 11, 9)
-    mine = _routed(case, _person(), team, assignee=me.id, status="claimed")
-    quiet = _routed(case, _person(), team, suppressed_until=today, suppress_reason="known")
+    now = datetime.now(UTC)
+    mine = _routed(case, _person(), team, assignee=me.id, status="claimed", created_at=now)
+    quiet = _routed(case, _person(), team, suppressed_until=today, suppress_reason="known",
+                    created_at=now)
     old = _alert("typology:r1", _person(), investigation_id=case, typology="structuring",
                  referent_node_ids=["n-1"], created_at=datetime.now(UTC) - timedelta(days=20))  # fmt: skip
     for a in (mine, quiet, old):
         await alerts.save(a)
 
     async def ids(**kw: Any) -> set[str]:
-        return {r.alert.id for r in await alerts.list_queue(case, me, today=today, **kw)}
+        return {r.alert.id for r in await alerts.list_queue(case, me, **{"today": today, **kw})}
 
     assert await ids(show="mine") == {mine.id}
     assert await ids(show="team") == {mine.id}, "the team's alerts, the suppressed one left out"
@@ -446,7 +448,9 @@ async def test_the_filters_mine_team_unassigned_and_older_are_in_the_query(store
 async def test_a_dataset_alert_is_in_every_case_reading_its_dataset_and_no_other(stores: Any) -> None:
     """ADR-146 decision 7: an analyst's alert to the dataset is raised into its home case and is in
     the queue of every case reading the dataset; a case reading another dataset is not given it, nor
-    a reader outside any case. Red with the dataset clause reading the reader's reach as unlimited."""
+    a reader outside any case. Red with the dataset clause admitting nothing (the alert is then in
+    its home case alone); what keeps it from a case on another dataset is the reach clause every
+    kind shares, so a plant widening this clause alone stays green (rule 15, recorded)."""
     _, alerts = stores
     home, elsewhere = new_id(), new_id()
     raised = _alert(f"analyst:dataset:ds-1", _person(), investigation_id=home, dataset_id="ds-1",

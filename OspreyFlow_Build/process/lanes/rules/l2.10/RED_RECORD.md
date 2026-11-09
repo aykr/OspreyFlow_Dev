@@ -83,3 +83,28 @@ Postgres runs (§1) were under the rules lease on stack b.
   The unresolved deployer is `test_a_rule_whose_deployer_cannot_be_resolved_is_said_in_its_audit`.
 - **The filters and a dataset alert's reach** are live (`test_monitoring_queue.py`'s two new cases), run
   in the second pass.
+
+## 6. The second live pass (rules lease, stack b, a75bbb8, 01:36–02:13Z), and after
+
+- 511 passed and 4 failed in the same 47 files:
+  - the filter case: its alerts used the fixture's fixed date, and its helper passed `today` twice; both
+    fixed and green;
+  - the address's timing case: the hidden alert's worst was 253.9 ms against its 250 ms quantum, while
+    `make ci` ran beside it. That is L2.9's Q3 residual, still the owner's. It passed when re-taken
+    alone;
+  - two cases that fail on main and are not this step's: `test_kyc_rules.py`'s true positive (red since
+    L2.8c, `gates/47435fa.live.txt`), and the repoint journal case, which reads another test's
+    leftover records and passes alone.
+- **Reds taken under the lease after the pass.**
+  - The suppressed clause in `list_queue` opened. Red: the filter case.
+  - The rule audit's routing check removed. Red:
+    `test_typology_rules.py::test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_its_team`.
+  - The dataset alert's clause admitting nothing. Red: its reach case.
+- **A plant that stayed green.** The dataset clause widened to every dataset. The reach clause every kind
+  shares already keeps the alert out of a case on another dataset, so the plant proved nothing (rule
+  15). The test now says so.
+- **Keyboard (with the registry patch applied, uncommitted).** 667 passed, 1 skipped and 2 failed, both in
+  `ingest-studio.spec.ts`. They were mine: the sentence builder read the team list from a harness
+  answering something else, which stopped the Studio's Checks on load. Fixed (`221d489`), and the spec
+  is green alone (46).
+- **Axe.** 650 passed.
