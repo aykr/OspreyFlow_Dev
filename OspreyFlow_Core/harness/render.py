@@ -1601,8 +1601,6 @@ def _render_env(config: OspreyConfig) -> str:
             if config.connectors.secrets
             else []
         ),
-        # ADR-143 decision 11: the scheme drawn items are graded in (`grading.scheme`).
-        f"OSPREY_GRADING_SCHEME={config.grading.scheme}",
         # ADR-143 decision 11 and Amendment 6: the scheme drawn items are graded in, by name, and a
         # scheme file's grades beside it (the Conduit never reads the file itself).
         *_grading_env(config),

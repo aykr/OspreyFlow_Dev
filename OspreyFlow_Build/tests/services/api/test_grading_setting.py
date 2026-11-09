@@ -149,6 +149,8 @@ def test_a_scheme_file_is_read_beside_osprey_yaml_and_rendered_with_its_grades(
     config = load_config(tmp_path / "osprey.yaml")
     assert config.grading.resolved().model_dump() == FORCE
     env = _render_env(config)
+    # Once, by the scheme's name: never the file's path (a second line, found at a rebase).
+    assert env.count("OSPREY_GRADING_SCHEME=") == 1
     assert "OSPREY_GRADING_SCHEME=force-4x3\n" in env
     assert f"OSPREY_GRADING_GRADES={GradingSchemeAnswer(**FORCE).model_dump_json()}\n" in env  # type: ignore[arg-type]
 
