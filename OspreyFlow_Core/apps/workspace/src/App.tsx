@@ -75,7 +75,8 @@ import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram"
 import { MapView } from "./map/MapView";
 import { MatrixView } from "./matrix/MatrixView";
 import { fetchCaseInfluencers } from "./strength/api";
-import { defaultProvider, fetchMapConfig } from "./map/providers";
+import { searchPlaces } from "./map/places";
+import { defaultProvider, fetchMapConfig, switchableProviders } from "./map/providers";
 import { instantAtFraction, itemsUpTo } from "./playback/math";
 import {
   fetchOntologyRegistry,
@@ -2004,6 +2005,14 @@ export function App() {
                     <MapView
                       graph={workingSetRef.current.graph}
                       provider={provider}
+                      // P4: the basemap switch and the place search over the case's gazetteer.
+                      providers={switchableProviders(mapConfig)}
+                      searchPlaces={
+                        investigationId
+                          ? (query) =>
+                              searchPlaces(API_BASE_URL, bearerToken, investigationId, query)
+                          : undefined
+                      }
                       nodeCoordinates={nodeCoordinates}
                       geoBins={geoBins}
                       snailTrail={revealedSightings}
