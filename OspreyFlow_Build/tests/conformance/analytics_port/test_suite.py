@@ -2541,9 +2541,13 @@ async def test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the
     (largest total 12); one microsecond less, it is (18)."""
     from datetime import timedelta
 
-    third = _day(180) + timedelta(microseconds=past_the_edge)
+    off = timedelta(microseconds=500)  # off every second and millisecond, so no grid lands on an edge
+    third = _day(180) + off + timedelta(microseconds=past_the_edge)
     events = [
-        _paid(0, 5.0), _paid(90, 7.0),
+        _event(occurred_at=_day(0) + off, edge_type="TRANSACTED", source_id="acct-a", target_id="acct-b",
+               properties={"amount": 5.0}),
+        _event(occurred_at=_day(90) + off, edge_type="TRANSACTED", source_id="acct-a", target_id="acct-b",
+               properties={"amount": 7.0}),
         _event(occurred_at=third, edge_type="TRANSACTED", source_id="acct-a", target_id="acct-b",
                properties={"amount": 11.0}),
     ]  # fmt: skip
@@ -2552,6 +2556,29 @@ async def test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the
         ninety = await adapter.event_frequency(_frequency(90, amount="amount", window=wide), OFFICIAL)
     assert ninety.nodes["acct-a"].most_in_span == 2  # 0 and 90, the span's far end included
     assert ninety.nodes["acct-a"].largest_total == largest
+
+
+async def test_frequency_counts_events_at_one_instant_together(factory: AnalyticsAdapterFactory) -> None:
+    """Ties: three events at one instant are each in every span that holds that instant, as a RANGE
+    frame counts its peers, never one at a time in an arbitrary order."""
+    events = [_paid(0), _paid(0), _paid(0), _paid(5), _paid(5.5), _paid(6)]
+    async with factory.context(events) as adapter:
+        three = await adapter.event_frequency(_frequency(3), OFFICIAL)
+    assert three.nodes["acct-a"].most_in_span == 3
+
+
+async def test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The total a rule compares is the same on every adapter: 0.1 and 0.2 make 0.3, not
+    0.30000000000000004. An amount past a decimal of 38 digits, 9 after the point (1e30, inf), is no
+    amount: the event is counted, its amount is not, and is never read as 0."""
+    async with factory.context([_paid(0, 0.1), _paid(1, 0.2)]) as adapter:
+        tenths = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+    async with factory.context([_paid(0, 1e30), _paid(1, "inf")]) as adapter:  # type: ignore[arg-type]
+        huge = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+    assert tenths.nodes["acct-a"].largest_total == 0.3
+    assert (huge.nodes["acct-a"].most_in_span, huge.nodes["acct-a"].largest_total) == (2, None)
 
 
 async def test_frequency_counts_a_subject_at_either_end_and_each_event_once(
@@ -2594,7 +2621,12 @@ async def test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first
     hidden = [_paid(0.5, 50_000, classification="SECRET"),
               _paid(0.7, 50_000, handling_code="R", owning_unit="unit-2", originator="unit-2"),
               _event(occurred_at=datetime(2025, 1, 1, tzinfo=UTC), edge_type="TRANSACTED", source_id="acct-a",
-                     target_id="acct-hidden", classification="SECRET")]  # fmt: skip
+                     target_id="acct-hidden", classification="SECRET"),
+              # The same two shapes with the subject at the far end: the other branch's access step.
+              _event(occurred_at=_day(0.6), edge_type="TRANSACTED", source_id="acct-b", target_id="acct-a",
+                     classification="SECRET", properties={"amount": 50_000}),
+              _event(occurred_at=_day(0.8), edge_type="TRANSACTED", source_id="acct-b", target_id="acct-a",
+                     handling_code="R", owning_unit="unit-2", originator="unit-2", properties={"amount": 50_000})]  # fmt: skip
     events = [_paid(0, 100), _paid(1, 100), *hidden]
     async with factory.context(events) as adapter:
         official = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
@@ -2602,13 +2634,15 @@ async def test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first
         only_hidden = await adapter.event_frequency(_frequency(7, nodes=["acct-hidden"]), OFFICIAL)
     assert (official.nodes["acct-a"].most_in_span, official.nodes["acct-a"].largest_total) == (2, 200.0)
     assert official.nodes["acct-a"].first_at == _day(0)
-    assert cleared.nodes["acct-a"].most_in_span == 3  # the SECRET one, for a reader who may see it
+    assert cleared.nodes["acct-a"].most_in_span == 4  # the two SECRET ones, for a reader who may see them
     assert cleared.nodes["acct-a"].first_at == datetime(2025, 1, 1, tzinfo=UTC)
     assert only_hidden.nodes == {}  # a node reached only through what is hidden is not there at all
 
 
 async def test_frequency_counts_only_this_case_and_the_link_types_named(factory: AnalyticsAdapterFactory) -> None:
     events = [_paid(0), _paid(1, investigation_scope="case-2"),
+              _event(occurred_at=_day(1), edge_type="TRANSACTED", source_id="acct-b", target_id="acct-a",
+                     investigation_scope="case-2"),
               _event(occurred_at=_day(1), edge_type="COMMUNICATED_WITH", source_id="acct-a", target_id="acct-b")]  # fmt: skip
     async with factory.context(events) as adapter:
         transacted = await adapter.event_frequency(_frequency(7), OFFICIAL)

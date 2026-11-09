@@ -768,9 +768,13 @@ class AnalyticsClickHouseAdapter:
         subjects = req.filter.node_ids
         marks = ",".join("?" for _ in subjects)
         amount = (
-            "CAST(NULL AS Nullable(Float64))"
+            "CAST(NULL AS Nullable(Decimal128(9)))"
             if req.amount_property is None
-            else f"toFloat64OrNull({_field_expression(req.amount_property)})"
+            # A decimal of 38 digits, 9 after the point, as the DuckDB adapter sums it, read from
+            # the number's shortest text (so 0.1 and 0.2 make 0.3); one that is not such a decimal
+            # (1e30, inf) is no amount, NULL, counted as none below.
+            else "toDecimal128OrNull(toString("
+            f"toFloat64OrNull({_field_expression(req.amount_property)})), 9)"
         )
         # Each event once per subject it touches: an event to itself is one event, not two.
         touched = (
@@ -787,13 +791,13 @@ class AnalyticsClickHouseAdapter:
         # with its instant (a RANGE frame with no offset), less the running figures of the last
         # instant strictly before `at - span_days` (an ASOF JOIN on the DateTime64 itself, exact to
         # the microsecond the column holds). Sorting, not pairing: n log n per subject. The sums are
-        # Decimal, so the subtraction is exact; an amount is read as its shortest decimal text.
+        # Decimal, so the subtraction is exact.
         days = int(req.span_days)
         rows = await self._ch.rows(
             f"WITH touched AS ({touched}), "
             "running AS ("
-            "  SELECT node, at, count() OVER w AS c, count(amount) OVER w AS nn, sum(ifNull("
-            "  toDecimal128OrNull(toString(amount), 9), toDecimal128(0, 9))) OVER w AS s "
+            "  SELECT node, at, count() OVER w AS c, count(amount) OVER w AS nn, "
+            "  sum(ifNull(amount, toDecimal128(0, 9))) OVER w AS s "
             "  FROM touched "
             "  WINDOW w AS (PARTITION BY node ORDER BY at "
             "  RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"
@@ -802,7 +806,8 @@ class AnalyticsClickHouseAdapter:
             "max(if(a.nn = b.nn, CAST(NULL AS Nullable(Float64)), toFloat64(a.s - b.s))) "
             f"FROM (SELECT node, at - INTERVAL {days} DAY AS cut, c, nn, s FROM running) AS a "
             "ASOF LEFT JOIN running AS b ON a.node = b.node AND a.cut > b.at "
-            "GROUP BY a.node",
+            # An event with nothing before its span joins no row: its figures less zeros.
+            "GROUP BY a.node SETTINGS join_use_nulls = 0",
             [*predicate.params, *subjects, *predicate.params, *subjects],
         )
         window = req.filter.window
@@ -844,9 +849,13 @@ class AnalyticsClickHouseAdapter:
         subjects = req.filter.node_ids
         marks = ",".join("?" for _ in subjects)
         amount = (
-            "CAST(NULL AS Nullable(Float64))"
+            "CAST(NULL AS Nullable(Decimal128(9)))"
             if req.amount_property is None
-            else f"toFloat64OrNull({_field_expression(req.amount_property)})"
+            # A decimal of 38 digits, 9 after the point, as the DuckDB adapter sums it, read from
+            # the number's shortest text (so 0.1 and 0.2 make 0.3); one that is not such a decimal
+            # (1e30, inf) is no amount, NULL, counted as none below.
+            else "toDecimal128OrNull(toString("
+            f"toFloat64OrNull({_field_expression(req.amount_property)})), 9)"
         )
         touched = (
             f"SELECT source_id AS node, occurred_at, {amount} AS amount FROM events "

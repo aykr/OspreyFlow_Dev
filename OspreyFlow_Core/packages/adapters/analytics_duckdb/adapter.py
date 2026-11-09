@@ -727,9 +727,13 @@ class AnalyticsDuckDBAdapter:
         subjects = req.filter.node_ids
         marks = ",".join("?" for _ in subjects)
         amount = (
-            "NULL"
+            "CAST(NULL AS DECIMAL(38, 9))"
             if req.amount_property is None
-            else f"TRY_CAST({_field_expression(req.amount_property)} AS DOUBLE)"
+            # Summed as a decimal of 38 digits, 9 after the point, as the ClickHouse adapter sums
+            # it, so a total that a rule compares is the same on both: 0.1 and 0.2 make 0.3. An
+            # amount that is not such a decimal (1e30, inf) is no amount.
+            else f"TRY_CAST(TRY_CAST({_field_expression(req.amount_property)} AS DOUBLE)"
+            " AS DECIMAL(38, 9))"
         )
         # Each event once per subject it touches: an event to itself is one event, not two.
         touched = (
