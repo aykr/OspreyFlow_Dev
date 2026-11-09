@@ -47,6 +47,7 @@ from schemas.sources import (
     SqlConnectionSettings,
     SqlRead,
     address_is_inside,
+    admitted_privately,
     literal_ip,
     refuse_inside_host,
 )
@@ -96,14 +97,31 @@ class Readers:
         return addresses[0]
 
 
-def refuse_host(kind: str, host: str, *, allowed_hosts: Collection[str] | None) -> list[str]:
+def private_allow_list() -> list[str]:
+    """The private hosts and networks the operator admits the connectors to (ADR-140 Amendment 15),
+    as `apply` renders them from `osprey.yaml`'s `connectors.private_hosts`."""
+    raw = os.environ.get("OSPREY_CONNECTOR_PRIVATE", "")
+    return [entry.strip() for entry in raw.split(",") if entry.strip()]
+
+
+def refuse_host(
+    kind: str,
+    host: str,
+    *,
+    allowed_hosts: Collection[str] | None,
+    private_hosts: Collection[str] | None = None,
+) -> list[str]:
     """Where a SQL or API connection may reach (ADR-147 decision 2a's rule, with `map_admin`'s own
     lookups; the orchestrator's review of L1.6): never this machine, a dotless name of the
     deployment's own (`postgres`, `keycloak`), or an address that is loopback, private, link-local
     (a cloud's metadata service), reserved, unspecified or multicast, written in any form or
     resolved to now; and, with `allowed_hosts`, only a host the operator's egress allow-list names.
-    Called when a connection is named and again before every connection or request, since DNS can
-    change in between. Refused in words; nothing is read."""
+    A name resolving to a private address is admitted only where the operator's list
+    (`private_hosts`, else `OSPREY_CONNECTOR_PRIVATE`) names it or a network it resolves into, and
+    never to this machine or the metadata service (ADR-140 Amendment 15). Called when a connection
+    is named and again before every connection or request, since DNS can change in between.
+    Refused in words; nothing is read."""
+    private = private_allow_list() if private_hosts is None else private_hosts
     try:
         refuse_inside_host(host)
     except ValueError as refused:
@@ -121,9 +139,10 @@ def refuse_host(kind: str, host: str, *, allowed_hosts: Collection[str] | None) 
     addresses = resolve_host(bare)
     for address in addresses:
         ip = literal_ip(address)
-        if ip is None or address_is_inside(ip):
+        if ip is None or (address_is_inside(ip) and not admitted_privately(bare, ip, private)):
             raise ConnectorRefused(
-                f"{bare} resolves inside this deployment or its network; nothing was read"
+                f"{bare} resolves inside this deployment or its network, and the operator has not "
+                f"admitted it (osprey.yaml's connectors.private_hosts); nothing was read"
             )
     return addresses
 

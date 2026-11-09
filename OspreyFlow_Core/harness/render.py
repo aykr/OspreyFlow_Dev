@@ -1557,6 +1557,13 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_HOTLIST_AUDIENCE={config.monitoring.hotlist_audience}",
         "OSPREY_HOTLIST_AUDIENCE_EDITABLE="
         + ("true" if config.monitoring.hotlist_audience_editable else "false"),
+        # ADR-140 Amendment 15: the private hosts and networks the operator admits the Studio's
+        # connectors to (names and networks, never a secret).
+        *(
+            ["OSPREY_CONNECTOR_PRIVATE=" + ",".join(config.connectors.private_hosts)]
+            if config.connectors.private_hosts
+            else []
+        ),
         "",
         "# Ports published besides the front proxy's: the Conduit only when network.expose_conduit",
         "# asks, ArcadeDB on loopback only (ADR-114 Amendment 4 decision 3). Each is overridable.",

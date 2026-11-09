@@ -1784,6 +1784,8 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `monitoring` | section | — | Monitoring and alerts: whom a new hotlist's alerts reach, and who changes it. |
 | `monitoring.hotlist_audience` | `only_me` \| `team` | `only_me` | Whom a new hotlist's alerts reach: its owner alone (only_me), or also the owner's team, the people of the owner's organisational unit (team). Applies to hotlists made after it is set, never to an existing one. |
 | `monitoring.hotlist_audience_editable` | bool | true | Whether a hotlist's owner may choose its audience, when making it or later. When false, every new hotlist takes hotlist_audience and a change is refused. |
+| `connectors` | section | — | The Studio's SQL and API connectors: the private hosts an operator admits them to. |
+| `connectors.private_hosts` | list of str | — | The private hosts a SQL or API connection may reach: each a host name in full (nomis-replica.client.internal) or a network inside 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 or fc00::/7 (10.20.0.0/16) that a connection's host name resolves into. Everything else inside a network stays refused, and this machine, a cloud's metadata service and the deployment's own services are never admitted. A host must still be on the egress allow-list. |
 | `mail` | section or none | none | A mail server, for invitations and password resets by email. |
 | `mail.host` | str | required | The mail server's name |
 | `mail.port` | int | `587` | The mail server's port. |
