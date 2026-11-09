@@ -31510,16 +31510,28 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
      over it**, though the store's merge keeps the newest write.
    - **A re-build refreshes the rest**: the Admin route and both command-line builds copy the places again
      into every recorded dataset once the places commit, drop the record of a dataset no longer there
-     (never writing into one), and revert the copy of a place gone.
-   - **`DELETE` reverts every copy but those a case's own load, link or confirmation rests on**, so no
-     case is left a link to nothing; the links are read as the Conduit reads the dataset and every analyst
-     layer of a case reading it, at the highest clearance and with every handling code, as the dataset's
-     unit. A kept copy keeps its gazetteer mark (3b holds). The answer counts the kept copies **the asker
-     may read** (`copies_kept`) and says so in words (`said`); one above their clearance is kept and not
-     counted.
-   - **Open, put to the orchestrator** (an access question): a kept copy the asker may read, kept for a
-     link they may not, still shows them that something rests on it, since it stays; neither keeping it
-     (no link left to nothing) nor reverting it (no existence told) can satisfy both.
+     (never writing into one).
+   - **A removal deletes nothing** (the orchestrator's ruling (d) of 9 November 2026, which replaces
+     the removal clause of the brief; the owner's ruling 6 named only the copying). Every copy stays,
+     whatever rests on it, as the dataset's own, with its gazetteer mark (3b holds); the record is
+     kept as removed, so a re-build no longer refreshes it and the place search no longer offers its
+     copies (keyed on the mark and the removal record, the same for every copy). The answer says so
+     in fixed words and gives no count, so a link a reader may not see (above their clearance, in a
+     case's analyst layer) changes nothing they are told or then read (rule 3): there is nothing to
+     compare. Adding the gazetteer again takes the record back and re-links the same copies, never a
+     second set. **A re-build reverts nothing either**: the copy of a place the gazetteer no longer
+     holds stays, as the dataset's own, still offered, since reverting it would carry the same
+     signal. No link read at the highest clearance decides anything.
+   - **Failures.** A copy that fails part way leaves its pages committed and the record in place, so
+     the dataset is said to hold the gazetteer and adding it again finishes the copy, or removing it
+     stops it. One dataset's failed refresh is said in the build's words and neither fails the
+     committed build nor skips the datasets after it. Another unit's gazetteer is refused with the
+     same 404 and words as no gazetteer at all, so the answer tells nothing of which regions another
+     unit has built. The copier reads as the dataset's own unit, so a restricted code is seen.
+   - **A real case load references a copy, never writes onto it**: a recipe's lookup by `osm_id`
+     finds the copy and links to it (`find_node`), so a load does not make the copy the case's; a
+     confirmation or a merge does.
+
 3. **The gazetteer's unit a build setting (ruling 8).** The recipe's `unit-1` is no longer what a build
    uses: *Admin › Maps*' Build takes a unit (empty: the administrator's own), and `ospreyflow map build`
    and `python -m scripts.build_local_basemap` take `--unit` (required). A unit that holds no case and no
@@ -31542,12 +31554,11 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   (`process/lanes/platform/PORT_CONTRACT.diff`); the rendered query and the two live files prove it.
 - **The image's source offer and NOTICE** for the Java runtime are a release step (`spec/00` §7).
 - **The copy is made in the request**, a page at a time; each re-build refreshes every recorded dataset
-  inside its stream. Measured: 2,000 planted places in 42.7 s on a leased test stack under other lanes'
-  load (about 21 s per 1,000; `test_a_region_is_copied_in_bounded_pages_and_timed`), so a region of
-  100,000 places would take over half an hour per dataset: a background job is the likely next step.
-- **The command-line builds' refresh leaves an open canvas as it was**: the working sets are the
-  Conduit's, so a copy reverted by a command-line re-build (its place gone) leaves an open case's canvas
-  when the case is next opened. The Admin route takes it out at once.
+  inside its stream. Measured under the platform lane's lease on stack a, 9 November 2026 (the
+  machine shared with other lanes' runs, load average 13 to 21; the lease covers the stack, not the
+  machine): 2,000 planted places in 42.7 s at 08:20 UTC and in 29.7 s at 08:28 UTC, about 15 to 21 s
+  per 1,000 (`test_a_region_is_copied_in_bounded_pages_and_timed`). A region of 100,000 places would
+  take over twenty minutes per dataset: a background job is the likely next step.
 - **planetiler itself was not run in the built image** (no release jar on this machine; tier 1 only, no
   real tiles fetched in tests): the image's `java -version` and the Conduit's builder check were.
 
@@ -31559,15 +31570,19 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   digest, jlinked, declared, on the `PATH`).
 - **Copies**: live, `tests/ingest/test_case_gazetteer_copies_live.py` (found by name at its point and a
   SECRET place not; no identifier on a node read, an expansion or a search; never matched by its `osm_id`
-  or `uprn`, more than a page sharing the prefix; a re-copy writes no second copy and reverts a place
-  gone; a removal reverts a copy whatever rests on it, and a re-add brings the link back; a case load
-  writing onto a copy through the real merge keeps it one, withheld, and kept by a removal) and
+  or `uprn`, more than a page sharing the prefix; a re-copy writes no second copy and keeps a place
+  gone; a restricted case load on a copy stays the case's at a re-build; a real case load references
+  the copies and a refresh after it writes no second set; every page of 2,000 places written; a case load
+  writing onto a copy through the real merge keeps it one, withheld) and
   `tests/ingest/test_case_gazetteer_routes_live.py` (through the routes: the case stays one dataset
   and the Studio's upload, a load a composite case refuses, is made, and refused once the case reads a
   composite; search, seed, expansion and the type-ahead carry and match no
-  identifier; `DELETE`); offline, `tests/services/api/test_case_gazetteers_routes.py` (which gazetteers,
-  the refusals and their words, what a copy is written as, what a removal reverts, the dataset's
-  record seen by every case reading it, a failed re-add, a rebuild skipping a dataset gone),
+  identifier; a removal in a case whose copy has a SECRET link and in one whose copies have none,
+  answered and then read alike, and a re-add re-linking the same copies); offline, `tests/services/api/test_case_gazetteers_routes.py` (which gazetteers,
+  the refusals and their words, what a copy is written as, a removal answering alike whatever rests on a copy (red against the
+  build that reverted), another unit's gazetteer answered as none, the dataset's record seen by every
+  case reading it, a failed copy keeping its record, one dataset's failed refresh said alone, a
+  rebuild skipping a dataset gone), the place search leaving a removed gazetteer's copies out,
   `tests/ontology/test_gazetteer_identifiers_withheld.py` (a copy, and `merge_provenance` keeping it one),
   `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py`, `test_map_places_route.py`; the
   routes' rights and levels, `test_route_rights.py` and `test_investigation_levels.py`.
@@ -31577,7 +31592,6 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   `tests/cli/test_map_verb.py`, `Maps.test.tsx`.
 
 **Cost.** The Conduit's image grows by the jlinked runtime: 61 MB, the image 1.33 GB (arm64). Each
-dataset that takes a gazetteer holds a copy of every place, written a page at a time (about 21 s per
-1,000 places, measured as above); a re-build rewrites every recorded dataset's copies but those the case
-made its own; a removal reads the dataset's `Location`s and asks, a hundred copies at a time, which a
-link rests on.
+dataset that takes a gazetteer holds a copy of every place, written a page at a time (15 to 21 s per
+1,000 places, measured as above), and keeps them after a removal; a re-build rewrites every recorded
+dataset's copies but those the case made its own. A removal is one record's update.

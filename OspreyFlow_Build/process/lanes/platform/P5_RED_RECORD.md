@@ -42,3 +42,16 @@ After the orchestrator's independent review (offline; live on stack a under the 
 | 8: `git` not passed silently | the git detection off | `…::test_git_installed_and_undeclared_is_refused` | `[] == [('api', 'git', 'undeclared')]` |
 | 10: no gazetteer node id in a copy's source | the locator `place <node id>` | `test_adding_copies_each_place_into_the_dataset` | the id in the copy |
 | 12: a unit holding only a gazetteer holds nothing | `units_held` counting gazetteer datasets | `test_gazetteer_dataset_registration.py::test_a_unit_holding_only_a_gazetteer_holds_nothing` | `unit-9` held |
+
+**The orchestrator's ruling (d) on item 7, and the lane's review of round 2** (offline unless said; live on stack a under the platform lease, 08:27–08:37 UTC, and the stack released at the orchestrator's word, the machine's swap full). Ruling (d) replaces item 7's rows above: a removal deletes nothing.
+
+| Fix | Plant (at the call site) | Test | Red |
+| --- | --- | --- | --- |
+| (d): a removal answers and leaves the same whatever rests on a copy | the build before (d), as committed at `6313d29` | `test_case_gazetteers_routes.py::test_a_removal_tells_the_author_the_same_whatever_rests_on_a_copy` | `'1 place stays…'` against `None`; the copy reverted in one and not the other |
+| (d): a removal deletes no copy and stops its refresh | the same | `…::test_removing_keeps_every_copy_with_its_mark_and_stops_its_refresh` | the copy reverted |
+| (d): the place search leaves a removed gazetteer's copies out | `is_gazetteer_place`: the removal record not judged | `test_map_places_route.py::test_a_removed_gazetteer_s_copies_are_no_longer_offered` | Cranwell offered |
+| Review 3: another unit's gazetteer answered as none | `_dataset_and_gazetteer`: 409 for another unit's | `…::test_another_unit_s_gazetteer_is_refused_as_one_that_does_not_exist` | the two answers differ |
+| Review 4: a failed copy keeps its record | the record removed on failure | `…::test_a_failed_copy_keeps_the_record_so_the_copies_written_can_be_removed` (2) | `[] == [('case-a', …)]` |
+| Review 6: one dataset's failed refresh said alone | `refresh_cases`: the failure not caught | `…::test_one_dataset_s_failed_refresh_neither_stops_the_others_nor_the_build` | `RuntimeError` out of the refresh |
+| Review 11: `git`'s exemption pinned to its Dockerfile and licence | the exemption by runtime name alone | `test_runtime_licences.py::test_git_declared_is_named_as_awaiting_the_owner_never_passed_silently` | `git` under AGPL passed |
+| Review 11: every run names it | `main()`: the awaiting lines not said | `…::test_every_run_names_what_awaits_the_owner` | no line |
