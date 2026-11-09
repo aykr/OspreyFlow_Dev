@@ -122,6 +122,9 @@ const opened = (b: HeldBoard) => ({
   markings: MARKINGS,
   ceiling: "OFFICIAL-SENSITIVE",
   grading_scheme: "5x5x5",
+  // As the Conduit's opened board since L3.7 (ADR-143 Amendment 6): the scheme's grades, from GRADING_PARTS;
+  // the Glass keeps no list of its own, so without them no grade is offered.
+  grading_grades: { scheme: "5x5x5", source: ["A", "B", "C", "D", "E"], intelligence: ["1", "2", "3", "4", "5"], handling: ["1", "2", "3", "4", "5"] },
   may_draw: b.created_by === reader,
 });
 
