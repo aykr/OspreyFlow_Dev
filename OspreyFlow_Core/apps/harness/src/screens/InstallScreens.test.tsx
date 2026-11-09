@@ -298,6 +298,19 @@ describe("ReviewScreen", () => {
     expect(onInstall).toHaveBeenCalled();
   });
 
+  it("says a backups folder never chosen goes to ~/OspreyFlow/backups, not the placeholder", async () => {
+    render(
+      <ReviewScreen
+        state={state({ answers: { mode: "lite" as const } })}
+        config={{ components: { storage: { backups: "/var/lib/osprey/backups" } } }}
+        onInstall={vi.fn()}
+        onSaveAnswers={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("Docker is installed.")).toBeTruthy());
+    expect(screen.getByText("Backups folder: not chosen (backups go to ~/OspreyFlow/backups)")).toBeTruthy();
+  });
+
   it("offers Save answers and the B6 sentence for Small, and no Install", async () => {
     const onSaveAnswers = vi.fn().mockResolvedValue(undefined);
     const small = state({ mode: "small", answers: { mode: "small" } });

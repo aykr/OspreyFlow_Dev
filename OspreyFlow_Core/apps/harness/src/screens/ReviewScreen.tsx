@@ -5,6 +5,11 @@ import type { DoctorResult, InstallAnswers, InstallState, OspreyConfig } from ".
 
 const MODE_WORDS = { lite: "Lite", small: "Small", enterprise: "Enterprise" } as const;
 
+
+// The schema's backups default, which `ospreyflow backup` reads as no folder named (ADR-114
+// Amendment 38): the backup then writes to ~/OspreyFlow/backups, so that is what Review says.
+const BACKUPS_PLACEHOLDER = "/var/lib/osprey/backups";
+
 export function ReviewScreen({
   state,
   config,
@@ -63,7 +68,12 @@ export function ReviewScreen({
           <>
             <li>Ingest folder: {storage?.ingest ?? "not chosen"}</li>
             <li>Basemap folder: {storage?.tiles ?? "not chosen"}</li>
-            <li>Backups folder: {storage?.backups ?? "not chosen"}</li>
+            <li>
+              Backups folder:{" "}
+              {storage?.backups && storage.backups !== BACKUPS_PLACEHOLDER
+                ? storage.backups
+                : "not chosen (backups go to ~/OspreyFlow/backups)"}
+            </li>
           </>
         ) : (
           <>
