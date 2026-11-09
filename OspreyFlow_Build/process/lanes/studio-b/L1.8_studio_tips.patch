@@ -808,8 +808,8 @@ index 0000000..03af7c6
 +// decision 12; L1.8). The Studio's actions that need a right each take it from here: the button stays
 +// focusable (`aria-disabled`, so a keyboard reaches it and its tip, rule 13), does nothing when pressed,
 +// and is described by a tip in words from `help/roles.ts` — the right's name and the built-in roles that
-+// hold it, never a role id or a person (the orchestrator's option C of 9 November 2026, until the owner
-+// rules on naming people). The route refuses all the same (rule 3): this is words, not access control.
++// hold it, never a role id or a person (the owner's ruling of 9 November 2026, ADR-145 Amendment 7).
++// The route refuses all the same (rule 3): this is words, not access control.
 +import { createContext, useContext, useId, type MouseEvent } from "react";
 +
 +import { Button, type ButtonProps } from "../../design/primitives/Button";

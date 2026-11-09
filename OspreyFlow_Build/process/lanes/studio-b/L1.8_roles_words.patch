@@ -38,9 +38,9 @@ index 180474a..d5907b9 100644
 +    .sort((a, b) => a.localeCompare(b));
 +}
 +
-+/** Why a person cannot take an action, and which roles can (decision 12 as the orchestrator settled it
-+ * on 9 November 2026, L1.8's option C: the roles that hold the right, never the people, until the owner
-+ * rules on naming people). */
++/** Why a person cannot take an action, and which roles can (decision 12 as the owner ruled it on
++ * 9 November 2026, ADR-145 Amendment 7: the roles that hold the right, never the people, so no one
++ * learns who holds a right). */
 +export function whyNotByRole(right: Right): string {
 +  const need = `You need ${rightName(right)}`;
 +  const roles = rolesHolding(right);
