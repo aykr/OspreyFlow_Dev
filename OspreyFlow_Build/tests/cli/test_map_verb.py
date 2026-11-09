@@ -50,14 +50,14 @@ def test_each_verb_runs_the_conduit_s_own_maps_code_in_its_container(
 
     assert rig("map", "verify") == 0
     assert rig("map", "prefetch") == 0
-    assert rig("map", "build", "rutland") == 0
+    assert rig("map", "build", "rutland", "--unit", "unit-7") == 0
     argvs = [c.argv for c in rig.runner.calls]
     assert [a[a.index("services.api.map_admin") + 1:] for a in argvs] == [
         ["verify", "--by", argvs[0][-1]], ["prefetch", "--by", argvs[1][-1]],
-        ["build", "rutland", "--by", argvs[2][-1]],
+        ["build", "rutland", "--by", argvs[2][-3], "--unit", "unit-7"],
     ]  # fmt: skip
     assert all(a[: len(_compose(rig)) + 3] == [*_compose(rig), "exec", "-T", "api"] for a in argvs)
-    assert all(a[-1].startswith("cli:") for a in argvs)
+    assert all(a[a.index("--by") + 1].startswith("cli:") for a in argvs)
 
 
 def test_a_refusal_in_the_conduit_fails_the_verb(rig: Rig, tmp_path: Path) -> None:
@@ -78,7 +78,7 @@ def test_build_places_the_jar_and_says_where_the_build_runs(
     jar = tmp_path / "planetiler-0.9.jar"
     jar.write_bytes(b"PK jar")
 
-    assert rig("map", "build", "rutland", "--planetiler-jar", str(jar)) == 0
+    assert rig("map", "build", "rutland", "--unit", "unit-1", "--planetiler-jar", str(jar)) == 0
 
     assert (tiles / "planetiler" / "planetiler.jar").read_bytes() == b"PK jar"
     assert "built by the Conduit, in its container" in capsys.readouterr().out
@@ -90,6 +90,17 @@ def test_build_refuses_a_jar_that_is_not_one(
     _installed(rig, tmp_path / "tiles")
     extract = tmp_path / "rutland.osm.pbf"
     extract.write_bytes(b"OSMHeader")
-    assert rig("map", "build", "rutland", "--planetiler-jar", str(extract)) != 0
+    assert rig("map", "build", "rutland", "--unit", "unit-1", "--planetiler-jar", str(extract)) != 0
     assert "not a .jar" in capsys.readouterr().err
+    assert rig.runner.calls == []
+
+
+def test_build_needs_the_unit_the_gazetteer_is_held_by(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-147 Amendment 2 (the owner's ruling 8): the unit is the build's setting, never the
+    recipe's `unit-1`; the Conduit refuses one that holds nothing, in words."""
+    _installed(rig, tmp_path / "tiles")
+    assert rig("map", "build", "rutland") == 2
+    assert "required: --unit" in capsys.readouterr().err
     assert rig.runner.calls == []

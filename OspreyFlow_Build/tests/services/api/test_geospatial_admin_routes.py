@@ -22,6 +22,7 @@ from the caller) with the build or its download and planetiler run replaced, the
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +42,7 @@ from services.api.app import (
     get_principal,
     require_admin_role,
 )
-from services.api.datasets import InMemoryDatasetStore
+from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.map_admin import InMemoryMapAdminAudit, MapAdmin, MapKeyFile, MapSettingsFile
 
 from schemas.domain import Principal, TxId
@@ -238,6 +239,49 @@ def test_the_build_loads_the_places_into_the_regions_gazetteer_dataset_with_thei
     ]
     held = DATASETS.datasets["gazetteer-osm-rutland"]
     assert (held.owning_unit, held.created_by) == ("unit-1", "admin-1")
+
+
+def test_the_build_s_unit_is_a_setting_and_an_unknown_one_is_refused_in_words_before_anything(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-147 Amendment 2 (the owner's ruling 8): the gazetteer's unit is the build's setting, no
+    longer the recipe's `unit-1`. A unit holding no case and no dataset here is refused in words,
+    before the extract is fetched or a place written; a unit that holds one is the unit of the
+    places and of their dataset."""
+    loads = _fake_gazetteer(monkeypatch)
+    built: list[str] = []
+
+    async def _fake_build(admin: Any, *, load_places: Any, settle: Any, **_kwargs: Any) -> Any:
+        built.append("built")
+        counts = await load_places(Path("/tmp/rutland.osm.pbf"))
+        await settle()
+        return ("rutland.pmtiles", *counts)
+
+    monkeypatch.setattr("services.api.map_admin.build_basemap", _fake_build)
+    refused = client.post(
+        "/v1/admin/geospatial/build-basemap", json={"region": "rutland", "unit": "unit-nowhere"}
+    )
+    assert refused.status_code == 422
+    assert refused.json()["detail"].startswith(
+        "No case or dataset in this deployment is held by the unit 'unit-nowhere'"
+    )
+    assert (built, loads) == ([], [])
+
+    DATASETS.datasets["d-unit-7"] = Dataset(
+        id="d-unit-7", name="Unit 7's", owning_unit="unit-7", created_at=datetime.now(UTC),
+        created_by="someone",
+    )  # fmt: skip
+    DATASETS.datasets.pop("gazetteer-osm-rutland", None)
+    try:
+        response = client.post(
+            "/v1/admin/geospatial/build-basemap", json={"region": "rutland", "unit": "unit-7"}
+        )
+        assert '"returncode": 0' in response.text, response.text
+        assert [load["unit"] for load in loads] == ["unit-7"]
+        assert DATASETS.datasets["gazetteer-osm-rutland"].owning_unit == "unit-7"
+    finally:
+        DATASETS.datasets.pop("d-unit-7", None)
+        DATASETS.datasets.pop("gazetteer-osm-rutland", None)
 
 
 def test_build_basemap_route_streams_real_progress_and_completes(

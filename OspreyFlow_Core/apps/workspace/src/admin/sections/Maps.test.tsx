@@ -126,6 +126,21 @@ describe("Maps", () => {
     expect(sent.find((s) => s.path === "/v1/admin/geospatial/build-basemap")?.body).toBe(JSON.stringify({ region: "rutland" }));
   });
 
+  it("sends the unit the place names are held by, and says a refused one in the Conduit's words", async () => {
+    // ADR-147 Amendment 2 (the owner's ruling 8).
+    const words = "No case or dataset in this deployment is held by the unit 'unit-9', so a gazetteer cannot be built for it.";
+    const sent = stub((path) =>
+      path === "/v1/admin/geospatial/build-basemap" ? { status: 422, body: { detail: words } } : undefined,
+    );
+    render(<Maps api={API} />);
+    fireEvent.change(await screen.findByLabelText(/Unit the place names are held by/), { target: { value: " unit-9 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Build the basemap" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(words);
+    expect(sent.find((s) => s.path === "/v1/admin/geospatial/build-basemap")?.body).toBe(
+      JSON.stringify({ region: "rutland", unit: "unit-9" }),
+    );
+  });
+
   it("says a build that did not finish in the Conduit's words", async () => {
     const stream = 'event: complete\ndata: {"returncode": 1, "error": "planetiler stopped"}\n\n';
     stub((path) => (path === "/v1/admin/geospatial/build-basemap" ? { status: 200, text: stream } : undefined));

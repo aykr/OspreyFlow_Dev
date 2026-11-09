@@ -77,11 +77,13 @@ export interface BuildOutcome {
 
 /** The build streams its progress (one `data:` line each) and ends with `event: complete`. Read
  * whole, then split, so every line the Conduit said is shown. */
-export async function buildBasemap(api: MapsApi, region: string): Promise<BuildOutcome> {
+/** ADR-147 Amendment 2 (the owner's ruling 8): `unit` is the unit the gazetteer is held by; left
+ * empty, the administrator's own. A unit holding no case or dataset is refused in words. */
+export async function buildBasemap(api: MapsApi, region: string, unit = ""): Promise<BuildOutcome> {
   const response = await fetch(`${api.apiBaseUrl}/v1/admin/geospatial/build-basemap`, {
     method: "POST",
     headers: { Authorization: `Bearer ${api.bearerToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ region }),
+    body: JSON.stringify(unit.trim() ? { region, unit: unit.trim() } : { region }),
   });
   if (!response.ok) throw refusal(response.status, (await response.json().catch(() => ({}))) as { detail?: unknown });
   const lines: string[] = [];

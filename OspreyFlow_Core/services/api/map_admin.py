@@ -1238,6 +1238,7 @@ async def _main(argv: Sequence[str]) -> int:
     build = sub.add_parser("build")
     build.add_argument("region")
     build.add_argument("--by", required=True)
+    build.add_argument("--unit", required=True)
     args = parser.parse_args(argv)
     admin, close = await open_admin()
     try:
@@ -1260,7 +1261,7 @@ async def _main(argv: Sequence[str]) -> int:
             print("Verify passed." if report.passed else "Verify found issues.")
             return 0 if report.passed else 1
         if args.verb == "build":
-            return await _build_here(admin, args.by, args.region)
+            return await _build_here(admin, args.by, args.region, args.unit)
     except MapAdminRefused as refused:
         print(refused.words, file=sys.stderr)
         return 1
@@ -1269,8 +1270,16 @@ async def _main(argv: Sequence[str]) -> int:
     return 1
 
 
-async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
-    """`build` from the command line: the gazetteer loaded through the Conduit's own graph."""
+async def _build_here(admin: MapAdmin, by: str, region: str, unit: str) -> int:
+    """`build` from the command line: the gazetteer loaded through the Conduit's own graph, held by
+    `unit` (ADR-147 Amendment 2, the owner's ruling 8), which is checked before anything runs."""
+    from services.api.map_places import DatasetsUnreachable, UnknownUnit, check_unit_from_env
+
+    try:
+        await check_unit_from_env(unit)
+    except (UnknownUnit, DatasetsUnreachable) as refused:
+        print(str(refused), file=sys.stderr)
+        return 1
     from scripts.build_local_basemap import load_gazetteer
     from services.resolve.trigger import service_principal
 
@@ -1301,6 +1310,7 @@ async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
         report = await load_gazetteer(
             extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
             load_id=f"load-osm-gazetteer-{region}", dataset=gazetteer_dataset_id(region),
+            unit=unit,
         )  # fmt: skip
         return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
@@ -1316,7 +1326,7 @@ async def _build_here(admin: MapAdmin, by: str, region: str) -> int:
         await graph.commit_transaction(held.pop("tx"))
         print(NO_POINTS_HERE)
         try:
-            await register_gazetteer_dataset_from_env(region, by=by)
+            await register_gazetteer_dataset_from_env(region, by=by, unit=unit)
         except DatasetsUnreachable as unreachable:
             # The places are committed; the build goes on, and says how to register them.
             print(str(unreachable), file=sys.stderr)

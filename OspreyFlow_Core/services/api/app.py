@@ -8033,6 +8033,17 @@ async def build_basemap_route(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{body.region!r} is not a known Geofabrik region: {sorted(GEOFABRIK_REGIONS)}",
         )
+    # ADR-147 Amendment 2 (the owner's ruling 8): the gazetteer's unit is the build's setting, the
+    # administrator's own unless named, and refused in words before anything runs.
+    gazetteer_unit = body.unit or principal.org_unit
+    try:
+        map_places.check_unit(
+            gazetteer_unit, await map_places.units_held(datasets), own=principal.org_unit
+        )
+    except map_places.UnknownUnit as unknown:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(unknown)
+        ) from None
 
     async def _events() -> AsyncIterator[bytes]:
         loop = asyncio.get_running_loop()
@@ -8054,13 +8065,16 @@ async def build_basemap_route(
                 extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
                 load_id=f"load-osm-gazetteer-{body.region}",
                 dataset=map_places.gazetteer_dataset_id(body.region), analytics=analytics,
+                unit=gazetteer_unit,
             )  # fmt: skip
             return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
         async def _settle() -> None:
             # Committed before the provider is registered (`map_admin.build_basemap`).
             await graph.commit_transaction(transaction.pop("tx"))
-            await map_places.register_gazetteer_dataset(datasets, body.region, by=principal.id)
+            await map_places.register_gazetteer_dataset(
+                datasets, body.region, by=principal.id, unit=gazetteer_unit
+            )
 
         async def _run_build() -> tuple[tuple[str, int, int, int] | None, BaseException | None]:
             try:
