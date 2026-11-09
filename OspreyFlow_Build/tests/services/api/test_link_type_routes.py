@@ -147,8 +147,7 @@ def test_only_an_administrator_of_the_unit_lists_and_decides(world: _World) -> N
 
 def test_the_administrators_list_holds_no_proposal_that_names_a_dataset(world: _World) -> None:
     """L2.7 (ADR-090 Amendment 4; ADR-143 decision 5 and Amendment 4's strict reading): with Admin's
-    Proposed types gone, `/v1/admin/link-types` lists only the proposals made before ADR-099
-    Amendment 3, which name no dataset. A proposal that names one is decided on its dataset's Model
+    Proposed types gone, `/v1/admin/link-types` lists only the proposals that name no dataset. A proposal that names one is decided on its dataset's Model
     tab, whose words are withheld above the reader's clearance, so the administrator's list never
     carries its words. Red with the store's `dataset_id IS NULL` removed."""
     bound = (

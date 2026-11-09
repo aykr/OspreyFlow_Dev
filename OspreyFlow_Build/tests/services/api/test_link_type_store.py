@@ -20,10 +20,10 @@ ADMIN_2 = Principal(id="admin-2", clearance="OFFICIAL", org_unit="unit-2", roles
 
 
 @pytest.fixture
-async def store():
-    s = await LinkTypeProposalStore.connect(PostgresConfig.from_env().dsn)
-    yield s
-    await s.close()
+async def store(own_store: LinkTypeProposalStore):
+    """Every case over a schema of its own, dropped afterwards, so none leaves a row in the shared
+    table (L2.7's review: these cases wrote to it and kept it)."""
+    yield own_store
 
 
 @pytest.fixture

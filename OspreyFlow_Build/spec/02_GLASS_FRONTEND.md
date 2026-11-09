@@ -1010,14 +1010,15 @@ the strict reading meanwhile) a row says only *A proposed link type above your c
 tag or decision, and is left out of the count. The tab reads *1 Model · n proposed*, n being the
 proposals this person may read and decide in this dataset; a reminder with its tip shows above the
 Studio's other tabs; and the top bar's *Needs you* lists them (ADR-090 Amendment 4, ADR-145 decision 11;
-L2.7), all three from `GET /v1/me/needs-you` (spec 03), which counts none above the reader's clearance
-and says only that such a proposal exists. A refusal is said in the Conduit's words; to a person the routes refuse the block
+L2.7), all three from `GET /v1/me/needs-you` (spec 03), which says nothing of a dataset whose proposals
+the reader is not cleared to read. A refusal is said in the Conduit's words; to a person the routes refuse the block
 is not drawn. Under the GOV.UK brand it is a summary list with tags, GOV.UK buttons and a textarea with an
 error summary. Keyboard: `keyboard/model-proposals.spec.ts` (`MODEL_PROPOSALS_ACTIONS`); axe in dark,
 light and GOV.UK with the form open and its error shown. **Admin has no *Proposed types* section**
-since L2.7 (ADR-090 Amendments 4 and 5). The proposals made before ADR-099 Amendment 3, which name no
-dataset, keep their administrator's routes (`/v1/admin/link-types`, behind `manage_ontology`; ADR-143
-decision 5), with no screen of their own. A proposal is not yet
+since L2.7 (ADR-090 Amendments 4 and 5). The proposals that name no dataset (those made before ADR-099
+Amendment 3 among them) keep their administrator's routes (`/v1/admin/link-types`, behind
+`manage_ontology`; ADR-143 decision 5), with no screen of their own; the list holds no proposal that
+names a dataset, in the store's own query. A proposal is not yet
 withdrawn from the Glass: the route exists (spec 03 §3.4) and the form does not offer it.
 
 ### 3.1g Two more layouts: a force-directed tree and clustered bubbles (ADR-083)
@@ -1454,8 +1455,8 @@ their rights, their roles, their case list and `GET /v1/me/needs-you`. It holds 
 - their level in each case;
 - what they answer for, with what waits. That is: *Author of* each case they author; each promotion
   overdue to them (opening Admin › Operations for a holder of `operate_schedules`); and each dataset's
-  proposed link types to decide (opening that dataset's Model tab). One above their clearance is said to
-  exist and opens nothing.
+  proposed link types to decide (opening that dataset's Model tab). A dataset whose proposals they may not
+  read is not mentioned.
 
 **Not drawn yet, for want of a source Home may read** (said nowhere rather than invented):
 - a level given "through" a team, which the case list does not carry;

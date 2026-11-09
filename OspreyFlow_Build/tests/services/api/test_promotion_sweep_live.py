@@ -160,6 +160,28 @@ async def _alerts(tag: str) -> list[asyncpg.Record]:
         await conn.close()
 
 
+async def _tidy(tag: str, dataset_id: str, case_id: str) -> None:
+    """Removes what the test wrote to the shared stack, whatever it did (L2.7's review): its alerts,
+    the dataset's home case and the dataset, and the home case with every row naming it."""
+    conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+    try:
+        await conn.execute("DELETE FROM promotion_overdue_alerts WHERE promotion_id LIKE $1",
+                           f"{tag}-%")  # fmt: skip
+        await conn.execute("DELETE FROM home_cases WHERE dataset_id = $1", dataset_id)
+        naming = await conn.fetch(
+            "SELECT table_name FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND column_name = 'investigation_id' AND table_name <> 'investigations'"
+        )
+        for row in naming:
+            await conn.execute(
+                f'DELETE FROM "{row["table_name"]}" WHERE investigation_id = $1', case_id
+            )
+        await conn.execute("DELETE FROM investigations WHERE id = $1", case_id)
+        await conn.execute("DELETE FROM datasets WHERE id = $1", dataset_id)
+    finally:
+        await conn.close()
+
+
 def test_the_lifespans_own_sweep_raises_r7s_alert_once_at_n_days(api_env: None) -> None:
     tag = "sw" + uuid.uuid4().hex[:8]
     dataset_id = f"ds-{tag}"
@@ -184,6 +206,7 @@ def test_the_lifespans_own_sweep_raises_r7s_alert_once_at_n_days(api_env: None) 
             app.state.identity_admin = held
             app.state.waiting_promotions = source_held
             asyncio.run(_restore(days_before))
+            asyncio.run(_tidy(tag, dataset_id, case_id))
     assert [r["promotion_id"] for r in rows] == [f"{tag}-old"]  # once, and only the one at N days
     [row] = rows
     assert sorted(__import__("json").loads(row["recipients"])) == ["sw-adm", "sw-rev"]
