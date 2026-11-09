@@ -47,7 +47,7 @@
    (`gates/52a4b6b.live.txt`):
    - Files: `test_route_rights.py`, `test_phase7_exit_live.py`, `test_pipeline_run.py`,
      `test_repoint_journal_callers_live.py` and `test_sql_connector_live.py`.
-   - **65 passed, 3 skipped** (spaCy is not on the server).
+   - **65 passed, 3 skipped** (the `extraction` extra not installed, as in CI; ADR-108; not counted as passes).
    - **1 failed:** the server has no git identity. It passed with a synthetic one under the same lease; the orchestrator counts that rerun, and has since set an identity on the server.
    - Two earlier runs on stack c are withdrawn: no `ospreyflow` database, then the tunnel's 0.7 s round trip and
      the owner's stop.
