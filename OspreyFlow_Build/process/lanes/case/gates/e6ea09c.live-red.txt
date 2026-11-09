@@ -1,0 +1,87 @@
+# L3.4 fix-round live run at e6ea09c on main base 9db2051 (main itself now f382e12), with ci-wiring, admin-delete, case-b-writer-gate, registry, audit-census and reports-viewer-census -L3.4.patch applied and placesByRole.json regenerated, uncommitted (git status below), under lease case on stack e held throughout (acquired before this run, released after it), run detached on the server by stack_lease.sh remote, from 2026-11-09T19:05:48Z
+#  M ../.github/workflows/ci.yml
+#  M Makefile
+#  M spec/03_CONDUIT_MIDDLEWARE.md
+#  M tests/services/api/test_admin_sections.py
+#  M tests/services/api/test_analyst_link_types.py
+#  M tests/services/api/test_investigation_levels.py
+#  M tests/services/api/test_promotions.py
+#  M tests/services/api/test_reports_viewer_journey.py
+#  M tests/services/api/test_route_rights.py
+#  M ../OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+#  M ../OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
+#  M ../OspreyFlow_Core/services/api/app.py
+#  M ../OspreyFlow_Core/services/api/audit_section.py
+# ?? process/lanes/case/gates/cd935e8.test.txt
+# ?? process/lanes/case/gates/de06d22.axe.txt
+# ?? process/lanes/case/gates/de06d22.ci.txt
+# ?? process/lanes/case/gates/e6ea09c.live.txt
+# files: ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_promotion_store.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py ../OspreyFlow_Build/tests/services/api/test_board_store.py
+Running on ospreyflow-test (stack e, osprey-runs/case/OspreyFlow_Build/), logged at osprey-runs/case.meta/runs/20261109T190557Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_promotion_store.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py ../OspreyFlow_Build/tests/services/api/test_board_store.py
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/case/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 32 items
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py ....         [ 12%]
+../OspreyFlow_Build/tests/services/api/test_promotion_store.py .....F..F [ 40%]
+..                                                                       [ 46%]
+../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ..   [ 53%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py ..... [ 68%]
+....                                                                     [ 81%]
+../OspreyFlow_Build/tests/services/api/test_board_store.py ......        [100%]
+
+=================================== FAILURES ===================================
+__________ test_the_studio_list_is_filtered_by_clearance_in_the_query __________
+
+store = <services.api.promotion_store.PostgresPromotionStore object at 0x79ce28b4d490>
+
+    async def test_the_studio_list_is_filtered_by_clearance_in_the_query(
+        store: PostgresPromotionStore,
+    ) -> None:
+        mine, other_unit, above = await _three(store)
+        seen = await store.into("src", markings=["OFFICIAL", "OFFICIAL-SENSITIVE"])
+>       assert {r.id for r in seen} == {mine, other_unit}
+E       AssertionError: assert {'01M70V8D2BA...5H0SZJ8THSMY'} == {'01M70V8D2BA...5H0SZJ8THSMW'}
+E         
+E         Extra items in the left set:
+E         '01M70V8D2BA1SQ5H0SZJ8THSMY'
+E         Extra items in the right set:
+E         '01M70V8D2BA1SQ5H0SZJ8THSMW'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_promotion_store.py:142: AssertionError
+___________ test_a_boards_list_is_filtered_by_clearance_in_the_query ___________
+
+store = <services.api.promotion_store.PostgresPromotionStore object at 0x79ce3d554800>
+
+    async def test_a_boards_list_is_filtered_by_clearance_in_the_query(
+        store: PostgresPromotionStore,
+    ) -> None:
+        mine, other_unit, above = await _three(store)
+        seen = await store.of_board("case-k", "board-1", markings=["OFFICIAL", "OFFICIAL-SENSITIVE"])
+>       assert {r.id for r in seen} == {mine, other_unit}
+E       AssertionError: assert {'01M70V8DST8...G973ZCZ5QBZ1'} == {'01M70V8DST8...G973ZCZ5QBYZ'}
+E         
+E         Extra items in the left set:
+E         '01M70V8DST83Z6G973ZCZ5QBZ1'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_promotion_store.py:182: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_the_studio_list_is_filtered_by_clearance_in_the_query
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotion_store.py::test_a_boards_list_is_filtered_by_clearance_in_the_query
+============= 2 failed, 30 passed, 1 warning in 189.68s (0:03:09) ==============
+remote exit 1
+# ended 2026-11-09T19:09:09Z
+# RED, found by this run: test_promotion_store.py's two clearance-filter cases shared `_three`, which the fix round's waiting tests had rewritten (the third record no longer the one marked above). The helper restored and the waiting cases given their own (`_three_waiting`); rerun: the next commit's .live.txt.

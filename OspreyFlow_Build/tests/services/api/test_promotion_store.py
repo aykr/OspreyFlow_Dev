@@ -75,6 +75,16 @@ async def test_a_promotion_reads_back_whole(store: PostgresPromotionStore) -> No
 
 async def _three(store: PostgresPromotionStore) -> tuple[str, str, str]:
     mine = _record(proposed_at=NOW)
+    other_unit = _record(unit="unit-2", proposed_at=NOW + timedelta(minutes=1))
+    above = _record(marking="SECRET", proposed_at=NOW + timedelta(minutes=2))
+    for r in (mine, other_unit, above):
+        await store.add(r)
+    return mine.id, other_unit.id, above.id
+
+
+async def _three_waiting(store: PostgresPromotionStore) -> tuple[str, str, str]:
+    """Two waiting, in two datasets, and one decided: the seam's read asks by dataset."""
+    mine = _record(proposed_at=NOW)
     other = _record(dataset_id="other", proposed_at=NOW + timedelta(minutes=1))
     decided = _record(status="committed", proposed_at=NOW + timedelta(minutes=2))
     for r in (mine, other, decided):
@@ -87,7 +97,7 @@ async def test_the_waiting_read_is_filtered_by_the_readers_datasets_in_the_query
 ) -> None:
     """The seam passes the datasets the reader may review (`WaitingFromStore.reviewable_datasets`,
     admin's `may_review` asked of each dataset as it is now) into the WHERE clause (rule 3)."""
-    mine, _, _ = await _three(store)
+    mine, _, _ = await _three_waiting(store)
     assert await store.waiting_dataset_ids() == ["other", "src"]
     assert [r.id for r in await store.waiting(dataset_ids=["src"])] == [mine]
     assert await store.waiting(dataset_ids=[]) == []
@@ -96,7 +106,7 @@ async def test_the_waiting_read_is_filtered_by_the_readers_datasets_in_the_query
 async def test_the_filter_check_fails_with_the_filter_not_passed(
     store: PostgresPromotionStore,
 ) -> None:
-    mine, other, _ = await _three(store)
+    mine, other, _ = await _three_waiting(store)
     # The plant: the seam's read made without the reader's filter.
     assert [r.id for r in await store.waiting()] == [mine, other]
 

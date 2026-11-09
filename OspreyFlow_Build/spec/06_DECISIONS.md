@@ -31232,6 +31232,12 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
      may, another unit's person without the right may not (the case lane's choice under Prompt L
      after the independent review's must-fix 8; the owner may overrule it, scoping it to the
      dataset's unit).
+   - The Studio's seven removed-case routes (listed, merge sheet opened and read, merged,
+     cancelled, deleted and its dry run) name no right: owning a dataset needs none (ADR-145
+     Amendment 4 decision 3), and each asks the dataset's own gate and Author level on its home case
+     instead. Weighed against ADR-146 decision 10 in `test_reports_viewer_journey.py`
+     (`reports-viewer-census-L3.4.patch`): a Reports Viewer reaches them only as such an Author,
+     which decision 10 does not take from an owner. For the owner to overrule, by giving them a right.
    - **Nothing drawn goes into a gazetteer dataset** (`gazetteer-*`, ADR-147 Amendment 1 decision 2,
      which holds the build's places alone): a case reading one is offered no promotion and is
      refused one at the route, and a removed case's layer is never merged into one, only deleted
