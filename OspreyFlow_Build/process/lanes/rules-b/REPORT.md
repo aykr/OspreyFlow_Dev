@@ -20,7 +20,7 @@
    - The vitest half stopped with pytest's failure, so it was run on its own: 2,802 passed plus the harness's 45 (`6221632.vitest.txt`).
    - Keyboard, with `registry-L2.12.patch` applied: 688 passed. 2 failed: `boards.spec.ts:225` and `:423`, main's own failure since L3.7, fixed on `lane/case` (CARRIES row).
    - At a1a8c04 (`whyNot` removed, nothing else changed), vitest: 2,801 passed and 1 failed, `MatrixView.budget` at 2,855 ms against 2,500 on a shared machine. It passed when re-run alone and at 6221632 (`a1a8c04.vitest.txt`).
-9. **Live run:** rules-b lease on stack g (on the server), at 6221632, 16:26–16:33Z. 232 passed across 24 files, `test_route_rights.py` included (`gates/6221632.live.txt`). Then a plant run on the server's copy only, red then restored (`6221632.live-plant.txt`). Stack down, lease released.
+9. **Live run:** rules-b lease on stack g (on the server), at 6221632, 16:22–16:32Z. 232 passed across 24 files, `test_route_rights.py` included (`gates/6221632.live.txt`). Then a plant run on the server's copy only, red then restored (`6221632.live-plant.txt`). Stack down, lease released.
 10. **Found on the way:**
     - The earlier review's items 2 and 4 have no record; RED_RECORD §12 says so, and this review stands in for them.
     - The effect's `drawsItself` check could never run; it is gone.

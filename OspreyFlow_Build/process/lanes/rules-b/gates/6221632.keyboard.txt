@@ -1,5 +1,5 @@
 Mon  9 Nov 2026 16:51:28 UTC
-# at 6221632 (on main cc384ac), offline: ports pinned closed (59991-59994), MINIO_ENDPOINT and OSPREY_LANE unset, with registry-L2.12.patch alone applied uncommitted
+# at 6221632 (on main 99d92a8), offline: ports pinned closed (59991-59994), MINIO_ENDPOINT and OSPREY_LANE unset, with registry-L2.12.patch alone applied uncommitted
 
 > @ospreyflow/workspace@0.0.0 test:keyboard
 > playwright test --config keyboard/playwright.config.ts

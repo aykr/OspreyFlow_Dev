@@ -257,7 +257,7 @@ cannot be told from here. The orchestrator's independent review of 211a6dc (§14
   live run not yet taken, the base hash, the guard's second assertion, the carry's scope, the report not
   updated, the docstring's "each still asks the case's level") are fixed here and in the report.
 - **The live run and the whole pin's red** (rules-b lease, stack g on the server, at 6221632 on main 99d92a8,
-  16:26–16:33Z): 232 passed across 24 files, `test_route_rights.py` and the new pin included
+  16:22–16:32Z): 232 passed across 24 files, `test_route_rights.py` and the new pin included
   (`gates/6221632.live.txt`). Planted on the server's copy only (the worktree untouched, the gates running):
   `queue_scope`'s typology clause given `AND {unit} NOT LIKE 'unit-b-%'`, so the fixture's other unit loses
   the case's typology alerts, rows taken away, the shape the old `<=` passed. The audience case FAILED at
