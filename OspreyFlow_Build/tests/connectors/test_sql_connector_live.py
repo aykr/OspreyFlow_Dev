@@ -446,3 +446,164 @@ async def test_a_write_in_the_connectors_session_is_refused_by_the_server(
         await conn.close()
     count = await nomis.fetchval("SELECT count(*) FROM nomis_replica_fixture.visit_bookings")
     assert count == len(BOOKINGS)
+
+
+# --- verify-full against a real TLS server (the orchestrator's second review, item 7) ----------
+#
+# The leased Postgres is given TLS for these cases alone: a synthetic CA, made here, signs a
+# certificate for `localhost`; the server is handed it by `lo_export` into its own data directory
+# and `ALTER SYSTEM`, and reloads. The connector's own `verify-full` context is used unchanged
+# except that it is told to trust that one CA (no deployment's CA is on this machine's trust
+# store). Teardown
+# turns TLS off again and empties both files, even when a case fails. What a mistake would do:
+# - `verify-full` that verifies nothing (a context without CERT_REQUIRED or the name check) —
+#   `test_verify_full_refuses_a_certificate_from_a_ca_it_does_not_trust` and
+#   `…_refuses_a_certificate_for_another_name`;
+# - a connection that silently falls back to plain text — `…_reads_over_tls_from_a_server_it_trusts`
+#   asks the server itself whether the session is encrypted.
+
+import ssl as _ssl  # noqa: E402
+from datetime import timedelta  # noqa: E402
+
+from cryptography import x509  # noqa: E402
+from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import ec  # noqa: E402
+from cryptography.x509.oid import NameOID  # noqa: E402
+
+
+def _pem(key: ec.EllipticCurvePrivateKey) -> bytes:
+    return key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+
+
+def _issue(subject: str, key: Any, issuer: x509.Name, signer: Any, *, ca: bool) -> x509.Certificate:
+    now = datetime.now().astimezone()
+    built = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject)]))
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=5))
+        .not_valid_after(now + timedelta(hours=1))
+        .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
+    )
+    if ca:
+        built = built.add_extension(
+            x509.KeyUsage(digital_signature=True, key_cert_sign=True, crl_sign=True,
+                          content_commitment=False, key_encipherment=False,
+                          data_encipherment=False,
+                          key_agreement=False, encipher_only=False,
+                          decipher_only=False),  # fmt: skip
+            critical=True,
+        ).add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+    else:
+        built = built.add_extension(
+            x509.SubjectAlternativeName([x509.DNSName(subject)]), critical=False
+        ).add_extension(
+            x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
+        ).add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(signer.public_key()), critical=False
+        )
+    return built.sign(signer, hashes.SHA256())
+
+
+class _Tls(SimpleNamespace):
+    ca_pem: str
+
+
+@pytest.fixture
+async def tls_server(nomis: asyncpg.Connection) -> AsyncIterator[_Tls]:
+    ca_key = ec.generate_private_key(ec.SECP256R1())
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "OspreyFlow fixture CA")])
+    ca = _issue("OspreyFlow fixture CA", ca_key, ca_name, ca_key, ca=True)
+    server_key = ec.generate_private_key(ec.SECP256R1())
+    server = _issue("localhost", server_key, ca_name, ca_key, ca=False)
+    data = await nomis.fetchval("SHOW data_directory")
+    crt, key = f"{data}/osprey_fixture_tls.crt", f"{data}/osprey_fixture_tls.key"
+
+    async def put(path: str, content: bytes) -> None:
+        await nomis.execute(f"SELECT lo_unlink(lo) FROM (SELECT lo_from_bytea(0, $1) AS lo) made "
+                            f"WHERE lo_export(lo, '{path}') = 1", content)  # fmt: skip
+
+    async def reload() -> None:
+        await nomis.execute("SELECT pg_reload_conf()")
+
+    try:
+        await put(crt, server.public_bytes(serialization.Encoding.PEM))
+        await put(key, _pem(server_key))
+        await nomis.execute(f"ALTER SYSTEM SET ssl_cert_file = '{crt}'")
+        await nomis.execute(f"ALTER SYSTEM SET ssl_key_file = '{key}'")
+        await nomis.execute("ALTER SYSTEM SET ssl = 'on'")
+        await reload()
+        ca_pem = ca.public_bytes(serialization.Encoding.PEM).decode()
+        trusting = _ssl.create_default_context(cadata=ca_pem)
+        for _ in range(50):  # the postmaster takes the reload in its own time
+            try:
+                probe = await asyncpg.connect(PostgresConfig.from_env().dsn.replace(
+                    "@127.0.0.1", "@localhost"), ssl=trusting)  # fmt: skip
+                await probe.close()
+                break
+            except (OSError, _ssl.SSLError, asyncpg.PostgresError, ConnectionError):
+                await __import__("asyncio").sleep(0.2)
+        else:
+            pytest.fail("the leased Postgres did not take TLS after its reload")
+        yield _Tls(ca_pem=ca_pem)
+    finally:
+        await nomis.execute("ALTER SYSTEM RESET ssl")
+        await nomis.execute("ALTER SYSTEM RESET ssl_cert_file")
+        await nomis.execute("ALTER SYSTEM RESET ssl_key_file")
+        await reload()
+        await put(crt, b"")
+        await put(key, b"")
+
+
+def _verified(ca_pem: str | None, host: str = "localhost") -> Any:
+    """The fixture's one difference for these cases: on this machine, so the hook takes the
+    connector's own context, checks it is verify-full, trusts the fixture's CA (or not), and
+    connects to `host`, the name the certificate is checked against."""
+
+    async def connect(**kw: Any) -> Any:
+        context = kw["ssl"]
+        assert isinstance(context, _ssl.SSLContext), context
+        assert context.verify_mode == _ssl.CERT_REQUIRED and context.check_hostname
+        if ca_pem is not None:
+            context.load_verify_locations(cadata=ca_pem)
+        assert kw["host"] == FIXTURE_HOST
+        return await asyncpg.connect(**{**kw, "host": host})
+
+    return connect
+
+
+async def test_verify_full_reads_over_tls_from_a_server_it_trusts(tls_server: _Tls) -> None:
+    from services.ingest.connectors.sql_connector import _open
+
+    settings = _settings()
+    assert settings.tls == "verify-full"
+    tested = await check_sql_connection(settings, secret=PASSWORD,
+                                        connect=_verified(tls_server.ca_pem))  # fmt: skip
+    assert tested.ok, tested.words
+    read = await read_sql(settings, READ, secret=PASSWORD, connect=_verified(tls_server.ca_pem))
+    assert len(read.rows) == len(BOOKINGS)
+    conn = await _open(settings, PASSWORD, _verified(tls_server.ca_pem))
+    try:
+        assert await conn.fetchval("SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
+    finally:
+        await conn.close()
+
+
+async def test_verify_full_refuses_a_certificate_from_a_ca_it_does_not_trust(
+    tls_server: _Tls,
+) -> None:
+    with pytest.raises(ConnectorRefused, match="TLS"):
+        await read_sql(_settings(), READ, secret=PASSWORD, connect=_verified(None))
+    tested = await check_sql_connection(_settings(), secret=PASSWORD, connect=_verified(None))
+    assert not tested.ok and "TLS" in tested.words
+
+
+async def test_verify_full_refuses_a_certificate_for_another_name(tls_server: _Tls) -> None:
+    """The certificate names `localhost`; reached as `127.0.0.1`, the name check refuses it."""
+    with pytest.raises(ConnectorRefused, match="TLS"):
+        await read_sql(_settings(), READ, secret=PASSWORD,
+                       connect=_verified(tls_server.ca_pem, host="127.0.0.1"))  # fmt: skip
