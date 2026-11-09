@@ -38,6 +38,7 @@ What a mistake would do, and the case that catches it:
 from __future__ import annotations
 
 import ipaddress
+import ssl
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -362,7 +363,6 @@ def test_a_connections_ca_certificate_is_a_certificate() -> None:
                               tls="require", ca_certificate=pem)  # fmt: skip
 
 
-
 def test_reserved_and_site_local_ipv6_are_inside(monkeypatch: pytest.MonkeyPatch) -> None:
     """Python counts `::/96` (IPv4-compatible, `::7f00:1` is loopback) and `fec0::/10` (site-local)
     as global; both are refused, listed or not (the orchestrator's review of Amendment 15,
@@ -402,16 +402,24 @@ def test_the_resolver_s_order_is_kept_and_unreachable_families_left_out(
     assert asked["flags"] & socket.AI_ADDRCONFIG
 
 
-async def test_sql_tries_each_checked_address_in_order_and_stops_at_a_refusal(
+async def test_sql_reaches_each_checked_address_in_order_and_signs_in_at_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A dual-stack host whose IPv6 address cannot be reached is read through its IPv4 one, both
-    checked first; a certificate that fails verification stops at once (items 4 and 11)."""
-    import ssl
-
+    """Items 4 and 11, and the lane review that followed: each checked address is first only reached
+    over TCP, nothing sent; asyncpg is given the first that answers and no other, so whatever then
+    fails (a sign-in refused, a timeout or reset after the password went, a certificate) is final
+    and no second server is ever sent the password."""
+    import asyncpg
     from services.ingest.connectors.sql_connector import check_sql_connection
 
-    tried: list[str] = []
+    v6, v4 = "2a00:1450:4009:81f::200e", "93.184.215.14"
+    reachable: dict[str, bool] = {v6: False, v4: True}
+    probed: list[str] = []
+    signed: list[str] = []
+
+    async def reach(address: str, port: int) -> bool:
+        probed.append(address)
+        return reachable[address]
 
     class _Conn:
         async def fetchrow(self, _sql: str) -> dict[str, Any]:
@@ -420,29 +428,42 @@ async def test_sql_tries_each_checked_address_in_order_and_stops_at_a_refusal(
         async def close(self) -> None:
             return None
 
+    failure: BaseException | None = None
+
     async def connect(**kw: Any) -> Any:
-        tried.append(kw["host"])
-        if ":" in kw["host"]:
-            raise OSError("Network is unreachable")
+        signed.append(kw["host"])
+        if failure is not None:
+            raise failure
         return _Conn()
 
     settings = SqlConnectionSettings(host="dual.client.example", database="nomis", user="reader",
                                      secret="NOMIS")  # fmt: skip
-    addresses = ["2a00:1450:4009:81f::200e", "93.184.215.14"]
-    tested = await check_sql_connection(settings, secret="pw", connect=connect, addresses=addresses)
+
+    async def test() -> Any:
+        probed.clear()
+        signed.clear()
+        return await check_sql_connection(settings, secret="pw", connect=connect,
+                                          addresses=[v6, v4], reach=reach)  # fmt: skip
+
+    tested = await test()
     assert tested.ok, tested.words
-    assert tried == addresses
-    tried.clear()
-
-    async def unverified(**kw: Any) -> Any:
-        tried.append(kw["host"])
-        raise ssl.SSLCertVerificationError("certificate verify failed")
-
-    refused = await check_sql_connection(settings, secret="pw", connect=unverified,
-                                         addresses=addresses)  # fmt: skip
-    assert not refused.ok and "certificate could not be verified" in refused.words
-    assert "would not speak TLS" not in refused.words
-    assert tried == addresses[:1]
+    assert probed == [v6, v4] and signed == [v4]
+    reachable[v6] = True
+    for failure, words in (
+        (asyncpg.InvalidPasswordError("password authentication failed"), "refused the sign-in"),
+        (TimeoutError(), "could not be reached"),
+        (ConnectionResetError("reset by peer"), "could not be reached"),
+        (ssl.SSLCertVerificationError("certificate verify failed"),
+         "certificate could not be verified"),
+    ):  # fmt: skip
+        refused = await test()
+        assert not refused.ok and words in refused.words, (failure, refused.words)
+        assert "would not speak TLS" not in refused.words
+        assert signed == [v6], (failure, signed)  # never the second address
+    failure = None
+    reachable[v6] = reachable[v4] = False
+    none = await test()
+    assert not none.ok and "any address" in none.words and signed == []
 
 
 async def test_an_api_request_tries_each_checked_address_in_order() -> None:
@@ -467,3 +488,61 @@ async def test_an_api_request_tries_each_checked_address_in_order() -> None:
         before_request=lambda _url: list(addresses),
     )  # fmt: skip
     assert len(read.rows) == 1 and tried == addresses
+
+
+async def test_an_api_request_stops_at_a_refusal_and_never_sends_the_second_address() -> None:
+    """An answer (401, any status), a TLS failure or a certificate refusal at the first address is
+    final: the second is never sent the request or the bearer token (decision 10)."""
+    import httpx
+    from services.ingest.connectors.reads import read_api
+
+    from schemas.sources import ApiRead
+
+    first, second = "2a00:1450:4009:81f::200e", "93.184.215.14"
+    tried: list[str] = []
+
+    async def read(fail: Any) -> None:
+        tried.clear()
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            tried.append(request.url.host)
+            if request.url.host == first:
+                return fail(request)
+            return httpx.Response(200, json={"data": [{"n": 1}]})
+
+        await read_api(
+            ApiConnectionSettings(base_url="https://crm.client.example", auth="bearer",
+                                  secret="CRM"),
+            ApiRead(path="/v1/n", records_at="data"), secret="synthetic-token",
+            allowed_hosts=["crm.client.example"], transport=httpx.MockTransport(answer),
+            before_request=lambda _url: [first, second],
+        )  # fmt: skip
+
+    def tls_error(request: httpx.Request) -> httpx.Response:
+        try:
+            raise ssl.SSLError("wrong version number")
+        except ssl.SSLError as exc:
+            raise httpx.ConnectError("handshake failed", request=request) from exc
+
+    def unverified(request: httpx.Request) -> httpx.Response:
+        try:
+            raise ssl.SSLCertVerificationError("certificate verify failed")
+        except ssl.SSLError as exc:
+            raise httpx.ConnectError("handshake failed", request=request) from exc
+
+    for fail, words in (
+        (lambda r: httpx.Response(401), "refused the sign-in"),
+        (lambda r: httpx.Response(500), "not 200"),
+        (tls_error, "TLS handshake failed"),
+        (unverified, "certificate could not be verified"),
+    ):
+        with pytest.raises(ConnectorRefused, match=words):
+            await read(fail)
+        assert tried == [first], (words, tried)
+
+
+@pytest.mark.parametrize("name", ["nomis", "NOMIS-REPLICA", "1NOMIS", "", "NOMIS,CRM", "A" * 65])
+def test_osprey_yaml_refuses_a_secret_name_that_is_not_one(name: str) -> None:
+    with pytest.raises(ValidationError):
+        ConnectorsConfig(secrets=[name])
+    assert ConnectorsConfig(secrets=["NOMIS_REPLICA"]).secrets == ["NOMIS_REPLICA"]

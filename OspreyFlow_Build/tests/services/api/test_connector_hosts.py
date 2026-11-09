@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 import pytest
@@ -365,10 +366,33 @@ def test_a_json_file_that_grows_after_it_was_sized_is_stopped_while_read(
             handle.write(" " * 500)
         return real(path, flags)
 
+    asked: list[int] = []
+
+    class _Counting:
+        """The real file, with each read's size kept: never more than the room the cap leaves."""
+
+        def __init__(self, handle: Any) -> None:
+            self.handle = handle
+
+        def __enter__(self) -> _Counting:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            self.handle.close()
+
+        def read(self, size: int = -1) -> bytes:
+            asked.append(size)
+            return self.handle.read(size)
+
+    def counting_open(*args: Any, **kwargs: Any) -> _Counting:
+        return _Counting(open(*args, **kwargs))
+
     monkeypatch.setattr(connector_reads, "_no_follow", grows_first)
+    monkeypatch.setattr(connector_reads, "open", counting_open, raising=False)
     with pytest.raises(ConnectorRefused, match="bytes"):
         _json_files("ds-a", "*.json", tmp_path)
     assert Path(folder / "growing.json").stat().st_size > 100
+    assert asked and all(0 <= size <= 101 for size in asked), asked
 
 
 def test_a_json_pattern_never_follows_a_link(tmp_path: __import__("pathlib").Path) -> None:
@@ -391,7 +415,6 @@ def test_a_json_pattern_never_follows_a_link(tmp_path: __import__("pathlib").Pat
     (tmp_path / "ds-c").symlink_to(folder)
     with pytest.raises(ConnectorRefused, match="no file"):
         _json_files("ds-c", "*.json", tmp_path)
-
 
 
 def test_a_watermark_is_a_column_name_and_a_quoted_name_holds() -> None:

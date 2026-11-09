@@ -9941,10 +9941,7 @@ async def register_dataset_source(
     try:
         made = await sources.register(dataset_id, body, principal)
     except UnknownConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"error": "unknown_connection", "detail": "There is no such connection."},
-        ) from exc
+        raise _no_such_connection() from exc
     except SourceAlreadyRegisteredError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

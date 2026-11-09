@@ -246,15 +246,26 @@ class _Unreached(Exception):
     """An address the request could not connect to: the next checked address is tried."""
 
 
-def _verification_failed(exc: BaseException) -> bool:
+def _in_chain(exc: BaseException, test: Callable[[BaseException], bool]) -> bool:
     seen: BaseException | None = exc
     while seen is not None:
-        if isinstance(seen, ssl.SSLCertVerificationError):
-            return True
-        if "CERTIFICATE_VERIFY_FAILED" in str(seen):
+        if test(seen):
             return True
         seen = seen.__cause__ or seen.__context__
     return False
+
+
+def _verification_failed(exc: BaseException) -> bool:
+    return _in_chain(
+        exc,
+        lambda e: (
+            isinstance(e, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(e)
+        ),
+    )
+
+
+def _tls_failed(exc: BaseException) -> bool:
+    return _in_chain(exc, lambda e: isinstance(e, ssl.SSLError))
 
 
 async def _get(
@@ -324,6 +335,12 @@ async def _get_at(
                 "the API's certificate could not be verified (a CA this connection does not "
                 "trust, or a name the certificate does not hold); nothing was read"
             ) from exc
+        if _tls_failed(exc):
+            raise ConnectorRefused(
+                "the API's TLS handshake failed; nothing was sent and nothing was read"
+            ) from exc
+        # Unreached: the connection, or its handshake, never completed, so nothing was sent; the
+        # next checked address is tried (Amendment 15 decision 10).
         if isinstance(exc, httpx.ConnectError | httpx.ConnectTimeout):
             raise _Unreached() from exc
         raise ConnectorRefused(

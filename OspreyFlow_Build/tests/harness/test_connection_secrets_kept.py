@@ -30,7 +30,7 @@ from harness.restore import connection_secrets_to_enter
 from tools.layout import CORE
 
 from schemas.deployment import ConnectorsConfig, OspreyConfig
-from tests.harness.test_cluster_render import _workloads, cluster_config, values_for
+from tests.harness.test_cluster_render import cluster_config, values_for
 from tests.harness.test_render import FIXTURE_CONFIG, _fake_resolver
 
 DECLARED = ConnectorsConfig(secrets=["NOMIS_READER", "TELCO"])
@@ -112,7 +112,8 @@ def test_no_service_but_the_conduit_is_given_a_connection_secret(tmp_path: Path)
 
 def test_no_cluster_workload_but_the_conduit_is_given_a_connection_secret() -> None:
     values = values_for(cluster_config(connectors=DECLARED.model_dump()))
-    readers = [w for w in _workloads(values).values() if w.get("envFrom")]
+    every = [*values["workloads"], *values.get("jobs", [])]
+    readers = [w for w in every if w.get("envFrom")]
     assert any(w["name"] == "api" for w in readers) and len(readers) > 1
     for workload in readers:
         blanked = {e["name"]: e.get("value") for e in workload.get("env", [])}

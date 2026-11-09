@@ -254,8 +254,13 @@ def test_a_connector_source_lands_as_its_one_file(world: SimpleNamespace) -> Non
     assert again.status_code == 200 and again.json()["rows"] == 2, again.text
     assert again.json()["file"] == file.name
     json_connection = _connection(
-        world, {"kind": "json", "name": "Bookings files", "settings": {"kind": "json"},
-                "datasets": ["ds-a"]}
+        world,
+        {
+            "kind": "json",
+            "name": "Bookings files",
+            "settings": {"kind": "json"},
+            "datasets": ["ds-a"],
+        },
     )
     json_read = {"kind": "json", "pattern": "bookings-*.json", "records_at": "records"}
     bookings = _register(world, json_connection, json_read, name="bookings")
@@ -416,3 +421,40 @@ def test_a_connection_whose_host_resolves_inside_is_never_kept(world: SimpleName
     assert [
         c["kind"] for c in world.client.get("/v1/admin/connections", headers=_as("admin")).json()
     ] == ["files"]
+
+
+def test_refresh_now_tells_a_source_author_fixed_words_and_audits_why(
+    world: SimpleNamespace,
+) -> None:
+    """Amendment 13 decision 7 on the second read path: a refused *Refresh now* names no host,
+    address or setting to a source author; the reason is audited (the orchestrator's review of
+    Amendment 15, item 1)."""
+    connection_id = _connection(world)
+    made = _register(
+        world, connection_id, {"kind": "api", "path": "/v1/numbers", "records_at": "data"}
+    )
+    assert made.status_code == 201, made.text
+    world.readers.allowed_hosts = []
+    refused = world.client.post(
+        f"/v1/datasets/ds-a/sources/{made.json()['id']}/read", headers=_as("engineer")
+    )
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["detail"]["detail"] == READ_REFUSED_FOR_AUTHORS
+    for leak in ("egress allow-list", "telco.example", "93.184.215.14", "OSPREY_CONNECTOR_EGRESS"):
+        assert leak not in refused.text
+    assert any("egress allow-list" in str(e["resolved_query"].get("why", ""))
+               for e in world.audit.entries)  # fmt: skip
+
+
+def test_only_an_administrator_is_given_a_refusal_s_own_words() -> None:
+    """The one place a refusal is turned into an answer: an administrator (who may see the
+    connection's settings) is given its words, anyone else the fixed ones."""
+    from services.api.app import _connector_refused
+    from services.ingest.connectors.reads import ConnectorRefused
+
+    refused = ConnectorRefused("telco.example is not on this deployment's egress allow-list")
+    admin = _connector_refused(refused, PEOPLE["admin"])
+    assert admin.detail["detail"] == str(refused)  # type: ignore[index]
+    for person in ("engineer", "analyst", "reader"):
+        author = _connector_refused(refused, PEOPLE[person])
+        assert author.detail["detail"] == READ_REFUSED_FOR_AUTHORS  # type: ignore[index]

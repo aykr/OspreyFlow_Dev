@@ -38,7 +38,13 @@ from services.ingest.connectors.reads import (
     read_json,
     write_snapshot,
 )
-from services.ingest.connectors.sql_connector import Connect, check_sql_connection, read_sql
+from services.ingest.connectors.sql_connector import (
+    Connect,
+    Reach,
+    check_sql_connection,
+    read_sql,
+    tcp_reaches,
+)
 
 from schemas.sources import (
     ApiConnectionSettings,
@@ -102,6 +108,8 @@ class Readers:
     the real one refuses)."""
 
     sql_connect: Connect = asyncpg.connect
+    #: Whether a checked address answers over plain TCP, before asyncpg is given it.
+    sql_reach: Reach = tcp_reaches
     http_transport: httpx.AsyncBaseTransport | None = None
     allowed_hosts: Collection[str] | None = None
     #: Where a connection may reach (`refuse_host`). A fixture on this machine (the leased stack's
@@ -310,6 +318,10 @@ def source_file(dataset_id: str, name: str, root: Path | None = None) -> Path:
     return root / UPLOAD_SUBDIR / dataset_id / f"{name}.csv"
 
 
+#: A file that changed between listing and reading (removed, or replaced by a link).
+_CHANGED = "a file changed while it was being read; nothing was read, so read again"
+
+
 def _json_files(dataset_id: str, pattern: str, root: Path) -> list[tuple[str, bytes]]:
     """The dataset's files matching `pattern`, in name order. A dot-name is never read (`*`
     matches one in `fnmatch`, and a read's half-written `.read-*.tmp` is one), and a link is never
@@ -334,13 +346,20 @@ def _json_files(dataset_id: str, pattern: str, root: Path) -> list[tuple[str, by
         f"the JSON files come to more than {reads.MAX_BYTES} bytes, more than one read may "
         "take; nothing was read (rule 2)"
     )
-    if sum(path.stat().st_size for _name, path in matched) > reads.MAX_BYTES:
+    try:
+        sizes = sum(path.stat().st_size for _name, path in matched)
+    except OSError as exc:
+        raise ConnectorRefused(_CHANGED) from exc
+    if sizes > reads.MAX_BYTES:
         raise over
     found: list[tuple[str, bytes]] = []
     room = reads.MAX_BYTES
     for name, path in matched:
-        with open(path, "rb", opener=_no_follow) as handle:
-            body = handle.read(room + 1)
+        try:
+            with open(path, "rb", opener=_no_follow) as handle:
+                body = handle.read(room + 1)
+        except OSError as exc:
+            raise ConnectorRefused(_CHANGED) from exc
         if len(body) > room:
             raise over
         room -= len(body)
@@ -384,7 +403,7 @@ async def read_rows(
         return await read_sql(
             settings, read, secret=secret_of(settings.secret), watermark=watermark,
             cursor=cursor if watermark else None, connect=readers.sql_connect,
-            addresses=addresses,
+            addresses=addresses, reach=readers.sql_reach,
         )  # fmt: skip
     if isinstance(settings, ApiConnectionSettings) and isinstance(read, ApiRead):
         return await read_api(
@@ -462,7 +481,7 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     if isinstance(settings, SqlConnectionSettings):
         return await check_sql_connection(
             settings, secret=secret_of(settings.secret), connect=readers.sql_connect,
-            addresses=addresses,
+            addresses=addresses, reach=readers.sql_reach,
         )  # fmt: skip
     if isinstance(settings, ApiConnectionSettings):
         try:
@@ -471,7 +490,9 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
             return ConnectionTest(ok=False, words=str(refused))
         if settings.auth == "bearer" and not secret_of(settings.secret):
             return ConnectionTest(
-                ok=False, words=f"the secret {settings.secret} is not set in this deployment"
+                ok=False,
+                words=f"the secret {settings.secret} is not set in this deployment, or not "
+                "declared in osprey.yaml's connectors.secrets",
             )
         return ConnectionTest(ok=True, words="The host is allowed and the secret is set.")
     return ConnectionTest(ok=True, words="Files in the ingest folder: nothing to sign in to.")

@@ -21,6 +21,7 @@ built. A read past `reads.MAX_ROWS` rows is refused whole (rule 2).
 
 from __future__ import annotations
 
+import asyncio
 import re
 import ssl
 from collections.abc import Awaitable, Callable, Sequence
@@ -89,57 +90,92 @@ def _tls(settings: SqlConnectionSettings) -> ssl.SSLContext | str:
     return context
 
 
+#: Whether a TCP connection to (address, port) can be opened now; nothing is sent on it.
+Reach = Callable[[str, int], Awaitable[bool]]
+#: How long the reachability check waits for one address.
+REACH_SECONDS = 5.0
+
+
+async def tcp_reaches(address: str, port: int) -> bool:
+    """A plain TCP connection opened and closed at once: nothing, not even TLS, is sent on it."""
+    try:
+        _reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(address, port), REACH_SECONDS
+        )
+    except (OSError, TimeoutError):
+        return False
+    writer.close()
+    try:
+        await writer.wait_closed()
+    except OSError:
+        pass
+    return True
+
+
 async def _open(
     settings: SqlConnectionSettings, secret: str | None, connect: Connect,
-    addresses: Sequence[str] | None = None,
+    addresses: Sequence[str] | None = None, reach: Reach = tcp_reaches,
 ) -> Any:  # fmt: skip
-    """Signed in, at the first of `addresses` (each already checked, in the resolver's order) that
-    can be reached, else by the host's name. Only an address that cannot be reached moves on to the
-    next; a TLS or sign-in refusal stops at once, so no other address is asked to take a password a
-    server refused (the orchestrator's review of Amendment 15, item 4)."""
+    """Signed in at one address. With several checked addresses (in the resolver's order), each is
+    first only reached over plain TCP, nothing sent, and the first that answers is the one address
+    asyncpg is given; whatever then fails (TLS, the certificate, the sign-in, a timeout or a reset
+    after the password went) is final, so no second server is ever sent the password (the
+    orchestrator's review of Amendment 15, item 4, and the lane review that followed). With no
+    addresses (a fixture's own check), by the host's name."""
     if not secret:
         raise ConnectorRefused(
             "the connection's secret is not set, or not declared in osprey.yaml's "
             "connectors.secrets; nothing was read"
         )
-    unreached: BaseException | None = None
-    for host in list(addresses or []) or [settings.host]:
-        try:
-            return await connect(
-                host=host, port=settings.port, user=settings.user, password=secret,
-                database=settings.database, ssl=_tls(settings), timeout=15,
-                # Every statement bounded, and the session read-only from its first statement (the
-                # orchestrator's review of L1.6).
-                server_settings={"statement_timeout": STATEMENT_TIMEOUT_MS,
-                                 "default_transaction_read_only": "on"},
-            )  # fmt: skip
-        except ssl.SSLCertVerificationError as exc:
+    candidates = list(addresses or [])
+    host = settings.host
+    if len(candidates) == 1:
+        host = candidates[0]
+    elif candidates:
+        for candidate in candidates:
+            if await reach(candidate, settings.port):
+                host = candidate
+                break
+        else:
             raise ConnectorRefused(
-                "the database's certificate could not be verified (a CA this connection does not "
-                "trust, or a name the certificate does not hold); nothing was read"
+                "the database could not be reached at any address its name resolves to; nothing "
+                "was read"
+            )
+    try:
+        return await connect(
+            host=host, port=settings.port, user=settings.user, password=secret,
+            database=settings.database, ssl=_tls(settings), timeout=15,
+            # Every statement bounded, and the session read-only from its first statement (the
+            # orchestrator's review of L1.6).
+            server_settings={"statement_timeout": STATEMENT_TIMEOUT_MS,
+                             "default_transaction_read_only": "on"},
+        )  # fmt: skip
+    except ssl.SSLCertVerificationError as exc:
+        raise ConnectorRefused(
+            "the database's certificate could not be verified (a CA this connection does not "
+            "trust, or a name the certificate does not hold); nothing was read"
+        ) from exc
+    except (OSError, asyncpg.PostgresError, ConnectionError) as exc:
+        words = str(exc).lower()
+        if isinstance(exc, ssl.SSLError) or "ssl" in words or "tls" in words:
+            raise ConnectorRefused(
+                "the database would not speak TLS, which every SQL connection asks for; "
+                "nothing was read"
             ) from exc
-        except (OSError, asyncpg.PostgresError, ConnectionError) as exc:
-            words = str(exc).lower()
-            if isinstance(exc, ssl.SSLError) or "ssl" in words or "tls" in words:
-                raise ConnectorRefused(
-                    "the database would not speak TLS, which every SQL connection asks for; "
-                    "nothing was read"
-                ) from exc
-            if isinstance(
-                exc, asyncpg.InvalidPasswordError | asyncpg.InvalidAuthorizationSpecificationError
-            ):
-                raise ConnectorRefused(
-                    "the database refused the sign-in: check the connection's login and secret; "
-                    "nothing was read"
-                ) from exc
-            if isinstance(exc, asyncpg.PostgresError):
-                raise ConnectorRefused(
-                    f"the database refused the connection ({type(exc).__name__}); nothing was read"
-                ) from exc
-            unreached = exc
-    raise ConnectorRefused(
-        f"the database could not be reached ({type(unreached).__name__}); nothing was read"
-    ) from unreached
+        if isinstance(
+            exc, asyncpg.InvalidPasswordError | asyncpg.InvalidAuthorizationSpecificationError
+        ):
+            raise ConnectorRefused(
+                "the database refused the sign-in: check the connection's login and secret; "
+                "nothing was read"
+            ) from exc
+        if isinstance(exc, asyncpg.PostgresError):
+            raise ConnectorRefused(
+                f"the database refused the connection ({type(exc).__name__}); nothing was read"
+            ) from exc
+        raise ConnectorRefused(
+            f"the database could not be reached ({type(exc).__name__}); nothing was read"
+        ) from exc
 
 
 async def _refuse_a_writing_login(conn: Any) -> None:
@@ -153,11 +189,11 @@ async def _refuse_a_writing_login(conn: Any) -> None:
 
 async def check_sql_connection(
     settings: SqlConnectionSettings, *, secret: str | None, connect: Connect = asyncpg.connect,
-    addresses: Sequence[str] | None = None,
+    addresses: Sequence[str] | None = None, reach: Reach = tcp_reaches,
 ) -> ConnectionTest:  # fmt: skip
     """*Test connection*: signed in over TLS, and the login is read-only. Nothing is read."""
     try:
-        conn = await _open(settings, secret, connect, addresses)
+        conn = await _open(settings, secret, connect, addresses, reach)
         try:
             await _refuse_a_writing_login(conn)
         finally:
@@ -176,11 +212,12 @@ async def read_sql(
     cursor: str | None = None,
     connect: Connect = asyncpg.connect,
     addresses: Sequence[str] | None = None,
+    reach: Reach = tcp_reaches,
 ) -> ReadRows:
     """The table's rows (past `cursor` on `watermark`, in its order, when incremental), as text."""
     if watermark is not None and not re.fullmatch(SQL_COLUMN, watermark):
         raise ConnectorRefused("the watermark column is not a plain column name; nothing was read")
-    conn = await _open(settings, secret, connect, addresses)
+    conn = await _open(settings, secret, connect, addresses, reach)
     try:
         await _refuse_a_writing_login(conn)
         async with conn.transaction(readonly=True):
