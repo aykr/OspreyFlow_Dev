@@ -670,6 +670,12 @@ New ones are added at the bottom as they happen.
    - (b) One image everywhere, accepting the larger image and its scan findings.
 3. **ADR-148 question 1, the recipes repository:** asked only after P8's report of who reads and writes it.
 
+98. **Case's L3.4 merged (`32c6f49`, onto main as `1fba324`)** after three independent review rounds and your two
+    rulings: promotion, the waiting-promotions seam filled, a removed case's layer merged or deleted, Admin's Delete
+    in the dataset's own unit, and the Reports Viewer refused every write. I gated it at the merge. My own slip,
+    caught there: the merge's CI-wiring apply left a conflict in `ci.yml`; resolved, and the two tests reading it
+    pass. Admin's L2.7 merges next, on top.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):

@@ -1,12 +1,11 @@
-# as of 2026-11-09T21:46:28Z
-case	L3.4	round-3 review (409 live passed)	~1–2 h
+# as of 2026-11-09T22:19:22Z
 platform	P5	four fixes from re-review, then merge	~2–3 h
 studio	L1.5	clear; live run on b at 165d144, then merge	~1½–2 h
 rules	L2.10	sent back: a count leak, re-gates, 4 more fixes	~3–4 h
 admin	L2.7	round 3 done; server make test, live on f, re-review	~2–3 h
 admin	L2.5b	after L2.7	~3 h after L2.7
 case	L3.6	after L3.4 and L2.10	~3 h after both
-case	L3.9	after L3.4	~8–10 h after L3.4
+case	L3.9	next for case, fresh session	~8–10 h
 rules	L2.11	after L2.10	~8–10 h after L2.10
 studio	L1.7	after L1.5	~8–10 h after L1.5
 platform-b	P5b	new sister lane, starting now	~3–4 h
