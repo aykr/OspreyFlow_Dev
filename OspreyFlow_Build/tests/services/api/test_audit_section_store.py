@@ -73,6 +73,7 @@ async def world() -> AsyncIterator[SimpleNamespace]:
     dsn = f"{base}?search_path={name}"
     cases = await InvestigationStore.connect(dsn)
     audit = await AuditWriter.connect(dsn)
+    await audit.indexes_built()  # built in the background; the index cases read them
     models = await PostgresModelAdminAudit.connect(dsn)
     reader = await AuditSectionReader.connect(dsn)
     ageing = await PromotionAgeingStore.connect(dsn)
@@ -139,13 +140,13 @@ async def test_filters_never_widen_the_read(world: SimpleNamespace) -> None:
     await _seed(world)
     for f in (
         StreamFilters(investigation_id=world.case_b.id),
-        StreamFilters(who="adm-b"),
-        StreamFilters(who="ana-b", kind="assertions"),
+        StreamFilters(who=("adm-b",)),
+        StreamFilters(who=("ana-b",), kind="assertions"),
         StreamFilters(dataset_id="ds-b"),
     ):
         rows, total = await world.reader.stream(A, cases=True, rights=FULL, filters=f, offset=0, limit=50)
         assert (rows, total) == ([], 0), f
-    rows, total = await world.reader.stream(A, cases=True, rights=FULL, filters=StreamFilters(who="ana-b"), offset=0, limit=50)
+    rows, total = await world.reader.stream(A, cases=True, rights=FULL, filters=StreamFilters(who=("ana-b",)), offset=0, limit=50)
     assert _seen(rows) == {("ana-b", "access_denied", world.case_a.id)} and total == 1
     rows, _ = await world.reader.stream(A, cases=True, rights=FULL, filters=StreamFilters(kind="people_and_roles"), offset=0, limit=50)
     assert _seen(rows) == {("adm-a", "set_person_roles", None)}
@@ -182,7 +183,7 @@ async def test_the_engines_history_pages_with_its_true_total(world: SimpleNamesp
     entries, total = await world.reader.model_history(StreamFilters(), offset=200, limit=50)
     assert total == 205 and len(entries) == 5
     assert entries[0].detail == {"engine": "e4", "changes": {}, "outcome": "done"}
-    _, by_b = await world.reader.model_history(StreamFilters(who="adm-b"), offset=0, limit=50)
+    _, by_b = await world.reader.model_history(StreamFilters(who=("adm-b",)), offset=0, limit=50)
     assert by_b == 0
 
 
@@ -277,6 +278,7 @@ async def test_an_index_left_invalid_by_a_crashed_build_is_built_again(world: Si
         "WHERE c.relname = 'audit_log_org_unit_idx' AND pg_table_is_visible(c.oid)")  # fmt: skip
     assert left is False  # the plant took: an invalid index of the real one's name
     again = await AuditWriter.connect(world.dsn)
+    await asyncio.wait_for(again.indexes_built(), 30)
     await again.close()
     valid, unique = await world.raw.fetchrow(
         "SELECT i.indisvalid, i.indisunique FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
@@ -414,3 +416,57 @@ async def test_units_are_recorded_from_this_deployments_own_date(world: SimpleNa
     later = await AuditWriter.connect(world.dsn)
     await later.close()
     assert await world.reader.units_from() == early
+
+
+async def test_a_start_returns_before_its_own_build(world: SimpleNamespace) -> None:
+    """Item 9: a start never builds inside its start. With an audit write left open (which a
+    concurrent build waits for) and an index missing, it returns at once; the build finishes in the
+    background once the write ends."""
+    await world.raw.execute("DROP INDEX CONCURRENTLY audit_log_org_unit_idx")
+    held = await asyncpg.connect(dsn=world.dsn)
+    writer: AuditWriter | None = None
+    try:
+        open_write = held.transaction()
+        await open_write.start()
+        await _audit_insert(held, "ana-a")
+        writer = await asyncio.wait_for(AuditWriter.connect(world.dsn), 5)
+        await open_write.commit()
+        await asyncio.wait_for(writer.indexes_built(), 30)
+    finally:
+        if writer is not None:
+            await writer.close()
+        await held.close()
+    assert await world.raw.fetchval(audit_module._INDEX_STATE_SQL, "audit_log_org_unit_idx") is True
+
+
+async def test_the_build_survives_any_failure_and_close_still_closes(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 8: a connection lost mid-build (`InterfaceError`, not a `PostgresError`) is logged and
+    tried again; and a build that only ever fails never stops `close` closing the pool."""
+    await world.raw.execute("DROP INDEX CONCURRENTLY audit_log_org_unit_idx")
+    real = audit_module.build_indexes
+    calls: list[int] = []
+
+    async def lost_once(conn: asyncpg.Connection) -> bool:
+        calls.append(1)
+        if len(calls) == 1:
+            raise asyncpg.exceptions.ConnectionDoesNotExistError("connection was closed")
+        return await real(conn)
+
+    monkeypatch.setattr(audit_module, "build_indexes", lost_once)
+    writer = await AuditWriter.connect(world.dsn, index_retry_seconds=0.1)
+    await asyncio.wait_for(writer.indexes_built(), 30)
+    await writer.close()
+    assert len(calls) == 2
+    assert await world.raw.fetchval(audit_module._INDEX_STATE_SQL, "audit_log_org_unit_idx") is True
+
+    async def always_fails(conn: asyncpg.Connection) -> bool:
+        raise RuntimeError("planted")
+
+    await world.raw.execute("DROP INDEX CONCURRENTLY audit_log_org_unit_idx")
+    monkeypatch.setattr(audit_module, "build_indexes", always_fails)
+    failing = await AuditWriter.connect(world.dsn, index_retry_seconds=0.05)
+    await asyncio.sleep(0.2)
+    await failing.close()  # raises nothing
+    assert failing._pool.is_closing()

@@ -221,3 +221,17 @@ async def test_people_and_names_share_one_read_per_id(idp: tuple[str, _IdpState]
     finally:
         await directory.aclose()
     assert state.users_asked == ["uuid-ayan", "uuid-dashboard"]
+
+
+async def test_full_names_never_serve_a_username(idp: tuple[str, _IdpState]) -> None:
+    """ADR-145 Amendment 6 point 2: Admin › Audit and Operations name an account by its name parts
+    alone; one with only a username (the identity provider's identifier) has no name there."""
+    base, _ = idp
+    directory = PrincipalNameDirectory(_settings(base))
+    try:
+        names = await directory.full_names(["uuid-ayan", "uuid-bare", "uuid-unknown"])
+        shown = await directory.display_names(["uuid-bare"])  # the cached read, as elsewhere
+    finally:
+        await directory.aclose()
+    assert names == {"uuid-ayan": "Ayan Kar"}
+    assert shown == {"uuid-bare": "osprey-admin"}  # unchanged for every other caller

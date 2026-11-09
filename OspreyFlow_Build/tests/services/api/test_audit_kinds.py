@@ -5,7 +5,7 @@ decision 10, Amendment 6; rule 12).
 direction (each named action is written somewhere): it cannot see an action written and named
 nowhere, which Audit would file under *Reads and refusals* by default. That default withholds its
 words, so it never shows too much, but a kind's filter would silently miss it. This finds every
-action written in `services/` by reading the source's syntax tree:
+action written in `services/` and `scripts/` by reading the source's syntax tree:
 
 - `….record(action=<string>)`, or a conditional of two strings, or a name assigned one in the same
   function or at a module's top level;
@@ -20,7 +20,11 @@ from __future__ import annotations
 import ast
 import pathlib
 
-SERVICES = pathlib.Path(__file__).resolve().parents[4] / "OspreyFlow_Core/services"
+CORE = pathlib.Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
+SERVICES = CORE / "services"
+#: Every tree that writes to the audit stream: the Conduit's and the Studio's services, and the
+#: operator's scripts (a seed, a revert, a sweep), which write through the same `AuditWriter`.
+WRITERS = (SERVICES, CORE / "scripts")
 
 _Found = tuple[set[str], set[str]]
 
@@ -117,7 +121,7 @@ def written_actions(root: pathlib.Path = SERVICES) -> tuple[set[str], set[str], 
     return actions, prefixes, sorted(set(unresolved))
 
 
-def unclassified(root: pathlib.Path = SERVICES) -> list[str]:
+def unclassified(*roots: pathlib.Path) -> list[str]:
     from services.api.audit_section import (
         _CLASSIFIED,
         READS_AND_OTHER,
@@ -125,7 +129,14 @@ def unclassified(root: pathlib.Path = SERVICES) -> list[str]:
     )
     from services.api.rule_evaluation import RULE_AUDIT_ACTIONS
 
-    actions, prefixes, unresolved = written_actions(root)
+    actions: set[str] = set()
+    prefixes: set[str] = set()
+    unresolved: list[str] = []
+    for root in roots or WRITERS:
+        found, fixed, lost = written_actions(root)
+        actions |= found
+        prefixes |= fixed
+        unresolved += lost
     named = set(_CLASSIFIED) | set(READS_AND_OTHER) | set(RULE_AUDIT_ACTIONS)
     return sorted(
         [f"unresolved {u}" for u in unresolved]
@@ -165,3 +176,15 @@ def test_an_action_written_and_named_nowhere_is_found(tmp_path: pathlib.Path) ->
             "                       resolved_query={}, result_cardinality=0)\n"
         )
     assert unclassified(copy) == ["planted_by_helper", "planted_unclassified", "prefix planted_"]
+
+
+def test_a_writer_the_scan_cannot_read_is_reported(tmp_path: pathlib.Path) -> None:
+    """The docstring's promise: an action the scan cannot resolve (here an attribute, the shape a
+    store writing its own `self.kind` would take) fails as unresolved, never passes unseen."""
+    (tmp_path / "planted.py").write_text(
+        "class Store:\n"
+        "    async def write(self, audit, principal):\n"
+        "        await audit.record(principal=principal, action=self.kind,\n"
+        "                           resolved_query={}, result_cardinality=0)\n"
+    )
+    assert unclassified(tmp_path) == ["unresolved planted.py:3 self.kind"]

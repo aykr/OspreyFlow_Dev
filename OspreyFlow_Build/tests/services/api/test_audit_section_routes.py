@@ -35,6 +35,8 @@ from services.api.investigations import Investigation, InvestigationNotFoundErro
 from services.api.promotion_ageing import InMemoryAgeingStore, NoPromotionsYet, PendingPromotion
 
 from schemas.domain import Principal, RuleAuditEntry, RuleAuditPage
+
+from tests.services.api.test_principal_names import idp  # noqa: F401 - the fixture, used by name
 from schemas.rights import ADMIN as ADMIN_RIGHTS
 
 T0 = datetime(2026, 11, 8, 9, 0, tzinfo=UTC)
@@ -129,6 +131,8 @@ class _Names:
         ids = set(ids)
         self.asked.append(ids)
         return {i: f"Name {i}" for i in ids if not i.startswith("nameless-")}
+
+    full_names = display_names
 
 
 @pytest.fixture
@@ -365,7 +369,10 @@ class _Waiting:
         self.proposers = list(proposers)
 
     async def waiting_for_review(self, reader: Principal) -> list[PendingPromotion]:
+        """As L3.4's store must: filtered by the reader's unit in its own read (rule 3)."""
         self.readers.append(reader.id)
+        if reader.org_unit != "unit-1":
+            return []
         return [PendingPromotion(promotion_id=f"p{n}", load_id="load-7", dataset_id="ds-a",
                                  dataset_name="Prison records", dataset_unit="unit-1",
                                  proposed_by=who, proposed_at=datetime.now(UTC) - timedelta(days=4, minutes=1))
@@ -416,8 +423,11 @@ def test_every_kinds_action_is_one_the_conduit_records() -> None:
 
     from services.api.audit_section import AWAITED_ACTIONS, KIND_ACTIONS, READS_AND_OTHER
 
-    core = pathlib.Path(__file__).resolve().parents[4] / "OspreyFlow_Core/services"
-    source = "\n".join(p.read_text() for p in core.rglob("*.py") if p.name != "audit_section.py")
+    core = pathlib.Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
+    source = "\n".join(
+        p.read_text() for tree in ("services", "scripts") for p in (core / tree).rglob("*.py")
+        if p.name != "audit_section.py"
+    )  # fmt: skip
     named = [*(a for actions in KIND_ACTIONS.values() for a in actions), *READS_AND_OTHER]
     missing = [a for a in named if f'"{a}"' not in source and a not in AWAITED_ACTIONS]
     assert missing == []
@@ -425,15 +435,35 @@ def test_every_kinds_action_is_one_the_conduit_records() -> None:
     assert AWAITED_ACTIONS <= set(KIND_ACTIONS["loads_and_promotions"])
 
 
-class _Directory:
-    """Names only some accounts, and none of its names holds an id, so an id in a response can be
-    nothing but an id served."""
+#: The identity provider's accounts for the id test, as Keycloak represents them: some with name
+#: parts, and some with only a username, which is its identifier and must never be served.
+_ACCOUNTS: dict[str, dict[str, object]] = {
+    "kc-u2": {"firstName": "Kim", "lastName": "Lee", "username": "login-u2", "enabled": True},
+    "lead-a": {"firstName": "Lee", "lastName": "Ann", "username": "uname-lead-a", "enabled": True},
+    "own-a": {"firstName": "Owen", "lastName": "Hart", "username": "uname-own-a", "enabled": True},
+    "from-1": {"firstName": "Fran", "lastName": "Ode", "username": "uname-from-1", "enabled": True},
+    "prop-1": {"firstName": "Pat", "lastName": "Ross", "username": "uname-prop-1", "enabled": True},
+    "mod-w": {"firstName": "Mo", "lastName": "Dell", "username": "uname-mod-w", "enabled": True},
+    # Only a username: the real directory's `display_names` falls back to it.
+    "nameless-w1": {"username": "uname-w1", "enabled": True},
+    "nameless-u1": {"username": "uname-u1", "enabled": True},
+    "nameless-r1": {"username": "uname-r1", "enabled": True},
+    "nameless-m1": {"username": "uname-m1", "enabled": True},
+    "nameless-p2": {"username": "uname-p2", "enabled": True},
+}
 
-    NAMES = {"kc-u2": "Kim Lee", "lead-a": "Lee Ann", "own-a": "Owen Hart", "from-1": "Fran Ode",
-             "prop-1": "Pat Ross", "mod-w": "Mo Dell"}  # fmt: skip
 
-    async def display_names(self, ids: Any) -> dict[str, str]:
-        return {i: self.NAMES[i] for i in ids if i in self.NAMES}
+@pytest.fixture
+def directory(monkeypatch: pytest.MonkeyPatch, idp: tuple[str, Any]) -> Any:
+    """The real `PrincipalNameDirectory` over `test_principal_names`' identity-provider fixture,
+    which refuses as Keycloak does, holding `_ACCOUNTS` (rule 15: not a stand-in that never falls
+    back to a username)."""
+    from services.api.principal_names import PrincipalNameDirectory
+
+    from tests.services.api import test_principal_names as idp_fixture
+
+    monkeypatch.setattr(idp_fixture, "ACCOUNTS", _ACCOUNTS)
+    return PrincipalNameDirectory(idp_fixture._settings(idp[0]))
 
 
 #: Every place an account's id is written into an entry the Conduit may serve: who wrote it, and
@@ -443,10 +473,13 @@ PLANTED = [
     "login-u3", "u3@mail.example", "grp-1", "lead-a", "nameless-lead-b", "nameless-cover-a",
     "own-a", "nameless-own-b", "nameless-home-1", "from-1", "nameless-to-1", "nameless-acct-1",
     "nameless-r1", "mod-w", "nameless-m1", "prop-1", "nameless-p2",
+    # The identity provider's usernames, served by `display_names` for an account with no name.
+    "uname-w1", "uname-u1", "uname-r1", "uname-m1", "uname-p2", "uname-lead-a", "uname-own-a",
+    "uname-from-1", "uname-prop-1", "uname-mod-w",
 ]  # fmt: skip
 
 
-def test_no_account_id_reaches_the_glass(world: SimpleNamespace) -> None:
+def test_no_account_id_reaches_the_glass(world: SimpleNamespace, directory: Any) -> None:
     """Rule 7 and ADR-106 Amendment 1: each id planted where the Conduit records one, and each
     route's whole response searched for it. Who acted is a name or fixed words; a person in the
     words is a name; an identity provider's subject, username or email is never served."""
@@ -454,7 +487,7 @@ def test_no_account_id_reaches_the_glass(world: SimpleNamespace) -> None:
 
     from schemas.admin import AuditSectionEntry
 
-    world.monkeypatch.setattr(app.state, "principal_names", _Directory())
+    world.monkeypatch.setattr(app.state, "principal_names", directory)
     world.reader.rows = [
         _row("set_person_roles", {"user_id": "nameless-u1", "roles": ["analyst"]}, None,
              who="nameless-w1"),
@@ -533,3 +566,15 @@ def _async(value: Any) -> Any:
         return value
 
     return answer
+
+
+def test_operations_ageing_lists_no_other_units_promotions(world: SimpleNamespace) -> None:
+    """Item 5: the ageing read passes its own reader to the store, which filters by unit: an
+    `operate_schedules` holder of another unit is listed none (red with the reader replaced)."""
+    waiting = _Waiting()
+    world.monkeypatch.setattr(app.state, "waiting_promotions", waiting)
+    _token("ops-9", ["right:operate_schedules"], unit="unit-2")
+    other = world.client.get("/v1/admin/operations/ageing", headers=_as("ops-9")).json()
+    own = world.client.get("/v1/admin/operations/ageing", headers=_as("ops-1")).json()
+    assert other["waiting"] == [] and [p["promotion_id"] for p in own["waiting"]] == ["p1"]
+    assert waiting.readers == ["ops-9", "ops-1"]

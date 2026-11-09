@@ -6,16 +6,14 @@ One view over the records that already exist, read under the reader's own princi
 - **The audit stream** (`audit_log`, written by `AuditWriter.record` on every route): the case
   audit, the people, roles and dataset audits, and the loads. An entry is the reader's unit's when
   the case it names is owned by that unit, or, naming no case, when it was written by an account of
-  that unit (`audit_log.org_unit`, from L2.6). **The unit filter is in the `WHERE` clause**
-  (rule 3),
-  so another unit's entry is neither on the page nor in the total; a filter is only ever ANDed after
-  it, so a filter never widens the read. An entry naming a case that does not exist, or written
-  before `org_unit` and naming no case, belongs to no unit and is never shown (fail closed).
+  that unit (`audit_log.org_unit`, from L2.6). **The unit filter is in the `WHERE` clause** (rule
+  3), so another unit's entry is neither on the page nor in the total; a filter is only ever ANDed
+  after it, so a filter never widens the read. An entry naming a case that does not exist, or
+  written before `org_unit` and naming no case, belongs to no unit and is never shown (fail closed).
 - **The rule audit** (ADR-109 ruling 1) is never read here from the stream: its entries carry words
   (a firing's) that `rule_holds.readable_rule_audit` withholds entry by entry as the reader. They
-  are
-  left out of the stream's read entirely, and the `rules` record is served by that read itself, for
-  one case, behind the gate the case's own rule-audit route uses (`app.py`).
+  are left out of the stream's read entirely, and the `rules` record is served by that read itself,
+  for one case, behind the gate the case's own rule-audit route uses (`app.py`).
 - **The engines' history** (`model_admin_audit`): ADR-112 Amendment 7 decision 7 names it as read
   here under `read_audit`. Engines are the deployment's, not a unit's, and the history never holds
   a key, so every holder of `read_audit` reads it whole.
@@ -42,6 +40,7 @@ from schemas.admin import AuditKind, AuditSectionEntry
 from schemas.domain import Principal
 from schemas.rights import Right
 
+from .investigations import TEAM_GRANT_PREFIX
 from .rule_evaluation import RULE_AUDIT_ACTIONS
 
 #: Decision 10's kinds, by the actions the audit stream records under each. An action in none of
@@ -168,10 +167,13 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
 _CLASSIFIED: tuple[str, ...] = tuple(a for actions in KIND_ACTIONS.values() for a in actions)
 
 #: Every other action the Conduit writes, named so that each one is classified on purpose
-#: (`test_audit_kinds.py` finds every action written in `services/` and fails on one in no list):
+#: (`test_audit_kinds.py` finds every action written in `services/` and `scripts/` and fails on one
+#: in no list):
 #: reads, refusals, the case's own work and the platform's. `kind_of` reads an unnamed one as this
 #: kind too, with its words withheld, so a missing name never shows words.
 READS_AND_OTHER: tuple[str, ...] = (
+    # Written by scripts, not routes: a seed's case brief, a sweep closing synthetic instants.
+    "case_brief_seed", "close_paysim_instants",
     "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",
     "alert_assigned", "alert_canvas", "alert_claimed", "alert_close_approved",
     "alert_close_proposed", "alert_close_sent_back", "alert_disposed", "alert_released",
@@ -228,6 +230,7 @@ WORDS_SHOWN_WITH: dict[str, Right] = {
 }
 
 STREAM_KINDS = (*KIND_ACTIONS, "reads_and_other")
+
 
 def stream_note(cases: bool, units_from: datetime | None) -> str:
     """Said with every page of the stream, so nothing left out is left out silently (rule 2). The
@@ -309,6 +312,8 @@ class StreamRow:
 
 
 def _ids(who: tuple[str, ...] | None) -> list[str] | None:
+    if isinstance(who, str):  # a bare id would be read as its letters, a filter matching nothing
+        raise TypeError("StreamFilters.who is a tuple of account ids, never one string")
     return None if who is None else list(who)
 
 
@@ -401,7 +406,8 @@ class AuditSectionReader:
         async with self._pool.acquire() as conn:
             if await conn.fetchval("SELECT to_regclass('audit_log_units_from')") is None:
                 return None
-            return await conn.fetchval("SELECT recorded_from FROM audit_log_units_from")
+            found = await conn.fetchval("SELECT recorded_from FROM audit_log_units_from")
+        return found if isinstance(found, datetime) else None
 
     async def writers(self, reader: Principal, *, cases: bool) -> set[str]:
         """Who wrote the entries of the stream this reader may read, under the same unit filter
@@ -463,6 +469,14 @@ class AuditSectionReader:
 
 #: Said for an account the identity provider gives no name: never its id (rule 7, ADR-106 Am. 1).
 NO_NAME = "An account with no name on record"
+#: Said for a team's grant (`team:<role id>`), which is no account: never its role's id.
+A_TEAM = "A team"
+
+
+def _named(value: str, names: dict[str, str]) -> str:
+    if value.startswith(TEAM_GRANT_PREFIX):
+        return A_TEAM
+    return names.get(value, NO_NAME)
 
 #: The words of a shown entry that name a person, by action: each is served as that person's name,
 #: never as the account's id. `user_id` and `account` name one wherever they are written.
@@ -479,7 +493,7 @@ _PERSON_WORDS: dict[str, dict[str, str]] = {
 #: by default: a new word is shown only once it is named here.
 _PLAIN_WORDS = frozenset({
     "roles", "clearance", "org_unit", "receivable_handling_codes", "delivery", "transferred",
-    "why", "name", "version", "rights", "display_name", "mailbox", "level", "unit_level",
+    "name", "version", "rights", "display_name", "mailbox", "level", "unit_level",
     "dataset_id", "member_ids", "source_id", "handling_before", "handling_after",
     "legal_basis_before", "legal_basis_after", "pipelines_needing_attention", "drafts_following",
     "pack", "highest_marking", "kind", "id",
@@ -504,7 +518,10 @@ def _person_values(action: str, key: str, value: Any) -> list[str]:
 
 def people_in(action: str, detail: dict[str, Any]) -> set[str]:
     """The accounts a shown entry's words name, to be asked their names (ADR-106 decision 3)."""
-    return {i for k, v in detail.items() for i in _person_values(action, k, v)}
+    return {
+        i for k, v in detail.items() for i in _person_values(action, k, v)
+        if not i.startswith(TEAM_GRANT_PREFIX)
+    }  # fmt: skip
 
 
 def shown_words(action: str, detail: dict[str, Any], names: dict[str, str]) -> dict[str, Any]:
@@ -516,13 +533,14 @@ def shown_words(action: str, detail: dict[str, Any], names: dict[str, str]) -> d
         if shape is not None:
             label = "person" if key in _PERSON_KEYS else key
             if shape == "one":
-                out[label] = names.get(value, NO_NAME) if isinstance(value, str) and value else None
+                out[label] = _named(value, names) if isinstance(value, str) and value else None
             elif shape == "first":
                 rest = value[1:] if isinstance(value, list) else []
                 first = value[0] if isinstance(value, list) and value else None
-                out[label] = [names.get(first, NO_NAME) if first else None, *rest]
+                out[label] = [_named(first, names) if isinstance(first, str) and first else None,
+                              *rest]  # fmt: skip
             else:
-                out[label] = [names.get(v, NO_NAME) for v in value if isinstance(v, str) and v]
+                out[label] = [_named(v, names) for v in value if isinstance(v, str) and v]
         elif key in _PLAIN_WORDS or (key in ("before", "after") and action in _SETTING_CHANGES):
             out[key] = value
     return out

@@ -147,3 +147,58 @@ def test_no_recipient_below_the_datasets_marking() -> None:
     # No marking: no clearance asked.
     assert recipients_of(P, ["eng-1"], people, classification=scheme) == [
         "adm-1", "adm-2", "adm-3", "eng-1"]  # fmt: skip
+
+
+async def test_a_tick_sweeps_the_source_it_is_handed_at_that_tick() -> None:
+    """The source L3.4 sets on `app.state` after start-up is the one swept: `PromotionSweep` asks
+    for it at every tick, and a source that records no promotions is not read at all."""
+    import asyncio  # noqa: F401 - the module runs under pytest-asyncio's auto mode
+
+    from services.api.promotion_ageing import InMemoryAgeingStore, NoPromotionsYet, PromotionSweep
+
+    store = InMemoryAgeingStore()
+    holder: dict[str, object] = {"source": NoPromotionsYet()}
+    asked: list[str] = []
+
+    async def recipients(p: PendingPromotion) -> list[str]:
+        asked.append(p.promotion_id)
+        return ["rev-1"]
+
+    job = PromotionSweep(store, store, lambda: holder["source"], recipients)  # type: ignore[arg-type,return-value]
+    now = SENT + timedelta(days=3)
+    assert await job.tick(now) == []
+    holder["source"] = _Source([P])
+    [alert] = await job.tick(now)
+    assert alert.recipients == ["rev-1"] and asked == ["p1"]
+    # Item 12: an alert already raised is not raised again, and its recipients are not read again.
+    assert await job.tick(now) == []
+    assert asked == ["p1"]
+
+
+async def test_a_failed_tick_raises_nothing_and_the_next_tries_again() -> None:
+    """The identity provider down at one tick (its people unreadable): nothing is raised, nothing
+    is raised to fewer people, and the next tick raises it."""
+    import asyncio
+
+    from services.api.promotion_ageing import InMemoryAgeingStore, PromotionSweep, run_every
+
+    store = InMemoryAgeingStore()
+    tries: list[int] = []
+
+    async def recipients(p: PendingPromotion) -> list[str]:
+        tries.append(1)
+        if len(tries) == 1:
+            raise OSError("the identity provider is unreachable")
+        return ["rev-1", "adm-1"]
+
+    job = PromotionSweep(store, store, lambda: _Source([P]), recipients)  # type: ignore[arg-type,return-value]
+    task = asyncio.create_task(run_every(job, 0.05))
+    try:
+        for _ in range(100):
+            if store.raised:
+                break
+            await asyncio.sleep(0.05)
+    finally:
+        task.cancel()
+    assert len(tries) >= 2
+    assert [a.recipients for a in store.raised.values()] == [["rev-1", "adm-1"]]

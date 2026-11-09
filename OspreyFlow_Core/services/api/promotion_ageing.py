@@ -1,14 +1,12 @@
 """Operations' ageing and *Promotions overdue* (`06_DECISIONS.md` ADR-145 decision 9, O3;
-Amendment 4
-decision 11, R7; ADR-143 decisions 8 and 10).
+Amendment 4 decision 11, R7; ADR-143 decisions 8 and 10).
 
 **What ages, and when.** A promotion waiting for review ages from the moment it was sent for review;
 at *Alert the reviewers and administrators after N days* (default 3, `alert_after_days`) it is
 flagged overdue on Admin › Running › Operations and one alert is raised, **once**, to the dataset's
 Authors holding `review_promotions` (never the proposer: a person is never the second person on
-their
-own work) and to the administrators of the dataset's unit. The alert names the load and the dataset,
-never what the promotion adds (rule 7).
+their own work) and to the administrators of the dataset's unit. The alert names the load and the
+dataset, never what the promotion adds (rule 7).
 
 **The seam for case's L3.4.** Promotions are not recorded yet. Everything here reads them through
 one Protocol, `WaitingPromotions`, whose record is `PendingPromotion`; until L3.4 provides one, the
@@ -47,6 +45,8 @@ from schemas.admin import (
 )
 from schemas.domain import Principal
 from schemas.rights import Right, rights_for
+
+from . import audit_section
 
 DEFAULT_ALERT_AFTER_DAYS = 3
 #: How often the sweep runs, unless `OSPREY_PROMOTION_SWEEP_SECONDS` says otherwise.
@@ -117,8 +117,6 @@ def ageing_rules(after_days: int) -> list[AgeingRule]:
     ]
 
 
-#: Said for a proposer the identity provider gives no name: never the account's id (rule 7).
-NO_NAME = "An account with no name on record"
 
 
 def waiting_row(
@@ -130,7 +128,7 @@ def waiting_row(
         load_id=p.load_id,
         dataset_id=p.dataset_id,
         dataset_name=p.dataset_name,
-        proposed_by_name=names.get(p.proposed_by, NO_NAME),
+        proposed_by_name=names.get(p.proposed_by, audit_section.NO_NAME),
         proposed_at=p.proposed_at,
         age_days=age_days(p.proposed_at, now),
         overdue=is_overdue(p.proposed_at, now, after_days),
@@ -187,6 +185,10 @@ class OverdueAlerts(Protocol):
         """True when this raised it; False when one was already raised for the promotion."""
         ...
 
+    async def raised_of(self, promotion_ids: Sequence[str]) -> set[str]:
+        """Of these promotions, those already alerted (so a tick reads no recipients for them)."""
+        ...
+
 
 async def sweep(
     source: WaitingPromotions,
@@ -199,9 +201,11 @@ async def sweep(
     """Raises *Promotions overdue* for every promotion at or past N days not yet alerted, once each
     (the store's own uniqueness decides "once", so two sweeps at the same moment raise one)."""
     raised: list[PromotionOverdueAlert] = []
-    for p in await source.all_waiting():
-        if not is_overdue(p.proposed_at, now, after_days):
-            continue
+    due = [p for p in await source.all_waiting() if is_overdue(p.proposed_at, now, after_days)]
+    done = await alerts.raised_of([p.promotion_id for p in due]) if due else set()
+    for p in due:
+        if p.promotion_id in done:
+            continue  # alerted already: its recipients are not read again
         alert = PromotionOverdueAlert(
             promotion_id=p.promotion_id,
             load_id=p.load_id,
@@ -320,6 +324,15 @@ class PromotionAgeingStore:
             )  # fmt: skip
         return made is not None
 
+    async def raised_of(self, promotion_ids: Sequence[str]) -> set[str]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT promotion_id FROM promotion_overdue_alerts "
+                "WHERE promotion_id = ANY($1::text[])",
+                list(promotion_ids),
+            )
+        return {r["promotion_id"] for r in rows}
+
     async def alerts_for(self, person: str) -> list[PromotionOverdueNotice]:
         """The alerts raised to one person, newest first (L2.7's *Needs you* reads these), with no
         other recipient: who else was alerted is not that person's to read."""
@@ -351,6 +364,9 @@ class InMemoryAgeingStore:
             return False
         self.raised[alert.promotion_id] = alert
         return True
+
+    async def raised_of(self, promotion_ids: Sequence[str]) -> set[str]:
+        return {i for i in promotion_ids if i in self.raised}
 
     async def alerts_for(self, person: str) -> list[PromotionOverdueNotice]:
         return [

@@ -16352,7 +16352,7 @@ async def _people_choice(
     """The picker's names, and the accounts a chosen name stands for. Names are asked only for
     accounts whose entries this reader may already read (ADR-106 decision 3); one with no name is
     not offered, since it could be chosen only by its id."""
-    names = await principal_names.display_names(writers)
+    names = await principal_names.full_names(writers)
     people = sorted(set(names.values()))
     if who is None:
         return people, None
@@ -16392,7 +16392,7 @@ async def read_audit_section(
     rows, total = await reader.stream(
         principal, filters, offset=offset, limit=limit, rights=rights, cases=cases
     )
-    names = await principal_names.display_names(audit_section_module.ids_to_name(rows, rights))
+    names = await principal_names.full_names(audit_section_module.ids_to_name(rows, rights))
     note = audit_section_module.stream_note(cases, await reader.units_from())
     return await _served_audit(
         principal, audit, audit_section_module.stream_entries(rows, rights, names),
@@ -16449,7 +16449,7 @@ async def read_audit_section_rules(
         and (filters.until is None or e.recorded_at < filters.until)
     ]  # fmt: skip
     served = kept[offset : offset + limit]
-    names = await principal_names.display_names({e.principal_id for e in served})
+    names = await principal_names.full_names({e.principal_id for e in served})
     entries = [
         AuditSectionEntry(
             recorded_at=e.recorded_at, who=names.get(e.principal_id, audit_section_module.NO_NAME),
@@ -16489,7 +16489,7 @@ async def read_audit_section_models(
     )
     filters = audit_section_module.StreamFilters(who=accounts, since=since, until=until)
     raw, total = await reader.model_history(filters, offset=offset, limit=limit)
-    names = await principal_names.display_names({e.who for e in raw})
+    names = await principal_names.full_names({e.who for e in raw})
     return await _served_audit(
         principal, audit, audit_section_module.name_entries(raw, names), held_in="models",
         who=who or None, filters=filters, total=total, offset=offset, limit=limit,
@@ -16514,7 +16514,7 @@ async def read_operations_ageing(
     now = datetime.now(UTC)
     served = await waiting.waiting_for_review(principal)
     # ADR-106 decision 3: names asked only for the proposers of the rows served; never an id.
-    names = await principal_names.display_names({p.proposed_by for p in served}) if served else {}
+    names = await principal_names.full_names({p.proposed_by for p in served}) if served else {}
     rows = [promotion_ageing_module.waiting_row(p, now, days, names) for p in served]
     await audit.record(
         principal=principal,

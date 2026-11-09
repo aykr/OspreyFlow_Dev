@@ -27,7 +27,6 @@ a different role.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import logging
 from collections.abc import Sequence
@@ -173,17 +172,21 @@ async def build_indexes(conn: asyncpg.Connection) -> bool:
 
 
 async def _build_until_done(pool: asyncpg.Pool, every: float) -> None:
-    """A start that left the indexes to another asks again until they are built, so it never
-    serves without them until its next restart."""
+    """Builds `audit_log`'s indexes in the background, and, if another start holds the build or a
+    try fails, asks again every `every` seconds until they are built: a start never waits for a
+    build, and never serves without its indexes until a restart. Any failure is logged and tried
+    again; only cancellation (the writer closing) ends it early."""
     while True:
-        await asyncio.sleep(every)
         try:
             async with pool.acquire() as conn:
                 if await build_indexes(conn):
-                    _log.info("audit_log's indexes are built")
                     return
-        except (asyncpg.PostgresError, OSError) as exc:
-            _log.warning("audit_log's indexes: asking again later (%s)", exc)
+            _log.info("audit_log's indexes are being built by another start; asking again later")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - logged; the next try goes on
+            _log.warning("audit_log's indexes: asking again later (%r)", exc)
+        await asyncio.sleep(every)
 
 
 class AuditWriteError(Exception):
@@ -223,21 +226,26 @@ class AuditWriter:
         async with pool.acquire() as conn:
             await create_table(conn)
             await add_org_unit(conn)
-            built = await build_indexes(conn)
+            built = await _all_built(conn)
         writer = cls(pool)
         if not built:
-            _log.warning(
-                "audit_log's indexes are being built by another start; asking again every %.0f s",
-                index_retry_seconds,
-            )
+            # Never inside the start: on a large `audit_log` a build takes as long as it takes,
+            # and a start killed mid-build would leave an invalid index for the next to drop.
             writer._index_retry = asyncio.create_task(_build_until_done(pool, index_retry_seconds))
         return writer
 
-    async def close(self) -> None:
+    async def indexes_built(self) -> None:
+        """Waits for this start's background build, if it has one (tests and scripts that need the
+        indexes before they go on)."""
         if self._index_retry is not None:
+            await asyncio.shield(self._index_retry)
+
+    async def close(self) -> None:
+        if self._index_retry is not None and not self._index_retry.done():
             self._index_retry.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._index_retry
+        if self._index_retry is not None:
+            # Whatever the build ended with, the pool is still closed.
+            await asyncio.gather(self._index_retry, return_exceptions=True)
         await self._pool.close()
 
     async def record(
