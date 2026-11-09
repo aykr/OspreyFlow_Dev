@@ -100,3 +100,4 @@ npm error command sh -c playwright test --config keyboard/playwright.config.ts
 make: *** [glass-keyboard] Error 1
 # exit 2 end 2026-11-09T13:10:01Z
 # Classification (rules): with the patch applied, rules' registries (ALERTS_ACTIONS, WATCH_PANEL_ACTIONS) are fully covered. What remains is boards.spec.ts:225, 'an item is edited by keyboard' (a 60 s timeout), plus its registry check, which reads every board id as unproven once that case fails. It failed again with the file run alone. src/boards, boards.spec.ts and boards-harness.tsx are identical to main (git diff main HEAD is empty for them), so this is main's own since L3.7 (case-b), not rules'.
+# Known failures on main (the orchestrator, CARRIES.md at 27dfd67, for case-b's L3.8): keyboard/boards.spec.ts:225 and keyboard/boards.spec.ts:423.
