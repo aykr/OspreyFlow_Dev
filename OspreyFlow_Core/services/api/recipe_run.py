@@ -62,6 +62,7 @@ from .studio_map import resolve_source_handling
 from .studio_publish import LoadSink, run_published_recipe
 from .target_models import TargetModelStore
 from .typology_rules import TypologyRuleStore
+from .watch_reach import owner_reaches_dataset_in
 
 
 @dataclass(frozen=True)
@@ -104,7 +105,8 @@ class RecipeRunDeps:
     #: staged run reads the dataset's own lists alone.
     list_store: ListStore | None = None
     #: L2.10 review item 4: whether a watch's owner still reaches its dataset
-    #: (`app.owner_reaches_dataset_in`). None: a watch with a dataset is not matched (fail closed).
+    #: (`watch_reach.owner_reaches_dataset_in`). None: a watch with a dataset is not matched (fail
+    #: closed). `from_state` always builds it from the state's own stores.
     watch_reach: DatasetReach | None = None
 
     @classmethod
@@ -117,6 +119,14 @@ class RecipeRunDeps:
             # An optional dependency (default None) the state does not hold is left None.
             optional = f.default is None
             values[f.name] = getattr(state, name, None) if optional else getattr(state, name)
+        if values.get("watch_reach") is None:
+            # L2.10 review round: the scheduled and folder-watched runs come this way. The check is
+            # built from the state's own stores, which every running Conduit holds, never from a
+            # field the state would have to be given (none is, so it would always be absent).
+            values["watch_reach"] = owner_reaches_dataset_in(
+                lambda: getattr(state, "datasets", None),
+                lambda: getattr(state, "investigations", None),
+            )
         return cls(**values)
 
 
@@ -473,6 +483,7 @@ async def _evaluate_watches_best_effort(
             valkey=valkey,
             principal_for_owner=_principal_for_owner,
             policy=config.hotlist_alert_policy,
+            reaches_dataset=watch_reach,
         )
         await evaluate_monitors_for_entry(
             entry,

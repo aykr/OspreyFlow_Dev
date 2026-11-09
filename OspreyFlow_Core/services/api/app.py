@@ -633,7 +633,6 @@ from .entity_pictures import (
     PictureNotFoundError,
     PictureSetResponse,
 )
-from .evaluation import DatasetReach
 from .event_scope import own_events_only
 from .explore import (
     ExploreService,
@@ -1033,6 +1032,7 @@ from .typology_rules import (
     TypologyRuleNotFoundError,
     TypologyRuleStore,
 )
+from .watch_reach import DatasetReach, owner_reaches_dataset_in
 from .watch_routes import (
     CreateHotlistRequest,
     CreateMonitorRequest,
@@ -2000,28 +2000,6 @@ def holds_a_level_in(
         return True
 
     return holds
-
-
-def owner_reaches_dataset_in(
-    datasets: DatasetStore | Callable[[], DatasetStore],
-    investigations: InvestigationStore | Callable[[], InvestigationStore],
-) -> Callable[[Principal, str], Any]:
-    """Whether a watch's owner still reaches its dataset: holds a level, by the case's own Viewer
-    check, on a case reading it (L2.10 review item 4). Asked of the owner's own principal as
-    resolved for the run, never of a principal narrowed to the dataset, which would reach it by
-    construction."""
-    holds = holds_a_level_in(investigations)
-
-    async def reaches(owner: Principal, dataset_id: str) -> bool:
-        store = datasets() if callable(datasets) else datasets
-        if store is None:
-            return False  # no dataset store, no case to reach it through
-        for case in await store.cases_reading(dataset_id):
-            if await holds(owner, case):
-                return True
-        return False
-
-    return reaches
 
 
 def get_watch_reach(request: Request) -> DatasetReach:
@@ -13854,6 +13832,7 @@ async def read_alert_teams(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
+    principal_names: PrincipalNamesDep,
 ) -> list[AlertTeam]:
     """The teams a rule's alerts may go to (ADR-146 decision 8), by name, and for each team the
     reader leads today the members of it who hold this case, whom they may give its alerts to
@@ -13877,6 +13856,13 @@ async def read_alert_teams(
             )
         out.append(AlertTeam(role_id=team.role_id, display_name=team.display_name,
                              lead=team.role_id in led, members=members))  # fmt: skip
+    # ADR-106: the members served, by name, asked for those ids alone (the lane-reviewer's round on
+    # the L2.10 fix: a lead's hand-off named people by their identity-provider ids).
+    served = sorted({m for t in out for m in t.members})
+    if served:
+        names = await principal_names.display_names(served)
+        out = [t.model_copy(update={"member_names": {m: names[m] for m in t.members if m in names}})
+               for t in out]  # fmt: skip
     return out
 
 

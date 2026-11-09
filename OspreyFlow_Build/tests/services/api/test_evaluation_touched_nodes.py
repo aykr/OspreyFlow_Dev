@@ -130,8 +130,12 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     return calls
 
 
+async def _reaches_all(owner: Principal, dataset_id: str) -> bool:
+    return True
+
+
 async def _hotlists_for(
-    graph: _Graph, entry: ChangeStreamEntry, hotlist: Hotlist, *more: Hotlist
+    graph: _Graph, entry: ChangeStreamEntry, hotlist: Hotlist, *more: Hotlist, reach: Any = _reaches_all
 ) -> list[Any]:
     async def owner(owner_id: str) -> Principal | None:
         return OWNER
@@ -140,7 +144,7 @@ async def _hotlists_for(
         entry, graph=graph,  # type: ignore[arg-type]
         scheme=SCHEME, hotlist_store=_Hotlists(hotlist, *more),  # type: ignore[arg-type]
         alert_store=None, audit=None, valkey=_Valkey(),  # type: ignore[arg-type]
-        principal_for_owner=owner, policy="strict",
+        principal_for_owner=owner, policy="strict", reaches_dataset=reach,
     )  # fmt: skip
 
 
@@ -343,3 +347,33 @@ async def test_a_monitor_is_evaluated_for_a_run_that_only_referenced_nodes(
         principal_for_owner=owner,
     )  # fmt: skip
     assert len(alerts) == 1 and calls[0]["recipient"].id == OWNER.id
+
+
+async def test_a_hotlist_whose_owner_has_lost_its_dataset_matches_nothing(
+    recorded: list[dict[str, Any]],
+) -> None:
+    """The lane-reviewer's round on the L2.10 fix: the hotlist path narrows its owner to the
+    hotlist's dataset only while they still reach it (`watch_reach.owner_reaches_dataset_in`, here
+    over a case they have left), and with no check at all matches nothing (fail closed); a check
+    that fails stops that hotlist alone. Red with the reach check removed from the hotlist loop:
+    the owner, narrowed to case-dataset, was given the match in each."""
+    from services.api.datasets import InMemoryDatasetStore
+    from services.api.investigations import InvestigationNotFoundError
+    from services.api.watch_reach import owner_reaches_dataset_in
+
+    class _Left:
+        async def get_authorized(self, case: str, principal: Principal, *, need: Any = None) -> object:
+            raise InvestigationNotFoundError(case)  # the owner holds no level there now
+
+    datasets = InMemoryDatasetStore()
+    datasets.cases.update({"case-1": ["case-dataset"]})
+    nodes = {"a": {"properties": {"value_normalised": HOT}, "datasets": ["case-dataset"]}}
+
+    async def broken(owner: Principal, dataset_id: str) -> bool:
+        raise ConnectionError("the case store went away")
+
+    for reach in (owner_reaches_dataset_in(datasets, _Left()), None, broken):
+        await _hotlists_for(_Graph(nodes), _entry(["a"]), _hotlist(dataset_id="case-dataset"), reach=reach)
+    assert recorded == []
+    await _hotlists_for(_Graph(nodes), _entry(["a"]), _hotlist(dataset_id="case-dataset"))
+    assert [c["recipient"].datasets for c in recorded] == [["case-dataset"]]

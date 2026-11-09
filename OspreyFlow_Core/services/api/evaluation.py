@@ -47,6 +47,7 @@ attempt flips it back, so this reflects the most recent reach, not a one-way tri
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -142,6 +143,33 @@ def watched_values(properties: Mapping[str, object]) -> set[str]:
     return found
 
 
+_log = logging.getLogger(__name__)
+
+#: Whether a principal still reaches a dataset (`watch_reach.owner_reaches_dataset_in`). A watch
+#: is matched within its dataset only while this holds.
+DatasetReach = Callable[[Principal, str], Awaitable[bool]]
+
+
+async def _within_its_dataset(
+    owner: Principal, dataset_id: str, reaches_dataset: DatasetReach | None, watch: str
+) -> Principal | None:
+    """The owner narrowed to a watch's dataset, or `None` (the watch is not matched) where the owner
+    no longer reaches it, where no check was given (fail closed) or where the check failed. Each
+    is logged: a watch that stops matching never does so silently (L2.10's review, item 4)."""
+    if reaches_dataset is None:
+        _log.warning("watch %s not matched: no dataset reach check was given", watch)
+        return None
+    try:
+        reaches = await reaches_dataset(owner, dataset_id)
+    except Exception:  # noqa: BLE001 - one watch's check never stops the others; it fails closed
+        _log.warning("watch %s not matched: its owner's reach was not read", watch, exc_info=True)
+        return None
+    if not reaches:
+        _log.info("watch %s not matched: its owner no longer reaches its dataset", watch)
+        return None
+    return owner.model_copy(update={"datasets": [dataset_id]})
+
+
 async def evaluate_hotlists_for_entry(
     entry: ChangeStreamEntry,
     *,
@@ -153,6 +181,7 @@ async def evaluate_hotlists_for_entry(
     valkey: Valkey,
     principal_for_owner: Callable[[str], Awaitable[Principal | None]],
     policy: DisclosurePolicy,
+    reaches_dataset: DatasetReach | None = None,
 ) -> list[Alert]:
     """One overlap-guarded evaluation per active hotlist. `principal_for_owner` is supplied by the
     caller, never resolved here — `06_DECISIONS.md` ADR-036's own "resolved fresh, never cached"
@@ -201,9 +230,14 @@ async def evaluate_hotlists_for_entry(
         await hotlist_store.set_status(hotlist.id, "active")
 
         # ADR-099 Amendment 3: a hotlist made in a case watches that case's dataset, and its owner
-        # is shown what it finds as that dataset's reader.
+        # is shown what it finds as that dataset's reader, only while they still reach it.
         if hotlist.dataset_id is not None:
-            recipient = recipient.model_copy(update={"datasets": [hotlist.dataset_id]})
+            narrowed = await _within_its_dataset(
+                recipient, hotlist.dataset_id, reaches_dataset, f"hotlist:{hotlist.id}"
+            )
+            if narrowed is None:
+                continue
+            recipient = narrowed
 
         async def _run(hotlist: Hotlist = hotlist, recipient: Principal = recipient) -> list[Alert]:
             found: list[Alert] = []
@@ -235,11 +269,6 @@ async def evaluate_hotlists_for_entry(
         all_alerts.extend(result.alert_list())
 
     return all_alerts
-
-
-#: Whether a principal still reaches a dataset: holds a level on a case reading it (the app's
-#: `owner_reaches_dataset_in`). A watch is matched within its dataset only while this holds.
-DatasetReach = Callable[[Principal, str], Awaitable[bool]]
 
 
 async def evaluate_monitors_for_entry(
@@ -281,9 +310,12 @@ async def evaluate_monitors_for_entry(
         # only while its owner still reaches it (L2.10 review item 4): narrowing the owner to the
         # dataset must never give back one they have lost.
         if monitor.dataset_id is not None:
-            if reaches_dataset is None or not await reaches_dataset(recipient, monitor.dataset_id):
+            narrowed = await _within_its_dataset(
+                recipient, monitor.dataset_id, reaches_dataset, f"monitor:{monitor.id}"
+            )
+            if narrowed is None:
                 continue
-            recipient = recipient.model_copy(update={"datasets": [monitor.dataset_id]})
+            recipient = narrowed
 
         async def _run(monitor: Monitor = monitor, recipient: Principal = recipient) -> list[Alert]:
             return await match_monitor(

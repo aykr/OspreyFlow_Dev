@@ -25,12 +25,48 @@ STATE_NAMES = {
 }
 
 
+#: Built by `from_state` from the state's own stores, never read from a state attribute of its own.
+BUILT = {"watch_reach"}
+
+
 def test_the_scheduler_reads_every_run_dependency_from_where_the_route_does() -> None:
-    fields = [f.name for f in dataclasses.fields(RecipeRunDeps)]
+    fields = [f.name for f in dataclasses.fields(RecipeRunDeps) if f.name not in BUILT]
     state = SimpleNamespace(**{STATE_NAMES.get(name, name): object() for name in fields})
     deps = RecipeRunDeps.from_state(state)
     for name in fields:
         assert getattr(deps, name) is getattr(state, STATE_NAMES.get(name, name)), name
+
+
+async def test_a_scheduled_run_checks_a_watchs_owner_reach_through_the_states_own_stores() -> None:
+    """The lane-reviewer's round on the L2.10 fix: the scheduled and folder-watched runs build their
+    dependencies with `from_state`, over a state that holds the dataset and case stores and no
+    `watch_reach` of its own, as the running Conduit's does. The check is built from those stores,
+    so a watch is matched for an owner who reaches its dataset and not for one who does not. Red
+    with `from_state`'s building of `watch_reach` removed: it was None, and every watch with a
+    dataset went unmatched on those runs."""
+    from services.api.datasets import InMemoryDatasetStore
+    from services.api.investigations import InvestigationNotFoundError
+
+    from schemas.domain import Principal
+
+    class _Cases:
+        async def get_authorized(self, case: str, principal: Principal, *, need: Any = None) -> object:
+            if (case, principal.id) != ("case-1", "owner"):
+                raise InvestigationNotFoundError(case)
+            return object()
+
+    datasets = InMemoryDatasetStore()
+    datasets.cases.update({"case-1": ["ds-1"]})
+    fields = [f.name for f in dataclasses.fields(RecipeRunDeps) if f.name not in BUILT]
+    state = SimpleNamespace(**{STATE_NAMES.get(name, name): object() for name in fields})
+    state.datasets, state.investigations = datasets, _Cases()
+    assert not hasattr(state, "watch_reach"), "the running Conduit's state holds no such attribute"
+    reach = RecipeRunDeps.from_state(state).watch_reach
+    assert reach is not None
+    owner = Principal(id="owner", clearance="OFFICIAL", org_unit="unit-1")
+    assert await reach(owner, "ds-1") is True
+    assert await reach(owner.model_copy(update={"id": "left"}), "ds-1") is False
+    assert await reach(owner, "ds-2") is False
 
 
 class _NothingVerified:

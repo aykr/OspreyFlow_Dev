@@ -308,6 +308,13 @@ class World:
         return copy.deepcopy(self)
 
 
+
+async def _owner_reaches(owner: object, dataset_id: str) -> bool:
+    """The hotlist's owner still reaches its dataset (ADR-146 Amendment 4 point 7): the storyline's
+    owner is the case's own member throughout; the reach itself is proven in
+    `test_evaluation_touched_nodes.py` and `test_team_lead_and_watches.py`."""
+    return True
+
 async def _load_base(world: World, file: str, rows: Sequence[dict[str, str]] | None = None) -> None:
     report, _events, _held = await load_with_rules(
         golden.recipe_for(file),
@@ -432,6 +439,7 @@ async def run_chapter_9_file(
         valkey=stores.valkey,  # type: ignore[arg-type]
         principal_for_owner=stores.principal_for_owner,
         policy="strict",
+        reaches_dataset=_owner_reaches,
     )
     world.loads.append(file)
     return Loaded(file, report, found, notes)

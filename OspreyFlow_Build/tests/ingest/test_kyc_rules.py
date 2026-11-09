@@ -460,7 +460,8 @@ async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_fal
     positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
     asserted, the alert still opens (its cited link follows the new revision), and due diligence
     says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides).
-    Red with `approve_close` not calling `_close`: the match stayed inferred."""
+    Red with `approve_close` not calling `_close`: the match stayed inferred; and with `_close`
+    confirming a false positive too: Nair's match was asserted."""
     case = f"case-{new_id()}"
     rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
@@ -486,8 +487,13 @@ async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_fal
         assert matches[0].provenance.state is ProvenanceState.ASSERTED
         assert matches[0].provenance.confirmed_by == colleague.id, "confirmed by whoever closed it"
 
+        # The false positive is closed the same way, proposed and approved, so its match is judged
+        # after a close has really happened (the lane-reviewer's round on the fix: proposed alone,
+        # nothing closed, and the assertion below could not fail).
         await dispose(stores["alerts"], graph, gate.analytics, case, nair.id, OFFICER,
                       disposition="false_positive", reason="A different person")  # fmt: skip
+        not_a_match = await approve_close(stores["alerts"], graph, gate.analytics, case, nair.id, colleague)
+        assert (not_a_match.status, not_a_match.disposition) == ("closed", "false_positive")
         nair_match = [e for e in await graph.edges_among(nair.referent_node_ids, OFFICER) if e.type == "SAME_AS"]
         assert [e.provenance.state for e in nair_match] == [ProvenanceState.INFERRED]
 

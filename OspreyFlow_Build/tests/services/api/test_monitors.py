@@ -122,8 +122,9 @@ async def test_a_watchs_schedule_is_set_by_its_owner_alone(
     saved = await pattern_store.save(
         OWNER, pattern_id=None, name="Monitor fixture schedule", definition=_pattern()
     )
-    monitor = await store.create(OWNER, pattern_id=saved.pattern_id)
+    monitor = None
     try:
+        monitor = await store.create(OWNER, pattern_id=saved.pattern_id)
         weekly = MonitorScheduleInput(every="weekly", hour=9, weekday=3)
         with pytest.raises(MonitorNotFoundError):
             await store.set_schedule(monitor.id, OTHER_ANALYST, weekly)
@@ -132,7 +133,8 @@ async def test_a_watchs_schedule_is_set_by_its_owner_alone(
         mine = await store.set_schedule(monitor.id, OWNER, weekly)
         assert (mine.every, mine.hour, mine.weekday) == ("weekly", 9, 3)
     finally:
-        async with store._pool.acquire() as conn:
-            await conn.execute("DELETE FROM monitors WHERE id = $1", monitor.id)
+        if monitor is not None:
+            async with store._pool.acquire() as conn:
+                await conn.execute("DELETE FROM monitors WHERE id = $1", monitor.id)
         async with pattern_store._pool.acquire() as conn:
             await conn.execute("DELETE FROM saved_patterns WHERE pattern_id = $1", saved.pattern_id)

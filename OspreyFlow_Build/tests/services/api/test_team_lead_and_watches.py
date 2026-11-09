@@ -12,7 +12,13 @@
 - a watched pattern on its own schedule (G16), matched as its owner within its dataset, so it alerts
   only on what its maker may see: `test_a_watch_runs_on_its_schedule_as_its_owner_within_its_dataset`,
   `test_a_scheduled_watch_alerts_only_on_what_its_maker_may_see`,
-  `test_a_slot_the_identity_provider_could_not_answer_is_tried_again`.
+  `test_a_slot_the_identity_provider_could_not_answer_is_tried_again`;
+- from the orchestrator's review: a watch whose owner has lost its dataset, on the schedule and on a
+  load (`test_a_scheduled_watch_whose_owner_has_lost_its_dataset_alerts_on_nothing`,
+  `test_a_loads_watch_whose_owner_has_lost_its_dataset_is_not_matched`), the teams a rule may go to
+  (`test_the_teams_a_rule_may_go_to_list_members_to_the_lead_alone`), What raises alerts' names
+  (`test_what_raises_alerts_names_its_people_and_asks_for_no_one_else`) and a routed alert's
+  explained team (`test_a_routed_alerts_explanation_names_the_team_it_was_routed_to`).
 Each red with its check removed at the real call site (`process/lanes/rules/l2.10/RED_RECORD.md`).
 """
 
@@ -385,8 +391,8 @@ async def test_a_scheduled_watch_whose_owner_has_lost_its_dataset_alerts_on_noth
     """The orchestrator's L2.10 review, item 4. The owner is resolved as the identity provider gives
     them, and narrowing them to the watch's dataset must never give back one they have lost: they
     have left case-1, the only case reading ds-1, so the watch reads nothing and raises nothing,
-    and the check was asked of the owner as resolved (`owner_reaches_dataset_in`, over the case's
-    own Viewer check). Red with the reach check removed from `MonitorScheduleExecutor._consider`:
+    and the check was asked for the owner, of ds-1's own case alone (`owner_reaches_dataset_in`,
+    over the case's own Viewer check, which reads their id, unit and teams). Red with the reach check removed from `MonitorScheduleExecutor._consider`:
     the owner, narrowed to ds-1, alerted on n-mine."""
     graph = _ScopedGraph({"n-mine": "ds-1"})
     saves = _Saves()
@@ -411,7 +417,7 @@ async def test_a_scheduled_watch_whose_owner_has_lost_its_dataset_alerts_on_noth
                                        reaches_dataset=owner_reaches_dataset_in(datasets, cases))  # type: ignore[arg-type]  # fmt: skip
     await executor.tick(NOW)
     assert saves.saved == []
-    assert cases.asked == [("case-1", "owner")], "asked of the owner as resolved, for ds-1's case alone"
+    assert cases.asked == [("case-1", "owner")], "asked for the owner, of ds-1's case alone"
     assert len(monitors.slots) == 1 and monitors.status == [], "the slot is spent; the watch is not stopped"
     # Given the case back, the next slot alerts again.
     cases.members["case-1"].add("owner")
@@ -554,18 +560,36 @@ async def test_the_teams_a_rule_may_go_to_list_members_to_the_lead_alone() -> No
                                                                         identity_admin=directory)))  # fmt: skip
     case = SimpleNamespace(id=CASE)
 
+    class _Names:
+        """The ADR-106 directory: records the ids asked for."""
+
+        def __init__(self) -> None:
+            self.asked: list[str] = []
+
+        async def display_names(self, ids: Any) -> dict[str, str]:
+            self.asked.extend(ids)
+            return {"lead": "Lee Lead", "member": "Mo Member"}
+
+    names = _Names()
+    served: list[Any] = []
+
     async def ask(principal: Principal) -> dict[str, tuple[bool, list[str]]]:
-        teams = await read_alert_teams(request, case, principal, grants)  # type: ignore[arg-type]
+        teams = await read_alert_teams(request, case, principal, grants, names)  # type: ignore[arg-type]
+        served.extend(teams)
         return {t.role_id: (t.lead, t.members) for t in teams}
 
     lead = LEAD.model_copy(update={"roles": ["reports_viewer", "role:team-7"]})  # no rule right
     assert await ask(lead) == {"team-7": (True, ["lead", "member"]), "team-8": (False, [])}
+    # ADR-106: the members by name, the directory asked for the members served alone.
+    assert served[0].member_names == {"lead": "Lee Lead", "member": "Mo Member"}
+    assert names.asked == ["lead", "member"]
     deployer = Principal(id="deployer", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
     assert await ask(deployer) == {"team-7": (False, []), "team-8": (False, [])}
     asked = directory.asked
     viewer = Principal(id="rv", clearance="OFFICIAL", org_unit="unit-1", roles=["reports_viewer"])
     assert await ask(viewer) == {}
     assert directory.asked == asked, "a reader shown no team causes no directory read"
+    assert names.asked == ["lead", "member"], "no one else is looked up by name"
 
 
 def test_what_raises_alerts_names_its_people_and_asks_for_no_one_else() -> None:
