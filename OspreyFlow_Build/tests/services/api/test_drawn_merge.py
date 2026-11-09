@@ -465,3 +465,51 @@ def test_under_second_person_reviews_nothing_is_written_until_an_author_approves
     assert len([e for e in mw.graph.edges() if e.type == SAME_AS]) == 1
     assert mw.datasets.cases[mw.home] == ["src"]
     assert mw.views.views[mw.board].drawing is False
+
+
+# --- the revert (decision 6 step 4: reverted as a promotion is) -------------------------------
+
+
+def _merge_commit(mw: SimpleNamespace) -> Any:
+    from services.api.app import app, get_boards  # the board service as a route builds it
+    from services.api.dataset_scope import stamping
+    from services.api.drawn_merge import MergeCommit
+
+    boards = get_boards(SimpleNamespace(app=app), stamping(mw.graph, registry=mw.datasets),
+                        mw.views, mw.items, mw.datasets, app.state.ontology,
+                        app.state.handling_scheme, mw.models)  # type: ignore[arg-type]  # fmt: skip
+    return boards, MergeCommit(
+        promotions_store=mw.store, graph=boards.graph, datasets=mw.datasets, views=mw.views,
+        items=mw.items, scheme=boards.scheme,
+    )  # fmt: skip
+
+
+async def test_reverting_a_merge_takes_back_the_load_its_matches_and_decision_7(
+    mw: SimpleNamespace,
+) -> None:
+    from scripts.revert_promotion import revert_promotion  # the operator module's own core
+
+    drawn = _three(mw)
+    body = _merge(mw, drawn).json()
+    boards, merge = _merge_commit(mw)
+    record = mw.store.records[body["id"]]
+    from services.api.promotions import PromotionRefused
+
+    # Without its stores, a drawn merge's revert is refused before anything is written.
+    with pytest.raises(PromotionRefused) as refused:
+        await revert_promotion(record, boards.graph, mw.store, boards.items)
+    assert refused.value.code == "no_merge"
+    assert mw.graph.node(drawn.mercer["element_id"]).datasets == sorted([mw.drawn, "src"])
+
+    reverted = await revert_promotion(record, boards.graph, mw.store, boards.items, merge)
+
+    assert reverted.status == "reverted"
+    assert mw.graph.node(drawn.mercer["element_id"]).datasets == [mw.drawn]
+    (same,) = [e for e in mw.graph.edges() if e.type == SAME_AS]
+    assert same.audit.reverted  # withdrawn with it, never deleted
+    assert mw.datasets.cases[mw.home] == [mw.drawn] and mw.datasets.merged == {}
+    view = mw.views.views[mw.board]
+    assert (view.drawing, view.merged_load, view.merged_added) == (True, None, [])
+    # Drawing again goes into the drawing, as before the merge.
+    again = _draw(mw, label="After")
+    assert mw.graph.node(again["element_id"]).datasets == [mw.drawn]
