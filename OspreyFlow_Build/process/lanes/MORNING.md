@@ -459,6 +459,12 @@ New ones are added at the bottom as they happen.
     switched back on (`rm ~/.ospreyflow/no-local-stacks`, with Docker Desktop started). Docker Desktop stays off,
     so the local image scans in `make ci` are refused (`make -k ci`, as on the 429 days). Each lane uses the lease
     script from main's checkout, not its own branch's copy, until it next rebases.
+    **Corrected, 12:50:** a stack's Postgres needs an `ospreyflow` database beside `osprey`. d had been created
+    without it, and so had b and c, which I built from d's settings. Studio and studio-b each found it on their
+    first runs: those runs failed (InvalidCatalogNameError), and each lane withdrew them as unmeasured. Each lane
+    then created the database under its own lease (b by studio, c by studio-b), and I created it on d and e under
+    mine (checked). It stays when a stack goes down. Whoever rebuilds a stack runs `CREATE DATABASE ospreyflow
+    OWNER osprey` after creating its Postgres.
 
 ## Evening, 7 November: your records of 7 November applied
 
