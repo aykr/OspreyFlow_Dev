@@ -21,6 +21,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from dulwich.refs import DiskRefsContainer
 from services.api import studio_publish
 from services.api.studio_publish import (
     GitCommitError,
@@ -73,16 +74,19 @@ async def test_changed_bytes_are_a_second_commit(tmp_path: Path) -> None:
 async def test_a_failed_commit_is_an_error_not_a_quiet_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real = studio_publish._run_git
+    """Dulwich's own refusal (since the swap from the git binary, the owner's ruling of
+    9 November 2026): the compare-and-swap on the branch fails because it moved under the commit.
+    The publish raises, and the branch is left where it was."""
+    await commit_recipe_file("r-one", DATA, version=1, repo_root=tmp_path)
+    before = _git(tmp_path, "rev-parse", "HEAD")
 
-    async def failing(*args: str, cwd: Path) -> tuple[int, str]:
-        if args[0] == "commit":
-            return 1, "fatal: something else"
-        return await real(*args, cwd=cwd)
+    def moved(self: DiskRefsContainer, *args: object, **kwargs: object) -> bool:
+        return False
 
-    monkeypatch.setattr(studio_publish, "_run_git", failing)
+    monkeypatch.setattr(DiskRefsContainer, "set_if_equals", moved)
     with pytest.raises(GitCommitError):
-        await commit_recipe_file("r-one", DATA, version=1, repo_root=tmp_path)
+        await commit_recipe_file("r-one", DATA + b"label: x\n", version=2, repo_root=tmp_path)
+    assert _git(tmp_path, "rev-parse", "HEAD") == before
 
 
 async def test_write_and_commit_recipe_goes_through_the_same_commit(
