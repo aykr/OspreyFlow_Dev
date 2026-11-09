@@ -66,12 +66,17 @@ def test_the_conduit_image_carries_the_connector_profiles() -> None:
     )
 
 
-#: A call that runs the `git` binary: a process API whose first argument (or first list element) is
-#: the literal "git", across line breaks — the shape `studio_publish._run_git` had before the
-#: dulwich swap, `asyncio.create_subprocess_exec(\n        "git",`.
+#: A call that runs the `git` binary: a process API whose first argument (or the first element of
+#: a list or tuple argv) is the literal "git" or a path ending in "/git", across line breaks — the
+#: shape `studio_publish._run_git` had before the dulwich swap,
+#: `asyncio.create_subprocess_exec(\n        "git",`. **Not seen**: a name bound to "git" and
+#: passed later (`GIT = "git"; run([GIT])`), or an argv built elsewhere and handed through a helper
+#: (`scripts/refresh.py`'s `subprocess.run(list(argv))`); the runtime half,
+#: `tests/services/api/test_recipe_repository.py::test_publish_never_execs_a_binary`, covers the
+#: publish path whatever the spelling.
 _GIT_EXEC = re.compile(
     r"(create_subprocess_exec|create_subprocess_shell|Popen|run|call|check_call|check_output"
-    r"|system|exec\w*|spawn\w*|which)\(\s*\[?\s*[\"']git\b"
+    r"|system|exec\w*|spawn\w*|which)\(\s*[\[(]?\s*[\"'](?:[^\"'\s]*/)?git[\"'\s]"
 )
 
 #: The code the Conduit's image carries (services/api/Dockerfile's COPY lines).
@@ -95,8 +100,12 @@ def test_the_git_scan_finds_the_call_the_conduit_used_to_make() -> None:
     )
     assert _git_execs(before_the_swap)
     assert _git_execs('subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"])')
+    assert _git_execs('subprocess.run(("git", "status"), check=True)')
+    assert _git_execs('os.execv("/usr/bin/git", ["git", "status"])')
+    assert _git_execs('os.system("git status")')
     assert not _git_execs('Repo.init(str(repo_root), default_branch=b"main")')
     assert not _git_execs('subprocess.run(["gitleaks", "detect"])')
+    assert not _git_execs('subprocess.run(["/opt/digit", "x"])')
 
 
 def test_nothing_the_conduit_image_carries_execs_git() -> None:

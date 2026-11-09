@@ -7,11 +7,13 @@ two invariants, each with the test that would fail if it were violated (rule 12)
 * **The repository stays a git repository.** What dulwich writes, the real `git` reads as the
   same history: `test_publish_writes_a_commit_real_git_reads` and
   `test_a_second_publish_keeps_the_first_in_the_history` read it back with the host's `git`
-  (a test may run git; the Conduit may not). Shown red with the commit removed (REPORT.md).
+  (a test may run git; the Conduit may not). Shown red with the commit removed
+  (`process/lanes/studio-b/l1.7a/`).
 * **Nothing on the publish path execs a binary.** `test_publish_never_execs_a_binary` replaces
   every process-spawning entry point with one that fails the test and empties `PATH`, so a `git`
   call anywhere under `commit_recipe_file` — not only in `studio_publish.py` — fails it. Shown red
-  with a planted `asyncio.create_subprocess_exec("git", "status")` (REPORT.md).
+  with a planted `asyncio.create_subprocess_exec("git", "status")`
+  (`process/lanes/studio-b/l1.7a/`).
 
 Offline: no stack, only a temporary directory.
 """
@@ -146,6 +148,79 @@ async def test_publish_never_execs_a_binary(
     assert calls == []
 
 
+@needs_git
+async def test_concurrent_publishes_each_commit_their_own_bytes(tmp_path: Path) -> None:
+    """The lock's invariant (rule 12): publishes of one recipe at once never refuse each other,
+    and each version's commit holds that version's bytes, not another's."""
+    repo = tmp_path / "repo"
+    versions = range(1, 9)
+    await asyncio.gather(
+        *(
+            commit_recipe_file("alpha", f"version: {v}\n".encode(), version=v, repo_root=repo)
+            for v in versions
+        )
+    )
+    log = _git(repo, "log", "--format=%H %s").splitlines()
+    assert len(log) == len(versions)
+    for line in log:
+        sha, subject = line.split(" ", 1)
+        version = subject.rsplit(" v", 1)[1]
+        assert _git(repo, "show", f"{sha}:recipes/alpha.yaml") == f"version: {version}\n"
+    _git(repo, "fsck", "--strict")
+
+
+@needs_git
+async def test_a_failure_after_staging_leaves_nothing_committed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The index is written before `HEAD` moves, as `git add` preceded `git commit`: a failure
+    writing the index raises, and the repository holds no commit the registry row does not name."""
+    from dulwich.index import Index
+
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    before = _git(repo, "rev-parse", "HEAD")
+
+    def locked(self: Index, *args: object, **kwargs: object) -> None:
+        raise OSError("index.lock is held")
+
+    monkeypatch.setattr(Index, "write", locked)
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+    assert _git(repo, "rev-parse", "HEAD") == before
+
+
+@needs_git
+async def test_a_recipe_root_inside_another_repository_gets_its_own(tmp_path: Path) -> None:
+    """The developer-host fallback root sits inside the monorepo's checkout. As the old
+    `.git`-exists check did, the publish makes a repository at the root itself and never
+    commits to the enclosing one."""
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    _git(outer, "init", "--initial-branch=trunk")
+    root = outer / "inner"
+
+    await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=root)
+
+    assert (root / ".git").is_dir()
+    assert _git(root, "log", "--format=%s").splitlines() == ["ingest: publish alpha v1"]
+    assert _git(outer, "rev-list", "--all").strip() == ""
+
+
+@needs_git
+async def test_a_detached_head_moves_as_git_commit_moved_it(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    first = _git(repo, "rev-parse", "HEAD").strip()
+    _git(repo, "checkout", "--detach", "-q")
+
+    await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert _git(repo, "rev-parse", "HEAD~1").strip() == first
+    assert _git(repo, "rev-parse", "refs/heads/main").strip() == first
+    assert _git(repo, "show", "HEAD:recipes/alpha.yaml") == "version: 2\n"
+
+
 def test_the_module_names_no_process_api() -> None:
     """The static half: the git binary is not named, nor any way to spawn one, in the module
     that publishes. Read as text, so a call on a branch no test reaches is still caught."""
@@ -161,8 +236,11 @@ async def test_a_failed_write_is_a_typed_error_not_a_bare_500(tmp_path: Path) ->
     blocker.mkdir()
     (blocker / ".git").write_text("not a repository\n")  # a file where the git dir should be
 
-    with pytest.raises(GitCommitError):
+    with pytest.raises(GitCommitError) as raised:
         await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=blocker)
+    # The text is the client's (app.py's handler returns it): no volume path in it.
+    assert str(tmp_path) not in str(raised.value)
+    assert "recipes/alpha.yaml" in str(raised.value)
 
 
 def test_dulwich_is_admitted_by_the_licence_gate_through_its_apache_alternative() -> None:
