@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { currentBrand } from "../brand/brand";
+import { whyNotByRole } from "../help/roles";
 import type { AdminApi } from "./api";
 import { onOpening, takeOpening } from "./needsYou/openings";
 import SECTIONS from "./sections.json";
@@ -168,7 +169,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
       <div>
         <button type="button" className={govuk ? "govuk-link" : "btn"} onClick={() => setHelp(true)}>{HELP_TITLE}</button>
       </div>
-      {!section && <p className="label">Your account holds no administration right.</p>}
+      {!section && <p className="label">{`Your account holds no administration right. ${whyNotByRole("administer_system")}`}</p>}
       {section && (
         <div className="admin-place__body">
           <SideNavigation
