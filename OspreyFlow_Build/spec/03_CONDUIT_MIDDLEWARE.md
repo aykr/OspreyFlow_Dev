@@ -1093,6 +1093,9 @@ GET    /v1/map/providers                        the deployment's declared map pr
 GET    /v1/map/tiles/{provider_id}/{z}/{x}/{y}   the tile proxy for a tier-3/4 provider
 GET    /v1/map/local-source/{provider_id}        a tier-1/2 provider's local PMTiles file, over HTTP
 POST   /v1/investigations/{id}/map/places       place search over the gazetteer datasets the case reads (`{"query", "limit"?}`), each place with its point and never its gazetteer's identifier; Viewer, `investigate` (ADR-147 Amendment 1)
+GET    /v1/investigations/{id}/map/gazetteers   the gazetteers of the reader's unit, each said added or not to the case's own dataset (names only, no count); Viewer, `investigate` (ADR-147 Amendment 2)
+PUT    /v1/investigations/{id}/map/gazetteers/{dataset_id}   adds a gazetteer: its places copied into the case's own dataset, identifiers withheld and never matched; Author, `share_case` (ADR-147 Amendment 2)
+DELETE /v1/investigations/{id}/map/gazetteers/{dataset_id}   removes it: its copies reverted, but another writer's or a confirmed one (`copies_kept`); Author, `share_case` (ADR-147 Amendment 2)
 ```
 
 **`GET /v1/ontology`** is what the Glass's channel/shape mapping (`02_GLASS_FRONTEND.md` §4: "Hue
