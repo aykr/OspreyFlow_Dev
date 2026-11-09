@@ -965,16 +965,23 @@ class Promotions:
         reads = await self._seen(grant.case_id, None, reader)
         problems = await self._problems(reads, dataset, grant.case_id, reader)
         goes, left = await self._plan(reads, problems, list(dict.fromkeys(ticked)), dataset, reader)
+        # The grant is for this merge alone, so the merge claims it, closing it, before anything is
+        # recorded: of two merges through one grant at once, only the one that closed it goes on
+        # (the store's conditional close, as a decision's); it is closed to reading the layer
+        # through it too, and the reviewer reads as a reviewer does, never through it (the
+        # independent review, blocker 2 and round 2's minor).
+        if not await self.store.close_grant(grant.id, datetime.now(UTC)):
+            raise PromotionRefused(
+                "no_open_grant",
+                "This merge is closed: open Merge into the dataset again to read the layer.",
+                status=403,
+            )
         record = await self._record(
             trigger="layer_merge", case_id=grant.case_id, board_id=None, dataset=dataset,
             layer_id=grant.layer_id, proposer=author, goes=goes, left=left, grant_id=grant.id,
         )  # fmt: skip
         if self.commits_at_once(dataset):
             return await self._commit(record, by=None)
-        # Sent for review: the grant was for this merge alone, so it closes now, to a second merge
-        # and to reading the layer through it; the reviewer reads as a reviewer does
-        # (`_reviewer_read`), never through the Author's grant (the independent review, blocker 2).
-        await self.store.close_grant(grant.id, datetime.now(UTC))
         return record
 
     async def cancel_merge(self, grant_id: str, dataset: Dataset, author: Principal) -> None:

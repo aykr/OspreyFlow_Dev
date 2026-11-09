@@ -127,7 +127,9 @@ class PromotionStore(Protocol):
     async def waiting_dataset_ids(self) -> list[str]: ...
     async def open_grant(self, grant: LayerGrant) -> None: ...
     async def grant(self, grant_id: str) -> LayerGrant | None: ...
-    async def close_grant(self, grant_id: str, at: datetime) -> None: ...
+    #: Closes an open grant; True only for the call that closed it, so a merge claims its grant
+    #: once (of two at once, one wins), as `decide` does a decision.
+    async def close_grant(self, grant_id: str, at: datetime) -> bool: ...
 
 
 class InMemoryPromotionStore:
@@ -256,10 +258,12 @@ class InMemoryPromotionStore:
     async def grant(self, grant_id: str) -> LayerGrant | None:
         return self.grants.get(grant_id)
 
-    async def close_grant(self, grant_id: str, at: datetime) -> None:
+    async def close_grant(self, grant_id: str, at: datetime) -> bool:
         held = self.grants.get(grant_id)
-        if held is not None and held.closed_at is None:
-            self.grants[grant_id] = replace(held, closed_at=at)
+        if held is None or held.closed_at is not None:
+            return False
+        self.grants[grant_id] = replace(held, closed_at=at)
+        return True
 
 
 _BOOTSTRAP_SQL = """
@@ -523,14 +527,15 @@ class PostgresPromotionStore:
             )
         return LayerGrant(**{k: row[k] for k in _GRANT_COLUMNS.split(", ")}) if row else None
 
-    async def close_grant(self, grant_id: str, at: datetime) -> None:
+    async def close_grant(self, grant_id: str, at: datetime) -> bool:
         async with self._pool.acquire() as conn:
-            await conn.execute(
+            done = await conn.execute(
                 "UPDATE promotion_layer_grants SET closed_at = $2 "
                 "WHERE id = $1 AND closed_at IS NULL",
                 grant_id,
                 at,
             )
+        return bool(done == "UPDATE 1")
 
 
 # --- admin's ageing seam (ADR-145 Amendment 6) ---------------------------------------------------

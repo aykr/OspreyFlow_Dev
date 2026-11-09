@@ -141,8 +141,9 @@ async def test_a_grant_closes_once_and_is_never_reopened(store: PostgresPromotio
                        holder="dana", opened_at=NOW)  # fmt: skip
     await store.open_grant(grant)
     assert await store.grant(grant.id) == grant
-    await store.close_grant(grant.id, NOW + timedelta(minutes=5))
-    await store.close_grant(grant.id, NOW + timedelta(minutes=9))
+    # The close answers whether this call closed it: a merge claims its grant once (round 2).
+    assert await store.close_grant(grant.id, NOW + timedelta(minutes=5)) is True
+    assert await store.close_grant(grant.id, NOW + timedelta(minutes=9)) is False
     held = await store.grant(grant.id)
     assert held is not None and held.closed_at == NOW + timedelta(minutes=5)
     assert await store.grant("no-such") is None

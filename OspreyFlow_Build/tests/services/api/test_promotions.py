@@ -1567,14 +1567,36 @@ def _reject_keeping_the_grant(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(Promotions, "reject", kept)
 
 
+def test_a_merge_whose_grant_another_merge_closed_meanwhile_records_nothing(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The claim is atomic (round 2's minor): a second merge through the same grant, closed by
+    the first after this one's grant was read open, is refused (403 `no_open_grant`) and records
+    no second promotion."""
+    first, _ = _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    real = Promotions._plan
+
+    async def raced(self: Promotions, *args: Any, **kwargs: Any) -> Any:
+        planned = await real(self, *args, **kwargs)
+        await self.store.close_grant(grant, datetime.now(UTC))  # the other merge's claim
+        return planned
+
+    monkeypatch.setattr(Promotions, "_plan", raced)
+    answer = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                              json={"item_ids": [first["item_id"]]})  # fmt: skip
+    assert answer.status_code == 403 and answer.json()["error"] == "no_open_grant"
+    assert not pw.store.records
+
+
 def test_the_one_merge_check_fails_with_the_grant_kept_at_send(
     pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The plant for blocker 2: a grant not closed when its merge is sent for review lets a second
     merge through it, a second promotion of the same layer."""
 
-    async def kept(self: InMemoryPromotionStore, grant_id: str, at: datetime) -> None:
-        return None
+    async def kept(self: InMemoryPromotionStore, grant_id: str, at: datetime) -> bool:
+        return True  # claims it, and keeps it open
 
     monkeypatch.setattr(InMemoryPromotionStore, "close_grant", kept)
     _policy(pw, "second_person_reviews")
@@ -1596,19 +1618,6 @@ def test_a_merge_whose_load_is_refused_closes_its_grant(
     assert answer.status_code == 409 and answer.json()["error"] == "items_changed"
     assert pw.store.grants[grant].closed_at is not None
     assert "promotion_rejected" in [r["action"] for r in pw.audit.records]
-
-
-def test_the_refused_load_grant_check_fails_with_the_grant_kept(
-    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _reject_keeping_the_grant(monkeypatch)
-    first, _ = _removed_with_items(pw)
-    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
-    _withdrawn_behind_the_sheet(pw, monkeypatch, first["element_id"])
-    _as("dana").post(
-        f"/v1/datasets/src/layer-merges/{grant}", json={"item_ids": [first["item_id"]]}
-    )
-    assert pw.store.grants[grant].closed_at is None
 
 
 def test_deleting_a_layer_rejects_what_still_waits_from_it(pw: SimpleNamespace) -> None:
