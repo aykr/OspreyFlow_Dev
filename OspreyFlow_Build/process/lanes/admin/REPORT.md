@@ -27,7 +27,7 @@ pass over round 2.
      read gives them; spec 02 records this (rule 11).
    - An overdue promotion opens nothing for an Author without `operate_schedules` until L3.4's review screen exists.
    - The top bar re-reads on its minute.
-   - Case wires `items_marking` into its store once this lands. It has been told, and its contract case is `p-item-high`.
+   - Case wires `items_marking` into its store once this lands. It has been told; the contract's case is `p-item`. The orchestrator carries the contract's derivation gap to case.
 3. **Commits:** `git log e76cef9..HEAD`. The two schemas commits (`NeedsYou`, then the flag's removal) go before their code.
 4. **Requests at the merge:**
    - Apply `registry-L2.7.diff`: 16 ids in all, made at this tree (the `index` line is its blob, 86c45ad).

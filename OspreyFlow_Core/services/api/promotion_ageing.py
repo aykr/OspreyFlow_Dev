@@ -38,7 +38,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
@@ -470,5 +470,12 @@ class InMemoryAgeingStore:
         return [
             PromotionOverdueNotice(**a.model_dump(include=set(_NOTICE_FIELDS)))
             for a in self.raised.values()
-            if person in a.recipients and person in await still(self.kept[a.promotion_id])
+            if person in a.recipients and person in await still(_as_kept(self.kept[a.promotion_id]))
         ]  # fmt: skip
+
+
+def _as_kept(p: PendingPromotion) -> PendingPromotion:
+    """The promotion as `PromotionAgeingStore` keeps it with an alert (`_kept_promotion`): its
+    items' marking is not kept, so the in-memory store is never looser than the real one (rule 15:
+    a reader must ask the seam for it, as the route does)."""
+    return replace(p, items_marking=None)
