@@ -1,6 +1,7 @@
 // The welcome page's About (ADR-115 decision 8; Amendment 4): what the product is for, with screens of
 // synthetic demonstration cases. Switched off by `welcome.about: false`.
 import { currentBrand } from "../brand/brand";
+import { PLACE_WORDS } from "../help/roles";
 import { MeshMark } from "../shell/BrandMark";
 import { PRODUCT_STATEMENT } from "./statement";
 import amlDecision from "./assets/screen-aml-decision.jpg";
@@ -59,6 +60,18 @@ const MONITORING = [
   { title: "Hotlists and watches", says: "Put a number, an account or a person on a hotlist with a review date. When a load matches it, an alert says what matched, and which file and row put it there." },
   { title: "Rules on every load", says: "Typology rules run as the data arrives, before it is committed, and their alerts land in one queue for the team." },
   { title: "Each alert explains itself", says: "An alert names its rule or hotlist entry, the entity it matched and its evidence. It is closed with a reason, and the reason stays on the record." },
+]; // prettier-ignore
+
+// ADR-145 Amendment 4 decision 1: the four places, in the words the help page and the guides take from
+// `help/roles.ts`, so the welcome page cannot drift from them.
+const PLACES = Object.values(PLACE_WORDS).map((place) => ({ title: place.name, says: place.says }));
+
+// ADR-143 as built (L3.3): drawing boards, in words. Promotion into a dataset is not built, so it is not
+// claimed here.
+const DRAWING = [
+  { title: "Declare and draw", says: "On a case's drawing board, declare a person, an account or a place and draw the links between them. Each drawn item is marked, graded and sourced." },
+  { title: "Kept to the case", says: "What you draw goes into the case's own analyst layer, never into the loaded data, and no other case can see it or infer it." },
+  { title: "Nothing merged", says: "A drawn item that looks like a loaded one is offered as a pair. The analyst says whether they are the same, and nothing is merged." },
 ]; // prettier-ignore
 
 const SAFEGUARDS = [
@@ -153,6 +166,16 @@ export function WelcomeAbout({ version = null }: { version?: string | null }) {
           <h3 className="welcome-about__heading">Event monitoring and alerting</h3>
           <p className="welcome-about__sub">For every team: the graph watches new data, so a match finds you.</p>
           <Points points={MONITORING} label="Event monitoring and alerting" />
+        </div>
+        <div className="welcome-about__part">
+          <h3 className="welcome-about__heading">Drawing boards</h3>
+          <p className="welcome-about__sub">For field analysts: what you know that the data does not yet say.</p>
+          <Points points={DRAWING} label="Drawing boards" />
+        </div>
+        <div className="welcome-about__part">
+          <h3 className="welcome-about__heading">Four places, each with one job</h3>
+          <p className="welcome-about__sub">You see only the places your roles open.</p>
+          <Points points={PLACES} label="The four places" />
         </div>
         <div className="welcome-about__part welcome-safeguards">
           <div>
