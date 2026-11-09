@@ -512,9 +512,14 @@ async def test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_it
         await stores["audit"].record(principal=ANALYST, action=action, investigation_id=case,
                                      resolved_query=detail, result_cardinality=1)  # fmt: skip
     member = ANALYST.model_copy(update={"roles": [f"role:{team}"]})
-    async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
-        outside = await readable_rule_audit(stores["audit"], graph, case, ANALYST, analytics=analytics, alerts=stores["alerts"])
-        inside = await readable_rule_audit(stores["audit"], graph, case, member, analytics=analytics, alerts=stores["alerts"])
+    try:
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            outside = await readable_rule_audit(stores["audit"], graph, case, ANALYST, analytics=analytics, alerts=stores["alerts"])
+            inside = await readable_rule_audit(stores["audit"], graph, case, member, analytics=analytics, alerts=stores["alerts"])
+    finally:  # Prompt L: a live test removes what it writes to a shared stack
+        async with stores["alerts"]._pool.acquire() as conn:  # noqa: SLF001 - the test's own clean-up
+            await conn.execute("DELETE FROM alerts WHERE id = $1", alert.id)
+            await conn.execute("DELETE FROM audit_log WHERE investigation_id = $1", case)
     assert [e.action for e in inside.entries if e.action == "rule_fired"] == ["rule_fired"]
     assert [e for e in outside.entries if e.action == "rule_fired"] == []
     assert "Okafor" not in str(outside.entries)

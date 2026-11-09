@@ -312,14 +312,22 @@ async def test_an_alert_routed_to_a_team_is_withheld_in_a_pack_from_a_reader_out
     team = f"team-{new_id()}"
     member = EDITOR.model_copy(update={"roles": [*EDITOR.roles, f"role:{team}"]})
     routed = await _plain_alert(aw, routed_team=team)
-    pack = _new_pack(aw.w)
-    assert _add_alert(aw, pack, routed, member).status_code == 201
-    assert _add_alert(aw, pack, routed).status_code == 404, "outside the team it is not in the queue"
-    outside = aw.as_(VIEWER).get(f"{CASE}/packs/{pack}").json()
-    assert (outside["withheld"], outside["items"]) == (True, [])
-    assert "Ardent" not in str(outside)
-    inside = aw.as_(member).get(f"{CASE}/packs/{pack}").json()
-    assert [i["kind"] for i in inside["items"]] == ["alert"]
+    try:
+        pack = _new_pack(aw.w)
+        assert _add_alert(aw, pack, routed, member).status_code == 201
+        assert _add_alert(aw, pack, routed).status_code == 404, "outside the team it is not in the queue"
+        outside = aw.as_(VIEWER).get(f"{CASE}/packs/{pack}").json()
+        assert (outside["withheld"], outside["items"]) == (True, [])
+        assert "Ardent" not in str(outside)
+        inside = aw.as_(member).get(f"{CASE}/packs/{pack}").json()
+        assert [i["kind"] for i in inside["items"]] == ["alert"]
+    finally:  # Prompt L: a live test removes what it writes to a shared stack
+        store = await AlertStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            async with store._pool.acquire() as conn:  # noqa: SLF001 - the test's own clean-up
+                await conn.execute("DELETE FROM alerts WHERE id = $1", routed)
+        finally:
+            await store.close()
 
 
 async def test_an_alert_item_is_withheld_when_what_it_cites_is_hidden_since(aw: AlertWorld) -> None:

@@ -32174,3 +32174,103 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
 dataset that takes a gazetteer holds a copy of every place, written a page at a time (15 to 21 s per
 1,000 places, measured as above), and keeps them after a removal; a re-build rewrites every recorded
 dataset's copies but those the case made its own. A removal is one record's update.
+
+### ADR-146, Amendment 4 (9 November 2026) — L2.10 as built: team routing (a routed alert read by the team's members and the home case's Authors, in the queue's query, trends and packs), one queue, filters, the lead's hand-off and Suppress until…, Raise an alert…, What raises alerts, watched patterns on a schedule
+
+Status: built by the rules lane in L2.10 (ADR-146 decisions 1, 2, 4, 5, 7 and 8; Amendment 1; ADR-145
+Amendment 5 points 5 and 6), reserved in `ADR_RESERVATIONS.md`. The decisions the lane took without a
+question (Prompt L) are listed under *Decisions taken* in `process/lanes/rules/REPORT.md`, each for the
+owner to overrule. ADR-146 and its Amendments 1 and 2 are unchanged except where this says so.
+
+1. **Team routing, a rule 3 read (decision 8).** A sentence's *Alert goes to* may name a team
+   (`RuleSentence.team = "team"`, `team_id` its role id, refused at the route when no such team
+   exists, 409 `unknown_team`). Its alerts carry `alerts.routed_team`. Who reads one is decided in the
+   query, never after it (`alerts.queue_scope`, `_routed_sql`): a case member who is in the team on
+   this request (the custom role their token carries, `alerts.reader_teams`, never kept), or an Author
+   of the home case of the alert's dataset (`AlertStore.answers_for`, the app's
+   `alert_routing.answers_for_datasets`, read per read; unset, the team alone, fail closed). The same
+   check holds wherever such an alert is shown: the queue's list, its counts, an alert's detail and
+   address, triage writes (`set_queue_triage`, `set_suppression`), a pack's alert item
+   (`AlertStore.routed_readable`, in `packs.readable`) and alert trends (the fact's audience
+   `routed`, counted in its case for the team's members alone, never its deployer as an owner;
+   `analytics_duckdb/alert_facts.py`, both adapters). **A routed alert writes no `Alert` node**
+   (`sentence_rules.writes_no_alert_node`), as a rule just for its author writes none: the node would
+   carry the finding's words to every member who may read its markings. "My team" (`my_team`), the
+   label written before teams, changes nobody's reading and is offered only for a rule saved with it
+   (gap map Q5 (B)). In trends the home case's Authors do not count a routed alert (the narrower
+   answer; they read it in the queue).
+2. **One queue (decision 1).** The inbox's routes (`GET …/alerts`, `GET …/alerts/{id}`) and its
+   component are gone; *what fired it* (the hotlist's entry, to its owner alone, and each matched
+   node's files and rows) is on the queue's explanation (`watch_routes.with_what_fired_it`), given
+   only once the reader may see the whole alert. The kind `analyst` joins the queue's kinds; the gap
+   map's kind-dependent places each take it. A scheduled run's notice (K11), never a queue kind and
+   shown only by the inbox, is now shown nowhere in the place: the Studio's schedules are its home
+   (a request to the studio lane).
+3. **The queue's filters (decision 2), in the query.** `show`: *Mine* (given to the reader), *Team*
+   (routed to one of their teams, or shared with their unit), *Unassigned*, each leaving out an
+   alert suppressed today; *All* (the default) holds the suppressed too. `older_than_days` keeps those
+   raised more than N days ago.
+4. **The lead's tools (Amendment 1).** The team's acting lead (`custom_roles.acting_lead`: the cover
+   through its last day, else the lead) gives one of the team's alerts to a member of the team who
+   holds the case at Editor or above, by their own grant or the team's (audited `alert_handed_off`);
+   no one else gives a team alert to another person. *Suppress until…* (`POST …/alert-queue/{id}/
+   suppress`, `AlertSuppressInput`): the lead or cover alone, a reason, a day today or later and at
+   most 90 days ahead, audited `alert_suppressed`; the status is unchanged, so the alert is counted
+   open everywhere, and it ends by itself (`alert_queue.suppressed_today`). An alert taken back by a
+   revert (closed with no outcome, G12) is marked apart in the queue.
+5. **Raised by an analyst (decision 7).** `POST …/raised-alerts` (`investigate`, Editor):
+   `analyst:case:<case>` worked in the case, or `analyst:dataset:<dataset>` raised into the dataset's
+   home case, in the queue of the home case and of every case reading the dataset, closed by the home
+   case's Authors alone (`alert_queue.dispose`'s `closer`, fail closed). Refused before anything is
+   written: a Viewer (403); a dataset the case does not read, a layer, or one with no home case (409
+   `dataset_not_writable`, `no_home_case`); an item the raiser may not read, as one that does not
+   exist (404); a dataset alert citing an item that is not the dataset's own, a drawn item (409
+   `not_the_datasets_own`). The Glass offers it in the query builder on the selected items, with the
+   query's name as what found them; the selection bar's and a question's answer's are the case and
+   questions surfaces' (requests).
+6. **What raises alerts (decision 5).** `GET …/alert-sources`: the case's rules and the reader's own
+   hotlists and watched patterns (another's watch is its owner's), each with its maker, dataset, owner,
+   state, expiry, last fired, alerts in 30 days and the share closed as not of interest, counted from
+   the reader's own queue (rule 7), and its alerts suppressed today beside it.
+7. **Watches made in the Glass and run on a schedule (decision 4, G16).** *Watch for this* (the
+   Inspector, on an entity carrying an identifier: a hotlist entry, reviewed in 90 days) and *Save as
+   a watch* (the query builder, on a saved pattern: a watched pattern), offered where the place is.
+   A watched pattern runs on its own schedule too (`every` daily by default at 06:00 Europe/London,
+   weekly, or never; `PUT …/monitors/{id}/schedule`, its owner alone), one replica per slot, as its
+   owner resolved afresh and confined to its dataset (`monitor_schedule.MonitorScheduleExecutor`,
+   through the same guarded match a load uses, `evaluation.match_monitor_guarded`); an owner who can
+   no longer sign in stops it.
+8. **The carries.** A settle on a read path purges what it re-marked at once, published to the
+   connected canvases (`alerts.settle_repoints` with `AlertStore.working_set`). Outside a load
+   (`raise_committed`), a node that cannot be written in a read-only dataset or marked leaves the row
+   raised without it, said in the audit (`read_only_dataset`, `unseen_referent`), unless the finding
+   writes alongside (a screening hit), whose refusal stands. The daily KYC sweep catches per case and
+   per customer, counts each failure and writes it to the rule's audit (`rule_evaluation_failed`,
+   listed in *Changes*), and closes the day. A scheduled slot or a re-screening that fails part-way
+   keeps and counts what it raised (`rule_evaluation.PartlyRaised`).
+
+**Left, and why.** An alert's address answers 404 where the reader's case is not the alert's own: a
+dataset alert read from another case on its dataset, and a watch alert a schedule raised (no case);
+both are worked in the queue that lists them, and their address waits for an address that names the
+reader's case (a later step). The selection bar's and a question's answer's *Raise an alert…* are the
+case and questions surfaces' (requests).
+
+**Tests that would fail (rule 12), each shown red first** (`process/lanes/rules/l2.10/RED_RECORD.md`):
+`test_monitoring_queue.py`'s four routing cases on Postgres (red with the routed check opened at
+`_routed_sql`'s own clause, its parameters kept, and with the Authors' clause read for any dataset);
+`test_pack_alert_item.py::test_an_alert_routed_to_a_team_is_withheld_in_a_pack_from_a_reader_outside_it`
+(red with the pack's check removed); the analytics suite's
+`test_a_team_routed_alert_is_counted_for_the_teams_members_alone` (red with the owner clause left open
+to `routed`, and with the routed clause gone; run on DuckDB, ClickHouse's half at the orchestrator's
+`conformance-analytics`); the rule audit's
+`test_typology_rules.py::test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_its_team`;
+`test_team_lead_and_watches.py` (the real Authors read, the lead and cover, Suppress until…, the
+hand-off, a dataset alert's close, the watch schedule and a Glass-made watch's reach, a routed rule's
+run counts); `test_sentence_rules.py`'s routed sentence (red with the
+node written); `test_raise_an_alert.py` (red with the drawn-item check and the dataset check removed);
+`test_alert_evidence_withheld.py::test_the_inbox_is_gone`; `test_alert_runs_partly_raised.py`,
+`test_read_path_purge.py`, `test_composite_monitors.py::test_one_failing_rule_never_stops_the_daily_sweep_whole`
+and `test_alert_node_marking.py::test_after_a_commit_an_unreadable_referent_node_raises_the_row_without_its_node`;
+`alerts/OneQueue.test.tsx` and `RulesPlaceQueue.test.tsx`; `keyboard/alerts.spec.ts` and
+`keyboard/watch-panels.spec.ts`, each new case red with its handler removed; axe over the routed,
+suppressed and taken-back alerts and the Glass's watch actions in dark, light and GOV.UK.

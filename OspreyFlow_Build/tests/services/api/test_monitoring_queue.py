@@ -120,9 +120,23 @@ async def stores():  # type: ignore[no-untyped-def]
     dsn = PostgresConfig.from_env().dsn
     hotlists = await HotlistStore.connect(dsn)
     alerts = await AlertStore.connect(dsn)
-    yield hotlists, alerts
-    await alerts.close()
-    await hotlists.close()
+    # Prompt L (9 November 2026): every live test removes what it writes to a shared stack, in
+    # teardown, even when it fails. The alerts each test saves are recorded and deleted after it.
+    saved: list[str] = []
+    save = alerts.save
+
+    async def recording(alert: Alert, **kwargs: Any) -> None:
+        saved.append(alert.id)
+        await save(alert, **kwargs)
+
+    alerts.save = recording  # type: ignore[method-assign]
+    try:
+        yield hotlists, alerts
+    finally:
+        async with alerts._pool.acquire() as conn:  # noqa: SLF001 - the test's own clean-up
+            await conn.execute("DELETE FROM alerts WHERE id = ANY($1::text[])", saved)
+        await alerts.close()
+        await hotlists.close()
 
 
 def _alert(rule_id: str, owner: Principal, **fields: object) -> Alert:
