@@ -15,8 +15,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from demo_fixtures.pid_plan import _end_of, _start_of
 
+from demo_fixtures.pid_plan import _end_of, span_start
 from tests.ingest.pid_golden_support import (
     CASE,
     PLAN,
@@ -87,7 +87,8 @@ async def test_every_stay_has_the_plans_interval(
         edge = stored[(_ref(PLAN.entity(lk.source)), _ref(PLAN.entity(lk.target)))]
         assert edge.occurrences == lk.occurrences == 1, lk.key
         assert edge.interval is not None
-        assert edge.interval.valid_from == _start_of(lk.first_seen), lk.key
+        # ADR-120 Amendment 18: the file's start, a time of the establishment's day (`span_start`).
+        assert edge.interval.valid_from == span_start(lk), lk.key
         want_end = None if lk.last_seen is None else _end_of(lk.last_seen)
         assert edge.interval.valid_to == want_end, lk.key
         running += want_end is None
