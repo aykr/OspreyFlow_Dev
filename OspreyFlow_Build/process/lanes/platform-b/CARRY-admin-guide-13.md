@@ -33,8 +33,8 @@ disagree.
 > `--out-root <folder>` writes a set elsewhere, but a folder inside the checkout is refused, and
 > `ospreyflow doctor` fails if the backups folder is inside it. `/var/lib/osprey/backups`, the
 > settings' placeholder, is refused at setup except on Small on your own server. A deployment
-> installed by name cannot be called `local-lite`, `small` or `cluster`, since the checkout's own
-> deployment uses those names for its backups. Give two checkouts on one machine different backups
+> installed by name cannot be called `local-lite`, `small` or `cluster`, or the checkout's own
+> `deployment.name`, since the checkout's own deployment keeps its backups under that name. Give two checkouts on one machine different backups
 > folders: both deployments are `local-lite`, so they would otherwise share a subfolder. An `osprey.yaml` from v0.4.x or earlier names no backups folder (or the
 > placeholder `/var/lib/osprey/backups`), so its sets go to `~/OspreyFlow/backups/<deployment>/`,
 > and the backup's first line says so. Name a folder as `components.storage.backups` to stop that
@@ -67,7 +67,7 @@ disagree.
 
 ## 4. `spec/05_DEPLOYMENT.md` §2.1, the Components screen's row
 
-> | **Components** | Graph store, analytics engine, and the storage roots for data and staging. The backups folder is asked for on the Folders screen of every install (ADR-114 Amendment 37), outside the checkout |
+> | **Components** | Graph store, analytics engine, and the storage roots for data and staging. The backups folder is asked for on the Folders screen (ADR-114 Amendments 37 and 38: on this machine, and in the answers file for every profile; a cloud install has none by default), outside the checkout |
 
 ## 5. The guide's settings table (`components.storage.backups`, §… at line ~1348 of `spec/10`)
 

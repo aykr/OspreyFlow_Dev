@@ -31006,10 +31006,12 @@ Platform-b took a recommended option for each and built it, and the orchestrator
    which no install off a server ever chose, because before Amendment 37 the backup wrote to the
    checkout whatever this setting said. So an `osprey.yaml` that keeps the placeholder is treated as
    naming no folder, as one without the key is (Amendment 37 decision 2): the set goes to
-   `~/OspreyFlow/backups` and says so. A blank value is the same. On Small on a server of your own
+   `~/OspreyFlow/backups` and says so. A blank value is the same, and the placeholder is compared as
+   a path (`/var/lib/osprey/backups/` is it too). On Small on a server of your own
    (no `external:`) Amendment 33 always wrote the folder, so the placeholder there is that server's
    chosen folder. Setup refuses the placeholder off a server, naming the reason, so a choice of it is
-   never set aside without a word. The schema's default is unchanged: changing it would move every
+   never set aside without a word; the guided page never offers it (blank where it knows no home
+   folder), and its Review says a folder never chosen goes to `~/OspreyFlow/backups`. The schema's default is unchanged: changing it would move every
    rendered `OSPREY_BACKUP_ROOT`.
 2. **A cloud install gets no default folder.** Its server is built elsewhere, and a folder on the
    installer's own machine would mean nothing there. So the answers write `folders.backups` for a
@@ -31029,12 +31031,17 @@ Platform-b took a recommended option for each and built it, and the orchestrator
 5. **The checkout is the git checkout**, the folder above `OspreyFlow_Core` that holds `.git`. So
    `OspreyFlow_Build/` and the root are refused as well (only `OspreyFlow_Core/backups/` was ever
    gitignored). A folder is compared by what it is, not its spelling: a link, a bind mount, or another
-   letter case on macOS's case-insensitive disk is the folder it shows. `doctor` fails on a backups
-   folder inside the checkout, where every backup and every update would be refused.
-6. **A deployment is never installed under a profile's name.** The checkout's own deployment is
-   named by its profile (`local-lite`, `small`, `cluster`), so `install --name local-lite` would
-   share its backups subfolder, against ADR-138. The install refuses it. A deployment installed by
-   such a name before this amendment is still reached by it.
+   letter case on macOS's case-insensitive disk is the folder it shows, and a link followed by `..`
+   is the folder the system reaches, never a tidied spelling. A deployment's name in a set's folder
+   is one folder's name, so it cannot climb out. `doctor` fails on a backups folder inside the
+   checkout, where every backup and every update would be refused; a relative folder is the
+   product's, as the backup reads it; where `doctor` runs with no checkout, it names none.
+6. **A deployment is never installed under the checkout's own deployment's name.** The checkout's
+   deployment is named by its `deployment.name`, else its profile (`local-lite`, `small`,
+   `cluster`; ADR-132 Amendment 1), so `install --name local-lite`, or `--name acme` beside a
+   checkout named `acme`, would share its backups subfolder, against ADR-138. The install refuses
+   every profile's name and the checkout's own. A deployment installed by such a name before this
+   amendment is still reached by it.
 7. **Two checkouts on one machine sharing one backups folder is not supported.** Each checkout's own
    deployment is `local-lite`, so both would write to `<folder>/local-lite/`. Give each its own
    folder at setup. Nothing detects it yet: a set does not record which checkout made it, so `doctor`
@@ -31054,8 +31061,10 @@ Platform-b took a recommended option for each and built it, and the orchestrator
 | a path is used as given | `tests/harness/test_host_tools_reach_the_server.py::test_restore_answers_the_servers_names` |
 | the git checkout, by what a folder is | `tests/harness/test_backup.py::test_a_folder_anywhere_in_the_git_checkout_is_refused`, `::test_the_checkout_spelt_another_way_is_still_the_checkout`; `tests/cli/test_doctor.py::test_a_backups_folder_inside_the_checkout_fails_the_doctor` |
 | the update's backup follows the rule, and its fake refuses what the real backup refuses | `tests/harness/test_update_apply.py::test_an_updates_backup_is_never_written_inside_the_checkout` |
-| a profile's name refused at install, and still reached once installed | `tests/cli/test_named_deployments.py::test_what_cannot_be_a_named_deployment_is_refused_in_words`, `::test_the_profile_names_refused_are_the_schemas_profiles`, `::test_a_deployment_installed_by_a_profiles_name_before_is_still_reached` |
-| the doctor and the backup apply one folder rule | `tests/cli/test_doctor.py::test_the_doctor_and_the_backup_agree_on_the_folder` |
+| a profile's name and the checkout's own refused at install, and still reached once installed | `tests/cli/test_named_deployments.py::test_what_cannot_be_a_named_deployment_is_refused_in_words`, `::test_the_profile_names_refused_are_the_schemas_profiles`, `::test_the_checkouts_own_deployment_name_is_refused_for_a_named_one`, `::test_a_deployment_installed_by_a_profiles_name_before_is_still_reached` |
+| the doctor and the backup apply one folder rule, and its copies of the backup's rules are the backup's | `tests/cli/test_doctor.py::test_the_doctor_and_the_backup_agree_on_the_folder`, `::test_the_doctors_mirrors_of_the_backups_rules_are_the_backups_own` |
+| a relative folder is the product's; no checkout is named where there is none; a named deployment's unreadable settings are said | `tests/cli/test_doctor.py::test_a_backups_folder_inside_the_checkout_fails_the_doctor`, `::test_off_a_checkout_the_doctor_calls_no_folder_inside_one`, `::test_a_named_deployments_unreadable_settings_are_said_not_raised` |
+| the guided page never offers the placeholder; Review names the fallback | `apps/harness/src/screens/InstallScreens.test.tsx` (FoldersScreen, ReviewScreen) |
 | sync roots, links and case; the answers' folder before the install | `tests/cli/test_doctor.py::test_doctor_warns_a_backups_folder_a_sync_client_copies`, `::test_a_plain_backups_folder_or_one_reached_through_a_link_is_judged_by_where_it_is`, `::test_the_doctor_warns_of_the_answers_backups_folder_before_the_install` |
 | a set not all readable is said to be at least its size, with sudo | `tests/cli/test_doctor.py::test_a_set_the_doctor_cannot_read_all_of_is_said_to_be_at_least_its_size` |
 
