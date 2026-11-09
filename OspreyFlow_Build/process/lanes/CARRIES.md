@@ -30,3 +30,6 @@ takes them (then struck through with the brief's commit). Newest last.
 | case | The case dataset picker stops composing a gazetteer-* dataset; a case adds a gazetteer by copy (the owner's ruling 6) | platform, P5 | after L3.4 |
 | orchestrator | test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines drops a Needs-you line under heavy load (studio's L1.5 make ci, 9 November); passes alone 5/5. Find the race in show's temporary files and fix, red first | studio, L1.5 | a tooling step |
 | studio | The PID recipe's r1 and r14 interval cases red on main: loaded links' valid_from keeps the row's time of day (2024-06-03 00:46:06) where the plan expects the start of the day for a date-only interval; find which side changed precision (a Studio load or the PID build) and fix, red first | rules, L2.10 live run | L1.5 if small, else L1.7 |
+| admin | Admin's read-only display of the grading scheme (GET /v1/grading-scheme is ready) | case-b, L3.7 | L2.7 |
+| platform | The backup set includes grading-scheme.yaml (harness/backup.py) | case-b, L3.7 | P6 |
+| case | Export board_store's item columns and row helper for the grading change (instead of case-b's copy) | case-b, L3.7 | L3.6 |
