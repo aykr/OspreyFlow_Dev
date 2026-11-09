@@ -77,7 +77,7 @@ export function PipelineYaml({
           rows={24}
           spellCheck={false}
           readOnly={!editable}
-          style={{ fontFamily: "var(--font-mono)", minWidth: 0, width: "100%" }}
+          style={{ fontFamily: "var(--mono)", minWidth: 0, width: "100%" }}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />

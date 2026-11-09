@@ -178,7 +178,7 @@ export function ExpertSettings(props: ExpertSettingsProps) {
               aria-label="SELECT"
               rows={8}
               spellCheck={false}
-              style={{ fontFamily: "var(--font-mono)", minWidth: 0 }}
+              style={{ fontFamily: "var(--mono)", minWidth: 0 }}
               value={text(rec.select)}
               onChange={(e) => set("select", e.target.value)}
             />
@@ -367,7 +367,7 @@ export function ExpertDisclosure({
               <div key={w}>{w}</div>
             ))}
             {d.select && (
-              <pre className="value" style={{ margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "var(--font-mono)" }}>
+              <pre className="value" style={{ margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "var(--mono)" }}>
                 {d.select}
               </pre>
             )}
