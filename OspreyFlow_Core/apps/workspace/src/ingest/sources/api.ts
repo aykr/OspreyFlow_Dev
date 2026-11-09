@@ -4,7 +4,6 @@
 import type {
   Connection,
   ConnectionInput,
-  ConnectionTest,
   ConnectorRead,
   DatasetOwnListImportInput,
   DatasetSubscriptions,
@@ -107,11 +106,6 @@ export const resumeRefresh = (api: SourcesApi, datasetId: string, sourceId: stri
 /** *Refresh now* for a SQL, API or JSON source: read again into its file. */
 export const readConnectorSource = (api: SourcesApi, datasetId: string, sourceId: string) =>
   call<ConnectorRead>(api, `${dataset(api, datasetId)}/sources/${encodeURIComponent(sourceId)}/read`, "Reading the source", {
-    method: "POST",
-  });
-
-export const testConnection = (api: SourcesApi, connectionId: string) =>
-  call<ConnectionTest>(api, `${api.apiBaseUrl}/v1/admin/connections/${encodeURIComponent(connectionId)}/test`, "Testing the connection", {
     method: "POST",
   });
 

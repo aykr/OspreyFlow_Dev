@@ -265,7 +265,7 @@ the orchestrator's review; `tests/services/api/test_studio_staging_routes.py`).
 | Records | Custody, incident, intelligence and case management exports | Usually CSV or XML out of a records management system |
 | Generic | CSV, TSV, JSON, JSONL, XML, Parquet, Excel, SQL table or view | The fallback that always works |
 
-### Connections beyond files (ADR-140 Amendment 13, redesign phase 9, as built 8 November 2026)
+### Connections beyond files (ADR-140 Amendment 13, as built 8 November 2026)
 
 An administrator names a **SQL**, **API** or **JSON** connection (*Admin › Connections*; `POST
 /v1/admin/connections`). A connection holds its settings and **the name of its secret, never its
