@@ -959,6 +959,18 @@ as a test of its own beside it):
   `test_a_marking_above_the_datasets_highest_is_refused_at_the_sheet_and_at_the_route`.
 - **A link of a type not yet live is not promoted** (decision 9; Amendment 4 decision 3, through
   `promotion_refusals`). `test_a_link_of_a_type_not_yet_live_is_refused_and_promotable_once_live`.
+- **An ontology link type goes only when the dataset's live model holds it**, through case-b's real
+  `LinkTypeService` (which answers `None` for every ontology type).
+  `test_c14_holds_through_the_real_link_type_service`.
+- **A rejection's words, its proposer and its case reach only who may know the case**; a check's
+  rejection records fixed words. `test_a_rejections_words_and_proposer_reach_no_reader_who_may_not_know_the_case`,
+  `test_a_rejection_by_a_check_records_fixed_words`.
+- **A revert waits for the Conduit to stop** and reads its resting links inside its own transaction.
+  `test_the_revert_is_refused_while_the_conduit_runs`; conformance
+  `test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote`.
+- **An open case is no removed case to probe** (strict 404) and **an ambiguous id refuses the load**.
+  `test_a_layer_merge_is_refused_to_a_non_author_and_for_an_open_case`,
+  `test_a_promotion_with_an_ambiguous_link_id_writes_nothing`.
 - **Nothing readable outside the case before review**, where the policy asks for a second person:
   nothing is written to the graph until the approval.
   `test_under_review_nothing_is_readable_outside_the_case_until_a_second_person_approves`.

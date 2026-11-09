@@ -213,10 +213,10 @@ GET    /v1/investigations/{id}/boards/{board}/promotions        *Promotions from
 GET    /v1/datasets/{dataset}/promotions                        the Ingest Studio's *Analyst promotions* (`Promotions`): every promotion into the dataset as counts and words, without its board's id and without what it left out, its case named only to the dataset's Authors and its proposer ("a case reading this dataset" otherwise), `may_review` and `why_not` for the reader, `revert_command` for a holder of revert_loads; one marked above the reader's clearance is left out in the store's query (its marking raised with an item edited while it waits); to the dataset's Authors, the counts *Details* would show them; behind the dataset's gate, review_promotions
 GET    /v1/datasets/{dataset}/promotions/{promotion}            *Details* (`PromotionDetails`): the promotion's own elements, read by id through the reviewer's own handling, from its layer and the dataset while it waits, from the dataset alone once committed, and none for a rejected or reverted one; `withheld` when one is not shown, the counts then those of what is shown; one of the dataset's Authors only; audited as read_promotion
 POST   /v1/datasets/{dataset}/promotions/{promotion}/decision   *Approve and commit* or *Reject with a reason* (`PromotionDecision`), by one of the dataset's Authors holding review_promotions, never the proposer; an approval runs every check again on the items as they are now, and a `layer_merge` whose case has been restored is rejected (409 `case_open`); audited as approve_promotion or reject_promotion, and a promotion rejected by anything but a reviewer's own *Reject* as promotion_rejected
-GET    /v1/datasets/{dataset}/removed-cases                     the removed cases reading the dataset directly (`RemovedCaseLayers`): counts only, `mergeable` false for a composite's and for any case of a gazetteer dataset; the dataset's Authors
+GET    /v1/datasets/{dataset}/removed-cases                     the removed cases reading the dataset directly (`RemovedCaseLayers`): counts only, `mergeable` false for a composite's and for any case of a gazetteer dataset; the dataset's Authors; audited as list_removed_case_layers
 POST   /v1/datasets/{dataset}/removed-cases/{case}/merge-sheet  *Merge into the dataset*: opens a read grant to that one layer for this Author and this merge alone, audited as open_layer_merge before anything is read, and answers the sheet (`LayerMergeSheet`, with its `grant_id`)
-GET    /v1/datasets/{dataset}/layer-merges/{grant}              the merge sheet again, through its open grant, the case checked again (one restored since: 409 `case_open`, the grant closed); audited as read_layer_merge
-POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked items (`LayerMergeInput`): the case checked again (one restored since is refused, 409 `case_open`, and the grant closed); one promotion, trigger layer_merge, under the dataset's policy; the grant closes when the merge does (committed, or rejected in any way: by a reviewer, by the approval's re-check, its load refused, its layer deleted), and lasts eight hours at most; audited as merge_layer
+GET    /v1/datasets/{dataset}/layer-merges/{grant}              the merge sheet again, through its open grant, the case checked again (one restored since: 404 `case_not_linked`, the grant closed); audited as read_layer_merge
+POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked items (`LayerMergeInput`): the case checked again (one restored since is refused, 404 `case_not_linked`, and the grant closed); one promotion, trigger layer_merge, under the dataset's policy; the grant closes when the merge does (committed, or rejected in any way: by a reviewer, by the approval's re-check, its load refused, its layer deleted), and lasts eight hours at most; audited as merge_layer
 DELETE /v1/datasets/{dataset}/layer-merges/{grant}              *Cancel*: the grant closes, nothing merged
 POST   /v1/datasets/{dataset}/removed-cases/{case}/delete/dry-run   *Delete*'s dry run for one of the dataset's Authors (`LayerDryRun`): the layer's counts as their own handling takes them, promoted items included, and that deleting withdraws those not promoted, in words, nothing written but its audit entry (dry_run_layer_delete)
 DELETE /v1/datasets/{dataset}/removed-cases/{case}/layer        *Delete* by one of the dataset's Authors (`LayerDeleted`, in words, with no count: it would include what the deleter may not see): every element wholly the layer's withdrawn under `layer-delete:<case>`, never deleted; a promoted element is never touched; the layer's open merges closed and its waiting promotions rejected; audited as delete_layer before it is written
@@ -237,7 +237,9 @@ item's `promoted_at` (which the withdrawal reads, above). A link goes only when 
 in the dataset (loaded there, going now, or promoted before), read through the proposer's own
 handling; a picture and a match decision go with their drawn node; everything else is listed in
 `left_out` (rule 2), given back to the proposer alone. A link's type is checked against the dataset's
-live model, its packs, as a node's is (C14). Refusals, each in words before anything is written: `check_failed` (422: a
+live model, its packs, as a node's is (C14), whatever `promotion_refusals` answers for it (it
+answers `None` for every ontology type: `Promotions.model_check_applies`); a case's own proposed
+type is decided by `promotion_refusals` alone. Refusals, each in words before anything is written: `check_failed` (422: a
 ticked item failing a check, at the route whatever the sheet said: a marking above the dataset's
 highest allowed, a type outside its model, a link type not yet live through case-b's
 `promotion_refusals`, no grading or source), `nothing_goes` (422), `nothing_to_promote_into` (409),
@@ -246,7 +248,13 @@ highest allowed, a type outside its model, a link type not yet live through case
 of two decisions at once one is written), `no_open_grant` (403: a merge's sheet after the merge has
 closed), `composite_never_merged` (409: a composite case's layer is only deleted, the
 orchestrator's settlement), `gazetteer_never_merged` (409: nothing drawn goes into a gazetteer
-dataset, ADR-143 Amendment 5 decision 7), `case_open` (409) and `case_not_linked` (404) as the dry run's. A
+dataset, ADR-143 Amendment 5 decision 7), `ambiguous_item` (409: an id two stored elements hold,
+the load refused whole), `case_open` (409: an approval of a waiting merge whose case has been
+restored) and `case_not_linked` (404, strict: an open case reading the dataset answers exactly as an
+id no case reading it has, on every removed-case route). A promotion rejected by a check records
+fixed words (no label, count or check's words); the reviewer is told which item and why. To a
+reader who may not know the case (`show_case`), a promotion is its status and counts alone: no
+proposer, no reviewer's reason. A
 promotion of another dataset, and none, answer 404 `promotion_not_found`; the dataset's gate answers
 404 to anyone it is not for. Under *Second person reviews* nothing is written to the graph until the
 approval, so no other case reads a promoted item before it

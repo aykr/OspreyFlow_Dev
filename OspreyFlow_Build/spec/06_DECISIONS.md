@@ -31278,6 +31278,27 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
      promoted items included, and that deleting withdraws those not promoted; never "would delete
      N".
 
+12. **After the orchestrator's independent review** (9 November 2026; the case lane's choices under
+   Prompt L, none loosening access, each red by a plant at its call site):
+   - **C14 holds through case-b's real service**: an ontology link type goes only when the dataset's
+     live model holds it, whatever `promotion_refusals` answers (`None` for every ontology type); a
+     case's own proposed type is that service's alone to decide. No quiet fallback when the app
+     holds a service without the method.
+   - **A rejection's words reach only who may know the case**: a check's rejection records fixed
+     words; a reviewer's own reason, the proposer and the case go to the dataset's Authors, the
+     proposer and the case's own board, never to another reader of the dataset.
+   - **The revert refuses while the Conduit answers** (`OSPREY_CONDUIT_URL`'s `/healthz`), as a
+     seed does, and reads its resting links inside its own transaction (`live_edges_touching`
+     gains an optional `tx`; conformance first).
+   - **Strict 404**: an open case reading the dataset answers every removed-case route exactly as
+     an id no case reading it has (the lane review's minor 12, reversed from "left" to fixed).
+   - **An ambiguous id refuses the load in words** (409 `ambiguous_item`), the board fake refusing
+     it as the adapter's `_holders` does; the removed cases' list is audited.
+   - **Left to their owners**: the administrator's *Delete* route (`admin-delete-L3.4.patch`, for
+     admin), the promotion-writer gate read as syntax over both triggers
+     (`case-b-writer-gate-L3.4.patch`, for case-b), and `placesByRole.json` regenerated at the
+     merge (`places-regeneration-L3.4.md`, for the orchestrator).
+
 **Open.** Nothing for the owner. The *Promotions overdue* sweep (ADR-145
 Amendment 6) is wired to this record when admin's L2.6 is on main (`WaitingFromStore`); until then the
 wiring is a patch in the case lane's folder.
