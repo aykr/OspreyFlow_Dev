@@ -1,0 +1,74 @@
+# L2.10's live delta at 778c4d8 (event_frequency's second round, both analytics adapters): the analytics suite whole and every live file that evaluates rules, the rules lease, stack c, by stack_lease.sh remote, start 2026-11-09T20:23:28Z
+# Files: ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261109T202339Z/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py
+........................................................................ [ 23%]
+........................................................................ [ 46%]
+........................................................................ [ 69%]
+........................................................................ [ 92%]
+......................                                                   [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+310 passed, 1 warning in 1230.90s (0:20:30)
+# exit 0 end 2026-11-09T20:44:13Z
+# The ClickHouse plants on c before this run (the frequency, access and case cases):
+#   == plant: target_branch_unchecked
+#   E       assert (4, 100200.0) == (2, 200.0)
+#   E       assert 2 == 1
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first[analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_only_this_case_and_the_link_types_named[analytics_clickhouse]
+#   2 failed, 11 passed, 247 deselected in 4.19s
+#   == plant: rows_frame
+#   E       assert 5 == 3
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_events_at_one_instant_together[analytics_clickhouse]
+#   1 failed, 12 passed, 247 deselected in 4.16s
+#   == plant: join_use_nulls_1
+#   E       TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+#   packages/adapters/analytics_clickhouse/adapter.py:830: TypeError
+#           ClickHouse refuses a RANGE window offset of 2^31 or more, so the adapter once failed on any span
+#   E       assert 1 == 2
+#   E       TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+#   packages/adapters/analytics_clickhouse/adapter.py:830: TypeError
+#   E       TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+#   packages/adapters/analytics_clickhouse/adapter.py:830: TypeError
+#   E       TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+#   packages/adapters/analytics_clickhouse/adapter.py:830: TypeError
+#   E       TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+#   packages/adapters/analytics_clickhouse/adapter.py:830: TypeError
+#   E       TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+#   packages/adapters/analytics_clickhouse/adapter.py:830: TypeError
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_the_most_events_in_any_span_of_the_days_asked[analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_microsecond[1-12.0-analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_a_subject_at_either_end_and_each_event_once[analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_says_the_first_event_ever_up_to_the_windows_end[analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first[analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_only_this_case_and_the_link_types_named[analytics_clickhouse]
+#   7 failed, 6 passed, 247 deselected in 4.13s
+#   == plant: cut_rounded_up_to_ms
+#           ClickHouse refuses a RANGE window offset of 2^31 or more, so the adapter once failed on any span
+#   E       assert 1 == 2
+#           ClickHouse refuses a RANGE window offset of 2^31 or more, so the adapter once failed on any span
+#   E       assert 1 == 2
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_microsecond[1-12.0-analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_microsecond[-1-18.0-analytics_clickhouse]
+#   2 failed, 11 passed, 247 deselected in 4.12s
+#   == plant: count_the_float
+#   E       assert (2, 0.0) == (2, None)
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]
+#   1 failed, 12 passed, 247 deselected in 3.96s
+#   == the fix (778c4d8)
+#   13 passed, 247 deselected in 4.10s
+# The DuckDB reds offline:
+#   E       assert (4, 100200.0) == (2, 200.0)
+#   E       assert 2 == 1
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first[analytics_duckdb]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_only_this_case_and_the_link_types_named[analytics_duckdb]
+#   2 failed, 11 passed, 247 deselected in 1.10s
+#   E       assert 0.30000000000000004 == 0.3
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_duckdb]
+#   1 failed, 259 deselected in 0.71s
+# Lease rules, stack c, 20:2xZ to 20:44Z; down and released.

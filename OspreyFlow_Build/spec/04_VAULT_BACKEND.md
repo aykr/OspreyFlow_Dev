@@ -327,7 +327,10 @@ refused whole, counted from what the reader sees. Both adapters run one predicat
 the most events and the largest total of a declared amount in any span of D days (ends included)
 within the window, and the first event ever up to the window's end; an event to itself counted once;
 an event the principal may not see adds nothing and is never a first, and a node reached only through
-hidden events is absent — the access step in the query, as every read's.
+hidden events is absent — the access step in the query, as every read's. A declared amount is summed as a
+decimal of 38 digits, 9 after the point, on every adapter, so a total a rule compares is the same on each (0.1 and
+0.2 make 0.3); an amount that is not such a decimal (1e30, inf) is no amount, its event still counted. A span is
+exact to the microsecond the store holds, at any length up to the 366 days allowed.
 `account_activity` (ADR-133 decision 2, stage (c)): for named accounts at either end of an event,
 the events and the total of a declared amount within the window (ends included) and in the D days
 before its start, the first event in the window and the last before it however long before; an

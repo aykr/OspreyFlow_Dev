@@ -255,5 +255,31 @@ span past about 24.9 days (ADR-133's frequency conditions allow 366).
     (offsets 2592000000 and 7776000000).
   - Plant 2, the self-join on milliseconds (1f04c2c's): `[1-12.0]` red, `assert 18.0 == 12.0`.
   - The fix: 16 passed, both adapters.
-- **Green, the whole analytics suite on both adapters:** `gates/<the fix's commit>.live.txt`. It includes
+- **Green, the whole analytics suite on both adapters:** `gates/274d114.live.txt`. It includes
   `test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first`, the rule 3 case on this read.
+
+### 12a. My lane-reviewer's second round on the frequency fix (778c4d8)
+
+It closed the first round's four items and found seven more. Each is built, red first, at its real call site.
+
+1. **The access case did not reach the target branch's check.** Every hidden plant had the subject at the source end, and
+   the absent-node assertion was answered by the separate first-seen query. Plants added at the far end: SECRET,
+   another unit, another case. Removing `{predicate.where}` from the target branch is red on both adapters:
+   `test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first` (`(4, 100200.0) == (2, 200.0)`) and
+   `test_frequency_counts_only_this_case_and_the_link_types_named` (`2 == 1`).
+2. **An amount past Decimal128(9) was counted as a present 0.** The amount itself is now the decimal, so `count(amount)`
+   counts only what is summed. `test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not` (1e30 and "inf" are
+   no amount) is red on the earlier ClickHouse query: `(2, 0.0) == (2, None)`.
+3. **The edge was pinned from one side only.** Every event is now 500 µs off every grid. A plant rounding the cut up to
+   the millisecond turns both `[±1]` cases red (`1 == 2`).
+4. **Ties were exercised by nothing.** `test_frequency_counts_events_at_one_instant_together` is red with a ROWS frame
+   (`5 == 3`).
+5. **`join_use_nulls`.** The query now sets `join_use_nulls = 0`. With it set to 1, seven cases are red (a `TypeError`
+   on `int(None)`, or a count of 1 for 2).
+6. **The two adapters summed differently** (exact decimal against DOUBLE). DuckDB now sums `DECIMAL(38, 9)` too, so 0.1
+   and 0.2 make 0.3 on both. Red on DuckDB's old DOUBLE sum: `0.30000000000000004 == 0.3`. Spec 04 says it (rule 11).
+7. **Records left uncommitted:** committed with this round.
+
+- **Green:** the 13 frequency, access and case cases on c's ClickHouse.
+- **The live delta at 778c4d8:** `gates/778c4d8.live.txt`, the analytics suite whole and every live file that
+  evaluates rules.
