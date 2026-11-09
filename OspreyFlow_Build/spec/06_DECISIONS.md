@@ -30932,3 +30932,62 @@ at the merge. Decision 11 and C13 stand; this says how they are built and narrow
    `cli:<the operator's account>`.
 
 Open: none. Admin's read-only display of the scheme (decision 11) is Admin's, over `GET /v1/grading-scheme`.
+
+### ADR-114, Amendment 37 (9 November 2026) — backups in a folder the administrator names at setup, for every install, never inside the checkout
+
+**The owner's ruling of 9 November 2026:** "For the backups, can you create a folder outside of core that holds
+the backups so that it is easier to clean up. This is how backups should be managed in the main package. This
+should be something that the admin defines as part of the setup."
+
+**What was wrong.** Amendment 33 decision 5 gave a self-contained Small on a server its backups folder
+(`server.backups`, `components.storage.backups`, default `~/OspreyFlow/backups`). Every other install fell back
+to the checkout's own `backups/` (`harness/backup.py`'s `DEFAULT_BACKUP_ROOT = REPO_ROOT / "backups"`). On the
+owner's machine that put three local-lite sets, 16 GB, inside `OspreyFlow_Core/`. The checkout sat under
+`~/Documents`, which a cloud-sync client was syncing, so the sets were being uploaded with it, and they held a
+dataset admitted for local use only (ADR-035 §C3, rule 9).
+
+**Decisions** (taken on the orchestrator's recommendation under the owner's ruling; overrule any of them):
+
+1. **Every install names its backups folder at setup.** The answers file gains `folders.backups` beside
+   `folders.ingest` and `folders.tiles`, for every profile. `ospreyflow install`'s questions ask for it, offering
+   `~/OspreyFlow/backups`. `server.backups` (Amendment 33) is still read, as the same setting; giving both with
+   different folders is refused, naming both. The folder is rendered into `components.storage.backups`, as
+   Amendment 33 does.
+2. **No backup is ever written inside the checkout.** `harness/backup.py` loses `DEFAULT_BACKUP_ROOT`.
+   `default_out_root` reads `components.storage.backups` for every profile. An `osprey.yaml` written before this
+   amendment, which has no such folder, falls back to `~/OspreyFlow/backups` and says so in the backup's output.
+   `--out-root` is still honoured, but a folder inside the checkout is refused, naming the checkout.
+3. **Each deployment's sets in its own subfolder.** A set is written to `<backups folder>/<deployment name>/`,
+   so two deployments' sets never mix (ADR-138's rule, which today puts a named deployment's sets in
+   `~/.ospreyflow/deployments/<name>/backups`). `ospreyflow restore` looks there first. A set still in the old
+   place is listed and restorable, with the command that moves it.
+4. **`doctor` finds backups left behind.** It names any set inside the checkout's `backups/` or a deployment's
+   old `backups/`, with their size and the one `mv` command that moves them to the configured folder. It never
+   moves or deletes one.
+5. **`doctor` warns about a backups folder that a sync client copies.** On macOS that is any folder under
+   `~/Library/CloudStorage/`, `~/Library/Mobile Documents/`, `~/Documents` or `~/Desktop` (iCloud and Google
+   Drive's defaults). On Windows it is a OneDrive folder. The check is a warning, not a refusal, because the
+   operator may intend it. The wording says that backups hold the deployment's data and any real-data exception
+   (ADR-035 §C3).
+6. **Clean-up is the operator's.** Nothing prunes sets automatically. The admin guide's §13 says where sets
+   are, how they are named (`<UTC stamp>-<profile>-<sha>`) and that removing an old one is an `rm -rf` of its
+   folder. A retention setting is not part of this amendment.
+
+**Tests (each shown red first, the violation planted at its real call site):**
+
+| Invariant | Test |
+| --- | --- |
+| every profile writes to the configured folder | `tests/harness/test_backup.py::test_every_profile_backs_up_to_its_configured_folder` (local-lite, Small, server) |
+| nothing is written inside the checkout | `::test_no_backup_is_written_inside_the_checkout`, red with `default_out_root` returning `REPO_ROOT / "backups"`; `::test_an_out_root_inside_the_checkout_is_refused` |
+| an old `osprey.yaml` falls back to `~/OspreyFlow/backups` and says so | `::test_a_config_without_a_backups_folder_falls_back_and_says_so` |
+| deployments never mix | `::test_two_deployments_sets_go_to_their_own_subfolders` |
+| setup asks for the folder | `tests/cli/test_answers.py::test_folders_backups_is_read_for_every_profile`, `::test_server_backups_and_folders_backups_differing_is_refused`; `tests/cli/test_install.py::test_install_asks_for_the_backups_folder` |
+| sets left behind are found, never moved | `tests/cli/test_doctor.py::test_doctor_names_sets_left_in_the_checkout_with_the_move_command` |
+| a synced folder is warned about | `::test_doctor_warns_a_backups_folder_a_sync_client_copies` (each named root, and a plain folder not warned) |
+
+**Documents:** the administration guide §13, `spec/05_DEPLOYMENT.md` §2.1's Components screen (backups a folder
+of every install), and the answers file's commented example in `cli/ospreyflow/answers.py`.
+
+**Built by:** the platform lane, as step P5b, after P5 merges.
+
+Open: none.

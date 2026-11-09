@@ -487,6 +487,18 @@ New ones are added at the bottom as they happen.
        "1099 may be the ArcadeDB's JMX" was wrong: 1099 is the server's ssh port.
     4. Every new leased live run uses `stack_lease.sh remote`, after one trial run of mine; runs already started
        finish over the tunnel, and Playwright and `test-js` stay on this machine.
+74. **Backups out of the checkout (your word, about 14:00).** On this machine: the latest local-lite set
+    (`20261105T101543Z`, 5.3 GB) moved to `~/OspreyFlow/backups` (mode 700, size checked before and after);
+    the two older sets and the four OpenTofu `.terraform` provider caches (1.8 GB, re-downloaded by `tofu
+    init`; the tracked lock files kept) deleted. `OspreyFlow_Core` went from 21 GB to 3.2 GB. Only about 2 GB
+    of disk came back, probably because the sets shared blocks (APFS clones). In the product: ADR-114
+    Amendment 37 (written): every install names its backups folder at setup, no backup is ever written inside
+    the checkout, and `doctor` names sets left behind and warns about a synced folder. Platform builds it as
+    P5b after P5 (CARRIES). **For you:** Google Drive (a `solirius.com` account) had the oldest set open and
+    appears to sync this repository from `~/Documents`, backups included. Those sets held the Enron dataset,
+    which ADR-035 §C3 admits for this device only. Their copies in that Drive, and its trash, are yours to
+    check and remove. The kept set is now outside `Documents`. Left for you: a stray untracked folder named
+    `" .."` (820 KB, a copy of a pytest cache, made 12:52 today) in `OspreyFlow_Core`.
 
 ## Evening, 7 November: your records of 7 November applied
 
