@@ -184,3 +184,42 @@ test_osm_gazetteer_recipe_end_to_end}.py`, `test_tile_cache.py`, `test_prefetch.
 The three live plants above were run within the same lease. Teardown: the throwaway databases dropped;
 `test_gazetteer_ids_withheld_live.py` removed its nodes and link by id, deleted its two cases (each
 delete checked) and its dataset rows (asserted gone).
+
+## Decision 3b: the case's own searches match a gazetteer place on its name alone (9 November 2026)
+
+The orchestrator's ruling after round 2 (strict): `/suggest` and the exact search, on nodes in
+`gazetteer-*` datasets, match on names only, the count and `more` as well as the rows.
+`builders.match_any_field`, used by `SearchNodesBuilder` and `SuggestNodesBuilder`.
+
+| Plant | Where | Red |
+| --- | --- | --- |
+| the guard off (`if principal.datasets is None` → `if True`) | `match_any_field` | live `test_the_case_s_own_searches_match_a_gazetteer_place_on_its_name_alone` at `hits.nodes == [] and hits.more is False` (12 places by `osm_id` prefix); live `test_gazetteer_ids_withheld_live.py` at the exact search by `osm_id` (the place found, its `osm_id` already withheld from the answer: the oracle itself); offline `test_gazetteer_name_only_match.py` |
+
+**First live run of the new Gremlin, a short lease on stack a, 04:05–04:07 UTC at `39cd225`:** 2 failed,
+both the tests' own: the exact-id case asked for `node/551203` where the plant wrote `node/5512003`, so it
+could not fail (rule 15: corrected, then the unlimited read found it); and the second case searched for
+its person by `family_name`, which 3b rightly no longer matches in a gazetteer dataset (the person is now
+put on the canvas from its stored record). Then 5 passed, and the plant above red at each assertion. An
+earlier `httpx.ReadError` was the stack still starting (ready on the next poll), not a result.
+
+**The lane's review of 3b** found no defect in the code; it asked for positive controls (a guard that
+matched nothing would pass every absence assertion): a case's own `Location` is found by its `uprn` by
+the exact search and by the type-ahead in each mode, and the regular-expression form finds by name;
+digit `osm_id`s, as the loader writes them; the identifiers live test planting inside its `try` and
+asserting nothing is left in the shared database; a type with no name field.
+
+**The leased live run for 3b: platform lease on stack a, 04:13:12–04:35:33 UTC 9 November 2026, at
+`b599708`** on main `b64c4e2`, nothing else of this lane's running (load average 3–4):
+`test_route_rights.py` (with L3.5's routes), **`tests/conformance/graph_port/`** (whole: its
+`search_nodes`/`suggest_nodes` cases, a case reader finding by an identifier in each mode, are the
+positive controls for the guarded branch), the gazetteer, identifier and build live files,
+`test_tile_cache.py`, `test_prefetch.py`, `test_statelessness.py` (wait unchanged),
+`tests/geocoder/test_match_live.py`, both sources-withheld live files and `tests/services/api/working_set/`:
+**688 passed**. Then, under the same lease:
+
+| Plant | Red |
+| --- | --- |
+| the guard off | `test_the_case_s_own_searches…` at `hits.nodes == [] and hits.more is False`; `test_gazetteer_ids_withheld_live.py` at the exact search by `osm_id` |
+| a guard that matches nothing (`__.not(__.identity())`) | `test_the_case_s_own_searches…` at its positive control, a case's own place by its `uprn` |
+
+Each restored; the stack brought down and released at 04:35:33.
