@@ -28,8 +28,10 @@ check() {  # CI's step: `PYTHONPATH=../OspreyFlow_Build uv run python -m tools.j
 BEFORE=sha256:f9bf7e9fe2f9bc4657537c1a7e20c768f0c3bafca41598263be4714783dd62eb
 trivy() { docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$WORK/trivy-cache:/root/.cache" "$TRIVY" "$@"; }
 
-say "1. build (amd64), as CI and make trivy-image-api: docker build --pull -f services/api/Dockerfile"
-docker build -q --pull -f services/api/Dockerfile -t osprey-p5-api:current . || exit 1
+# Built as CI's job builds it, without --pull: Docker Hub's pull limit refused --pull's manifest
+# request on the test server (429), and the base images are already there from this evening's builds.
+say "1. build (amd64), as CI's trivy-image-api job: docker build -f services/api/Dockerfile"
+docker build -q -f services/api/Dockerfile -t osprey-p5-api:current . || exit 1
 docker image inspect osprey-p5-api:current --format 'image size: {{.Size}} bytes ({{.Architecture}})'
 docker run --rm --entrypoint sh osprey-p5-api:current -c 'du -sh /opt/java; cat /opt/java/release; java -version 2>&1; echo "legal/java.desktop:"; ls /opt/java/legal/java.desktop; for f in /opt/java/legal/java.desktop/*.md; do echo "----- $f"; cat "$f"; done'
 grep -n '^FROM eclipse-temurin' services/api/Dockerfile
