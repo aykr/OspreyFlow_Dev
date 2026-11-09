@@ -49,6 +49,8 @@ from .doctor import (
     Probes,
     ServerPlan,
     SystemProbes,
+    backups_checks,
+    deployment_name_of,
     format_check,
     gpu_checks,
     gpu_plan,
@@ -402,7 +404,9 @@ def _print_checks(checks: list[Check]) -> bool:
     return all(check.ok for check in checks)
 
 
-def _doctor(args: argparse.Namespace, probes: Probes, product: Path) -> int:
+def _doctor(
+    args: argparse.Namespace, probes: Probes, product: Path, env: Mapping[str, str]
+) -> int:
     server = None
     base = _product_config(product)
     gpu = gpu_plan(base)
@@ -420,8 +424,24 @@ def _doctor(args: argparse.Namespace, probes: Probes, product: Path) -> int:
             # ADR-135 Amendment 2 decision 9: an installed deployment's model keys, as it says.
             model_states=getattr(probes, "model_key_states", lambda: None)(),
         )
+        + _backups_checks(probes, product, base, env)
     )  # fmt: skip
     return 0 if ok else 1
+
+
+def _backups_checks(
+    probes: Probes, product: Path, base: Mapping[str, object], env: Mapping[str, str]
+) -> list[Check]:
+    """ADR-114 Amendment 37 decisions 4 and 5, for the checkout's deployment and each one kept by
+    name (ADR-138): sets left behind, and a backups folder a sync client copies."""
+    deployments: list[tuple[str, Mapping[str, object]]] = []
+    if base:
+        deployments.append((deployment_name_of(base), base))
+    for name in named.named(env):
+        own = read_config(named.named_target(env, name).folder)
+        deployments.append((deployment_name_of(own), own))
+    home = Path(env["HOME"]) if env.get("HOME") else Path.home()
+    return backups_checks(probes, product, deployments, home=home)
 
 
 def _product_config(product: Path) -> dict[str, object]:
@@ -1530,7 +1550,7 @@ def main(
             compose(directory) if (directory / "compose.yaml").is_file() else None
         )
         if args.verb == "doctor":
-            return _doctor(args, real_probes, product)
+            return _doctor(args, real_probes, product, env)
         ctx = _Context(
             product,
             env,

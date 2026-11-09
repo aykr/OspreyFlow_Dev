@@ -454,3 +454,129 @@ def test_the_doctor_warns_of_an_installed_deployment_that_joins_by_email(
     config.write_text(yaml.safe_dump(raw), encoding="utf-8")
     assert rig("doctor") == 0
     assert "nOAuth" not in capsys.readouterr().out
+
+
+# ---- ADR-114 Amendment 37 decisions 4 and 5: sets left behind, and a folder a sync client copies --
+
+
+def _a_set(folder: Path, name: str, size: int = 2048) -> Path:
+    made = folder / name
+    made.mkdir(parents=True)
+    (made / "manifest.json").write_text("{}")
+    (made / "graph.tgz").write_bytes(b"\0" * (size - 2))
+    return made
+
+
+def test_doctor_names_sets_left_in_the_checkout_with_the_move_command(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Decision 4: a set in the checkout's `backups/` or a named deployment's old `backups/`
+    (ADR-138) is named, with its size and the one command that moves it into its deployment's
+    subfolder of the configured folder. A warning: the doctor still passes, and it never moves or
+    deletes a set."""
+    folder = tmp_path / "bk"
+    (rig.product / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "components": {"storage": {"backups": str(folder)}}}))  # fmt: skip
+    left = _a_set(rig.product / "backups", "20261101T000000Z-local-lite-abc1234")
+    named = tmp_path / "home" / ".ospreyflow" / "deployments" / "alpha"
+    named.mkdir(parents=True)
+    (named / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "deployment": {"name": "alpha"},
+         "components": {"storage": {"backups": str(folder)}}}))  # fmt: skip
+    old = _a_set(named / "backups", "20261102T000000Z-alpha-abc1234", size=3 * 1024 * 1024)
+    assert rig("doctor") == 0
+    out = capsys.readouterr().out
+    warned = [line for line in out.splitlines() if line.startswith("⚠") and "left" in line]
+    assert len(warned) == 2, out
+    checkout_line = next(line for line in warned if str(rig.product / "backups") in line)
+    assert "1 backup set" in checkout_line and "2.0 KB" in checkout_line
+    assert f"mkdir -p {folder}/local-lite && mv {left} {folder}/local-lite/" in checkout_line
+    named_line = next(line for line in warned if str(named / "backups") in line)
+    assert "3.0 MB" in named_line
+    assert f"mkdir -p {folder}/alpha && mv {old} {folder}/alpha/" in named_line
+    # Never moved or deleted.
+    assert (left / "graph.tgz").stat().st_size == 2046 and old.is_dir()
+
+
+_BASE = {"profile": "local-lite", "network": {"public_origin": "http://ospreyflow.localhost"}}
+
+
+@pytest.mark.parametrize(
+    ("system", "where"),
+    [
+        ("Darwin", "Library/CloudStorage/GoogleDrive-someone@example.org/My Drive/backups"),
+        ("Darwin", "Library/Mobile Documents/com~apple~CloudDocs/backups"),
+        ("Darwin", "Documents/OspreyFlow/backups"),
+        ("Darwin", "Desktop/backups"),
+        ("Windows", "OneDrive - Example Department/OspreyFlow/backups"),
+        ("Windows", "OneDrive/backups"),
+    ],
+)
+def test_doctor_warns_a_backups_folder_a_sync_client_copies(
+    tmp_path: Path, system: str, where: str
+) -> None:
+    """Decision 5: a backups folder under a root a sync client copies is warned of — a warning,
+    not a refusal, saying a set holds the deployment's data and any real-data exception."""
+    from ospreyflow.doctor import backups_checks
+
+    home = tmp_path / "home"
+    probes = FakeProbes()
+    probes.system_name = system
+    config = {**_BASE, "components": {"storage": {"backups": str(home / where)}}}
+    (check,) = [c for c in backups_checks(probes, tmp_path, [("local-lite", config)], home=home)
+                if c.name == "backups-synced"]  # fmt: skip
+    assert check.warn and check.ok
+    assert str(home / where) in check.says
+    assert "real-data exception" in check.says and "ADR-035" not in check.says
+    assert check.fix
+
+
+def test_a_plain_backups_folder_or_one_reached_through_a_link_is_judged_by_where_it_is(
+    tmp_path: Path,
+) -> None:
+    """`~/OspreyFlow/backups` is not warned of; a folder that is a link into `~/Documents` is, as
+    the sync client copies what the link points at."""
+    from ospreyflow.doctor import backups_checks
+
+    home = tmp_path / "home"
+    probes = FakeProbes()
+    probes.system_name = "Darwin"
+
+    def synced(folder: Path) -> bool:
+        config = {**_BASE, "components": {"storage": {"backups": str(folder)}}}
+        checks = backups_checks(probes, tmp_path, [("local-lite", config)], home=home)
+        return any(c.name == "backups-synced" for c in checks)
+
+    assert not synced(home / "OspreyFlow" / "backups")
+    (home / "Documents" / "real").mkdir(parents=True)
+    (home / "Backups").symlink_to(home / "Documents" / "real")
+    assert synced(home / "Backups")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {},
+        {"components": {"storage": {"backups": "/var/lib/osprey/backups"}}},
+        {"components": {"storage": {"backups": "/srv/mine"}}},
+        {"profile": "small", "components": {"storage": {"backups": "/var/lib/osprey/backups"}},
+         "network": {"public_origin": "https://osprey.example.internal"}},
+        {"profile": "small", "network": {"public_origin": "https://osprey.example.org"},
+         "external": {"postgres": {"host": "db.example.org"}},
+         "components": {"storage": {"backups": "/var/lib/osprey/backups"}}},
+    ],
+)  # fmt: skip
+def test_the_doctor_and_the_backup_agree_on_the_folder(
+    raw: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The command reads `osprey.yaml` as a mapping (it runs before the product's own Python); the
+    rule it applies is `harness.backup`'s, so it looks where the backup writes."""
+    from harness import backup
+    from ospreyflow.doctor import backups_folder_of
+
+    from schemas.deployment import OspreyConfig
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert backups_folder_of(raw, home=tmp_path) == backup.backups_folder(
+        OspreyConfig.model_validate(raw)
+    )[0]

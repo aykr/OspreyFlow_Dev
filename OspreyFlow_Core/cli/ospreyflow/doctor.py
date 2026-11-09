@@ -969,3 +969,147 @@ def format_check(check: Check) -> str:
     if check.warn:
         return f"⚠ {check.says} — {check.fix}"
     return f"✔ {check.says}" if check.ok else f"✘ {check.says} — {check.fix}"
+
+
+# ---- ADR-114 Amendment 37 decisions 4 and 5: the backups folder ---------------------------------
+
+#: `harness.backup.LEGACY_PLACEHOLDER` and `SET_NAME`: this command runs before the product's own
+#: Python, so it applies the backup's rule to `osprey.yaml` as a mapping;
+#: `test_the_doctor_and_the_backup_agree_on_the_folder` holds the two to one rule.
+LEGACY_BACKUPS_PLACEHOLDER = "/var/lib/osprey/backups"
+SET_NAME = re.compile(r"^(?P<stamp>\d{8}T\d{6}Z)-(?P<name>.+)-(?P<sha>[^-]+)$")
+#: Decision 5: the folders a sync client copies by default, under the home folder, on macOS
+#: (iCloud Drive, the File Provider clients — Google Drive, OneDrive, Dropbox — and iCloud's
+#: Desktop and Documents).
+MACOS_SYNCED = ("Library/CloudStorage", "Library/Mobile Documents", "Documents", "Desktop")
+
+
+def _section(config: Mapping[str, object], *keys: str) -> Mapping[str, object]:
+    found: object = config
+    for key in keys:
+        found = found.get(key) if isinstance(found, Mapping) else None
+    return found if isinstance(found, Mapping) else {}
+
+
+def deployment_name_of(config: Mapping[str, object]) -> str:
+    """`deployment.name`, else the profile (`schemas.deployment.generated_folder`)."""
+    name = _section(config, "deployment").get("name")
+    return str(name or config.get("profile") or "local-lite")
+
+
+def backups_folder_of(config: Mapping[str, object], *, home: Path) -> Path:
+    """`harness.backup.backups_folder`'s folder: `components.storage.backups` when one is named,
+    else `~/OspreyFlow/backups`. The placeholder is a folder named only on Small on a server of
+    your own (no `external:`), where Amendment 33 always wrote one."""
+    value = _section(config, "components", "storage").get("backups")
+    own_server = config.get("profile") == "small" and not any(
+        _section(config, "external").values()
+    )
+    if value and (value != LEGACY_BACKUPS_PLACEHOLDER or own_server):
+        text = str(value)
+        return home / text[2:] if text.startswith("~/") else Path(text)
+    return home / "OspreyFlow" / "backups"
+
+
+def _size(folder: Path) -> int:
+    total = 0
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            try:
+                total += (Path(root) / name).lstat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def _human(size: int) -> str:
+    for unit, scale in (("GB", 1024**3), ("MB", 1024**2), ("KB", 1024)):
+        if size >= scale:
+            return f"{size / scale:.1f} {unit}"
+    return f"{size} bytes"
+
+
+def _sets_in(folder: Path) -> list[Path]:
+    if not folder.is_dir():
+        return []
+    return sorted(
+        c for c in folder.iterdir() if c.is_dir() and SET_NAME.match(c.name) is not None
+    )
+
+
+def _left_behind(where: Path, sets: Sequence[Path], destination: Path) -> Check:
+    """Decision 4: named, with their size and the one command that moves them; never moved."""
+    import shlex
+
+    to = shlex.quote(str(destination))
+    moved = " ".join(shlex.quote(str(s)) for s in sets)
+    return Check(
+        "backups-left-behind",
+        True,
+        f"{len(sets)} backup set{'' if len(sets) == 1 else 's'}, {_human(sum(map(_size, sets)))}, "
+        f"left in {where}: {', '.join(s.name for s in sets)}",
+        f"move {'it' if len(sets) == 1 else 'them'} to the backups folder with: "
+        f"mkdir -p {to} && mv {moved} {to}/",
+        warn=True,
+    )
+
+
+def _synced_root(folder: Path, *, home: Path, system: str) -> Path | None:
+    """Decision 5: the root a sync client copies that holds `folder`, as given or as its links
+    resolve, or None."""
+    for seen in dict.fromkeys((folder, folder.resolve())):
+        if system == "Darwin":
+            for root in MACOS_SYNCED:
+                for base in dict.fromkeys((home / root, (home / root).resolve())):
+                    if seen.is_relative_to(base):
+                        return base
+        for index, part in enumerate(seen.parts):
+            # OneDrive's own folder: `OneDrive`, or `OneDrive - <organisation>` for a work account.
+            if part == "OneDrive" or part.startswith("OneDrive - "):
+                return Path(*seen.parts[: index + 1])
+    return None
+
+
+def backups_checks(
+    probes: Probes,
+    product: Path,
+    deployments: Sequence[tuple[str, Mapping[str, object]]],
+    *,
+    home: Path,
+) -> list[Check]:
+    """ADR-114 Amendment 37 decisions 4 and 5 for each deployment (`(name, its osprey.yaml)`; a
+    named one's own folder is `~/.ospreyflow/deployments/<name>`): sets left in the checkout's
+    `backups/`, a named deployment's old `backups/` or the top of the backups folder, and a backups
+    folder a sync client copies. Warnings only."""
+    checks: list[Check] = []
+    folders = {name: backups_folder_of(config, home=home) for name, config in deployments}
+    fallback = home / "OspreyFlow" / "backups"
+
+    def home_of(set_name: str) -> Path:
+        name = SET_NAME.match(set_name)["name"]  # type: ignore[index]
+        return folders.get(name, next(iter(folders.values()), fallback)) / name
+
+    places = [product / "backups"]
+    places += [home / ".ospreyflow" / "deployments" / name / "backups" for name in folders]
+    places += list(dict.fromkeys(folders.values()))
+    for where in dict.fromkeys(places):
+        grouped: dict[Path, list[Path]] = {}
+        for found in _sets_in(where):
+            grouped.setdefault(home_of(found.name), []).append(found)
+        checks += [_left_behind(where, sets, to) for to, sets in grouped.items()]
+    for folder in dict.fromkeys(folders.values()):
+        root = _synced_root(folder, home=home, system=probes.system())
+        if root is not None:
+            checks.append(
+                Check(
+                    "backups-synced",
+                    True,
+                    f"The backups folder {folder} is inside {root}, which a sync client copies; "
+                    "each backup holds the deployment's data and any real-data exception it was "
+                    "given, which are then copied off this machine",
+                    "name a folder outside it as folders.backups (components.storage.backups), "
+                    "for example ~/OspreyFlow/backups, unless that copy is intended",
+                    warn=True,
+                )
+            )
+    return checks
