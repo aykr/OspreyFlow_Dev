@@ -189,7 +189,10 @@ class PostgresOwnershipStore:
     ) -> PersonOwnership:
         unit, top = admin.org_unit, scheme.classification[-1]
         cleared = cleared_markings(admin, scheme)
-        async with self._pool.acquire() as conn, conn.transaction(isolation="repeatable_read"):
+        async with (
+            self._pool.acquire() as conn,
+            conn.transaction(isolation="repeatable_read", readonly=True),
+        ):
             items = await owned_items(conn, person, admin_unit=unit, cleared=cleared, top=top)
             hidden = await withheld(conn, person, admin_unit=unit, cleared=cleared, top=top)
         return ownership_of(person, items, withheld=hidden)

@@ -183,6 +183,14 @@ async def test_what_is_no_longer_theirs_or_no_longer_open_is_left_out(
     await _view(conn, "c-other-gone", "ana-1")
     await _proposal(conn, "c-other", "ana-1", unit="unit-2", status="rejected", dataset="ds-off")
     await _watch(conn, "c-other", "ana-1", dataset="ds-off", ended=True)
+    await _proposal(conn, "c-other-gone", "ana-1", unit="unit-2", dataset="ds-off")
+    await _watch(conn, "c-other-gone", "ana-1", dataset="ds-off")
+    # Someone else's open items out of the administrator's reach: theirs, never ana-1's withheld.
+    await _dataset(conn, "ds-top", "TOP SECRET")
+    await _view(conn, "c-other", "ana-2")
+    await _proposal(conn, "c-other", "ana-2", unit="unit-2", dataset="ds-off")
+    await _proposal(conn, "c-k", "ana-2", dataset="ds-top")
+    await _watch(conn, "c-other", "ana-2", dataset="ds-off")
 
     owned = await ownership.owned_by("ana-1", admin=ADMIN, scheme=SCHEME)
 
@@ -248,7 +256,8 @@ async def test_an_item_above_the_administrators_clearance_is_never_named_nor_cou
 
 #: Each way an item is left out, alone, so `withheld` is shown to say each one (ADR-145 A4).
 HIDDEN_ONE = ["view_elsewhere", "board_elsewhere", "proposal_elsewhere",
-              "proposal_of_another_unit_on_this_units_case", "watch_elsewhere",
+              "proposal_of_another_unit_on_this_units_case",
+              "proposal_of_this_unit_on_another_units_case", "watch_elsewhere",
               "proposal_above", "watch_above", "watch_on_no_dataset"]  # fmt: skip
 
 
@@ -267,6 +276,8 @@ async def test_each_item_left_out_is_said_to_be_withheld_and_never_named(
                                                 dataset="ds-off"),
         "proposal_of_another_unit_on_this_units_case": lambda: _proposal(
             conn, "c-k", "ana-1", unit="unit-2", dataset="ds-off"),
+        "proposal_of_this_unit_on_another_units_case": lambda: _proposal(
+            conn, "c-other", "ana-1", dataset="ds-off"),
         "watch_elsewhere": lambda: _watch(conn, "c-other", "ana-1", dataset="ds-off"),
         "proposal_above": lambda: _proposal(conn, "c-k", "ana-1", dataset="ds-top"),
         "watch_above": lambda: _watch(conn, "c-k", "ana-1", dataset="ds-top"),

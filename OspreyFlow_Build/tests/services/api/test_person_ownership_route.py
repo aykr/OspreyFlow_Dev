@@ -1,8 +1,9 @@
 """`GET /v1/admin/people/{user_id}/ownership` (ADR-145 decision 6 and A4; L3.8): what a person owns
 that the case lane keeps, read by an administrator who may disable people and by no one else. The
 real app and `require_right` run; the store is a stand-in that refuses as the real one does (rule
-15): its one item, a view in unit-1's case on a SECRET dataset's reach, goes only to an administrator
-of unit-1 cleared to SECRET, and anyone else is answered nothing and told some are withheld. It
+15): its one item, a link-type proposal in unit-1's case on a SECRET dataset, goes only to an
+administrator of unit-1 cleared to SECRET, as the real store's reads give it; anyone else is answered
+nothing and told some are withheld. It
 records the unit and clearance it was asked with, so the route is shown to pass the administrator's
 own (`test_person_ownership_store.py` runs the real SQL under the lease).
 
@@ -50,6 +51,9 @@ TOKENS: dict[str, Principal] = {
 }
 
 
+PROPOSAL_LABEL = "A proposed link type in the case Kestrel, waiting for a decision"
+
+
 class _Resolver:
     def resolve(self, token: str) -> Principal:
         return TOKENS[token]
@@ -73,9 +77,9 @@ class _Ownership:
         if admin.org_unit != "unit-1" or not scheme.clears(admin.clearance, "SECRET"):
             return PersonOwnership(person=person, withheld=True,
                                    not_yet_listed=["promotions waiting for review"])  # fmt: skip
-        items = [OwnershipItem(kind="view", id="v-1", investigation_id="c-k",
-                               label="A private view of the case Kestrel")]  # fmt: skip
-        return PersonOwnership(person=person, items=items, counts={"view": 1},
+        items = [OwnershipItem(kind="link_type_proposal", id="p-1", investigation_id="c-k",
+                               label=PROPOSAL_LABEL)]  # fmt: skip
+        return PersonOwnership(person=person, items=items, counts={"link_type_proposal": 1},
                                not_yet_listed=["promotions waiting for review"])  # fmt: skip
 
 
@@ -124,9 +128,9 @@ def test_the_store_is_asked_with_the_administrators_own_unit_and_clearance(
     assert world.ownership.asked == [("ana-2", "unit-1", "SECRET")]
     body = answer.json()
     assert body["person"] == "ana-2"
-    assert body["items"] == [{"kind": "view", "id": "v-1", "investigation_id": "c-k",
-                              "label": "A private view of the case Kestrel"}]  # fmt: skip
-    assert body["counts"] == {"view": 1} and body["withheld"] is False
+    assert body["items"] == [{"kind": "link_type_proposal", "id": "p-1", "investigation_id": "c-k",
+                              "label": PROPOSAL_LABEL}]  # fmt: skip
+    assert body["counts"] == {"link_type_proposal": 1} and body["withheld"] is False
     assert body["not_yet_listed"] == ["promotions waiting for review"]
 
 
@@ -140,7 +144,7 @@ def test_another_units_or_a_lower_cleared_administrator_is_told_only_that_some_a
     assert world.ownership.asked == [("ana-2", held.org_unit, held.clearance)]
     body = answer.json()
     assert body["items"] == [] and body["counts"] == {} and body["withheld"] is True
-    assert "v-1" not in answer.text and "Kestrel" not in answer.text and "c-k" not in answer.text
+    assert "p-1" not in answer.text and "Kestrel" not in answer.text and "c-k" not in answer.text
 
 
 def test_the_read_is_audited_with_its_count(world: SimpleNamespace) -> None:
