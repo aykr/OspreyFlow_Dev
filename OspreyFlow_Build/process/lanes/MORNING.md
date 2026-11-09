@@ -436,6 +436,10 @@ New ones are added at the bottom as they happen.
   session ends, then reopen on `ayan`. `~/.ospreyflow/accounts.conf` still names `sol` for some lanes, so I
   pass `--account ayan` explicitly; edit it to match if you like.
 
+71. **Case-b's L3.7 merged (`e935ded`), with two choices for you to overrule:** promoted items are regraded too,
+    and a later revert of a load whose link was regraded is refused for that link; a scheme file is never edited
+    in place once items are graded in it (a change makes a new scheme).
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):

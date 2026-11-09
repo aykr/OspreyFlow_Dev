@@ -1,32 +1,31 @@
-# Case-b lane · brief L3.5 and L3.7 · analyst-defined link types, and the grading scheme
+# Case-b lane · brief L3.8 · the ownership route for Disable…
 
-Written by the orchestrator, 8 November 2026, for the **case-b lane's first session** (ADR-142 Amendment 4).
-Case (the parent) is building L3.3, drawing boards, beside you. Read ADR-143 decisions 9 and 11 and
-`process/lanes/case/REPORT.md` (L3.2b) first. Opus, medium. L3.5 is M, L3.7 is S; then L3.8 (S), briefed later.
+Written by the orchestrator, 9 November 2026, after L3.7's merge (`e935ded`), for a **fresh case-b session on
+the default account** (`ayan`; the owner, 9 November: every lane moves to it at its next changeover). Read
+`process/lanes/case-b/REPORT.md` (L3.7) and the ADRs on Admin's *Disable…* and person removal (ADR-145, and the
+admin lane's L2.5 report, `process/lanes/admin/REPORT.md` history) first. Rebase onto `main`. Opus, medium.
+Size S. Case (the parent) is on L3.4 beside you; L3.4's promotion store is not on main yet.
 
-**The lane, the stacks, the merge rule.** A sister lane (ADR-142 Amendment 4) on account `sol`: your files are
-the map's row for this lane in `process/BUILD_PLAN_PARALLEL_LANES.md`, carved from your parent's, and anything
-else is a request to the orchestrator. Your parent works beside you in its own worktree: never touch its
-files, and if a step needs one, ask the orchestrator first. A test stack by `stack_lease.sh acquire case-b
-"<purpose>" && …` only (three stacks now, a, b and c). Prompt L's rules: never stop on a question (log it under
-"Decisions taken"; only loosening access, real data or contradicting an accepted ADR stops a piece); schemas
-changes ride with the step; before ready-to-merge, your own lane-reviewer, then make -k ci and make test at a
-commit rebased onto main, saved under `process/lanes/case-b/gates/`.
+**The lane, the stacks, the merge rule.** Your files are the map's row for this lane in
+`process/BUILD_PLAN_PARALLEL_LANES.md`; anything else is a request to the orchestrator, never your parent's files.
+**Ask the orchestrator before taking a test stack**; then `stack_lease.sh acquire case-b "<purpose>" && …`,
+at most two leased live runs on the machine at once. Prompt L's rules: never stop on a question; schemas ride
+with the step; every live test removes what it writes; your own lane-reviewer, then make -k ci, make test and
+test-js at a commit rebased onto main, saved under gates/, with a leased live run including `test_route_rights.py`.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 6, 12, 13 and 15 above all); ADR-143 decisions 9 and 11;
-ADR-090 Amendment 4 (proposed types decided on the Studio's Model tab); `spec/01` and `spec/03`'s link-type
-passages.
+**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 7, 12 and 15 above all).
 
-**Build** (the plan's rows L3.5 and L3.7, in order, one ready-to-merge for both):
-1. **L3.5, analyst-defined link types** (decision 9) and the Model tab's proposals block: an analyst proposes a
-   type in a case; its links cannot be promoted until it is accepted; accepted, they can.
-2. **L3.7, the grading scheme setting and its change command** (decision 11): the dry run writes nothing, and
-   grades keep their original.
+**Build** (the plan's row L3.8): the ownership route Admin's *Disable…* reads: for one person, what they own —
+views, boards, promotions they proposed or must review, proposed link types, watches if the store is on main —
+so an administrator can transfer each before disabling them.
+- **Who may read it:** an administrator who may disable people (`manage_people`), and no one else.
+- **What it gives:** counts and display names only; never an identity-provider id or a source-system identifier
+  (rule 7); an item above the administrator's own clearance is counted in words ("2 you can't see") or left out,
+  strictly so its existence can't be inferred beyond what Admin's People already shows.
+- **Promotions:** read L3.4's store if it is on main when you build; otherwise leave a seam named in the report,
+  and case wires it.
+- **Tests first:** an access test (non-administrator refused; a hidden item never named), a row in
+  `test_route_rights.py`, each red by a plant at the real call site (rule 15).
 
-**Tests first, each red by a plant at the real call site:** a proposed type's links refused promotion, then
-allowed once accepted; a proposed type visible only where its case is (rule 3); the grading command's dry run
-writes nothing (red with a write planted) and existing grades keep their original; keyboard cases (rule 13)
-with registry ids as a diff; axe in dark, light and GOV.UK.
-
-**Exit.** Both rows' exits; make ci and make test green offline; live cases under a named lease and stack; a
-friction fragment. Report in Prompt L's format, then stop.
+**Exit.** The row's exit (Lane 2's L2.5b consumes it); make ci, make test and test-js green offline; a friction
+fragment. Report in Prompt L's format, then stop.
