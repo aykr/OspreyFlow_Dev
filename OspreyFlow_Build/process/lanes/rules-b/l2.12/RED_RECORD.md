@@ -193,6 +193,10 @@ names of 6) before the change; `analyst` is *Raised by an analyst*, a later kind
 no `team_mine` row: FAILED before the change, green after. The feed is pulled by a board as its dashboard
 identity (`report_sync` reads the CSV), and a reader's own claims mean nothing there; spec 03 says so.
 
+**Items 2 and 4 of the orchestrator's earlier review are unrecorded.** Neither has a record in this lane's
+files, and their text was lost with the previous orchestrator session; what was done for them, if anything,
+cannot be told from here. The orchestrator's independent review of 211a6dc (§14) stands in for them.
+
 ## 13. My lane-reviewer on the fix round's delta
 
 - **Item 8, the JSON feed too.** The JSON feed (the default) answered the figures whole, *mine* included.
@@ -215,3 +219,30 @@ identity (`report_sync` reads the CSV), and a reader's own claims mean nothing t
   behaviour tells one from the other); the other unit's checks bound the groups to typology (`<=`), since
   the case's own typology alerts reach the reader the case gate lets in, and the other unit is refused at
   that gate, not here.
+
+## 14. The orchestrator's independent review of 211a6dc, at the rebase onto main 0a4051d
+
+- **Item 1, the new route that names no right.** Rebased with no conflict; `make schemas-check` matched
+  (504 types) with nothing regenerated. `test_every_route_naming_no_right_is_one_weighed_for_the_viewer`
+  FAILED at the rebased head as it should (`named no right, not weighed: ['get_grading_scheme_route']`,
+  L3.7's route). Weighed: the deployment's grading scheme, reference settings as `get_yardstick_route` is,
+  no record's content, so within decision 10; pinned, green. The nothing-else sweep
+  (`test_a_reports_viewer_is_refused_every_route_beyond_its_rights`) passed over every route of main's app,
+  L1.6's and L3.7's included; its red half (`test_the_sweep_finds_a_right_given_beyond_the_list`) still red
+  by its plant. The four patches each pass `git apply --check` at the rebased head.
+- **The other unit's figures pinned whole** (`test_monitoring_dashboard.py`, the audience case): its Alerts
+  panel and team view equal the case's typology rows, not a subset of the typology label. Run under the
+  lease (the live run, `gates/`).
+- **`AGE_BANDS` typed against the generated `AgeBand`** (`reports/figureParts.tsx`), both ways: a band
+  dropped from the list (`"over 30 days"` removed) → `tsc` TS2322 at `_EVERY_BAND`; a band the schema does
+  not have (`"over 31 days"`) → TS2820. Restored: `tsc` clean.
+- **The board's Superset guard, one guard red alone.** §12 found the effect's `drawsItself` check and the
+  mount's render guard each enough, so no behaviour told one from the other. The effect's check is gone
+  (with no mount it never ran); the mount's render guard is the one guard, and `is the first board …` now
+  also asserts no Superset mount is drawn. Render guard removed → FAILED (`expected <div …(3)></div> to be
+  null`); restored, 6 passed.
+- **The board's Rule and Period selects by keys** (`alert-figures.spec.ts`, rule 13), not `selectOption`:
+  typed letters, as `keyboard.spec.ts`'s `chooseOption` does (ArrowDown opens the menu on macOS). Rule's
+  `onChange` removed → FAILED (`Expected "hotlists:"`, `Received ""`); Period's removed → FAILED
+  (`Expected "26"`, `Received "12"`); restored, 8 passed with `registry-L2.12.patch` applied. The ids are
+  unchanged (the Period select is part of `filter-the-alert-monitoring-board-by-keyboard`).

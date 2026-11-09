@@ -15,7 +15,7 @@ takes them (then struck through with the brief's commit). Newest last.
 | studio | L1.5 first: Test of a pipeline with no staging steps still counts over masked rows (pre-existing rule 3 oracle) | independent review of L1.4 | L1.5 |
 | admin | The Model tab's proposal notifications (count, reminder, Needs you) for analyst-defined link types | case-b, L3.5 | L2.7 |
 | case | Mount rules-b's alert badge overlay in GlassCanvas.tsx (patch in process/lanes/rules-b/) and the boards' Alerts panel | rules-b, L2.12 | L3.4 or at rules-b's merge |
-| admin | Admin's tips (Roles, People, Datasets) from help/roles.ts (patch in process/lanes/rules-b/) | rules-b, L2.12 | L2.7 |
+| admin | Admin › Roles' tips from help/roles.ts and the help page's door (admin-tips.patch in process/lanes/rules-b/); still to build, by admin after L2.6: People's and Datasets' tips (roles, teams, leads, Authors) from roles.ts, and a refused action saying why and who can with roles.ts's `whyNot` (decision 12; no screen uses it yet) | rules-b, L2.12 | L2.7 |
 | rules | *See the trend* in the queue's detail opening the board filtered (patch in process/lanes/rules-b/) | rules-b, L2.12 | L2.10 or L2.11 |
 | case | A case's own proposed link types usable at once on its boards, through LinkTypeService.case_types (decision 9); case-b's L3.5 closes the cross-case leak (hidden types left out of BoardService.link_types) | case-b, L3.5 | L3.4 |
 | case | The promotion writer calls LinkTypeService.promotion_refusals; test_every_promotion_writer_asks_which_links_may_go holds it | case-b, L3.5 | L3.4 |
