@@ -48,6 +48,8 @@ PEOPLE.update(
     {
         "ann": Principal(id="ann", clearance="SECRET", org_unit=UNIT, roles=["analyst"]),
         "olga": Principal(id="olga", clearance="SECRET", org_unit=UNIT, roles=["osprey-admin"]),
+        # A data engineer holding a level on the target's home case below Author.
+        "vic": Principal(id="vic", clearance="SECRET", org_unit=UNIT, roles=["data_engineer"]),
     }
 )
 STEPS = ("targets", "sheet", "dry_run", "merge")
@@ -57,6 +59,7 @@ OTHER_HOME = "home-other"
 @pytest.fixture
 def mw(pw: SimpleNamespace) -> Iterator[SimpleNamespace]:  # noqa: F811
     pw.cases.grants[HOME]["ann"] = AccessLevel.AUTHOR
+    pw.cases.grants[HOME]["vic"] = AccessLevel.EDITOR
     # Another dataset Dana reads too, holding a Mercer of its own.
     pw.datasets.add(
         Dataset(id="other", name="Other intel", owning_unit=UNIT, created_by="eng",
@@ -73,7 +76,7 @@ def mw(pw: SimpleNamespace) -> Iterator[SimpleNamespace]:  # noqa: F811
     assert made.status_code == 201, made.text
     body = made.json()
     home = body["investigation_id"]
-    for who in ("dana", "erin", "fred", "ann", "olga", "sam"):
+    for who in ("dana", "erin", "fred", "ann", "olga", "sam", "vic"):
         pw.cases.grants[home][who] = AccessLevel.VIEWER
     yield SimpleNamespace(
         **vars(pw), drawn=body["dataset_id"], home=home, board=body["board"]["id"]
@@ -139,14 +142,17 @@ def test_every_step_names_merge_datasets(mw: SimpleNamespace, step: str, who: st
     _nothing_written(mw, drawn.mercer["element_id"])
 
 
+@pytest.mark.parametrize("who", ["fred", "vic"])
 @pytest.mark.parametrize("step", ["sheet", "dry_run", "merge"])
 def test_a_holder_of_merge_datasets_who_is_no_author_of_the_target_is_answered_as_for_no_target(
-    mw: SimpleNamespace, step: str
+    mw: SimpleNamespace, step: str, who: str
 ) -> None:
+    """Fred reads `src` through a case of his own; Vic is an Editor of its home case: neither is
+    one of its Authors."""
     drawn = _three(mw)
-    assert _step(mw, "targets", "fred").json()["targets"] == []
-    into_src = _step(mw, step, "fred", item_ids=_ids(drawn))
-    into_none = _step(mw, step, "fred", target="no-such-dataset", item_ids=_ids(drawn))
+    assert _step(mw, "targets", who).json()["targets"] == []
+    into_src = _step(mw, step, who, item_ids=_ids(drawn))
+    into_none = _step(mw, step, who, target="no-such-dataset", item_ids=_ids(drawn))
     assert into_src.status_code == 404, into_src.text
     # Rule 3: the same answer as for a dataset that does not exist.
     assert into_src.json() == into_none.json()
