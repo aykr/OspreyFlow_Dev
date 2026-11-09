@@ -24,7 +24,7 @@ import io
 import json
 import os
 import tempfile
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,6 +38,8 @@ from schemas.sources import ApiConnectionSettings, ApiRead, JsonRead
 MAX_ROWS = 500_000
 #: The most pages one API read follows.
 MAX_PAGES = 1_000
+#: The most bytes one read may take in (an API's answers, the JSON files) or write (the file).
+MAX_BYTES = 256 * 1024 * 1024
 _TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 
@@ -108,6 +110,11 @@ def tabulate(records: Sequence[Any], where: str) -> ReadRows:
 def read_json(files: Sequence[tuple[str, bytes]], read: JsonRead) -> ReadRows:
     """The records of each JSON file, in the order given, at the source's records path."""
     records: list[Any] = []
+    if sum(len(c) for _n, c in files) > MAX_BYTES:
+        raise ConnectorRefused(
+            f"the JSON files come to more than {MAX_BYTES} bytes, more than one read may take; "
+            "nothing was written (rule 2)"
+        )
     for name, content in files:
         try:
             document = json.loads(content.decode("utf-8-sig"))
@@ -147,6 +154,7 @@ async def read_api(
     secret: str | None,
     allowed_hosts: Collection[str],
     transport: httpx.AsyncBaseTransport | None = None,
+    before_request: Callable[[str], None] | None = None,
 ) -> ReadRows:
     """Every page of the endpoint's records. A refusal, an error or records missing where the read
     says they are is refused in words: never read as no rows."""
@@ -159,13 +167,22 @@ async def read_api(
             raise ConnectorRefused("the connection's secret is not set; nothing was read")
         headers["Authorization"] = f"Bearer {secret}"
     records: list[Any] = []
+    taken = 0
     async with httpx.AsyncClient(
         transport=transport, timeout=_TIMEOUT, headers=headers, follow_redirects=False
     ) as client:
         page, next_url = 1, url
         for _ in range(MAX_PAGES):
             params = {settings.page_param: str(page)} if settings.pagination == "page" else None
-            document = await _get(client, next_url, params)
+            if before_request is not None:
+                before_request(next_url)  # the host looked up again before every request
+            document, size = await _get(client, next_url, params)
+            taken += size
+            if taken > MAX_BYTES:
+                raise ConnectorRefused(
+                    f"the API's answers came to more than {MAX_BYTES} bytes, more than one read "
+                    "may take; nothing was written (rule 2)"
+                )
             found = _at(document, read.records_at, "the API's answer")
             records += found
             if len(records) > MAX_ROWS:
@@ -211,7 +228,9 @@ def _next_link(document: Any, path: str | None) -> str | None:
     return found if isinstance(found, str) and found else None
 
 
-async def _get(client: httpx.AsyncClient, url: str, params: dict[str, str] | None) -> Any:
+async def _get(
+    client: httpx.AsyncClient, url: str, params: dict[str, str] | None
+) -> tuple[Any, int]:
     try:
         response = await client.get(url, params=params)
     except httpx.HTTPError as exc:
@@ -228,7 +247,7 @@ async def _get(client: httpx.AsyncClient, url: str, params: dict[str, str] | Non
             f"the API answered {response.status_code}, not 200; nothing was written"
         )
     try:
-        return response.json()
+        return response.json(), len(response.content)
     except ValueError as exc:
         raise ConnectorRefused("the API's answer is not JSON; nothing was written") from exc
 
@@ -271,6 +290,10 @@ def write_snapshot(rows: ReadRows, folder: Path, name: str, *, keep_earlier: boo
     writer.writerows(earlier)
     for row in rows.rows:
         writer.writerow(["" if row.get(c) is None else row[c] for c in rows.columns])
+    if len(buffer.getvalue().encode("utf-8")) > MAX_BYTES:
+        raise ConnectorRefused(
+            f"the source's file would be more than {MAX_BYTES} bytes; nothing was written (rule 2)"
+        )
     if len(earlier) + len(rows.rows) > MAX_ROWS:
         raise ConnectorRefused(
             f"the source's file would hold more than {MAX_ROWS} rows; nothing was written (rule 2)"

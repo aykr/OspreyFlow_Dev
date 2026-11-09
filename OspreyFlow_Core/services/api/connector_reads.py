@@ -17,10 +17,11 @@ from __future__ import annotations
 import fnmatch
 import os
 import re
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import asyncpg
 import httpx
@@ -44,9 +45,11 @@ from schemas.sources import (
     SourceTable,
     SqlConnectionSettings,
     SqlRead,
+    refuse_inside_host,
 )
 
 from .ingest_sources import UPLOAD_SUBDIR, ingest_root, is_inside
+from .map_admin import _is_inside, _literal_ip, resolve_host
 
 #: A non-file source's own name for its file: plain, lower case, no path.
 SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
@@ -65,9 +68,66 @@ class Readers:
     sql_connect: Connect = asyncpg.connect
     http_transport: httpx.AsyncBaseTransport | None = None
     allowed_hosts: Collection[str] | None = None
+    #: Where a connection may reach (`refuse_host`). A fixture on this machine (the leased stack's
+    #: Postgres) stands one in that admits it; that is named wherever it is used.
+    host_check: Callable[[str, str, Collection[str]], None] | None = None
 
     def hosts(self) -> Collection[str]:
         return egress_allow_list() if self.allowed_hosts is None else self.allowed_hosts
+
+    def check(self, kind: str, host: str) -> None:
+        (self.host_check or _refuse_host_with_list)(kind, host, self.hosts())
+
+
+def refuse_host(kind: str, host: str, *, allowed_hosts: Collection[str] | None) -> None:
+    """Where a SQL or API connection may reach (ADR-147 decision 2a's rule, with `map_admin`'s own
+    lookups; the orchestrator's review of L1.6): never this machine, a dotless name of the
+    deployment's own (`postgres`, `keycloak`), or an address that is loopback, private, link-local
+    (a cloud's metadata service), reserved, unspecified or multicast, written in any form or
+    resolved to now; and, with `allowed_hosts`, only a host the operator's egress allow-list names.
+    Called when a connection is named and again before every connection or request, since DNS can
+    change in between. Refused in words; nothing is read."""
+    try:
+        refuse_inside_host(host)
+    except ValueError as refused:
+        raise ConnectorRefused(f"{refused}; nothing was read") from refused
+    bare = host.strip().strip("[]").rstrip(".").lower()
+    if allowed_hosts is not None:
+        allowed = {h.strip().strip("[]").rstrip(".").lower() for h in allowed_hosts if h.strip()}
+        if bare not in allowed:
+            raise ConnectorRefused(
+                f"{bare} is not on this deployment's egress allow-list: ask an operator to add it "
+                f"(OSPREY_CONNECTOR_EGRESS); nothing was read ({kind} connection)"
+            )
+    if _literal_ip(bare) is not None:
+        return
+    for address in resolve_host(bare):
+        ip = _literal_ip(address)
+        if ip is not None and _is_inside(ip):
+            raise ConnectorRefused(
+                f"{bare} resolves inside this deployment or its network; nothing was read"
+            )
+
+
+def _refuse_host_with_list(kind: str, host: str, allowed: Collection[str]) -> None:
+    refuse_host(kind, host, allowed_hosts=allowed)
+
+
+def connection_host(settings: object) -> tuple[str, str] | None:
+    """A connection's kind and the host it reaches, or `None` for files."""
+    if isinstance(settings, SqlConnectionSettings):
+        return "sql", settings.host
+    if isinstance(settings, ApiConnectionSettings):
+        return "api", urlsplit(settings.base_url).hostname or ""
+    return None
+
+
+def refuse_connection_hosts(settings: object) -> None:
+    """At save: the host refused if it is, or resolves, inside the deployment. The allow-list is
+    not asked yet: an operator may add the host after the administrator names it."""
+    found = connection_host(settings)
+    if found is not None:
+        refuse_host(found[0], found[1], allowed_hosts=None)
 
 
 def source_file(dataset_id: str, name: str, root: Path | None = None) -> Path:
@@ -113,6 +173,12 @@ async def read_rows(
     """The rows one read of `source` finds, through its connection."""
     settings, read = connection.settings, source.read
     if isinstance(settings, SqlConnectionSettings) and isinstance(read, SqlRead):
+        readers.check("sql", settings.host)
+        if read.table.split(".")[0] not in settings.schemas:
+            raise ConnectorRefused(
+                f"the table {read.table} is not in a schema this connection may read "
+                f"({', '.join(settings.schemas)}); nothing was read"
+            )
         refresh = getattr(source, "refresh", None)
         watermark = (
             refresh.watermark_column
@@ -127,6 +193,7 @@ async def read_rows(
         return await read_api(
             settings, read, secret=secret_of(settings.secret), allowed_hosts=readers.hosts(),
             transport=readers.http_transport,
+            before_request=lambda url: readers.check("api", urlsplit(url).hostname or ""),
         )  # fmt: skip
     if connection.kind == "json" and isinstance(read, JsonRead):
         return read_json(_json_files(dataset_id, read.pattern, root), read)
@@ -171,6 +238,12 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     """*Test connection*: a SQL login signed in over TLS and found read-only; an API's host on the
     allow-list and its secret set. Nothing is read."""
     settings = connection.settings
+    found = connection_host(settings)
+    if found is not None:
+        try:
+            readers.check(*found)
+        except ConnectorRefused as refused:
+            return ConnectionTest(ok=False, words=str(refused))
     if isinstance(settings, SqlConnectionSettings):
         return await check_sql_connection(
             settings, secret=secret_of(settings.secret), connect=readers.sql_connect

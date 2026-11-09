@@ -4,10 +4,12 @@ NOMIS-replica table (rule 9: invented rows) in the leased stack's Postgres, is r
 incremental watermark, and a refresh reads only the new rows.
 
 The leased Postgres is the fixture, and it refuses what a real one refuses (rule 15): a wrong
-password, a table that is not there, a write through a read-only transaction. It also lacks TLS, so
-`test_a_server_without_tls_is_refused` proves the real connector refuses it. Every other case
-connects through `_no_tls`, which drops TLS and nothing else. That is the fixture's one
-difference from a deployment, and it is named here.
+password, a table that is not there, a write through a read-only transaction. It differs from a
+deployment in two named ways, each taken by `_no_tls` alone: it is on this machine, which every
+connection refuses (`test_connector_hosts.py`), so its settings name `FIXTURE_HOST` and the hook
+connects to the leased port instead; and it lacks TLS, so the hook asks for none.
+`test_a_server_without_tls_is_refused` connects through `_to_the_stack`, which takes the address and
+keeps TLS, to prove the real connector refuses that same server.
 
 **The exit, end to end.**
 `test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_routes` registers
@@ -57,14 +59,31 @@ LATER = [
 ]
 
 
+#: The fixture's host as its settings name it: a name every check admits, which only the hooks below
+#: take to the leased stack's Postgres on this machine.
+FIXTURE_HOST = "nomis-replica.fixture.example"
+
+
+async def _to_the_stack(**kw: Any) -> Any:
+    """The leased Postgres is on this machine, which no connection may name: connect there."""
+    assert kw["host"] == FIXTURE_HOST
+    return await asyncpg.connect(**{**kw, "host": "localhost"})
+
+
 async def _no_tls(**kw: Any) -> Any:
-    """The fixture's one difference: the leased Postgres has no TLS, so it is asked for none."""
-    return await asyncpg.connect(**{**kw, "ssl": False})
+    """The fixture's two differences: on this machine, and with no TLS to ask for."""
+    return await _to_the_stack(**{**kw, "ssl": False})
+
+
+def _admit_the_fixture(kind: str, host: str, allowed: object) -> None:
+    """The route's host check for the fixture alone: it admits `FIXTURE_HOST` and nothing else."""
+    assert host == FIXTURE_HOST, host
 
 
 def _settings(user: str = READER) -> SqlConnectionSettings:
     return SqlConnectionSettings(
-        host="localhost",
+        host=FIXTURE_HOST,
+        schemas=["nomis_replica_fixture"],
         port=int(os.environ["POSTGRES_PORT"]),
         database=PostgresConfig.from_env().dsn.rsplit("/", 1)[-1],
         user=user,
@@ -199,8 +218,8 @@ async def test_refusals_are_refused_in_words(nomis: asyncpg.Connection) -> None:
 
 async def test_a_server_without_tls_is_refused(nomis: asyncpg.Connection) -> None:
     with pytest.raises(ConnectorRefused, match="TLS"):
-        await read_sql(_settings(), READ, secret=PASSWORD)
-    tested = await check_sql_connection(_settings(), secret=PASSWORD)
+        await read_sql(_settings(), READ, secret=PASSWORD, connect=_to_the_stack)
+    tested = await check_sql_connection(_settings(), secret=PASSWORD, connect=_to_the_stack)
     assert not tested.ok and "TLS" in tested.words
 
 
@@ -263,6 +282,9 @@ async def test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_r
     (root / "uploaded" / "ds-exit").mkdir(parents=True)
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(root))
     monkeypatch.setenv("OSPREY_CONNECTION_SECRET_NOMIS_FIXTURE", PASSWORD)
+    from services.api import connector_reads
+
+    monkeypatch.setattr(connector_reads, "resolve_host", lambda host: [])  # no lookup leaves
     datasets = InMemoryDatasetStore()
     datasets.add(
         Dataset(
@@ -282,7 +304,7 @@ async def test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_r
         "sources": sources,
         "studio_recipes": _Recipes(),
         "audit": _Audit(),
-        "connector_readers": Readers(sql_connect=_no_tls),
+        "connector_readers": Readers(sql_connect=_no_tls, host_check=_admit_the_fixture),
     }
     for name, value in state.items():
         monkeypatch.setattr(app.state, name, value, raising=False)

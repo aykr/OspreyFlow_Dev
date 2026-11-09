@@ -505,7 +505,13 @@ from .compute_routes import (
 )
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
-from .connector_reads import Readers, check_connection, read_into_file, source_file
+from .connector_reads import (
+    Readers,
+    check_connection,
+    read_into_file,
+    refuse_connection_hosts,
+    source_file,
+)
 from .credentials import MissingCredentialError
 from .custom_roles import (
     CustomRoleStore,
@@ -8992,6 +8998,12 @@ async def add_admin_connection(
     body: ConnectionInput, principal: PrincipalDep, sources: SourcesDep, audit: AuditDep
 ) -> Connection:
     """An administrator names a connection (ADR-140 Amendment 4). Files only until phase 9."""
+    # ADR-140 Amendment 13 (the orchestrator's review of L1.6): a host that is, or resolves to, an
+    # address inside the deployment is refused before it is kept; the schema refuses written forms.
+    try:
+        refuse_connection_hosts(body.settings)
+    except ConnectorRefused as refused:
+        raise _connector_refused(refused) from refused
     made = await sources.add_connection(body, principal)
     await audit.record(
         principal=principal,

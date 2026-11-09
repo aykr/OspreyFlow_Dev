@@ -34,6 +34,8 @@ from . import reads
 from .reads import ConnectorRefused, ReadRows, as_text
 
 Connect = Callable[..., Awaitable[Any]]
+#: How long one statement may run on the client's database, in milliseconds.
+STATEMENT_TIMEOUT_MS = "60000"
 #: A type the server's catalogue names: words, and a size in brackets.
 _TYPE = re.compile(r"^[a-z][a-z0-9 _]*(\(\d+(,\s*\d+)?\))?(\[\])?$")
 
@@ -69,6 +71,10 @@ async def _open(settings: SqlConnectionSettings, secret: str | None, connect: Co
         return await connect(
             host=settings.host, port=settings.port, user=settings.user, password=secret,
             database=settings.database, ssl=_tls(settings), timeout=15,
+            # Every statement bounded, and the session read-only from its first statement (the
+            # orchestrator's review of L1.6).
+            server_settings={"statement_timeout": STATEMENT_TIMEOUT_MS,
+                             "default_transaction_read_only": "on"},
         )  # fmt: skip
     except (OSError, asyncpg.PostgresError, ssl.SSLError, ConnectionError) as exc:
         words = str(exc).lower()
