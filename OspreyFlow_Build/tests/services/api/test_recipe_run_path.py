@@ -7,6 +7,8 @@ first case fails if the two ever name different things."""
 
 from __future__ import annotations
 
+from services.api.investigations import AccessLevel
+
 import dataclasses
 from types import SimpleNamespace
 from typing import Any
@@ -50,7 +52,8 @@ async def test_a_scheduled_run_checks_a_watchs_owner_reach_through_the_states_ow
     from schemas.domain import Principal
 
     class _Cases:
-        async def get_authorized(self, case: str, principal: Principal, *, need: Any = None) -> object:
+        async def get_authorized(self, case: str, principal: Principal, *, need: AccessLevel) -> object:
+            assert need is AccessLevel.VIEWER, "the reach asks the case's own Viewer check"
             if (case, principal.id) != ("case-1", "owner"):
                 raise InvestigationNotFoundError(case)
             return object()

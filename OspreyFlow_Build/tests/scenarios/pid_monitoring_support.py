@@ -315,6 +315,7 @@ async def _owner_reaches(owner: object, dataset_id: str) -> bool:
     `test_evaluation_touched_nodes.py` and `test_team_lead_and_watches.py`."""
     return True
 
+
 async def _load_base(world: World, file: str, rows: Sequence[dict[str, str]] | None = None) -> None:
     report, _events, _held = await load_with_rules(
         golden.recipe_for(file),

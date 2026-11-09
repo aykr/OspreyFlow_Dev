@@ -245,7 +245,8 @@ class _Cases:
         self.members = members
         self.asked: list[tuple[str, str]] = []
 
-    async def get_authorized(self, case: str, principal: Principal, *, need: Any = None) -> object:
+    async def get_authorized(self, case: str, principal: Principal, *, need: AccessLevel) -> object:
+        assert need is AccessLevel.VIEWER, "the reach asks the case's own Viewer check"
         from services.api.investigations import InvestigationNotFoundError
 
         self.asked.append((case, principal.id))

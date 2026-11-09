@@ -20,6 +20,8 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
+from services.api.investigations import AccessLevel
+
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
@@ -350,7 +352,7 @@ async def test_a_monitor_is_evaluated_for_a_run_that_only_referenced_nodes(
 
 
 async def test_a_hotlist_whose_owner_has_lost_its_dataset_matches_nothing(
-    recorded: list[dict[str, Any]],
+    recorded: list[dict[str, Any]], caplog: pytest.LogCaptureFixture
 ) -> None:
     """The lane-reviewer's round on the L2.10 fix: the hotlist path narrows its owner to the
     hotlist's dataset only while they still reach it (`watch_reach.owner_reaches_dataset_in`, here
@@ -362,7 +364,8 @@ async def test_a_hotlist_whose_owner_has_lost_its_dataset_matches_nothing(
     from services.api.watch_reach import owner_reaches_dataset_in
 
     class _Left:
-        async def get_authorized(self, case: str, principal: Principal, *, need: Any = None) -> object:
+        async def get_authorized(self, case: str, principal: Principal, *, need: AccessLevel) -> object:
+            assert need is AccessLevel.VIEWER, "the reach asks the case's own Viewer check"
             raise InvestigationNotFoundError(case)  # the owner holds no level there now
 
     datasets = InMemoryDatasetStore()
@@ -372,8 +375,20 @@ async def test_a_hotlist_whose_owner_has_lost_its_dataset_matches_nothing(
     async def broken(owner: Principal, dataset_id: str) -> bool:
         raise ConnectionError("the case store went away")
 
+    import logging
+
+    caplog.set_level(logging.INFO, logger="services.api.evaluation")
     for reach in (owner_reaches_dataset_in(datasets, _Left()), None, broken):
         await _hotlists_for(_Graph(nodes), _entry(["a"]), _hotlist(dataset_id="case-dataset"), reach=reach)
     assert recorded == []
+    said = [r.getMessage() for r in caplog.records]
+    assert any("no longer reaches its dataset" in m for m in said)
+    assert any("no dataset reach check was given" in m for m in said)
+    assert any("reach was not read" in m for m in said), "each is logged, never silent"
+    # A check that fails stops that hotlist alone: another, with no dataset, still matches.
+    await _hotlists_for(_Graph(nodes), _entry(["a"]), _hotlist(dataset_id="case-dataset"),
+                        _hotlist_n(2, HOT), reach=broken)  # fmt: skip
+    assert [c["rule_id"] for c in recorded] == ["hotlist:h2"]
+    recorded.clear()
     await _hotlists_for(_Graph(nodes), _entry(["a"]), _hotlist(dataset_id="case-dataset"))
     assert [c["recipient"].datasets for c in recorded] == [["case-dataset"]]

@@ -111,6 +111,7 @@ async def _owner_reaches(owner: object, dataset_id: str) -> bool:
     `test_evaluation_touched_nodes.py` and `test_team_lead_and_watches.py`."""
     return True
 
+
 async def base_world() -> World:
     """The case as the seed leaves it: September's people, accounts, money and direct writes."""
     graph = LedgerGraph(ONTOLOGY)

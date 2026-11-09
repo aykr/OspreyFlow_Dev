@@ -68,6 +68,7 @@ from .change_stream import ChangeStreamEntry
 from .hotlists import HotlistStore
 from .monitors import MonitorStore
 from .pattern_store import PatternNotFoundError, PatternStore
+from .watch_reach import DatasetReach
 
 #: Bounds `services/resolve/trigger.py`'s own `LOCK_TTL_SECONDS`/`PAGE_SIZE` precedent —
 #: conservative and disclosed as a guess, not a measurement, for the identical reason that
@@ -145,9 +146,6 @@ def watched_values(properties: Mapping[str, object]) -> set[str]:
 
 _log = logging.getLogger(__name__)
 
-#: Whether a principal still reaches a dataset (`watch_reach.owner_reaches_dataset_in`). A watch
-#: is matched within its dataset only while this holds.
-DatasetReach = Callable[[Principal, str], Awaitable[bool]]
 
 
 async def _within_its_dataset(

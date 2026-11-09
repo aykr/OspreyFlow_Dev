@@ -165,3 +165,37 @@ e79271b.
   was still coming up; it passed in the plant run and in the green run after.
 - **Item 9 (offline).** `test_a_routed_alerts_explanation_names_the_team_it_was_routed_to`, red with
   the explanation reading `alert.team` (unit-1).
+
+## 9. My lane-reviewer's two rounds on the fix (9 November 2026)
+
+Each case was green, red with one plant at its real call site, and green again with the plant removed.
+Offline runs used the closed ports; the live run was under the rules lease on stack a, 07:58–07:59Z,
+at ef45fa1.
+
+- **The scheduled and folder-watched runs' reach.**
+  `test_recipe_run_path.py::test_a_scheduled_run_checks_a_watchs_owner_reach_through_the_states_own_stores`.
+  Its state holds the stores and no `watch_reach`, as the running Conduit's does. Red with
+  `from_state`'s building of `watch_reach` removed: `None is not None`. The test before it had handed
+  the state a `watch_reach` the real one never has, which is why the gap went unseen; it now leaves
+  the built field out.
+- **The hotlist path.** `test_evaluation_touched_nodes.py::test_a_hotlist_whose_owner_has_lost_its_dataset_matches_nothing`.
+  - With the reach check removed from the hotlist loop: the owner, narrowed to the dataset, was
+    given the match three times.
+  - With the per-watch catch removed from `_within_its_dataset`: the failing check stopped the
+    evaluation whole (`ConnectionError`), where it now stops that hotlist alone and a second one
+    still matches.
+  - Each refusal is asserted in the log.
+  - The fakes of the case store take `need` as the real one does, required, and assert it is
+    Viewer.
+- **The hand-off's names.**
+  - `test_the_teams_a_rule_may_go_to_list_members_to_the_lead_alone`, red with no member names
+    served (`{} == {...}`).
+  - `OneQueue.test.tsx`'s lead case, red with the options shown by id (no option "Mo Member").
+  - `keyboard/alerts.spec.ts`'s hand-off, red the same way (no option "Priya Shah").
+  - A first keyboard run without the name assertion stayed green under that plant, because typing a
+    label works whatever the label says, so the assertion was added.
+- **The kyc false positive (live).** It is now closed by a second person before it is judged. Red
+  with `_close` confirming a false positive too: Nair's match was asserted. Green before and after.
+- **`writeTheSentence` by keys.** Red with the Frequency select's `onChange` a no-op (the value
+  check). A first plant on the Subject select stayed green: Person is its default, so choosing it
+  changes nothing. The plant proved nothing and was replaced (rule 15).

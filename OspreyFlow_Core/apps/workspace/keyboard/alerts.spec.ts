@@ -346,7 +346,10 @@ test("a team's lead gives one of its alerts to a member, by keyboard (ADR-146 Am
   await page.goto("/keyboard/alerts-harness.html");
   await openTheAlert(page);
   const lead = page.getByRole("group", { name: "As the team's lead" });
-  await chooseByTyping(page, lead.getByRole("combobox", { name: "Give to (a member of the team)" }), "analyst-2");
+  const give = lead.getByRole("combobox", { name: "Give to (a member of the team)" });
+  // ADR-106: each member by name, never by their identity-provider id.
+  await expect(give.getByRole("option", { name: "Priya Shah" })).toHaveCount(1);
+  await chooseByTyping(page, give, "analyst-2");
   await press(page, lead.getByRole("button", { name: "Give to the member" }));
   await expect.poll(() => state.sent.find((s) => s.path === "alert-queue/a1/assign")?.body).toEqual({ assignee: "analyst-2" });
   registerCovered(REGISTRY, "give-a-team-alert-to-a-member-by-keyboard");
@@ -579,7 +582,8 @@ test("a rule is written as a sentence, shown as its drawn pattern and deployed, 
   await press(page, page.getByRole("button", { name: "Show the drawn pattern" }));
   await expect(page.getByRole("region", { name: "The drawn pattern" })).toContainText("When a Person whose listing is one of sanction, pep");
   expect(state.sent.find((s) => s.path === "rules/sentence/compile")?.body).toEqual(WRITTEN);
-  await page.getByLabel("Name of the sentence rule").fill("Listed people seen often");
+  await page.getByLabel("Name of the sentence rule").focus();
+  await page.keyboard.type("Listed people seen often");
   await press(page, page.getByRole("button", { name: "Deploy the sentence" }));
   await expect(page.getByText("Deployed “Listed people seen often”.")).toBeVisible();
   expect(state.sent.find((s) => s.path === "rules/sentence")?.body).toEqual({ name: "Listed people seen often", sentence: WRITTEN });
