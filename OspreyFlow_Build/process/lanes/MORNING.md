@@ -610,6 +610,13 @@ New ones are added at the bottom as they happen.
      Viewer doesn't hold.
    - (b) Yes, as an Author, amending ADR-112 for this case.
 
+91. **Case-b's L3.8 merged (`2317b49`, onto main as `01a2a75`), with ADR-145 Amendment 8 written: your Disable
+    ruling.** Three findings were settled at the merge, each a one-line census entry or a fix of mine: the
+    route's audit action classified among reads in admin's census; the route recorded as not yet a section's
+    (L2.5b draws it); my `SKIP_JS` test given a clean environment (red when run inside `make test SKIP_JS=1`).
+    Admin's L2.5b is now unblocked (CARRIES). Case's L3.4 is in its third round with two questions for you
+    (above). Studio's L1.5, rules' L2.10, platform's P5 and admin's L2.7 are building or testing.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):

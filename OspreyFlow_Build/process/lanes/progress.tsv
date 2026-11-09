@@ -39,7 +39,7 @@ case	L3.4	L	building	Promotion; a removed case's layer merged or deleted
 case-b	L3.5	M	done	Analyst-defined link types
 case	L3.6	S	todo	drawn_watch alerts in the one queue (with L2.10)
 case-b	L3.7	S	done	The grading scheme setting and command
-case-b	L3.8	S	todo	The ownership route for Disable
+case-b	L3.8	S	done	The ownership route for Disable
 case	L3.9	L	todo	Merging a drawn dataset; the drawing as a case view (L5, L6 ruled)
 platform	P1	L	done	Models in Admin: engines, each job's model, keys write-only, connection test (ADR-135 Am 2)
 platform	P2	M	done	Model usage and limits
