@@ -317,6 +317,11 @@ New ones are added at the bottom as they happen.
     that failed on an upload. Rules' L2.9 merged (`057a10e`); rules is on L2.10, and rules-b opened on sol for
     L2.12. Platform's P3 held for a map-key exfiltration path and host-check bypasses; being fixed.
 
+64. **Two accepted ADRs reconciled (studio-b's L1.6), overrule if you wish:** ADR-146 decision 2 keeps
+    load_screening_lists inside Rules and Monitoring; ADR-140 Amendment 9 decision 3, your later and more specific
+    record, puts the deployment-wide list connector in Studio › Sources. Settled: the right acts in both (ADR-146
+    Amendment 3); no one's rights change. Tied to your open question on which store is the store of record.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
