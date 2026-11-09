@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from services.api.app import app
+from services.api.person_ownership import PROMOTION_KINDS
 
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 from schemas.domain import Principal
@@ -76,11 +77,11 @@ class _Ownership:
         self.asked.append((person, admin.org_unit, admin.clearance))
         if admin.org_unit != "unit-1" or not scheme.clears(admin.clearance, "SECRET"):
             return PersonOwnership(person=person, withheld=True,
-                                   not_yet_listed=["promotions waiting for review"])  # fmt: skip
+                                   not_yet_listed=list(PROMOTION_KINDS))  # fmt: skip
         items = [OwnershipItem(kind="link_type_proposal", id="p-1", investigation_id="c-k",
                                label=PROPOSAL_LABEL)]  # fmt: skip
         return PersonOwnership(person=person, items=items, counts={"link_type_proposal": 1},
-                               not_yet_listed=["promotions waiting for review"])  # fmt: skip
+                               not_yet_listed=list(PROMOTION_KINDS))  # fmt: skip
 
 
 class _Audit:
@@ -131,7 +132,7 @@ def test_the_store_is_asked_with_the_administrators_own_unit_and_clearance(
     assert body["items"] == [{"kind": "link_type_proposal", "id": "p-1", "investigation_id": "c-k",
                               "label": PROPOSAL_LABEL}]  # fmt: skip
     assert body["counts"] == {"link_type_proposal": 1} and body["withheld"] is False
-    assert body["not_yet_listed"] == ["promotions waiting for review"]
+    assert body["not_yet_listed"] == list(PROMOTION_KINDS)
 
 
 @pytest.mark.parametrize("who", ["ppl-1", "adm-low"])

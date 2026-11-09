@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 
 import asyncpg
 import pytest
+from services.api.admin_people import DisableRefused
 from services.api.board_store import PostgresBoardItemStore
 from services.api.case_views import PostgresCaseViewStore
 from services.api.config import PostgresConfig
@@ -36,7 +37,6 @@ from services.api.person_ownership import (
     PROMOTION_KINDS,
     WITHHELD_ERROR,
     PostgresOwnershipStore,
-    WithheldRefused,
     refuse_if_withheld,
 )
 
@@ -344,7 +344,7 @@ async def test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withh
     await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
 
     hidden = await _proposal(conn, "c-k", "ana-1", dataset="ds-top")
-    with pytest.raises(WithheldRefused) as refused:
+    with pytest.raises(DisableRefused) as refused:
         await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
     assert refused.value.error == WITHHELD_ERROR == "withheld_items"
     words = refused.value.words.lower()
@@ -367,7 +367,7 @@ async def test_disable_is_refused_for_an_item_on_an_unmarked_dataset_or_none(
     await _case(conn, "c-k", "Kestrel")
     await _dataset(conn, "ds-unmarked", None)
     await _watch(conn, "c-k", "ana-1", dataset=dataset)
-    with pytest.raises(WithheldRefused):
+    with pytest.raises(DisableRefused):
         await refuse_if_withheld(conn, "ana-1", admin=ADMIN, scheme=SCHEME)
     top = ADMIN.model_copy(update={"clearance": "SECRET"})
     await refuse_if_withheld(conn, "ana-1", admin=top, scheme=SCHEME)

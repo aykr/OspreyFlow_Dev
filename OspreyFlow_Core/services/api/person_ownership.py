@@ -36,6 +36,8 @@ from ontology.handling import HandlingScheme
 from schemas.domain import Principal
 from schemas.person_ownership import OwnershipItem, OwnershipKind, PersonOwnership
 
+from .admin_people import DisableRefused
+
 #: The seam for L3.4's promotion store: the kinds said in `not_yet_listed` until it is on main.
 PROMOTION_KINDS: tuple[str, ...] = ("promotions waiting for review", "reviews waiting on them")
 
@@ -109,24 +111,17 @@ WITHHELD_WORDS = (
 )
 
 
-class WithheldRefused(Exception):
-    """409 `withheld_items`: raised by `refuse_if_withheld`, carrying only its code and words."""
-
-    def __init__(self) -> None:
-        super().__init__(WITHHELD_WORDS)
-        self.error = WITHHELD_ERROR
-        self.words = WITHHELD_WORDS
-
-
 async def refuse_if_withheld(
     conn: asyncpg.Connection, person: str, *, admin: Principal, scheme: HandlingScheme
 ) -> None:
-    """For *Transfer and disable* (L2.5b), inside its own transaction before the identity provider
-    is asked: refused while the person owns any item of these kinds the administrator may not
-    see."""
+    """For *Transfer and disable* (L2.5b), as Amendment 5 decision 8's `other_unit` is answered
+    (`app.disable_person_route`): asked after the visible transfers have committed, which stand,
+    and before the identity provider is asked; refused while the person still owns any item of
+    these kinds the administrator may not see. Raises `admin_people.DisableRefused`, which that
+    route already answers 409 with its code and words: `withheld_items`, naming nothing."""
     unit, cleared, top = reach(admin, scheme)
     if await withheld(conn, person, admin_unit=unit, cleared=cleared, top=top):
-        raise WithheldRefused
+        raise DisableRefused(WITHHELD_ERROR, WITHHELD_WORDS)
 
 
 def reach(admin: Principal, scheme: HandlingScheme) -> tuple[str | None, list[str], str]:
@@ -239,7 +234,6 @@ __all__ = [
     "PROMOTION_KINDS",
     "WITHHELD_ERROR",
     "WITHHELD_WORDS",
-    "WithheldRefused",
     "PostgresOwnershipStore",
     "cleared_markings",
     "owned_items",
