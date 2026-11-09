@@ -17,3 +17,4 @@ takes them (then struck through with the brief's commit). Newest last.
 | case | Mount rules-b's alert badge overlay in GlassCanvas.tsx (patch in process/lanes/rules-b/) and the boards' Alerts panel | rules-b, L2.12 | L3.4 or at rules-b's merge |
 | admin | Admin's tips (Roles, People, Datasets) from help/roles.ts (patch in process/lanes/rules-b/) | rules-b, L2.12 | L2.7 |
 | rules | *See the trend* in the queue's detail opening the board filtered (patch in process/lanes/rules-b/) | rules-b, L2.12 | L2.10 or L2.11 |
+| case | A case's own proposed link types usable at once on its boards, through LinkTypeService.case_types (decision 9); case-b's L3.5 closes the cross-case leak (hidden types left out of BoardService.link_types) | case-b, L3.5 | L3.4 |
