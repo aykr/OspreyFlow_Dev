@@ -71,6 +71,10 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files|model)"
      r"|^/v1/datasets/\{dataset_id\}/(screening-subscriptions|reference-lists)|^/v1/studio/",
      frozenset({"ingest"}), "the Ingest Studio (Sources' lists and connectors, ADR-140 A13)"),
+    # ADR-147 Amendment 2: a dataset's gazetteers, a load into it (`run_pipelines`, the Studio's
+    # right); no screen calls them yet (platform's P6 adds the Glass's panel, and the Glass here).
+    (r"^/v1/datasets/\{dataset_id\}/gazetteers/", frozenset({"ingest"}),
+     "a dataset's gazetteers (ADR-147 Amendment 2)"),
     (r"", frozenset({"glass"}), "the Glass"),
 ]  # fmt: skip
 
