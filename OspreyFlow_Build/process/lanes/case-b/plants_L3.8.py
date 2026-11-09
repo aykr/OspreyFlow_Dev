@@ -83,6 +83,12 @@ LIVE: list[Plant] = [
        "SELECT v.id, v.case_id, v.shared, v.drawing, v.name AS case_name")],
      [f"{S}::test_labels_name_the_case_and_never_what_the_analyst_wrote"]),
     # --- withheld: said for every item left out, and for nothing else ---
+    ("Transfer and disable never refused for a withheld item", O,
+     [("    ):\n        raise WithheldRefused\n", "    ):\n        return\n")],
+     [f"{S}::test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld"]),
+    ("Transfer and disable always refused", O,
+     [("    if await withheld(\n        conn,\n", "    if True or await withheld(\n        conn,\n")],
+     [f"{S}::test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withheld"]),
     ("withheld never said", O,
      [("    return bool(await conn.fetchval(_WITHHELD_SQL, person, admin_unit, cleared, top))",
        "    return False")],
