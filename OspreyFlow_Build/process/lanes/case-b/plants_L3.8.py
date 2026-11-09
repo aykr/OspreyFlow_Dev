@@ -42,7 +42,7 @@ OFFLINE: list[Plant] = [
     ("the store asked at the top clearance with no unit, not as the administrator", APP,
      [("    owned = await ownership.owned_by(user_id, admin=principal, scheme=scheme)\n",
        "    owned = await ownership.owned_by(\n        user_id, admin=principal.model_copy("
-       "update={\"clearance\": \"TOP SECRET\", \"org_unit\": None}), scheme=scheme\n    )\n")],
+       "update={\"clearance\": \"SECRET\", \"org_unit\": None}), scheme=scheme\n    )\n")],
      [f"{R}::test_the_store_is_asked_with_the_administrators_own_unit_and_clearance",
       f"{R}::test_another_units_or_a_lower_cleared_administrator_is_told_only_that_some_are_withheld"]),
     ("the read not audited", APP,
