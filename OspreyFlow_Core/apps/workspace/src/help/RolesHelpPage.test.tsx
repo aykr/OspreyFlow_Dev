@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RolesHelpPage } from "./RolesHelpPage";
-import { HELP_TITLE, RIGHT_WORDS, rightName } from "./roles";
+import { HELP_TITLE, RIGHT_WORDS, rightName, rightSays } from "./roles";
 
 afterEach(cleanup);
 
@@ -15,9 +15,9 @@ describe("the help page", () => {
     render(<RolesHelpPage backTo="Admin" onBack={back} />);
     expect(screen.getByRole("heading", { level: 2, name: HELP_TITLE })).toBeTruthy();
     const rights = screen.getByRole("region", { name: "What each right lets you do" });
-    for (const [right, says] of Object.entries(RIGHT_WORDS)) {
+    for (const right of Object.keys(RIGHT_WORDS)) {
       expect(within(rights).getByText(rightName(right))).toBeTruthy();
-      expect(within(rights).getAllByText(says).length).toBeGreaterThan(0);
+      expect(within(rights).getAllByText(rightSays(right)).length).toBeGreaterThan(0);
     }
     const button = screen.getByRole("button", { name: "← Back to Admin" });
     expect(document.activeElement).toBe(button);

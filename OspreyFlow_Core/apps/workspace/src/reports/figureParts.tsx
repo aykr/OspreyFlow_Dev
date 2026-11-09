@@ -27,7 +27,10 @@ export interface RuleGroup {
 
 export const groupKey = (g: RuleGroup): string => `${g.label}:${g.typology}`;
 
-const KIND_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors" };
+const KIND_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors", analyst: "analyst" };
+/** The non-typology groups' names; a kind added later (one the Conduit counts under its own name) is
+ * said by that name, never folded into a typology or another kind. */
+const GROUP_NAMES: Record<string, string> = { hotlists: "Hotlists", monitors: "Monitors", analyst: "Raised by an analyst" };
 
 /** The rule group a queued alert is counted under, as the Conduit's `_RULE_GROUP` names it: the Glass's one
  * copy, read by the Alerts panel and by Home's *Open the dashboard*, so the two cannot drift apart. */
@@ -38,9 +41,11 @@ export function alertRuleGroup(row: { kind?: string | null; alert: { typology?: 
 
 /** A rule group in words: a typology rule by its typology, never a rule's own analyst-written name. */
 export function groupName(g: RuleGroup): string {
-  if (g.label === "hotlists") return "Hotlists";
-  if (g.label === "monitors") return "Monitors";
-  return typologyLabel(g.typology || "other");
+  if (g.label === "typology") return typologyLabel(g.typology || "other");
+  const named = GROUP_NAMES[g.label];
+  if (named) return named;
+  const words = g.label.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export function Section({ title, children, id, outlined = false }: { title: string; children: ReactNode; id?: string; outlined?: boolean }) {

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import BY_ROLE from "../shell/placesByRole.json";
-import { RIGHT_WORDS, ROLE_WORDS, whyNot } from "./roles";
+import { RIGHT_WORDS, ROLE_WORDS, rightSays, whyNot } from "./roles";
 
 const RIGHTS_PY = join(dirname(fileURLToPath(import.meta.url)), "../../../../packages/schemas/rights.py");
 
@@ -19,19 +19,24 @@ function declaredRights(source = readFileSync(RIGHTS_PY, "utf8")): string[] {
 }
 
 describe("the words for roles, teams and Authors", () => {
-  it("say every right rights.py declares, and no other", () => {
+  it("say only rights rights.py declares, read from it at test time", () => {
     const declared = declaredRights();
-    expect(declared.length).toBeGreaterThan(40);
-    expect(Object.keys(RIGHT_WORDS).sort()).toEqual([...declared].sort());
+    expect(declared).toContain("create_case");
+    expect(Object.keys(RIGHT_WORDS).filter((r) => !declared.includes(r))).toEqual([]);
   });
 
-  it("are found missing when rights.py declares a right they do not say", () => {
-    const planted = readFileSync(RIGHTS_PY, "utf8").replace(
-      '    MANAGE_MODELS = "manage_models"',
-      '    MANAGE_MODELS = "manage_models"\n    APPROVE_RELEASES = "approve_releases"',
-    );
-    const missing = declaredRights(planted).filter((r) => !(r in RIGHT_WORDS));
-    expect(missing).toEqual(["approve_releases"]);
+  it("stay green when another lane adds a right to rights.py, and say it by its name", () => {
+    const source = readFileSync(RIGHTS_PY, "utf8");
+    const planted = source.replace(/^(\s+CREATE_CASE = "create_case".*)$/m, '$1\n    RAISE_ALERTS = "raise_alerts"');
+    expect(declaredRights(planted)).toContain("raise_alerts");
+    expect(Object.keys(RIGHT_WORDS).filter((r) => !declaredRights(planted).includes(r))).toEqual([]);
+    expect(rightSays("raise_alerts")).toBe("Raise alerts.");
+    expect(rightSays("create_case")).toBe(RIGHT_WORDS.create_case);
+  });
+
+  it("are found stale when rights.py no longer declares a right they say", () => {
+    const planted = readFileSync(RIGHTS_PY, "utf8").replace(/^\s+CREATE_CASE = "create_case".*\n/m, "");
+    expect(Object.keys(RIGHT_WORDS).filter((r) => !declaredRights(planted).includes(r))).toEqual(["create_case"]);
   });
 
   it("say why an action cannot be taken and who can, never only that it cannot", () => {

@@ -1,8 +1,9 @@
 // *Roles, teams and Authors* in one set of words (ADR-145 Amendment 4 decision 12): the tips in Admin
 // and the Ingest Studio, the help page, and the guides' sections (Lane 4) all take their wording from
-// here, so they cannot drift. Every right has its words: `RIGHT_WORDS` is typed by the generated
-// `Right` union, so a right added in `packages/schemas/rights.py` is a type error until it is said
-// here (and `roles.test.ts` reads `rights.py` itself, red with one missing).
+// here, so they cannot drift. Each right's words are written here; a right another lane adds in
+// `packages/schemas/rights.py` before its words are is said by its name (`rightSays`), so neither the
+// type check nor `roles.test.ts` goes red for it, and `roles.test.ts` refuses words for a right
+// `rights.py` no longer declares.
 //
 // Plain words, British English; what a role or right lets a person do, never how it is checked.
 import type { BuiltInRole } from "../../../../packages/schemas/generated";
@@ -40,8 +41,8 @@ export const ROLE_WORDS: Record<string, { name: string; says: string; places: Pl
   ]),
 );
 
-/** Every right, in plain words: what it lets a person do. */
-export const RIGHT_WORDS: Record<Right, string> = {
+/** Each right, in plain words: what it lets a person do. */
+export const RIGHT_WORDS: Partial<Record<Right, string>> = {
   create_case: "Start a case.",
   share_case: "Give people a level in a case.",
   remove_case: "Remove a case they are an Author of.",
@@ -100,6 +101,11 @@ export const RIGHT_WORDS: Record<Right, string> = {
 export function rightName(right: string): string {
   const words = right.replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** What a right lets a person do: its own words, or, for a right added before its words were, its name. */
+export function rightSays(right: string): string {
+  return RIGHT_WORDS[right as Right] ?? `${rightName(right)}.`;
 }
 
 /** The levels a person holds in a case (ADR-052). */

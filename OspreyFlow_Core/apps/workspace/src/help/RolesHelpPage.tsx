@@ -3,7 +3,7 @@
 // part, lists beneath, and a way back that has focus when it opens (rule 13).
 import { useEffect, useRef } from "react";
 
-import { HELP_TITLE, LEVEL_WORDS, PLACE_WORDS, RIGHT_WORDS, ROLE_WORDS, TEAM_WORDS, rightName, type Right } from "./roles";
+import { HELP_TITLE, LEVEL_WORDS, PLACE_WORDS, RIGHT_WORDS, ROLE_WORDS, TEAM_WORDS, rightName, rightSays, type Right } from "./roles";
 
 export interface RolesHelpPageProps {
   /** Where the page goes back to: "Admin" or "the Ingest Studio". */
@@ -60,7 +60,7 @@ export function RolesHelpPage({ backTo, onBack }: RolesHelpPageProps) {
       <section aria-labelledby="help-rights">
         <h3 id="help-rights">What each right lets you do</h3>
         <dl style={{ margin: 0 }}>
-          {(Object.entries(RIGHT_WORDS) as [Right, string][]).map(([right, says]) => (
+          {(Object.keys(RIGHT_WORDS) as Right[]).map((right) => [right, rightSays(right)] as const).map(([right, says]) => (
             <div key={right}><dt className="value">{rightName(right)}</dt><dd style={{ margin: "0 0 var(--sp-8)" }}>{says}</dd></div>
           ))}
         </dl>

@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MonitoringFigures } from "../../../../packages/schemas/generated";
+import { alertRuleGroup, groupName } from "./figureParts";
 import { AlertsPanel } from "./AlertsPanel";
 
 afterEach(() => {
@@ -121,5 +122,21 @@ describe("the newest few under a filter", () => {
     expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
       expect.stringMatching(/^Hotlists: Alpha Ltd h-old/),
     ]);
+  });
+});
+
+describe("a rule group's name", () => {
+  it("is its own for every kind, so L2.10's analyst alerts and any later kind never read as one another or as a typology", () => {
+    const names = [
+      groupName({ label: "typology", typology: "structuring" }),
+      groupName({ label: "typology", typology: "" }),
+      groupName({ label: "hotlists", typology: "" }),
+      groupName({ label: "monitors", typology: "" }),
+      groupName({ label: "analyst", typology: "" }),
+      groupName({ label: "watch", typology: "" }),
+    ];
+    expect(new Set(names).size).toBe(names.length);
+    expect(groupName(alertRuleGroup({ kind: "analyst", alert: {} }))).toBe("Raised by an analyst");
+    expect(groupName({ label: "watch", typology: "" })).toBe("Watch");
   });
 });
