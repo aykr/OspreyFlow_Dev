@@ -63,6 +63,14 @@ reverted online?
 - (c) Online, data engineers only.
 Built meanwhile: the revert core and the offline command; any online route is a thin wrapper over it.
 
+**And one more (case-b's L3.5; access, so yours):** the Studio's Model tab shows a proposed link type's text (its
+label, meaning, proposer and reason, written inside a case) to the dataset's data engineers who accept types,
+who may hold no level on that case. Should the case's marking limit that?
+- (a) Case-b's recommendation: no; the text is about the model, not the case's data, and the data engineer must
+  read it to decide.
+- **(b) Built meanwhile, the strict default:** the text shows only to an accepter cleared for the case's marking;
+  others see that a proposal exists above their clearance, without its words.
+
 **Needs you before any lane opens:**
 1. Close the three retired windows (studio, case, glass).
 2. Write `~/.ospreyflow/accounts.conf` (yours alone; the tooling never writes it):
