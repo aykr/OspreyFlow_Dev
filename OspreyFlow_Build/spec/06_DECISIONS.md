@@ -31480,9 +31480,25 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    `jlink`, an `/opt/java` or a distribution's Java package with no such label fails too. The labels are
    read however they are written (quoted or not, several on a line, continued, the legacy form).
    **`git`** (GPL-2.0-only, already in the image: the Conduit runs it to publish recipes,
-   `09_INGEST_STUDIO.md` §6) is declared the same way; the register does not pass it, so the leg names it
-   on every run as **awaiting the owner** (`AWAITING_OWNER`), never silently, and an undeclared `git`
-   fails.
+   `09_INGEST_STUDIO.md` §6) is declared the same way, and the register does not pass it. **The owner
+   ruled on 9 November 2026:** the `git` command is replaced by dulwich, under its Apache-2.0 licence
+   (studio's carry in L1.7), and `git` then leaves the image. Until that carry lands the leg names it on
+   every run as **not yet passed** (`AWAITING_OWNER`), with that ruling and carry, never silently, and
+   an undeclared `git` fails.
+   **trivy does not see the runtime.** A runtime unpacked from Temurin's tarball and derived by `jlink`
+   is no distribution package and no jar, so `trivy image` names nothing of it: the same image built
+   from Temurin 21.0.1 (October 2023, with known CVEs) scans clean, as the current one does (measured on
+   the test server). So **the runtime's version is a gate of its own**
+   (`tools/java_runtime_check.py`): the Dockerfile declares it in `LABEL
+   org.ospreyflow.runtime.java.version`, beside the licence label. The built image's
+   `/opt/java/release` (`JAVA_VERSION`) and `java -version` (its build) must be that version, and that
+   version must be Temurin 21's newest general-availability release, from Adoptium's API. Whatever
+   cannot be read (the image, or Adoptium's answer) is a refusal, never a pass. **The policy:** CI goes
+   red whenever Adoptium publishes a newer Temurin 21, until the digest and the label are repinned
+   together, as a scanned package with a fixed CVE would make it. It needs the network and Docker, as
+   the image scans do, so it runs after `core-check` in Build's `make ci`, never in Core's
+   Makefile, which stands alone (ADR-114 Amendment 2). Pinned at **21.0.13+9**, October 2026's update.
+   Its bundled native libraries' licences, for the NOTICE, are in `spec/00` §7.
 2. **Gazetteer places copied into a case's own dataset (ruling 6, option C).** Adding a gazetteer
    copies its places into a case's own dataset (`services/api/case_gazetteers.py`), so **the case stays
    one dataset and keeps its loads**. **It is a dataset-level action** (the orchestrator's review):
@@ -31565,8 +31581,12 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   administrator build a gazetteer for each unit.
 - **The port's own contract and the graph-port conformance suite** (`ports/graph.py`'s `search_nodes`
   and `suggest_nodes`; `tests/conformance/graph_port`) do not yet say that a copy matches on its name
-  alone: neither is this lane's file, so the wording is a request to the orchestrator
-  (`process/lanes/platform/PORT_CONTRACT.diff`); the rendered query and the two live files prove it.
+  alone: neither is this lane's file, so the wording and a conformance case
+  (`test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone`) are a request to the orchestrator
+  (`process/lanes/platform/PORT_CONTRACT.diff`), proved live with the diff applied, the case red with
+  the search guard's copy clause or the suggestion's withholding removed.
+- **The version gate's `make ci` target** is Build's Makefile, a shared file: a request to the
+  orchestrator (`process/lanes/platform/JAVA_RUNTIME_CI.diff`).
 - **The image's source offer and NOTICE** for the Java runtime are a release step (`spec/00` §7).
 - **The copy is made in the request**, a page at a time; each re-build refreshes every recorded dataset
   inside its stream. Measured under the platform lane's lease on stack a, 9 November 2026 (the
@@ -31574,21 +31594,27 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   machine): 2,000 planted places in 42.7 s at 08:20 UTC and in 29.7 s at 08:28 UTC, about 15 to 21 s
   per 1,000 (`test_a_region_is_copied_in_bounded_pages_and_timed`). A region of 100,000 places would
   take over twenty minutes per dataset: a background job is the likely next step.
-- **planetiler itself was not run in the built image** (no release jar on this machine; tier 1 only, no
-  real tiles fetched in tests): the image's `java -version` and the Conduit's builder check were.
+- **planetiler runs under the image's Java** (v0.10.2's `--help`, exit 0, in the built image on amd64,
+  the test server), but no real tile build is run in tests (tier 1 only, no real tiles fetched).
 
 **Tests that would fail if it were broken** (each shown red by a plant at its real call site,
 `process/lanes/platform/P5_RED_RECORD.md`):
 - **Java**: `tests/licence_check/test_runtime_licences.py` (a plain GPL-2.0 Java, GPL-3.0 with the
   exception, another exception, the exception for an unrecorded runtime, an undeclared Java: each
   refused; the real Dockerfiles pass); `tests/test_conduit_image_java_licence.py` (the stage pinned by
-  digest, jlinked, declared, on the `PATH`).
+  digest, jlinked, declared, on the `PATH`); `tests/licence_check/test_java_runtime_check.py` (the
+  version gate: an update not taken, a label drifted from the image by version or by build, a release
+  file or `java -version` naming none, every way Adoptium's answer can fail, a release of another
+  shape, the label however written, through `main` and the fetch's own code).
 - **Copies**: live, `tests/ingest/test_case_gazetteer_copies_live.py` (found by name at its point and a
   SECRET place not; no identifier on a node read, an expansion or a search; never matched by its `osm_id`
   or `uprn`, more than a page sharing the prefix; a re-copy writes no second copy and keeps a place
   gone; a restricted case load on a copy stays the case's at a re-build; a real case load references
   the copies and a refresh after it writes no second set; every page of 2,000 places written; a case load
-  writing onto a copy through the real merge keeps it one, withheld) and
+  writing onto a copy through the real merge keeps it one, withheld; node detail in bulk and the
+  type-ahead by name send none; a retracted copy stays one, withheld),
+  `tests/adapters/graph_arcadedb/test_every_read_withholds_by_its_principal.py` (every read in the
+  adapter deserialised with its own caller's principal, so no read path sends a copy's identifier) and
   `tests/ingest/test_case_gazetteer_routes_live.py` (through the routes: the case stays one dataset
   and the Studio's upload, a load a composite case refuses, is made, and refused once the case reads a
   composite; search, seed, expansion and the type-ahead carry and match no
@@ -31604,9 +31630,13 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
 - **The unit**: `test_geospatial_admin_routes.py` (refused in words, nothing built; a named unit's
   places and dataset), `test_gazetteer_build_registration_order.py` (both command-line builds check it
   before anything, and refresh the cases after the registration), `test_gazetteer_dataset_registration.py`,
-  `tests/cli/test_map_verb.py`, `Maps.test.tsx`.
+  `tests/cli/test_map_verb.py`, `Maps.test.tsx`; the set-up console,
+  `tests/harness/test_webapp_geospatial.py` (none, an option or a control character refused, nothing
+  run; any unit the Conduit can name sent, and its refusal of an unknown one shown in its words; the fake
+  runner refusing with the Conduit's own parser) and `GeospatialScreen.test.tsx`.
 
-**Cost.** The Conduit's image grows by the jlinked runtime: 61 MB, the image 1.33 GB (arm64). Each
+**Cost.** The Conduit's image grows by the jlinked runtime: 62 MB (`/opt/java`); the image is
+1.86 GB on amd64 (1.33 GB measured on arm64). A Temurin update turns `make ci` red until it is taken. Each
 dataset that takes a gazetteer holds a copy of every place, written a page at a time (15 to 21 s per
 1,000 places, measured as above), and keeps them after a removal; a re-build rewrites every recorded
 dataset's copies but those the case made its own. A removal is one record's update.
