@@ -465,6 +465,8 @@ New ones are added at the bottom as they happen.
     then created the database under its own lease (b by studio, c by studio-b), and I created it on d and e under
     mine (checked). It stays when a stack goes down. Whoever rebuilds a stack runs `CREATE DATABASE ospreyflow
     OWNER osprey` after creating its Postgres.
+    **Your word, about 13:05:** up to four leased live runs at once, raised from two now that the stacks run on the
+    server. Platform took d and case took e at once; rules takes the first stack to free up.
 
 ## Evening, 7 November: your records of 7 November applied
 
