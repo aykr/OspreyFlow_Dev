@@ -934,8 +934,8 @@ A **merge read grant** (`promotion_layer_grants`) gives one of the dataset's Aut
 one removed case's layer, opened by the merge sheet, read through by the merge alone, and closed when
 the merge closes (committed, rejected or cancelled); it is never reopened.
 
-What holds, and the test that would fail if it did not (each red by a plant at its call site,
-`process/lanes/case/L3.4_RED_RECORD.md`):
+What holds, and the test that would fail if it did not (each red by a plant at its call site, kept
+as a test of its own beside it):
 
 - **One element, both datasets, one load, all or nothing** (decision 8; rule 6).
   - Conformance: `test_a_promotion_adds_the_dataset_to_the_drawn_elements_themselves` (red with a
@@ -968,7 +968,22 @@ What holds, and the test that would fail if it did not (each red by a plant at i
   nothing. `test_reverting_a_promotion_leaves_the_elements_in_the_layer_only` (conformance),
   `test_the_commands_dry_run_writes_nothing_and_the_real_run_reverts`.
 - **Every route refuses whom it is not for** (rule 4).
-  `test_every_promotion_route_refuses_a_non_member_as_a_missing_case`.
+  `test_every_promotion_route_refuses_a_non_member_as_a_missing_case`,
+  `test_every_layer_route_refuses_whom_it_is_not_for`.
+- **Nothing reaches a reader their handling or case does not allow** (rules 3 and 7): what a
+  promotion left out goes to its proposer alone; its case is named only to the dataset's Authors and
+  its proposer; a list leaves out a promotion above the reader's clearance; a withheld item is not
+  counted beside the items shown; a delete answers in words, with no count.
+  `test_what_was_left_out_goes_to_its_proposer_alone_and_the_case_to_whom_may_know_it`,
+  `test_the_boards_promotions_are_listed_only_as_the_reader_may_see_them`,
+  `test_the_removed_cases_count_is_only_what_the_author_may_see`.
+- **An approval runs every check again**, on the items as they are now.
+  `test_an_approval_runs_every_check_again_on_the_items_as_they_are_now`.
+- **One item, one open promotion; one element, one promotion's stamp.**
+  `test_an_item_waiting_for_review_is_in_no_second_promotion`; conformance
+  `test_an_element_promoted_by_another_load_is_not_promoted_again`.
+- **A revert leaves no link resting on a node gone from the dataset.**
+  `test_a_revert_is_refused_while_another_link_rests_on_its_items`.
 - **The ageing seam's read is filtered in the query** by the reader's unit and clearance (rule 3).
   `test_the_waiting_read_is_filtered_by_unit_and_clearance_in_the_query` (real Postgres).
 

@@ -1,6 +1,6 @@
 # Wiring admin's ageing seam to L3.4's promotions (for the orchestrator, at whichever merge comes second)
 
-Admin's L2.6 (`lane/admin`, `services/api/promotion_ageing.py`) reads promotions through
+Admin's L2.6 (on `lane/admin`, its `promotion_ageing` module, not yet on main) reads promotions through
 `WaitingPromotions` and fills `app.state.waiting_promotions` with `NoPromotionsYet` until L3.4. L3.4
 provides `services/api/promotion_store.py`'s `WaitingFromStore`, which answers
 `waiting_for_review(reader)` from `PostgresPromotionStore.waiting(unit=…, markings=…)`, filtered in the

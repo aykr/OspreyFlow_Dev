@@ -209,28 +209,36 @@ in the store. A drawn item is changed only on its board: the canvas routes that 
 ```
 GET    /v1/investigations/{id}/boards/{board}/promotion-sheet   *Promote…* (`PromotionSheet`): the board's drawn items not yet promoted, each with every check it fails in words (`problems`), the checks, undecided matches as `warnings`, the dataset's highest allowed marking and policy, and how it is recorded; `refused` says why a board promotes into nothing (a drawing that is its own dataset, a case reading a composite or no dataset); Author and promote_to_dataset, the board's creator
 POST   /v1/investigations/{id}/boards/{board}/promotions        promote the ticked items (`PromotionInput`): every check run again here; one load (`promotion-<id>`, trigger analyst_promotion), committed at once under *Author promotes*, `awaiting_review` under *Second person reviews*; answers `Promotion` with `left_out` (each item that does not go, and why); audited as promote_drawn_items with the element ids
-GET    /v1/investigations/{id}/boards/{board}/promotions        *Promotions from this board* (`Promotions`), for a reader who may see the board
-GET    /v1/datasets/{dataset}/promotions                        the Ingest Studio's *Analyst promotions* (`Promotions`): every promotion into the dataset as counts and words, without its board's id, `may_review` and `why_not` for the reader, `revert_command` for a holder of revert_loads; one marked above the reader's clearance is not listed; behind the dataset's gate, review_promotions
-GET    /v1/datasets/{dataset}/promotions/{promotion}            *Details* (`PromotionDetails`): the promotion's own elements, read by id from its layer and the dataset through the reviewer's own handling; `withheld` when one is not shown; one of the dataset's Authors only; audited as read_promotion
-POST   /v1/datasets/{dataset}/promotions/{promotion}/decision   *Approve and commit* or *Reject with a reason* (`PromotionDecision`), by one of the dataset's Authors holding review_promotions, never the proposer; audited as approve_promotion or reject_promotion
+GET    /v1/investigations/{id}/boards/{board}/promotions        *Promotions from this board* (`Promotions`), for a reader who may see the board, each carrying an item above their clearance left out; what a promotion left out and why to its proposer alone
+GET    /v1/datasets/{dataset}/promotions                        the Ingest Studio's *Analyst promotions* (`Promotions`): every promotion into the dataset as counts and words, without its board's id and without what it left out, its case named only to the dataset's Authors and its proposer ("a case reading this dataset" otherwise), `may_review` and `why_not` for the reader, `revert_command` for a holder of revert_loads; one marked above the reader's clearance is left out in the store's query; behind the dataset's gate, review_promotions
+GET    /v1/datasets/{dataset}/promotions/{promotion}            *Details* (`PromotionDetails`): the promotion's own elements, read by id from its layer and the dataset through the reviewer's own handling; `withheld` when one is not shown, the counts then those of what is shown; one of the dataset's Authors only; audited as read_promotion
+POST   /v1/datasets/{dataset}/promotions/{promotion}/decision   *Approve and commit* or *Reject with a reason* (`PromotionDecision`), by one of the dataset's Authors holding review_promotions, never the proposer; an approval runs every check again on the items as they are now; audited as approve_promotion or reject_promotion
 GET    /v1/datasets/{dataset}/removed-cases                     the removed cases reading the dataset directly (`RemovedCaseLayers`): counts only, `mergeable` false for a composite's; the dataset's Authors
 POST   /v1/datasets/{dataset}/removed-cases/{case}/merge-sheet  *Merge into the dataset*: opens a read grant to that one layer for this Author and this merge alone, audited as open_layer_merge before anything is read, and answers the sheet (`LayerMergeSheet`, with its `grant_id`)
 GET    /v1/datasets/{dataset}/layer-merges/{grant}              the merge sheet again, through its open grant
-POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked items (`LayerMergeInput`): one promotion, trigger layer_merge, under the dataset's policy; the grant closes when the merge does (committed or rejected); audited as merge_layer
+POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked items (`LayerMergeInput`): the case checked again (one restored since is refused, 409 `case_open`, and the grant closed); one promotion, trigger layer_merge, under the dataset's policy; the grant closes when the merge does (committed or rejected), and lasts eight hours at most; audited as merge_layer
 DELETE /v1/datasets/{dataset}/layer-merges/{grant}              *Cancel*: the grant closes, nothing merged
-DELETE /v1/datasets/{dataset}/removed-cases/{case}/layer        *Delete* by one of the dataset's Authors (`LayerDeleted`): every element wholly the layer's withdrawn under `layer-delete:<case>`, never deleted; a promoted element is never touched; audited as delete_layer before it is written
+POST   /v1/datasets/{dataset}/removed-cases/{case}/delete/dry-run   *Delete*'s dry run for one of the dataset's Authors (`LayerDryRun`): its counts as their own handling takes them, in words, nothing written but its audit entry (dry_run_layer_delete)
+DELETE /v1/datasets/{dataset}/removed-cases/{case}/layer        *Delete* by one of the dataset's Authors (`LayerDeleted`, in words, with no count: it would include what the deleter may not see): every element wholly the layer's withdrawn under `layer-delete:<case>`, never deleted; a promoted element is never touched; the layer's open merges closed; audited as delete_layer before it is written
 POST   /v1/admin/datasets/{dataset}/cases/{case}/delete         the same *Delete* by an administrator, after its dry run; administer_system
 ```
 
 A promotion adds the dataset to the drawn elements themselves (`GraphPort.promote_elements`,
 ADR-099 decision 2's union; rule 6), in one graph transaction: an element not live when it is
 written refuses the whole load, the promotion is recorded `rejected` saying nothing was written,
-and the answer is 409 `items_changed` (`test_a_promotion_with_an_item_changed_writes_nothing`). The
+and the answer is 409 `items_changed` (`test_a_promotion_with_an_item_changed_writes_nothing`); a load refused for any
+other reason is recorded rejected too, never left waiting. An element already promoted by another
+load is not live for this purpose, and an item an open promotion carries is offered in no other
+(`test_an_item_waiting_for_review_is_in_no_second_promotion`). An approval runs every check again on the
+items as they are now: an item edited since it was sent, or the dataset's highest lowered, refuses
+the load and rejects the promotion
+(`test_an_approval_runs_every_check_again_on_the_items_as_they_are_now`). The
 elements stay `analyst_drawn` and keep their markings and gradings; the board's registry sets each
 item's `promoted_at` (which the withdrawal reads, above). A link goes only when both its ends will be
 in the dataset (loaded there, going now, or promoted before), read through the proposer's own
 handling; a picture and a match decision go with their drawn node; everything else is listed in
-`left_out` (rule 2). Refusals, each in words before anything is written: `check_failed` (422: a
+`left_out` (rule 2), given back to the proposer alone. A link's type is checked against the dataset's
+live model, its packs, as a node's is (C14). Refusals, each in words before anything is written: `check_failed` (422: a
 ticked item failing a check, at the route whatever the sheet said: a marking above the dataset's
 highest allowed, a type outside its model, a link type not yet live through case-b's
 `promotion_refusals`, no grading or source), `nothing_goes` (422), `nothing_to_promote_into` (409),
@@ -246,8 +254,11 @@ approval, so no other case reads a promoted item before it
 
 A promotion is reverted like any load, with the Conduit stopped: `python -m scripts.revert_promotion
 <load_id>` (dry run first, `--dry-run`), which takes the dataset back from exactly its elements
-(`GraphPort.revert_promotion`), clears their `promoted_at` and records the promotion `reverted`. An
-online revert waits for the owner's ruling on ADR-143 open question 2.
+(`GraphPort.revert_promotion`), clears their `promoted_at` and records the promotion `reverted`. It is
+refused while a live link other than its own and the case's own unpromoted drawing rests on one of its
+nodes (`test_a_revert_is_refused_while_another_link_rests_on_its_items`); a promotion from a layer
+deleted since takes its elements out with the layer. An online revert waits for the owner's ruling on
+ADR-143 open question 2.
 
 A deleted view's conversation stays in the store, read by no route: the questions are listed only
 through a view the reader may open, so they go with the view. Its pending proposals stay pending

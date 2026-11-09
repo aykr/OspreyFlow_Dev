@@ -571,7 +571,8 @@ Conduit's words), the undecided matches as warnings, and how it is recorded. *Pr
 review*) sends what is ticked; the sheet then says the outcome, the load and *Left out, and why*. A
 board that promotes into nothing (a drawing that is its own dataset, a case reading a composite) says
 why and offers no button. Escape or *Cancel* closes it, back to *Promote…*. *Promotions from this
-board* lists each one's status, what it added and, when rejected, the reason.
+board* lists each one the reader may see, its status, what it added and, when rejected, the reason;
+what was left out is shown to its proposer alone.
 
 The Ingest Studio's **4 Runs** shows ***Analyst promotions*** under the grid (`ingest/runs/promotions.tsx`,
 by agreement with the Studio lane): each promotion's load, what it adds, who and when, the case, its
@@ -583,7 +584,8 @@ reason* (a reason is required); for a holder of `revert_loads`, the revert comma
 button. A reader without `review_promotions` is told who has it. Below it, for one of the dataset's
 Authors only, ***Removed cases' layers***: each removed case's layer as a count, *Merge into the
 dataset* (its sheet says the read grant is for this merge alone; a composite case's layer says it is
-never merged) and *Delete…*, asked once. Under the GOV.UK brand the lists are summary lists, the ticks
+never merged) and *Delete…*, which shows its dry run's words (what would go, nothing written) and
+asks once; the delete then says it in words, with no count. Under the GOV.UK brand the lists are summary lists, the ticks
 GOV.UK checkboxes, statuses GOV.UK tags, the table a GOV.UK table and a refusal an error summary.
 
 Proved by keyboard in `keyboard/boards.spec.ts` (`promote-drawn-items-by-keyboard`,

@@ -31196,26 +31196,40 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    hold `review_promotions`, never the proposer. A reviewer reads exactly the promotion's elements, by
    id, from its layer and the dataset, through their own clearance. One who may not see every item
    may not approve. The Studio's list leaves out a promotion marked above the reader's clearance.
-6. **Under *Second person reviews* nothing is written to the graph until the approval.** A load that
-   finds an item changed at the approval writes nothing and records the promotion rejected, saying
-   so.
+6. **Under *Second person reviews* nothing is written to the graph until the approval**, and the
+   approval runs every check again on the items as they are now: one edited since (a marking raised)
+   or the dataset's highest lowered refuses the load and records the promotion rejected, saying why.
+   An item an open promotion carries is offered in no other, and an element another load promoted is
+   not promoted again. A load refused for any reason is recorded rejected, never left waiting.
+6a. **What reaches whom** (rules 3 and 7). What a promotion left out, with its labels, goes to its
+   proposer alone. The Studio's list names the case only to the dataset's Authors and its proposer,
+   and leaves out, in the store's query, a promotion above the reader's clearance; a board's list
+   does the same for its readers. A reviewer shown fewer items than the promotion carries is given
+   the counts of what is shown, never the difference. Drawn items carry only a permitted handling
+   code, so the classification is the whole of their audience beyond the dataset.
 7. **A removed case's layer is merged or deleted from the Ingest Studio's Runs**, by the dataset's
    Authors, who need not be administrators. An administrator deletes through Admin's route after its
    dry run.
    - The merge sheet opens a read grant to that one layer, for that Author and that merge. The grant
-     closes when the merge is committed, rejected or cancelled, and is never reopened. It has no
-     time limit of its own.
+     closes when the merge is committed, rejected or cancelled, when the layer is deleted, or after
+     eight hours, and is never reopened. A case restored since the sheet was opened is not merged.
    - The sheet lists only what the Author may see. An item above their clearance stays in the layer,
      uncounted (rule 3 over rule 2, as the L3.3 withdrawal ruling).
    - A merge carries the layer's drawn items (the board registry's). The analyst's own resolution
      links and hand-marking in the layer (Amendment 1) stay; a delete withdraws them with the rest.
    - A composite case's layer is never merged, only deleted (the orchestrator's settlement).
-   - A delete needs no second person, and never touches an element holding another dataset.
+   - A delete has its dry run first (for an Author in the Studio, as for an administrator in Admin),
+     needs no second person, answers in words with no count, and never touches an element holding
+     another dataset.
 8. **Revert is the operator command alone**, `python -m scripts.revert_promotion <load_id>
    --reverted-by <you> [--dry-run]`, with the Conduit stopped (ADR-127 Amendment 9). It takes the
    dataset back from exactly the promotion's elements, clears their `promoted_at` and the Conduit's
-   kept results, and is audited. An online revert waits for the owner's ruling on open question 2.
-9. **A case's own proposed link types are usable on its boards at once** (decision 9), through
+   kept results, and is audited (a refusal after the audit is audited too). It is refused while a live
+   link other than its own and the case's unpromoted drawing rests on one of its nodes (as a load's
+   revert is, ADR-127 Amendment 6), and a promotion from a layer deleted since takes its elements
+   out with the layer. An online revert waits for the owner's ruling on open question 2.
+9. **A link's type is checked against the dataset's live model**, its packs, as a node's is (C14).
+   **A case's own proposed link types are usable on its boards at once** (decision 9), through
    `LinkTypeService.case_types` alone. A proposal's hidden storage label is never offered or accepted
    by name (the orchestrator's carried item). Their links are promoted only once live, through case-b's
    `promotion_refusals` (Amendment 4 decision 3).
