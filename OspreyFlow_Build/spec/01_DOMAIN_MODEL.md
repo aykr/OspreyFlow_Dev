@@ -917,6 +917,61 @@ The invariants, each with the test that fails if it is broken (rule 12):
 - **Restored in its own case's layer** (Amendment 2 decision 4).
   - `test_a_drawn_item_and_its_picture_come_back_in_their_cases_layer`, red with the layer lost.
 
+### 2.2e Promotion, and a removed case's layer (ADR-143 decisions 8 and 10; Amendment 2 decision 1; Amendment 5; L3.4)
+
+A **promotion** is a load (`load_id` `promotion-<id>`) that adds the case's source dataset to drawn
+elements of its analyst layer: each element's `datasets` gains the dataset (ADR-099 decision 2's
+union), as the same element, never a copy and never a merge (rule 6), stamped `promoted_by_load`. Its
+trigger is `analyst_promotion` (from a board) or `layer_merge` (a removed case's layer). The element
+stays `analyst_drawn`, keeping its marking and grading. Its record (`promotions`, the promotion's own
+ledger) holds ids and words only: the case, the board (never shown in the Studio: a board's id is its
+author's), the dataset and the layer, the proposer, its status (`awaiting_review`, `committed`,
+`rejected`, `reverted`), the reviewer and reason, the element ids and board items it carries, what it
+left out and why, its highest marking and the dataset's unit. The board's registry sets each item's
+`promoted_at` when it commits (the withdrawal reads it, §2.2d).
+
+A **merge read grant** (`promotion_layer_grants`) gives one of the dataset's Authors read access to
+one removed case's layer, opened by the merge sheet, read through by the merge alone, and closed when
+the merge closes (committed, rejected or cancelled); it is never reopened.
+
+What holds, and the test that would fail if it did not (each red by a plant at its call site,
+`process/lanes/case/L3.4_RED_RECORD.md`):
+
+- **One element, both datasets, one load, all or nothing** (decision 8; rule 6).
+  - Conformance: `test_a_promotion_adds_the_dataset_to_the_drawn_elements_themselves` (red with a
+    copy written), `test_a_promotion_with_an_element_not_live_writes_nothing` (red item by item).
+  - Route: `test_author_promotes_commits_one_load_and_case_b_reads_the_same_element`,
+    `test_a_promotion_with_an_item_changed_writes_nothing`.
+- **A link only with both its ends** in the dataset (loaded there, going now, or promoted before);
+  a picture and a match decision with their drawn node; everything else listed with its reason
+  (rule 2). `test_a_link_whose_drawn_end_does_not_go_is_left_out_and_listed`.
+- **Within the dataset's highest allowed marking**, at the sheet and again at the route.
+  `test_a_marking_above_the_datasets_highest_is_refused_at_the_sheet_and_at_the_route`.
+- **A link of a type not yet live is not promoted** (decision 9; Amendment 4 decision 3, through
+  `promotion_refusals`). `test_a_link_of_a_type_not_yet_live_is_refused_and_promotable_once_live`.
+- **Nothing readable outside the case before review**, where the policy asks for a second person:
+  nothing is written to the graph until the approval.
+  `test_under_review_nothing_is_readable_outside_the_case_until_a_second_person_approves`.
+- **The approver is one of the dataset's Authors holding `review_promotions`, never the proposer**,
+  and reads exactly the promotion's elements through their own clearance; one who may not see every
+  item may not approve. `test_the_proposer_cannot_approve_their_own_promotion`,
+  `test_only_an_author_of_the_dataset_holding_review_promotions_decides`,
+  `test_a_reviewer_who_may_not_see_every_item_may_not_approve`.
+- **The merge's read grant ends with the merge.**
+  `test_an_author_merges_a_removed_cases_layer_through_a_grant_that_ends_with_the_merge`,
+  `test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_at_the_decision`.
+- **A composite case's layer is never merged, only deleted**, and **a delete never touches what was
+  promoted**. `test_a_composite_cases_layer_is_never_merged_only_deleted`,
+  `test_deleting_a_layer_leaves_what_was_promoted_from_it`; conformance
+  `test_withdrawing_a_layer_leaves_what_was_promoted_from_it`.
+- **A revert leaves the elements in the layer only**, by the operator command, whose dry run writes
+  nothing. `test_reverting_a_promotion_leaves_the_elements_in_the_layer_only` (conformance),
+  `test_the_commands_dry_run_writes_nothing_and_the_real_run_reverts`.
+- **Every route refuses whom it is not for** (rule 4).
+  `test_every_promotion_route_refuses_a_non_member_as_a_missing_case`.
+- **The ageing seam's read is filtered in the query** by the reader's unit and clearance (rule 3).
+  `test_the_waiting_read_is_filtered_by_unit_and_clearance_in_the_query` (real Postgres).
+
 ### 2.3 Resolution state
 
 ```python
