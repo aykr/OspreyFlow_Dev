@@ -82,7 +82,8 @@ test("a removed case's layer is merged through its sheet by keyboard", async ({ 
   expect(merged?.body).toEqual({ item_ids: ["i-a"] });
   await expect(page.getByRole("dialog", { name: "Merge sent" })).toContainText("Left out, and why");
   await press(page, "Close");
-  // A sent merge closed its own grant: nothing is cancelled afterwards.
+  // A sent merge closed its own grant (committed or sent for review: one grant, one merge), so
+  // nothing is cancelled afterwards.
   expect((await sent(page)).some((s) => s.method === "DELETE" && s.path.endsWith("/layer-merges/g-1"))).toBe(false);
   registerCovered("PROMOTION_ACTIONS", "merge-a-removed-cases-layer-by-keyboard");
 });

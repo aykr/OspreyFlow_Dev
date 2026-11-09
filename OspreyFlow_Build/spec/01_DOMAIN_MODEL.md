@@ -932,7 +932,8 @@ left out and why, its highest marking and the dataset's unit. The board's regist
 
 A **merge read grant** (`promotion_layer_grants`) gives one of the dataset's Authors read access to
 one removed case's layer, opened by the merge sheet, read through by the merge alone, and closed when
-the merge closes (committed, rejected or cancelled); it is never reopened.
+the merge is sent (committed at once, or sent for review: one grant, one merge), cancelled or refused;
+it is never reopened. A reviewer never reads through it.
 
 What holds, and the test that would fail if it did not (each red by a plant at its call site, kept
 as a test of its own beside it):
@@ -979,10 +980,12 @@ as a test of its own beside it):
   item may not approve. `test_the_proposer_cannot_approve_their_own_promotion`,
   `test_only_an_author_of_the_dataset_holding_review_promotions_decides`,
   `test_a_reviewer_who_may_not_see_every_item_may_not_approve`.
-- **The merge's read grant ends with the merge**, however it ends, and is used for a removed case
-  alone: one restored since is neither read nor merged nor approved.
+- **The merge's read grant ends with the merge**, however it ends, closes when the merge is sent
+  (so one grant makes one merge), and is used for a removed case alone: one restored since is
+  neither read nor merged nor approved.
   `test_an_author_merges_a_removed_cases_layer_through_a_grant_that_ends_with_the_merge`,
-  `test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_at_the_decision`,
+  `test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_when_it_is_sent`,
+  `test_the_one_merge_check_fails_with_the_grant_kept_at_send`,
   `test_a_merge_rejected_by_the_approvals_recheck_closes_its_grant`,
   `test_a_merge_whose_load_is_refused_closes_its_grant`,
   `test_a_case_restored_since_its_sheet_was_opened_is_not_read_through_its_grant`,

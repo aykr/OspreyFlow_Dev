@@ -31215,8 +31215,10 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    admin lane's to build (`process/lanes/case/admin-delete-L3.4.patch`: the route, its positive and
    open-case tests; its screen makes the dry run come first, which the route does not enforce).
    - The merge sheet opens a read grant to that one layer, for that Author and that merge. The grant
-     closes when the merge is committed, rejected or cancelled, when the layer is deleted, or after
-     eight hours, and is never reopened. A case restored since the sheet was opened is not merged.
+     closes when the merge is sent (committed at once, or sent for review: one grant makes one
+     merge, and nothing more is read through it), when it is cancelled or refused, when the layer is
+     deleted, or after eight hours, and is never reopened; the reviewer reads as a reviewer does,
+     never through it (the independent review of L3.4, blocker 2). A case restored since the sheet was opened is not merged.
    - The sheet lists only what the Author may see. An item above their clearance stays in the layer,
      uncounted (rule 3 over rule 2, as the L3.3 withdrawal ruling).
    - A merge carries the layer's drawn items (the board registry's). The analyst's own resolution

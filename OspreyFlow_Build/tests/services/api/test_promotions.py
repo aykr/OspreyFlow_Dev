@@ -894,20 +894,27 @@ def test_the_merge_grant_check_fails_with_the_grant_kept(
     assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 200
 
 
-def test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_at_the_decision(
+def test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_when_it_is_sent(
     pw: SimpleNamespace,
 ) -> None:
+    """One grant, one merge (spec 03, Amendment 5 decision 7): sent for review, the grant is
+    closed to a second merge and to reading the layer through it; the reviewer approves as a
+    reviewer reads."""
     _policy(pw, "second_person_reviews")
-    first, _ = _removed_with_items(pw)
+    first, second = _removed_with_items(pw)
     grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
     merged = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
                               json={"item_ids": [first["item_id"]]}).json()  # fmt: skip
     assert merged["status"] == "awaiting_review" and not _carol_sees_it_from_b(first["element_id"])
-    assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 200
+    again = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                             json={"item_ids": [second["item_id"]]})  # fmt: skip
+    assert again.status_code == 403 and again.json()["error"] == "no_open_grant"
+    assert [r.trigger for r in pw.store.records.values()] == ["layer_merge"]
+    reread = _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}")
+    assert reread.status_code == 403 and reread.json()["error"] == "no_open_grant"
     assert _studio("dana", f"/{merged['id']}/decision", "post", approve=True).status_code == 403
     assert _studio("sam", f"/{merged['id']}/decision", "post", approve=True).status_code == 200
     assert _carol_sees_it_from_b(first["element_id"])
-    assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 403
 
 
 def test_a_layer_merge_is_refused_to_a_non_author_and_for_an_open_case(pw: SimpleNamespace) -> None:
@@ -1442,15 +1449,22 @@ def _reject_keeping_the_grant(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(Promotions, "reject", kept)
 
 
-def test_the_recheck_grant_check_fails_with_the_grant_kept(
+def test_the_one_merge_check_fails_with_the_grant_kept_at_send(
     pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _reject_keeping_the_grant(monkeypatch)
-    promotion, grant, _ = _merge_waiting(pw, marking="OFFICIAL-SENSITIVE")
-    held = pw.datasets.datasets["src"]
-    pw.datasets.datasets["src"] = held.model_copy(update={"highest_marking": "OFFICIAL"})
-    _studio("sam", f"/{promotion}/decision", "post", approve=True)
-    assert pw.store.grants[grant].closed_at is None
+    """The plant for blocker 2: a grant not closed when its merge is sent for review lets a second
+    merge through it, a second promotion of the same layer."""
+
+    async def kept(self: InMemoryPromotionStore, grant_id: str, at: datetime) -> None:
+        return None
+
+    monkeypatch.setattr(InMemoryPromotionStore, "close_grant", kept)
+    _policy(pw, "second_person_reviews")
+    first, second = _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    for item in (first, second):
+        _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}", json={"item_ids": [item["item_id"]]})
+    assert len(pw.store.records) == 2
 
 
 def test_a_merge_whose_load_is_refused_closes_its_grant(

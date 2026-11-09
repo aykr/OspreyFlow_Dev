@@ -964,6 +964,10 @@ class Promotions:
         )  # fmt: skip
         if self.commits_at_once(dataset):
             return await self._commit(record, by=None)
+        # Sent for review: the grant was for this merge alone, so it closes now, to a second merge
+        # and to reading the layer through it; the reviewer reads as a reviewer does
+        # (`_reviewer_read`), never through the Author's grant (the independent review, blocker 2).
+        await self.store.close_grant(grant.id, datetime.now(UTC))
         return record
 
     async def cancel_merge(self, grant_id: str, dataset: Dataset, author: Principal) -> None:
