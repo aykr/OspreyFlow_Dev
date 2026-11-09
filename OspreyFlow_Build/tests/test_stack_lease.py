@@ -440,11 +440,11 @@ def test_remote_runs_the_command_on_the_stack_s_host_with_its_ports_and_lease(le
     assert "cd osprey-runs/case/OspreyFlow_Build/ || exit 1" in script, script
     export = next(l for l in script if l.startswith("export "))
     assert "ARCADEDB_HTTP_PORT=2492" in export and "POSTGRES_PORT=55434" in export and "OSPREY_LANE=case" in export
-    assert "OSPREY_LEASE_DIR=$HOME/osprey-runs/case/.osprey-lease" in export
+    assert "OSPREY_LEASE_DIR=$HOME/osprey-runs/case.meta/lease" in export
     assert "pytest -q tests " in script
     # A call's command spans lines in the log; the start is the one call holding nohup setsid.
     assert text.count("nohup setsid") == 1, text
-    mirrored = [l for l in log.read_text().splitlines() if ".osprey-lease/stack-b.lease/info" in l]
+    mirrored = [l for l in log.read_text().splitlines() if "case.meta/lease/stack-b.lease/info" in l]
     assert mirrored, log.read_text()
 
 
@@ -509,7 +509,7 @@ def test_remote_starts_the_run_detached_with_keepalives_and_follows_its_log(leas
     assert all("ServerAliveInterval=" in c for c in calls), calls
     text = log.read_text()  # a call's command spans lines in the log
     start = next(l for l in text.splitlines() if "nohup setsid" in l)
-    assert "> osprey-runs/case/.runs/" in start and "/log 2>&1" in start
+    assert "> osprey-runs/case.meta/runs/" in start and "/log 2>&1" in start
     assert "tail -n +1 -F --pid=" in text, text
 
 
@@ -535,7 +535,7 @@ def test_remote_log_follows_the_lane_s_last_run_on_its_host(lease, tmp_path: Pat
     assert ran.returncode == 0, ran.stderr
     text = log.read_text()  # a call's command spans lines in the log
     assert text.count("tail -n +1 -F") == 1, text
-    assert "ospreyflow-test l=osprey-runs/case/.runs/last" in text, text
+    assert "ospreyflow-test l=osprey-runs/case.meta/runs/last" in text, text
 
 
 # --- offline: a lane's offline tests on the server, with no stack (the owner, 9 November 2026) ----------------
@@ -559,7 +559,7 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
     for pin in ("ARCADEDB_HTTP_PORT=59991", "POSTGRES_PORT=59992", "VALKEY_PORT=59993", "CLICKHOUSE_HTTP_PORT=59994"):
         assert pin in export, export
     assert "OSPREY_LANE" not in export
-    assert "mkdir -p osprey-runs/case/.osprey-lease" in text and "/info" not in text  # an empty lease directory
+    assert "mkdir -p osprey-runs/case.meta/lease" in text and "/info" not in text  # an empty lease directory
     assert "stdin make -k test SKIP_JS=1 " in text
 
 
@@ -570,7 +570,7 @@ def test_remote_log_follows_an_offline_run_when_no_stack_is_held(lease, tmp_path
            "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
     ran = subprocess.run(["bash", str(SCRIPT), "remote-log", "case"], env=env, capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
-    assert "ospreyflow-test l=osprey-runs/case/.runs/last" in log.read_text()
+    assert "ospreyflow-test l=osprey-runs/case.meta/runs/last" in log.read_text()
 
 
 def test_make_test_leaves_out_test_js_only_when_asked() -> None:
@@ -580,3 +580,25 @@ def test_make_test_leaves_out_test_js_only_when_asked() -> None:
     assert "test-js" in dry()
     skipped = dry("SKIP_JS=1")
     assert "test-js" not in skipped and "pytest" in skipped
+
+
+
+# --- The server copy behaves as a checkout (9 November 2026: the first offline run failed 66 cases for want of git,
+# Node and a clean root) -------------------------------------------------------------------------------------
+
+
+def test_the_server_copy_is_a_repository_has_the_glass_packages_and_keeps_its_runs_beside_it(lease, tmp_path: Path) -> None:
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "true"],
+                         cwd=wt / "OspreyFlow_Build", env=env, capture_output=True, text=True)
+    assert off.returncode == 0, off.stderr
+    text = log.read_text()
+    assert "git init -q" in text and "git add -A" in text and "commit -q --allow-empty" in text
+    assert "npm ci" in text and "package-lock.json" in text
+    assert "$HOME/.local/node/bin" in next(l for l in text.splitlines() if l.startswith("stdin export "))
+    assert "osprey-runs/case.meta/runs/" in text
+    # nothing of the runs or the lease is kept inside the copy's root
+    assert "osprey-runs/case/.runs" not in text and "osprey-runs/case/.osprey-lease" not in text
