@@ -75,8 +75,10 @@ class _Datasets:
             "ds-a": _dataset("ds-a", "Prison records", "SECRET"),
             "ds-top": _dataset("ds-top", "Border watch", "TOP SECRET"),
             "ds-c": _dataset("ds-c", "Someone else's data", "OFFICIAL"),
+            "ds-x": _dataset("ds-x", "Intake extract", "OFFICIAL"),
         }
-        self.cases = {"case-a": ["ds-a"], "case-top": ["ds-top"], "case-c": ["ds-c"]}
+        self.cases = {"case-a": ["ds-a"], "case-top": ["ds-top"], "case-c": ["ds-c"],
+                      "case-reads": ["ds-x", "ds-a"]}  # loads into ds-x, only reads ds-a
         self.homes = {"ds-a": HomeCase(dataset_id="ds-a", investigation_id="home-a",
                                     made_at=T0, made_by="seed")}
 
@@ -105,6 +107,7 @@ class _Cases:
             "gone-1": {"case-a": AccessLevel.AUTHOR},
             "ana-1": {"case-a": AccessLevel.EDITOR},
             "other-eng": {"case-c": AccessLevel.EDITOR},
+            "reader-eng": {"case-reads": AccessLevel.EDITOR},
         }
         self.grants = {"home-a": {"rev-1": AccessLevel.AUTHOR, "gone-1": AccessLevel.AUTHOR}}
 
@@ -122,8 +125,10 @@ class _Cases:
 class _People:
     def __init__(self, people: list[PersonAccount]) -> None:
         self.people = people
+        self.reads = 0
 
     async def list_people(self) -> list[PersonAccount]:
+        self.reads += 1
         return list(self.people)
 
 
@@ -145,6 +150,7 @@ class _LinkTypes:
                      _proposal("p5", "accepted")],
             "ds-top": [_proposal("t1", "pending"), _proposal("t2", "pending")],
             "ds-c": [_proposal("c1", "pending")],
+            "ds-x": [],
         }  # fmt: skip
         self.asked: list[tuple[str, bool]] = []
 
@@ -162,6 +168,21 @@ PROMOTION = PendingPromotion(promotion_id="pr-1", load_id="load-7", dataset_id="
                              dataset_marking="SECRET")  # fmt: skip
 
 
+class _Waiting:
+    """The seam L3.4 fills (`WaitingPromotions`): the promotions waiting now."""
+
+    recorded = True
+
+    def __init__(self, waiting: list[PendingPromotion]) -> None:
+        self.waiting = waiting
+
+    async def waiting_for_review(self, reader: Principal) -> list[PendingPromotion]:
+        return list(self.waiting)
+
+    async def all_waiting(self) -> list[PendingPromotion]:
+        return list(self.waiting)
+
+
 @pytest.fixture
 def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     TOKENS.clear()
@@ -172,18 +193,22 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
         _account("eng-1", ["data_engineer"]),
         _account("ana-1", ["analyst"]),
         _account("other-eng", ["data_engineer"]),
+        _account("reader-eng", ["data_engineer"]),
     ]
     for person in people:
         _token(person)
     ageing = InMemoryAgeingStore()
+    waiting = _Waiting([PROMOTION])
     state = {"principal_resolver": _Resolver(), "promotion_ageing": ageing,
+             "waiting_promotions": waiting,
              "investigations": _Cases(), "datasets": _Datasets(), "link_types": _LinkTypes(),
              "identity_admin": _People(people), "custom_roles": None,
              "handling_scheme": SCHEME, "graph": object(), "analytics": object(),
              "alerts_store": object()}  # fmt: skip
     for name, value in state.items():
         monkeypatch.setattr(app.state, name, value, raising=False)
-    yield SimpleNamespace(client=TestClient(app), ageing=ageing, people=people, **state)
+    yield SimpleNamespace(client=TestClient(app), ageing=ageing, people=people, waiting=waiting,
+                          **state)  # fmt: skip
 
 
 def _read(world: SimpleNamespace, who: str) -> dict[str, Any]:
@@ -243,8 +268,8 @@ def test_the_count_leaves_out_proposals_the_reader_cannot_read(world: SimpleName
                           "to_decide": 3, "above_clearance": False}  # fmt: skip
     assert by["ds-top"] == {"dataset_id": "ds-top", "dataset_name": "Border watch",
                             "to_decide": 0, "above_clearance": True}  # fmt: skip
-    assert ("ds-top", False) in world.link_types.asked
     assert "WORDS_OF_t" not in str(body) and "Label of t" not in str(body)
+    assert "Reason of t" not in str(body)
 
 
 def test_only_the_datasets_the_readers_cases_load_into_are_asked(world: SimpleNamespace) -> None:
@@ -264,6 +289,59 @@ def test_no_proposal_is_counted_without_accept_types(world: SimpleNamespace) -> 
     asked for. Red with the right check removed."""
     assert _read(world, "ana-1") == {"promotions_overdue": [], "proposals": []}
     assert world.link_types.asked == []
+
+
+def test_a_promotion_no_longer_waiting_is_not_shown(world: SimpleNamespace) -> None:
+    """Approved, rejected or withdrawn since its alert, a promotion leaves the seam's waiting list,
+    and *Needs you* no longer serves it: the alert's store keeps it, the read asks the seam. Its
+    words are said as they stand now, not as they stood when raised. Red with the waiting list not
+    asked."""
+    import asyncio
+
+    asyncio.run(_raise(world, ["rev-1"]))
+    [notice] = _read(world, "rev-1")["promotions_overdue"]
+    assert "has waited" in notice["words"] and "3 days" not in notice["words"]  # its age now
+    world.waiting.waiting = []
+    assert _read(world, "rev-1")["promotions_overdue"] == []
+
+
+def test_the_people_are_read_once_a_read(world: SimpleNamespace) -> None:
+    """The recipients of every stored alert are asked from one read of the people (the top bar
+    reads every minute)."""
+    import asyncio
+
+    from dataclasses import replace
+
+    asyncio.run(_raise(world, ["rev-1"]))
+    second = replace(PROMOTION, promotion_id="pr-2", load_id="load-8")
+    world.waiting.waiting = [PROMOTION, second]
+    alert = PromotionOverdueAlert(promotion_id="pr-2", load_id="load-8", dataset_id="ds-a",
+                                  raised_at=T0 + timedelta(days=3), recipients=["rev-1"],
+                                  words="Promotion load-8 into Prison records has waited 3 days.")  # fmt: skip
+    assert asyncio.run(world.ageing.raise_once(alert, second))
+    world.identity_admin.reads = 0
+    assert len(_read(world, "rev-1")["promotions_overdue"]) == 2
+    assert world.identity_admin.reads == 1
+
+
+def test_a_dataset_whose_above_clearance_proposals_are_decided_is_not_flagged(
+    world: SimpleNamespace,
+) -> None:
+    """ds-top's two proposals, above eng-1's clearance, both declined since: nothing is left to
+    decide there, so nothing is said of it. Red with the flag raised by any withheld proposal,
+    whatever its status."""
+    world.link_types.of["ds-top"] = [_proposal("t1", "rejected"), _proposal("t2", "promoted")]
+    body = _read(world, "eng-1")
+    assert "ds-top" not in [p["dataset_id"] for p in body["proposals"]]
+
+
+def test_a_dataset_a_case_only_reads_is_not_reached(world: SimpleNamespace) -> None:
+    """reader-eng's case loads into ds-x and only reads ds-a: as the Studio's own reach
+    (`scope_to_dataset`, its first dataset alone), ds-a's proposals are neither asked nor counted.
+    Red with every dataset of the case taken."""
+    body = _read(world, "reader-eng")
+    assert "ds-a" not in str(body)
+    assert {d for d, _ in world.link_types.asked} <= {"ds-x"}
 
 
 @pytest.mark.parametrize(

@@ -16794,7 +16794,28 @@ async def my_needs_you_route(
     `accept_types`, only in the datasets their own cases load into, and without any proposal they
     may not read."""
     app_ = request.app
-    overdue = await ageing.alerts_for(principal.id, lambda p: _promotion_recipients(app_, p))
+    # Only a promotion still waiting is served (one approved, rejected or withdrawn since its alert
+    # is not), with its words as they stand now; the people are read once for every alert.
+    now = datetime.now(UTC)
+    source = app_.state.waiting_promotions
+    current = (
+        {w.promotion_id: w for w in await source.all_waiting()}
+        if getattr(source, "recorded", False) else {}
+    )  # fmt: skip
+    people: list[PersonAccount] = []
+    if current:
+        people = await app_.state.identity_admin.list_people()
+
+    async def still(p: promotion_ageing_module.PendingPromotion) -> list[str]:
+        if p.promotion_id not in current:
+            return []
+        return await _promotion_recipients(app_, p, people)
+
+    words_now = promotion_ageing_module.overdue_words
+    overdue = [
+        n.model_copy(update={"words": words_now(current[n.promotion_id], now)})
+        for n in await ageing.alerts_for(principal.id, still)
+    ]
     proposals: list[NeedsYouProposals] = []
     if Right.ACCEPT_TYPES in rights_for(principal.roles):
         reached = await needs_you_module.reached_datasets(
@@ -17394,7 +17415,9 @@ async def _admin_dataset_of(datasets: DatasetStore, dataset_id: str) -> Dataset:
 
 
 async def _promotion_recipients(
-    app: FastAPI, p: promotion_ageing_module.PendingPromotion
+    app: FastAPI,
+    p: promotion_ageing_module.PendingPromotion,
+    people: Sequence[PersonAccount] | None = None,
 ) -> list[str]:
     """Decision 11's recipients of one overdue promotion, read now (at the sweep, and again at
     each read of `alerts_for`): the dataset's home case's Authors holding `review_promotions` and
@@ -17409,7 +17432,8 @@ async def _promotion_recipients(
     )
     home = await app.state.datasets.home_case_of(p.dataset_id)
     authors = await _authors_of(app.state.investigations, home.investigation_id) if home else []
-    people = await app.state.identity_admin.list_people()
+    if people is None:  # a read of several alerts passes the people it read once (L2.7)
+        people = await app.state.identity_admin.list_people()
     store = getattr(app.state, "custom_roles", None)
     custom = await store.current_rights() if store is not None else {}
     return promotion_ageing_module.recipients_of(

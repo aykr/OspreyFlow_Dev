@@ -12,8 +12,9 @@ proposed*. It names no right of its own, because each half is gated by what it l
   the reader's own cases load into. That is exactly the Studio's reach (`scope_to_dataset`, ADR-140
   Amendment 2), so a dataset reached by no case of theirs, or held by another unit, is not asked.
   A proposal the reader is not cleared to read (`may_read_proposal_words`) is neither counted nor
-  described. The dataset says only that *one or more* exist above their clearance, with no count, no
-  words and no status: `above_clearance` is a flag.
+  described. The dataset says only that *one or more still to decide* exist above their clearance,
+  with no count, no words and no status: `above_clearance` is a flag, raised by an open proposal
+  alone (a declined one raises nothing).
 """
 
 from __future__ import annotations
@@ -51,9 +52,13 @@ async def proposals_to_decide(
     found: list[NeedsYouProposals] = []
     for dataset_id in sorted(set(dataset_ids)):
         words = await may_read_words(dataset_id)
-        listed = await views(dataset_id, words)
-        count = sum(1 for v in listed if to_decide(v))
-        hidden = any(getattr(v, "withheld", False) for v in listed)
+        # Read whole inside the Conduit and reduced here to a count or a flag, so the flag is raised
+        # only by a proposal still to decide (`without_words` keeps no status); no word of a
+        # proposal the reader may not read leaves this function.
+        listed = await views(dataset_id, True)
+        open_ = sum(1 for v in listed if to_decide(v))
+        count = open_ if words else 0
+        hidden = not words and open_ > 0
         if count or hidden:
             found.append(
                 NeedsYouProposals(
