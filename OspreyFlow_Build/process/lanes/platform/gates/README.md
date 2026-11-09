@@ -80,3 +80,11 @@ met Docker Hub's 429; here there is no daemon). It is open in the report.
 **`make test-js` (`957ef5d.test-js.txt`)**: workspace 2765 passed and 1 failed, `MatrixView.budget.test.tsx`'s
 first-frame timing under a full run's load. Alone at load average 11, it passed. The harness had 45 passed
 (run after, appended).
+
+**Live, first attempt: withdrawn, unmeasured** (`957ef5d.live-withdrawn.txt`). Platform lease on stack d (the
+owner's test server, tunnelled to 127.0.0.1 here), 13:09:36–14:38:13 UTC at `957ef5d`. Over the tunnel each
+database call took about 0.7 s, so the set got through only 25 tests in 1 h 29 m (`...F................F.F..`,
+three failures whose names `-q` had not yet printed). At the owner's ruling, through the orchestrator, the pytest
+was stopped and the run is recorded as **withdrawn and unmeasured**: what it measured is the tunnel's speed. Its
+three failures are not read as the branch's or as not the branch's. The lease on d was kept and the stack left up
+for the rerun on the server (`stack_lease.sh remote`).
