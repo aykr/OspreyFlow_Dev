@@ -1,6 +1,7 @@
 // AUTO-GENERATED — do not edit by hand.
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Region = string;
+export type Unit = string | null;
 
 /**
  * `POST /v1/admin/geospatial/build-basemap`: a named region only. The tiles folder and the
@@ -8,4 +9,5 @@ export type Region = string;
  */
 export interface BuildBasemapInput {
   region: Region;
+  unit?: Unit;
 }
