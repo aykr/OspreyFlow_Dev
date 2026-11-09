@@ -644,6 +644,13 @@ New ones are added at the bottom as they happen.
     `rule_evaluation_failed` audit entry shows the sweep's counts to readers its firings are hidden from (rule 7),
     and its gates predate three adapter commits. ClickHouse `account_activity` was changed unreported, so the two
     adapters now disagree. The read-path purge is proved only against a fake. Checked in the code by me; my call.
+96. **Your word, about 21:35: more in parallel.** Three new pieces start now:
+    - **platform-b** (a new sister lane) builds P5b, ADR-114 Amendment 37's backups folder, beside platform's P5;
+    - **studio-b** swaps the git CLI for dulwich, then lands the Studio's tips after L2.7;
+    - **docs** starts D2a now, leaving out the alerts and rules pages until L2.10. This relaxes your earlier gate
+      on docs; the README stays a draft for your approval.
+
+    Case-b, rules-b and the old studio-b session were closed, their work merged (your word).
 
 ## Evening, 7 November: your records of 7 November applied
 

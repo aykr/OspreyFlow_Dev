@@ -287,6 +287,7 @@ the lane records each one in `REPORT.md`.
 | case-b (ADR-142 Amendment 4) | L3.5's link types (`services/api/link_types.py`, `link_type_store.py`, the Model tab's proposals block, `apps/workspace/src/linktypes/**`); L3.7's grading scheme setting and command; L3.8's ownership route |
 | studio-b | `connectors/**`, the Studio's Sources step and its routes (L1.6), then L1.8's tips and wording across the Studio by agreement with studio |
 | rules-b | L2.12's reporting: the case's *Figures* tab, the *Alert monitoring* board, the Reports Viewer and the dashboards door, by agreement with rules for the shell |
+| platform-b (9 November 2026) | P5b's backups folder (ADR-114 Amendment 37): `harness/{backup,restore}.py`, `cli/ospreyflow/{answers,doctor}.py` and the backup and restore dispatch in `cli/ospreyflow/main.py`, and their tests; the admin guide's §13 by carry to docs |
 | Docs | `OspreyFlow_Core/docs/**`, `OspreyFlow_Core/README.md`, `apps/workspace/src/welcome/**`, `OspreyFlow_Build/marketing_site/**`, `OspreyFlow_presentations/**` |
 | Orchestrator | `spec/06_DECISIONS.md` (appends, reservations), `spec/ADR_RESERVATIONS.md`, `process/**`, `OspreyFlow_Build/tools/friction_assemble.py`, `OspreyFlow_Build/tools/adr_reservations_check.py`, `OspreyFlow_Build/scripts/{stack_lease,lanes_heartbeat,lanes_launch}.sh` |
 | Shared, by small orchestrator-merged commits only | `packages/schemas/**` (and the generated types); `keyboard/actionRegistry.ts`; `apps/workspace/src/design/tokens.css`; `OspreyFlow_Core/Makefile` and `.github/workflows/ci.yml` (the owner's) |

@@ -1,30 +1,25 @@
-# Studio-b lane · brief L1.8 · the Studio's tips, who-can refusals and Domain model wording
+# Studio-b lane · brief L1.7a · the dulwich swap, then the Studio's tips
 
-Written by the orchestrator, 9 November 2026, after L1.6's merge (`9b266d8`), for a **fresh studio-b session on
-the default account** (`ayan`; the owner, 9 November: every lane moves to it at its next changeover). Read
-`process/lanes/studio-b/REPORT.md` (L1.6), ADR-145 Amendment 4 (decision 12) and ADR-140 Amendment 9 first.
-Rebase onto `main`. Opus, medium. Size S. Studio (the parent) is on L1.5 beside you, then L1.7.
+Written by the orchestrator, 9 November 2026 (the owner: "studio-b on the dulwich swap"), for a **fresh studio-b
+session on the default account** (`ayan`). Read `process/lanes/CARRIES.md`'s studio rows and the owner's ruling of
+9 November in `process/lanes/MORNING.md` (item 89) first. Opus, medium. Size S.
 
-**The lane, the stacks, the merge rule.** Your files are the map's row for this lane in
-`process/BUILD_PLAN_PARALLEL_LANES.md`; anything else is a request to the orchestrator, and never your parent's
-files. A test stack by `stack_lease.sh acquire studio-b "<purpose>" && …` only, and at most two leased live runs on
-the machine at once while its swap is high (check `stack_lease.sh status`). Prompt L's rules: never stop on a
-question; schemas ride with the step; every live test removes what it writes; your own lane-reviewer, then
-make -k ci and make test at a commit rebased onto main, saved under gates/, with a leased live run including
-`test_route_rights.py`.
+**The lane.** As L1.8, plus, by agreement with studio (which is finishing L1.5 beside you), the one file
+`services/api/studio_publish.py`, its tests, and `tests/test_connectors_are_carried_into_the_image.py`. The
+Conduit's Dockerfile and the licence gate's AWAITING_OWNER entry are platform's: hand them back as a carry (git
+leaves the image and the entry goes, after this merges). Test stacks are on the server only; Docker is off on this
+Mac. Ask the orchestrator for stacks and before heavy local runs. `make test` runs on the server through
+`stack_lease.sh offline studio-b -- …`. Report by message.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (4, 7, 12, 13 and 15 above all); ADR-145 Amendment 4 decision 12; the
-words rules in spec/02.
+**Build, in this order:**
+1. **The dulwich swap** (the owner's ruling, item 89): replace `_run_git`'s `git` CLI calls (init, add, commit of
+   `recipes/<id>.yaml` on the recipe volume) with dulwich under its Apache-2.0 licence. The repository on disk stays
+   the record (spec 09 §6) and is byte-compatible: a `git log` on it reads the same history. Add dulwich to the
+   lock and licence-check it (Apache-2.0). Tests first: publish writes a commit that real git reads, red with the
+   write removed; a recipe's history survives a second publish; no `git` binary is called (red with a planted
+   subprocess call).
+2. **Once admin's L2.7 is on main** (it applies `admin-tips.patch` and `L1.8_roles_words.patch`): land
+   `L1.8_studio_tips.patch`, `L1.8_action_registry.diff` and `L1.8_every_harness.diff` (ADR-145 Amendment 7), in
+   `L1.8_PATCHES.md`'s order, with keyboard and axe re-gated. The orchestrator tells you when L2.7 has merged.
 
-**Build** (the plan's row L1.8):
-1. **Tips and who-can refusals** in the Studio, from `help/roles.ts` (rules-b's; read it, change it only by a
-   patch): every disabled Studio action says why and who can, in words, never a role id.
-2. **"Domain model" wording everywhere** on screen; no "target model".
-3. **`tools/ui_words_check.py`**: a gate that fails on "target model" in user-facing copy, shown red by a plant
-   at the real shape of a Glass string (rule 15) before it is wired into `make ci` (as a diff).
-4. **Carries** (`process/lanes/CARRIES.md`, studio-b rows): the subscribed list ids into `studio_staging` and
-   `reference_list_import` with L1.4's stand-in import retired; getaddrinfo off the event loop; the SQL byte
-   cap checked before a row is held, counted in bytes. Each with a test red first.
-
-**Exit.** The row's exit; make ci and make test green offline; a friction fragment. Report in Prompt L's format,
-then stop.
+**Exit.** Both parts merged, or part 1 with part 2 waiting for L2.7; `make ci` and `make test` green; a friction row.

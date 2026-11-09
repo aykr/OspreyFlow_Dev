@@ -48,5 +48,7 @@ platform	P4	M	done	The analyst's map: basemap switch, place search, contrast in 
 platform	P5	M	building	The owner's map rulings: Java runtime, gazetteer copies in a case's dataset, the unit a setting (ADR-147 Am 2)
 platform	P6	S	todo	The case's gazetteer panel beside place search, by keyboard
 docs	D1	M	done	The website: drawing boards and three places, marked coming
-docs	D2a	M	todo	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed)
+docs	D2a	M	building	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed)
 docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)
+platform-b	P5b	S	building	Backups in a folder the administrator names at setup (ADR-114 Am 37)
+studio-b	L1.7a	S	building	The dulwich swap, then the Studio's tips patches after L2.7

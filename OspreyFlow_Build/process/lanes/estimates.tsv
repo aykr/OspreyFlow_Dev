@@ -1,15 +1,16 @@
-# as of 2026-11-09T21:02:15Z
+# as of 2026-11-09T21:33:08Z
 studio	L1.5	clear; live run on b at 165d144, then merge	~1½–2 h
 case	L3.4	live run on e, then round-3 review	~2–3 h
 platform	P5	round 3 gates; then re-review	~2 h
 rules	L2.10	sent back: a count leak, re-gates, 4 more fixes	~3–4 h
 admin	L2.7	round 3 done; server make test, live on f, re-review	~2–3 h
 admin	L2.5b	after L2.7	~3 h after L2.7
-studio-b	tips	the Studio's tips patches, after L2.7	~1–2 h after L2.7
 platform	P5	round 3 gates; then re-review	~2 h
 platform	P6	gazetteer panel, after P5	~3 h after P5
 case	L3.6	after L3.4 and L2.10	~3 h after both
 case	L3.9	after L3.4	~8–10 h after L3.4
 rules	L2.11	after L2.10	~8–10 h after L2.10
 studio	L1.7	after L1.5	~8–10 h after L1.5
-docs	D2a+b	last	~6–8 h, last
+platform-b	P5b	new sister lane, starting now	~3–4 h
+studio-b	L1.7a	dulwich now; tips after L2.7	~2 h, tips after L2.7
+docs	D2a	starting now, minus alerts/rules pages	~6–8 h; D2b last
