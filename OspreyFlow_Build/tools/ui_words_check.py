@@ -2,8 +2,8 @@
 
 ADR-140 Amendment 9 decision 1: every dataset has one model, and the screens, guides and help call it
 the **domain model**; the code and spec 01 keep `TargetModel`. So the phrase "target model" (any case;
-its words apart by any run of whitespace, so JSX text wrapped across lines is caught, by a hyphen, or by
-JSX's `{" "}`) must not appear in the Glass's source outside comments: in a string, a template literal
+its words apart by any run of whitespace, so JSX text wrapped across lines is caught, by a hyphen, by
+JSX's `{" "}`, or by a non-breaking space written as `&nbsp;`, `&#160;`, `\\u00a0` or `\\xa0`) must not appear in the Glass's source outside comments: in a string, a template literal
 (nested ones too), JSX text, an attribute or a JSON copy file. Identifiers (`TargetModel`) and right ids
 (`edit_target_model`) never match.
 
@@ -11,7 +11,10 @@ JSX's `{" "}`) must not appear in the Glass's source outside comments: in a stri
 right's name is `help/roles.ts`'s `rightName`, held to the rule by `help/rightNames.test.ts`, which also
 holds Admin › Roles' `rightWords` to `rightName` (until rules-b's `admin-tips.patch` lands, Admin builds
 its own, and says "Edit target model": the lane review of L1.8). Words the Conduit sends to the screen
-(none says it today) and `apps/harness` are outside the Glass's `src` and not scanned.
+(none says it today) and `apps/harness` are outside the Glass's `src` and not scanned. Words joined at run
+time from two strings (`"target " + "model"`, `["target", "model"].join(" ")`) are not seen either: no
+copy in the Glass builds a sentence that way today, and a review is what holds it. Files scanned:
+`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.css` (a `content:` string), `.json`, `.html` and `.md`.
 
 Tests (`*.test.*`, `*.spec.*`) and generated types are not on screen and are skipped.
 
@@ -39,9 +42,12 @@ GLASS_SRC = CORE / "apps" / "workspace" / "src"
 
 #: The banned phrase, its words apart by whitespace, a hyphen, or JSX's `{" "}`. The words in its place
 #: are "domain model".
-BANNED = re.compile(r"\btarget(?:\s|-|\{\s*[\"'`]\s+[\"'`]\s*\})+model", re.IGNORECASE)
+BANNED = re.compile(
+    r"\btarget(?:\s|-|\{\s*[\"'`]\s+[\"'`]\s*\}|&nbsp;|&#160;|&#xa0;|\\u00a0|\\xa0)+model",
+    re.IGNORECASE,
+)
 
-SUFFIXES = frozenset({".ts", ".tsx", ".json", ".html", ".md"})
+SUFFIXES = frozenset({".ts", ".tsx", ".js", ".jsx", ".mjs", ".css", ".json", ".html", ".md"})
 
 
 def strip_comments(text: str) -> str:

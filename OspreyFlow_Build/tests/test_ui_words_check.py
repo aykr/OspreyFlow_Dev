@@ -44,6 +44,16 @@ PLANTS = {
     "ingest/y/Spaced.tsx": '<p>Open the target{" "}model.</p>\n',
     "ingest/y/Nested.tsx": "const t = `${ready ? `the target model` : 'none'}`;\n",
     "ingest/y/AfterNested.tsx": "const u = `${a ? `x` : y} // not a comment`; const w = 'the target model';\n",
+    # The orchestrator's review of L1.8: a non-breaking space by entity or escape, and the other files
+    # the Glass's copy can sit in.
+    "ingest/z/Nbsp.tsx": "<p>The target&nbsp;model</p>\n",
+    "ingest/z/NbspNumeric.tsx": "<p>The target&#160;model</p>\n",
+    "ingest/z/NbspEscape.ts": "const n = 'the target\\u00a0model';\n",
+    "ingest/z/NbspHexEscape.ts": "const n = 'the target\\xa0model';\n",
+    "ingest/z/Plain.js": "export const words = 'the target model';\n",
+    "ingest/z/Plain.jsx": "export const P = () => <p>the target model</p>;\n",
+    "ingest/z/Plain.mjs": "export const words = 'the target model';\n",
+    "ingest/z/plain.css": ".empty::after { content: \"No target model yet\"; }\n",
 }
 
 

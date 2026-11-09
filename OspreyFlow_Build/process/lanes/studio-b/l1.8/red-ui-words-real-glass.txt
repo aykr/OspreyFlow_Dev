@@ -13,3 +13,12 @@ FAILED ../OspreyFlow_Build/tests/test_ui_words_check.py::test_a_comment_inside_a
 2 failed, 6 passed in 0.81s
 ## and with the lexer and pattern fixed
 8 passed in 0.74s
+
+# The orchestrator's review of L1.8 (its minor): eight new plants (&nbsp;, &#160;, \u00a0, \xa0; .js, .jsx, .mjs, .css), offline, 2026-11-09T16:45:59Z
+## red: against the gate before this change (BANNED without the non-breaking spaces, SUFFIXES without the four)
+E       AssertionError: assert ['ingest/dag/...ngle.ts', ...] == ['ingest/dag/...ngle.ts', ...]
+E         Right contains 8 more items, first extra item: 'ingest/z/NbspEscape.ts'
+1 failed, 7 deselected
+## green: with it
+8 passed
+## the real Glass with it: ui-words-check: no "target model" in the Glass's copy
