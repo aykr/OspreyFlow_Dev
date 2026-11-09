@@ -1,0 +1,46 @@
+[
+  {
+    "ref": "SYN0001",
+    "primary_name": "PETROVA, Elena",
+    "aliases": "PETROVA, Lena|PETROVA, Yelena",
+    "date_of_birth": "1971-03-03",
+    "nationality": "Xanadu Republic",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Person"
+  },
+  {
+    "ref": "SYN0002",
+    "primary_name": "ORLANSKY, Dmitri Pavel",
+    "aliases": null,
+    "date_of_birth": null,
+    "nationality": null,
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Person"
+  },
+  {
+    "ref": "SYN0003",
+    "primary_name": "NORTHWIND METALS FZE",
+    "aliases": "NORTHWIND METAL TRADING",
+    "date_of_birth": null,
+    "nationality": "Bexland",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Organisation"
+  },
+  {
+    "ref": "OFSI-90005",
+    "primary_name": "BRANDT, Ilsa",
+    "aliases": null,
+    "date_of_birth": "1980-12-12",
+    "nationality": "Bexland",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Person"
+  }
+]

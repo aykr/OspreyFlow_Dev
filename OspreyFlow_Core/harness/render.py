@@ -371,6 +371,27 @@ def _keys_for_the_gateway_alone(config: OspreyConfig, services: dict[str, Any]) 
         service["environment"] = environment
 
 
+def connection_secret_variables(config: OspreyConfig) -> list[str]:
+    """Each declared connection secret's `deployment.env` variable (ADR-140 Amendment 15)."""
+    return [f"OSPREY_CONNECTION_SECRET_{name}" for name in config.connectors.secrets]
+
+
+def _connection_secrets_for_the_conduit_alone(
+    config: OspreyConfig, services: dict[str, Any]
+) -> None:
+    """A SQL or API connection's secret is read by the Conduit alone (the orchestrator's review of
+    ADR-140 Amendment 15, item 9, as ADR-135 decision 2 keeps a model key to the gateway): every
+    other owned service reads `deployment.env` whole, so its own environment, which Compose puts
+    above the file, blanks each declared secret."""
+    variables = connection_secret_variables(config)
+    for name, service in services.items():
+        if name == "api" or "env_file" not in service:
+            continue
+        environment = dict(service.get("environment") or {})
+        environment.update({variable: "" for variable in variables})
+        service["environment"] = environment
+
+
 def _local_model_table(config: OspreyConfig, extraction: str) -> str:
     return yaml.safe_dump(
         {
@@ -1184,6 +1205,7 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
         )
     )
     _keys_for_the_gateway_alone(config, services)
+    _connection_secrets_for_the_conduit_alone(config, services)
     _gateway_database(config, services)
     if "keycloak" in services and ("postgres" in services or config.external.postgres is not None):
         services["keycloak-db"] = _keycloak_database_step(config)
@@ -1557,6 +1579,20 @@ def _render_env(config: OspreyConfig) -> str:
         f"OSPREY_HOTLIST_AUDIENCE={config.monitoring.hotlist_audience}",
         "OSPREY_HOTLIST_AUDIENCE_EDITABLE="
         + ("true" if config.monitoring.hotlist_audience_editable else "false"),
+        # ADR-140 Amendment 15: the private hosts and networks the operator admits the Studio's
+        # connectors to (names and networks, never a secret).
+        *(
+            ["OSPREY_CONNECTOR_PRIVATE=" + ",".join(config.connectors.private_hosts)]
+            if config.connectors.private_hosts
+            else []
+        ),
+        # The connection secrets the operator declares, by name only (never a value): only the
+        # Conduit is given them, and it reads no other.
+        *(
+            ["OSPREY_CONNECTOR_SECRETS=" + ",".join(config.connectors.secrets)]
+            if config.connectors.secrets
+            else []
+        ),
         "",
         "# Ports published besides the front proxy's: the Conduit only when network.expose_conduit",
         "# asks, ArcadeDB on loopback only (ADR-114 Amendment 4 decision 3). Each is overridable.",

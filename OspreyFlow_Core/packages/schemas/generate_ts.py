@@ -31,6 +31,7 @@ from schemas.deployment import ALL_MODELS as DEPLOYMENT_MODELS  # noqa: E402
 from schemas.domain import ALL_MODELS as DOMAIN_MODELS  # noqa: E402
 from schemas.explore import ALL_MODELS as EXPLORE_MODELS  # noqa: E402
 from schemas.ingest import ALL_MODELS as INGEST_MODELS  # noqa: E402
+from schemas.list_connector import ALL_MODELS as LIST_CONNECTOR_MODELS  # noqa: E402
 from schemas.map_admin import ALL_MODELS as MAP_ADMIN_MODELS  # noqa: E402
 from schemas.mapconfig import ALL_MODELS as MAPCONFIG_MODELS  # noqa: E402
 from schemas.model import ALL_MODELS as MODEL_PORT_MODELS  # noqa: E402
@@ -59,6 +60,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *INGEST_MODELS,
     *STAGING_MODELS,
     *SOURCE_MODELS,
+    *LIST_CONNECTOR_MODELS,
     *PROFILE_MODELS,
     *MAPCONFIG_MODELS,
     *PROVIDER_PROFILE_MODELS,

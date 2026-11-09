@@ -73,17 +73,17 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-146 Amendment 2 | Rules and Monitoring as built in L2.9: the place's gate and the five routes it shares (three reads, two writes); an alert's address; the jump replaced; the Rule author's queue read, as the owner ruled | rules | 2026-11-08 | written |
 | ADR-145 Amendment 6 | Audit and Operations' ageing as built (L2.6) | admin | 2026-11-08 | reserved |
 | ADR-142 Amendment 4 | Sister lanes: case-b, studio-b and rules-b take the steps that do not wait on their parent's current one, on the sol account; a third test stack (the owner's ruling, 8 November) | orchestrator | 2026-11-08 | reserved |
-| ADR-140 Amendment 13 | Phase 9 as built: connectors (SQL, API, JSON) and the screening-list connector, its templates, deployment-wide import, subscription by list id, schedule and Refresh now (L1.6) | studio-b | 2026-11-08 | reserved |
+| ADR-140 Amendment 13 | Phase 9 as built: connectors (SQL, API, JSON) and the screening-list connector, its templates, deployment-wide import, subscription by list id, schedule and Refresh now (L1.6) | studio-b | 2026-11-08 | written |
 | ADR-143 Amendment 4 | Analyst-defined link types as built (L3.5) | case-b | 2026-11-08 | written |
 | ADR-140 Amendment 14 | Phase 8 as built: the SQL transform's sandbox and its _ref rule, the fuzzy match's inferred SAME_AS and inferred matched values, YAML editing in expert mode, the expert steps' disclosure, and open question 7 answered (L1.5) | studio | 2026-11-08 | reserved |
 | ADR-112 Amendment 8 | write_sql_transforms (D12): the expert steps' right, held by no built-in role and granted singly by an administrator (L1.5) | studio | 2026-11-08 | reserved |
-| ADR-146 Amendment 3 | load_screening_lists acts in Rules and Monitoring and in Studio › Sources' list connector, reconciling decision 2 with ADR-140 Amendment 9 decision 3; no one's rights change (L1.6) | studio-b | 2026-11-09 | reserved |
+| ADR-146 Amendment 3 | load_screening_lists acts in Rules and Monitoring and in Studio › Sources' list connector, reconciling decision 2 with ADR-140 Amendment 9 decision 3; no one's rights change (L1.6) | studio-b | 2026-11-09 | written |
 | ADR-143 Amendment 5 | Promotion and a removed case's layer as built (L3.4) | case | 2026-11-09 | reserved |
 | ADR-146 Amendment 4 | L2.10 as built: team routing (a routed alert read by the team's members and the home case's Authors, in the queue's query, trends and packs), one queue, filters, the lead's hand-off and Suppress until…, Raise an alert…, What raises alerts, watched patterns on a schedule | rules | 2026-11-09 | reserved |
 | ADR-147 Amendment 1 | The analyst's map: the basemap switch, place search over the case's gazetteer, the three themes' contrast (P4) | platform | 2026-11-09 | written |
 | ADR-147 Amendment 2 | The owner's rulings of 9 November: a Java runtime under the Classpath exception in the Conduit image, gazetteer places copied into a case's dataset at load, the gazetteer's unit a build setting (P5) | platform | 2026-11-09 | reserved |
-| ADR-133 Amendment 9 | The owner's ruling of 9 November: L1.6's reference lists are the screening-list store of record; the Lists tab read-only, then retired | studio-b | 2026-11-09 | reserved |
-| ADR-140 Amendment 15 | The owner's ruling of 9 November: an operator's allow-list in osprey.yaml admits named private hosts or networks to the SQL and API connectors | studio-b | 2026-11-09 | reserved |
+| ADR-133 Amendment 9 | The owner's ruling of 9 November: L1.6's reference lists are the screening-list store of record; the Lists tab read-only, then retired | studio-b | 2026-11-09 | written |
+| ADR-140 Amendment 15 | The owner's ruling of 9 November: an operator's allow-list in osprey.yaml admits named private hosts or networks to the SQL and API connectors | studio-b | 2026-11-09 | written |
 | ADR-143 Amendment 6 | The grading change as built (L3.7): the verb over the scripts module, the dry run enforced (ruling C13), the Conduit stopped, what the change leaves alone | case-b | 2026-11-09 | reserved |
 
 ## Baseline

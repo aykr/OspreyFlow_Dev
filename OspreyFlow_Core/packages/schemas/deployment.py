@@ -36,6 +36,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from schemas.mapconfig import MapConfig
+from schemas.sources import SECRET_NAME, private_host_entry
 
 #: The Lite address (`06_DECISIONS.md` ADR-114 Amendment 4): the front proxy on port 80 of this
 #: machine, the Glass at this name, the identity provider at `id.` and the dashboards at `bi.`.
@@ -819,6 +820,56 @@ class MonitoringConfig(BaseModel):
     )
 
 
+class ConnectorsConfig(BaseModel):
+    """The Studio's SQL and API connectors (`06_DECISIONS.md` ADR-140 Amendments 13 and 15). A
+    connector never reaches inside the deployment or its network unless the operator admits a
+    client's private database or API here; the installer's setting, never Admin's."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    private_hosts: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Default: none. The private hosts a SQL or API connection may reach: each a host name "
+            "in full (nomis-replica.client.internal) or a network inside 10.0.0.0/8, "
+            "172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 or fc00::/7 (10.20.0.0/16) that a "
+            "connection's host name resolves into. Everything else inside a network stays "
+            "refused. Never admitted, whatever is listed: this machine, a cloud's metadata "
+            "services (169.254.0.0/16, fd00:ec2::/32, 100.100.0.0/16), Docker's and the "
+            "cluster's own names, and any address in the Conduit's own networks or the "
+            "deployment's own services'. A host must still be on the egress allow-list."
+        ),
+    )
+
+    secrets: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Default: none. The name of each SQL or API connection's secret "
+            "(NOMIS_REPLICA for OSPREY_CONNECTION_SECRET_NOMIS_REPLICA in deployment.env). Only "
+            "the Conduit is given a declared secret, every other service having it blanked, and a "
+            "connection whose secret is not declared reads nothing."
+        ),
+    )
+
+    @field_validator("secrets")
+    @classmethod
+    def _each_a_secret_name(cls, value: list[str]) -> list[str]:
+        for name in value:
+            if not re.fullmatch(SECRET_NAME, name):
+                raise ValueError(
+                    f"{name!r} is not a secret's name: capitals, digits and _ only, starting "
+                    "with a capital (NOMIS_REPLICA)"
+                )
+        return value
+
+    @field_validator("private_hosts")
+    @classmethod
+    def _each_private(cls, value: list[str]) -> list[str]:
+        for entry in value:
+            private_host_entry(entry)
+        return [e.strip() for e in value]
+
+
 class WelcomeConfig(BaseModel):
     """The welcome page before sign-in (ADR-115 decision 8): its About section, and the footer's
     links — the deploying organisation's own documents, each shown only when its address is
@@ -1127,6 +1178,7 @@ class OspreyConfig(BaseModel):
     map: MapConfig | None = Field(default=None, description="Default: none declared")
     reporting: ReportingConfig = Field(default_factory=ReportingConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    connectors: ConnectorsConfig = Field(default_factory=ConnectorsConfig)
     mail: MailConfig | None = Field(default=None, description="Default: none — one-time codes")
     welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
     deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)

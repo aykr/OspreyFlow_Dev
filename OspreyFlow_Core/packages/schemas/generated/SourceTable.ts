@@ -16,6 +16,16 @@ export type Owner = string | null;
 export type SetAt = string | null;
 export type Paused = boolean;
 export type PausedReason = string | null;
+export type Read = (SqlRead | ApiRead | JsonRead) | null;
+export type Kind = "sql";
+export type Table = string;
+export type Columns = string[];
+export type Kind1 = "api";
+export type Path = string;
+export type RecordsAt = string | null;
+export type Kind2 = "json";
+export type Pattern1 = string;
+export type RecordsAt1 = string | null;
 export type Version = number;
 export type CreatedBy = string;
 export type CreatedAt = string;
@@ -32,6 +42,7 @@ export interface SourceTable {
   handling?: Handling;
   legal_basis?: LegalBasis;
   refresh?: SourceRefresh;
+  read?: Read;
   version?: Version;
   created_by: CreatedBy;
   created_at: CreatedAt;
@@ -58,4 +69,28 @@ export interface SourceRefresh {
   paused?: Paused;
   paused_reason?: PausedReason;
   [k: string]: unknown;
+}
+/**
+ * A table (or view) of a SQL connection; the columns named, or all of them.
+ */
+export interface SqlRead {
+  kind?: Kind;
+  table: Table;
+  columns?: Columns;
+}
+/**
+ * A path under the connection's base URL, and where each page's records are.
+ */
+export interface ApiRead {
+  kind?: Kind1;
+  path: Path;
+  records_at?: RecordsAt;
+}
+/**
+ * JSON files of the dataset's folder whose names match `pattern`, records at `records_at`.
+ */
+export interface JsonRead {
+  kind?: Kind2;
+  pattern: Pattern1;
+  records_at?: RecordsAt1;
 }

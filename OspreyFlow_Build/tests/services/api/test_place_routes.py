@@ -65,8 +65,9 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"^/v1/exports$", frozenset({"admin"}), "the export ledger, Admin's right (ADR-112 A8)"),
     (r"/ingest/(extract|candidates)", frozenset({"glass"}),
      "extraction of a case's files, an investigation right (ADR-112 I4)"),
-    (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files|model)",
-     frozenset({"ingest"}), "the Ingest Studio"),
+    (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files|model)"
+     r"|^/v1/datasets/\{dataset_id\}/(screening-subscriptions|reference-lists)|^/v1/studio/",
+     frozenset({"ingest"}), "the Ingest Studio (Sources' lists and connectors, ADR-140 A13)"),
     (r"", frozenset({"glass"}), "the Glass"),
 ]  # fmt: skip
 
@@ -772,9 +773,36 @@ def test_a_rule_author_opens_rules_and_monitoring() -> None:
 #: The rights that act only in Rules and Monitoring (ADR-146 decision 2): a route asking for one of
 #: them is the place's, whatever its path.
 RULES_ONLY_RIGHTS = frozenset(
-    {"author_rules", "triage_alerts", "deploy_rules", "read_rule_audit", "keep_watches",
-     "load_screening_lists"}
+    {"author_rules", "triage_alerts", "deploy_rules", "read_rule_audit", "keep_watches"}
 )  # fmt: skip
+#: ADR-146 Amendment 3: `load_screening_lists` acts in Rules and Monitoring and in Studio › Sources'
+#: list connector (ADR-140 Amendment 9 decision 3), and nowhere else.
+LIST_LOADING_STUDIO_PATHS = re.compile(r"^/v1/studio/screening-lists(/|$)")
+
+
+def _misplaced_list_routes(checks: Callable[[APIRoute], frozenset[str]] = _checks) -> list[str]:
+    return sorted(
+        r.path
+        for r in _routes()
+        if "load_screening_lists" in checks(r)
+        and "rules" not in places_of(r.path)
+        and not LIST_LOADING_STUDIO_PATHS.match(r.path)
+    )
+
+
+def test_every_route_loading_screening_lists_is_rules_or_the_studio_list_connector_s() -> None:
+    """ADR-146 Amendment 3: a route asking for `load_screening_lists` is Rules and Monitoring's or
+    the Studio's list connector's, never anywhere else (red with a planted route, below)."""
+    assert _misplaced_list_routes() == []
+
+
+def test_a_list_loading_route_elsewhere_is_found() -> None:
+    victim = next(r for r in _routes() if r.endpoint.__name__ == "list_trends")
+
+    def planted(route: APIRoute) -> frozenset[str]:
+        return _checks(route) | {"load_screening_lists"} if route is victim else _checks(route)
+
+    assert _misplaced_list_routes(planted) == [victim.path]
 
 
 def _unplaced_rules_routes(checks: Callable[[APIRoute], frozenset[str]] = _checks) -> list[str]:

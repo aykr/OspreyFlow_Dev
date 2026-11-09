@@ -30490,3 +30490,363 @@ built, a composite; (c) the places copied into each case's own dataset. (b) stan
 
 **Cost.** One more dataset per built region; a place search asks the store up to four times (one for each
 casing), each reading up to 201 `Location`s by name, before keeping the gazetteer's.
+
+### ADR-140, Amendment 13 (8 November 2026) — Phase 9 as built: SQL, API and JSON connections, each read landing as its source's file; and the screening-list connector in Studio › Sources
+
+Status: accepted, built in the studio-b lane, step L1.6 (redesign phase 9; Amendment 9 decision 3).
+Amendments 9, 11 and 12 are unchanged except where this says so. Every question the step met was taken
+by its recommended option and logged in `process/lanes/studio-b/REPORT.md` for the owner to overrule.
+
+**Decision.**
+
+1. **Connections beyond files.** `ConnectionKind` gains `sql`, `api` and `json`, each with its own
+   typed settings (`schemas/sources.py`). A connection **names** its secret; the value is the
+   deployment's, `OSPREY_CONNECTION_SECRET_<NAME>` in `deployment.env`, read only when a read needs it.
+   It is never stored, audited, logged or answered, and the schema refuses a field that would carry it.
+   A source on such a connection carries its **read** (`SqlRead`: a table and columns; `ApiRead`: a
+   path and a records path; `JsonRead`: a file pattern, never climbing or matching a hidden file, and
+   a records path). **Every part is a name, never an expression** (rule 8); a sandboxed SELECT remains
+   expert mode's (L1.5).
+   **Where a connection may reach** (the orchestrator's review, with ADR-147 decision 2a's rule and
+   `map_admin`'s own lookups): never this machine, a dotless name of the deployment's own
+   (`postgres`, `keycloak`), or an address that is loopback, private, link-local (a cloud's metadata
+   service), reserved, unspecified or multicast, written in any form (`127.1`, `0x7f.1`,
+   `2130706433`, `::ffff:127.0.0.1`) or resolved to now. The schema refuses the written forms; the
+   Conduit refuses a name resolving inside when an administrator names the connection, and again
+   before every connection or request, since DNS can change in between. A host must also be on the
+   egress allow-list at each read. This applies to SQL as well as API connections, so a client
+   database on a private network cannot be reached unless the operator admits it (Amendment 15, the
+   owner's ruling of 9 November). "Inside" is judged as `not is_global` (shared addresses, `100.64.0.0/10`, among them), and an
+   IPv6 address carrying an IPv4 one (mapped, NAT64's `64:ff9b::/96`, 6to4) by the address it
+   carries. An API request is sent to the address that was checked, the name kept for `Host` and
+   TLS, so a name rebound between the check and the request reaches nothing new.
+   **Whose a connection is** (the orchestrator's ruling on the second review, rule 3: the strict
+   default). A SQL, API or JSON connection is **bound to the datasets an administrator names** when
+   making it (`Connection.datasets`, by id; the schema refuses such a connection naming none, and a
+   files connection naming any). A source may name only a connection bound to its own dataset, refused
+   in words otherwise at registration, at *Refresh now* and in the one read path every connector read
+   passes (`refuse_unbound` in `read_into_file`); the refusal is audited. A run, a sample and *Test*
+   read the landed file, never the connection, so that one path covers them. **A secret belongs to
+   one connection**: a second connection naming a secret already named is refused, so a secret given
+   for one host or database is never reused for another. An unknown connection is a 404, and no reply
+   names a path on the server.
+2. **SQL: a read-only login over TLS, within named schemas**, checked twice. The connection names the
+   schemas its sources may read (`public` by default; never the server's own catalogue), and a
+   source's table is always schema-qualified in one of them. *Test connection* and every read refuse a
+   superuser, a login owning a table, or one with a write privilege on any table it can see (its own
+   grants and `PUBLIC`'s), and the read runs in a `READ ONLY` transaction, in a session made read-only
+   from its first statement with each statement bounded (`statement_timeout`, 60 seconds). TLS is
+   always asked for, and by default the server's certificate and name are verified (`verify-full`);
+   a server without it is refused. Incremental reads take rows past the source's **cursor**, compared in
+   the column's own type from the server's catalogue, its value bound. The cursor's column is a plain
+   column name, and every quoted name doubles its own `"`.
+3. **API: behind the egress allow-list.** An HTTPS base URL, a bearer secret or none, paging by `page`
+   (until an empty page) or by a next link at a dotted path, which must keep the base URL's scheme,
+   host and port (a next link over plain HTTP would carry the bearer secret in clear). The host
+   must be on `OSPREY_CONNECTOR_EGRESS`, which only an operator sets. A host off it is refused in words
+   that say whom to ask, so the "egress allow-list request" is a request to an operator. A refusal (401,
+   403, 404, 5xx), or records missing where the read says, is refused in words: never read as no rows.
+4. **Each read lands as the source's one file**, `uploaded/<dataset>/<source>.csv`, written to a
+   temporary name and renamed into place. Registration first checks everything (the read's kind, the
+   name, a file or source already there, a keyless refresh), then reads once into a **new** file, then
+   registers the source on it; a name whose file exists is refused, never overwritten, and a refused
+   registration takes its file back. From then on the run path, the folder watch (its pattern set to
+   the file), raw rows, watermark, confinement and rule gate are those of any file source, unchanged.
+   *Refresh now* (`POST …/sources/{id}/read`) reads again. An API or JSON read, or a SQL snapshot, is
+   the file whole. **An incremental SQL read adds its rows to the file**, since earlier rows may not
+   have been loaded yet (a paused watch, a failed run), and leaves the file as it was when it finds
+   nothing; each run's own watermark (ADR-110 Amendment 6) then reads only what that pipeline has not
+   loaded, so nothing is dropped and nothing loads twice. A read, or a file, past 500,000 rows, or an
+   API past 1,000 pages, or more than 256 MiB taken in or written, is refused whole (rule 2), and the
+   byte cap stops the read where it is passed: an API's body is streamed, JSON files are sized before
+   any is opened, and SQL rows come through a cursor. A JSON pattern never lists or reads a name
+   starting with a dot (a read's half-written temporary file among them). The two settings the connectors read
+   (`OSPREY_CONNECTION_SECRET_<NAME>`, `OSPREY_CONNECTOR_EGRESS`) reach the Conduit as every
+   `deployment.env` line does (each owned service's `env_file`, `harness/render.py`); `apply` keeps
+   both as it keeps every secret, and a restore names each connection secret and the egress list to
+   set again (`05_DEPLOYMENT.md` §6.1).
+5. **The screening-list connector** (`services/api/list_connector.py`). A list is **imported once for
+   the deployment** from a file in the ingest folder, through its format's **template** (OFAC SDN,
+   OFSI consolidated, the UK Sanctions List, UN, EU, OpenSanctions;
+   `services/ingest/connectors/screening_templates.py`, each reading through its Knowledge Adapter). A
+   list no template covers uses the **blank** template: column picks and a separator from a closed set,
+   saved as that list's own mapping. A row the blank template cannot map refuses the whole list, by row
+   number and never by content (rules 2 and 7). Rule 9 is judged as ADR-133's lists judge it: synthetic
+   by SHA-256 (the screening manifest and `connectors/screening/synthetic.sha256`), else real, naming a
+   dataset this device admits, with UN and OpenSanctions synthetic-only until licensed. A format's
+   files are read by ADR-133's own reader (`screening_refresh.read_files`).
+6. **A version only when the rows change.** An import keeps a new version at Amendment 11's path,
+   `reference_lists/deployment/<name>@v<n>.parquet`, written once and never replaced, only when its
+   rows' digest differs from the current version's, each cell taken as the keeper keeps it (a blank
+   cell is empty). The same rows again are `unchanged`, so an import is idempotent per version. A
+   version's record is its rows' (never its schedule). Two imports at once cannot both apply: the
+   store's compare-and-set on the version refuses the second; a version file an import kept but never
+   applied (the process stopped between) was never live and is stepped over, never replaced. Every
+   attempt is recorded in words, a refused or failed one is the list's failure until a later import
+   succeeds, and a list's import history says when older imports are left out (`more`).
+7. **Subscribed per dataset, by id** (`dataset_list_subscriptions`). The lists a dataset's rule or
+   Lookup is offered (`GET …/reference-lists/offered`) are computed by the save gate's own
+   `readable_lists`: the dataset's own lists (kept files whose ids its live domain model names) and the
+   deployment-wide lists it subscribes to. Another dataset's list is never offered, whatever its kind,
+   name or id, and a name two readable lists share is offered as neither (the gate refuses it). A
+   source author is shown each deployment list's name, template, version, entries, last import and
+   whether it failed (`SubscribableList`), never its file, who added it, its real dataset, its mapping
+   or its failure's words. Of connections, a source author is shown the name and kind of those bound
+   to their dataset only (decision 1's ruling); a connection's settings and datasets are shown only to
+   an administrator.
+8. **A dataset's own list's rows from its own file** (`POST …/reference-lists/{id}/import`). The file
+   must be one the dataset's listing offers, refused in the same words whether or not it exists. The
+   list must be one its live model names; a first import gives its name and key column, and a later one
+   takes the record from the version kept. A new version is kept only when the rows change. This
+   replaces L1.4's stand-in: its command line is retired, and `import_list` stays only as the tests'
+   seed of a synthetic list.
+9. **Schedule and *Refresh now*.** Deployment-wide lists are refreshed every day or every week at an hour.
+   Each slot runs once (claimed in Valkey, then marked on the list), as the person who set the schedule,
+   who must still sign in and hold `load_screening_lists`, and audited as that person; it ticks on the
+   monitoring minute.
+10. **The seam with L1.4, built.** `studio_staging.dataset_reference_lists` answers the dataset's own
+    lists and each deployment-wide list it subscribes to by id (the list store is opened with the run's
+    resources, one pool), and `subscribed_in` reads the subscriptions back from that answer for the save
+    gate, Test, the drawer's sample and the run (`lists_for_run(subscribed=…)`).
+
+**Tests (each shown red first; `process/lanes/studio-b/L1.6_RED_RECORD.md`).**
+
+| Test | What it proves |
+| --- | --- |
+| `tests/schemas/test_connector_schemas.py` | a secret named, never held; every read a name, never an expression; only the blank template takes a mapping |
+| `tests/connectors/test_list_templates.py` | each template maps its synthetic golden file to the screening shape (checked against each adapter's own golden file); the blank template's refusals by row |
+| `tests/services/api/test_list_connector.py` | an import idempotent per version; a changed list a new version, the old kept; rule 9; only subscribed and own lists offered, another dataset's never; offered equals what the gate reads; a dataset's own list; a schedule's slot once, as someone still allowed |
+| `tests/services/api/test_list_connector_routes.py` | rule 4 on every list route: `load_screening_lists`, the dataset's own gate, subscription by id, own-list import from its own files |
+| `tests/services/api/test_list_connector_store.py` (live) | the Postgres store refuses what its twin refuses |
+| `tests/connectors/test_api_and_json_connectors.py` | egress; the API's refusals in words; every page; a next link off the host; the cap; JSON at its records path; a read landing whole |
+| `tests/services/api/test_connector_hosts.py` | no connection reaches inside the deployment, in any written form or by resolution, at save and before every read or page; a table outside the connection's schemas; each session bounded and read-only; the byte caps |
+| `tests/services/api/test_connector_routes.py` | a secret never answered or audited; only an administrator names or tests a connection; a refused first read registers nothing; *Refresh now* behind the dataset's gate |
+| `tests/services/api/test_connection_binding.py` | a connection bound to the datasets an administrator names: a source of another dataset refused at registration, *Refresh now* and the one read path, and audited; a secret named by one connection only |
+| `tests/harness/test_connection_secrets_kept.py` | `apply` keeps every connection secret and the egress list; a restore names each to set again |
+| `tests/connectors/test_sql_connector_live.py` (live) | **the phase's exit**: `visit_bookings` registered and refreshed through the routes over the Postgres source store and its cursor; a SQL source's file loaded through the source-refresh path into ArcadeDB, the refresh loading only the new row; a writing login refused; refusals in words; a server without TLS refused |
+| `tests/services/api/test_list_rows_parquet_live.py` (live) | the real keeper keeps and refuses what its twin does: blank cells, never replaced, another list's file |
+| `tests/services/api/test_subscribed_lists_seam.py` | a Lookup reads a deployment list only while its dataset subscribes, at the gate and in the run |
+| `apps/workspace/src/ingest/sources/connectors.test.tsx` | the wizard's read; subscription by id; *Manage* only for whoever may load lists; the blank mapping |
+| `keyboard/sources-connectors.spec.ts` | each action by keyboard (rule 13), `SOURCES_CONNECTORS_ACTIONS` |
+| `a11y/every-harness.spec.ts` | the harness's ten states (the default and nine variants) in dark, light and GOV.UK |
+
+**Phase 9's exit is met:** `visit_bookings` is registered from the fixture Postgres with an incremental
+watermark through the register route, and a refresh reads only the new rows into its file; a SQL
+source's file loaded through the source-refresh path loads only the new row
+(`test_sql_connector_live.py`, under the lease named in the lane's report). The load half reads a
+payments-shaped synthetic table, the only recipe the live source-refresh path publishes. The fixture
+lacks TLS, so its cases connect without it; that is the fixture's one named difference, and the real
+connector is shown refusing that same server. `verify-full` itself is shown live through a TLS front
+before the same Postgres (Amendment 15's tests).
+
+**Not built.** Scheduled polling of a SQL or API source waits on R17's poll floor; it is read at
+registration and by *Refresh now*. *Admin › Connections*' fields for the new kinds are the admin lane's
+(requested). The rule's list picker reading `…/reference-lists/offered` is the rules lane's (requested).
+Re-screening a dataset's customers against a Studio list's changed entries is the rules': the import
+counts what it added, changed and delisted for them. **Two deployment-wide list stores** now stand side
+by side: ADR-133's (the Lists tab, which the rules screen against) and this one (Studio › Sources,
+versions as reference lists). The owner ruled on 9 November that this one is the store of record
+(ADR-133 Amendment 9). This step leaves ADR-133's store, its refresh, its schedule and its Lists tab
+exactly as they were; the rules lane's L2.11 moves the picker and re-screening, makes the Lists tab
+read-only in that same change, and migrates its lists. An incremental source's file
+grows with each read; pruning rows every pipeline has loaded is not built (a file past the cap is
+refused in words). A torn write of a read's file has no test that could catch it in one process; the
+rename is recorded as untested.
+
+### ADR-146, Amendment 3 (9 November 2026) — `load_screening_lists` acts in Rules and Monitoring and in Studio › Sources' list connector
+
+Status: accepted, the orchestrator's reconciliation of 9 November 2026 (on the owner's review list),
+written in the studio-b lane at step L1.6. Decision 2 is unchanged except where this says so.
+
+**Context.** Decision 2 made `load_screening_lists` one of the rights that act only in Rules and
+Monitoring, so every route asking for it is that place's (`test_place_routes.py`'s
+`RULES_ONLY_RIGHTS`). ADR-140 Amendment 9 decision 3, accepted earlier, puts a screening list's
+deployment-wide import "through a list connector in Studio › Sources", and Amendment 13 built it as
+five routes under `/v1/studio/screening-lists` that ask for `load_screening_lists`. The two
+decisions met at L1.6's gate.
+
+**Decision.** `load_screening_lists` acts in Rules and Monitoring (ADR-133's Lists, unchanged) and in
+Studio › Sources' list connector, the routes under `/v1/studio/screening-lists`, and nowhere else.
+**No one's rights change:** the same roles hold the right (Data engineer and Administrator), and
+each route still asks for it. A Studio list route is answered to whoever holds the right, as ADR-133's
+are; an administrator who is not offered the Studio is recorded as answered there
+(`shell/placesByRole.json`'s `answered_hidden`), as decision 2's gate already records for other places.
+
+**Tests.** `test_place_routes.py`: `RULES_ONLY_RIGHTS` no longer holds the right;
+`test_every_route_loading_screening_lists_is_rules_or_the_studio_list_connector_s` finds any route
+asking for it outside the two, red with the Studio's path narrowed to nothing (5 routes found) and
+with a planted Glass route (`test_a_list_loading_route_elsewhere_is_found`).
+
+### ADR-140, Amendment 15 (9 November 2026) — an operator's allow-list in `osprey.yaml` admits named private hosts or networks to the SQL and API connectors
+
+Status: accepted, the owner's ruling (a) of 9 November 2026 (`process/lanes/MORNING.md`, item 7),
+written in the studio-b lane at step L1.6. Amendment 13 is unchanged except where this says so.
+
+**Context.** Amendment 13 (after the orchestrator's review) refuses every SQL or API connection that
+reaches inside the deployment or its network: this machine, a dotless name (one of the deployment's
+own services), and any loopback, private, shared, link-local, reserved, unspecified or multicast
+address, written in any form or resolved to now. That also refuses a client's own database or API on
+a private network, the commonest place a NOMIS replica lives. The owner was asked whether an operator
+may admit one and ruled (a): yes, an allow-list in `osprey.yaml`, installer-level and never Admin's,
+each entry a named host or network the operator admits, everything else still refused.
+
+**Decision.**
+1. **`connectors.private_hosts` in `osprey.yaml`** (`schemas/deployment.py`'s `ConnectorsConfig`),
+   empty by default. Each entry is either a host name in full (with a dot: `nomis-replica.client.internal`)
+   or a network written as address/length (`10.20.0.0/16`, `fd12:3456::/32`), or one address, wholly
+   inside 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 or fc00::/7. The deployment's schema
+   refuses in words anything else: a dotless name, `localhost` or `*.localhost`, Docker's and a
+   cluster's own names (`*.docker.internal`, `*.svc`, `*.cluster.local`), a wildcard, a scheme or port,
+   loopback, link-local (a cloud's metadata service), unspecified, multicast, a public address, a
+   network reaching outside those ranges (`10.0.0.0/7`), and a network wholly inside the metadata
+   services of decision 2 (`fd00:ec2::/32`, `100.100.0.0/16`).
+2. **What an entry admits.** A connection's host name is admitted when it resolves only to addresses
+   that are global or admitted: a private address is admitted when the host is listed by name, or the
+   address lies inside a listed network. A network entry admits a name by what it resolves to, never
+   by the name; a name entry admits that name only. Every address a name resolves to is judged; one
+   not admitted refuses the name. An IPv6 address carrying an IPv4 one (mapped, NAT64, 6to4) is judged
+   by the IPv4 address it carries. **Never admitted, whatever the list holds** (checked by the Conduit
+   on every check, so a hand-edited `deployment.env` cannot change it, and an entry that is not valid
+   admits nothing):
+   - anything outside the five ranges: this machine, link-local (169.254.169.254, the metadata service
+     of most clouds), unspecified, multicast, reserved;
+   - the metadata services that sit inside them: AWS's IPv6 instance metadata service and resolver
+     (`fd00:ec2::/32`) and Alibaba Cloud's metadata and internal services (`100.100.0.0/16`);
+   - **the deployment's own networks**, which only the Conduit can see: each network its container's
+     interfaces reach and each gateway (on Docker, the host itself), from the kernel's route tables;
+     the addresses its own service names (`postgres`, `keycloak`, `api` …; a cluster's resolve through
+     the pod's search domain) and Docker's names for this machine (`host.docker.internal`,
+     `gateway.docker.internal`) resolve to; and the cluster's API (`KUBERNETES_SERVICE_HOST`). Looked
+     up at most once a minute, and only when a listed entry would admit a private address.
+   **Limit, recorded:** a cluster's service network is refused only where one of the deployment's own
+   names resolves into it; a service of another product in the same cluster, inside a listed network,
+   is not seen. An operator lists the client's own networks, not the cluster's.
+3. **A connection is still written by name.** A literal private address as a connection's host stays
+   refused as Amendment 13 refuses it (the schema checks a host before any list is known); the operator
+   lists the address's network, and the administrator names the host. Decision taken in the lane, logged
+   for the owner to overrule.
+4. **Where it is read.** `apply` renders the list as `OSPREY_CONNECTOR_PRIVATE` in `deployment.env`
+   (names and networks, never a secret); `refuse_host` reads it at the one call site Amendment 13 built:
+   when an administrator names a connection, and again before every SQL connection and API request,
+   since DNS can change in between. **Each connection goes to the address that was checked** (the
+   lane review's item 3): an API request as Amendment 13 already sends it, and a SQL connection too,
+   with the host's name kept for TLS's name check (`NamedTls`), so a name rebound after the check is
+   never connected to. A SQL host that does not resolve is refused. The egress allow-list (`OSPREY_CONNECTOR_EGRESS`) is still asked of
+   a listed host, as of any host. A refusal names the setting: "… and the operator has not admitted it
+   (osprey.yaml's connectors.private_hosts)".
+5. **Nothing else loosens.** The binding of a connection to the datasets an administrator names, a
+   secret to one connection, the read-only bounded session, TLS as the connection sets it
+   (`verify-full` by default; `require` stays the administrator's choice, as Amendment 13 left it) and
+   the byte and row caps all hold for an admitted host exactly as for a public one.
+6. **A client's own CA** (the lane review's item 12). A server on a client's private network usually
+   holds a certificate its internal CA signed, which no system trust store holds; without a way to
+   trust it, `verify-full` would refuse it and `require` would send the password to a server nobody
+   verified. A SQL or API connection may name `ca_certificate`: the CA's certificate in PEM, public and
+   never a secret, checked at save to load as one or more certificates and to hold no private key, and
+   trusted beside the system's store for that connection alone. On a SQL connection it is taken only
+   with `verify-full`. Its field in *Admin › Connections* rides with the admin lane's carry for the
+   connection settings' fields.
+
+**Tests.** `tests/services/api/test_connector_private_hosts.py`, each red by a plant at its real call
+site (`process/lanes/studio-b/L1.6_RED_RECORD.md`, P1–P6 and N1–N9): an unlisted private address
+refused, and a name entry or network entry admitting nothing else; a listed host or network admitted
+for SQL and API, the egress list still asked; no list admits this machine, the link-local metadata
+service, the metadata services inside a range, or the deployment's own networks (and those are read
+from a synthetic route table); every address a name resolves to judged; IPv6 forms judged by the IPv4
+address they carry; `osprey.yaml` refuses every entry no list may hold; `apply` renders the list; the
+save route keeps a listed connection and refuses an unlisted one; *Test connection* and every read go
+through the list, and a SQL connection is sent to the checked address with its name kept for TLS; a
+SQL host that does not resolve refused; a CA certificate that is not one refused.
+`tests/connectors/test_sql_connector_live.py`'s three `verify-full` cases, live, through a TLS front
+before the leased Postgres (the server itself untouched): read over TLS from a server whose CA the
+connection names; refused for a CA it does not trust and for a certificate naming another host, with
+nothing relayed to Postgres. The administration guide's `osprey.yaml` reference gains the `connectors`
+section from the schema.
+
+**After the orchestrator's independent review (9 November 2026).** No blocker; nine items fixed, the
+strict option taken wherever one was offered, each shown red at its real call site
+(`L1.6_RED_RECORD.md`, R1–R12):
+7. **A source author never sees why a read was refused** (Amendment 13 decision 7). Registering a
+   source and *Refresh now* answer a refused read with fixed words that name no host, address,
+   schema or setting, and point to *Test connection* and the audit log; the refusal's own words are
+   audited, and given only to an administrator (`administer_system`). A source's own name, which the
+   author wrote, is still refused in its own words (`source_name_refused`).
+8. **An unbound connection answers as an unknown one** (Amendment 13 decision 1): 404 `not_found`,
+   "There is no such connection.", identical in status and body, when registering a source and on
+   *Refresh now*; the unbound attempt is audited.
+9. **Reserved and site-local IPv6 are inside.** Python counts `::/8` (the deprecated IPv4-compatible
+   `::/96` among it: `::7f00:1` is loopback) and `fec0::/10` as global; both are refused by name, and
+   no list admits either. `::/96` is refused, not carried.
+10. **Each checked address in the resolver's order.** The Conduit resolves with `getaddrinfo`'s own
+    order and `AI_ADDRCONFIG` (a family with no route left out), not sorted as text. **SQL:** each
+    checked address is first only reached over plain TCP, nothing sent, for up to 5 seconds; asyncpg is
+    given the first that answers and no other, so whatever then fails (TLS, the certificate, the
+    sign-in, a timeout or a reset after the password went) is final and no second server is ever sent
+    the password (the lane review of this round). **API:** each checked address is tried in turn only
+    while its connection or handshake does not complete (`ConnectError`, `ConnectTimeout`), when
+    nothing has been sent; any TLS error, a certificate refusal or any answer stops at once, so no
+    second address is sent the request or its token.
+11. **Connection secrets reach the Conduit alone** (as ADR-135 decision 2 keeps a model key to the
+    gateway). The operator declares each connection's secret by name in `osprey.yaml`'s
+    `connectors.secrets`; render blanks each declared `OSPREY_CONNECTION_SECRET_<NAME>` in the own
+    environment of every other service reading `deployment.env` (Compose) and of every other `envFrom`
+    workload (the chart), and tells the Conduit the declared names (`OSPREY_CONNECTOR_SECRETS`). The
+    Conduit reads only a declared secret, so one set but undeclared, and so not blanked elsewhere, is
+    never used: a read through it is refused as an unset secret, in words naming the setting.
+    Decision taken in the lane (versus a separate file read by the Conduit alone, which the chart's one
+    Secret cannot express), logged for the owner to overrule.
+12. **JSON files:** a link is never followed, wherever it points (a file or a dataset's folder), and
+    each file is read against the room the byte cap leaves, so one that grows after it was sized is
+    stopped while it is read; it is opened with `O_NOFOLLOW`.
+13. **A certificate that fails verification says so** ("the database's (the API's) certificate could
+    not be verified …"), and is not reported as a server that would not speak TLS or could not be
+    reached.
+Carried, not built here (the orchestrator's CARRIES): a lookup that blocks the event loop, and the SQL
+byte cap counted after each fetched row in characters. The shared files (`keyboard/actionRegistry.ts`,
+`OspreyFlow_Build/Makefile`, `.github/workflows/ci.yml`) leave the branch; the orchestrator applies them
+from `process/lanes/studio-b/L1.6_{action_registry,ci_makefile}.diff`.
+
+**Tests added.** `tests/connectors/test_api_tls.py` (the API path's TLS against a real HTTPS server:
+trusted, an untrusted CA and another name, the request never sent when refused);
+`test_connector_routes.py` (an author is told fixed words; the audit holds the reason);
+`test_connection_binding.py::test_an_unbound_connection_answers_as_an_unknown_one`;
+`test_connector_private_hosts.py` (reserved and site-local IPv6; the resolver's order; SQL and API
+trying each checked address and stopping at a refusal; a failed verification's words);
+`test_connector_hosts.py` (a link never followed; a growing file stopped while read; the opener
+spied, not `Path.read_bytes`); `tests/harness/test_connection_secrets_kept.py` (Compose, the chart and
+the Conduit's own read of a declared secret).
+
+### ADR-133, Amendment 9 (9 November 2026) — L1.6's reference lists are the screening-list store of record; the Lists tab read-only, then retired
+
+Status: accepted, the owner's ruling (a) of 9 November 2026 (`process/lanes/MORNING.md`, item 2),
+written in the studio-b lane at step L1.6. The code it asks for is built in the rules lane's L2.11
+(`process/lanes/CARRIES.md`), not in L1.6.
+
+**Context.** Two deployment-wide screening-list stores existed after L1.6: ADR-133's (Rules and
+Monitoring's Lists tab, which KYC rules screen against) and ADR-140 Amendment 13's (Studio › Sources'
+list connector, each list versioned as a reference list, per Amendment 9 decision 3). Amendment 13 left
+ADR-133's store and Lists tab fully working while the owner ruled which is of record. The owner ruled
+(a): L1.6's.
+
+**Decision.**
+1. **The store of record** for deployment-wide screening lists is ADR-140 Amendment 13's: lists named,
+   imported through a template, versioned only on change, and read by a dataset that subscribes to one
+   by its id. Nothing new is written to ADR-133's store's design.
+2. **The order, so screening never goes stale** (the lane review's item 11). Until a rule's list picker
+   reads `GET /v1/datasets/{id}/reference-lists/offered` and re-screening runs against the Studio's
+   lists, ADR-133's store, its Lists tab and its scheduled refresh stay exactly as they are. The Lists
+   tab becomes read-only (no add or import of a new list; existing lists keep their scheduled refresh)
+   **in the same change** that moves the picker and re-screening, and never before it. It is
+   **retired** once no rule reads an ADR-133 list. All of it is built in the rules lane's L2.11.
+3. **The lists already in ADR-133's store** are migrated, not dropped: L2.11 imports each one's current
+   rows once into the Studio's store as a deployment-wide list of the same name (version 1, through the
+   blank template's column picks, rule 9's check before anything is kept), and repoints each rule that
+   read it to the new list's id. ADR-133's own history stays readable in the audit trail. A clashing
+   name is refused in words for an administrator to settle, never merged. Decision taken in the lane,
+   logged for the owner to overrule.
+4. **No one's rights change.** `load_screening_lists` keeps acting where ADR-146 Amendment 3 says.
+
+**Tests.** None in L1.6, which changes no code for this amendment. L2.11 owns them, each red by a plant
+(rules 12 and 15): the Lists tab refuses a new list only once a rule screens against a Studio list; an
+existing ADR-133 list keeps refreshing until then; each migrated list holds its rows and its rules
+point at it by id; a clashing name is refused.

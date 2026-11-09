@@ -265,6 +265,49 @@ the orchestrator's review; `tests/services/api/test_studio_staging_routes.py`).
 | Records | Custody, incident, intelligence and case management exports | Usually CSV or XML out of a records management system |
 | Generic | CSV, TSV, JSON, JSONL, XML, Parquet, Excel, SQL table or view | The fallback that always works |
 
+### Connections beyond files (ADR-140 Amendment 13, as built 8 November 2026)
+
+An administrator names a **SQL**, **API** or **JSON** connection (*Admin › Connections*; `POST
+/v1/admin/connections`). A connection holds its settings and **the name of its secret, never its
+value**: the value is the deployment's, `OSPREY_CONNECTION_SECRET_<NAME>` in `deployment.env`, declared
+by name in `osprey.yaml`'s `connectors.secrets` so that only the Conduit is given it (ADR-140 Amendment
+15), read only when a read needs it and never stored, audited or answered. A source author whose read
+is refused is told so in fixed words; why (a host, a schema, a setting) is the administrator's.
+
+- **SQL** (PostgreSQL): host, port, database, a login and its secret, the schemas its sources may
+  read (never the server's catalogue), and TLS (`verify-full` by default, or `require`; a server
+  without TLS is refused), with the client's own CA certificate if an internal CA signed the server's
+  (ADR-140 Amendment 15). Each session is read-only from its first statement, and each statement is
+  bounded at 60 seconds. The login must be **read-only**: *Test connection* and every read
+  refuse a superuser, a login owning a table, or one with a write privilege on any table it can see,
+  and the read runs in a `READ ONLY` transaction. A source names a table or view and, optionally, its
+  columns; never an expression (a sandboxed SELECT is expert mode's, L1.5).
+- **API**: an HTTPS base URL, no sign-in or a bearer secret, and paging by `page` or by a next link
+  named at a dotted path (which must keep the base URL's scheme, host and port). Its host must be on the deployment's
+  egress allow-list, `OSPREY_CONNECTOR_EGRESS`, which only an operator sets; a client's own CA
+  certificate may be named as for SQL.
+- **Private networks.** No SQL or API connection reaches inside the deployment or its network unless
+  the operator admits the host by name or network in `osprey.yaml`'s `connectors.private_hosts`
+  (ADR-140 Amendment 15); this machine, a cloud's metadata services and the deployment's own networks
+  are never admitted, whatever is listed.
+- **JSON**: files in the dataset's folder whose names match a pattern, their records at a dotted path.
+
+**No connection reaches inside the deployment:** not this machine, the deployment's own services
+(a dotless name), a cloud's metadata service or any private address, written in any form or resolved
+to now. This is checked when the connection is named and again before every connection or request.
+
+**Each read lands as the source's one file**, `uploaded/<dataset>/<source>.csv`, written to a
+temporary name and renamed into place. Registration checks everything first, then reads once into a
+new file (a name whose file exists is refused, never overwritten) and registers the source on it; a
+refused registration takes the file back. From there it is a file source like any other: its folder
+watch runs its deployed pipelines on each new read, a run keeps what it read as its load's raw rows,
+and the watermark, the confinement and the rule gate apply as built. An incremental SQL source reads
+only rows past its **cursor** (the highest watermark value it has read) and adds them to its file,
+whose earlier rows may not have been loaded yet; a read that finds nothing leaves the file. Each run's
+own watermark then reads only what that pipeline has not loaded. A read holding more than 500,000 rows or 256 MiB, or an API giving more than
+1,000 pages, is refused whole (rule 2). *Refresh now* on the source page reads again; a scheduled poll
+of a SQL or API source waits on the poll floor (R17) and is not built.
+
 ### Unstructured sources
 
 | Group | Formats |
@@ -1207,7 +1250,8 @@ A recipe without `staging` is written exactly as before; `staging: []` is refuse
 - a key, or a Derive's `normalise`, read by anything but a text adapter (§4);
 - a Lookup of a list the dataset cannot read. A dataset reads its own lists, and a
   **deployment-wide** screening list (one imported once for the deployment, whose own `dataset_id`
-  is `deployment`) that it subscribes to **by the list's id**. Only the list's own record makes it
+  is `deployment`) that it subscribes to **by the list's id** (Studio › Sources' *Screening lists*,
+  ADR-140 Amendment 13; the lists a rule or Lookup is offered are exactly those this rule reads). Only the list's own record makes it
   deployment-wide. Another dataset's list is never readable, whatever its kind or name. A
   refusal uses the same words as for a list that does not exist, and a name two readable lists
   share is refused too.

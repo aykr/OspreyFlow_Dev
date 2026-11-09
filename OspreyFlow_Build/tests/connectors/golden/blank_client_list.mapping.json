@@ -1,0 +1,13 @@
+{
+  "ref": "Client ref",
+  "primary_name": "Full name",
+  "aliases": "Other names",
+  "date_of_birth": "Born",
+  "nationality": "Country",
+  "identifiers": "Passport numbers",
+  "programme": "Regime",
+  "separator": ",",
+  "entity_type": null,
+  "entity_type_column": "Party type",
+  "listing": "sanction"
+}

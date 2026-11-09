@@ -118,7 +118,13 @@
     "glass",
     "admin"
    ],
-   "answered_hidden": []
+   "answered_hidden": [
+    "add_deployment_list",
+    "list_deployment_list_imports",
+    "list_deployment_lists",
+    "refresh_deployment_list",
+    "set_deployment_list_schedule"
+   ]
   },
   "reports_viewer": {
    "rights": [
@@ -293,7 +299,13 @@
     "load_screening_lists"
    ],
    "places": [],
-   "answered_hidden": []
+   "answered_hidden": [
+    "add_deployment_list",
+    "list_deployment_list_imports",
+    "list_deployment_lists",
+    "refresh_deployment_list",
+    "set_deployment_list_schedule"
+   ]
   },
   "right:manage_dashboards": {
    "rights": [

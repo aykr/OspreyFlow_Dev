@@ -136,6 +136,9 @@ class DryRun:
     keys_to_enter: tuple[str, ...] = ()
     #: ADR-147: the map providers whose key was set in Admin; the backup holds none.
     map_keys_to_enter: tuple[str, ...] = ()
+    #: ADR-140 Amendment 13: the connections' secrets and the egress list, which live only in
+    #: `deployment.env`, which no backup carries.
+    connection_settings_to_enter: tuple[str, ...] = ()
 
     def render(self) -> str:
         lines = [
@@ -169,6 +172,13 @@ class DryRun:
                 f"              enter the key of {', '.join(self.keys_to_enter)} again,",
                 "              in Admin › Models or with ospreyflow models key <name>. The",
                 "              engines, their models and each job's default are restored.",
+            ]
+        if self.connection_settings_to_enter:
+            lines += [
+                "",
+                "  connections no backup carries deployment.env (05_DEPLOYMENT.md §6.1). After the",
+                f"              restore, set {', '.join(self.connection_settings_to_enter)}",
+                "              in deployment.env again; the connections themselves are restored.",
             ]
         if self.map_keys_to_enter:
             lines += [
@@ -242,6 +252,7 @@ def dry_run_for(directory: Path, manifest: dict[str, Any]) -> DryRun:
         empty=tuple(manifest.get("empty", ())),
         keys_to_enter=tuple(engines_with_keys(directory)),
         map_keys_to_enter=tuple(map_providers_with_keys(directory)),
+        connection_settings_to_enter=tuple(connection_secrets_to_enter(directory)),
     )
 
 
@@ -645,6 +656,39 @@ def engines_with_keys(directory: Path) -> list[str]:
 
     recorded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     return sorted(dict(recorded.get("keys") or {}))
+
+
+def connection_secrets_to_enter(directory: Path) -> list[str]:
+    """The `deployment.env` settings the set's connections need (ADR-140 Amendment 13): each SQL or
+    API connection's `OSPREY_CONNECTION_SECRET_<NAME>`, and `OSPREY_CONNECTOR_EGRESS` when any such
+    connection exists. Read from the dump's `ingest_connections` rows, which name a secret and
+    never hold one."""
+    import json
+
+    dump = directory / "postgres" / "dump.sql"
+    if not dump.is_file():
+        return []
+    names: set[str] = set()
+    reaching = False
+    columns: list[str] | None = None
+    with dump.open(encoding="utf-8") as handle:
+        for line in handle:
+            if columns is None:
+                if line.startswith("COPY public.ingest_connections ("):
+                    inside = line[line.index("(") + 1 : line.index(")")]
+                    columns = [c.strip() for c in inside.split(",")]
+                continue
+            if line.startswith("\\."):
+                break
+            row = dict(zip(columns, line.rstrip("\n").split("\t"), strict=False))
+            if row.get("kind") in ("sql", "api"):
+                reaching = True
+            settings = row.get("settings")
+            if settings and settings != "\\N":
+                secret = json.loads(settings).get("secret")
+                if secret:
+                    names.add(f"OSPREY_CONNECTION_SECRET_{secret}")
+    return sorted(names) + (["OSPREY_CONNECTOR_EGRESS"] if reaching else [])
 
 
 def map_providers_with_keys(directory: Path) -> list[str]:

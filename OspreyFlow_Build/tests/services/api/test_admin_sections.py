@@ -62,6 +62,9 @@ NOT_WALKED = ("design/", "brand/")
 NOT_A_SECTION_S = {
     # Monitoring › Lists in the Glass calls these (`test_place_routes.py`'s first rule).
     r"^/v1/admin/screening-lists": "the Glass's Monitoring › Lists",
+    # ADR-140 Amendment 13 (L1.6): Test connection's route is built; Admin › Connections' fields and
+    # its button are the admin lane's to build (requested through the orchestrator).
+    r"^/v1/admin/connections/\{connection_id\}/test$": "Admin › Connections' Test, not yet drawn",
 }
 
 

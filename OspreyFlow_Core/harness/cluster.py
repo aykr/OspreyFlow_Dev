@@ -446,6 +446,7 @@ def render_cluster(
         UnpinnedImagesError,
         _render_versions_lock,
         compose_services,
+        connection_secret_variables,
         model_key_variables,
         render_litellm_config,
     )
@@ -540,6 +541,9 @@ def render_cluster(
     # ADR-135 decision 2: a workload that reads the whole Secret (`envFrom`) has every model key
     # blanked above it; only the gateway reads one, by name.
     blanks = [{"name": key, "value": ""} for key in model_key_variables(config).values()]
+    # ADR-140 Amendment 15 (the orchestrator's review, item 9): a connection's secret reaches the
+    # Conduit alone.
+    connection_blanks = [{"name": key, "value": ""} for key in connection_secret_variables(config)]
     # ADR-135 Amendment 2 decision 3: and the gateway's encryption key and database password; its
     # master key reaches the Conduit too, which calls the admin API with it.
     gateway_blanks = [
@@ -554,6 +558,7 @@ def render_cluster(
                 *blanks,
                 *gateway_blanks,
                 *([master_blank] if workload["name"] != "api" else []),
+                *(connection_blanks if workload["name"] != "api" else []),
             ]
             workload["env"] = [
                 *workload.get("env", []),

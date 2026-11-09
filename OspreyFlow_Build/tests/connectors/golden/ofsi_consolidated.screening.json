@@ -1,0 +1,35 @@
+[
+  {
+    "ref": "90001",
+    "primary_name": "PETROVA, Elena",
+    "aliases": "PETROVA, Lena",
+    "date_of_birth": "1971-03-03",
+    "nationality": "Xanadu Republic",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Person"
+  },
+  {
+    "ref": "90002",
+    "primary_name": "ORLANSKY, Dmitri",
+    "aliases": null,
+    "date_of_birth": null,
+    "nationality": "Xanadu Republic",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Person"
+  },
+  {
+    "ref": "90003",
+    "primary_name": "NORTHWIND METALS FZE",
+    "aliases": null,
+    "date_of_birth": null,
+    "nationality": "Bexland",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Organisation"
+  }
+]

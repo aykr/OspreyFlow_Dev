@@ -1120,6 +1120,16 @@ in the Conduit's map key file, which no backup reads: the set takes the maps fil
 providers, the default, the prefetch areas and the ids of the providers whose key was set), and
 every restore names each provider whose key must be entered again in *Admin › Maps*.
 
+**Connection secrets and the egress list** (ADR-140 Amendment 13) live only in `deployment.env`: each
+SQL or API connection names its secret, `OSPREY_CONNECTION_SECRET_<NAME>`, and the hosts a connector
+may reach are `OSPREY_CONNECTOR_EGRESS`. `apply` keeps both across every re-render, as it keeps a
+password (`harness.apply.keep_existing_secrets`). No backup carries the file, so every restore names
+each connection secret, and the egress list when any connection reaches out, to be set again in
+`deployment.env` (`harness.restore.connection_secrets_to_enter`, read from the backed-up connections,
+which name a secret and never hold one; `tests/harness/test_connection_secrets_kept.py`). Each
+connection's secret is declared by name in `osprey.yaml`'s `connectors.secrets` (ADR-140 Amendment 15):
+render blanks it for every service but the Conduit, and the Conduit reads no undeclared one.
+
 **For `cluster`, the answer is different and not yet built.** Holding secrets outside the
 deployment, in a secret manager the restored deployment is pointed at, is recorded as the cluster
 profile's approach. It does not apply to `local-lite` or `small`, where standing up a secret

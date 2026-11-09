@@ -1,0 +1,24 @@
+[
+  {
+    "ref": "800001",
+    "primary_name": "Elena PETROVA",
+    "aliases": "Lena Petrova",
+    "date_of_birth": "1971-03-03",
+    "nationality": "XA",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Person"
+  },
+  {
+    "ref": "800002",
+    "primary_name": "Northwind Metals FZE",
+    "aliases": null,
+    "date_of_birth": null,
+    "nationality": "XC",
+    "identifiers": null,
+    "programme": null,
+    "listing": "sanction",
+    "entity_type": "Organisation"
+  }
+]

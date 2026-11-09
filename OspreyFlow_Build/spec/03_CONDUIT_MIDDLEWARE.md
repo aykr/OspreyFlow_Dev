@@ -499,10 +499,22 @@ GET    /v1/ingest/connectors                               the connector catalog
 GET    /v1/ingest/packs                                    the domain packs a pipeline's root may name (09 §1.1)
 GET    /v1/ingest/connections                              the connections a source is registered on (ADR-140 Amendment 4; SOURCE_AUTHOR)
 GET    /v1/admin/connections                               the deployment's connections (administer_system)
-POST   /v1/admin/connections                               an administrator names a connection, audited (Files only until ADR-140's other connectors are built)
+POST   /v1/admin/connections                               an administrator names a connection, audited: files, or sql, api and json with their settings and a secret's name, never its value (ADR-140 Amendment 13)
+POST   /v1/admin/connections/{connection_id}/test          Test connection: a SQL login over TLS found read-only, an API's host allowed and its secret set; nothing read (administer_system)
 GET    /v1/datasets/{dataset_id}/source-files              the register wizard's files: the dataset's own, as Connect lists them
 GET    /v1/datasets/{dataset_id}/sources                   the dataset's registered sources
-POST   /v1/datasets/{dataset_id}/sources                   register a source once: a file the dataset's listing offers, else 422; 409 if registered
+POST   /v1/datasets/{dataset_id}/sources                   register a source once: a file the dataset's listing offers, else 422; 409 if registered. On a sql, api or json connection, read once into its own file in the dataset's folder and registered on it only if that read succeeds
+POST   /v1/datasets/{dataset_id}/sources/{source_id}/read  Refresh now for a sql, api or json source: read again into its file (an incremental SQL source past its cursor); audited (add_ingest_files)
+GET    /v1/datasets/{dataset_id}/screening-subscriptions   the deployment's screening lists, and which this dataset subscribes to, by id (add_ingest_files)
+PUT    /v1/datasets/{dataset_id}/screening-subscriptions/{list_id}     subscribe by the list's id (404 for an id no list has); audited
+DELETE /v1/datasets/{dataset_id}/screening-subscriptions/{list_id}     unsubscribe; audited
+GET    /v1/datasets/{dataset_id}/reference-lists/offered   the lists its rules and Lookups are offered: its own and its subscriptions, exactly as the save gate reads them (edit_pipelines)
+POST   /v1/datasets/{dataset_id}/reference-lists/{list_id}/import      its own list's rows from one of its files, a new version only when they change (add_ingest_files)
+GET    /v1/studio/screening-lists                          the deployment-wide screening lists (load_screening_lists)
+POST   /v1/studio/screening-lists                          a list named with its template and its file in the ingest folder; audited
+POST   /v1/studio/screening-lists/{list_id}/refresh        Refresh now: a new version only when the rows change; every attempt recorded in words
+GET    /v1/studio/screening-lists/{list_id}/imports        its latest imports, newest first
+PUT    /v1/studio/screening-lists/{list_id}/schedule       every day or week at an hour, as the person setting it; or by hand only
 GET    /v1/datasets/{dataset_id}/sources/{source_id}        one source (404 through another dataset's route)
 GET    /v1/datasets/{dataset_id}/sources/{source_id}/profile   its profile, computed for the reader, never stored
 GET    /v1/datasets/{dataset_id}/sources/{source_id}/lineage   the dataset's pipelines that read it
