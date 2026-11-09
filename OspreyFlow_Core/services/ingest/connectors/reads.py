@@ -23,6 +23,7 @@ import csv
 import io
 import json
 import os
+import ssl
 import tempfile
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass, field
@@ -170,9 +171,15 @@ async def read_api(
         headers["Authorization"] = f"Bearer {secret}"
     records: list[Any] = []
     taken = 0
+    # The system's trust store, and the connection's own CA if it names one (ADR-140 Amendment 15
+    # decision 6); the certificate and its name always checked.
+    verify = ssl.create_default_context()
+    if settings.ca_certificate:
+        verify.load_verify_locations(cadata=settings.ca_certificate)
     async with httpx.AsyncClient(
-        transport=transport, timeout=_TIMEOUT, headers=headers, follow_redirects=False
-    ) as client:
+        transport=transport, timeout=_TIMEOUT, headers=headers, follow_redirects=False,
+        verify=verify,
+    ) as client:  # fmt: skip
         page, next_url = 1, url
         for _ in range(MAX_PAGES):
             params = {settings.page_param: str(page)} if settings.pagination == "page" else None

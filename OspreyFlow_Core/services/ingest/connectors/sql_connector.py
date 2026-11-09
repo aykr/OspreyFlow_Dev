@@ -60,18 +60,45 @@ def _quoted(name: str) -> str:
     return ".".join('"' + part.replace('"', '""') + '"' for part in name.split("."))
 
 
+class NamedTls(ssl.SSLContext):
+    """A client TLS context that checks the server's certificate against `server_name` whatever
+    address the connection was made to: the connection goes to the address the host check passed,
+    and the certificate must still name the host the administrator wrote (ADR-140 Amendment 15)."""
+
+    server_name: str | None = None
+
+    def wrap_bio(  # type: ignore[override]
+        self, incoming: Any, outgoing: Any, server_side: bool = False,
+        server_hostname: str | None = None, session: Any = None,
+    ) -> ssl.SSLObject:  # fmt: skip
+        return super().wrap_bio(
+            incoming, outgoing, server_side, self.server_name or server_hostname, session
+        )
+
+
 def _tls(settings: SqlConnectionSettings) -> ssl.SSLContext | str:
-    if settings.tls == "verify-full":
-        return ssl.create_default_context()
-    return "require"
+    """verify-full: the system's trust store and the connection's own CA, if it names one, with the
+    certificate and its name checked; else TLS asked for without either."""
+    if settings.tls != "verify-full":
+        return "require"
+    context = NamedTls(ssl.PROTOCOL_TLS_CLIENT)
+    context.load_default_certs()
+    if settings.ca_certificate:
+        context.load_verify_locations(cadata=settings.ca_certificate)
+    context.server_name = settings.host.rstrip(".")
+    return context
 
 
-async def _open(settings: SqlConnectionSettings, secret: str | None, connect: Connect) -> Any:
+async def _open(
+    settings: SqlConnectionSettings, secret: str | None, connect: Connect,
+    address: str | None = None,
+) -> Any:  # fmt: skip
+    """Signed in, at `address` (the checked one) when given, else by the host's name."""
     if not secret:
         raise ConnectorRefused("the connection's secret is not set; nothing was read")
     try:
         return await connect(
-            host=settings.host, port=settings.port, user=settings.user, password=secret,
+            host=address or settings.host, port=settings.port, user=settings.user, password=secret,
             database=settings.database, ssl=_tls(settings), timeout=15,
             # Every statement bounded, and the session read-only from its first statement (the
             # orchestrator's review of L1.6).
@@ -107,11 +134,12 @@ async def _refuse_a_writing_login(conn: Any) -> None:
 
 
 async def check_sql_connection(
-    settings: SqlConnectionSettings, *, secret: str | None, connect: Connect = asyncpg.connect
-) -> ConnectionTest:
+    settings: SqlConnectionSettings, *, secret: str | None, connect: Connect = asyncpg.connect,
+    address: str | None = None,
+) -> ConnectionTest:  # fmt: skip
     """*Test connection*: signed in over TLS, and the login is read-only. Nothing is read."""
     try:
-        conn = await _open(settings, secret, connect)
+        conn = await _open(settings, secret, connect, address)
         try:
             await _refuse_a_writing_login(conn)
         finally:
@@ -129,13 +157,12 @@ async def read_sql(
     watermark: str | None = None,
     cursor: str | None = None,
     connect: Connect = asyncpg.connect,
+    address: str | None = None,
 ) -> ReadRows:
     """The table's rows (past `cursor` on `watermark`, in its order, when incremental), as text."""
     if watermark is not None and not re.fullmatch(SQL_COLUMN, watermark):
-        raise ConnectorRefused(
-            "the watermark column is not a plain column name; nothing was read"
-        )
-    conn = await _open(settings, secret, connect)
+        raise ConnectorRefused("the watermark column is not a plain column name; nothing was read")
+    conn = await _open(settings, secret, connect, address)
     try:
         await _refuse_a_writing_login(conn)
         async with conn.transaction(readonly=True):

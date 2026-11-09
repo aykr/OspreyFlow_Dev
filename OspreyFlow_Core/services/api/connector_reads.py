@@ -15,8 +15,10 @@ audited or sent back. **Egress**: an API connection reaches only hosts on `OSPRE
 from __future__ import annotations
 
 import fnmatch
+import ipaddress
 import os
 import re
+import time
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,12 +44,15 @@ from schemas.sources import (
     ApiRead,
     Connection,
     ConnectionTest,
+    IpAddress,
     JsonRead,
+    Network,
     SourceTable,
     SqlConnectionSettings,
     SqlRead,
     address_is_inside,
     admitted_privately,
+    carried_address,
     literal_ip,
     refuse_inside_host,
 )
@@ -79,8 +84,24 @@ class Readers:
     def hosts(self) -> Collection[str]:
         return egress_allow_list() if self.allowed_hosts is None else self.allowed_hosts
 
-    def check(self, kind: str, host: str) -> None:
-        (self.host_check or _refuse_host_with_list)(kind, host, self.hosts())
+    def check(self, kind: str, host: str) -> list[str] | None:
+        """The host refused, or the addresses it was checked at; `None` from a fixture's check."""
+        if self.host_check is not None:
+            self.host_check(kind, host, self.hosts())
+            return None
+        return refuse_host(kind, host, allowed_hosts=self.hosts())
+
+    def sql_address(self, host: str) -> str | None:
+        """The address a SQL connection goes to, looked up and checked now; asyncpg is sent to that
+        address, the name kept for TLS's name check, so DNS cannot change between the check and the
+        connection (the lane review of ADR-140 Amendment 15, item 3). A name that does not resolve
+        is refused. A fixture's own check pins nothing."""
+        addresses = self.check("sql", host)
+        if addresses is None:
+            return None
+        if not addresses:
+            raise ConnectorRefused(f"{host} does not resolve; nothing was read")
+        return addresses[0]
 
     def pin(self, url: str) -> str | None:
         """The address an API request goes to, looked up and checked now; the request is sent to
@@ -95,6 +116,88 @@ class Readers:
         if not addresses:
             raise ConnectorRefused(f"{host} does not resolve; nothing was read")
         return addresses[0]
+
+
+#: The deployment's own names, each resolved to find an address the list must never admit
+#: (ADR-140 Amendment 15 decision 2): its compose services (a cluster's resolve too, through the
+#: pod's search domain), Docker's names for this machine and the cluster's API.
+SELF_NAMES = (
+    "postgres", "keycloak", "arcadedb", "valkey", "api", "worker", "workspace", "proxy",
+    "superset", "opensearch", "litellm", "ner", "objectstore", "minio", "clickhouse",
+    "report-sync", "harness", "host.docker.internal", "gateway.docker.internal",
+    "kubernetes.default.svc",
+)  # fmt: skip
+_OWN_FOR_SECONDS = 60.0
+_own_cache: tuple[float, list[Network]] | None = None
+
+
+def _v4(column: str) -> ipaddress.IPv4Address:
+    """One of `/proc/net/route`'s columns: an IPv4 address in hexadecimal, little-endian."""
+    return ipaddress.IPv4Address(int(column, 16).to_bytes(4, "little"))
+
+
+def _proc_routes(
+    ipv4: str = "/proc/net/route", ipv6: str = "/proc/net/ipv6_route"
+) -> list[Network]:
+    """The networks this container's interfaces reach directly, and each gateway (on Docker, the
+    host itself), from the kernel's route tables; none where there are no such files (not Linux)."""
+    found: list[Network] = []
+    try:
+        lines = Path(ipv4).read_text().splitlines()[1:]
+    except OSError:
+        lines = []
+    for line in lines:
+        cols = line.split()
+        if len(cols) < 8:
+            continue
+        dest, gateway, mask = (_v4(cols[i]) for i in (1, 2, 7))
+        if int(dest):
+            found.append(ipaddress.ip_network(f"{dest}/{mask}", strict=False))
+        if int(gateway):
+            found.append(ipaddress.ip_network(f"{gateway}/32"))
+    try:
+        lines6 = Path(ipv6).read_text().splitlines()
+    except OSError:
+        lines6 = []
+    for line in lines6:
+        cols = line.split()
+        if len(cols) < 10:
+            continue
+        net6 = ipaddress.IPv6Address(int(cols[0], 16))
+        length, hop = int(cols[1], 16), ipaddress.IPv6Address(int(cols[4], 16))
+        if length and not net6.is_link_local and not net6.is_multicast:
+            found.append(ipaddress.ip_network(f"{net6}/{length}", strict=False))
+        if int(hop) and not hop.is_link_local:
+            found.append(ipaddress.ip_network(f"{hop}/128"))
+    return found
+
+
+def own_networks() -> list[Network]:
+    """Where the deployment itself lives, which no operator's list admits (ADR-140 Amendment 15
+    decision 2): this container's own networks and gateways, the addresses its own service names
+    and Docker's names for this machine resolve to, and the cluster's API. Looked up at most once
+    a minute; asked only when a listed entry would admit a private address."""
+    global _own_cache
+    now = time.monotonic()
+    if _own_cache is not None and now - _own_cache[0] < _OWN_FOR_SECONDS:
+        return _own_cache[1]
+    found = _proc_routes()
+    for name in SELF_NAMES:
+        for address in resolve_host(name):
+            ip = literal_ip(address)
+            if ip is not None:
+                found.append(ipaddress.ip_network(ip))
+    cluster = literal_ip(os.environ.get("KUBERNETES_SERVICE_HOST", ""))
+    if cluster is not None:
+        found.append(ipaddress.ip_network(cluster))
+    _own_cache = (now, found)
+    return found
+
+
+def is_own(ip: IpAddress, networks: Collection[Network]) -> bool:
+    """Whether `ip` (or the IPv4 address it carries) is in one of the deployment's own networks."""
+    carried = carried_address(ip)
+    return any(n.version == carried.version and carried in n for n in networks)
 
 
 def private_allow_list() -> list[str]:
@@ -139,16 +242,15 @@ def refuse_host(
     addresses = resolve_host(bare)
     for address in addresses:
         ip = literal_ip(address)
-        if ip is None or (address_is_inside(ip) and not admitted_privately(bare, ip, private)):
+        if ip is None or (
+            address_is_inside(ip)
+            and not (admitted_privately(bare, ip, private) and not is_own(ip, own_networks()))
+        ):
             raise ConnectorRefused(
                 f"{bare} resolves inside this deployment or its network, and the operator has not "
                 f"admitted it (osprey.yaml's connectors.private_hosts); nothing was read"
             )
     return addresses
-
-
-def _refuse_host_with_list(kind: str, host: str, allowed: Collection[str]) -> None:
-    refuse_host(kind, host, allowed_hosts=allowed)
 
 
 def connection_host(settings: object) -> tuple[str, str] | None:
@@ -222,7 +324,7 @@ async def read_rows(
     """The rows one read of `source` finds, through its connection."""
     settings, read = connection.settings, source.read
     if isinstance(settings, SqlConnectionSettings) and isinstance(read, SqlRead):
-        readers.check("sql", settings.host)
+        address = readers.sql_address(settings.host)
         if read.table.split(".")[0] not in settings.schemas:
             raise ConnectorRefused(
                 f"the table {read.table} is not in a schema this connection may read "
@@ -236,7 +338,7 @@ async def read_rows(
         )
         return await read_sql(
             settings, read, secret=secret_of(settings.secret), watermark=watermark,
-            cursor=cursor if watermark else None, connect=readers.sql_connect,
+            cursor=cursor if watermark else None, connect=readers.sql_connect, address=address,
         )  # fmt: skip
     if isinstance(settings, ApiConnectionSettings) and isinstance(read, ApiRead):
         return await read_api(
@@ -302,15 +404,20 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     allow-list and its secret set. Nothing is read."""
     settings = connection.settings
     found = connection_host(settings)
+    address: str | None = None
     if found is not None:
         try:
-            readers.check(*found)
+            if found[0] == "sql":
+                address = readers.sql_address(found[1])
+            else:
+                readers.check(*found)
         except ConnectorRefused as refused:
             return ConnectionTest(ok=False, words=str(refused))
     if isinstance(settings, SqlConnectionSettings):
         return await check_sql_connection(
-            settings, secret=secret_of(settings.secret), connect=readers.sql_connect
-        )
+            settings, secret=secret_of(settings.secret), connect=readers.sql_connect,
+            address=address,
+        )  # fmt: skip
     if isinstance(settings, ApiConnectionSettings):
         try:
             check_egress(settings.base_url, readers.hosts())

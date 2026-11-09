@@ -18,11 +18,26 @@ What a mistake would do, and the case that catches it:
   `test_osprey_yaml_refuses_an_entry_no_list_may_hold`;
 - the list never reaching the Conduit — `test_apply_renders_the_list_for_the_conduit`;
 - the save route refusing a listed host, or keeping an unlisted one —
-  `test_an_administrator_names_a_listed_private_connection_and_not_an_unlisted_one`.
+  `test_an_administrator_names_a_listed_private_connection_and_not_an_unlisted_one`;
+- a cloud's metadata service inside a private range (AWS's `fd00:ec2::254`, Alibaba's
+  `100.100.100.200`) admitted by a broad entry —
+  `test_no_list_admits_a_metadata_service_inside_a_range`;
+- the deployment's own networks (Docker's bridge, its gateway, `host.docker.internal`, a cluster's
+  services) admitted by a client's LAN range — `test_no_list_admits_the_deployments_own_networks`
+  and `test_the_own_networks_are_read_from_the_route_tables`;
+- a name resolving to several addresses admitted by its first —
+  `test_every_address_a_name_resolves_to_is_judged`;
+- an IPv6 form carrying an IPv4 address judged by its IPv6 form —
+  `test_an_ipv6_form_is_judged_by_the_ipv4_address_it_carries`;
+- the read path not reading the list, or a SQL connection re-resolving the name after the check
+  (DNS rebinding) — `test_the_read_checks_read_the_list_and_sql_connects_to_the_checked_address`;
+- a name that does not resolve read anyway — `test_a_sql_host_that_does_not_resolve_is_refused`;
+- a client CA that is not a certificate kept — `test_a_connections_ca_certificate_is_a_certificate`.
 """
 
 from __future__ import annotations
 
+import ipaddress
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,13 +48,18 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from services.api import connector_reads
 from services.api.app import app
-from services.api.connector_reads import refuse_connection_hosts, refuse_host
+from services.api.connector_reads import (
+    Readers,
+    check_connection,
+    refuse_connection_hosts,
+    refuse_host,
+)
 from services.api.sources import InMemorySourceStore
 from services.ingest.connectors.reads import ConnectorRefused
 
 from schemas.deployment import ConnectorsConfig, OspreyConfig
 from schemas.domain import Principal
-from schemas.sources import ApiConnectionSettings, SqlConnectionSettings
+from schemas.sources import ApiConnectionSettings, Connection, SqlConnectionSettings
 
 ANSWERS: dict[str, list[str]] = {
     "nomis.client.example": ["10.20.30.40"],
@@ -49,6 +69,17 @@ ANSWERS: dict[str, list[str]] = {
     "loop.client.example": ["127.0.0.1"],
     "meta.client.example": ["169.254.169.254"],
     "telco.example": ["93.184.215.14"],
+    "aws.client.example": ["fd00:ec2::254"],
+    "ali.client.example": ["100.100.100.200"],
+    "bridge.client.example": ["172.18.0.5"],
+    "dockerhost.client.example": ["192.168.65.254"],
+    "lan.client.example": ["172.20.4.9"],
+    "mixed.client.example": ["10.20.30.40", "10.99.0.7"],
+    "public-and-private.client.example": ["93.184.215.14", "10.20.30.40"],
+    "mapped.client.example": ["::ffff:127.0.0.1"],
+    "nat64.client.example": ["64:ff9b::a9fe:a9fe"],
+    "sixtofour.client.example": ["2002:7f00:1::"],
+    "mapped-private.client.example": ["::ffff:10.20.30.40"],
 }
 
 
@@ -56,6 +87,7 @@ ANSWERS: dict[str, list[str]] = {
 def dns(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]:
     """What each name resolves to, by the test: no lookup leaves the machine."""
     monkeypatch.setattr(connector_reads, "resolve_host", lambda host: ANSWERS.get(host, []))
+    monkeypatch.setattr(connector_reads, "own_networks", lambda: [])
     monkeypatch.delenv("OSPREY_CONNECTOR_PRIVATE", raising=False)
     return ANSWERS
 
@@ -65,9 +97,7 @@ def _listed(monkeypatch: pytest.MonkeyPatch, *entries: str) -> None:
 
 
 @pytest.mark.parametrize("kind", ["sql", "api"])
-def test_an_unlisted_private_address_is_refused(
-    kind: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_an_unlisted_private_address_is_refused(kind: str, monkeypatch: pytest.MonkeyPatch) -> None:
     for host in ("nomis.client.example", "ula.client.example", "shared.client.example"):
         with pytest.raises(ConnectorRefused, match="resolves inside"):
             refuse_host(kind, host, allowed_hosts=None)
@@ -100,20 +130,19 @@ def test_no_list_admits_this_machine_or_the_metadata_service(
 ) -> None:
     """Even if `osprey.yaml`'s check were bypassed (a hand-edited `deployment.env`), the Conduit
     admits only a private address: a listed name resolving to loopback or link-local is refused."""
-    _listed(monkeypatch, "loop.client.example", "meta.client.example", "127.0.0.0/8",
-            "169.254.0.0/16", "0.0.0.0/0", "postgres", "localhost")  # fmt: skip
-    for host in ("loop.client.example", "meta.client.example", "postgres", "localhost"):
-        with pytest.raises(ConnectorRefused):
+    _listed(monkeypatch, "loop.client.example", "meta.client.example")
+    for host in ("loop.client.example", "meta.client.example"):
+        with pytest.raises(ConnectorRefused, match="resolves inside"):
             refuse_host("sql", host, allowed_hosts=None)
-    with pytest.raises(ConnectorRefused):
-        refuse_host("api", "nomis.client.example", allowed_hosts=None)  # 0.0.0.0/0 admits nothing
 
 
 @pytest.mark.parametrize(
     "entry",
     ["127.0.0.0/8", "127.0.0.1", "169.254.169.254", "169.254.0.0/16", "0.0.0.0/0", "::1",
      "fe80::/10", "10.0.0.0/7", "8.8.8.8", "postgres", "localhost", "db.localhost",
-     "*.client.example", "http://db.client.example"],
+     "*.client.example", "http://db.client.example", "fd00:ec2::/32", "fd00:ec2::254",
+     "100.100.0.0/16", "100.100.100.200", "host.docker.internal", "api.osprey.svc",
+     "api.osprey.svc.cluster.local", "172.16.0.0/11"],
 )  # fmt: skip
 def test_osprey_yaml_refuses_an_entry_no_list_may_hold(entry: str) -> None:
     with pytest.raises(ValidationError):
@@ -179,4 +208,151 @@ def test_the_save_check_and_the_read_check_read_the_same_list(
                                                   user="reader", secret="NOMIS"))  # fmt: skip
     with pytest.raises(ConnectorRefused, match="resolves inside"):
         refuse_connection_hosts(ApiConnectionSettings(base_url="https://crm.client.example"))
-    assert datetime.now(UTC)  # (the module's imports kept honest)
+
+
+def test_no_list_admits_a_metadata_service_inside_a_range(monkeypatch: pytest.MonkeyPatch) -> None:
+    _listed(monkeypatch, "fd00::/8", "100.64.0.0/10", "aws.client.example", "ali.client.example")
+    for host in ("aws.client.example", "ali.client.example"):
+        with pytest.raises(ConnectorRefused, match="resolves inside"):
+            refuse_host("api", host, allowed_hosts=None)
+    # The same entries still admit an ordinary address in those ranges.
+    assert refuse_host("api", "shared.client.example", allowed_hosts=None) == ["100.64.3.2"]
+    assert refuse_host("api", "ula.client.example", allowed_hosts=None) == ["fd12:3456::7"]
+
+
+def test_no_list_admits_the_deployments_own_networks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A client's LAN range that happens to hold Docker's bridge or the host's address admits
+    neither, by network or by name; an address of the client's outside them still is."""
+    own = [ipaddress.ip_network("172.18.0.0/16"), ipaddress.ip_network("192.168.65.254/32")]
+    monkeypatch.setattr(connector_reads, "own_networks", lambda: own)
+    _listed(monkeypatch, "172.16.0.0/12", "192.168.0.0/16", "bridge.client.example")
+    for host in ("bridge.client.example", "dockerhost.client.example"):
+        with pytest.raises(ConnectorRefused, match="resolves inside"):
+            refuse_host("sql", host, allowed_hosts=None)
+    assert refuse_host("sql", "lan.client.example", allowed_hosts=None) == ["172.20.4.9"]
+    for platform in ("host.docker.internal", "api.osprey.svc.cluster.local"):
+        with pytest.raises(ValidationError):
+            SqlConnectionSettings(host=platform, database="d", user="u", secret="S")
+
+
+def test_the_own_networks_are_read_from_the_route_tables(tmp_path: Path) -> None:
+    """A synthetic route table as Linux writes it: the bridge's network, and the gateway (on Docker,
+    the host itself); IPv6's link-local and multicast routes left out."""
+    route = tmp_path / "route"
+    route.write_text(
+        "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n"
+        "eth0\t00000000\t010012AC\t0003\t0\t0\t0\t00000000\t0\t0\t0\n"
+        "eth0\t000012AC\t00000000\t0001\t0\t0\t0\t0000FFFF\t0\t0\t0\n"
+    )
+    route6 = tmp_path / "ipv6_route"
+    route6.write_text(
+        "fd000000000000000000000000000000 40 00000000000000000000000000000000 00 "
+        "00000000000000000000000000000000 00000100 00000000 00000000 00000001 eth0\n"
+        "fe800000000000000000000000000000 40 00000000000000000000000000000000 00 "
+        "00000000000000000000000000000000 00000100 00000000 00000000 00000001 eth0\n"
+    )
+    found = connector_reads._proc_routes(str(route), str(route6))
+    assert ipaddress.ip_network("172.18.0.0/16") in found
+    assert ipaddress.ip_network("172.18.0.1/32") in found
+    assert ipaddress.ip_network("fd00::/64") in found
+    assert not any(n.version == 6 and n.network_address.is_link_local for n in found)
+    assert connector_reads._proc_routes(str(tmp_path / "none"), str(tmp_path / "none6")) == []
+
+
+def test_every_address_a_name_resolves_to_is_judged(monkeypatch: pytest.MonkeyPatch) -> None:
+    _listed(monkeypatch, "10.20.0.0/16")
+    with pytest.raises(ConnectorRefused, match="resolves inside"):
+        refuse_host("sql", "mixed.client.example", allowed_hosts=None)  # 10.99.0.7 unlisted
+    assert refuse_host("sql", "public-and-private.client.example", allowed_hosts=None) == [
+        "93.184.215.14", "10.20.30.40"]  # fmt: skip
+
+
+def test_an_ipv6_form_is_judged_by_the_ipv4_address_it_carries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    names = ("mapped.client.example", "nat64.client.example", "sixtofour.client.example")
+    _listed(monkeypatch, *names)
+    for host in names:  # loopback and the metadata service, carried in IPv6
+        with pytest.raises(ConnectorRefused, match="resolves inside"):
+            refuse_host("api", host, allowed_hosts=None)
+    _listed(monkeypatch, "10.20.0.0/16")
+    assert refuse_host("api", "mapped-private.client.example", allowed_hosts=None) == [
+        "::ffff:10.20.30.40"]  # fmt: skip
+
+
+def _sql_connection(host: str) -> Connection:
+    return Connection(
+        id="conn-1", kind="sql", name="Client", created_by="adm-1", created_at=datetime.now(UTC),
+        settings=SqlConnectionSettings(host=host, database="nomis", user="reader", secret="NOMIS"),
+        datasets=["ds-a"],
+    )  # fmt: skip
+
+
+async def test_the_read_checks_read_the_list_and_sql_connects_to_the_checked_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test connection and every read go through `Readers`: the list is read there, and asyncpg is
+    sent to the address that was checked, the host's name kept for TLS's name check, so a name
+    rebound after the check is never connected to."""
+    monkeypatch.setenv("OSPREY_CONNECTION_SECRET_NOMIS", "fixture-only")
+    seen: list[dict[str, Any]] = []
+
+    async def connect(**kw: Any) -> Any:
+        seen.append(kw)
+        ANSWERS["nomis.client.example"] = ["127.0.0.1"]  # rebound once checked
+        raise OSError("the fixture connects nowhere")
+
+    readers = Readers(sql_connect=connect, allowed_hosts=["nomis.client.example"])
+    unlisted = await check_connection(_sql_connection("nomis.client.example"), readers)
+    assert not unlisted.ok and "resolves inside" in unlisted.words and not seen
+    _listed(monkeypatch, "10.20.0.0/16")
+    monkeypatch.setitem(ANSWERS, "nomis.client.example", ["10.20.30.40"])
+    await check_connection(_sql_connection("nomis.client.example"), readers)
+    assert seen[0]["host"] == "10.20.30.40"
+    assert seen[0]["ssl"].server_name == "nomis.client.example"
+    # The API's own pin reads the same list.
+    monkeypatch.setitem(ANSWERS, "crm.client.example", ["10.20.9.9"])
+    api = Readers(allowed_hosts=["crm.client.example"])
+    assert api.pin("https://crm.client.example/v1") == "10.20.9.9"
+    _listed(monkeypatch, "10.99.0.0/16")
+    with pytest.raises(ConnectorRefused, match="resolves inside"):
+        api.pin("https://crm.client.example/v1")
+
+
+def test_a_sql_host_that_does_not_resolve_is_refused() -> None:
+    readers = Readers(allowed_hosts=["gone.client.example"])
+    with pytest.raises(ConnectorRefused, match="does not resolve"):
+        readers.sql_address("gone.client.example")
+
+
+def test_a_connections_ca_certificate_is_a_certificate() -> None:
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Synthetic client CA")])
+    now = datetime.now(UTC)
+    cert = (
+        x509.CertificateBuilder().subject_name(name).issuer_name(name)
+        .public_key(key.public_key()).serial_number(1)
+        .not_valid_before(now).not_valid_after(now.replace(year=now.year + 1))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(key, hashes.SHA256())
+    )  # fmt: skip
+    pem = cert.public_bytes(serialization.Encoding.PEM).decode()
+    kept = SqlConnectionSettings(host="db.client.example", database="d", user="u", secret="S",
+                                 ca_certificate=pem)  # fmt: skip
+    assert kept.ca_certificate == pem.strip()
+    assert ApiConnectionSettings(base_url="https://crm.client.example", ca_certificate=pem)
+    key_pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                serialization.NoEncryption()).decode()  # fmt: skip
+    for wrong in ("not a certificate", key_pem, pem + key_pem,
+                  "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----"):  # fmt: skip
+        with pytest.raises(ValidationError):
+            SqlConnectionSettings(host="db.client.example", database="d", user="u", secret="S",
+                                  ca_certificate=wrong)  # fmt: skip
+    with pytest.raises(ValidationError, match="verify-full"):
+        SqlConnectionSettings(host="db.client.example", database="d", user="u", secret="S",
+                              tls="require", ca_certificate=pem)  # fmt: skip
