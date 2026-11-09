@@ -1,12 +1,12 @@
-# as of 2026-11-09T20:36:42Z
-studio	L1.5	clear after its live run on b, then the merge	~1½–2 h
+# as of 2026-11-09T21:02:15Z
+studio	L1.5	clear; live run on b at 165d144, then merge	~1½–2 h
 case	L3.4	live run on e, then round-3 review	~2–3 h
-platform	P5	round 3 on d, then re-review	~2–3 h
-rules	L2.10	ClickHouse fix on c, then independent review	~2–3 h
-admin	L2.7	three must-fixes, then gates and re-review	~3–4 h
+platform	P5	round 3 gates; then re-review	~2 h
+rules	L2.10	sent back: a count leak, re-gates, 4 more fixes	~3–4 h
+admin	L2.7	round 3 done; server make test, live on f, re-review	~2–3 h
 admin	L2.5b	after L2.7	~3 h after L2.7
 studio-b	tips	the Studio's tips patches, after L2.7	~1–2 h after L2.7
-platform	P5b	backups folder, after P5	~3 h after P5
+platform	P5	round 3 gates; then re-review	~2 h
 platform	P6	gazetteer panel, after P5	~3 h after P5
 case	L3.6	after L3.4 and L2.10	~3 h after both
 case	L3.9	after L3.4	~8–10 h after L3.4

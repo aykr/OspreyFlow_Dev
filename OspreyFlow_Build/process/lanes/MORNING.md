@@ -639,6 +639,11 @@ New ones are added at the bottom as they happen.
     above-clearance proposal flag in Needs you. It leaks whether any proposal is still open, and that reader
     can't act on it (ADR-143 Am 4 (b), strict). Studio's L1.5 is clear once its live run is green (a GROUPING
     SETS rule added in the last look). Rules is fixing ClickHouse's `event_frequency` on c.
+95. **Rules' L2.10 sent back after my independent review (about 21:05).** Team routing is sound (the read in the
+    SQL at every alert read), and the `event_frequency` fix is correct at its edges. But the new
+    `rule_evaluation_failed` audit entry shows the sweep's counts to readers its firings are hidden from (rule 7),
+    and its gates predate three adapter commits. ClickHouse `account_activity` was changed unreported, so the two
+    adapters now disagree. The read-path purge is proved only against a fake. Checked in the code by me; my call.
 
 ## Evening, 7 November: your records of 7 November applied
 
