@@ -46,7 +46,12 @@ from schemas.domain import Principal
 
 T0 = datetime(2026, 11, 9, tzinfo=UTC)
 SCHEME = load_uk_le_scheme()
-ADMIN = Principal(id="adm-1", clearance="SECRET", org_unit="unit-1", roles=["osprey-admin"])
+#: Below the scheme's highest (the UK LE scheme's is SECRET; it has no TOP SECRET), so that a dataset
+#: with no marking, read at the highest, is above them: markings the scheme itself holds, as the real
+#: deployment's are (rule 15: a marking the scheme does not know is refused for another reason).
+ADMIN = Principal(
+    id="adm-1", clearance="OFFICIAL-SENSITIVE", org_unit="unit-1", roles=["osprey-admin"]
+)
 SECRET_WORDS = "Operation Nightjar contacts"
 
 
@@ -192,7 +197,7 @@ async def test_what_is_no_longer_theirs_or_no_longer_open_is_left_out(
     await _proposal(conn, "c-other-gone", "ana-1", unit="unit-2", dataset="ds-off")
     await _watch(conn, "c-other-gone", "ana-1", dataset="ds-off")
     # Someone else's open items out of the administrator's reach: theirs, never ana-1's withheld.
-    await _dataset(conn, "ds-top", "TOP SECRET")
+    await _dataset(conn, "ds-top", "SECRET")
     await _view(conn, "c-other", "ana-2")
     await _proposal(conn, "c-other", "ana-2", unit="unit-2", dataset="ds-off")
     await _proposal(conn, "c-k", "ana-2", dataset="ds-top")
@@ -234,7 +239,7 @@ async def test_an_item_above_the_administrators_clearance_is_never_named_nor_cou
 ) -> None:
     await _case(conn, "c-k", "Kestrel")
     await _dataset(conn, "ds-off", "OFFICIAL")
-    await _dataset(conn, "ds-top", "TOP SECRET")
+    await _dataset(conn, "ds-top", "SECRET")
     await _dataset(conn, "ds-unmarked", None)
     seen = {await _proposal(conn, "c-k", "ana-1", dataset="ds-off"),
             await _watch(conn, "c-k", "ana-1", dataset="ds-off")}  # fmt: skip
@@ -254,8 +259,8 @@ async def test_an_item_above_the_administrators_clearance_is_never_named_nor_cou
     assert owned.counts == {"link_type_proposal": 1, "drawn_watch": 1}
     assert not any(h in owned.model_dump_json() for h in hidden)
     assert owned.withheld is True
-    # An administrator cleared to the top sees all of them, and nothing is withheld from them.
-    top = ADMIN.model_copy(update={"clearance": "TOP SECRET"})
+    # An administrator cleared to the scheme's highest sees all of them, and nothing is withheld from them.
+    top = ADMIN.model_copy(update={"clearance": "SECRET"})
     whole = await ownership.owned_by("ana-1", admin=top, scheme=SCHEME)
     assert {i.id for i in whole.items} == seen | hidden and whole.withheld is False
 
@@ -274,7 +279,7 @@ async def test_each_item_left_out_is_said_to_be_withheld_and_never_named(
     await _case(conn, "c-k", "Kestrel")
     await _case(conn, "c-other", "Harrier", unit="unit-2")
     await _dataset(conn, "ds-off", "OFFICIAL")
-    await _dataset(conn, "ds-top", "TOP SECRET")
+    await _dataset(conn, "ds-top", "SECRET")
     made = {
         "view_elsewhere": lambda: _view(conn, "c-other", "ana-1"),
         "board_elsewhere": lambda: _view(conn, "c-other", "ana-1", board=True),
@@ -330,7 +335,7 @@ async def test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withh
     disable* calls `refuse_if_withheld` in its transaction; refused while an item is withheld."""
     await _case(conn, "c-k", "Kestrel")
     await _dataset(conn, "ds-off", "OFFICIAL")
-    await _dataset(conn, "ds-top", "TOP SECRET")
+    await _dataset(conn, "ds-top", "SECRET")
     await _view(conn, "c-k", "ana-1")
     await _proposal(conn, "c-k", "ana-2", dataset="ds-top")
     # Only what the administrator can see: nothing refused.
@@ -344,5 +349,14 @@ async def test_disable_is_refused_in_words_naming_nothing_while_an_item_is_withh
     assert hidden not in words and "Kestrel" not in words and "proposal" not in words
     assert "link type" not in words and "1" not in words
     # An administrator who may see it is not refused.
-    top = ADMIN.model_copy(update={"clearance": "TOP SECRET"})
+    top = ADMIN.model_copy(update={"clearance": "SECRET"})
     await refuse_if_withheld(conn, "ana-1", admin=top, scheme=SCHEME)
+
+
+def test_the_fixtures_markings_are_the_schemes_own() -> None:
+    """The administrator is below the scheme's highest marking, and every marking used is one the
+    scheme holds (found on stack g, 9 November 2026: a TOP SECRET the scheme lacks hid items for
+    being unknown, and a SECRET administrator cleared the scheme's highest)."""
+    assert ADMIN.clearance in SCHEME.classification and "SECRET" == SCHEME.classification[-1]
+    assert not SCHEME.clears(ADMIN.clearance, SCHEME.classification[-1])
+    assert SCHEME.clears(ADMIN.clearance, "OFFICIAL")
