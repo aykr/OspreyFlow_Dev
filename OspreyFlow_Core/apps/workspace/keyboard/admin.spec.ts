@@ -540,7 +540,7 @@ test("an API connection is named with its fields, and a connection tested, by ke
   expect(sent).toEqual([{ kind: "api", name: "Carrier API (synthetic)", datasets: ["enron"],
                           settings: { kind: "api", base_url: "https://carrier.example", auth: "bearer", secret: "CARRIER_API", pagination: "none" } }]); // prettier-ignore
   registerCovered(REGISTRY, "name-an-api-connection-by-keyboard");
-  await press(page, "Test Telco lookup (synthetic)");
+  await press(page, "Test connection: Telco lookup (synthetic)");
   await expect(page.getByRole("status").filter({ hasText: "The host is allowed" })).toBeVisible();
   expect(asked).toContain("POST connections/c-api/test");
   registerCovered(REGISTRY, "test-a-connection-by-keyboard");

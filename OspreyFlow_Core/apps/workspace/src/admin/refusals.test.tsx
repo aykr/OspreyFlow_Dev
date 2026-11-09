@@ -30,7 +30,7 @@ describe("Admin's refusals say why and which roles can", () => {
       }),
     );
     render(<Connections api={{ apiBaseUrl: "http://x", bearerToken: "t" }} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Test Telco" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Test connection: Telco" }));
     const said = await screen.findByRole("status");
     expect(said.textContent).toContain(whyNotByRole("administer_system"));
     expect(said.textContent).toContain("Administrator");

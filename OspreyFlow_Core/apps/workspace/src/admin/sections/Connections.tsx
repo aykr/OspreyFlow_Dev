@@ -214,7 +214,7 @@ export function Connections({ api }: { api: AdminApi }) {
                 <td>
                   {c.kind !== "files" && (
                     <>
-                      <Button onClick={() => void test(c)} aria-label={`Test ${c.name}`}>
+                      <Button onClick={() => void test(c)} aria-label={`Test connection: ${c.name}`}>
                         Test connection
                       </Button>
                       {tested[c.id] && (

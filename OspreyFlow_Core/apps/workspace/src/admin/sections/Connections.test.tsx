@@ -124,7 +124,7 @@ describe("Connections", () => {
     await waitFor(() => expect(within(row).getByText("Prison records")).toBeTruthy());
     expect(within(row).getByText("https://telco.example")).toBeTruthy();
     expect(within(row).getByText("TELCO")).toBeTruthy();
-    fireEvent.click(within(row).getByRole("button", { name: "Test Telco lookup (synthetic)" }));
+    fireEvent.click(within(row).getByRole("button", { name: "Test connection: Telco lookup (synthetic)" }));
     expect((await within(row).findByRole("status")).textContent).toBe("✓ The host is allowed and the secret is set.");
     expect(posts.map((p) => p.path)).toEqual(["/v1/admin/connections/c-api/test"]);
   });
