@@ -31451,7 +31451,9 @@ Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
       change binding one after a SQL step is saved is refused at the next Test, publish or run, in
       the same words.
     - **No row is given another row's values or `_ref`.** Always refused: a window function (`OVER`,
-      `QUALIFY`), a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, any table or
+      `QUALIFY`), a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, more than one
+      grouping set (`GROUPING SETS`, `ROLLUP`, `CUBE`: each set folds rows the others' `_ref`
+      columns do not name; the last look), any table or
       CTE read more than once in one SELECT (a self-join), a recursive or forward CTE reference (a CTE
       sees only those declared before it), and a `* REPLACE` or `* RENAME` touching `_ref`; a qualified
       `EXCLUDE` of `_ref` is a drop. A `_ref…` column is read only as a bare select item, a GROUP BY
