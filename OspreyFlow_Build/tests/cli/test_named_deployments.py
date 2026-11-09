@@ -350,6 +350,11 @@ def test_a_name_installed_already_is_refused_and_left_alone(
         (("install", "--mode", "lite", "--yes", "--address", "http://x.localhost:9000"),
          "--address goes with --name"),
         (("install", "--mode", "lite", "--yes", "--name", "Bad_Name"), "cannot name a deployment"),
+        # ADR-114 Amendment 38: a profile's name is the checkout's own deployment's backups
+        # subfolder, so a deployment by that name would share its sets.
+        (("install", "--mode", "lite", "--yes", "--name", "local-lite"), "the name of a profile"),
+        (("install", "--mode", "lite", "--yes", "--name", "small"), "the name of a profile"),
+        (("install", "--mode", "lite", "--yes", "--name", "cluster"), "the name of a profile"),
         (("start", "--name", "nonesuch"), "no deployment called 'nonesuch'"),
     ],
 )  # fmt: skip
@@ -567,3 +572,28 @@ def test_name_may_come_before_or_after_the_demo_packs_own_words(
     assert machine(*words) == 0
     (seed,) = [e for a, e, _c in machine.docker.calls if "scripts.seed_internal" in a]
     assert seed["OSPREYFLOW_DEPLOYMENT_DIR"] == str(machine.root / "bravo")
+
+
+def test_the_profile_names_refused_are_the_schemas_profiles() -> None:
+    """The command runs before the product's Python, so it holds the profiles' names itself; they
+    must be every one the schema has, or a new profile's name becomes a deployment's."""
+    from ospreyflow.deployments import PROFILE_NAMES
+
+    from schemas.deployment import Profile
+
+    assert set(PROFILE_NAMES) == {p.value for p in Profile}
+
+
+def test_a_deployment_installed_by_a_profiles_name_before_is_still_reached(
+    machine: Machine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The refusal is the install's: one installed as `small` before Amendment 38 is still named
+    by its own verbs (this one is a bare folder, so `stop` goes on to say nothing is rendered)."""
+    folder = machine.root / "small"
+    folder.mkdir(parents=True)
+    (folder / "osprey.yaml").write_text(yaml.safe_dump(
+        {"profile": "local-lite", "deployment": {"name": "small"},
+         "network": {"public_origin": "http://small.localhost:8091"}}))  # fmt: skip
+    machine("stop", "--name", "small")
+    said = capsys.readouterr().err
+    assert "the name of a profile" not in said and "no deployment called" not in said, said

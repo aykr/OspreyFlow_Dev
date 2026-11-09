@@ -117,6 +117,11 @@ def remember(env: Mapping[str, str], name: str) -> None:
     path.write_text(name + "\n", encoding="utf-8")
 
 
+#: `schemas.deployment.Profile`'s values (held to them by a test, as this command runs before the
+#: product's Python): the checkout's own deployment's name, and so its backups subfolder.
+PROFILE_NAMES = ("local-lite", "small", "cluster")
+
+
 def check_name(name: str) -> None:
     if name == DEFAULT:
         raise CommandRefused(
@@ -149,6 +154,14 @@ def resolve(
     if name == DEFAULT:
         return default_target(product)
     check_name(name)
+    if creating and name in PROFILE_NAMES and name not in installed:
+        # ADR-114 Amendment 38: a deployment's backups are in `<backups folder>/<its name>/`, and
+        # the checkout's own deployment is named by its profile, so the two would share sets. One
+        # installed by such a name before it is still reached by it.
+        raise CommandRefused(
+            f"'{name}' is the name of a profile, which the checkout's own deployment goes by (its "
+            "backups are kept under that name); give the new one a name of its own."
+        )
     if name not in installed and not creating:
         known = ", ".join([DEFAULT, *installed])
         raise CommandRefused(
