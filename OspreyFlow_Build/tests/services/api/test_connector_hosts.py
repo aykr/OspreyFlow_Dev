@@ -129,6 +129,7 @@ def test_the_host_is_looked_up_again_before_every_read(dns: dict[str, list[str]]
 def test_a_sql_read_refuses_its_host_before_connecting(monkeypatch: pytest.MonkeyPatch) -> None:
     # The secret is set, so nothing but the host check stands between the read and the connect.
     monkeypatch.setenv("OSPREY_CONNECTION_SECRET_X", "pw")
+    monkeypatch.setenv("OSPREY_CONNECTOR_SECRETS", "X")  # declared (Amendment 15)
     connected: list[object] = []
 
     async def connect(**kw: object) -> object:
@@ -325,17 +326,71 @@ def test_json_files_over_the_cap_are_never_opened(
     folder = tmp_path / "ds-a"
     folder.mkdir()
     (folder / "big.json").write_text('{"r": [' + '"y",' * 200 + '"z"]}')
+    from services.api import connector_reads
+
     opened: list[str] = []
-    real = Path.read_bytes
+    real = connector_reads._no_follow
 
-    def spy(self: Path) -> bytes:
-        opened.append(self.name)
-        return real(self)
+    def spy(path: str, flags: int) -> int:
+        opened.append(Path(path).name)
+        return real(path, flags)
 
-    monkeypatch.setattr(Path, "read_bytes", spy)
+    monkeypatch.setattr(connector_reads, "_no_follow", spy)
     with pytest.raises(ConnectorRefused, match="bytes"):
         _json_files("ds-a", "*.json", tmp_path)
     assert opened == []
+    (folder / "big.json").write_text('{"r": []}')
+    assert _json_files("ds-a", "*.json", tmp_path) and opened == ["big.json"]
+
+
+def test_a_json_file_that_grows_after_it_was_sized_is_stopped_while_read(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: __import__("pathlib").Path
+) -> None:
+    """The orchestrator's review of Amendment 15, item 10: the cap holds while reading, not only
+    before, so a file written to between the size check and the read is never read whole."""
+    from pathlib import Path
+
+    from services.api import connector_reads
+    from services.api.connector_reads import _json_files
+    from services.ingest.connectors import reads
+
+    monkeypatch.setattr(reads, "MAX_BYTES", 100)
+    folder = tmp_path / "ds-a"
+    folder.mkdir()
+    (folder / "growing.json").write_text('{"r": []}')
+    real = connector_reads._no_follow
+
+    def grows_first(path: str, flags: int) -> int:
+        with open(path, "a") as handle:
+            handle.write(" " * 500)
+        return real(path, flags)
+
+    monkeypatch.setattr(connector_reads, "_no_follow", grows_first)
+    with pytest.raises(ConnectorRefused, match="bytes"):
+        _json_files("ds-a", "*.json", tmp_path)
+    assert Path(folder / "growing.json").stat().st_size > 100
+
+
+def test_a_json_pattern_never_follows_a_link(tmp_path: __import__("pathlib").Path) -> None:
+    """A link named like a source's file, to a dot-file beside it or to a file in another folder,
+    is never read; nor a folder that is itself a link (item 10)."""
+    from services.api.connector_reads import _json_files
+
+    folder = tmp_path / "uploaded" / "ds-a"
+    folder.mkdir(parents=True)
+    (folder / "bookings.json").write_text('{"records": [{"id": 1}]}')
+    (folder / ".secret.json").write_text('{"records": [{"id": "hidden"}]}')
+    elsewhere = tmp_path / "uploaded" / "ds-b"
+    elsewhere.mkdir()
+    (elsewhere / "theirs.json").write_text('{"records": [{"id": "theirs"}]}')
+    (folder / "a.json").symlink_to(folder / ".secret.json")
+    (folder / "b.json").symlink_to(elsewhere / "theirs.json")
+    found = _json_files("ds-a", "*.json", tmp_path)
+    assert [name for name, _ in found] == ["bookings.json"]
+    assert all(b"hidden" not in body and b"theirs" not in body for _, body in found)
+    (tmp_path / "ds-c").symlink_to(folder)
+    with pytest.raises(ConnectorRefused, match="no file"):
+        _json_files("ds-c", "*.json", tmp_path)
 
 
 

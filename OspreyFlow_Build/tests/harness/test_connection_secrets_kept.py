@@ -9,7 +9,12 @@ carries the file, so a restored deployment's connections name secrets it does no
 What a mistake would do, and the case that catches it:
 - an `apply` that silently drops every connection's secret, or the egress list, so each read is
   refused until someone notices — `test_apply_keeps_connection_secrets_and_the_egress_list`;
-- a restore that says nothing of them — `test_a_restore_names_each_connection_secret_to_enter`.
+- a restore that says nothing of them — `test_a_restore_names_each_connection_secret_to_enter`;
+- a connection's secret given to every container that reads `deployment.env`, not the Conduit
+  alone (the orchestrator's review of ADR-140 Amendment 15, item 9) —
+  `test_no_service_but_the_conduit_is_given_a_connection_secret` (Compose),
+  `test_no_cluster_workload_but_the_conduit_is_given_a_connection_secret` and
+  `test_the_conduit_reads_only_a_declared_secret`.
 """
 
 from __future__ import annotations
@@ -17,8 +22,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+import yaml
 from harness.apply import keep_existing_secrets
+from harness.render import load_config, render
 from harness.restore import connection_secrets_to_enter
+from tools.layout import CORE
+
+from schemas.deployment import ConnectorsConfig, OspreyConfig
+from tests.harness.test_cluster_render import _workloads, cluster_config, values_for
+from tests.harness.test_render import FIXTURE_CONFIG, _fake_resolver
+
+DECLARED = ConnectorsConfig(secrets=["NOMIS_READER", "TELCO"])
+VARIABLES = ("OSPREY_CONNECTION_SECRET_NOMIS_READER", "OSPREY_CONNECTION_SECRET_TELCO")
 
 
 def test_apply_keeps_connection_secrets_and_the_egress_list() -> None:
@@ -63,3 +79,58 @@ def test_a_restore_names_each_connection_secret_to_enter(tmp_path: Path) -> None
         "OSPREY_CONNECTOR_EGRESS",
     ]
     assert connection_secrets_to_enter(tmp_path / "nowhere") == []
+
+
+def _lite(tmp_path: Path) -> OspreyConfig:
+    path = tmp_path / "osprey.yaml"
+    path.write_text(FIXTURE_CONFIG, encoding="utf-8")
+    loaded = load_config(path)
+    return loaded.model_copy(update={
+        "connectors": DECLARED,
+        "components": loaded.components.model_copy(update={"source_path": str(CORE)}),
+    })  # fmt: skip
+
+
+def test_no_service_but_the_conduit_is_given_a_connection_secret(tmp_path: Path) -> None:
+    """Every owned service reads `deployment.env` whole; its own environment, which Compose puts
+    above the file, blanks each declared secret, except the Conduit's."""
+    rendered = render(_lite(tmp_path), resolver=_fake_resolver)
+    services = yaml.safe_load(rendered.artefacts["compose.yaml"])["services"]
+    readers = [name for name, service in services.items() if "env_file" in service]
+    assert "api" in readers and len(readers) > 1
+    for name in readers:
+        environment = services[name].get("environment") or {}
+        for variable in VARIABLES:
+            if name == "api":
+                assert variable not in environment, (name, variable)
+            else:
+                assert environment.get(variable) == "", (name, variable)
+    lines = rendered.artefacts["deployment.env"].splitlines()
+    env = dict(line.partition("=")[::2] for line in lines if "=" in line and line[0] != "#")
+    assert env["OSPREY_CONNECTOR_SECRETS"] == "NOMIS_READER,TELCO"
+
+
+def test_no_cluster_workload_but_the_conduit_is_given_a_connection_secret() -> None:
+    values = values_for(cluster_config(connectors=DECLARED.model_dump()))
+    readers = [w for w in _workloads(values).values() if w.get("envFrom")]
+    assert any(w["name"] == "api" for w in readers) and len(readers) > 1
+    for workload in readers:
+        blanked = {e["name"]: e.get("value") for e in workload.get("env", [])}
+        for variable in VARIABLES:
+            if workload["name"] == "api":
+                assert variable not in blanked, (workload["name"], variable)
+            else:
+                assert blanked.get(variable) == "", (workload["name"], variable)
+
+
+def test_the_conduit_reads_only_a_declared_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An undeclared secret is blanked nowhere, so the Conduit never reads one, even if set."""
+    from services.api.connector_reads import secret_of
+
+    monkeypatch.setenv("OSPREY_CONNECTION_SECRET_TELCO", "synthetic-token")
+    monkeypatch.setenv("OSPREY_CONNECTION_SECRET_ROGUE", "synthetic-other")
+    monkeypatch.setenv("OSPREY_CONNECTOR_SECRETS", "TELCO")
+    assert secret_of("TELCO") == "synthetic-token"
+    assert secret_of("ROGUE") is None
+    monkeypatch.delenv("OSPREY_CONNECTOR_SECRETS")
+    assert secret_of("TELCO") is None

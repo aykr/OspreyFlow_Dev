@@ -155,9 +155,10 @@ async def read_api(
     secret: str | None,
     allowed_hosts: Collection[str],
     transport: httpx.AsyncBaseTransport | None = None,
-    #: Called before each request with its URL: refuses in words, or names the address to send it
-    #: to (the host's checked address, so DNS cannot change between the check and the connection).
-    before_request: Callable[[str], str | None] | None = None,
+    #: Called before each request with its URL: refuses in words, or names the addresses to send it
+    #: to, in turn (the host's checked addresses, so DNS cannot change between the check and the
+    #: connection).
+    before_request: Callable[[str], list[str] | None] | None = None,
 ) -> ReadRows:
     """Every page of the endpoint's records. A refusal, an error or records missing where the read
     says they are is refused in words: never read as no rows."""
@@ -167,7 +168,10 @@ async def read_api(
     headers = {"Accept": "application/json"}
     if settings.auth == "bearer":
         if not secret:
-            raise ConnectorRefused("the connection's secret is not set; nothing was read")
+            raise ConnectorRefused(
+                "the connection's secret is not set, or not declared in osprey.yaml's "
+                "connectors.secrets; nothing was read"
+            )
         headers["Authorization"] = f"Bearer {secret}"
     records: list[Any] = []
     taken = 0
@@ -185,7 +189,7 @@ async def read_api(
             params = {settings.page_param: str(page)} if settings.pagination == "page" else None
             pinned = before_request(next_url) if before_request is not None else None
             document, size = await _get(
-                client, next_url, params, room=MAX_BYTES - taken, address=pinned
+                client, next_url, params, room=MAX_BYTES - taken, addresses=pinned
             )
             taken += size
             if taken > MAX_BYTES:
@@ -238,7 +242,45 @@ def _next_link(document: Any, path: str | None) -> str | None:
     return found if isinstance(found, str) and found else None
 
 
+class _Unreached(Exception):
+    """An address the request could not connect to: the next checked address is tried."""
+
+
+def _verification_failed(exc: BaseException) -> bool:
+    seen: BaseException | None = exc
+    while seen is not None:
+        if isinstance(seen, ssl.SSLCertVerificationError):
+            return True
+        if "CERTIFICATE_VERIFY_FAILED" in str(seen):
+            return True
+        seen = seen.__cause__ or seen.__context__
+    return False
+
+
 async def _get(
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict[str, str] | None,
+    *,
+    room: int,
+    addresses: list[str] | None = None,
+) -> tuple[Any, int]:
+    """One page, sent to each checked address in turn until one connects (the orchestrator's review
+    of Amendment 15, item 4). A certificate that fails verification, a refusal or an answer stops at
+    once: no other address is sent the request."""
+    unreached: BaseException | None = None
+    tried: list[str | None] = list(addresses or []) or [None]
+    for address in tried:
+        try:
+            return await _get_at(client, url, params, room=room, address=address)
+        except _Unreached as exc:
+            unreached = exc.__cause__
+    raise ConnectorRefused(
+        f"the API could not be reached ({type(unreached).__name__}); nothing was read"
+    ) from unreached
+
+
+async def _get_at(
     client: httpx.AsyncClient,
     url: str,
     params: dict[str, str] | None,
@@ -277,6 +319,13 @@ async def _get(
                         "read may take; nothing was written (rule 2)"
                     )
     except httpx.HTTPError as exc:
+        if _verification_failed(exc):
+            raise ConnectorRefused(
+                "the API's certificate could not be verified (a CA this connection does not "
+                "trust, or a name the certificate does not hold); nothing was read"
+            ) from exc
+        if isinstance(exc, httpx.ConnectError | httpx.ConnectTimeout):
+            raise _Unreached() from exc
         raise ConnectorRefused(
             f"the API could not be reached ({type(exc).__name__}); nothing was read"
         ) from exc

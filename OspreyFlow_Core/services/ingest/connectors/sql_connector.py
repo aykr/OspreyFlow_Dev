@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 import ssl
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 import asyncpg
@@ -91,37 +91,55 @@ def _tls(settings: SqlConnectionSettings) -> ssl.SSLContext | str:
 
 async def _open(
     settings: SqlConnectionSettings, secret: str | None, connect: Connect,
-    address: str | None = None,
+    addresses: Sequence[str] | None = None,
 ) -> Any:  # fmt: skip
-    """Signed in, at `address` (the checked one) when given, else by the host's name."""
+    """Signed in, at the first of `addresses` (each already checked, in the resolver's order) that
+    can be reached, else by the host's name. Only an address that cannot be reached moves on to the
+    next; a TLS or sign-in refusal stops at once, so no other address is asked to take a password a
+    server refused (the orchestrator's review of Amendment 15, item 4)."""
     if not secret:
-        raise ConnectorRefused("the connection's secret is not set; nothing was read")
-    try:
-        return await connect(
-            host=address or settings.host, port=settings.port, user=settings.user, password=secret,
-            database=settings.database, ssl=_tls(settings), timeout=15,
-            # Every statement bounded, and the session read-only from its first statement (the
-            # orchestrator's review of L1.6).
-            server_settings={"statement_timeout": STATEMENT_TIMEOUT_MS,
-                             "default_transaction_read_only": "on"},
-        )  # fmt: skip
-    except (OSError, asyncpg.PostgresError, ssl.SSLError, ConnectionError) as exc:
-        words = str(exc).lower()
-        if "ssl" in words or "tls" in words:
-            raise ConnectorRefused(
-                "the database would not speak TLS, which every SQL connection asks for; nothing "
-                "was read"
-            ) from exc
-        if isinstance(
-            exc, asyncpg.InvalidPasswordError | asyncpg.InvalidAuthorizationSpecificationError
-        ):
-            raise ConnectorRefused(
-                "the database refused the sign-in: check the connection's login and secret; "
-                "nothing was read"
-            ) from exc
         raise ConnectorRefused(
-            f"the database could not be reached ({type(exc).__name__}); nothing was read"
-        ) from exc
+            "the connection's secret is not set, or not declared in osprey.yaml's "
+            "connectors.secrets; nothing was read"
+        )
+    unreached: BaseException | None = None
+    for host in list(addresses or []) or [settings.host]:
+        try:
+            return await connect(
+                host=host, port=settings.port, user=settings.user, password=secret,
+                database=settings.database, ssl=_tls(settings), timeout=15,
+                # Every statement bounded, and the session read-only from its first statement (the
+                # orchestrator's review of L1.6).
+                server_settings={"statement_timeout": STATEMENT_TIMEOUT_MS,
+                                 "default_transaction_read_only": "on"},
+            )  # fmt: skip
+        except ssl.SSLCertVerificationError as exc:
+            raise ConnectorRefused(
+                "the database's certificate could not be verified (a CA this connection does not "
+                "trust, or a name the certificate does not hold); nothing was read"
+            ) from exc
+        except (OSError, asyncpg.PostgresError, ConnectionError) as exc:
+            words = str(exc).lower()
+            if isinstance(exc, ssl.SSLError) or "ssl" in words or "tls" in words:
+                raise ConnectorRefused(
+                    "the database would not speak TLS, which every SQL connection asks for; "
+                    "nothing was read"
+                ) from exc
+            if isinstance(
+                exc, asyncpg.InvalidPasswordError | asyncpg.InvalidAuthorizationSpecificationError
+            ):
+                raise ConnectorRefused(
+                    "the database refused the sign-in: check the connection's login and secret; "
+                    "nothing was read"
+                ) from exc
+            if isinstance(exc, asyncpg.PostgresError):
+                raise ConnectorRefused(
+                    f"the database refused the connection ({type(exc).__name__}); nothing was read"
+                ) from exc
+            unreached = exc
+    raise ConnectorRefused(
+        f"the database could not be reached ({type(unreached).__name__}); nothing was read"
+    ) from unreached
 
 
 async def _refuse_a_writing_login(conn: Any) -> None:
@@ -135,11 +153,11 @@ async def _refuse_a_writing_login(conn: Any) -> None:
 
 async def check_sql_connection(
     settings: SqlConnectionSettings, *, secret: str | None, connect: Connect = asyncpg.connect,
-    address: str | None = None,
+    addresses: Sequence[str] | None = None,
 ) -> ConnectionTest:  # fmt: skip
     """*Test connection*: signed in over TLS, and the login is read-only. Nothing is read."""
     try:
-        conn = await _open(settings, secret, connect, address)
+        conn = await _open(settings, secret, connect, addresses)
         try:
             await _refuse_a_writing_login(conn)
         finally:
@@ -157,12 +175,12 @@ async def read_sql(
     watermark: str | None = None,
     cursor: str | None = None,
     connect: Connect = asyncpg.connect,
-    address: str | None = None,
+    addresses: Sequence[str] | None = None,
 ) -> ReadRows:
     """The table's rows (past `cursor` on `watermark`, in its order, when incremental), as text."""
     if watermark is not None and not re.fullmatch(SQL_COLUMN, watermark):
         raise ConnectorRefused("the watermark column is not a plain column name; nothing was read")
-    conn = await _open(settings, secret, connect, address)
+    conn = await _open(settings, secret, connect, addresses)
     try:
         await _refuse_a_writing_login(conn)
         async with conn.transaction(readonly=True):

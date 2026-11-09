@@ -18,6 +18,7 @@ import fnmatch
 import ipaddress
 import os
 import re
+import socket
 import time
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
@@ -58,15 +59,41 @@ from schemas.sources import (
 )
 
 from .ingest_sources import UPLOAD_SUBDIR, ingest_root, is_inside
-from .map_admin import resolve_host
 
 #: A non-file source's own name for its file: plain, lower case, no path.
 SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 
 
+def declared_secrets() -> set[str]:
+    """The connection secrets the operator declares in `osprey.yaml`'s `connectors.secrets`, as
+    `apply` renders them (`OSPREY_CONNECTOR_SECRETS`): the names the Conduit alone is given, every
+    other service having each blanked (the orchestrator's review of Amendment 15, item 9)."""
+    raw = os.environ.get("OSPREY_CONNECTOR_SECRETS", "")
+    return {name.strip() for name in raw.split(",") if name.strip()}
+
+
 def secret_of(name: str | None) -> str | None:
-    """A connection's secret, by its name, from the deployment's environment."""
-    return os.environ.get(f"OSPREY_CONNECTION_SECRET_{name}") if name else None
+    """A connection's secret, by its name, from the deployment's environment; only a name the
+    operator declared, since only those are kept from every service but the Conduit."""
+    if not name or name not in declared_secrets():
+        return None
+    return os.environ.get(f"OSPREY_CONNECTION_SECRET_{name}") or None
+
+
+def resolve_host(host: str) -> list[str]:
+    """What `host` resolves to now, in the resolver's own order, each address once: the order a
+    client would try them in, IPv4 first where this machine has no IPv6 route (`AI_ADDRCONFIG`
+    leaves out a family it cannot reach). Nothing when it does not resolve."""
+    try:
+        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM, flags=socket.AI_ADDRCONFIG)
+    except (OSError, UnicodeError):
+        return []
+    found: list[str] = []
+    for info in infos:
+        address = str(info[4][0]).split("%", 1)[0]
+        if address not in found:
+            found.append(address)
+    return found
 
 
 @dataclass
@@ -91,19 +118,21 @@ class Readers:
             return None
         return refuse_host(kind, host, allowed_hosts=self.hosts())
 
-    def sql_address(self, host: str) -> str | None:
-        """The address a SQL connection goes to, looked up and checked now; asyncpg is sent to that
-        address, the name kept for TLS's name check, so DNS cannot change between the check and the
-        connection (the lane review of ADR-140 Amendment 15, item 3). A name that does not resolve
-        is refused. A fixture's own check pins nothing."""
+    def sql_addresses(self, host: str) -> list[str] | None:
+        """The addresses a SQL connection may go to, looked up and checked now, in the resolver's
+        order; asyncpg is sent to them in turn, the name kept for TLS's name check, so DNS cannot
+        change between the check and the connection (the lane review of ADR-140 Amendment 15, item
+        3), and a host with an IPv6 address this machine cannot reach is still reached by its IPv4
+        one (the orchestrator's review, item 4). A name that does not resolve is refused. A
+        fixture's own check pins nothing."""
         addresses = self.check("sql", host)
         if addresses is None:
             return None
         if not addresses:
             raise ConnectorRefused(f"{host} does not resolve; nothing was read")
-        return addresses[0]
+        return addresses
 
-    def pin(self, url: str) -> str | None:
+    def pin(self, url: str) -> list[str] | None:
         """The address an API request goes to, looked up and checked now; the request is sent to
         that address, the name kept for its Host header and TLS, so DNS cannot change between the
         check and the connection (the orchestrator's second review of L1.6). A fixture's own check
@@ -115,7 +144,7 @@ class Readers:
         addresses = refuse_host("api", host, allowed_hosts=self.hosts())
         if not addresses:
             raise ConnectorRefused(f"{host} does not resolve; nothing was read")
-        return addresses[0]
+        return addresses
 
 
 #: The deployment's own names, each resolved to find an address the list must never admit
@@ -283,33 +312,49 @@ def source_file(dataset_id: str, name: str, root: Path | None = None) -> Path:
 
 def _json_files(dataset_id: str, pattern: str, root: Path) -> list[tuple[str, bytes]]:
     """The dataset's files matching `pattern`, in name order. A dot-name is never read (`*`
-    matches one in `fnmatch`, and a read's half-written `.read-*.tmp` is one), and the files' sizes
-    are added up before any is opened, so a read past the byte cap opens none (rule 2)."""
+    matches one in `fnmatch`, and a read's half-written `.read-*.tmp` is one), and a link is never
+    followed, wherever it points (the orchestrator's review of Amendment 15, item 10: a link named
+    `a.json` could reach a dot-file or another folder). The files' sizes are added up before any is
+    opened, so a read past the byte cap opens none, and each is read against what room is left, so
+    a file that grows after it was sized is stopped while it is read, never read whole (rule 2)."""
     matched: list[tuple[str, Path]] = []
     for folder in (root / dataset_id, root / UPLOAD_SUBDIR / dataset_id):
-        if not folder.is_dir():
+        if not folder.is_dir() or folder.is_symlink():
             continue
         for candidate in sorted(folder.iterdir(), key=lambda p: p.name):
-            if candidate.name.startswith("."):
+            if candidate.name.startswith(".") or candidate.is_symlink():
                 continue
-            resolved = candidate.resolve()
             if (
                 fnmatch.fnmatchcase(candidate.name, pattern)
-                and is_inside(folder, resolved)
-                and resolved.is_file()
+                and is_inside(folder, candidate.resolve())
+                and candidate.is_file()
             ):
-                matched.append((candidate.name, resolved))
+                matched.append((candidate.name, candidate))
+    over = ConnectorRefused(
+        f"the JSON files come to more than {reads.MAX_BYTES} bytes, more than one read may "
+        "take; nothing was read (rule 2)"
+    )
     if sum(path.stat().st_size for _name, path in matched) > reads.MAX_BYTES:
-        raise ConnectorRefused(
-            f"the JSON files come to more than {reads.MAX_BYTES} bytes, more than one read may "
-            "take; nothing was read (rule 2)"
-        )
-    found = [(name, path.read_bytes()) for name, path in matched]
+        raise over
+    found: list[tuple[str, bytes]] = []
+    room = reads.MAX_BYTES
+    for name, path in matched:
+        with open(path, "rb", opener=_no_follow) as handle:
+            body = handle.read(room + 1)
+        if len(body) > room:
+            raise over
+        room -= len(body)
+        found.append((name, body))
     if not found:
         raise ConnectorRefused(
             f"no file in the dataset's folder matches {pattern!r}; nothing was written"
         )
     return found
+
+
+def _no_follow(path: str, flags: int) -> int:
+    """Opens `path` without following a link put there after it was listed."""
+    return os.open(path, flags | getattr(os, "O_NOFOLLOW", 0))
 
 
 async def read_rows(
@@ -324,7 +369,7 @@ async def read_rows(
     """The rows one read of `source` finds, through its connection."""
     settings, read = connection.settings, source.read
     if isinstance(settings, SqlConnectionSettings) and isinstance(read, SqlRead):
-        address = readers.sql_address(settings.host)
+        addresses = readers.sql_addresses(settings.host)
         if read.table.split(".")[0] not in settings.schemas:
             raise ConnectorRefused(
                 f"the table {read.table} is not in a schema this connection may read "
@@ -338,7 +383,8 @@ async def read_rows(
         )
         return await read_sql(
             settings, read, secret=secret_of(settings.secret), watermark=watermark,
-            cursor=cursor if watermark else None, connect=readers.sql_connect, address=address,
+            cursor=cursor if watermark else None, connect=readers.sql_connect,
+            addresses=addresses,
         )  # fmt: skip
     if isinstance(settings, ApiConnectionSettings) and isinstance(read, ApiRead):
         return await read_api(
@@ -404,11 +450,11 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     allow-list and its secret set. Nothing is read."""
     settings = connection.settings
     found = connection_host(settings)
-    address: str | None = None
+    addresses: list[str] | None = None
     if found is not None:
         try:
             if found[0] == "sql":
-                address = readers.sql_address(found[1])
+                addresses = readers.sql_addresses(found[1])
             else:
                 readers.check(*found)
         except ConnectorRefused as refused:
@@ -416,7 +462,7 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     if isinstance(settings, SqlConnectionSettings):
         return await check_sql_connection(
             settings, secret=secret_of(settings.secret), connect=readers.sql_connect,
-            address=address,
+            addresses=addresses,
         )  # fmt: skip
     if isinstance(settings, ApiConnectionSettings):
         try:

@@ -80,6 +80,9 @@ ANSWERS: dict[str, list[str]] = {
     "nat64.client.example": ["64:ff9b::a9fe:a9fe"],
     "sixtofour.client.example": ["2002:7f00:1::"],
     "mapped-private.client.example": ["::ffff:10.20.30.40"],
+    "compat.client.example": ["::7f00:1"],
+    "sitelocal.client.example": ["fec0::1"],
+    "reserved.client.example": ["100::1"],
 }
 
 
@@ -295,6 +298,7 @@ async def test_the_read_checks_read_the_list_and_sql_connects_to_the_checked_add
     sent to the address that was checked, the host's name kept for TLS's name check, so a name
     rebound after the check is never connected to."""
     monkeypatch.setenv("OSPREY_CONNECTION_SECRET_NOMIS", "fixture-only")
+    monkeypatch.setenv("OSPREY_CONNECTOR_SECRETS", "NOMIS")  # declared (Amendment 15)
     seen: list[dict[str, Any]] = []
 
     async def connect(**kw: Any) -> Any:
@@ -313,7 +317,7 @@ async def test_the_read_checks_read_the_list_and_sql_connects_to_the_checked_add
     # The API's own pin reads the same list.
     monkeypatch.setitem(ANSWERS, "crm.client.example", ["10.20.9.9"])
     api = Readers(allowed_hosts=["crm.client.example"])
-    assert api.pin("https://crm.client.example/v1") == "10.20.9.9"
+    assert api.pin("https://crm.client.example/v1") == ["10.20.9.9"]
     _listed(monkeypatch, "10.99.0.0/16")
     with pytest.raises(ConnectorRefused, match="resolves inside"):
         api.pin("https://crm.client.example/v1")
@@ -322,7 +326,7 @@ async def test_the_read_checks_read_the_list_and_sql_connects_to_the_checked_add
 def test_a_sql_host_that_does_not_resolve_is_refused() -> None:
     readers = Readers(allowed_hosts=["gone.client.example"])
     with pytest.raises(ConnectorRefused, match="does not resolve"):
-        readers.sql_address("gone.client.example")
+        readers.sql_addresses("gone.client.example")
 
 
 def test_a_connections_ca_certificate_is_a_certificate() -> None:
@@ -356,3 +360,110 @@ def test_a_connections_ca_certificate_is_a_certificate() -> None:
     with pytest.raises(ValidationError, match="verify-full"):
         SqlConnectionSettings(host="db.client.example", database="d", user="u", secret="S",
                               tls="require", ca_certificate=pem)  # fmt: skip
+
+
+
+def test_reserved_and_site_local_ipv6_are_inside(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Python counts `::/96` (IPv4-compatible, `::7f00:1` is loopback) and `fec0::/10` (site-local)
+    as global; both are refused, listed or not (the orchestrator's review of Amendment 15,
+    item 3)."""
+    from schemas.sources import address_is_inside
+
+    for address in ("::7f00:1", "::a14:1e28", "fec0::1", "100::1"):
+        assert address_is_inside(ipaddress.ip_address(address)), address
+    assert not address_is_inside(ipaddress.ip_address("2a00:1450:4009:81f::200e"))
+    for host in ("compat.client.example", "sitelocal.client.example", "reserved.client.example"):
+        with pytest.raises(ConnectorRefused, match="resolves inside"):
+            refuse_host("api", host, allowed_hosts=None)
+    _listed(monkeypatch, "compat.client.example", "sitelocal.client.example")
+    for host in ("compat.client.example", "sitelocal.client.example"):
+        with pytest.raises(ConnectorRefused, match="resolves inside"):
+            refuse_host("sql", host, allowed_hosts=None)
+
+
+def test_the_resolver_s_order_is_kept_and_unreachable_families_left_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`resolve_host` keeps getaddrinfo's own order (not text order, which puts `2001:…` before
+    `93.…`) and asks for `AI_ADDRCONFIG`, so a family with no route is left out."""
+    import socket
+
+    asked: dict[str, Any] = {}
+
+    def getaddrinfo(host: str, port: Any, **kw: Any) -> list[Any]:
+        asked.update(kw)
+        return [(socket.AF_INET, 1, 6, "", ("93.184.215.14", 0)),
+                (socket.AF_INET6, 1, 6, "", ("2606:2800:220:1::1", 0, 0, 0)),
+                (socket.AF_INET, 1, 6, "", ("93.184.215.14", 0))]  # fmt: skip
+
+    monkeypatch.undo()  # the real resolve_host, its lookup stood in for
+    monkeypatch.setattr(connector_reads.socket, "getaddrinfo", getaddrinfo)
+    assert connector_reads.resolve_host("dual.example") == ["93.184.215.14", "2606:2800:220:1::1"]
+    assert asked["flags"] & socket.AI_ADDRCONFIG
+
+
+async def test_sql_tries_each_checked_address_in_order_and_stops_at_a_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dual-stack host whose IPv6 address cannot be reached is read through its IPv4 one, both
+    checked first; a certificate that fails verification stops at once (items 4 and 11)."""
+    import ssl
+
+    from services.ingest.connectors.sql_connector import check_sql_connection
+
+    tried: list[str] = []
+
+    class _Conn:
+        async def fetchrow(self, _sql: str) -> dict[str, Any]:
+            return {"superuser": False, "owned": 0, "writable": 0}
+
+        async def close(self) -> None:
+            return None
+
+    async def connect(**kw: Any) -> Any:
+        tried.append(kw["host"])
+        if ":" in kw["host"]:
+            raise OSError("Network is unreachable")
+        return _Conn()
+
+    settings = SqlConnectionSettings(host="dual.client.example", database="nomis", user="reader",
+                                     secret="NOMIS")  # fmt: skip
+    addresses = ["2a00:1450:4009:81f::200e", "93.184.215.14"]
+    tested = await check_sql_connection(settings, secret="pw", connect=connect, addresses=addresses)
+    assert tested.ok, tested.words
+    assert tried == addresses
+    tried.clear()
+
+    async def unverified(**kw: Any) -> Any:
+        tried.append(kw["host"])
+        raise ssl.SSLCertVerificationError("certificate verify failed")
+
+    refused = await check_sql_connection(settings, secret="pw", connect=unverified,
+                                         addresses=addresses)  # fmt: skip
+    assert not refused.ok and "certificate could not be verified" in refused.words
+    assert "would not speak TLS" not in refused.words
+    assert tried == addresses[:1]
+
+
+async def test_an_api_request_tries_each_checked_address_in_order() -> None:
+    import httpx
+    from services.ingest.connectors.reads import read_api
+
+    from schemas.sources import ApiRead
+
+    tried: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        tried.append(request.url.host)
+        if ":" in request.url.host:
+            raise httpx.ConnectError("Network is unreachable", request=request)
+        return httpx.Response(200, json={"data": [{"n": 1}]})
+
+    addresses = ["2a00:1450:4009:81f::200e", "93.184.215.14"]
+    read = await read_api(
+        ApiConnectionSettings(base_url="https://crm.client.example"),
+        ApiRead(path="/v1/n", records_at="data"), secret=None,
+        allowed_hosts=["crm.client.example"], transport=httpx.MockTransport(answer),
+        before_request=lambda _url: list(addresses),
+    )  # fmt: skip
+    assert len(read.rows) == 1 and tried == addresses

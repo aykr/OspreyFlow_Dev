@@ -283,6 +283,7 @@ async def test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_r
     (root / "uploaded" / "ds-exit").mkdir(parents=True)
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(root))
     monkeypatch.setenv("OSPREY_CONNECTION_SECRET_NOMIS_FIXTURE", PASSWORD)
+    monkeypatch.setenv("OSPREY_CONNECTOR_SECRETS", "NOMIS_FIXTURE")  # declared (Amendment 15)
     from services.api import connector_reads
 
     monkeypatch.setattr(connector_reads, "resolve_host", lambda host: [])  # no lookup leaves
@@ -470,56 +471,11 @@ async def test_a_write_in_the_connectors_session_is_refused_by_the_server(
 import asyncio  # noqa: E402
 import ssl as _ssl  # noqa: E402
 import struct  # noqa: E402
-from datetime import timedelta  # noqa: E402
 
-from cryptography import x509  # noqa: E402
-from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric import ec  # noqa: E402
-from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID  # noqa: E402
+from tests.connectors.tls_fixture import Ca, make_ca  # noqa: E402
 
 TLS_NAME = "nomis-tls.fixture.example"
 _SSL_REQUEST = struct.pack("!ii", 8, 80877103)
-
-
-def _issue(subject: str, key: Any, issuer: x509.Name, signer: Any, *, ca: bool) -> x509.Certificate:
-    now = datetime.now().astimezone()
-    built = (
-        x509.CertificateBuilder()
-        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject)]))
-        .issuer_name(issuer)
-        .public_key(key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(minutes=5))
-        .not_valid_after(now + timedelta(hours=1))
-        .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
-    )
-    if ca:
-        built = built.add_extension(
-            x509.KeyUsage(
-                digital_signature=True,
-                key_cert_sign=True,
-                crl_sign=True,
-                content_commitment=False,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                encipher_only=False,
-                decipher_only=False,
-            ),  # fmt: skip
-            critical=True,
-        ).add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
-    else:
-        built = (
-            built.add_extension(
-                x509.SubjectAlternativeName([x509.DNSName(subject)]), critical=False
-            )
-            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-            .add_extension(
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(signer.public_key()),
-                critical=False,
-            )
-        )
-    return built.sign(signer, hashes.SHA256())
 
 
 class _TlsFront:
@@ -574,26 +530,13 @@ class _TlsFront:
         await asyncio.gather(pipe(reader, up_writer, True), pipe(up_reader, writer, False))
 
 
-class _Ca(SimpleNamespace):
-    pem: str
-    key: Any
-    name: x509.Name
-
-
 @pytest.fixture
-def fixture_ca() -> _Ca:
-    key = ec.generate_private_key(ec.SECP256R1())
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "OspreyFlow fixture CA")])
-    cert = _issue("OspreyFlow fixture CA", key, name, key, ca=True)
-    return _Ca(pem=cert.public_bytes(serialization.Encoding.PEM).decode(), key=key, name=name)
+def fixture_ca() -> Ca:
+    return make_ca()
 
 
-async def _front_for(name: str, ca: _Ca, tmp: Path) -> _TlsFront:
-    key = ec.generate_private_key(ec.SECP256R1())
-    cert = _issue(name, key, ca.name, ca.key, ca=False)
-    key_pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                serialization.NoEncryption())  # fmt: skip
-    front = _TlsFront(cert.public_bytes(serialization.Encoding.PEM), key_pem, tmp)
+async def _front_for(name: str, ca: Ca, tmp: Path) -> _TlsFront:
+    front = _TlsFront(*ca.server(name), tmp)
     await front.start()
     return front
 
@@ -605,14 +548,14 @@ def _tls_settings(port: int, ca_pem: str | None) -> SqlConnectionSettings:
 
 
 async def test_verify_full_reads_over_tls_from_a_server_it_trusts(
-    nomis: asyncpg.Connection, fixture_ca: _Ca, tmp_path: Path
+    nomis: asyncpg.Connection, fixture_ca: Ca, tmp_path: Path
 ) -> None:
     front = await _front_for(TLS_NAME, fixture_ca, tmp_path)
     try:
         settings = _tls_settings(front.port, fixture_ca.pem)
-        tested = await check_sql_connection(settings, secret=PASSWORD, address="127.0.0.1")
+        tested = await check_sql_connection(settings, secret=PASSWORD, addresses=["127.0.0.1"])
         assert tested.ok, tested.words
-        read = await read_sql(settings, READ, secret=PASSWORD, address="127.0.0.1")
+        read = await read_sql(settings, READ, secret=PASSWORD, addresses=["127.0.0.1"])
         assert len(read.rows) == len(BOOKINGS)
         assert front.handshakes >= 2 and front.relayed > 0
     finally:
@@ -620,31 +563,31 @@ async def test_verify_full_reads_over_tls_from_a_server_it_trusts(
 
 
 async def test_verify_full_refuses_a_certificate_from_a_ca_it_does_not_trust(
-    nomis: asyncpg.Connection, fixture_ca: _Ca, tmp_path: Path
+    nomis: asyncpg.Connection, fixture_ca: Ca, tmp_path: Path
 ) -> None:
     """The connection names no CA, so only the system's trust store is asked, which does not hold
     the fixture's CA: refused, and the sign-in never reaches Postgres."""
     front = await _front_for(TLS_NAME, fixture_ca, tmp_path)
     try:
         settings = _tls_settings(front.port, None)
-        with pytest.raises(ConnectorRefused, match="TLS"):
-            await read_sql(settings, READ, secret=PASSWORD, address="127.0.0.1")
-        tested = await check_sql_connection(settings, secret=PASSWORD, address="127.0.0.1")
-        assert not tested.ok and "TLS" in tested.words
+        with pytest.raises(ConnectorRefused, match="certificate could not be verified"):
+            await read_sql(settings, READ, secret=PASSWORD, addresses=["127.0.0.1"])
+        tested = await check_sql_connection(settings, secret=PASSWORD, addresses=["127.0.0.1"])
+        assert not tested.ok and "certificate could not be verified" in tested.words
         assert front.relayed == 0
     finally:
         await front.stop()
 
 
 async def test_verify_full_refuses_a_certificate_for_another_name(
-    nomis: asyncpg.Connection, fixture_ca: _Ca, tmp_path: Path
+    nomis: asyncpg.Connection, fixture_ca: Ca, tmp_path: Path
 ) -> None:
     """A certificate the trusted CA signed, but for another name: refused by the name check."""
     front = await _front_for("other.fixture.example", fixture_ca, tmp_path)
     try:
         settings = _tls_settings(front.port, fixture_ca.pem)
-        with pytest.raises(ConnectorRefused, match="TLS"):
-            await read_sql(settings, READ, secret=PASSWORD, address="127.0.0.1")
+        with pytest.raises(ConnectorRefused, match="certificate could not be verified"):
+            await read_sql(settings, READ, secret=PASSWORD, addresses=["127.0.0.1"])
         assert front.relayed == 0
     finally:
         await front.stop()
