@@ -1,11 +1,12 @@
-"""A case's gazetteers (ADR-147 Amendment 2, the owner's ruling 6): `GET`, `PUT` and `DELETE
-/v1/investigations/{id}/map/gazetteers[/{dataset_id}]`, through the real app with the graph stood in.
+"""A dataset's gazetteers (ADR-147 Amendment 2, the owner's ruling 6): the case's `GET
+/v1/investigations/{id}/map/gazetteers` and the dataset's `PUT`/`DELETE
+/v1/datasets/{dataset}/gazetteers/{gazetteer}`, through the real app with the graph stood in.
 
 What the stand-in can prove, and only that: which gazetteers are offered (the Author's unit's), which
 additions are refused and in what words (another unit's, not a gazetteer, a case reading a composite
 or nothing), what a copy is written as (the case's own dataset, the place's handling and properties,
-its provenance naming the gazetteer, the same id each time), and which copies a removal reverts (the
-gazetteer's alone: never one another writer wrote or a link rests on, rule 6). That the store reads
+its provenance naming the gazetteer, the same id each time), and that a removal deletes nothing and
+answers alike whatever rests on a copy (the orchestrator's ruling (d), rule 3). That the store reads
 and writes them under the access step, and that a copy's identifiers are withheld and never matched,
 is proven live (`tests/ingest/test_case_gazetteer_copies_live.py`). The case levels are
 `test_investigation_levels.py`'s table and the rights `test_route_rights.py`'s.
@@ -41,14 +42,12 @@ from schemas.domain import (
     AuditStub,
     Edge,
     Handling,
-    ExpandRequest,
     Node,
     NodeWrite,
     Principal,
     Provenance,
     ProvenanceState,
     SourceRef,
-    Subgraph,
 )
 from tests.services.api.any_case import AnyCase
 from tests.services.api.test_search_route import _FakeAudit
@@ -140,15 +139,6 @@ class _Graph:
             if w.id in self.reverted:
                 self.reverted.remove(w.id)
         return [w.id for w in writes]
-
-    async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
-        edges = [
-            e for e in self.links
-            if {e.source, e.target} & set(req.node_ids)
-            and _reads(principal, e.datasets, e.handling.classification)
-        ]  # fmt: skip
-        self.expanded_as.append(principal)
-        return Subgraph(nodes=[], edges=edges)
 
     async def revert_elements(self, nodes: Sequence[str], edges: Sequence[str], _tx: str) -> None:
         self.reverted.extend(nodes)
@@ -446,7 +436,8 @@ async def test_one_dataset_s_failed_refresh_neither_stops_the_others_nor_the_bui
     monkeypatch.setattr(case_gazetteers, "copy_places", flaky)
     refreshed = await refresh_cases(graph, load_uk_le_scheme(), store, datasets, GAZ)
     assert refreshed.datasets == 1 and len(refreshed.failed) == 1
-    assert "case-a" in refreshed.failed[0]
+    # Said with no dataset named: the building administrator may be of another unit.
+    assert "case-a" not in refreshed.failed[0] and "(RuntimeError)" in refreshed.failed[0]
     assert {w.datasets[0] for w in graph.written} == {"case-b"}
 
 
@@ -462,6 +453,25 @@ async def test_a_rebuild_refreshes_each_dataset_and_drops_one_no_longer_there(
     await refresh_cases(graph, load_uk_le_scheme(), store, datasets, GAZ)
     assert {w.datasets[0] for w in graph.written} == {"case-a"}
     assert list(store.added) == [("case-a", GAZ)]
+
+
+def test_a_removal_needs_only_the_record_not_the_gazetteer_s_state_now(world: World) -> None:
+    """The lane's review: a gazetteer since deleted, or moved to another unit, can still be removed
+    from a dataset that holds it, so its copies stop being offered."""
+    _graph, datasets, store, *_ = world
+    _put()
+    del datasets.datasets[GAZ]
+    assert _delete().status_code == 200
+    assert store.added == {}
+
+
+def test_a_re_add_is_recorded_as_the_re_adder_s(world: World) -> None:
+    _graph, _datasets, store, *_ = world
+    _put()
+    _delete()
+    app.dependency_overrides[get_principal] = lambda: AUTHOR.model_copy(update={"id": "author-2"})
+    _put()
+    assert store.added[("case-a", GAZ)].added_by == "author-2"
 
 
 def test_removing_a_gazetteer_the_dataset_never_took_is_refused(world: World) -> None:

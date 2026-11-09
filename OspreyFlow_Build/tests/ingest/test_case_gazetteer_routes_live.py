@@ -68,12 +68,15 @@ PLANTED: list[str] = []
 
 @pytest.fixture
 def api_env(jwks_url: str, tmp_path: Any) -> Iterator[None]:
-    keys = ("OIDC_JWKS_URL", "OIDC_ALGORITHMS", "ARCADEDB_DATABASE", "OSPREY_INGEST_ROOT")
+    keys = ("OIDC_JWKS_URL", "OIDC_ALGORITHMS", "ARCADEDB_DATABASE", "OSPREY_INGEST_ROOT",
+            "ANALYTICS_DB_PATH")  # fmt: skip
     previous = {key: os.environ.get(key) for key in keys}
     os.environ.update(
         {"OIDC_JWKS_URL": jwks_url, "OIDC_ALGORITHMS": "RS256", "ARCADEDB_DATABASE": "ospreyflow",
-         # The upload lands in this run's own folder, removed with it.
-         "OSPREY_INGEST_ROOT": str(tmp_path)}
+         # The upload lands in this run's own folder, removed with it; so does the analytics store
+         # the place's point is planted in.
+         "OSPREY_INGEST_ROOT": str(tmp_path),
+         "ANALYTICS_DB_PATH": str(tmp_path / "analytics.duckdb")}
     )  # fmt: skip
     try:
         yield
@@ -200,6 +203,28 @@ async def _hidden_link(case_dataset: str, copy: str) -> None:
     await client.aclose()
 
 
+def _plant_point(client: TestClient) -> None:
+    """The place's point, in the test app's own analytics store (this run's folder)."""
+    from services.ingest.geometries import POINT_GEOMETRY_VERSION
+
+    from schemas.analytics import GeometryKind, GeometryRecord
+
+    record = GeometryRecord(
+        geometry_ref=f"g-{TAG}", version=POINT_GEOMETRY_VERSION, kind=GeometryKind.POINT,
+        lon=-0.7, lat=52.7, handling=_handling(),
+    )  # fmt: skip
+    client.portal.call(client.app.state.analytics.load_geometries, [record])  # type: ignore[attr-defined,union-attr]
+
+
+def _places(client: TestClient, case_id: str, headers: dict[str, str]) -> list[str]:
+    found = client.post(
+        f"/v1/investigations/{case_id}/map/places", headers=headers, json={"query": "Quillbury"}
+    )
+    assert found.status_code == 200, found.text
+    assert not _carries_an_identifier(found.text), found.text
+    return [p["id"] for p in found.json()["places"]]
+
+
 async def _remove(ids: list[str]) -> None:
     if not ids:
         return
@@ -289,6 +314,8 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
             added = client.put(f"/v1/datasets/{own}/gazetteers/{GAZETTEER}", headers=headers)
             assert added.status_code == 200, added.text
             copy = copy_id(place_id, own)
+            _plant_point(client)
+            assert _places(client, case_id, headers) == [copy]
 
             # The case stays one dataset: no composite.
             after = client.get(f"/v1/investigations/{case_id}/datasets", headers=headers).json()
@@ -383,6 +410,8 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
                 added = [g for g in listing.json()["gazetteers"] if g["dataset_id"] == GAZETTEER]
                 return len(found), hinted["more"], len(hinted["nodes"]) + 10 * added[0]["added"]
 
+            # The place search no longer offers it (ruling (d), through the Conduit's own records).
+            assert _places(client, case_id, headers) == []
             # Every copy stays in both: the place by its name, the twelve by theirs.
             assert seen(case_id) == seen(other_id) == (1, True, 10)
             # Added again: the same copies, re-linked, never a second set.
@@ -393,6 +422,7 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
                 f"/v1/investigations/{case_id}/search", headers=headers, json={"query": NAME}
             )
             assert [n["id"] for n in again.json()["nodes"]] == [copy], again.text
+            assert _places(client, case_id, headers) == [copy]
 
             # The control: the same upload in a case reading a composite (what adding the gazetteer
             # as a dataset made, Amendment 1's option (b)) is refused.

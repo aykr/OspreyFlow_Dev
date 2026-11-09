@@ -191,11 +191,14 @@ _JAVA_IN_IMAGE = re.compile(
     r"|\b(openjdk-?\d+(-jre|-jdk)?(-headless)?|default-(jre|jdk)(-headless)?)\b",
     re.M | re.I,
 )
-#: `git` installed by a distribution's package manager: GPL-2.0, so it is declared like a runtime.
+#: `git` in an image: a distribution's package (`git`, `git-core`, `git-lfs`, which brings `git`), or
+#: its binary copied in from another stage. GPL-2.0, so it is declared like a runtime. A base image
+#: that already carries it is beyond what a Dockerfile's text can show.
 _GIT_IN_IMAGE = re.compile(
-    r"\b(apt-get|apt|dnf|yum|microdnf)\b[^\n]*\binstall\b[^\n]*\bgit(-lfs)?(?![\w-])"
-    r"|\bapk\s+add\b[^\n]*\bgit(-lfs)?(?![\w-])",
-    re.I,
+    r"\b(apt-get|apt|dnf|yum|microdnf)\b[^\n]*\binstall\b[^\n]*\bgit(-lfs|-core)?(?![\w-])"
+    r"|\bapk\s+add\b[^\n]*\bgit(-lfs|-core)?(?![\w-])"
+    r"|^COPY\b[^\n]*\s/usr/(local/)?bin/git(\s|$)",
+    re.I | re.M,
 )
 #: Runtimes an image carries under a licence the register does not pass, put to the owner and not
 #: yet ruled on: named on every run (never passed silently), not failed. The register is the

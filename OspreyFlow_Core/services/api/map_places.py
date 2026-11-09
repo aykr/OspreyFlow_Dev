@@ -280,22 +280,21 @@ async def search_places(
 
 #: ADR-147 Amendment 2: a command-line build that could not refresh the cases' copies says so.
 UNREFRESHED_COPIES = (
-    "The places are committed, but the cases that added this gazetteer were not given them again: "
-    "the Conduit's database could not be reached ({error}). Run the build again once the "
-    "deployment is up."
+    "The places are committed, but the datasets that hold this gazetteer were not given them "
+    "again ({error}). Run the build again once the deployment is up."
 )
 
 
 async def refresh_case_copies_from_env(
     graph: GraphPort, scheme: HandlingScheme, gazetteer: str
 ) -> int:
-    """The command-line builds' refresh of every case's copies of `gazetteer` (ADR-147 Amendment
-    2: a re-build refreshes them), once its places are committed. Returns how many cases. The
-    working sets are the Conduit's: a copy reverted here (its place gone) leaves an open case's
-    canvas when the case is next opened. An unreachable database is said in words."""
+    """The command-line builds' refresh of every dataset's copies of `gazetteer` (ADR-147
+    Amendment 2: a re-build refreshes them), once its places are committed. Returns how many
+    datasets were given the places again. Nothing is reverted (the orchestrator's ruling (d)). Any
+    failure is said in words, never failing the committed build."""
     from .case_gazetteers import refresh_cases_from_env
 
     try:
         return await refresh_cases_from_env(graph, scheme, gazetteer)
-    except (OSError, asyncpg.PostgresError) as exc:
+    except Exception as exc:  # noqa: BLE001 - said in words; the build stands
         raise DatasetsUnreachable(UNREFRESHED_COPIES.format(error=type(exc).__name__)) from None

@@ -1331,7 +1331,7 @@ async def _build_here(admin: MapAdmin, by: str, region: str, unit: str) -> int:
             await register_gazetteer_dataset_from_env(region, by=by, unit=unit)
             # ADR-147 Amendment 2: every case that added the gazetteer given its places again.
             cases = await refresh_case_copies_from_env(graph, scheme, gazetteer_dataset_id(region))
-            print(f"Cases given the places again: {cases}.")
+            print(f"Datasets given the places again: {cases}.")
         except DatasetsUnreachable as unreachable:
             # The places are committed; the build goes on, and says how to register them.
             print(str(unreachable), file=sys.stderr)

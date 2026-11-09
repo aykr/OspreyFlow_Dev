@@ -29,8 +29,10 @@ sees the gazetteer added; a case deleted, or moved to another dataset, leaves th
 copies it describes.
 
 **Copied in pages**, each its own transaction, never one unbounded write. **A copy the case has
-written to** (another writer's source, as when a case's own load matched it by its `osm_id`, or a
-person's confirmation) **is the case's data now**: a re-build does not write over it.
+written to** (another writer's source, as when a case's own upsert-mode load matched and wrote onto
+it, or a person's confirmation) **is the case's data now**: a re-build does not write over it. A
+reference-mode lookup (`on_match: reference`, as the gazetteer recipe's) finds the copy and links to
+it, writing nothing onto it.
 
 **Nothing is ever deleted** (the orchestrator's ruling (d), rule 3). A removal reverts no copy,
 whatever rests on it, so no case is left a link to nothing and nothing a reader may not see changes
@@ -81,7 +83,8 @@ class AddedGazetteer:
     """A gazetteer copied into `case_dataset`, a case's own dataset: recorded **for the dataset**,
     which holds the copies, so every case that reads the dataset reads them and sees the gazetteer
     added, and a case deleted or moved to another dataset leaves the copies' record with them.
-    `added_in` is the case it was added from, for the audit's sake."""
+    `added_in` is where it was added from (the dataset's own route: the dataset), for the audit's
+    sake."""
 
     case_dataset: str
     gazetteer: str
@@ -119,12 +122,14 @@ ALTER TABLE dataset_gazetteers ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ;
         await self.pool.close()
 
     async def add(self, added: AddedGazetteer) -> bool:
-        """Records `added`, or takes a removed record back; `False` if the dataset held the
-        gazetteer already (the first record kept)."""
+        """Records `added`, or takes a removed record back as the re-adder's; `False` if the
+        dataset held the gazetteer already (the first record kept)."""
         async with self.pool.acquire() as connection:
             made = await connection.fetchval(
                 "INSERT INTO dataset_gazetteers VALUES ($1, $2, $3, $4, $5, NULL) "
-                "ON CONFLICT (case_dataset, gazetteer) DO UPDATE SET removed_at = NULL "
+                "ON CONFLICT (case_dataset, gazetteer) DO UPDATE SET removed_at = NULL, "
+                "added_in = EXCLUDED.added_in, added_by = EXCLUDED.added_by, "
+                "added_at = EXCLUDED.added_at "
                 "WHERE dataset_gazetteers.removed_at IS NOT NULL RETURNING true",
                 added.case_dataset, added.gazetteer, added.added_in, added.added_by,
                 added.added_at,
@@ -188,7 +193,8 @@ class InMemoryCaseGazetteerStore:
         key = (added.case_dataset, added.gazetteer)
         if key in self.added:
             return False
-        self.added[key] = self.removed.pop(key, added)
+        self.removed.pop(key, None)
+        self.added[key] = added  # a re-add is the re-adder's, as the Postgres store records it
         return True
 
     async def remove(self, case_dataset: str, gazetteer: str) -> None:
@@ -262,8 +268,8 @@ async def _copies(
 
 
 def _the_gazetteer_s_alone(copy: Node, gazetteer: str) -> bool:
-    """No other writer's source on it and no person's confirmation: what a re-build may write over
-    and a removal may revert. Otherwise it is the case's data now (rule 6)."""
+    """No other writer's source on it and no person's confirmation: what a re-build may write over.
+    Otherwise it is the case's data now (rule 6)."""
     own = f"{COPY_SOURCE_PREFIX}{gazetteer}"
     return (
         all(s.document_id == own for s in copy.provenance.sources)
@@ -337,6 +343,13 @@ async def copy_places(
     return count
 
 
+#: A refresh that could not reach one dataset, or any, said to the builder (no dataset named).
+UNREFRESHED = (
+    "A dataset that holds this gazetteer was not given its places again ({error}); the build "
+    "stands. Build again to retry it."
+)
+
+
 @dataclass(frozen=True)
 class Refreshed:
     """What a re-build's refresh did: how many datasets were given the places again, and the words
@@ -366,10 +379,8 @@ async def refresh_cases(
                 by=added.added_by, unit=held[added.case_dataset].owning_unit,
             )  # fmt: skip
         except Exception as error:  # noqa: BLE001 - said in words, the others still refreshed
-            failed.append(
-                f"The dataset {added.case_dataset} was not given the places again "
-                f"({type(error).__name__}); build again to retry it."
-            )
+            # No dataset is named: the building administrator may be of another unit.
+            failed.append(UNREFRESHED.format(error=type(error).__name__))
             continue
         done += 1
     return Refreshed(datasets=done, failed=tuple(failed))

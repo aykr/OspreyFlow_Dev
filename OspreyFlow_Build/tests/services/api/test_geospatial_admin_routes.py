@@ -34,6 +34,7 @@ from services.api.app import (
     app,
     get_analytics,
     get_audit,
+    get_case_gazetteers,
     get_config,
     get_datasets,
     get_graph,
@@ -43,6 +44,7 @@ from services.api.app import (
     get_principal,
     require_admin_role,
 )
+from services.api.case_gazetteers import InMemoryCaseGazetteerStore
 from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.map_admin import InMemoryMapAdminAudit, MapAdmin, MapKeyFile, MapSettingsFile
 
@@ -56,6 +58,7 @@ ANALYST = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 #: gazetteer's points and its dataset); a sentinel and the in-memory store, read back below.
 ANALYTICS = object()
 DATASETS = InMemoryDatasetStore()
+GAZETTEERS = InMemoryCaseGazetteerStore()
 
 
 def _principal(*roles: str) -> Principal:
@@ -153,6 +156,7 @@ def client(graph: _FakeGraph, map_admin: MapAdmin) -> TestClient:
     app.dependency_overrides[get_analytics] = lambda: ANALYTICS
     app.dependency_overrides[get_datasets] = lambda: DATASETS
     app.dependency_overrides[get_handling_scheme] = load_uk_le_scheme
+    app.dependency_overrides[get_case_gazetteers] = lambda: GAZETTEERS
     test_client = TestClient(app)
     try:
         yield test_client
@@ -480,3 +484,35 @@ def test_the_places_are_committed_before_the_provider_is_registered(
     response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "rutland"})
     assert '"returncode": 0' in response.text, response.text
     assert order == ["commit", "register"]
+
+
+
+def test_a_refresh_that_fails_outright_neither_fails_the_committed_build_nor_hides_it(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The lane's review of round 2: the records' own read failing (outside any one dataset's copy)
+    is said in the build's words; the build, its places committed, completes and its provider is
+    registered."""
+    _fake_gazetteer(monkeypatch)
+
+    class _Down(InMemoryCaseGazetteerStore):
+        async def datasets_with(self, gazetteer: str) -> list:  # type: ignore[type-arg]
+            raise ConnectionRefusedError("the records' database is down")
+
+    app.dependency_overrides[get_case_gazetteers] = lambda: _Down()
+
+    async def _fake_build(admin: Any, *, load_places: Any, settle: Any, **_kwargs: Any) -> Any:
+        counts = await load_places(Path("/tmp/rutland.osm.pbf"))
+        await settle()
+        return ("rutland.pmtiles", *counts)
+
+    monkeypatch.setattr("services.api.map_admin.build_basemap", _fake_build)
+    DATASETS.datasets.pop("gazetteer-osm-rutland", None)
+    try:
+        response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "rutland"})
+    finally:
+        DATASETS.datasets.pop("gazetteer-osm-rutland", None)
+    assert '"returncode": 0' in response.text, response.text
+    assert "was not given its places again (ConnectionRefusedError); the build stands" in (
+        response.text
+    )

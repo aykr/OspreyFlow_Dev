@@ -620,7 +620,7 @@ async def _after_the_commit(
     except DatasetsUnreachable as unreachable:
         print(str(unreachable), file=sys.stderr)
         return 1
-    print(f"Cases given the places again: {cases}.")
+    print(f"Datasets given the places again: {cases}.")
     return 1 if result.gazetteer_report.rejections else 0
 
 

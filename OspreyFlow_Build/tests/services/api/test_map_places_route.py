@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from services.api.case_gazetteers import AddedGazetteer, InMemoryCaseGazetteerStore
 from services.api.map_places import SCAN_LIMIT
 
 from ports.graph import NodeSuggestions
@@ -27,6 +28,7 @@ from services.api.app import (
     app,
     get_analytics,
     get_audit,
+    get_case_gazetteers,
     get_graph,
     get_investigations,
     get_principal,
@@ -144,6 +146,8 @@ class _Analytics:
 
 
 World = tuple[_Graph, _Analytics, _FakeAudit]
+#: The dataset's gazetteer records, through the route's own dependency (no record: nothing removed).
+GAZETTEERS = InMemoryCaseGazetteerStore()
 
 
 @pytest.fixture
@@ -156,6 +160,7 @@ def world() -> Iterator[World]:
     app.dependency_overrides[get_analytics] = lambda: analytics
     app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: audit
+    app.dependency_overrides[get_case_gazetteers] = lambda: GAZETTEERS
     yield graph, analytics, audit
     app.dependency_overrides.clear()
 
@@ -349,24 +354,28 @@ def test_a_case_s_copy_of_a_gazetteer_place_is_offered(world: World) -> None:
 def test_a_removed_gazetteer_s_copies_are_no_longer_offered(world: World) -> None:
     """ADR-147 Amendment 2, the orchestrator's ruling (d): a removal deletes no copy, and the place
     search stops offering them, keyed on their mark and the removal record."""
-    from services.api.case_gazetteers import AddedGazetteer, InMemoryCaseGazetteerStore
-
     graph, analytics, _audit = world
     copy = _location("loc-copy", dataset="case-data", name="Cranwell", geometry_ref="g-copy")
     copy.provenance.gazetteer = "gazetteer-osm-rutland"
     graph.nodes = [copy]
     analytics.points["g-copy"] = _point("g-copy", -0.5, 53.0)
     store = InMemoryCaseGazetteerStore()
-    app.state.case_gazetteers = store
-    try:
-        assert [p["name"] for p in _search().json()["places"]] == ["Cranwell"]
-        import asyncio
+    app.dependency_overrides[get_case_gazetteers] = lambda: store
+    assert [p["name"] for p in _search().json()["places"]] == ["Cranwell"]
+    import asyncio
 
-        asyncio.run(store.add(AddedGazetteer(
-            case_dataset="case-data", gazetteer="gazetteer-osm-rutland", added_in="inv-1",
-            added_by="a", added_at=datetime(2026, 1, 1, tzinfo=UTC),
-        )))  # fmt: skip
-        asyncio.run(store.remove("case-data", "gazetteer-osm-rutland"))
-        assert _search().json() == {"places": [], "more": False}
-    finally:
-        del app.state.case_gazetteers
+    asyncio.run(store.add(AddedGazetteer(
+        case_dataset="case-data", gazetteer="gazetteer-osm-rutland", added_in="case-data",
+        added_by="a", added_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )))  # fmt: skip
+    asyncio.run(store.remove("case-data", "gazetteer-osm-rutland"))
+    assert _search().json() == {"places": [], "more": False}
+
+
+def test_without_the_gazetteer_records_the_search_refuses_rather_than_offer_removed_copies(
+    world: World,
+) -> None:
+    """The lane's review: the records are the route's dependency, so a Conduit without them answers
+    503, never offering a removed gazetteer's copies again (no silent fail-open)."""
+    del app.dependency_overrides[get_case_gazetteers]
+    assert _search().status_code == 503

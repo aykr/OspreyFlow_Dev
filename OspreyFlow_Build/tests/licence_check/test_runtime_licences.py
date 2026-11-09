@@ -121,6 +121,11 @@ def test_git_installed_and_undeclared_is_refused() -> None:
     assert find_runtime_offenders({"api": GIT.replace("git curl", "git-lfs curl")}) == [
         ("api", "git", "undeclared")
     ]
+    assert find_runtime_offenders({"api": GIT.replace("git curl", "git-core curl")}) == [
+        ("api", "git", "undeclared")
+    ]
+    copied = "FROM python:3.12-slim\nCOPY --from=tools /usr/bin/git /usr/bin/git\n"
+    assert find_runtime_offenders({"api": copied}) == [("api", "git", "undeclared")]
     assert find_runtime_offenders({"api": GIT.replace("git curl", "gitk-viewer curl")}) == []
 
 
