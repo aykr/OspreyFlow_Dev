@@ -696,6 +696,7 @@ jobs:
           ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
           ../OspreyFlow_Build/tests/services/api/test_list_connector_store.py
           ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py
+          ../OspreyFlow_Build/tests/services/api/test_list_rows_parquet_live.py
           ../OspreyFlow_Build/tests/test_migrate_branches_to_views_store.py
           ../OspreyFlow_Build/tests/services/api/test_unconverted_case_merge_live.py
           ../OspreyFlow_Build/tests/resolve/test_trigger_layers.py
