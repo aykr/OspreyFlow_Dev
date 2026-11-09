@@ -1,55 +1,97 @@
-# studio-b lane · report · L1.6 (phase 9: connectors, and the screening-list connector; ADR-140 Amendments 13 and 15, ADR-133 Amendment 9), 9 November 2026
+# studio-b lane · report · L1.8 (the Studio's tips, who-can refusals and Domain model wording; ADR-145 Amendments 4 and 7, ADR-140 Amendments 9 and 16), 9 November 2026
 
-1. **Phase 9's exit: met.** `visit_bookings` is registered from a synthetic NOMIS replica with an incremental watermark, and *Refresh now* reads only the new rows. A SQL source's file then loads only the new row (`test_sql_connector_live.py`). Connections name their secret and never hold it (`test_connector_schemas.py`, `test_connector_routes.py`).
-2. **Each template maps its synthetic golden file: met** (7 templates; `tests/connectors/test_list_templates.py`).
-3. **A rule offers only subscribed lists, never another dataset's: met at the route** (`test_list_connector.py`, `test_list_connector_routes.py`, `test_subscribed_lists_seam.py`). The rule's picker is the rules lane's (in CARRIES).
-4. **Import idempotent per version: met,** proven on the real keeper too (`test_list_rows_parquet_live.py`). **Import replaces L1.4's stand-in: met** (`test_subscribed_lists_seam.py`).
-5. **Keyboard (rule 13) and axe: met in the earlier session.** `sources-connectors.spec.ts` (12 ids, `L1.6_action_registry.diff`); `every-harness` covers 10 states × 3 themes. No Glass change since, so not re-run.
-6. **ADR-140 Amendment 15** (the owner's ruling 7a): `connectors.private_hosts` in `osprey.yaml` admits named private hosts or networks. Never admitted: this machine, the deployment's own networks and names, or a cloud's metadata services, link-local or inside a range. SQL connects to the checked address; a client's CA can be named. Proven by `test_connector_private_hosts.py` (38 cases, plants P1–P6, N1–N9, M1–M2), and live by `verify-full` through a TLS front (plants L1–L4). **ADR-133 Amendment 9** (ruling 2a) is written; its code is rules' L2.11, by the orchestrator's ruling.
-7. **The orchestrator's independent review: no blocker; items 1–5 and 9–12 fixed**, strict option each time, shown red (R1–R12):
-   - **Access:** a source author is told a refused read in fixed words, and an unbound connection answers as an unknown one (404).
-   - **TLS and addresses:** the API's TLS is tested against a real HTTPS server; reserved and site-local IPv6 are inside; addresses are taken in the resolver's order.
-   - **Secrets:** connection secrets are declared in `osprey.yaml` and given to the Conduit alone.
-   - **Files and words:** JSON reads never follow a link and are capped while read; a failed certificate check says so.
-   - **Shared files:** they left the branch, carried as diffs that apply to main.
-8. **My lane-reviewer on that round: 6 must-fix items, all fixed (S1–S6).** The main fix: SQL reaches each checked address over TCP first and signs in at one only, so no second server is sent the password. Also: the API stops at any TLS failure, and the stop-at-a-refusal cases, *Refresh now*'s words, the administrator's words and the JSON read's bounded size are now tested. An earlier review round found 2 blocking and 10 must-fix items (N, M, L plants), all fixed.
-9. **Live, under lease studio-b on stack a, 08:20:23Z–08:21:47Z at fbc71bc on main 7f67b1b:** 47 passed, 1 failed (main's own snapshot-revert case, failing identically at main). The three `verify-full` cases passed. No timing figure is claimed.
-10. **Gates at 16d9291** (tree `e5c918dd`, `gates/16d9291.*`, explained), on main 7f67b1b:
-    - **`make -k ci`:** green, the seven image scans included, except `test-file-coverage-check`. It names only the two live files whose wiring is in `L1.6_ci_makefile.diff`; with the diff applied, the gate reports no drift.
-    - **`make test`:** 5 failed, 9369 passed, 6 skipped, 16 errors. 14 errors and 1 failure come from that diff (the live files are collected). The rest are this machine's or Docker Hub's, as at every gate.
-11. **Left:** scheduled polling of SQL and API sources (waits on R17); *Admin › Connections*' fields, now with `ca_certificate` (admin's carry); the picker, re-screening, the read-only Lists tab and the list migration (rules' L2.11); pruning an incremental file. The orchestrator's CARRIES: a lookup that blocks the event loop; the SQL byte cap per row.
-12. **Requests at merge:**
-    - Apply `L1.6_action_registry.diff` (in the merge commit itself: `sources-connectors.spec.ts` imports from it), `L1.6_ci_makefile.diff` and `L1.6_every_harness.diff`.
-    - Ratify the files below.
-    - Mark ADR-140 Amendments 13 and 15, ADR-146 Amendment 3 and ADR-133 Amendment 9 written.
-    - Guide version 1.58 is this branch's unless case-b merges first.
-    - **Questions:** none. **Running:** nothing; no lease held.
+1. **The row's exit: met in the code, partly on `main` by the orchestrator's ruling.**
+   - **"No target model on screen": met.** The Studio says "domain model" (`IngestStudio.test.tsx`,
+     `ingest-studio.spec.ts`). `tools/ui_words_check.py` finds none in the Glass's copy, and
+     `tests/test_ui_words_check.py` holds the proof.
+   - **Every disabled action says why and who can: built as patches.** They wait on rules-b's L2.12
+     (`help/roles.ts`), which is not on `main`. The patches are `L1.8_roles_words.patch`,
+     `L1.8_studio_tips.patch`, `L1.8_action_registry.diff` and `L1.8_every_harness.diff`, in that order, after
+     rules-b's `admin-tips.patch` (`L1.8_PATCHES.md`). Their tests are `rightsGate.test.tsx`,
+     `rightNames.test.ts` and `studio-tips.spec.ts`, each red first (`l1.8/red-studio-tips.txt`). An apply check
+     on this branch with `lane/rules-b` merged ran clean: vitest 528 passed, keyboard 94, axe 30 scans.
+   - Who-can names the roles that hold a right, never people: the owner's ruling, in ADR-145 Amendment 7.
+2. **`ui_words_check`: met.**
+   - Shown red by plants in the Glass's real string shapes (JSX text, attributes, templates, a hyphen,
+     `{" "}`), and against the real Glass before the wording change (four findings,
+     `l1.8/red-ui-words-real-glass.txt`).
+   - Its `make ci` wiring is `L1.8_ci_makefile.diff`.
+3. **Carries: all four met, each red first.**
+   - **The subscribed list ids:**
+     - The run path was already built (`test_subscribed_lists_seam.py`).
+     - Studio's L1.5 review found the drawer's sample, Test and the run still refused a subscribed Lookup.
+       Each caller now hands the engine `subscribed=subscribed_in(references)`
+       (`test_subscribed_lookup_call_sites.py`).
+     - Another dataset's subscription is refused at all three, and red with the filter removed.
+     - A static check holds every caller, with 12 plant shapes; the check as first written missed 9 of them.
+     - L1.4's stand-in is retired, held by module (`test_nothing_but_tests_seeds_a_list`).
+     - ADR-140 Amendment 16 records all of this.
+   - **getaddrinfo off the event loop:** a SQL read, each API page, *Test connection*, naming a connection,
+     Admin › Maps' add and edit, a provider's tile and the prefetch (`test_lookups_off_the_loop.py`, each site
+     red alone).
+   - **The SQL byte cap:** counted in UTF-8 bytes. The server keeps the running total, so no row past the cap is
+     sent or held, and the cursor stops at the cap rather than scanning the table (`test_sql_connector_live.py`;
+     `l1.8/red-carry-byte-cap.txt`, red at main and at the first fix).
+4. **Lane reviews: three rounds, every must-fix fixed.**
+   - **The first two (byte cap, words gate, patches):** fixed in 30a670c and 95bf8b5.
+   - **The third, after the rebase:** five must-fix items, all closed.
+     - The live run at head is done (item 5).
+     - Item 2: the three refusals added.
+     - Items 3 and 4: the check refuses an empty `subscribed=`, an alias, `partial`, `run_in_executor` and a bare
+       reference; it asks `run_staged_recipe` too, and scans `cli`, `scripts` and `packages`.
+     - Item 5, ownership: the orchestrator ratifies at merge.
+     - Gates at head are done.
+   - Its minor items are also fixed: the byte cap's lower bound, the incremental-read comment, the timing figure's
+     lease, the amendment, the friction row and the hash map in `L1.8_LIVE_RECORD.md`.
+5. **Live, under lease studio-b on stack f, through `stack_lease.sh remote`, at 52a4b6b on main 99d92a8**
+   (`gates/52a4b6b.live.txt`):
+   - Files: `test_route_rights.py`, `test_phase7_exit_live.py`, `test_pipeline_run.py`,
+     `test_repoint_journal_callers_live.py` and `test_sql_connector_live.py`.
+   - **65 passed, 3 skipped** (spaCy is not on the server).
+   - **1 failed:** the server has no git identity. It passed with a synthetic one under the same lease; the orchestrator counts that rerun, and has since set an identity on the server.
+   - Two earlier runs on stack c are withdrawn: no `ospreyflow` database, then the tunnel's 0.7 s round trip and
+     the owner's stop.
+   - No timing figure is claimed.
+6. **Gates at 28775d8 on main c467064**, offline (`gates/28775d8.*`, explained):
+   - **`make -k ci`:** red only where Docker is needed (trivy, opentofu-check, chart-check). Docker Desktop is off
+     by the owner's ruling.
+   - **`make test`:** 24 failed, 9471 passed, 16 skipped, 30 errors.
+     - 22 failures and the 30 errors need the Docker API.
+     - Two come from this machine: the skip-worktree `osprey.yaml` and `graphify-out/` at the root.
+     - Two come from the closed ports.
+   - The lane's own tests all pass. The commits after 28775d8 change only records.
+7. **Left:**
+   - Applying the step 1 patches once L2.12 lands.
+   - Studio's choice (L1.7) to drop the `subscribed=()` defaults, so mypy holds every caller.
+   - The Deploy refusal still names the source approver role by its id, in the Conduit's words
+     (ADR-145 Amendment 7).
+8. **Requests at merge:**
+   - Apply `L1.8_ci_makefile.diff`. The four step 1 patches wait for L2.12.
+   - Ratify the files below.
+   - ADR-145 Amendment 7 and ADR-140 Amendment 16 are written.
+   - **Questions:** none. **Running:** nothing; no lease held.
 
 ## Decisions taken (each logged for the owner to overrule)
 
-- **`connectors/**` ownership** (A) read as covering `services/ingest/connectors/**`; ratified by the orchestrator (R2).
-- **A connector read lands as a CSV in the dataset's folder** (A, versus a new run path per kind): one run path, watch, watermark and confinement for all sources.
-- **Secrets by name from `deployment.env`** (`OSPREY_CONNECTION_SECRET_<NAME>`; A, versus a new secret store).
-- **The egress "request" is a refusal naming the operator** (A, versus a request queue): `OSPREY_CONNECTOR_EGRESS` is set only by an operator.
-- **SQL: table and columns only** (A, versus an expert query): the sandboxed SELECT is L1.5's.
-- **Incremental files keep earlier rows** (A): nothing is lost, and each run's watermark dedupes.
-- **The UK Sanctions List gets a template too** (A): OFSI's list closed on 28 January 2026.
-- **Deployment-list routes under `load_screening_lists`** (A): reconciled with ADR-146 by its Amendment 3.
-- **Subscriptions under the Sources step's gate** (`add_ingest_files` and the source author role, A).
-- **Own-list import reads the dataset's own files, with no SHA check** (A): a dataset's data is the user's; rule 9 binds the repository and CI.
-- **The stand-in's `import_list` kept as the tests' synthetic seed;** only the CLI is retired (A).
-- **Store of record: ruled (a) by the owner.** Lists already in ADR-133's store are migrated by L2.11, not dropped: version 1 of a same-named Studio list, each rule repointed by id, a clashing name refused (A, versus dropping or re-import by hand; ADR-133 Amendment 9 decision 3).
-- **Private networks: ruled (a) by the owner.** A connection to a private address is written by name; a literal private address stays refused (A, versus admitting a literal inside a listed network: the schema checks a host before any list is known).
-- **The deployment's own networks** are read from the container's route tables and its own names, once a minute (A, versus an operator-supplied exclusion list). Recorded limit: another product's service in the same cluster, inside a listed network, is not seen.
-- **A client's CA per connection** (A, versus a deployment-wide CA bundle in `osprey.yaml`): a connection trusts its own client's CA only.
-- **Connection secrets declared in `osprey.yaml`'s `connectors.secrets`** (A, versus a separate file only the Conduit reads): render must know the names to blank them for every other service, as ADR-135 does for model keys, and the chart's one Secret cannot be split per workload. An undeclared secret is never read.
-- **SQL reaches each address over TCP before signing in** (A, versus moving on after a failed sign-in or a timeout): once a server may have seen the password, no second address is tried. The API moves on only while its connection or handshake has not completed, so nothing has been sent.
-- **The fixed words for a source author** name *Test connection* and the audit log, so they know whom to ask; a source's own name is still refused in its own words (`source_name_refused`).
+- **Step 1 as patches** (the orchestrator's ruling, option C) until L2.12 lands, rather than copying `roles.ts`.
+- **Who-can names roles, never people** (the owner's ruling; ADR-145 Amendment 7).
+- **The subscribed carry fixed in Studio's three call sites** (CARRIES row 36, as assigned). The engine's
+  defaults are left to Studio (A, versus removing them in its files).
+- **The byte cap's crossing row is sent without its values** (A, versus a filter on the running total, which
+  makes the server scan the table).
+- **The live rerun added `test_sql_connector_live.py`** (A), for the byte cap's new lower bound.
 
 ## Files outside the lane's map (ratification asked)
 
-`services/api/connector_reads.py` (the Sources step's read service); `app.py`'s *Test connection* route (R4) and `_MonitoringSchedules`' optional field; `studio_staging.py`, `studio_verify.py`, `pipeline_run.py`, `recipe_run.py`, `run_resources.py` and `reference_list_import.py` (R3's seam); `harness/{render,apply,restore}.py` (the private list rendered; secrets and egress kept across apply and restore); `tests/harness/test_connection_secrets_kept.py`; `tests/services/api/{test_route_rights,test_run_resources,test_recipe_run_path,test_place_routes,test_admin_sections}.py` and `tests/ingest/test_reference_list_rows.py`; `shell/placesByRole.json`; `harness/cluster.py` (connection secrets blanked for every workload but the Conduit); `tools/admin_guide_options.py` (one section line), `docs/administration-guide.md` (generated Appendix A rows, version 1.58, its PDF and manifest entry) and `spec/10_ADMINISTRATION_GUIDE.md` (generated rows); `spec/05_DEPLOYMENT.md` §6.1; `keyboard/actionRegistry.ts`, `a11y/every-harness.spec.ts`, `OspreyFlow_Build/Makefile` and `.github/workflows/ci.yml` (shared; also carried as diffs). `packages/schemas/{sources,deployment,list_connector}.py` and the generated types ride with the step.
+- Studio's: `services/api/{studio_staging,studio_verify,pipeline_run}.py` and
+  `services/ingest/reference_list_import.py` (CARRIES row 36; studio knows, and its L1.5 report carries it into
+  L1.7).
+- Platform's: `services/api/map_admin.py`.
+- Shared: `services/api/app.py` (the tile and prefetch lookups, for the getaddrinfo carry).
+- `spec/06_DECISIONS.md` and `spec/ADR_RESERVATIONS.md` (the two amendments).
+- The Glass files under `src/ingest/**` (the wording) are by agreement with studio.
 
 ## Commits
 
-`git log main..lane/studio-b` (53): the schemas commit first, then templates, the list service, routes, connectors, the Glass, keyboard and a11y, CI, the spec, friction, two review rounds, the seam, Amendment 15 and its review, the verify-full live cases, the guide, and the gate records.
+`git log main..lane/studio-b` (24): the words gate, the wording, the carries, step 1's patches, ADR-145
+Amendment 7, three review rounds, ADR-140 Amendment 16, the live records and the gate records.

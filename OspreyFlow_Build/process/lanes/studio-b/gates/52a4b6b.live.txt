@@ -1,0 +1,98 @@
+# L1.8 live run at 52a4b6b on main 99d92a8, lease studio-b on stack f, run on the server beside the containers (stack_lease.sh remote)
+Started 2026-11-09T16:10:33Z
+Running on ospreyflow-test (stack f, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b/.runs/20261109T161341Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest/test_phase7_exit_live.py ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py
+....F....sss.........................................................    [100%]
+=================================== FAILURES ===================================
+_______ test_visits_and_contacts_is_stored_with_every_element_traceable ________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-12/test_visits_and_contacts_is_st0')
+storage = ObjectStorageConfig(endpoint='localhost:9010', access_key='minioadmin', secret_key='minioadmin', bucket='studio-l14-4730da86aa2e', use_ssl=False, region=None)
+
+    async def test_visits_and_contacts_is_stored_with_every_element_traceable(
+        tmp_path: Path, storage: ObjectStorageConfig
+    ) -> None:
+        import_list(ESTABLISHMENTS, FIXTURES / "establishments.csv", storage=storage)
+>       draft, repo = await _built_and_published(tmp_path)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_phase7_exit_live.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_phase7_exit.py:92: in _built_and_published
+    git_path = await write_and_commit_recipe(recipe, repo_root=repo)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:291: in write_and_commit_recipe
+    return await commit_recipe_file(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+recipe_id = 'visits-and-contacts'
+data = b"id: visits-and-contacts\nversion: 1\nlabel: Visits and contacts\nconnector:\n  profile: generic-csv\n  delimiter: ',...n: title\n  operation: concat\n  columns:\n  - establishment\n  - visit_at\n  settings:\n    separator: ' \xc2\xb7 '\n"
+version = 1
+repo_root = PosixPath('/tmp/pytest-of-root/pytest-12/test_visits_and_contacts_is_st0/repo')
+
+    async def commit_recipe_file(
+        recipe_id: str, data: bytes, *, version: int, repo_root: Path = _REPO_ROOT
+    ) -> str:
+        """The commit half of `write_and_commit_recipe`, for a file that is to be exactly `data`:
+        writes it to `recipes/<recipe_id>.yaml` under `repo_root` and commits it as `ingest: publish
+        <id> v<version>`, and returns the git-relative path. The Prison Intelligence seed copies each
+        committed recipe here byte for byte (ADR-127 Amendment 23), which `serialise_recipe` would not
+        keep (it drops comments and reorders). A commit with nothing changed is not an error; every
+        other non-zero exit is."""
+        relative_path = recipe_git_relative_path(recipe_id)
+        absolute_path = repo_root / relative_path
+        absolute_path.parent.mkdir(parents=True, exist_ok=True)
+        absolute_path.write_bytes(data)
+    
+        await _ensure_repository(repo_root)
+    
+        code, output = await _run_git("add", relative_path, cwd=repo_root)
+        if code != 0:
+            raise GitCommitError(f"git add {relative_path!r} failed: {output}")
+    
+        code, output = await _run_git(
+            "commit",
+            "-m",
+            f"ingest: publish {recipe_id} v{version}",
+            "--",
+            relative_path,
+            cwd=repo_root,
+        )
+        if code != 0 and "nothing to commit" not in output:
+>           raise GitCommitError(f"git commit {relative_path!r} failed: {output}")
+E           services.api.studio_publish.GitCommitError: git commit 'recipes/visits-and-contacts.yaml' failed: Author identity unknown
+E           
+E           *** Please tell me who you are.
+E           
+E           Run
+E           
+E             git config --global user.email "you@example.com"
+E             git config --global user.name "Your Name"
+E           
+E           to set your account's default identity.
+E           Omit --global to set the identity only in this repository.
+E           
+E           fatal: unable to auto-detect email address (got 'root@gpu-1.(none)')
+
+services/api/studio_publish.py:326: GitCommitError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_phase7_exit_live.py::test_visits_and_contacts_is_stored_with_every_element_traceable
+1 failed, 65 passed, 3 skipped, 1 warning in 668.28s (0:11:08)
+Ended 2026-11-09T16:24:52Z
+
+## The one failure again: the server has no git identity, so the case's throwaway repository could not commit. A synthetic identity is given (GIT_AUTHOR_*/GIT_COMMITTER_*, osprey-test), same lease. Started 2026-11-09T16:25:07Z
+1 passed, 1 warning in 11.39s
+Ended 2026-11-09T16:27:14Z
+## The skips named (-rs), same lease, started 2026-11-09T16:27:33Z
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py:368: spaCy is not installed here
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py:406: spaCy is not installed here
+SKIPPED [1] ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py:433: spaCy is not installed here
+30 passed, 3 skipped, 1 warning in 131.91s (0:02:11)
+Ended 2026-11-09T16:30:50Z
+Stack f brought down, then the lease released, 2026-11-09T16:31:18Z. Every case removes what it wrote (the connector cases drop their schema and roles in teardown). No timing figure is claimed.
+The three skips: the extraction extra not installed, as in CI (ADR-108), not passes. The synthetic-identity rerun is counted by the orchestrator, who has set an identity on the server.
