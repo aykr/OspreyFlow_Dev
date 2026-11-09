@@ -542,6 +542,11 @@ New ones are added at the bottom as they happen.
     `owning_unit`), so (j) would have shown another unit's promotions to someone every read refuses. Checked in
     the code by me. It comes out, with a cross-unit Author added to the L3.4 contract test and to A8. **My call,
     not yours:** the strict reading of Am 4 decision 11 and rule 3.
+82. **Two server gaps found by studio-b's first remote run.** Git had no identity for root, so a test's
+    throwaway repository could not commit: set once in root's global git config ("OspreyFlow test runner",
+    `test-runner@ospreyflow.invalid`). The server's venv is synced without the `extraction` extra (spaCy,
+    transformers, torch), as CI's is on purpose (ADR-108 phase D), so cases needing spaCy skip there as in CI.
+    Lanes record them as not run. My call: torch would add gigabytes to each lane's venv on the server.
 
 ## Evening, 7 November: your records of 7 November applied
 
