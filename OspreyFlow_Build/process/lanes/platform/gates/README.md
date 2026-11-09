@@ -126,3 +126,12 @@ The stack was brought down and released at 17:40:03 UTC.
   - `ce36c3f.test.txt`: 9732 passed, 7 failed, 2 errors. Of those, the lane's were `test_core_stands_alone.py` (2, the reviewer's defect 1), `test_audit_kinds.py` (main's new census) and the two citation checks above, all fixed since. The server's own: the GPU preflight case, `test_valkey_config.py` (the offline pins), `test_workspace_proxy.py`'s two errors. test-js: 2776 passed, 2 failed (the Matrix timing cases under load) and `App.test.tsx`'s hook timeout.
   - `b9d5aeb.test.txt`: **9762 passed, 2 failed, 11 skipped, none the branch's**: the server's GPU preflight case and `test_valkey_config.py` (the offline pins). test-js: workspace 2814 passed, 1 failed, `MatrixView.budget.test.tsx`'s first-frame timing under a full run's load, as at every earlier gate. `make test-js` stopped there, before the harness suite.
   - `b9d5aeb.test-js-rest.txt`, the same server: the harness suite, **47 passed**, the Geospatial screen's two among them; then the Matrix timing case alone, 1 passed.
+
+
+## P5, the orchestrator's re-review, at `d9b0818` on main `15d0d24`
+
+- **Live**, platform lease on stack e, through `stack_lease.sh remote`, 21:57–22:12 UTC at `dc11181` (code identical to `d9b0818`, which adds only the image script's `--pull` and the friction row):
+  - `dc11181.live.txt`: part 1, the image build refused by Docker Hub's pull limit on `--pull` (429), then the live set, `test_route_rights.py` and both case-gazetteer files, **15 passed**. Then the port contract's case, green; red with the guard's copy clause dropped; red at the page's `more=True` with the case's earlier checks removed too.
+  - `dc11181.image-ci-step.txt`: the image built as CI's job builds it (no `--pull`), 1,858,960,446 bytes. CI's step through the server's `uv`: exit 0 over it, exit 1 over Temurin 21.0.1. `--current`: exit 0 on the committed pin, exit 1 on the previous digest. planetiler `--help` exit 0. trivy exit 0 over both.
+- **`make -k ci`**, `d9b0818.ci.txt`: green but this machine's Docker socket, as before.
+- **`make test`** on the server, `d9b0818.test.txt`: 9774 passed, 2 failed, none the branch's (the GPU preflight case, `test_valkey_config.py`'s offline pin). Workspace test-js 2814 passed, 1 failed (`MatrixView.budget.test.tsx` under a full run's load); harness 47 passed, run on its own so the workspace's failure cannot skip it.
