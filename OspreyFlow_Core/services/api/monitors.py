@@ -111,7 +111,8 @@ class MonitorStore:
         reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id, every, hour, weekday "
+                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id, "
+                "every, hour, weekday "
                 f"FROM monitors WHERE id = $1 AND owner_id = $2{reach}",
                 monitor_id,
                 principal.id,
@@ -125,7 +126,8 @@ class MonitorStore:
         reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id, every, hour, weekday "
+                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id, "
+                "every, hour, weekday "
                 f"FROM monitors WHERE owner_id = $1{reach} ORDER BY created_at DESC",
                 principal.id,
                 *extra,
