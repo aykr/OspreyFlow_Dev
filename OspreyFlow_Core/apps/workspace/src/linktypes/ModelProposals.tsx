@@ -37,11 +37,12 @@ function statusOf(p: ModelProposal): { words: string; tag: string } {
     if (p.in_model === "draft") return { words: "In the draft model", tag: "govuk-tag--blue" };
     return { words: "Accepted, not in the model", tag: "govuk-tag--orange" };
   }
-  return STATUS[p.status] ?? { words: p.status, tag: "govuk-tag--grey" };
+  return (p.status && STATUS[p.status]) || { words: p.status ?? "", tag: "govuk-tag--grey" };
 }
 
 /** Pending, or accepted and lost from the model: still to decide. */
 function decidable(p: ModelProposal): boolean {
+  if (p.withheld) return false;
   return p.status === "pending" || (p.status === "accepted" && !p.in_model);
 }
 
@@ -194,13 +195,21 @@ export function ModelProposals({ apiBaseUrl, bearerToken, datasetId, datasetName
             return (
               <div key={p.id} className={govuk ? "govuk-summary-list__row" : undefined} data-proposal-id={p.id} style={govuk ? undefined : { borderBottom: "1px solid var(--border-subtle)", paddingBottom: "var(--sp-8)", display: "grid", gap: "var(--sp-4)" }}>
                 <dt className={govuk ? "govuk-summary-list__key" : undefined} style={{ margin: 0 }}>
-                  <strong>{title(p)}</strong> <span className={muted}>{p.name}</span>{" "}
-                  <strong className={govuk ? `govuk-tag ${status.tag}` : muted}>{status.words}</strong>
+                  {p.withheld ? <strong>A proposed link type above your clearance</strong> : <><strong>{title(p)}</strong> <span className={muted}>{p.name}</span></>}{" "}
+                  {!p.withheld && <strong className={govuk ? `govuk-tag ${status.tag}` : muted}>{status.words}</strong>}
                 </dt>
                 <dd className={govuk ? "govuk-summary-list__value" : undefined} style={{ margin: 0, display: "grid", gap: "var(--sp-4)" }}>
-                  <span>{`What it means: “${p.reason}”`}</span>
-                  <span className={muted}>{`${ends(p)}. Proposed by ${p.proposed_by} on ${p.proposed_at.slice(0, 10)}.`}</span>
-                  {p.decision_reason && p.status !== "pending" && (
+                  {p.withheld ? (
+                    <span className={muted}>
+                      It was proposed in a case marked above your clearance, so its words are not shown and a data engineer of the dataset cleared for it decides it.
+                    </span>
+                  ) : (
+                    <>
+                      <span>{`What it means: “${p.reason}”`}</span>
+                      <span className={muted}>{`${ends(p)}. Proposed by ${p.proposed_by} on ${(p.proposed_at ?? "").slice(0, 10)}.`}</span>
+                    </>
+                  )}
+                  {!p.withheld && p.decision_reason && p.status !== "pending" && (
                     <span className={muted}>{`Decided by ${p.decided_by ?? "someone"}: “${p.decision_reason}”`}</span>
                   )}
                   {open && deciding && (

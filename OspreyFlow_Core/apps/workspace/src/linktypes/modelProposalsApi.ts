@@ -13,15 +13,18 @@ export interface ModelProposal {
   to_types: string[];
   directed: boolean;
   proposed_by: string;
-  proposed_at: string;
+  proposed_at: string | null;
   reason: string;
-  status: ProposalStatus;
+  status: ProposalStatus | null;
   decided_by?: string | null;
   decided_at?: string | null;
   decision_reason?: string | null;
   basis?: "direct" | "probabilistic" | null;
   /** Where its type stands in the dataset's model: live, in the draft, or neither. */
   in_model?: "live" | "draft" | null;
+  /** Proposed in a case marked above the reader's clearance: its words are left out and it cannot
+   * be decided by this reader (ADR-143 Amendment 4's Open, the strict reading). */
+  withheld?: boolean;
 }
 
 const modelUrl = (base: string, datasetId: string) =>

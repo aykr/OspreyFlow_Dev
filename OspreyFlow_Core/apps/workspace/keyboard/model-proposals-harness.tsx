@@ -40,19 +40,30 @@ const rows = [
   },
 ];  // prettier-ignore
 
+// `?lost=1`: Bribed accepted, then lost from a discarded draft, to be added again.
+if (params.get("lost") === "1") Object.assign(rows[0]!, { status: "accepted", decided_by: "erin", decision_reason: "Useful" });
+
 window.__PROPOSALS__ = { sent: [] };
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const path = new URL(String(input)).pathname;
-  if (path === "/v1/datasets/ds-1/model/proposals") return json(200, { proposals: rows });
+  if (path === "/v1/datasets/ds-1/model/proposals") {
+    // `?as=low`: a data engineer not cleared for the case's marking, told only that each exists.
+    if (reader === "low") {
+      const withheld = rows.map((r) => ({ ...r, name: "", label: null, reason: "", proposed_by: "", decided_by: null, decision_reason: null, withheld: true }));
+      return json(200, { proposals: withheld });
+    }
+    return json(200, { proposals: rows });
+  }
   const decided = /^\/v1\/datasets\/ds-1\/model\/proposals\/([^/]+)\/(accept|decline)$/.exec(path);
   if (!decided) return json(404, { error: "proposal_not_found" });
   const body = JSON.parse(String(init.body ?? "{}")) as { reason?: string; basis?: string };
   window.__PROPOSALS__!.sent.push({ path, body });
   const row = rows.find((r) => r.id === decided[1]);
-  if (!row || row.status !== "pending") return json(404, { error: "proposal_not_found" });
+  const decidable = row && (row.status === "pending" || (row.status === "accepted" && !row.in_model));
+  if (!row || !decidable) return json(404, { error: "proposal_not_found" });
   const refuse = (detail: string) => json(422, { error: "proposal_refused", detail });
   if (!String(body.reason ?? "").trim()) return refuse("Say why: a reason of at most 2000 characters is required.");
   if (row.proposed_by === reader) return refuse("You proposed this type, so another data engineer of the dataset decides it.");

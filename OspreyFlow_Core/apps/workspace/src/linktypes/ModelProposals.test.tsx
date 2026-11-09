@@ -146,4 +146,14 @@ describe("ModelProposals", () => {
     expect(await screen.findByText("In the live model")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Bribed/ })).toBeNull();
   });
+
+  it("says a proposal above the reader's clearance exists, without its words, and offers no decision", async () => {
+    serve({ status: 200, json: { proposals: [{ ...PENDING, name: "", label: null, reason: "", proposed_by: "", withheld: true }] } });
+    mount();
+    expect(await screen.findByText("A proposed link type above your clearance")).toBeTruthy();
+    expect(screen.getByText(/marked above your clearance, so its words are not shown/)).toBeTruthy();
+    expect(screen.queryByText(/What it means/)).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Proposed link types" })).toBeTruthy();
+  });
 });

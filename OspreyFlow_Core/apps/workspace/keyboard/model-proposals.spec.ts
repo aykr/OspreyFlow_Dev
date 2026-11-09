@@ -43,7 +43,9 @@ test("a proposed type is added to the draft model by keyboard, with a reason", a
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("alert")).toHaveText("Say why: a reason is required.");
   expect(await sent(page)).toHaveLength(0);
-  await page.getByLabel("Why? (required)").focus();
+  // Shift+Tab from the basis back to the reason.
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByLabel("Why? (required)")).toBeFocused();
   await page.keyboard.type("Seen in three cases this month");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("status")).toHaveText(/Bribed added to the draft model/);
@@ -94,6 +96,36 @@ test("the proposer's own is refused in the Conduit's words, by keyboard", async 
   );
   await expect(page.getByText("In the draft model")).toHaveCount(0);
   registerCovered(REGISTRY, "a-refusal-is-shown-in-the-conduits-words-by-keyboard");
+});
+
+test("Cancel closes the decision form by keyboard, sends nothing, and gives focus back", async ({ page }) => {
+  await open(page);
+  await tabTo(page, "Add Bribed to the draft model…");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Not yet");
+  await tabTo(page, "Cancel");
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Why? (required)")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add Bribed to the draft model…", exact: true })).toBeFocused();
+  expect(await sent(page)).toHaveLength(0);
+  registerCovered(REGISTRY, "cancel-closes-the-decision-form-by-keyboard");
+});
+
+test("an accepted type lost from the model is added again by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/model-proposals-harness.html?lost=1");
+  await expect(page.getByText("Accepted, not in the model")).toBeVisible();
+  await tabTo(page, "Add Bribed to the draft model again…");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Lost with the discarded draft");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Space");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(page.getByRole("status")).toHaveText(/Bribed added to the draft model/);
+  expect((await sent(page))[0]).toEqual({
+    path: "/v1/datasets/ds-1/model/proposals/p1/accept",
+    body: { basis: "direct", reason: "Lost with the discarded draft" },
+  });
+  registerCovered(REGISTRY, "add-a-lost-type-to-the-draft-model-again-by-keyboard");
 });
 
 test("every registered Model tab proposals action has its own proving test case above", () => {
