@@ -187,7 +187,14 @@ async def test_no_copy_s_identifier_is_sent_on_any_node_read(stores: Stores) -> 
     [arrived] = [n for n in around.nodes if n.id == copy]
     assert _no_identifier(arrived.properties), arrived.properties
     by_name = await graph.search_nodes("Ashwell", CASE)
-    assert all(_no_identifier(n.properties) for n in by_name)
+    assert by_name and all(_no_identifier(n.properties) for n in by_name)
+    # Each read path on its own (the orchestrator's review of round 3, item 4): by id in bulk, as
+    # the seed re-reads, and suggested by its name.
+    [bulk] = await graph.get_nodes([copy], CASE)
+    assert _no_identifier(bulk.properties), bulk.properties
+    named = await graph.suggest_nodes("Ashwe", CASE, limit=10)
+    assert [n.id for n in named.nodes] == [copy]
+    assert all(_no_identifier(n.properties) for n in named.nodes), named.nodes
     # The Conduit's own work keeps them (a rebuild's lookups), as a read written back does.
     unlimited = CASE.model_copy(update={"datasets": None})
     whole = await graph.get_node(copy, unlimited)

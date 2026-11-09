@@ -341,6 +341,13 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
             assert found.status_code == 200, found.text
             assert [n["id"] for n in found.json()["nodes"]] == [copy]
             assert not _carries_an_identifier(found.text), found.text
+            named = client.post(
+                f"/v1/investigations/{case_id}/suggest", headers=headers,
+                json={"query": NAME[:5]},
+            )  # fmt: skip
+            assert named.status_code == 200, named.text
+            assert copy in [n["id"] for n in named.json()["nodes"]], named.text
+            assert not _carries_an_identifier(named.text), named.text
 
             seeded = client.post(
                 f"/v1/investigations/{case_id}/seed", headers=headers,
