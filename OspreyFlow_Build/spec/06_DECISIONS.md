@@ -30343,3 +30343,81 @@ The owner's (a) is that function's one line, `return True`.
 `keyboard/model-proposals.spec.ts`; axe in dark, light and GOV.UK. Each red by a plant at its call site
 (`process/lanes/case-b/L3.5_RED_RECORD.md`; the lane's review and an independent one, each finding with its
 test).
+
+### ADR-147, Amendment 1 (9 November 2026) — the analyst's map: the basemap switch, place search over the case's gazetteer, and the three themes' contrast
+
+Status: accepted 9 November 2026; the orchestrator's settlement of the same day (the gazetteer is loaded
+into a dataset of its own, which a case's Author adds like any other); every other choice the platform
+lane's, under Prompt L's rule (`process/lanes/platform/REPORT.md`, "Decisions taken"). Written by the
+platform lane in P4 (`07_BUILD_PLAN.md`'s lane table, row P4). ADR-099, ADR-014–017 and ADR-147's own
+decisions are otherwise unchanged.
+
+**Context.** The analyst's map opened on `map.default` with no way to choose another provider, and had no
+place search (`02_GLASS_FRONTEND.md` §3.5's "Basemap switching" and "Gazetteer search" rows). The gazetteer
+a build loads was written by the Conduit's own principal into **no dataset**, so under ADR-099 decision 5
+no case read it, and a search would have found nothing anywhere; and **no gazetteer build wrote its places'
+points** into the analytics store's geometry partition, so a loaded place's `geometry_ref` resolved to
+nothing (found building this). The map's contrast check (`map-verify/contrast.spec.ts`) ran in the dark
+theme only, and its reference image could not fail there.
+
+**Decision.**
+
+1. **The basemap switch** offers the providers `GET /v1/map/providers` returns that the map can draw: a
+   vector PMTiles source under the bundled style, or a raster under the raster overlay
+   (`map/providers.ts`'s `switchableProviders`); an image, a terrain model or an unbuilt style is a layer,
+   not a basemap. A **radio group**, so arrow keys choose on every platform; a hosted provider named as
+   hosted, and the hosted-provider sign and the attribution following the provider drawn. The Glass draws a
+   proxied provider's tiles from the Conduit's tile route, so **no provider's key or key-bearing address is
+   ever in the Glass**: every map read route answers without either, whether the key was entered in
+   Admin or is the installer's `env:` reference.
+2. **The gazetteer is loaded into `gazetteer-osm-<region>`**, a dataset held by the unit the gazetteer
+   recipe gives its places (`recipes/osm_gazetteer.yaml`'s `owning_unit`), registered by the build and
+   stamped on every place as it is written (`load_gazetteer` requires the dataset; its lookups read that
+   dataset alone, so a rebuild makes no second copy). A case reads the gazetteer when its Author adds
+   that dataset, as any other (ADR-099 Amendment 12: a composite of the two). **The places' points** are
+   written beside them into the geometry partition by a build from *Admin › Maps*; the command-line
+   builds cannot open the Conduit's analytics store while it runs, and say so.
+3. **Place search** is `POST /v1/investigations/{id}/map/places` (`investigate`, Viewer, audited as the
+   case's other searches): the case's principal reads, in the store, `Location`s by name, contains and
+   ignoring case (`GraphPort.suggest_nodes`, rule 3), of which only the gazetteer's own places are kept
+   (an external gazetteer's identifier and a point), each with its point; `more` says when more matched
+   than are shown (rule 2). **The answer never carries the gazetteer's identifier** for a place (rule 7),
+   and **no hosted geocoder is called**, whatever the deployment names (§3.5); its words say the places
+   come from the gazetteer datasets the case reads. Choosing a place moves the map there.
+4. **The map's colours meet WCAG's floors in the dark, light and GOV.UK themes**, measured from their own
+   call sites (the bundled style, `map/overlayColours.ts`, the controls' CSS): text 4.5:1, a marker, link
+   or trail 3:1, over land and over water. In the dark theme a marker on the ramp's second step was 2.7:1,
+   so there the water is the ramp's first step and the land the panel surface (`style.ts`'s
+   `landAndWater`; land and water stay apart). The reference image's per-pixel threshold is 0.05, not
+   0.2, under which a dark scene's changes passed.
+
+**Open, on the owner's list: adding the gazetteer to a working case costs it its loads.** A case reads
+one dataset (ADR-099 Amendment 12), so a case that adds the gazetteer reads a composite of its own and the
+gazetteer's, and a case reading a composite is read-only for loads (Amendment 15). The options: (a) the
+gazetteer read beside the case's own dataset through the same access step, an ADR-099 amendment; (b) as
+built, a composite; (c) the places copied into each case's own dataset. (b) stands until the owner rules
+(the orchestrator, 9 November 2026).
+
+**Left, and why:**
+- **The command-line builds load the places without their points**: DuckDB has one writer, and the
+  Conduit holds its analytics store while it runs, so `ospreyflow map build` and
+  `python -m scripts.build_local_basemap` cannot open it. A place they load is found by name but is not
+  offered (it has no point) until a build from *Admin › Maps*.
+- **Places in a case's own datasets that carry a gazetteer identifier** (a Studio load of OS Open Names)
+  are offered too: they are gazetteer places by the same mark, read under the case's own access.
+
+**Tests that would fail if it were broken** (rule 12; each shown red by a plant at its real call site,
+`process/lanes/platform/P4_RED_RECORD.md`):
+- **The switch and the search by keyboard (rule 13)**: `keyboard/map-view.spec.ts` (`MAP_VIEW_ACTIONS`).
+- **No key in the Glass**: `tests/services/api/test_glass_map_reads_carry_no_key.py` walks every
+  `GET /v1/map/*` route for every provider with an Admin key and an `env:` key planted.
+- **Place search**: `tests/services/api/test_map_places_route.py` (only gazetteer places, rule 7, `more`,
+  no hosted geocoder, a principal required); live, `tests/ingest/test_gazetteer_place_search_live.py`
+  (a case that added the gazetteer finds the place, one that did not finds nothing; no second copy on a
+  rebuild); the build's dataset and points, `test_geospatial_admin_routes.py`; the stamp,
+  `tests/ingest/test_{map_admin,build_local}_build_end_to_end.py`.
+- **Contrast in three themes**: `map-verify/contrast.spec.ts`; `map/style.test.ts`. **Axe** in the dark,
+  light and GOV.UK themes on `map-view-harness.html`, with the search's answer drawn.
+
+**Cost.** One more dataset per built region; a place search reads up to 200 `Location`s before keeping the
+gazetteer's.

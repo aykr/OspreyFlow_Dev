@@ -39,3 +39,44 @@ Each restored: 3 passed.
 | the dataset's registration dropped | the same | the case (no `gazetteer-osm-rutland` in the store) |
 
 Each restored: 13 passed. The stamping itself, live: see the leased run below.
+
+## The basemap switch and the place search, by keyboard (rule 13)
+
+`apps/workspace/keyboard/map-view.spec.ts` (`MAP_VIEW_ACTIONS`), 9 November 2026, port 5185 free
+(another worktree's vite had held it earlier; waited, never reused). Each plant in the product code;
+each made its case red and, with it, the registry's coverage case:
+
+| Plant | Where | Red |
+| --- | --- | --- |
+| choosing a basemap does nothing | `BasemapSwitch`'s `onChange` | `the basemap is switched by keyboard…` |
+| the map keeps the caller's provider whatever is chosen | `MapView`'s `active` | the same |
+| going to a place moves nothing | `MapView`'s `PlaceSearch onGo` | `a place is found in the case's gazetteer and shown by keyboard` |
+| Enter in the search submits nothing | `PlaceSearch`'s `onSubmit` | the same |
+
+Each restored: 7 passed.
+
+## The map's contrast in the dark, light and GOV.UK themes
+
+`apps/workspace/map-verify/contrast.spec.ts`, 9 November 2026. Fifteen pairs a theme, each read from
+its call site (`buildBundledDarkStyle`, `overlayColours`, the controls' computed CSS).
+
+**Red on the real code first.** The first run, before any fix: the dark theme's `marker on water` at
+**2.7:1**, under WCAG 1.4.11's 3:1 (brass on the ramp's second step); light and GOV.UK passed. Fixed in
+`style.ts`'s `landAndWater`: water the ramp's first step and land the panel surface wherever a marker
+on the second step would fall under 3:1 (the dark theme), so markers are 4.39:1 on water and 5.78:1
+on land, and land and water stay apart (`style.test.ts`'s 0.08 OKLab lightness, 0.088).
+
+| Plant | Where | Red |
+| --- | --- | --- |
+| a marker drawn in the hover surface | `overlayColours` | all three themes |
+| water always the ramp's second step | `landAndWater` | the dark theme (2.7:1, as found) |
+| the controls' note in `--text-tertiary` | `mapControls.css` | **not red**: it still meets 4.5:1, so it proves nothing (kept here, not counted) |
+| the controls' note in `--border-strong` | `mapControls.css` | the dark and GOV.UK themes |
+
+Each restored: 3 passed.
+
+**The reference images: the comparison could not fail in the dark theme.** With the picture rewritten
+for P4, the old dark reference (the four channel dots of 8 November) still passed against the new
+page: at Playwright's default per-pixel threshold of 0.2 (YIQ), a dark scene's changes fall under it.
+With `threshold: 0.05` the same comparison failed (324,927 pixels, 36%), then the three references
+were made (`map-contrast-{dark,light,govuk}-darwin.png`) and passed twice more unchanged.
