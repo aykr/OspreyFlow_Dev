@@ -2,12 +2,15 @@
 [--dry-run]` (`06_DECISIONS.md` ADR-143 decision 8; the logic is
 `revert_promotion` below, in this operator module alone).
 
-A promotion is a load (trigger `analyst_promotion` or `layer_merge`) that added a dataset to drawn
-elements of a case's analyst layer. Its revert takes that dataset back from exactly those elements,
-in one transaction, so each is in the case's layer only again, as it was before; records the
-promotion `reverted`; clears its board items' `promoted_at`; audits it under `--reverted-by`; and
-clears the Conduit's kept results (`cache:*` in the shared Valkey), since what was counted included
-the promoted elements. Nothing is deleted.
+A promotion is a load (trigger `analyst_promotion`, `layer_merge` or `drawn_merge`) that added a
+dataset to drawn elements of a case's analyst layer or of a drawn dataset. Its revert takes that
+dataset back from exactly those elements, in one transaction, so each is in the case's layer only
+again, as it was before; records the promotion `reverted`; clears its board items' `promoted_at`;
+audits it under `--reverted-by`; and clears the Conduit's kept results (`cache:*` in the shared
+Valkey), since what was counted included the promoted elements. Nothing is deleted. A drawn
+dataset's merge (L3.9) is undone whole: its matches' `SAME_AS` withdrawn in the same transaction,
+then its case back on its drawing and the views it made boards again (ADR-143 Amendment 2 decision
+7, reverted).
 
 **Stop the Conduit**, as for any load's revert (ADR-127 Amendment 9): the command opens a bare
 connection to the Conduit's address (`OSPREY_CONDUIT_URL`, default `http://api:8000`; no route is
@@ -38,7 +41,10 @@ from typing import Any, Literal
 from services.api.audit import AuditWriter
 from services.api.board_store import PostgresBoardItemStore
 from services.api.cache import invalidate_every_cache
+from services.api.case_views import PostgresCaseViewStore
 from services.api.config import PostgresConfig, ValkeyConfig
+from services.api.datasets import PostgresDatasetStore
+from services.api.drawn_merge import MergeCommit
 from services.api.promotion_store import PostgresPromotionStore, PromotionRecord, PromotionStore
 from services.api.promotions import LAYER_DELETE_PREFIX, LAYER_DELETER, PromotionRefused
 from valkey.asyncio import Valkey
@@ -64,7 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def revert_promotion(
-    record: PromotionRecord, graph: Any, store: PromotionStore, items: Any
+    record: PromotionRecord,
+    graph: Any,
+    store: PromotionStore,
+    items: Any,
+    merge: Any | None = None,
 ) -> PromotionRecord:
     """The revert of a committed promotion: the dataset taken back from exactly its elements in
     one transaction, the promotion recorded `reverted`, its items' `promoted_at` cleared. The
@@ -80,6 +90,12 @@ async def revert_promotion(
             "not_committed",
             f"Promotion {record.load_id} is {record.status}: nothing to revert.",
         )
+    drawn_merge = record.trigger == "drawn_merge"
+    if drawn_merge and merge is None:
+        raise PromotionRefused("no_merge", "A drawn dataset's merge is reverted with its stores.")
+    # A drawn merge's own matches rest on its nodes, and go with it.
+    matched = await store.matches_of(record.id) if drawn_merge else []
+    own_matches = {r.edge_id for r in matched if r.edge_id}
     held = await items.in_case(record.case_id)
     own_drawing = {
         i.element_id for i in held
@@ -94,13 +110,15 @@ async def revert_promotion(
         # transaction, so the check and the writes are one view of the graph (the independent
         # review of L3.4, item 4).
         resting = await graph.live_edges_touching(list(record.node_ids), tx=tx)
-        others = set(resting) - set(record.edge_ids) - own_drawing
+        others = set(resting) - set(record.edge_ids) - own_drawing - own_matches
         if others:
             raise PromotionRefused(
                 "links_rest_on_it",
                 f"{len(others)} link(s) written since rest on its items: revert those first.",
             )
         await graph.revert_promotion(record.load_id, record.dataset_id, tx)
+        if drawn_merge:
+            await merge.undo_writes(record, tx)
         if layer_deleted:
             await graph.withdraw_layer(
                 record.layer_id, f"{LAYER_DELETE_PREFIX}{record.case_id}", tx
@@ -115,6 +133,8 @@ async def revert_promotion(
         raise PromotionRefused("already_decided", "This promotion has changed since it was read.")
     await graph.commit_transaction(tx)
     await items.mark_promoted(record.case_id, list(record.item_ids), None)
+    if drawn_merge:
+        await merge.undo(record)
     if layer_deleted:
         await items.withdraw(
             record.case_id, list(record.item_ids), LAYER_DELETER, datetime.now(UTC)
@@ -183,6 +203,7 @@ async def run(
     audit: Any,
     invalidate: Any,
     conduit: Any = conduit_state,
+    merge: Any | None = None,
 ) -> int:
     record = await store.by_load(load_id)
     if record is None:
@@ -212,7 +233,7 @@ async def run(
         result_cardinality=len(record.node_ids) + len(record.edge_ids),
     )  # fmt: skip
     try:
-        await revert_promotion(record, graph, store, items)
+        await revert_promotion(record, graph, store, items, merge)
     except PromotionRefused as refused:
         # Audited before it was tried, so its refusal is audited too: the trail says it did not
         # happen.
@@ -240,19 +261,27 @@ async def _main(args: argparse.Namespace) -> int:
     )
     store = await PostgresPromotionStore.connect(dsn)
     items = await PostgresBoardItemStore.connect(dsn)
+    datasets = await PostgresDatasetStore.connect(dsn)
+    views = await PostgresCaseViewStore.connect(dsn)
     audit = await AuditWriter.connect(dsn)
+    scheme = load_uk_le_scheme()
+    graph = GraphArcadeDBAdapter(client, scheme)
     valkey_config = ValkeyConfig.from_env()
     valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
     try:
         return await run(
             args.load_id, reverted_by=args.reverted_by, dry_run=args.dry_run, store=store,
-            graph=GraphArcadeDBAdapter(client, load_uk_le_scheme()), items=items, audit=audit,
+            graph=graph, items=items, audit=audit,
             invalidate=lambda: invalidate_every_cache(valkey),
+            merge=MergeCommit(promotions_store=store, graph=graph, datasets=datasets, views=views,
+                              items=items, scheme=scheme),
         )  # fmt: skip
     finally:
         await client.aclose()
         await store.close()
         await items.close()
+        await datasets.close()
+        await views.close()
         await audit.close()
         await valkey.aclose()
 

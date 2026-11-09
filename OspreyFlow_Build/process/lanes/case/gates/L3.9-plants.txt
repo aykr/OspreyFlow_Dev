@@ -11,23 +11,23 @@ E         Use -v to get more diff
 
 ## merge_datasets removed from the routes
 plant in services/api/app.py; -k names_merge_datasets; exit 1
-E       AssertionError: {"drawn_dataset_id":"01M717Q2V1M9RB0VCHDSF6838K","drawn_name":"Night visits","targets":[{"dataset_id":"src","name":"Prison intel","highest_marking":"OFFICIAL-SENSITIVE","policy":"author_promotes"}],"refused":null}
+E       AssertionError: {"drawn_dataset_id":"01M717TWW1CDKA5RB7Z02Y5WQT","drawn_name":"Night visits","targets":[{"dataset_id":"src","name":"Prison intel","highest_marking":"OFFICIAL-SENSITIVE","policy":"author_promotes"}],"refused":null}
 E       assert 200 == 403
 E        +  where 200 = <Response [200 OK]>.status_code
-E       AssertionError: {"drawn_dataset_id":"01M717Q2YAD31WYV6KY3BVXRQB","drawn_name":"Night visits","targets":[],"refused":null}
+E       AssertionError: {"drawn_dataset_id":"01M717TWZCYY0MS5H6V6R1X6N2","drawn_name":"Night visits","targets":[],"refused":null}
 E       assert 200 == 403
 E        +  where 200 = <Response [200 OK]>.status_code
-E       AssertionError: {"drawn_dataset_id":"01M717Q2YS8EDC3TEJB9A8GCFJ","drawn_name":"Night visits","target_dataset_id":"src","target_name":"Prison intel","highest_marking":"OFFICIAL-SENSITIVE","policy":"author_promotes","mapping":[{"kind":"link","drawn_type":"ASSOCIATE_OF","target_type":"ASSOCIATE_OF","items":1,"why_not":null},{"kind":"node","drawn_type":"Person","target_type":"Person","items":2,"why_not":null}],"matches":[{"drawn":"01M717Q2YVESXXAV5AWWB8HYGB","drawn_label":"Mercer","loaded":"p-loaded","loaded_label":"Mercer","loaded_type":"Person","score":1.0,"why":"a name alike"}],"more_matches":false,"items":[{"item_id":"01M717Q2YVESXXAV5AWWB8HYGA","element_id":"01M717Q2YVESXXAV5AWWB8HYGB","kind":"node","type":"Person","label":"Mercer","marking":"OFFICIAL","follows":false,"source":null,"target":null,"problems":[]},{"item_id":"01M717Q2YXNA6Y8T0D2XXATZAM","element_id":"01M717Q2YXNA6Y8T0D2XXATZAN","kind":"node","type":"Person","label":"Unknown male “Tall”","marking":"OFFICIAL","follows":false,"source":null,"target":null,"problems":[]},{"item_id":"01M717Q2YZ5MD4ZZX59MA1JP4F","element_id":"01M717Q2YZ5MD4ZZX59MA1JP4G","kind":"link","type":"ASSOCIATE_OF","label":"seen together","marking":"OFFICIAL","follows":true,"source":"01M717Q2YVESXXAV5AWWB8HYGB","target":"01M717Q2YXNA6Y8T0D2XXATZAN","problems":[]}],"checks":[{"name":"marking","passed":true,"words":"Every marking within Prison intel's highest allowed, OFFICIAL-SENSITIVE"},{"name":"types","passed":true,"words":"Every type in Prison intel's model"},{"name":"graded","passed":true,"words":"Every item graded, with a source"},{"name":"ends","passed":true,"words":"Every link with both its ends able to go"}],"recorded_as":"One load into Prison intel (trigger drawn_merge), committed at once (the Author promotes). Each item stays drawn and keeps its marking and grading; it is listed in the Ingest Studio's Analyst promotions and reverted like any load."}
+E       AssertionError: {"drawn_dataset_id":"01M717TWZYXD2S8RWE8VXCFK21","drawn_name":"Night visits","target_dataset_id":"src","target_name":"Prison intel","highest_marking":"OFFICIAL-SENSITIVE","policy":"author_promotes","mapping":[{"kind":"link","drawn_type":"ASSOCIATE_OF","target_type":"ASSOCIATE_OF","items":1,"why_not":null},{"kind":"node","drawn_type":"Person","target_type":"Person","items":2,"why_not":null}],"matches":[{"drawn":"01M717TX00G0W1WZ5E7JTQW6S4","drawn_label":"Mercer","loaded":"p-loaded","loaded_label":"Mercer","loaded_type":"Person","score":1.0,"why":"a name alike"}],"more_matches":false,"items":[{"item_id":"01M717TX00G0W1WZ5E7JTQW6S3","element_id":"01M717TX00G0W1WZ5E7JTQW6S4","kind":"node","type":"Person","label":"Mercer","marking":"OFFICIAL","follows":false,"source":null,"target":null,"problems":[]},{"item_id":"01M717TX025Q57XCBJ63EHBNFD","element_id":"01M717TX025Q57XCBJ63EHBNFE","kind":"node","type":"Person","label":"Unknown male “Tall”","marking":"OFFICIAL","follows":false,"source":null,"target":null,"problems":[]},{"item_id":"01M717TX0496HQ7P50GJ3A9EFX","element_id":"01M717TX0496HQ7P50GJ3A9EFY","kind":"link","type":"ASSOCIATE_OF","label":"seen together","marking":"OFFICIAL","follows":true,"source":"01M717TX00G0W1WZ5E7JTQW6S4","target":"01M717TX025Q57XCBJ63EHBNFE","problems":[]}],"checks":[{"name":"marking","passed":true,"words":"Every marking within Prison intel's highest allowed, OFFICIAL-SENSITIVE"},{"name":"types","passed":true,"words":"Every type in Prison intel's model"},{"name":"graded","passed":true,"words":"Every item graded, with a source"},{"name":"ends","passed":true,"words":"Every link with both its ends able to go"}],"recorded_as":"One load into Prison intel (trigger drawn_merge), committed at once (the Author promotes). Each item stays drawn and keeps its marking and grading; it is listed in the Ingest Studio's Analyst promotions and reverted like any load."}
 E       assert 200 == 403
 
 ## the match candidates read unscoped (the target scope dropped)
 plant in services/api/drawn_merge.py; -k no_match_is_offered; exit 1
-E       AssertionError: assert [('01M717Q4S8...', 'p-other')] == [('01M717Q4S8..., 'p-loaded')]
+E       AssertionError: assert [('01M717TYT3...', 'p-other')] == [('01M717TYT3..., 'p-loaded')]
 E         
-E         Left contains one more item: ('01M717Q4S83GVDARFGW66YVKXG', 'p-other')
+E         Left contains one more item: ('01M717TYT3EB52FT47R363RJWN', 'p-other')
 E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_no_match_is_offered_from_a_node_the_merger_may_not_see_or_another_dataset
-1 failed, 27 deselected, 1 warning in 1.42s
+1 failed, 28 deselected, 1 warning in 1.41s
 
 ## the target's highest marking check removed (`_problems`'s marking)
 plant in services/api/promotions.py; -k above_the_targets_highest; exit 1
@@ -36,13 +36,13 @@ E
 E         Right contains one more item: "Marked SECRET, above Prison intel's highest allowed marking, OFFICIAL-SENSITIVE."
 E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_an_item_above_the_targets_highest_marking_refuses_the_merge_and_writes_nothing
-1 failed, 27 deselected, 1 warning in 1.33s
+1 failed, 28 deselected, 1 warning in 1.35s
 
 ## a chosen match not checked against what is offered
 plant in services/api/drawn_merge.py; -k not_offered_is_refused; exit 1
-E           KeyError: ('01M717Q8B4YHVFP6570N7BJH0V', 'p-secret')
+E           KeyError: ('01M717V2D1ZYGWPKPKPNXXR79D', 'p-secret')
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_a_chosen_match_not_offered_is_refused_alike_and_writes_nothing
-1 failed, 27 deselected, 1 warning in 1.57s
+1 failed, 28 deselected, 1 warning in 1.59s
 
 ## the dry run merges
 plant in services/api/drawn_merge.py; -k dry_run_counts; exit 1
@@ -50,7 +50,7 @@ E       AssertionError: {"error":"item_not_found"}
 E       assert 404 == 200
 E        +  where 404 = <Response [404 Not Found]>.status_code
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_the_dry_run_counts_only_what_the_merger_may_see_and_writes_nothing
-1 failed, 27 deselected, 1 warning in 1.31s
+1 failed, 28 deselected, 1 warning in 1.33s
 
 ## a match written asserted (rule 5)
 plant in services/api/drawn_merge.py; -k becomes_a_view; exit 1
@@ -58,16 +58,16 @@ E       pydantic_core._pydantic_core.ValidationError: 1 validation error for Pro
 E         Value error, extraction_confidence must be null for asserted provenance [type=value_error, input_value={'state': <ProvenanceStat...action_confidence': 1.0}, input_type=dict]
 E           For further information visit https://errors.pydantic.dev/2.14/v/value_error
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_author_promotes_one_load_matches_inferred_and_the_drawing_becomes_a_view
-1 failed, 27 deselected, 1 warning in 1.58s
+1 failed, 28 deselected, 1 warning in 1.64s
 
 ## the boards left as boards (decision 7)
 plant in services/api/drawn_merge.py; -k becomes_a_view; exit 1
-E       AssertionError: assert (True, None) == (False, 'prom...MRPBCD9YAYBK')
+E       AssertionError: assert (True, None) == (False, 'prom...BW9FCRPXSFK1')
 E         
 E         At index 0 diff: True != False
 E         Use -v to get more diff
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_author_promotes_one_load_matches_inferred_and_the_drawing_becomes_a_view
-1 failed, 27 deselected, 1 warning in 1.30s
+1 failed, 28 deselected, 1 warning in 1.34s
 
 ## annotations read unfiltered (the reader's clearance dropped)
 plant in services/api/drawn_merge.py; -k annotation_is_withheld; exit 1
@@ -77,7 +77,7 @@ E         'Courier' is contained here:
 E           "label": "Courier", "marking": "SECRET", "grading": "B21", "source_note": "Informant 7", "words": "Drawn by alice, not merged: it stays in the drawing, read-only", "merged": false}]}
 E         ?           +++++++)
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_an_annotation_is_withheld_from_a_reader_who_may_not_see_its_item
-1 failed, 27 deselected, 1 warning in 1.33s
+1 failed, 28 deselected, 1 warning in 1.33s
 
 ## committed at once whatever the policy
 plant in services/api/drawn_merge.py; -k second_person; exit 1
@@ -86,7 +86,30 @@ E
 E         - awaiting_review
 E         + committed
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_under_second_person_reviews_nothing_is_written_until_an_author_approves
-1 failed, 27 deselected, 1 warning in 1.35s
+1 failed, 28 deselected, 1 warning in 1.32s
+
+## the revert leaving the merge's matches live
+plant in scripts/revert_promotion.py; -k reverting_a_merge; exit 1
+E       AssertionError: assert False
+E        +  where False = AuditStub(created_at=datetime.datetime(2026, 11, 9, 22, 46, 21, 13584, tzinfo=datetime.timezone.utc), created_by='dana...ision=1, superseded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None).reverted
+E        +    where AuditStub(created_at=datetime.datetime(2026, 11, 9, 22, 46, 21, 13584, tzinfo=datetime.timezone.utc), created_by='dana...ision=1, superseded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None) = Edge(id='01M717VDJN4DQJW2J5BBDVZ8FB', type='SAME_AS', source='01M717VDJET9R1FY93S5GD5KDP', target='p-loaded', properti..._by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=['src']).audit
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_reverting_a_merge_takes_back_the_load_its_matches_and_decision_7
+1 failed, 28 deselected, 1 warning in 1.32s
+
+## the revert leaving the case on the target and its views
+plant in scripts/revert_promotion.py; -k reverting_a_merge; exit 1
+E       AssertionError: assert (['src'] == ['01M717VFBGBQC5XCHHR1M2E3CD']
+E         
+E         At index 0 diff: 'src' != '01M717VFBGBQC5XCHHR1M2E3CD'
+E         Use -v to get more diff)
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_reverting_a_merge_takes_back_the_load_its_matches_and_decision_7
+1 failed, 28 deselected, 1 warning in 1.36s
+
+## the revert taking no stores for a drawn merge
+plant in scripts/revert_promotion.py; -k reverting_a_merge; exit 1
+E               AttributeError: 'NoneType' object has no attribute 'undo_writes'
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_merge.py::test_reverting_a_merge_takes_back_the_load_its_matches_and_decision_7
+1 failed, 28 deselected, 1 warning in 1.31s
 
 ## restored
-28 passed, 1 warning in 1.65s
+29 passed, 1 warning in 1.68s
