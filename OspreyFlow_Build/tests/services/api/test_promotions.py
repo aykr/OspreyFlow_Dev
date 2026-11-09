@@ -994,3 +994,75 @@ async def test_a_revert_after_its_layer_was_deleted_takes_the_items_out_with_it(
     assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 0
     assert pw.graph.node(made["element_id"]).audit.reverted
     assert pw.items.items[made["item_id"]].withdrawn_at is not None
+
+
+# --- a gazetteer dataset takes nothing drawn (ADR-147 Amendment 1 decision 2; P4) ------------
+
+GAZ = "gazetteer-osm-test"
+
+
+def _gazetteer(pw: SimpleNamespace, case: str) -> None:
+    pw.datasets.add(
+        Dataset(id=GAZ, name="Places", owning_unit=UNIT, created_by="eng",
+                created_at=datetime(2026, 11, 1, tzinfo=UTC))
+    )  # fmt: skip
+    pw.datasets.cases[HOME + "-gaz"] = [GAZ]
+    pw.cases.seed(HOME + "-gaz", {"dana": AccessLevel.AUTHOR})
+    pw.datasets.homes[GAZ] = HomeCase(
+        dataset_id=GAZ, investigation_id=HOME + "-gaz", made_at=datetime.now(UTC), made_by="dana"
+    )
+    pw.datasets.cases[case] = [GAZ]
+
+
+def test_nothing_drawn_is_promoted_into_a_gazetteer_dataset(pw: SimpleNamespace) -> None:
+    _gazetteer(pw, K)
+    board = _board()
+    made = _item(board)
+    sheet = _sheet(board)
+    assert not sheet["items"] and "gazetteer dataset holds only the places" in sheet["refused"]
+    answer = _promote(board, made["item_id"])
+    assert answer.status_code == 409 and answer.json()["error"] == "nothing_to_promote_into"
+    assert not pw.store.records and pw.graph.promotions == 0
+    assert GAZ not in _node_datasets(pw, made["element_id"])
+
+
+def test_the_gazetteer_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(promotions_module, "is_gazetteer", lambda _d: False)
+    _gazetteer(pw, K)
+    board = _board()
+    made = _item(board)
+    assert _promote(board, made["item_id"]).status_code == 201
+
+
+def test_a_removed_cases_layer_is_never_merged_into_a_gazetteer_dataset(
+    pw: SimpleNamespace,
+) -> None:
+    pw.cases.seed("case-g", {"alice": AccessLevel.AUTHOR})
+    _gazetteer(pw, "case-g")
+    board = _board(case="case-g")
+    _item(board, case="case-g")
+    pw.removed.add("case-g")
+    (row,) = _as("dana").get(f"/v1/datasets/{GAZ}/removed-cases").json()["cases"]
+    assert not row["mergeable"] and "gazetteer dataset" in row["why_not"]
+    refused = _as("dana").post(f"/v1/datasets/{GAZ}/removed-cases/case-g/merge-sheet")
+    assert refused.status_code == 409 and refused.json()["error"] == "gazetteer_never_merged"
+    assert "open_layer_merge" not in [r["action"] for r in pw.audit.records]
+    deleted = _as("dana").delete(f"/v1/datasets/{GAZ}/removed-cases/case-g/layer")
+    assert deleted.status_code == 200 and "deleted" in deleted.json()["words"]
+
+
+def test_the_gazetteer_merge_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.api import app as app_module
+
+    monkeypatch.setattr(app_module, "is_gazetteer", lambda _d: False)
+    pw.cases.seed("case-g", {"alice": AccessLevel.AUTHOR})
+    _gazetteer(pw, "case-g")
+    board = _board(case="case-g")
+    _item(board, case="case-g")
+    pw.removed.add("case-g")
+    opened = _as("dana").post(f"/v1/datasets/{GAZ}/removed-cases/case-g/merge-sheet")
+    assert opened.status_code == 200, opened.text

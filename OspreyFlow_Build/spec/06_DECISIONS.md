@@ -31218,6 +31218,11 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    - A merge carries the layer's drawn items (the board registry's). The analyst's own resolution
      links and hand-marking in the layer (Amendment 1) stay; a delete withdraws them with the rest.
    - A composite case's layer is never merged, only deleted (the orchestrator's settlement).
+   - **Nothing drawn goes into a gazetteer dataset** (`gazetteer-*`, ADR-147 Amendment 1 decision 2,
+     which holds the build's places alone): a case reading one is offered no promotion and is
+     refused one at the route, and a removed case's layer is never merged into one, only deleted
+     (found at the rebase onto P4; the case lane's choice under Prompt L, `promotions.is_gazetteer`;
+     `test_promotions.py`'s two gazetteer cases, each red with the check removed).
    - A delete has its dry run first (for an Author in the Studio, as for an administrator in Admin),
      needs no second person, answers in words with no count, and never touches an element holding
      another dataset.

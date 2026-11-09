@@ -44,6 +44,7 @@ from typing import Any, Protocol
 from conduit_common.identity import new_id
 from ports.graph import NotPromotable
 from schemas.domain import NOT_SAME_AS, SAME_AS, Edge, Node, Principal
+from schemas.mapconfig import GAZETTEER_DATASET_PREFIX
 from schemas.promotions import (
     DetailItem,
     LayerDeleted,
@@ -107,6 +108,17 @@ class _Read:
     element: Node | Edge | None
 
 
+GAZETTEER_TAKES_NOTHING_DRAWN = (
+    "A gazetteer dataset holds only the places its build loads: nothing drawn in a case is "
+    "promoted or merged into it."
+)
+
+
+def is_gazetteer(dataset: Dataset) -> bool:
+    """A `gazetteer-*` dataset (ADR-147 Amendment 1 decision 2): the build's places alone."""
+    return dataset.id.startswith(GAZETTEER_DATASET_PREFIX)
+
+
 @dataclass
 class Promotions:
     boards: Boards
@@ -143,6 +155,8 @@ class Promotions:
                 "A case reading a composite promotes nothing: a composite holds none of its "
                 "members' data. Promote from a case reading the member dataset."
             )
+        if is_gazetteer(chosen[0]):
+            return None, GAZETTEER_TAKES_NOTHING_DRAWN
         return chosen[0], None
 
     # --- reading the items ----------------------------------------------------------------

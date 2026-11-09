@@ -791,7 +791,13 @@ from .pipeline_run import (
 )
 from .principal_names import PrincipalNameDirectory
 from .promotion_store import InMemoryPromotionStore, PostgresPromotionStore, PromotionStore
-from .promotions import PromotionNotFound, PromotionRefused, Promotions
+from .promotions import (
+    GAZETTEER_TAKES_NOTHING_DRAWN,
+    PromotionNotFound,
+    PromotionRefused,
+    Promotions,
+    is_gazetteer,
+)
 from .questions import (
     AskRequest,
     NoDocumentsError,
@@ -9939,12 +9945,20 @@ async def removed_case_layers(
     dataset = (await datasets.egress_of([dataset_id]))[dataset_id]
     rows = await _linked_cases(dataset, datasets, investigations, graph, principal)
     composite = dataset.kind == "composite"
+    gazetteer = is_gazetteer(dataset)
+    why_not = (
+        _COMPOSITE_NEVER_MERGED
+        if composite
+        else GAZETTEER_TAKES_NOTHING_DRAWN
+        if gazetteer
+        else None
+    )
     return RemovedCaseLayers(
         dataset_id=dataset_id,
         cases=[
             RemovedCaseLayer(
                 investigation_id=r.investigation_id, name=r.name, items=r.items + r.links,
-                mergeable=not composite, why_not=_COMPOSITE_NEVER_MERGED if composite else None,
+                mergeable=why_not is None, why_not=why_not,
             )
             for r in rows
             if r.state == "removed" and r.through is None
@@ -9971,6 +9985,10 @@ async def open_layer_merge(
     )
     if dataset.kind == "composite":
         raise LayerActionRefused(409, "composite_never_merged", _COMPOSITE_NEVER_MERGED)
+    if is_gazetteer(dataset):
+        raise LayerActionRefused(
+            409, "gazetteer_never_merged", GAZETTEER_TAKES_NOTHING_DRAWN
+        )
     await _audit_promotion(
         audit, principal, "open_layer_merge", case_id, 0, dataset_id=dataset_id,
         layer_id=layer,
