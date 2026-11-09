@@ -200,9 +200,9 @@ _GIT_IN_IMAGE = re.compile(
     r"|^COPY\b[^\n]*\s/usr/(local/)?bin/git(\s|$)",
     re.I | re.M,
 )
-#: Runtimes an image carries under a licence the register does not pass, put to the owner and not
-#: yet ruled on: named on every run (never passed silently), not failed. The register is the
-#: owner's (the orchestrator's review of P5, item 8).
+#: Runtimes an image carries under a licence the register does not pass, put to the owner, and
+#: either awaiting a ruling or, once ruled, awaiting the carry that removes them: named on every run
+#: with the ruling and its carry (never passed silently), not failed. The register is the owner's.
 #: Each entry is pinned: this runtime, in this Dockerfile, under exactly this licence; anything else
 #: (another image, another licence) is an offender as usual.
 AWAITING_OWNER: dict[tuple[str, str, str], str] = {
@@ -223,11 +223,12 @@ def _instructions(text: str) -> list[str]:
     ]
 
 
-def declared_runtimes(text: str) -> dict[str, str]:
-    """Every `org.ospreyflow.runtime.<name>.licence` a Dockerfile's `LABEL`s declare."""
+def label_pairs(text: str) -> list[tuple[str, str]]:
+    """Every `key`/`value` a Dockerfile's `LABEL`s set, however each is written (quoted or not,
+    several to a line, continued lines, or the legacy `LABEL key value`), in order."""
     import shlex
 
-    found: dict[str, str] = {}
+    found: list[tuple[str, str]] = []
     for instruction in _instructions(text):
         word, _, rest = instruction.partition(" ")
         if word.upper() != "LABEL":
@@ -239,10 +240,17 @@ def declared_runtimes(text: str) -> dict[str, str]:
         pairs = [t.split("=", 1) for t in tokens if "=" in t]
         if not pairs and len(tokens) >= 2:  # the legacy form, `LABEL key value`
             pairs = [[tokens[0], " ".join(tokens[1:])]]
-        for key, value in pairs:
-            named = _RUNTIME_KEY.match(key.strip())
-            if named:
-                found[named.group(1)] = value.strip()
+        found.extend((key.strip(), value.strip()) for key, value in pairs)
+    return found
+
+
+def declared_runtimes(text: str) -> dict[str, str]:
+    """Every `org.ospreyflow.runtime.<name>.licence` a Dockerfile's `LABEL`s declare."""
+    found: dict[str, str] = {}
+    for key, value in label_pairs(text):
+        named = _RUNTIME_KEY.match(key)
+        if named:
+            found[named.group(1)] = value
     return found
 
 
@@ -413,7 +421,7 @@ def main() -> int:
     awaiting = find_runtimes_awaiting_owner()
     for dockerfile, runtime, licence in awaiting:
         print(
-            f"licence-check: AWAITING THE OWNER: {dockerfile} carries {runtime!r} under {licence!r}, "
+            f"licence-check: NOT YET PASSED: {dockerfile} carries {runtime!r} under {licence!r}, "
             f"not on the allowlist ({AWAITING_OWNER[(dockerfile, runtime, licence)]})",
             file=sys.stderr,
         )
@@ -422,7 +430,7 @@ def main() -> int:
         return 1
     print(
         f"licence-check: {len(packages)} packages, all allowed "
-        f"({len(awaiting)} image runtime(s) awaiting the owner, named above) "
+        f"({len(awaiting)} image runtime(s) not yet passed, named above) "
         f"({len(REGISTRY)} demo data licence(s) checked, all allowed or undeclared); "
         "this project's own LICENSE/NOTICE present and correct."
     )

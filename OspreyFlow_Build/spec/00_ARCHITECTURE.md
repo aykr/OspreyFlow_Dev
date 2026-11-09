@@ -953,7 +953,7 @@ and AGPL still never pass. A runtime in an image is declared by a `LABEL
 org.ospreyflow.runtime.<name>.licence` in its Dockerfile, which `make licence-check` reads
 (`tools/licence_check.py`'s image leg, `find_runtime_offenders`); a Java stage with no such label
 fails too, as does a distribution's Java package; the labels are read however they are written
-(`tests/licence_check/test_runtime_licences.py`, each refusal shown red). **Awaiting the owner:**
+(`tests/licence_check/test_runtime_licences.py`, each refusal shown red). **Not yet passed:**
 `git` (GPL-2.0-only), already in the Conduit's image because the Conduit runs it to publish
 recipes (`09_INGEST_STUDIO.md` §6). **The owner's ruling of 9 November 2026:** the `git` command is
 replaced by dulwich, used under its Apache-2.0 licence (studio's carry in L1.7), and `git` then leaves the

@@ -159,5 +159,8 @@ def test_every_run_names_what_awaits_the_owner(
     monkeypatch.setattr("sys.argv", ["licence_check"])
     assert licence_check.main() == 0
     said = capsys.readouterr()
-    assert "AWAITING THE OWNER: services/api/Dockerfile carries 'git'" in said.err
-    assert "1 image runtime(s) awaiting the owner" in said.out
+    assert "NOT YET PASSED: services/api/Dockerfile carries 'git'" in said.err
+    # The owner's ruling and its carry, said on every run (the orchestrator's review of round 3).
+    assert "the owner's ruling of 9 November 2026: replaced by dulwich" in said.err
+    assert "studio's carry in L1.7" in said.err
+    assert "1 image runtime(s) not yet passed" in said.out
