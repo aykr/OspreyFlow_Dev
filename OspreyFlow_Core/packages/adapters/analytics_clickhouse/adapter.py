@@ -28,7 +28,7 @@ from typing import Any, cast
 from adapters.analytics_duckdb.access_filter import AccessFilter, SqlPredicate
 from adapters.analytics_duckdb.alert_facts import alert_predicate, series_expression
 from ontology.handling import HandlingScheme
-from ports.analytics import TrendLimitExceeded
+from ports.analytics import TrendLimitExceeded, refuse_an_amount_total_out_of_range
 from schemas.analytics import (
     ActivityRequest,
     ActivityResult,
@@ -104,6 +104,18 @@ def _field_expression(field: str) -> str:
     if name in _TOP_LEVEL_FIELDS:
         return name
     return _property(name)
+
+
+def _decimal_amount(field: str | None) -> str:
+    """A declared amount as a decimal of 38 digits, 9 after the point, as the DuckDB adapter reads
+    it, so a total a rule compares is the same on both: read from the number's shortest text (0.1
+    and 0.2 make 0.3). One that is not such a decimal (1e30, inf) is NULL, no amount: summed and
+    counted as none. Running sums are Decimal256, so no total wraps (ADR-133 Amendment 10)."""
+    if field is None:
+        return "CAST(NULL AS Nullable(Decimal128(9)))"
+    # Rounded to 9 places first (as DuckDB's cast to DECIMAL(38, 9) rounds), so a tenth digit is
+    # never truncated here and rounded there.
+    return f"toDecimal128OrNull(toString(round(toFloat64OrNull({_field_expression(field)}), 9)), 9)"
 
 
 def _time(value: object) -> datetime:
@@ -767,15 +779,7 @@ class AnalyticsClickHouseAdapter:
         predicate = self._predicate(req.filter, principal)
         subjects = req.filter.node_ids
         marks = ",".join("?" for _ in subjects)
-        amount = (
-            "CAST(NULL AS Nullable(Decimal128(9)))"
-            if req.amount_property is None
-            # A decimal of 38 digits, 9 after the point, as the DuckDB adapter sums it, read from
-            # the number's shortest text (so 0.1 and 0.2 make 0.3); one that is not such a decimal
-            # (1e30, inf) is no amount, NULL, counted as none below.
-            else "toDecimal128OrNull(toString("
-            f"toFloat64OrNull({_field_expression(req.amount_property)})), 9)"
-        )
+        amount = _decimal_amount(req.amount_property)
         # Each event once per subject it touches: an event to itself is one event, not two.
         touched = (
             f"SELECT source_id AS node, occurred_at AS at, {amount} AS amount "
@@ -797,13 +801,16 @@ class AnalyticsClickHouseAdapter:
             f"WITH touched AS ({touched}), "
             "running AS ("
             "  SELECT node, at, count() OVER w AS c, count(amount) OVER w AS nn, "
-            "  sum(ifNull(amount, toDecimal128(0, 9))) OVER w AS s "
+            "  sum(toDecimal256(ifNull(amount, toDecimal128(0, 9)), 9)) OVER w AS s "
             "  FROM touched "
             "  WINDOW w AS (PARTITION BY node ORDER BY at "
             "  RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"
             ") "
             "SELECT a.node, max(a.c - b.c), "
-            "max(if(a.nn = b.nn, CAST(NULL AS Nullable(Float64)), toFloat64(a.s - b.s))) "
+            "max(if(a.nn = b.nn, CAST(NULL AS Nullable(Float64)), toFloat64(a.s - b.s))), "
+            # Decimal256 cannot wrap; a span's total past the limit is refused all the same, as the
+            # DuckDB adapter must refuse it (ADR-133 Amendment 10).
+            "max(abs(toFloat64(a.s - b.s))) "
             f"FROM (SELECT node, at - INTERVAL {days} DAY AS cut, c, nn, s FROM running) AS a "
             "ASOF LEFT JOIN running AS b ON a.node = b.node AND a.cut > b.at "
             # An event with nothing before its span joins no row: its figures less zeros.
@@ -826,8 +833,10 @@ class AnalyticsClickHouseAdapter:
             [*unbounded.params, *upper_params, *subjects,
              *unbounded.params, *upper_params, *subjects],
         )  # fmt: skip
+        refuse_an_amount_total_out_of_range(*(float(guard) for *_, guard in rows))
         found = {
-            str(node): (int(n), None if total is None else float(total)) for node, n, total in rows
+            str(node): (int(n), None if total is None else float(total))
+            for node, n, total, _ in rows
         }
         return FrequencyResult(
             nodes={
@@ -848,15 +857,7 @@ class AnalyticsClickHouseAdapter:
         unbounded = self._predicate(req.filter.model_copy(update={"window": None}), principal)
         subjects = req.filter.node_ids
         marks = ",".join("?" for _ in subjects)
-        amount = (
-            "CAST(NULL AS Nullable(Decimal128(9)))"
-            if req.amount_property is None
-            # A decimal of 38 digits, 9 after the point, as the DuckDB adapter sums it, read from
-            # the number's shortest text (so 0.1 and 0.2 make 0.3); one that is not such a decimal
-            # (1e30, inf) is no amount, NULL, counted as none below.
-            else "toDecimal128OrNull(toString("
-            f"toFloat64OrNull({_field_expression(req.amount_property)})), 9)"
-        )
+        amount = _decimal_amount(req.amount_property)
         touched = (
             f"SELECT source_id AS node, occurred_at, {amount} AS amount FROM events "
             f"WHERE {unbounded.where} AND occurred_at <= ? AND source_id IN ({marks}) "
@@ -869,9 +870,10 @@ class AnalyticsClickHouseAdapter:
         baseline_start = start - timedelta(days=req.baseline_days)
         recent, before = "occurred_at >= ?", "occurred_at < ? AND occurred_at >= ?"
         rows = await self._ch.rows(
-            f"SELECT node, countIf({recent}), sumIf(amount, {recent} AND amount IS NOT NULL), "
+            f"SELECT node, countIf({recent}), "
+            f"sumIf(toDecimal256(amount, 9), {recent} AND amount IS NOT NULL), "
             f"countIf({recent} AND amount IS NOT NULL), "
-            f"countIf({before}), sumIf(amount, {before} AND amount IS NOT NULL), "
+            f"countIf({before}), sumIf(toDecimal256(amount, 9), {before} AND amount IS NOT NULL), "
             f"countIf({before} AND amount IS NOT NULL), "
             "minIf(occurred_at, occurred_at >= ?), maxIf(occurred_at, occurred_at < ?), "
             "countIf(occurred_at < ?) "
@@ -882,6 +884,7 @@ class AnalyticsClickHouseAdapter:
              *unbounded.params, window.valid_to, *subjects,
              *unbounded.params, window.valid_to, *subjects],
         )  # fmt: skip
+        refuse_an_amount_total_out_of_range(*(float(t) for row in rows for t in (row[2], row[5])))
         nodes: dict[str, NodeActivity] = {}
         for row in rows:
             node, n_recent, t_recent, a_recent, n_base, t_base, a_base, first, last, n_before = row

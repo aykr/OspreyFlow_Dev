@@ -2559,12 +2559,13 @@ async def test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the
 
 
 async def test_frequency_counts_events_at_one_instant_together(factory: AnalyticsAdapterFactory) -> None:
-    """Ties: three events at one instant are each in every span that holds that instant, as a RANGE
-    frame counts its peers, never one at a time in an arbitrary order."""
-    events = [_paid(0), _paid(0), _paid(0), _paid(5), _paid(5.5), _paid(6)]
+    """Ties: four events at one instant are each in every span that holds that instant, as a RANGE
+    frame counts its peers, never one at a time in an arbitrary order. The tied four are the one
+    largest span, so an undercount of them fails as an overcount elsewhere does."""
+    events = [_paid(0), _paid(0), _paid(0), _paid(0), _paid(5), _paid(5.5), _paid(6)]
     async with factory.context(events) as adapter:
         three = await adapter.event_frequency(_frequency(3), OFFICIAL)
-    assert three.nodes["acct-a"].most_in_span == 3
+    assert three.nodes["acct-a"].most_in_span == 4
 
 
 async def test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not(
@@ -2577,7 +2578,11 @@ async def test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not(
         tenths = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
     async with factory.context([_paid(0, 1e30), _paid(1, "inf")]) as adapter:  # type: ignore[arg-type]
         huge = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+    # Past nine places an amount is rounded, on every adapter alike, never cut on one.
+    async with factory.context([_paid(0, 0.1234567896), _paid(1, 1.0000000004)]) as adapter:
+        tenth = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
     assert tenths.nodes["acct-a"].largest_total == 0.3
+    assert tenth.nodes["acct-a"].largest_total == 1.12345679
     assert (huge.nodes["acct-a"].most_in_span, huge.nodes["acct-a"].largest_total) == (2, None)
 
 
@@ -2704,6 +2709,43 @@ async def test_activity_counts_the_window_and_the_days_before_it(factory: Analyt
     assert (a.recent_count, a.recent_total) == (3, 600.0)
     assert (a.baseline_count, a.baseline_total) == (2, 3_000.0)
     assert plain.nodes["acct-a"].recent_total is None and plain.nodes["acct-a"].baseline_count == 2
+
+
+async def test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """As event_frequency's: the totals a rule compares are the same on every adapter (0.1 and 0.2
+    make 0.3, not 0.30000000000000004), and an amount past a decimal of 38 digits, 9 after the point
+    (1e30, inf), is no amount, its event still counted."""
+    events = [_moved(_at(0), 0.1), _moved(_at(1), 0.2),  # in the window
+              _moved(_at(-1), 1e30), _moved(_at(-2), "inf")]  # type: ignore[arg-type]  # fmt: skip
+    async with factory.context(events) as adapter:
+        counted = await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+    a = counted.nodes["acct-a"]
+    assert (a.recent_count, a.recent_total) == (2, 0.3)
+    assert (a.baseline_count, a.baseline_total) == (2, None)
+
+
+@pytest.mark.parametrize("sign", [1, -1])
+async def test_a_total_past_the_decimals_range_is_refused_never_wrapped(
+    factory: AnalyticsAdapterFactory, sign: int
+) -> None:
+    """ADR-133 Amendment 10 (rule 2): two amounts of 9 × 10^28 each fit a decimal of 38 digits, 9
+    after the point; their total does not. A frequency's span and an activity's window holding both
+    are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
+    decimal wraps silently to a negative) and never cut. Either sign."""
+    from ports.analytics import AmountTotalOutOfRange
+
+    big = sign * 9e28
+    async with factory.context([_paid(0, big), _paid(1, big)]) as adapter:
+        with pytest.raises(AmountTotalOutOfRange):
+            await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+    async with factory.context([_moved(_at(0), big), _moved(_at(1), big)]) as adapter:
+        with pytest.raises(AmountTotalOutOfRange):
+            await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+    async with factory.context([_moved(_at(-1), big), _moved(_at(-2), big)]) as adapter:
+        with pytest.raises(AmountTotalOutOfRange):  # the days before the window too
+            await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
 
 
 async def test_activity_says_the_first_movement_in_the_window_and_the_last_before_it(
