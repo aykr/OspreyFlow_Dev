@@ -33,7 +33,7 @@ from typing import Any, Protocol
 
 import asyncpg
 
-from schemas.dataset_model import ModelExtension, TargetModel, TargetModelDraftInput
+from schemas.dataset_model import ExtensionKind, ModelExtension, TargetModel, TargetModelDraftInput
 from schemas.domain import Principal
 
 #: The POLE core's entity and link types as the default ontology loads them, for the tests; the
@@ -181,6 +181,24 @@ class TargetModelStore(Protocol):
     async def revert(
         self, dataset_id: str, to_version: int, principal: Principal
     ) -> TargetModel: ...
+    async def add_extension(
+        self, dataset_id: str, name: str, kind: ExtensionKind, principal: Principal
+    ) -> TargetModel: ...
+
+
+def _added(draft: TargetModel, name: str, kind: ExtensionKind) -> TargetModelDraftInput:
+    """ADR-143 decision 9 (L3.5): the draft with one more extension, added in its own version; a
+    name already in the draft is refused, so two acceptances never both write it."""
+    if any(e.name == name for e in draft.extensions):
+        raise TargetModelRefused(f"{name} is already in the draft, version {draft.version}")
+    return TargetModelDraftInput(
+        packs=dict(draft.packs),
+        extensions=[
+            *draft.extensions,
+            ModelExtension(name=name, kind=kind, added_in=draft.version),
+        ],
+        reference_lists=list(draft.reference_lists),
+    )
 
 
 def _first_or_copy(dataset_id: str, live: TargetModel | None, principal: Principal) -> TargetModel:
@@ -259,6 +277,14 @@ class InMemoryTargetModelStore:
         )  # fmt: skip
         held[held.index(draft)] = live
         return live, before
+
+    async def add_extension(
+        self, dataset_id: str, name: str, kind: ExtensionKind, principal: Principal
+    ) -> TargetModel:
+        """One extension appended to the draft (opened if there is none), read and written in one
+        step, so a concurrent acceptance is never lost (ADR-143 decision 9)."""
+        draft = await self.draft(dataset_id) or await self.open_draft(dataset_id, principal)
+        return await self.save_draft(dataset_id, _added(draft, name, kind), principal)
 
     async def revert(self, dataset_id: str, to_version: int, principal: Principal) -> TargetModel:
         _refuse_a_second_draft(await self.draft(dataset_id))
@@ -398,6 +424,30 @@ class PostgresTargetModelStore:
             if draft is None:
                 raise TargetModelRefused("there is no draft to save: open one first")
             _checked(await self._in(conn, dataset_id, "live"), draft, given, self._core)
+            await conn.execute(
+                "UPDATE target_models SET content = $3::jsonb "
+                "WHERE dataset_id = $1 AND version = $2 AND state = 'draft'",
+                dataset_id,
+                draft.version,
+                _content(given),
+            )
+        return draft.model_copy(update=_fields_of(given))
+
+    async def add_extension(
+        self, dataset_id: str, name: str, kind: ExtensionKind, principal: Principal
+    ) -> TargetModel:
+        """One extension appended to the draft, opened if there is none, under the dataset's lock:
+        the draft is read and written in one transaction, so two acceptances at once both land
+        (ADR-143 decision 9)."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            await self._locked(conn, dataset_id)
+            live = await self._in(conn, dataset_id, "live")
+            draft = await self._in(conn, dataset_id, "draft")
+            if draft is None:
+                draft = _first_or_copy(dataset_id, live, principal)
+                await self._insert(conn, draft)
+            given = _added(draft, name, kind)
+            _checked(live, draft, given, self._core)
             await conn.execute(
                 "UPDATE target_models SET content = $3::jsonb "
                 "WHERE dataset_id = $1 AND version = $2 AND state = 'draft'",

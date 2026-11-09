@@ -1,0 +1,6 @@
+........................                                                 [100%]
+24 passed in 45.80s
+ the old status check left in place | 1 failed in 0.85s 
+ the store's decision not conditional on the status read | 1 failed in 0.93s 
+ the dataset's model lock planted out of `_locked` | 1 failed in 0.81s 
+# after the run: rows with a status main does not know: 0; leftover test schemas: 0

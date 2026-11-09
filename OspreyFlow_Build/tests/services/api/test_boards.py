@@ -1481,3 +1481,45 @@ def test_a_private_boards_id_is_on_no_other_members_canvas(world: SimpleNamespac
     assert private not in str([n.model_dump() for n in bobs])
     alices, _ = asyncio.run(canvas("alice"))
     assert alices and all(n.provenance.drawn.board_id == private for n in alices)
+
+
+# --- a proposal's own storage label is never a board's (rule 3, rule 7; found at L3.5) ----------
+
+
+def test_a_board_neither_lists_nor_draws_under_a_proposals_storage_label(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A link type proposed in another case declares its own hidden storage type (`NAME__<id>`,
+    ADR-090 Amendment 2) in the ontology every board reads. Listed, it would tell this case of
+    that proposal and send its label to the Glass; and since `link` accepts what the list holds, a
+    link could be drawn under it. Red with `link_types` listing hidden types."""
+    base = ONTOLOGY.edge_type("ASSOCIATE_OF")
+    assert base is not None
+    label = "BRIBED__01PROPOSALOFANOTHERCASE"
+    stored = base.model_copy(update={"name": label, "hidden": True, "analyst_defined": True})
+    ontology = ONTOLOGY.model_copy(update={"edge_types": [*ONTOLOGY.edge_types, stored]})
+    monkeypatch.setattr(app.state, "ontology", ontology, raising=False)
+    board = _board()
+    opened = _as("alice").get(f"/v1/investigations/{K}/boards/{board}")
+    assert opened.status_code == 200, opened.text
+    assert label not in opened.json()["link_types"]
+    assert not [t for t in opened.json()["link_types"] if "__" in t]
+
+
+def test_a_link_is_never_drawn_under_a_proposals_storage_label(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`link` draws only a type its board lists (`link_types`), so a hidden storage label is
+    refused at the route and nothing is written. Red with hidden types listed."""
+    base = ONTOLOGY.edge_type("ASSOCIATE_OF")
+    assert base is not None
+    label = "BRIBED__01PROPOSALOFANOTHERCASE"
+    stored = base.model_copy(update={"name": label, "hidden": True, "analyst_defined": True})
+    ontology = ONTOLOGY.model_copy(update={"edge_types": [*ONTOLOGY.edge_types, stored]})
+    monkeypatch.setattr(app.state, "ontology", ontology, raising=False)
+    board = _board()
+    one, two = _item(board)["element_id"], _item(board, label="Second")["element_id"]
+    before = len(world.graph.edge_writes)
+    answer = _link(board, one, two, type=label)
+    assert answer.status_code == 422 and answer.json()["error"] == "not_in_the_model"
+    assert len(world.graph.edge_writes) == before

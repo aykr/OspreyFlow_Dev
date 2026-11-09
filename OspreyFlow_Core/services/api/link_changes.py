@@ -318,10 +318,13 @@ class LinkChangeService:
         self._notes = notes
         self._types = types
 
-    def _type_of(self, name: str) -> EdgeTypeDef | None:
-        """The type an existing link reads as, offered in the case or not (ADR-090)."""
+    async def _type_of(
+        self, name: str, investigation_id: str, principal: Principal
+    ) -> EdgeTypeDef | None:
+        """The type an existing link reads as in this case, offered or not (ADR-090); never
+        another case's proposal (ADR-143 decision 9)."""
         if self._types is not None:
-            found = self._types.type_named(name)
+            found = await self._types.type_named(name, investigation_id, principal)
             return found.definition if found is not None else None
         return self._ontology.edge_type(name)
 
@@ -336,7 +339,7 @@ class LinkChangeService:
             return (found, name) if found is not None else None
         entry = (await self._types.case_types(investigation_id, principal)).get(name)
         if entry is None and name == old_type:
-            entry = self._types.type_named(name)
+            entry = await self._types.type_named(name, investigation_id, principal)
         return (entry.definition, entry.storage_name) if entry is not None else None
 
     async def _visible(self, investigation_id: str, edge_id: str, principal: Principal) -> Edge:
@@ -398,7 +401,7 @@ class LinkChangeService:
         if wanted_type is None:
             raise InvalidChangeError(f"{new_type!r} is not a link type offered in this case.")
         type_def, write_type = wanted_type
-        old_def = self._type_of(old.type)
+        old_def = await self._type_of(old.type, investigation_id, principal)
         ends = await self._working_set.end_types(investigation_id, old)
         if ends is None:
             raise LinkNotFoundError(edge_id)

@@ -243,7 +243,10 @@ class Boards:
         return sorted(
             e.name
             for e in self.ontology.edge_types
-            if not e.system and e.name not in _NOT_DRAWN_LINK_TYPES
+            # A proposal's own storage label (`NAME__<proposal id>`) is `hidden`: listing it would
+            # tell this case of another case's proposal (rule 3), send a storage label to the Glass
+            # (rule 7), and let a link be drawn under it (ADR-143 decision 9; L3.5).
+            if not e.system and not e.hidden and e.name not in _NOT_DRAWN_LINK_TYPES
         )
 
     def markings_up_to(self, ceiling: str, principal: Principal) -> list[str]:

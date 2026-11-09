@@ -657,17 +657,24 @@ from .link_notes import (
 )
 from .link_type_store import LinkTypeProposalStore
 from .link_types import (
+    AcceptLinkTypeRequest,
     CaseLinkTypesResponse,
     LinkTypeDecisionRequest,
     LinkTypeOption,
     LinkTypeProposal,
     LinkTypeProposalList,
     LinkTypeService,
+    ModelProposalList,
+    ModelProposalView,
+    PromotableRequest,
+    PromotableResponse,
+    PromotableType,
     PromoteLinkTypeRequest,
     ProposalNotFoundError,
     ProposalRefusedError,
     ProposeLinkTypeRequest,
     RetireLinkTypeRequest,
+    may_read_proposal_words,
     public_ontology,
 )
 from .list_schedule import ListRefreshExecutor, ListScheduleRefused
@@ -1104,8 +1111,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # ADR-090: the ontology in force is `default.yaml` plus every proposal, composed here and after
     # each proposal and decision, in place, so every service holding `ontology` sees it.
     app.state.link_types = LinkTypeService(
-        link_type_store, ontology, graph, app.state.working_set, investigations
-    )
+        link_type_store, ontology, graph, app.state.working_set, investigations,
+        models=target_model_store,
+    )  # fmt: skip
     await app.state.link_types.refresh()
     app.state.link_changes = LinkChangeService(
         link_changes_store,
@@ -5939,9 +5947,9 @@ async def change_link_route(
 async def case_link_types_route(
     investigation: InvestigationViewerDep, principal: PrincipalDep, link_types: LinkTypesDep
 ) -> CaseLinkTypesResponse:
-    """The types a link in this case may take: the ontology's, and those proposed in the case or
-    for a link the caller can see in it. Not audited, like the
-    ontology itself."""
+    """The types a link in this case may take: the ontology's, those accepted into the model of a
+    dataset the case reads once live, and those proposed in this case alone (ADR-143 decision 9).
+    Not audited, like the ontology itself."""
     offered = await link_types.case_types(investigation.id, principal)
     return CaseLinkTypesResponse(
         types=[
@@ -5953,7 +5961,7 @@ async def case_link_types_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/link-types",
-    dependencies=[Depends(require_right(Right.PROPOSE_LINK_TYPE))],
+    dependencies=[Depends(require_right(Right.PROPOSE_TYPES))],
 )
 async def propose_link_type_route(
     investigation: InvestigationEditorDep,
@@ -5962,8 +5970,9 @@ async def propose_link_type_route(
     link_types: LinkTypesDep,
     audit: AuditDep,
 ) -> LinkTypeProposal:
-    """Propose a type when none fits (ADR-090): usable at once in this case, probabilistic, until an
-    administrator of the unit decides."""
+    """Propose a type when none fits (ADR-090): usable at once in this case alone, probabilistic,
+    until a data engineer of its dataset decides it on the Studio's Model tab (ADR-143 decision
+    9)."""
     proposal = await link_types.propose(
         investigation.id,
         principal,
@@ -5989,7 +5998,7 @@ async def propose_link_type_route(
 
 @app.post(
     "/v1/investigations/{investigation_id}/link-types/{proposal_id}/withdraw",
-    dependencies=[Depends(require_right(Right.PROPOSE_LINK_TYPE))],
+    dependencies=[Depends(require_right(Right.PROPOSE_TYPES))],
 )
 async def withdraw_link_type_route(
     investigation: InvestigationEditorDep,
@@ -6018,6 +6027,29 @@ async def withdraw_link_type_route(
         justification=body.reason,
     )
     return proposal
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/link-types/promotable",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def promotable_link_types_route(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    body: PromotableRequest,
+    link_types: LinkTypesDep,
+) -> PromotableResponse:
+    """ADR-143 decision 9: whether links of each type can be promoted from this case into its
+    source dataset, and why not. A proposed type's cannot until a data engineer has accepted it and
+    its model version is live; a declined type's never. L3.4's promotion sheet asks the same
+    `promotion_refusals`. Not audited: a read of the case's own types, like the list above."""
+    found = await link_types.promotion_refusals(investigation.id, principal, body.types)
+    return PromotableResponse(
+        types=[
+            PromotableType(name=name, promotable=reason is None, reason=reason)
+            for name, reason in found.items()
+        ]
+    )
 
 
 @app.get("/v1/admin/link-types", dependencies=[Depends(require_right(Right.MANAGE_ONTOLOGY))])
@@ -9132,6 +9164,113 @@ async def revert_dataset_model(
         audit, principal, "revert_model", dataset_id, draft.version, reverted_from=body.version
     )
     return draft
+
+
+# --- the Model tab's proposed link types (ADR-143 decision 9, ADR-090 Amendment 4; L3.5) -------
+
+#: Behind the dataset's own gate (404 to anyone it is not for) and `accept_types`; deciding writes
+#: the draft model, so a composite's is refused as its model is.
+_DECIDES_TYPES = [Depends(require_right(Right.ACCEPT_TYPES))]
+
+
+async def _reads_proposal_words(
+    dataset_id: str, principal: Principal, datasets: DatasetStore, scheme: HandlingScheme
+) -> bool:
+    """`may_read_proposal_words` against the dataset's highest allowed marking, or the scheme's
+    highest where none is set (the strict side)."""
+    held = (await datasets.egress_of([dataset_id])).get(dataset_id)
+    marking = (held.highest_marking if held is not None else None) or scheme.classification[-1]
+    return may_read_proposal_words(principal, marking, scheme)
+
+
+@app.get("/v1/datasets/{dataset_id}/model/proposals", dependencies=_DECIDES_TYPES)
+async def list_model_proposals(
+    dataset_id: StudioDatasetDep,
+    principal: PrincipalDep,
+    link_types: LinkTypesDep,
+    datasets: DatasetsDep,
+    scheme: HandlingSchemeDep,
+) -> ModelProposalList:
+    """The link types analysts proposed for this dataset, newest first, without their cases; to a
+    reader not cleared for the dataset's highest marking, without their words either."""
+    words = await _reads_proposal_words(dataset_id, principal, datasets, scheme)
+    return ModelProposalList(
+        proposals=await link_types.dataset_proposal_views(dataset_id, may_read_words=words)
+    )
+
+
+async def _audit_type_decision(
+    audit: AuditWriter,
+    principal: Principal,
+    action: str,
+    dataset_id: str,
+    found: Any,
+    why: str,
+    **more: object,
+) -> None:
+    await audit.record(
+        principal=principal,
+        action=action,
+        resolved_query={
+            "dataset_id": dataset_id, "proposal_id": found.id, "name": found.name, **more
+        },
+        result_cardinality=1,
+        justification=why,
+    )
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/model/proposals/{proposal_id}/accept",
+    dependencies=[*_DECIDES_TYPES, Depends(refuse_changing_a_composites_model)],
+)
+async def accept_model_proposal(
+    dataset_id: StudioDatasetDep,
+    proposal_id: str,
+    body: AcceptLinkTypeRequest,
+    principal: PrincipalDep,
+    link_types: LinkTypesDep,
+    datasets: DatasetsDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> ModelProposalView:
+    """*Add it to the draft model*, Direct or Probabilistic: made live with the next model
+    version; never by its proposer. The draft it was written into is named in the audit, as the
+    Studio's own draft routes name theirs."""
+    words = await _reads_proposal_words(dataset_id, principal, datasets, scheme)
+    found, version = await link_types.accept(
+        dataset_id, proposal_id, principal, basis=body.basis, reason=body.reason,
+        may_read_words=words,
+    )  # fmt: skip
+    await _audit_type_decision(
+        audit, principal, "link_type_accept", dataset_id, found, body.reason,
+        basis=body.basis, model_version=version,
+    )  # fmt: skip
+    return ModelProposalView.of(found, in_model="draft")
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/model/proposals/{proposal_id}/decline",
+    dependencies=[*_DECIDES_TYPES, Depends(refuse_changing_a_composites_model)],
+)
+async def decline_model_proposal(
+    dataset_id: StudioDatasetDep,
+    proposal_id: str,
+    body: LinkTypeDecisionRequest,
+    principal: PrincipalDep,
+    link_types: LinkTypesDep,
+    datasets: DatasetsDep,
+    scheme: HandlingSchemeDep,
+    audit: AuditDep,
+) -> ModelProposalView:
+    """*Decline*, with a reason: its links stay in its case's layer for good."""
+    words = await _reads_proposal_words(dataset_id, principal, datasets, scheme)
+    found = await link_types.decline(
+        dataset_id, proposal_id, principal, reason=body.reason, may_read_words=words
+    )
+    await _audit_type_decision(
+        audit, principal, "link_type_decline", dataset_id, found, body.reason
+    )
+    return ModelProposalView.of(found)
 
 
 ALREADY_OWNED = (

@@ -126,4 +126,13 @@ describe("ProposedTypes", () => {
     expect((await screen.findByRole("alert")).textContent).toMatch(/could not be read/);
     expect(screen.queryByText(/No proposals/)).toBeNull();
   });
+
+  it("offers no Promote or Reject for a proposal of a dataset, decided on its Model tab instead", async () => {
+    serve({ status: 200, json: { proposals: [{ ...PENDING, dataset_id: "ds-1" }] } });
+    mount();
+    expect(await screen.findByText("Known to")).toBeTruthy();
+    expect(screen.getByText(/Decided by a data engineer of its dataset, on the Ingest Studio's Model tab/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Promote Known to…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reject Known to…" })).toBeNull();
+  });
 });

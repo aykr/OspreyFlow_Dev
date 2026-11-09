@@ -954,18 +954,36 @@ A link written again by a load never lowers its handling (ADR-102 decision 1), s
 down (`keyboard/inspector.spec.ts`).
 
 **When no type fits, an Editor defines one there (ADR-090).** The types the form offers are the case's
-own (`GET .../link-types`): the ontology's (the default dataset's), and those proposed in any case
-reading one of this case's datasets (ADR-099 Amendment 3 decision 2), each proposed one marked
-"(proposed)"; one proposed before that amendment and not yet placed keeps ADR-090's rule. **Define a new
+own (`GET .../link-types`): the ontology's (the default dataset's), those a data engineer accepted into
+the model of a dataset the case reads once that version is live, and those proposed in this case alone
+(ADR-143 decision 9; L3.5), each proposed one marked "(proposed)"; one proposed before ADR-099 Amendment
+3 and not yet placed keeps ADR-090's rule. **Define a new
 type…** asks for a name in sentence case ("Known to"), from which its ID is made (`KNOWN_TO`, which may
 be edited), whether it goes either way round, a colour and a thickness (both optional), and why no
 type fits; the ends are the link's own. Proposed, it is chosen at once in the form and, being
-probabilistic until an administrator decides, its basis is stated, not asked; on the canvas its links
+probabilistic until a data engineer of its dataset accepts it (choosing Direct or Probabilistic), its
+basis is stated, not asked; on the canvas its links
 are drawn dotted in its own colour and thickness, named by its label. The Glass reads the case's types
 when a case opens and again after a proposal or a decision. A refused name is said in the server's
-words. **A holder of `manage_ontology`** (an administrator) has **Proposed types** as a section of the Admin
-place, under *Data* (ADR-090 Amendment 5: it left the rail, and stays in Admin until the Studio's Model tab shows it,
-L3.5): their own unit's
+words. **The Studio's *1 Model* tab decides a dataset's proposals** (ADR-143 decision 9, ADR-090 Amendment 4;
+L3.5; `linktypes/ModelProposals.tsx`): below the model, *Proposed link types (N to decide)* lists, to a
+holder of `accept_types` of that dataset, each proposal's label and ID, a *Proposed*, *In the draft
+model*, *In the live model*, *Accepted, not in the model* (lost from a discarded draft: **Add <type> to
+the draft model again…**), *Declined*, *Withdrawn* or *Merged* tag, what it means, its ends and
+direction, who proposed it and when, never the case (rule 3), with **Add <type> to the draft model…**
+(asking *What stands behind its links?*, Direct or Probabilistic, no default) and **Decline <type>…**,
+each asking *Why? (required)* (Ctrl/⌘+Enter decides, Escape cancels and focus goes back to the button;
+the outcome takes focus). To a holder not cleared for the case's marking (ADR-143 Amendment 4's *Open*,
+the strict reading meanwhile) a row says only *A proposed link type above your clearance*, with no words,
+tag or decision, and is left out of the count. Admin's *Proposed types* offers no decision on a proposal that names a
+dataset, saying it is decided on that dataset's Model tab. The tab's count, the reminder above the
+Studio's other tabs and the *Needs you* entry (ADR-090 Amendment 4) are Admin's L2.7. A refusal is said in the Conduit's words; to a person the routes refuse the block
+is not drawn. Under the GOV.UK brand it is a summary list with tags, GOV.UK buttons and a textarea with an
+error summary. Keyboard: `keyboard/model-proposals.spec.ts` (`MODEL_PROPOSALS_ACTIONS`); axe in dark,
+light and GOV.UK with the form open and its error shown. **A holder of `manage_ontology`** (an
+administrator) still has **Proposed types** as a section of the Admin place, under *Data*, for the
+proposals made before ADR-099 Amendment 3 that name no dataset (its removal is Admin's next step,
+ADR-090 Amendment 5): their own unit's
 proposals, each with its name, ID, ends, proposer, case and reason, to **Promote…** (Direct or
 Probabilistic, no default, and a new ID when the server says the name is taken by a type its links do
 not fit), **Reject…**, or once promoted **Retire…**, each with a reason. Reachable by keyboard
