@@ -1,0 +1,9 @@
+Mon  9 Nov 2026 06:38:59 UTC
+# at 72a87a8, registry-L2.12.patch applied uncommitted: keyboard/ingest-studio.spec.ts re-taken alone (both full-run failures were in it)
+    Error Context: test-results/ingest-studio-every-regist-56eba-own-proving-test-case-above/error-context.md
+
+  2 failed
+    keyboard/ingest-studio.spec.ts:882:1 › phase 7's exit: Visits and contacts is built by keys, mapped over its staged table, tested and deployed 
+    keyboard/ingest-studio.spec.ts:916:1 › every registered Ingest Studio action has its own proving test case above 
+  44 passed (2.0m)
+EXIT 0

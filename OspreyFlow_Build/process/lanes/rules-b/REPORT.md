@@ -1,0 +1,15 @@
+# rules-b lane · report · L2.12, reporting folded into the places (9 November 2026; resumed session, after three own review rounds)
+
+1. **Figures replace the Reports view: met.** Alerts panel (open by source and age; the newest few only to whom the Conduit gives the rows) and Drawing panel (null until L3.4); the second dashboards door removed. `test_alert_panel_figures.py` (8), `AlertsPanel`, `ReportsView`, `ReportsPlace`, `EmbeddedDashboards` tests.
+2. **Every figure counted as the reader, no unfiltered count (rules 3, 7): met.** `test_alert_panel_figures.py`, red with the sections counted over the unscoped read and with `mine` unchecked (`l2.12/RED_RECORD.md`).
+3. **The Reports Viewer reaches only decision 10's list: met.** `test_reports_viewer_journey.py` (5), red with the place gate dropped and with the role short of `read_reports`; Home's two ways on in `journey`, `HomePage`, `App` tests.
+4. **Alert monitoring board (D2): met.** `AlertMonitoringBoard.test.tsx`. **Help page and roles' words: met.** `roles.test.ts`, `RolesHelpPage.test.tsx`.
+5. **Canvas badge, Admin's tips, See the trend: built as patches** for case, admin and rules (`PATCHES.md`); each applies alone at 72a87a8. `alertBadges.test.ts` on the branch.
+6. **Keyboard and axe: met.** `alert-figures.spec.ts` (8 cases, 8 ids in `registry-L2.12.patch`); axe 702 passed in dark, light and GOV.UK.
+7. **Review round 3 (this session):** the way back stole focus on every App render (WCAG 2.4.3); fixed, red first with a fresh object per render (RED_RECORD §11). One Glass copy of the rule-group table; spec 02's "until L2.12" sentence; PLAN.md lists every out-of-map file.
+8. **Gates at 72a87a8** (rebased on main 7783935; offline, closed ports pinned, `gates/72a87a8.*`): `make -k ci` green but the seven `trivy-image-*` (Docker Hub 429). `make test` 9,128 passed; 4 failed as on main's baseline 17262d1 (osprey.yaml map, Valkey port, graphify-out at root, phone fixture), 2 errors as on main (workspace image build timed out), and `test_port_guard` red only because the run exported `MINIO_ENDPOINT` (alone without it: 27 passed). Keyboard with `registry-L2.12.patch`: 677 passed, 2 failed in studio's `ingest-studio.spec.ts` (phase 7's Deploy button detached, 1 in 3 alone; its coverage case after the worker restart), as rules recorded on main.
+9. **Live:** rules-b lease, stack c, at 9edc5d4, 05:19–05:26Z: 226 passed across 24 files, `test_route_rights.py` included (`gates/9edc5d4.live.txt`). Later commits are Glass and docs only; stack down, lease released.
+10. **Left, by design:** the boards' Alerts panel mount (L3.3/L3.4) and the Studio's help door (studio's screens).
+11. **Commits:** 40e777e…9edc5d4 (14, rebased), 4c8585b, 9da2a5d, 72a87a8, and this report's.
+12. **Requests to the orchestrator:** apply `registry-L2.12.patch` in the same merge (the branch's keyboard coverage needs `ALERT_FIGURES_ACTIONS`); pass the three other patches to case, admin and rules; ratify the out-of-map files PLAN.md lists; studio's phase 7 keyboard case is flaky.
+13. **Questions for the owner:** none. **Still running:** nothing.
