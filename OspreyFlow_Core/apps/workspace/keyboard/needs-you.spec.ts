@@ -34,7 +34,7 @@ test("Needs you opens, each entry's tip is read with it, and Escape gives focus 
   await page.keyboard.press("Tab");
   const above = page.getByText("A proposed link type in Border watch (synthetic) is above your clearance");
   await expect(above).toBeFocused();
-  await expect(above).toHaveAccessibleDescription(/told only that it exists/);
+  await expect(above).toHaveAccessibleDescription(/told only that it waits/);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("group", { name: "Needs you" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Needs you · 3/ })).toBeFocused();
