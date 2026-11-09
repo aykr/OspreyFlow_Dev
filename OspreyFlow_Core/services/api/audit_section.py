@@ -98,6 +98,14 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "screening_list_refreshed",
         "screening_list_subscribed",
         "screening_list_schedule_set",
+        # The Studio's deployment lists (L1.6, ADR-140 Amendment 15): added, refreshed, scheduled,
+        # subscribed and imported.
+        "add_deployment_list",
+        "deployment_list_refreshed",
+        "deployment_list_schedule_set",
+        "dataset_list_subscribed",
+        "dataset_list_unsubscribed",
+        "import_dataset_own_list",
         "set_promotion_alert_days",
         "load_reverted",
         "resume_recipe_schedule",
@@ -174,6 +182,10 @@ _CLASSIFIED: tuple[str, ...] = tuple(a for actions in KIND_ACTIONS.values() for 
 READS_AND_OTHER: tuple[str, ...] = (
     # Written by scripts, not routes: a seed's case brief, a sweep closing synthetic instants.
     "case_brief_seed", "close_paysim_instants",
+    # L1.6's reads and its refusal: a connector's source read or refused, a connection tested.
+    "connector_read_refused", "read_connector_source", "test_ingest_connection",
+    "dataset_list_subscriptions", "list_deployment_list_imports", "list_deployment_lists",
+    "offered_reference_lists",
     "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",
     "alert_assigned", "alert_canvas", "alert_claimed", "alert_close_approved",
     "alert_close_proposed", "alert_close_sent_back", "alert_disposed", "alert_released",

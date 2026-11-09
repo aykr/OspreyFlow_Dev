@@ -175,7 +175,8 @@ def test_an_action_written_and_named_nowhere_is_found(tmp_path: pathlib.Path) ->
             "    await audit.record(principal=principal, action=f\"planted_{principal}\",\n"
             "                       resolved_query={}, result_cardinality=0)\n"
         )
-    assert unclassified(copy) == ["planted_by_helper", "planted_unclassified", "prefix planted_"]
+    found = set(unclassified(copy, CORE / "scripts")) - set(unclassified())
+    assert sorted(found) == ["planted_by_helper", "planted_unclassified", "prefix planted_"]
 
 
 def test_a_writer_the_scan_cannot_read_is_reported(tmp_path: pathlib.Path) -> None:
