@@ -967,7 +967,7 @@ def test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_lay
     """ADR-112 (a Reports Viewer is refused every write) and ADR-146 decision 10 (read-only): one
     of the dataset's Authors holding only `reports_viewer` opens no merge, merges, cancels, deletes
     nor runs the delete's dry run (403 `right_required`, before anything is read or granted). The
-    round 2 review's item 2; whether owning alone should do is the owner's open question."""
+    round 2 review's item 2, the owner's ruling of 9 November 2026: ADR-112 stands."""
     PEOPLE["vic"] = Principal(id="vic", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"])
     pw.cases.grants[HOME]["vic"] = AccessLevel.AUTHOR
     try:

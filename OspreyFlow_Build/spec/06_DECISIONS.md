@@ -31227,23 +31227,22 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
      relayed through the orchestrator); the owner may later choose a member merge. Neither from the
      composite's Studio (409 `composite_never_merged`) nor from a member dataset's, which no case
      reading it through the composite is linked to (404 `case_not_linked`).
-   - **Provisional, the strict default (the independent review's round 2, item 1):** Admin's
-     *Delete* of a removed case's layer is `administer_system`'s **within the dataset's current unit**:
+   - **The owner's ruling of 9 November 2026 (asked at the independent review's round 2, item 1):**
+     Admin's *Delete* of a removed case's layer is `administer_system`'s **within the dataset's current unit**:
      an administrator of another unit is answered 404, as a dataset that does not exist, before
      anything is read or withdrawn (a destructive write with no undo, as *Name an Author* is
      unit-scoped). `test_admin_delete_is_scoped_to_the_datasets_unit`, red with the unit check
-     removed. **The owner's open question:** whether it should be deployment-wide, as Admin ›
-     Datasets' list and its dry run are (ADR-136 decision 2).
-   - **Provisional, the strict default (the independent review's round 2, item 2):** the Studio's
-     five removed-case writes (opening a merge, merging, cancelling, deleting and the delete's dry
+     removed.
+   - **The owner's ruling of 9 November 2026 (asked at the independent review's round 2, item 2):**
+     the Studio's five removed-case writes (opening a merge, merging, cancelling, deleting and the delete's dry
      run) name `investigate`, a right every Author role holds and a Reports Viewer does not (ADR-112:
      a Reports Viewer is refused every write; ADR-146 decision 10), beside the dataset's own gate and
      Author level on its home case; its two reads (the removed cases listed, a merge sheet read
      again) name none, owning needing none (ADR-145 Amendment 4 decision 3), weighed in
      `test_reports_viewer_journey.py` (`reports-viewer-census-L3.4.patch`).
      `test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer`, red with the
-     right removed. **The owner's open question:** whether owning alone should let an Author who is
-     a Reports Viewer write here (the wider option).
+     right removed. ADR-112 stands: a Reports Viewer, even one of the dataset's Authors, writes
+     nothing here.
    - **Nothing drawn goes into a gazetteer dataset** (`gazetteer-*`, ADR-147 Amendment 1 decision 2,
      which holds the build's places alone): a case reading one is offered no promotion and is
      refused one at the route, and a removed case's layer is never merged into one, only deleted

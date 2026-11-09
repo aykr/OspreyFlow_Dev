@@ -1,12 +1,12 @@
 diff --git a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
-index 75f5942..87bc1ae 100644
+index 75f5942..6d52cbf 100644
 --- a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
 +++ b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
 @@ -220,6 +220,7 @@ POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked
  DELETE /v1/datasets/{dataset}/layer-merges/{grant}              *Cancel* (investigate): the grant closes, nothing merged
  POST   /v1/datasets/{dataset}/removed-cases/{case}/delete/dry-run   *Delete*'s dry run for one of the dataset's Authors (investigate) (`LayerDryRun`): the layer's counts as their own handling takes them, promoted items included, and that deleting withdraws those not promoted, in words, nothing written but its audit entry (dry_run_layer_delete)
  DELETE /v1/datasets/{dataset}/removed-cases/{case}/layer        *Delete* by one of the dataset's Authors (investigate) (`LayerDeleted`, in words, with no count: it would include what the deleter may not see): every element wholly the layer's withdrawn under `layer-delete:<case>`, never deleted; a promoted element is never touched; the layer's open merges closed and its waiting promotions rejected; audited as delete_layer before it is written
-+POST   /v1/admin/datasets/{dataset}/cases/{case}/delete         the same *Delete* by an administrator of the dataset's current unit, its dry run shown first by Admin; administer_system; another unit's administrator is answered 404, as a dataset that does not exist (provisional, the strict default; deployment-wide is the owner's open question, ADR-143 Amendment 5; `test_admin_delete_is_scoped_to_the_datasets_unit`)
++POST   /v1/admin/datasets/{dataset}/cases/{case}/delete         the same *Delete* by an administrator of the dataset's current unit, its dry run shown first by Admin; administer_system; another unit's administrator is answered 404, as a dataset that does not exist (the owner's ruling of 9 November 2026, ADR-143 Amendment 5; `test_admin_delete_is_scoped_to_the_datasets_unit`)
  ```
  
  A promotion adds the dataset to the drawn elements themselves (`GraphPort.promote_elements`,
@@ -42,10 +42,10 @@ index 95a7f0d..14df024 100644
  
  
 diff --git a/OspreyFlow_Build/tests/services/api/test_promotions.py b/OspreyFlow_Build/tests/services/api/test_promotions.py
-index d1b6613..b911161 100644
+index 5371e27..30b1c7b 100644
 --- a/OspreyFlow_Build/tests/services/api/test_promotions.py
 +++ b/OspreyFlow_Build/tests/services/api/test_promotions.py
-@@ -1101,6 +1101,51 @@ def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace)
+@@ -1110,6 +1110,51 @@ def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace)
      assert pw.items.items[spare["item_id"]].withdrawn_at is not None
      actions = [r["action"] for r in pw.audit.records]
      assert "delete_layer" in actions
@@ -75,8 +75,8 @@ index d1b6613..b911161 100644
 +
 +
 +def test_admin_delete_is_scoped_to_the_datasets_unit(pw: SimpleNamespace) -> None:
-+    """Rule 4 at the unit boundary (the independent review's round 2, item 1; provisional, the
-+    strict default): Admin's Delete is a destructive write with no undo, so only an administrator
++    """Rule 4 at the unit boundary (the independent review's round 2, item 1; the owner's ruling
++    of 9 November 2026): Admin's Delete is a destructive write with no undo, so only an administrator
 +    of the dataset's current unit makes it. Another unit's administrator is answered exactly as
 +    for a dataset that does not exist, and nothing is withdrawn; another unit's person without
 +    `administer_system` is refused by the right first."""
@@ -110,7 +110,7 @@ index a5ed059..6abc4d6 100644
      "seed": "investigate",
      "expand": "investigate",
 diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
-index 3e9a007..85a62d6 100644
+index 3e9a007..a4f7149 100644
 --- a/OspreyFlow_Core/services/api/app.py
 +++ b/OspreyFlow_Core/services/api/app.py
 @@ -10205,6 +10205,31 @@ async def delete_removed_case_layer(
@@ -132,9 +132,9 @@ index 3e9a007..85a62d6 100644
 +    audit: AuditDep,
 +) -> LayerDeleted:
 +    """*Delete* by an administrator (Admin › Datasets), after its dry run, of the dataset's own
-+    unit alone (provisional, the strict default; ADR-143 Amendment 5): a destructive write with no
-+    undo. Another unit's administrator, or one with no unit, is answered as for a dataset that does
-+    not exist, before anything is read (fails closed)."""
++    unit alone (the owner's ruling of 9 November 2026; ADR-143 Amendment 5): a destructive write
++    with no undo. Another unit's administrator, or one with no unit, is answered as for a dataset
++    that does not exist, before anything is read (fails closed)."""
 +    dataset = await _admin_dataset_of(datasets, dataset_id)
 +    if principal.org_unit is None or dataset.owning_unit != principal.org_unit:
 +        raise UnknownDatasetEgressError(dataset_id)

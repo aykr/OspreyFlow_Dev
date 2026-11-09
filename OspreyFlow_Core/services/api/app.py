@@ -4512,7 +4512,7 @@ _REVIEWS = [Depends(require_right(Right.REVIEW_PROMOTIONS))]
 #: A removed case's layer merged or deleted by one of the dataset's Authors: a write, so it names
 #: a right every Author holds and a Reports Viewer does not (ADR-112: a Reports Viewer is refused
 #: every write; ADR-146 decision 10), the dataset's gate and Author level asked as before. The
-#: owner's open question (Amendment 5): whether owning alone (ADR-145 Amendment 4 decision 3) does.
+#: owner's ruling of 9 November 2026 (Amendment 5): owning alone does not; ADR-112 stands.
 _LAYER_WRITES = [Depends(require_right(Right.INVESTIGATE))]
 
 
