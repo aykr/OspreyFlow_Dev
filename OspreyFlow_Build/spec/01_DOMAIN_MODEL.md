@@ -1025,7 +1025,8 @@ as a test of its own beside it):
 - **A waiting promotion is listed only to one who may review it** (ADR-145 Amendment 4 decision
   11: an Author of the dataset's home case holding `review_promotions`, or its unit's administrator,
   of the dataset's current unit and cleared to its current highest marking), the reviewable datasets
-  passed into the store's query (rule 3). `test_waiting_promotions_contract.py` (nine readers, the
+  and the markings the reader's clearance reaches (the items' own, which an unmarked or lowered
+  dataset does not bound) both passed into the store's query (rule 3). `test_waiting_promotions_contract.py` (nine readers, the
   case store among its `STORES`); `test_the_waiting_read_is_filtered_by_the_readers_datasets_in_the_query`
   (real Postgres); `test_the_waiting_seam_reads_the_datasets_unit_as_it_is_now`.
 

@@ -23,7 +23,12 @@ from typing import Any
 
 import pytest
 from ontology.handling import HandlingScheme
-from services.api.promotion_ageing import PendingPromotion, WaitingPromotions, may_review
+from services.api.promotion_ageing import (
+    PendingPromotion,
+    WaitingPromotions,
+    cleared_to,
+    may_review,
+)
 
 from schemas.domain import Principal
 
@@ -37,7 +42,15 @@ PROMOTIONS = [
     PendingPromotion(promotion_id="p-plain", load_id="load-2", dataset_id="ds-p",
                      dataset_name="Synthetic visits", dataset_unit="unit-1",
                      proposed_by="ana-1", proposed_at=SENT),
+    # Its dataset has no highest marking, and its items are marked SECRET: the dataset's marking
+    # does not bound them, so the items' own marking is asked (rule 3; the independent review's
+    # round 2, item 3).
+    PendingPromotion(promotion_id="p-item-high", load_id="load-3", dataset_id="ds-p",
+                     dataset_name="Synthetic visits", dataset_unit="unit-1",
+                     proposed_by="ana-1", proposed_at=SENT),
 ]  # fmt: skip
+#: The highest marking among each promotion's own items, where it is above the lowest.
+ITEM_MARKINGS: dict[str, str] = {"p-item-high": "SECRET"}
 AUTHORS: dict[str, list[str]] = {
     "ds-s": ["rev-1", "rev-low", "ana-2", "rev-9"],
     "ds-p": ["rev-1", "ana-2", "rev-9"],
@@ -57,6 +70,7 @@ class ReferenceWaiting:
             p for p in self.promotions
             if may_review(reader.id, reader.roles, reader.clearance, reader.org_unit, p,
                           self.authors.get(p.dataset_id, ()), None, SCHEME)
+            and cleared_to(reader.clearance, ITEM_MARKINGS.get(p.promotion_id), SCHEME)
         ]  # fmt: skip
 
     async def all_waiting(self) -> list[PendingPromotion]:
@@ -86,7 +100,7 @@ def case_promotion_store(
             id=p.promotion_id, load_id=p.load_id, trigger="analyst_promotion", case_id="c-1",
             board_id="b-1", dataset_id=p.dataset_id, layer_id="layer-c-1",
             proposed_by=p.proposed_by, proposed_at=p.proposed_at, status="awaiting_review",
-            marking="OFFICIAL", unit="unit-at-proposal",
+            marking=ITEM_MARKINGS.get(p.promotion_id, "OFFICIAL"), unit="unit-at-proposal",
         )  # fmt: skip
         datasets[p.dataset_id] = SimpleNamespace(
             name=p.dataset_name, owning_unit=p.dataset_unit, highest_marking=p.dataset_marking
@@ -116,7 +130,7 @@ def _p(pid: str, roles: list[str], *, unit: str = "unit-1", clearance: str = "SE
 #: Each reader, and the promotions they are listed (of `PROMOTIONS`, by id).
 READERS: list[tuple[str, Principal, set[str]]] = [
     ("an Author holding review_promotions, cleared", _p("rev-1", ["data_engineer"]),
-     {"p-secret", "p-plain"}),
+     {"p-secret", "p-plain", "p-item-high"}),
     ("an Author holding review_promotions, below the marking",
      _p("rev-low", ["data_engineer"], clearance="OFFICIAL"), set()),
     ("an Author without review_promotions", _p("ana-2", ["analyst"]), set()),
@@ -125,7 +139,7 @@ READERS: list[tuple[str, Principal, set[str]]] = [
      _p("rev-9", ["data_engineer"], unit="unit-9"), set()),
     ("review_promotions but no Author", _p("eng-9", ["data_engineer"]), set()),
     ("the dataset's unit's administrator, cleared", _p("adm-1", ["osprey-admin"]),
-     {"p-secret", "p-plain"}),
+     {"p-secret", "p-plain", "p-item-high"}),
     ("the dataset's unit's administrator, below the marking",
      _p("adm-low", ["osprey-admin"], clearance="OFFICIAL"), {"p-plain"}),
     ("another unit's administrator", _p("adm-9", ["osprey-admin"], unit="unit-9"), set()),

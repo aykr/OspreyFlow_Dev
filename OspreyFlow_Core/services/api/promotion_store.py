@@ -92,7 +92,8 @@ class PromotionStore(Protocol):
         self, case_id: str, board_id: str, *, markings: Sequence[str] | None = None
     ) -> list[PromotionRecord]: ...
     #: An item of an open promotion edited to a higher marking: the promotion's marking rises
-    #: with it, so every reader filter (the lists, *Details*, the seam) reads it as it is now.
+    #: with it, so every reader filter (the lists, *Details*, and the seam's `waiting(markings=…)`)
+    #: reads it as it is now.
     async def raise_marking(
         self, case_id: str, item_id: str, marking: str, ranked: Sequence[str]
     ) -> None: ...
@@ -120,7 +121,7 @@ class PromotionStore(Protocol):
         reason: str | None = None,
     ) -> bool: ...
     async def waiting(
-        self, *, dataset_ids: Sequence[str] | None = None
+        self, *, dataset_ids: Sequence[str] | None = None, markings: Sequence[str] | None = None
     ) -> list[PromotionRecord]: ...
     #: The datasets with a promotion waiting, and nothing of the promotions themselves.
     async def waiting_dataset_ids(self) -> list[str]: ...
@@ -230,13 +231,16 @@ class InMemoryPromotionStore:
             )
         return True
 
-    async def waiting(self, *, dataset_ids: Sequence[str] | None = None) -> list[PromotionRecord]:
+    async def waiting(
+        self, *, dataset_ids: Sequence[str] | None = None, markings: Sequence[str] | None = None
+    ) -> list[PromotionRecord]:
         return sorted(
             (
                 r
                 for r in self.records.values()
                 if r.status == "awaiting_review"
                 and (dataset_ids is None or r.dataset_id in dataset_ids)
+                and (markings is None or r.marking in markings)
             ),
             key=lambda r: (r.proposed_at, r.id),
         )
@@ -478,15 +482,20 @@ class PostgresPromotionStore:
                 )  # fmt: skip
         return str(done).endswith(" 1")
 
-    async def waiting(self, *, dataset_ids: Sequence[str] | None = None) -> list[PromotionRecord]:
+    async def waiting(
+        self, *, dataset_ids: Sequence[str] | None = None, markings: Sequence[str] | None = None
+    ) -> list[PromotionRecord]:
         # The reader's filter is in the WHERE clause (rule 3): a promotion of a dataset the reader
-        # may not review is never read out of the table for them.
+        # may not review, or whose items are marked above their clearance (the dataset's highest
+        # marking may be none, or lowered while it waits), is never read out of the table for them.
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM promotions WHERE status = 'awaiting_review' "
                 "AND ($1::text[] IS NULL OR dataset_id = ANY($1::text[])) "
+                "AND ($2::text[] IS NULL OR marking = ANY($2::text[])) "
                 "ORDER BY proposed_at, id",
                 list(dataset_ids) if dataset_ids is not None else None,
+                list(markings) if markings is not None else None,
             )
         return [_record(r) for r in rows]
 
@@ -595,9 +604,17 @@ class WaitingFromStore:
                 out.append(dataset_id)
         return out
 
+    def _reached(self, reader: Any) -> list[str]:
+        """The markings `reader`'s clearance reaches, by the scheme's dominance rule."""
+        return [m for m in self.scheme.classification if self.scheme.clears(reader.clearance, m)]
+
     async def waiting_for_review(self, reader: Any) -> list[Any]:
+        # Both in the query: the datasets the reader may review, and the items' own marking, which
+        # the dataset's highest marking does not bound once that is none or lowered (rule 3).
         return await self._as_pending(
-            await self.store.waiting(dataset_ids=await self.reviewable_datasets(reader))
+            await self.store.waiting(
+                dataset_ids=await self.reviewable_datasets(reader), markings=self._reached(reader)
+            )
         )
 
     async def all_waiting(self) -> list[Any]:

@@ -204,3 +204,96 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_promotions.py::test_the_waiti
 
 pytest exit 1
 # restored: True
+
+# Round 2 of the independent review (item 3 and a minor), over d577c14: (e) the items' marking not passed into the query; (f) the probe's dataset marking dropped.
+# plant in services/api/promotion_store.py:
+#   - 'dataset_ids=await self.reviewable_datasets(reader), markings=self._reached(reader)'
+#   + 'dataset_ids=await self.reviewable_datasets(reader), markings=None'
+......F..                                                                [100%]
+=================================== FAILURES ===================================
+_ test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it[the dataset's unit's administrator, below the marking-case] _
+
+store = 'case', who = "the dataset's unit's administrator, below the marking"
+reader = Principal(id='adm-low', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=['osprey-admin'], datasets=None)
+listed = {'p-plain'}
+
+    @pytest.mark.parametrize("store", sorted(STORES))
+    @pytest.mark.parametrize(("who", "reader", "listed"), READERS, ids=[r[0] for r in READERS])
+    async def test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it(
+        store: str, who: str, reader: Principal, listed: set[str]
+    ) -> None:
+        waiting = STORES[store](PROMOTIONS, AUTHORS)
+        assert waiting.recorded is True
+        got = {p.promotion_id for p in await waiting.waiting_for_review(reader)}
+>       assert got == listed, who
+E       AssertionError: the dataset's unit's administrator, below the marking
+E       assert {'p-item-high', 'p-plain'} == {'p-plain'}
+E         
+E         Extra items in the left set:
+E         'p-item-high'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_waiting_promotions_contract.py:159: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_waiting_promotions_contract.py::test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it[the dataset's unit's administrator, below the marking-case]
+1 failed, 8 passed, 9 deselected in 0.80s
+
+pytest exit 1
+# restored: True
+# plant in services/api/promotion_store.py:
+#   - '                dataset_marking=dataset.highest_marking,\n            )  # fmt: skip\n            authors'
+#   + '                dataset_marking=None,\n            )  # fmt: skip\n            authors'
+================
+_ test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it[an Author holding review_promotions, below the marking-case] _
+
+store = 'case', who = 'an Author holding review_promotions, below the marking'
+reader = Principal(id='rev-low', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=['data_engineer'], datasets=None)
+listed = set()
+
+    @pytest.mark.parametrize("store", sorted(STORES))
+    @pytest.mark.parametrize(("who", "reader", "listed"), READERS, ids=[r[0] for r in READERS])
+    async def test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it(
+        store: str, who: str, reader: Principal, listed: set[str]
+    ) -> None:
+        waiting = STORES[store](PROMOTIONS, AUTHORS)
+        assert waiting.recorded is True
+        got = {p.promotion_id for p in await waiting.waiting_for_review(reader)}
+>       assert got == listed, who
+E       AssertionError: an Author holding review_promotions, below the marking
+E       assert {'p-secret'} == set()
+E         
+E         Extra items in the left set:
+E         'p-secret'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_waiting_promotions_contract.py:159: AssertionError
+_ test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it[the dataset's unit's administrator, below the marking-case] _
+
+store = 'case', who = "the dataset's unit's administrator, below the marking"
+reader = Principal(id='adm-low', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=['osprey-admin'], datasets=None)
+listed = {'p-plain'}
+
+    @pytest.mark.parametrize("store", sorted(STORES))
+    @pytest.mark.parametrize(("who", "reader", "listed"), READERS, ids=[r[0] for r in READERS])
+    async def test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it(
+        store: str, who: str, reader: Principal, listed: set[str]
+    ) -> None:
+        waiting = STORES[store](PROMOTIONS, AUTHORS)
+        assert waiting.recorded is True
+        got = {p.promotion_id for p in await waiting.waiting_for_review(reader)}
+>       assert got == listed, who
+E       AssertionError: the dataset's unit's administrator, below the marking
+E       assert {'p-plain', 'p-secret'} == {'p-plain'}
+E         
+E         Extra items in the left set:
+E         'p-secret'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_waiting_promotions_contract.py:159: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_waiting_promotions_contract.py::test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it[an Author holding review_promotions, below the marking-case]
+FAILED ../OspreyFlow_Build/tests/services/api/test_waiting_promotions_contract.py::test_a_waiting_promotion_is_listed_only_to_those_who_may_review_it[the dataset's unit's administrator, below the marking-case]
+2 failed, 7 passed, 9 deselected in 0.88s
+
+pytest exit 1
+# restored: True

@@ -101,6 +101,10 @@ async def test_the_waiting_read_is_filtered_by_the_readers_datasets_in_the_query
     assert await store.waiting_dataset_ids() == ["other", "src"]
     assert [r.id for r in await store.waiting(dataset_ids=["src"])] == [mine]
     assert await store.waiting(dataset_ids=[]) == []
+    # The items' own marking, in the same WHERE: `mine` is OFFICIAL, so a reader reaching only a
+    # marking it is not (here, none of OFFICIAL) is read nothing of it.
+    assert [r.id for r in await store.waiting(dataset_ids=["src"], markings=["OFFICIAL"])] == [mine]
+    assert await store.waiting(dataset_ids=["src"], markings=["PUBLIC"]) == []
 
 
 async def test_the_filter_check_fails_with_the_filter_not_passed(
