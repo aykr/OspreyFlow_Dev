@@ -577,9 +577,13 @@ def test_remote_log_follows_an_offline_run_when_no_stack_is_held(lease, tmp_path
 
 
 def test_make_test_leaves_out_test_js_only_when_asked() -> None:
+    # A clean environment: run inside `make test SKIP_JS=1` (as on the server), SKIP_JS reaches this make through
+    # MAKEFLAGS and the plain dry run would leave test-js out too (found at case-b's merge, 9 November 2026).
+    env = {k: v for k, v in os.environ.items() if k not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "SKIP_JS")}
+
     def dry(*extra: str) -> str:
         return subprocess.run(["make", "-n", "-C", str(BUILD), "test", *extra],
-                              capture_output=True, text=True).stdout
+                              capture_output=True, text=True, env=env).stdout
     assert "test-js" in dry()
     skipped = dry("SKIP_JS=1")
     assert "test-js" not in skipped and "pytest" in skipped

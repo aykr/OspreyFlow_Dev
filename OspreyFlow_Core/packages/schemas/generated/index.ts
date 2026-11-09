@@ -513,3 +513,5 @@ export type { PrefetchScheduleInput } from "./PrefetchScheduleInput";
 export type { BuildBasemapInput } from "./BuildBasemapInput";
 export type { MapAdminEntry } from "./MapAdminEntry";
 export type { MapAdminHistory } from "./MapAdminHistory";
+export type { OwnershipItem } from "./OwnershipItem";
+export type { PersonOwnership } from "./PersonOwnership";
