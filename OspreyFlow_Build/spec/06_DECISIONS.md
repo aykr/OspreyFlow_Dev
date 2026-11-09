@@ -30850,3 +30850,64 @@ ADR-133's store and Lists tab fully working while the owner ruled which is of re
 (rules 12 and 15): the Lists tab refuses a new list only once a rule screens against a Studio list; an
 existing ADR-133 list keeps refreshing until then; each migrated list holds its rows and its rules
 point at it by id; a clashing name is refused.
+
+### ADR-143, Amendment 6 (9 November 2026) — the grading change as built (L3.7): the verb over the scripts module, the dry run enforced (ruling C13), the Conduit stopped, the scheme file, what the change leaves alone
+
+Status: written by the case-b lane at L3.7, round 2, on the orchestrator's independent review of the same day,
+which asked for the strict reading of decision 11 and the owner's ruling C13; for the orchestrator's acceptance
+at the merge. Decision 11 and C13 stand; this says how they are built and narrows neither.
+
+1. **The command is `ospreyflow grading change`** (decision 11's verb), a thin verb over
+   `scripts/grading_change.py`, which it runs in a one-shot from the Conduit's image on the deployment's own
+   network, as a load's revert runs, with the mapping and any scheme file mounted read-only. After a change,
+   and only then, the verb sets `grading.scheme` in `osprey.yaml` (edited in place, its comments kept; a scheme
+   file copied beside it as `grading-scheme.yaml`), renders the deployment again (`harness.apply --reapply`)
+   and starts the Conduit. A refused change leaves the setting and starts the Conduit as it was; a change
+   stopped part way leaves the Conduit stopped and the setting unchanged, and says so.
+   (`tests/cli/test_grading_verb.py`.)
+2. **A dry run first, enforced (C13).** The dry run reports how many items each mapping line moves, writes
+   nothing (no audit record, no table made) and gives a token naming the mapping, the two schemes and each live
+   drawn item's id, grade, original and revision. The change is refused without that token, with another
+   mapping's, or once any drawing or edit has changed the state since. The audit records the token.
+   (`test_the_change_is_refused_without_its_dry_runs_token_for_this_state`,
+   `test_an_edit_since_the_dry_run_is_another_state`; live, `test_the_command_changes_every_drawn_grade_in_the_real_stores`.)
+3. **The Conduit stopped.** The change, not its dry run, is refused while a Conduit answers (the script asks
+   its liveness route; the verb asks Docker and stops it only on `--stop-api`): a drawing or an edit during the
+   change, or between it and the restart in the new scheme, would be in the old one.
+   (`test_the_change_is_refused_while_the_conduit_answers_before_any_store_is_opened`,
+   `test_the_change_is_refused_while_the_conduit_runs_unless_told_to_stop_it`.)
+4. **The scheme file** (decision 11's third form). `grading.scheme` names `5x5x5`, `3x5x2` or a YAML file,
+   beside `osprey.yaml` unless absolute, of the shape `GradingSchemeAnswer`: `scheme` (a name of its own, never a
+   built-in one's), and each part's grades. `harness.render.load_config` reads it; the render writes its name as
+   `OSPREY_GRADING_SCHEME` and its grades as `OSPREY_GRADING_GRADES`; the Conduit never reads the file and does
+   not start without the grades. An opened board offers the scheme's grades (`grading_grades`). A grade of a
+   built-in scheme is checked by `Grading` itself; a scheme file's, where a grade enters: the board routes and
+   the change. A stored one is read as stored, since an original may be of a scheme the deployment no longer
+   has. `GRADING_PARTS` is the one list of the built-in schemes. (`test_grading_setting.py`,
+   `test_a_scheme_files_grades_are_offered_and_checked`, `test_a_scheme_files_scheme_is_a_target_like_any`,
+   `test_the_built_in_schemes_names_are_listed_once`.)
+5. **The grade alone, in place.** Each item is changed by `GraphPort.regrade_drawn`: its drawn grade and
+   original, and nothing else, so a link is neither counted nor weighed again (ADR-120), its audit is untouched
+   and a node keeps its resolution state. This is a named exception to ADR-080's "every change is a supersede",
+   as ADR-124 decision 11's strip is: the change is recorded in the audit trail, before the first write and after
+   the last, with the original kept beside the new grade. The port answers False, writing nothing, for an
+   element gone, reverted, superseded or not drawn, and the run stops rather than count it changed.
+   (`test_regrade_drawn_changes_the_grade_and_original_alone` in the graph port's conformance suite;
+   `test_the_change_is_the_grade_alone_in_place`; `test_an_element_gone_from_under_the_change_stops_it_saying_so`.)
+6. **What the change leaves alone.** A withdrawn item keeps the grade it was drawn with (decision 5's kept, never
+   shown live). An item already in the new scheme with no original (drawn in it, the setting changed by hand) is
+   left and counted, the way out of that state. An item in a third scheme, or a registered item the command
+   cannot read back, refuses the whole change before any write, naming the items' ids (the first ten and how
+   many more), so the operator can act. (`test_a_withdrawn_item_keeps_the_grade_it_was_drawn_with`,
+   `test_an_item_drawn_in_the_new_scheme_is_left_and_counted`,
+   `test_an_item_in_a_third_scheme_refuses_the_whole_change_naming_it`,
+   `test_a_registered_item_that_cannot_be_read_back_refuses_the_whole_change`.)
+7. **The operator's read across cases, offline only.** The command reads every case's board registry and the
+   graph as the deployment's top clearance with every handling code and dataset: the one read of `board_items`
+   that names no case (`01_DOMAIN_MODEL.md`), outside the Conduit, never a route, answered to no reader, so
+   rule 3 is not loosened. A restricted code scoped to another unit leaves such an item unreadable, and the
+   change is then refused, naming it. `--changed-by` is recorded as typed and said to be
+   (`changed_by_as_typed`): no sign-in says who runs a command outside the Conduit; the verb passes
+   `cli:<the operator's account>`.
+
+Open: none. Admin's read-only display of the scheme (decision 11) is Admin's, over `GET /v1/grading-scheme`.
