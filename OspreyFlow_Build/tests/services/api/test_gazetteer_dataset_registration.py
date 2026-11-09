@@ -64,6 +64,6 @@ async def test_an_unreachable_database_is_said_in_words(failure: Exception) -> N
     with pytest.raises(DatasetsUnreachable) as raised:
         await register_gazetteer_dataset_from_env("rutland", by="cli:owner", connect=connect)
     words = str(raised.value)
-    assert "Cannot reach the Conduit's database" in words and "--tiles-only" in words
+    assert "Cannot reach the Conduit's database" in words and "run the build again" in words
     # Its name, not its text: the text names an address or a user.
     assert "127.0.0.1" not in words and "osprey-postgres" not in words

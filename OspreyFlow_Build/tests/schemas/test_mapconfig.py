@@ -56,7 +56,10 @@ def test_a_tier_4_provider_needs_both_service_and_endpoint() -> None:
 
 def test_a_tier_4_provider_with_service_and_endpoint_is_valid() -> None:
     provider = _provider(
-        source=None, kind="raster", service="wmts", endpoint="https://gis.internal/wmts",
+        source=None,
+        kind="raster",
+        service="wmts",
+        endpoint="https://gis.internal/wmts",
         layer="aerial:latest",
     )
     assert provider.service is OgcServiceKind.WMTS
@@ -85,16 +88,38 @@ def test_credential_must_be_an_env_reference_not_a_literal_value() -> None:
          "key-named parameter"),
         ({"source": "https://tiles.example.test/{z}/{x}/{y}.png?access_token=PLANTED"},
          "key-named parameter"),
+        # A user part, and a key in the path (the independent review).
+        ({"source": "https://mapuser:PLANTED@tiles.example.test/{z}/{x}/{y}.png"}, "user part"),
+        ({"source": "https://tiles.example.test/key/PLANTED/{z}/{x}/{y}.png"},
+         "key-like path segment"),
+        ({"source": "https://tiles.example.test/api_key=PLANTED/{z}/{x}/{y}.png"},
+         "key-like path segment"),
     ],
 )  # fmt: skip
 def test_a_provider_the_browser_fetches_takes_no_key(fields: dict[str, str], words: str) -> None:
     """Its address is handed to the Glass (`public_view`), and the basemap switch offers it."""
     with pytest.raises(ValidationError, match=words):
         _provider(kind="raster", style="bundled:osprey-raster-overlay", **fields)
+    if words in ("user part", "key-like path segment"):
+        return
     # Through the Conduit, the same address is the proxy's alone.
     _provider(kind="raster", style="bundled:osprey-raster-overlay", proxy="required",
               **{**fields, "source": fields["source"].replace("sk-PLANTED", "{credential}")
                  .replace("=PLANTED", "={credential}")})  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "file:///data/tiles/monkey.pmtiles",
+        "https://tiles.example.test/keystone/{z}/{x}/{y}.png",
+        "https://tiles.example.test/authority-maps/{z}/{x}/{y}.png",
+        "https://tiles.example.test/styles/turnkey/{z}/{x}/{y}.png",
+    ],
+)
+def test_a_word_holding_key_is_not_refused(source: str) -> None:
+    """The path rule reads words, not letters: a place, a style or a file name may hold one."""
+    _provider(kind="raster", style="bundled:osprey-raster-overlay", source=source)
 
 
 def test_prefetch_cache_is_optional_and_only_meaningful_for_tier_3() -> None:

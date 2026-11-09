@@ -15,11 +15,13 @@ places are that unit's by their own handling, so the dataset is too, and a build
 and one from the command line give the same answer.
 
 **How they are found.** Within the case's datasets and the reader's clearance, in the store
-(`GraphPort.suggest_nodes`, rule 3), only the gazetteer's own places: a `Location` carrying one of
-the external gazetteers' identifiers and a `geometry_ref`. A case's own locations (a yard, an
-address in a statement) carry neither and are not offered as places. No hosted geocoder is ever
-called here, whatever the deployment names (`OSPREY_ONLINE_GEOCODER` is the pipeline's enrich
-stage's, ADR-136's egress rule applying there); §3.5 says none is.
+(`GraphPort.suggest_locations`, rule 3), by `Location.name` alone, never an identifier; of those,
+only the gazetteer's own places are offered: in a `gazetteer-*` dataset, with a point, the name
+holding the words. A case's own locations (a yard, an address in a statement) are in the case's
+dataset and are not offered as places. The answer never carries a gazetteer's identifier for a place
+(rule 7; every other node read withholds them too, `ontology.handling.withhold_sources`). No hosted
+geocoder is ever called here, whatever the deployment names (`OSPREY_ONLINE_GEOCODER` is the
+pipeline's enrich stage's, ADR-136's egress rule applying there); §3.5 says none is.
 """
 
 from __future__ import annotations
@@ -34,18 +36,21 @@ import yaml
 from services.ingest.geometries import POINT_GEOMETRY_VERSION
 
 from ports.analytics import AnalyticsPort
-from ports.graph import GraphPort, SuggestOptions
+from ports.graph import GraphPort
 from schemas.analytics import GeometryKind
 from schemas.domain import Node, Principal
-from schemas.mapconfig import MapPlace, PlaceSearchRequest, PlaceSearchResponse
+from schemas.mapconfig import (
+    GAZETTEER_DATASET_PREFIX,
+    MapPlace,
+    PlaceSearchRequest,
+    PlaceSearchResponse,
+)
 
 from .datasets import Dataset
 
-#: Every gazetteer a build loads is in a dataset named with this prefix (`gazetteer_dataset_id`).
-GAZETTEER_DATASET_PREFIX = "gazetteer-"
-
-#: How many visible `Location`s one search reads before keeping the gazetteer's own: enough that a
-#: case's own locations rarely crowd the places out, and when they do `more` says so.
+#: How many visible `Location`s one search reads, for each casing of the words, before keeping the
+#: gazetteer's own: enough that a case's own locations rarely crowd the places out, and when they do
+#: `more` says so (counted on names alone, never on an identifier).
 SCAN_LIMIT = 200
 
 _RECIPE = Path(__file__).resolve().parents[2] / "recipes" / "osm_gazetteer.yaml"
@@ -82,9 +87,9 @@ async def register_gazetteer_dataset(store: _Registers, region: str, *, by: str)
 #: What a command-line build says when the Conduit's database cannot be reached to register the
 #: gazetteer's dataset, in place of a connection traceback.
 UNREACHABLE_DATASETS = (
-    "Cannot reach the Conduit's database to register the gazetteer's dataset ({error}), so the "
-    "place names cannot be loaded. Start the deployment, or add --tiles-only to build the map "
-    "alone."
+    "Cannot reach the Conduit's database to register the gazetteer's dataset ({error}). The place "
+    "names are loaded into it already; run the build again once the deployment is up to register "
+    "it, so a case's Author can add it."
 )
 
 #: What a command-line build says about the places' points (ADR-147 Amendment 1).
@@ -120,10 +125,9 @@ async def register_gazetteer_dataset_from_env(
 
 def is_gazetteer_place(node: Node, query: str) -> bool:
     """A gazetteer's place (in a gazetteer dataset: what the gazetteer holds, not a case's own
-    location with a postcode) whose **name** holds `query`. The store matches a `Location` on
-    its identifiers too (`suggestion_scope`); a match on an `osm_id` or a `uprn` alone is
-    dropped here, so a run of queries cannot rebuild a place's source-system identifier from
-    what comes back (rule 7)."""
+    location with a postcode) with a point, whose **name** holds `query`. The store is asked by name
+    alone already (`suggest_locations`); the name is checked again here, ignoring case, since the
+    store's match keeps case and is asked in several casings."""
     if node.type != "Location" or not node.properties.get("geometry_ref"):
         return False
     if not any(d.startswith(GAZETTEER_DATASET_PREFIX) for d in node.datasets):
@@ -141,14 +145,19 @@ async def search_places(
     """The gazetteer's places matching `body.query`, read with `principal` (the case's), each with
     its point. A place whose point the reader may not see, or that has none (a boundary), is not
     offered: there is nowhere to take the map."""
-    found = await graph.suggest_nodes(
-        body.query,
-        principal,
-        limit=SCAN_LIMIT,
-        options=SuggestOptions(mode="contains", ignore_case=True, types=("Location",)),
-    )
     query = body.query.strip()
-    candidates = [node for node in found.nodes if is_gazetteer_place(node, query)]
+    # Names alone, at the store (`GraphPort.suggest_locations`: `Location.name`, containing, the
+    # access step in the traversal, rule 3): never an identifier, so neither the places nor
+    # `more` can answer on an `osm_id` or a `uprn` (rule 7). Its match keeps case, so the words are
+    # asked as typed, capitalised and in lower case, and the answers joined.
+    found: dict[str, Node] = {}
+    more = False
+    for words in dict.fromkeys((query, query[:1].upper() + query[1:], query.lower())):
+        nodes = await graph.suggest_locations(words, principal, limit=SCAN_LIMIT + 1)
+        more = more or len(nodes) > SCAN_LIMIT
+        for node in nodes[:SCAN_LIMIT]:
+            found.setdefault(node.id, node)
+    candidates = [node for node in found.values() if is_gazetteer_place(node, query)]
     refs = list(dict.fromkeys(str(node.properties["geometry_ref"]) for node in candidates))
     points = {
         record.geometry_ref: record
@@ -173,6 +182,4 @@ async def search_places(
             place.name.casefold(),
         )
     )
-    return PlaceSearchResponse(
-        places=places[: body.limit], more=len(places) > body.limit or found.more
-    )
+    return PlaceSearchResponse(places=places[: body.limit], more=len(places) > body.limit or more)

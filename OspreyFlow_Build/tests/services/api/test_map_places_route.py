@@ -2,10 +2,11 @@
 ADR-147 Amendment 1), through the real app with the graph and the analytics store stood in.
 
 What the stand-ins can prove, and only that: the route reads with the principal it is given (the
-case's), asks the store for `Location`s by contains and ignoring case, keeps only the gazetteer's
-own places (an external gazetteer's identifier and a point), takes each to its point, says `more`
-honestly, never names a gazetteer's identifier to the Glass (rule 7), never calls a hosted geocoder
-whatever the deployment names, and audits. That the store limits the places to the case's datasets
+case's), asks the store for `Location`s by name alone (`suggest_locations`, whose match keeps case,
+as the stand-in's does), keeps only the gazetteer's own places (in a `gazetteer-*` dataset, with a
+point), takes each to its point, says `more` honestly and never on an identifier, never names a
+gazetteer's identifier to the Glass (rule 7), never calls a hosted geocoder whatever the deployment
+names, and audits. That the store limits the places to the case's datasets
 and the reader's clearance is the store's (rule 3), proven live against ArcadeDB in
 `tests/ingest/test_gazetteer_place_search_live.py`: a stand-in would pass whatever it is told.
 """
@@ -18,6 +19,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from services.api.map_places import SCAN_LIMIT
 from services.api.app import (
     app,
     get_analytics,
@@ -27,7 +29,6 @@ from services.api.app import (
     get_principal,
 )
 
-from ports.graph import NodeSuggestions, SuggestOptions
 from schemas.analytics import GeometryKind, GeometryRecord
 from schemas.domain import AuditStub, Node, Principal, Provenance, ProvenanceState, SourceRef
 from services.api.investigations import (
@@ -90,17 +91,23 @@ HIDDEN_POINT = _location("loc-hidden", name="Cranham", osm_id="9", geometry_ref=
 
 
 class _Graph:
-    def __init__(self, nodes: list[Node], more: bool = False) -> None:
-        self.nodes = nodes
-        self.more = more
-        self.calls: list[tuple[str, Principal, int, SuggestOptions | None]] = []
+    """`GraphPort.suggest_locations` as the ArcadeDB adapter answers it (`SuggestLocationsBuilder`):
+    `Location.name` containing the words, **case kept** (`TextP.containing`), never an identifier,
+    at most `limit`. A stand-in that matched ignoring case or on identifiers would accept what the
+    real one refuses (rule 15)."""
 
-    async def suggest_nodes(
-        self, prefix: str, principal: Principal, *, limit: int = 10,
-        options: SuggestOptions | None = None,
-    ) -> NodeSuggestions:  # fmt: skip
-        self.calls.append((prefix, principal, limit, options))
-        return NodeSuggestions(nodes=self.nodes, more=self.more)
+    def __init__(self, nodes: list[Node]) -> None:
+        self.nodes = nodes
+        self.calls: list[tuple[str, Principal, int]] = []
+
+    async def suggest_locations(
+        self, name: str, principal: Principal, *, limit: int = 20
+    ) -> list[Node]:
+        self.calls.append((name, principal, limit))
+        return [
+            n for n in self.nodes
+            if n.type == "Location" and name in str(n.properties.get("name", ""))
+        ][:limit]  # fmt: skip
 
 
 class _Analytics:
@@ -154,10 +161,11 @@ def test_only_the_gazetteers_places_with_a_point_are_offered(world: World) -> No
         ],
         "more": False,
     }
-    # Read with the case's principal, as Locations by contains, ignoring case.
-    ((prefix, principal, _limit, options),) = graph.calls
-    assert (prefix, principal) == ("cran", PRINCIPAL)
-    assert options == SuggestOptions(mode="contains", ignore_case=True, types=("Location",))
+    # Read with the case's principal, by name, the words as typed and capitalised (the store's
+    # match keeps case).
+    assert [(words, principal) for words, principal, _limit in graph.calls] == [
+        ("cran", PRINCIPAL), ("Cran", PRINCIPAL),
+    ]  # fmt: skip
     # The yard's point is never asked after: it is not a gazetteer's place.
     assert all("g-yard" not in refs and p == PRINCIPAL for refs, p in analytics.asked)
     assert audit.records[-1]["action"] == "map_place_search"
@@ -181,8 +189,12 @@ def test_more_is_said_when_more_places_matched_than_are_shown(world: World) -> N
         "more": True,
     }
     graph, _analytics, _audit = world
-    graph.more = True  # the store read its scan's worth and more Locations matched
-    assert _search().json()["more"] is True
+    # The store's scan filled by a case's own places named alike: more matched than were read.
+    graph.nodes = [
+        _location(f"own-{i}", dataset="case-data", name=f"Cranwell {i}", geometry_ref="g-x")
+        for i in range(SCAN_LIMIT + 1)
+    ]
+    assert _search().json() == {"places": [], "more": True}
 
 
 def test_a_query_too_short_or_too_long_is_refused_and_asks_nothing(world: World) -> None:
@@ -285,3 +297,18 @@ def test_a_spaces_only_query_is_refused_not_a_scan(world: World) -> None:
     for spaces in ("   ", " a "):
         assert _search(spaces).status_code == 422
     assert graph.calls == []
+
+
+def test_an_identifier_fragment_finds_no_place_and_says_no_more(world: World) -> None:
+    """Rule 7 (the independent review): the store is asked by name alone, so a fragment of an
+    `osm_id` or a `uprn` matches nothing there, and `more` cannot answer on it either. A run of such
+    searches tells the reader nothing about a place's identifier."""
+    graph, _analytics, _audit = world
+    # Many places carrying the fragment in their identifiers, enough to fill a scan.
+    graph.nodes = [
+        _location(f"p-{i}", name=f"Hamlet {i}", osm_id=f"31337{i:04d}", uprn=f"1000{i:06d}",
+                  geometry_ref="g-cranford")
+        for i in range(SCAN_LIMIT + 5)
+    ]  # fmt: skip
+    for fragment in ("31337", "1000", "osm-node"):
+        assert _search(fragment).json() == {"places": [], "more": False}, fragment

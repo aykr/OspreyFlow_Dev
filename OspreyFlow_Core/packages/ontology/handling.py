@@ -18,6 +18,7 @@ import yaml
 from pydantic import BaseModel, ValidationError
 
 from schemas.domain import Edge, Handling, Node, Principal
+from schemas.mapconfig import GAZETTEER_DATASET_PREFIX, GAZETTEER_SOURCE_IDENTIFIERS
 
 from .errors import HandlingSchemeError
 
@@ -334,10 +335,30 @@ def withhold_sources[Element: (Node, Edge)](element: Element, principal: Princip
     if _SOURCES_IN_FULL.get():
         return element
     element = _board_as_known(element, principal)
+    element = _gazetteer_identifiers_withheld(element, principal)
     if sources_within_case(element.datasets, principal):
         return element
     provenance = element.provenance.model_copy(update={"sources": [], "sources_withheld": True})
     return element.model_copy(update={"provenance": provenance})
+
+
+def _gazetteer_identifiers_withheld[Element: (Node, Edge)](
+    element: Element, principal: Principal
+) -> Element:
+    """ADR-147 Amendment 1 (rule 7, the orchestrator's ruling of 9 November 2026): a gazetteer's
+    place (a node in a `gazetteer-*` dataset) comes to a request reader without its gazetteer's own
+    identifiers (`osm_id`, `uprn`, …), which are source-system identifiers. A case that adds the
+    gazetteer reads its places through search, expansion and every other node read, all of which
+    pass here. The Conduit's own work (`datasets is None`: a build's lookup, resolution) and a read
+    written back (`sources_in_full`) keep them, so a rebuild still finds a place by its `osm_id`."""
+    if principal.datasets is None or not isinstance(element, Node):
+        return element
+    if not any(d.startswith(GAZETTEER_DATASET_PREFIX) for d in element.datasets):
+        return element
+    if not any(name in element.properties for name in GAZETTEER_SOURCE_IDENTIFIERS):
+        return element
+    kept = {k: v for k, v in element.properties.items() if k not in GAZETTEER_SOURCE_IDENTIFIERS}
+    return element.model_copy(update={"properties": kept})
 
 
 def _board_as_known[Element: (Node, Edge)](element: Element, principal: Principal) -> Element:

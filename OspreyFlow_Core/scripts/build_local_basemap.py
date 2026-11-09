@@ -528,12 +528,6 @@ async def _run(args: argparse.Namespace) -> int:
         register_gazetteer_dataset_from_env,
     )
 
-    try:
-        await register_gazetteer_dataset_from_env(args.region, by=principal.id)
-    except DatasetsUnreachable as unreachable:
-        await client.aclose()
-        print(str(unreachable), file=sys.stderr)
-        return 1
     tx = await graph.begin_transaction()
     try:
         result = await build_local_basemap(
@@ -556,12 +550,19 @@ async def _run(args: argparse.Namespace) -> int:
         await client.aclose()
 
     print(f"PMTiles written to {result.pmtiles_path}")
-    print(NO_POINTS_HERE)
     print(
         f"Gazetteer: {result.gazetteer_report.nodes_created} places created, "
         f"{result.gazetteer_report.nodes_referenced} already known, "
         f"{len(result.gazetteer_report.rejections)} rejected."
     )
+    print(NO_POINTS_HERE)
+    # ADR-147 Amendment 1, decision 2: the dataset registered once the places are committed, so a
+    # failed build leaves none. Its places are stamped already; registering again later is harmless.
+    try:
+        await register_gazetteer_dataset_from_env(args.region, by=principal.id)
+    except DatasetsUnreachable as unreachable:
+        print(str(unreachable), file=sys.stderr)
+        return 1
     return 1 if result.gazetteer_report.rejections else 0
 
 
