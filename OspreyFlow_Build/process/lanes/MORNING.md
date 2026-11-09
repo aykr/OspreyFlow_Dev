@@ -536,6 +536,12 @@ New ones are added at the bottom as they happen.
 80. **Docker started again at 16:19 UTC** (launched as an app, with no containers; not by me, and no lane
     record shows a start). Quit again on your word, and every lane told never to start it. The Docker setting
     "Start Docker Desktop when you sign in" is still yours to turn off.
+81. **Admin's L2.6, the second review (about 16:40): nine of ten fixes hold; decision (j) sent back.** The lane
+    had logged, as its own decision, that an Author's unit is not checked for the promotions list and the
+    overdue alert. The case's own access check refuses another unit's Author outright (`get_authorized`'s
+    `owning_unit`), so (j) would have shown another unit's promotions to someone every read refuses. Checked in
+    the code by me. It comes out, with a cross-unit Author added to the L3.4 contract test and to A8. **My call,
+    not yours:** the strict reading of Am 4 decision 11 and rule 3.
 
 ## Evening, 7 November: your records of 7 November applied
 
