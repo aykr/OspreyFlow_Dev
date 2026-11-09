@@ -1,8 +1,8 @@
 // The top bar's *Needs you · n* (ADR-145 decision 11, A2; Amendment 4 decision 11, R7; ADR-090
 // Amendment 4; L2.7): the proposed link types the reader may decide and the promotions overdue to
 // them, each with a tip saying what it is and what follows. Everything it lists is what the Conduit
-// served this reader (`GET /v1/me/needs-you`), so it lists nothing the reader cannot see. A proposal
-// above their clearance is said to exist, and is neither counted nor described. The control is
+// served this reader (`GET /v1/me/needs-you`), so it lists nothing the reader cannot see: a dataset
+// whose proposals they may not read is not listed at all. The control is
 // drawn only when something waits, or when the read failed (said, never shown as nothing, rule 2).
 import { useCallback, useEffect, useState } from "react";
 
@@ -59,8 +59,7 @@ export function NeedsYou({
   }, [load, every, generation]);
 
   const count = needs ? needsYouCount(needs) : 0;
-  const hidden = needs ? needs.proposals.filter((p) => p.above_clearance) : [];
-  if (!failed && !problem && count === 0 && hidden.length === 0) return null;
+  if (!failed && !problem && count === 0) return null;
   const opening = (datasetId: string) => () => {
     setProblem(null);
     void Promise.resolve(onOpenModel?.(datasetId)).catch((e: unknown) =>
@@ -152,13 +151,6 @@ export function NeedsYou({
                 close,
               ),
             )}
-          {hidden.map((p) =>
-            entry(
-              `above-${p.dataset_id}`,
-              WORDS.aboveClearance(p.dataset_name),
-              WORDS.aboveClearanceTip,
-            ),
-          )}
         </ul>
       )}
     </DropdownPanel>

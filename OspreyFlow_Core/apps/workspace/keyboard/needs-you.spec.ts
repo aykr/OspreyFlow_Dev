@@ -31,10 +31,6 @@ test("Needs you opens, each entry's tip is read with it, and Escape gives focus 
   const proposals = page.getByRole("button", { name: /2 proposed link types to decide in Harbour/ });
   await expect(proposals).toBeFocused();
   await expect(proposals).toHaveAccessibleDescription(/add each to the draft model or decline it/);
-  await page.keyboard.press("Tab");
-  const above = page.getByText("A proposed link type in Border watch (synthetic) is above your clearance");
-  await expect(above).toBeFocused();
-  await expect(above).toHaveAccessibleDescription(/told only that it waits/);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("group", { name: "Needs you" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Needs you · 3/ })).toBeFocused();
@@ -103,7 +99,6 @@ test("what you answer for opens where to act, its why read with each line, by ke
   await expect.poll(() => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened)).toEqual([
     "case:SYN-c1", "model:SYN-ds-a", "operations",
   ]); // prettier-ignore
-  await expect(page.getByRole("button", { name: /Border watch/ })).toHaveCount(0);
   registerCovered(REGISTRY, "open-what-you-answer-for-by-keyboard");
   const byPlace = page.getByText("What you can do, by place");
   await byPlace.focus();

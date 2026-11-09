@@ -81,19 +81,12 @@ export function answersFor(input: {
     });
   }
   for (const p of needs?.proposals ?? []) {
-    // A proposal above the reader's clearance is said to exist, never counted (ADR-143 Amendment 4).
+    // A dataset whose proposals the reader may not read is not listed at all (ADR-143 Amendment 4).
     if (p.to_decide > 0) {
       answers.push({
         text: `Data engineer of ${p.dataset_name}: ${plural(p.to_decide, "proposed link type", "proposed link types")} to decide`,
         why: whyHeld("accept_types", roles),
         opens: { to: "model", datasetId: p.dataset_id },
-      });
-    }
-    if (p.above_clearance) {
-      answers.push({
-        text: `Data engineer of ${p.dataset_name}: a proposed link type above your clearance`,
-        why: "Someone cleared to its dataset's highest marking decides it; you are told only that it waits.",
-        opens: { to: "none" },
       });
     }
   }

@@ -21,14 +21,13 @@ const NEEDS: NeedsYou = {
   promotions_overdue: [{ promotion_id: "p1", load_id: "load-7", dataset_id: "ds-a", raised_at: "",
                          words: "Promotion load-7 into Prison records has waited 3 days for review." }],
   proposals: [
-    { dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 2, above_clearance: false },
-    { dataset_id: "ds-top", dataset_name: "Border watch", to_decide: 0, above_clearance: true },
+    { dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 2 },
   ],
 }; // prettier-ignore
 const ENGINEER = new Set(["investigate", "edit_pipelines", "review_promotions", "accept_types"]);
 
 describe("answersFor", () => {
-  it("lists only the reader's own cases and what waits for them, never a count above their clearance", () => {
+  it("lists only the reader's own cases and what waits for them", () => {
     const shown = answersFor({ rights: ENGINEER, roles: ["data_engineer"], cases: CASES, needs: NEEDS });
     expect(shown.levels).toEqual([
       { caseId: "c1", name: "Prison intel", level: "Author" },
@@ -38,9 +37,7 @@ describe("answersFor", () => {
       "Author of Prison intel",
       "Reviewer of promotions: Promotion load-7 into Prison records has waited 3 days for review.",
       "Data engineer of Prison records: 2 proposed link types to decide",
-      "Data engineer of Border watch: a proposed link type above your clearance",
     ]);
-    expect(shown.answers.find((a) => a.text.includes("Border watch"))?.opens).toEqual({ to: "none" });
   });
 
   it("offers only the places the reader's rights open", () => {
@@ -74,7 +71,6 @@ describe("the Home section", () => {
     expect(onOpenModel).toHaveBeenCalledWith("ds-a");
     fireEvent.click(screen.getByRole("button", { name: /^Reviewer of promotions/ }));
     expect(onOpenOperations).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("button", { name: /Border watch/ })).toBeNull();
   });
 
   it("says a failed read, never nothing", async () => {

@@ -19,8 +19,7 @@ const NEEDS = {
   promotions_overdue: [{ promotion_id: "SYN-pr-1", load_id: "SYN-load-7", dataset_id: "SYN-ds-a", raised_at: "",
                          words: "Promotion SYN-load-7 into Harbour prison extract (synthetic) has waited 3 days for review." }],
   proposals: [
-    { dataset_id: "SYN-ds-a", dataset_name: "Harbour prison extract (synthetic)", to_decide: 2, above_clearance: false },
-    { dataset_id: "SYN-ds-top", dataset_name: "Border watch (synthetic)", to_decide: 0, above_clearance: true },
+    { dataset_id: "SYN-ds-a", dataset_name: "Harbour prison extract (synthetic)", to_decide: 2 },
   ],
 }; // prettier-ignore
 

@@ -29,8 +29,7 @@ const NEEDS: Needs = {
       words: "Promotion load-7 into Prison records has waited 3 days for review." },
   ],
   proposals: [
-    { dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 2, above_clearance: false },
-    { dataset_id: "ds-top", dataset_name: "Border watch", to_decide: 0, above_clearance: true },
+    { dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 2 },
   ],
 }; // prettier-ignore
 
@@ -47,19 +46,13 @@ async function open(
 }
 
 describe("Needs you", () => {
-  it("counts the overdue promotions and the proposals to decide, never one above the reader's clearance", async () => {
+  it("counts the overdue promotions and the proposals to decide, and lists only what the Conduit served", async () => {
     await open(NEEDS);
     const button = await screen.findByRole("button", { name: /Needs you · 3/ });
     expect(needsYouCount(NEEDS)).toBe(3);
     fireEvent.click(button);
     const panel = screen.getByRole("group", { name: "Needs you" });
-    expect(panel.textContent).toContain(
-      NEEDS_YOU_WORDS.aboveClearance("Border watch"),
-    );
-    // Said to exist, with no count of how many: nothing of it but its dataset.
-    expect(panel.textContent).not.toMatch(
-      /\d+ proposed link types? to decide in Border watch/,
-    );
+    expect(panel.querySelectorAll("li")).toHaveLength(2);
   });
 
   it("gives every entry its tip, read with it, saying what it is and what follows", async () => {
@@ -83,13 +76,6 @@ describe("Needs you", () => {
       document.getElementById(promotion.getAttribute("aria-describedby")!)
         ?.textContent,
     ).toBe(NEEDS_YOU_WORDS.promotionTip);
-    const above = screen.getByText(
-      NEEDS_YOU_WORDS.aboveClearance("Border watch"),
-    );
-    expect(
-      document.getElementById(above.getAttribute("aria-describedby")!)
-        ?.textContent,
-    ).toBe(NEEDS_YOU_WORDS.aboveClearanceTip);
   });
 
   it("opens the dataset's Model tab and Admin's Operations, and closes", async () => {
@@ -136,7 +122,7 @@ describe("Needs you", () => {
 
   it("gives the Model tab the count of its own dataset alone", () => {
     expect(proposedIn(NEEDS, "ds-a")).toBe(2);
-    expect(proposedIn(NEEDS, "ds-top")).toBe(0);
+    expect(proposedIn(NEEDS, "ds-other")).toBe(0);
     expect(proposedIn(NEEDS, null)).toBe(0);
   });
 

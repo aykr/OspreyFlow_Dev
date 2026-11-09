@@ -27,7 +27,7 @@ export async function readNeedsYou(
 }
 
 /** How many things wait for the reader: each overdue promotion and each proposed link type they may
- * decide. A proposal above their clearance is never counted (ADR-143 Amendment 4's *Open*). */
+ * decide; a dataset they may not read the proposals of is never listed (ADR-143 Amendment 4's *Open*). */
 export function needsYouCount(needs: NeedsYou): number {
   return (
     needs.promotions_overdue.length +
@@ -56,10 +56,6 @@ export const NEEDS_YOU_WORDS = {
     `${plural(n, "proposed link type", "proposed link types")} to decide in ${dataset}`,
   proposalsTip:
     "Analysts proposed these link types in cases reading this dataset. On its Model tab, add each to the draft model or decline it, with a reason; until then its links stay in their case and cannot be promoted.",
-  aboveClearance: (dataset: string) =>
-    `A proposed link type in ${dataset} is above your clearance`,
-  aboveClearanceTip:
-    "Its dataset may hold material marked above your clearance, so you are told only that it waits. Someone cleared to the dataset's highest marking decides it.",
   promotionTip:
     "A promotion has waited past the days your administrator set. Review it, or ask its dataset's other reviewers. It stays here while it still waits and you may still review it.",
   reminder: (n: number) =>

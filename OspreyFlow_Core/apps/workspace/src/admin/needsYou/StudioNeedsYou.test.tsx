@@ -44,7 +44,6 @@ function serve(
     dataset_id: string;
     dataset_name: string;
     to_decide: number;
-    above_clearance: boolean;
   }[],
 ) {
   const asked: string[] = [];
@@ -84,13 +83,11 @@ describe("the Studio's proposals count", () => {
         dataset_id: "ds-a",
         dataset_name: "Prison records",
         to_decide: 2,
-        above_clearance: true,
       },
       {
         dataset_id: "ds-b",
         dataset_name: "Other",
         to_decide: 7,
-        above_clearance: false,
       },
     ]);
     open();
@@ -105,7 +102,6 @@ describe("the Studio's proposals count", () => {
         dataset_id: "ds-a",
         dataset_name: "Prison records",
         to_decide: 1,
-        above_clearance: false,
       },
     ]);
     open();
@@ -135,7 +131,6 @@ describe("the Studio's proposals count", () => {
         dataset_id: "ds-a",
         dataset_name: "Prison records",
         to_decide: 0,
-        above_clearance: true,
       },
     ]);
     open();
@@ -152,7 +147,6 @@ describe("the Studio's proposals count", () => {
         dataset_id: "ds-a",
         dataset_name: "Prison records",
         to_decide: 1,
-        above_clearance: false,
       },
     ]);
     requestOpening({ kind: "studio", tab: "model", datasetId: "ds-a" });
@@ -167,7 +161,7 @@ describe("the Studio's proposals count", () => {
   });
 
   it("leaves a request for another dataset waiting for the reload into it", async () => {
-    serve([{ dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 1, above_clearance: false }]);
+    serve([{ dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 1 }]);
     requestOpening({ kind: "studio", tab: "model", datasetId: "ds-other" });
     open();
     await screen.findByRole("tab", { name: "1 Model · 1 proposed" });

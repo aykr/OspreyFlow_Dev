@@ -235,7 +235,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   // this dataset, for the Model tab's count and the reminder (`needs-you.spec.ts`); otherwise none.
   if (path === "/v1/me/needs-you")
     return reply({ promotions_overdue: [], proposals: startParams.get("proposed") === "1"
-      ? [{ dataset_id: "harbour-extract", dataset_name: "Harbour prison extract (synthetic)", to_decide: 2, above_clearance: false }] : [] }); // prettier-ignore
+      ? [{ dataset_id: "harbour-extract", dataset_name: "Harbour prison extract (synthetic)", to_decide: 2 }] : [] }); // prettier-ignore
   if (path === "/v1/handling-scheme") return reply(SCHEME);
   if (path === "/v1/ingest/connectors") return reply([{ id: "generic-csv", label: "CSV file", group: "Generic", structured: true, available: true }]);
   if (path === "/v1/ingest/connections") return reply([{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: day(30) }]);

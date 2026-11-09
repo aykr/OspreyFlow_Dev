@@ -74,7 +74,7 @@ function serve() {
       if (path === "/v1/me/needs-you")
         return json(200, { promotions_overdue: [{ promotion_id: "p1", load_id: "load-7", dataset_id: "ds-a", raised_at: "",
                                                   words: "Promotion load-7 into Prison records has waited 7 days for review." }],
-                           proposals: [{ dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 1, above_clearance: true }] }); // prettier-ignore
+                           proposals: [{ dataset_id: "ds-a", dataset_name: "Prison records", to_decide: 1 }] }); // prettier-ignore
       return json(200, []);
     }),
   );
