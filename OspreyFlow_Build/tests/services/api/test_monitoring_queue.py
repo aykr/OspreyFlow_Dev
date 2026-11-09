@@ -301,6 +301,106 @@ async def test_a_scheduled_runs_notice_is_never_queued(stores: Any) -> None:
     assert await _queued_ids(alerts, "c", owner) == []
 
 
+# --- ADR-146 decision 8: an alert routed to a named team (a rule 3 read, tests first) -------------
+
+
+def _routed(case: str, deployer: Principal, team: str, **fields: object) -> Alert:
+    return _alert(
+        f"typology:r-{new_id()}", deployer, investigation_id=case, typology="sentence",
+        words="a routed finding", referent_node_ids=["n-1"], routed_team=team, **fields,
+    )  # fmt: skip
+
+
+def _answering(authors: dict[str, list[str]]) -> Any:
+    """The store's `answers_for` as the app gives it: of the reader's datasets, those whose home
+    case they are an Author of (here, a table)."""
+
+    async def answers_for(principal: Principal) -> list[str]:
+        return [d for d in authors.get(principal.id, []) if d in (principal.datasets or [])]
+
+    return answers_for
+
+
+async def test_a_team_routed_alert_reaches_only_its_members_and_the_home_cases_authors(
+    stores: Any,
+) -> None:
+    """Only the team's members, and the Authors of the home case of the alert's dataset, read a
+    routed alert: not another member of the case, nor the rule's own deployer outside the team
+    (ADR-146 decision 8; its test "only a team's members and the home case's Authors see a
+    team-routed alert"). Red with the routed check removed from `queue_scope`, and with the Authors'
+    clause reading every dataset rather than those the reader answers for."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    deployer, outsider, author = _person(), _person(), _person()
+    member = _person(roles=[f"role:{team}"])
+    alerts.answers_for = _answering({author.id: ["ds-1"]})
+    try:
+        routed = _routed(case, deployer, team)
+        plain = _alert("typology:r1", deployer, investigation_id=case, typology="structuring",
+                       referent_node_ids=["n-1"])  # fmt: skip
+        for a in (routed, plain):
+            await alerts.save(a)
+
+        assert set(await _queued_ids(alerts, case, member)) == {routed.id, plain.id}
+        assert set(await _queued_ids(alerts, case, author)) == {routed.id, plain.id}
+        assert await _queued_ids(alerts, case, outsider) == [plain.id]
+        assert await _queued_ids(alerts, case, deployer) == [plain.id], "its deployer is no reader"
+        for reader in (outsider, deployer):
+            with pytest.raises(AlertNotFoundError):
+                await alerts.get_queue_alert(routed.id, case, reader)
+        row = await alerts.get_queue_alert(routed.id, case, member)
+        assert (row.audience, row.alert.routed_team) == ("team", team)
+        # The Authors' clause reads the alert's dataset alone: an Author of another dataset's home
+        # case does not read it.
+        alerts.answers_for = _answering({author.id: ["ds-2"]})
+        other = author.model_copy(update={"datasets": ["ds-1", "ds-2"]})
+        assert await _queued_ids(alerts, case, other) == [plain.id]
+    finally:
+        alerts.answers_for = None
+
+
+async def test_a_member_leaving_the_team_no_longer_reads_its_routed_alert(stores: Any) -> None:
+    """Membership is read from the request's own token, never kept: the same person without the
+    team's role reads nothing routed to it (ADR-112 Amendment 5 decision 3)."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    member = _person(roles=[f"role:{team}"])
+    routed = _routed(case, _person(), team)
+    await alerts.save(routed)
+    assert await _queued_ids(alerts, case, member) == [routed.id]
+    left = member.model_copy(update={"roles": []})
+    assert await _queued_ids(alerts, case, left) == []
+    other_team = member.model_copy(update={"roles": [f"role:team-{new_id()}"]})
+    assert await _queued_ids(alerts, case, other_team) == []
+
+
+async def test_a_routed_alert_is_shown_to_a_member_only_where_they_may_read_its_evidence(
+    stores: Any,
+) -> None:
+    """Routing narrows who may read an alert; it never widens what they may read: a member of the
+    team who may not see a node the alert names is not given it (rule 3, ADR-146 decision 10)."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    member = _person(roles=[f"role:{team}"])
+    routed = _routed(case, _person(), team)
+    await alerts.save(routed)
+    hidden = await alert_queue.monitoring_queue(
+        alerts, _Graph(GRAPH_NAMES, hidden={"n-1"}), NO_TRANSACTIONS, case, member)  # fmt: skip
+    assert hidden == []
+
+
+async def test_without_an_answer_for_its_datasets_a_routed_alert_reaches_its_team_alone(
+    stores: Any,
+) -> None:
+    """A store given no `answers_for` shows a routed alert to the team alone (fail closed)."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    routed = _routed(case, _person(), team)
+    await alerts.save(routed)
+    alerts.answers_for = None
+    assert await _queued_ids(alerts, case, _person()) == []
+
+
 # --- severity, and the filters -----------------------------------------------------------------
 
 

@@ -60,6 +60,22 @@ def is_just_me(rule: TypologyRule) -> bool:
     return params is not None and params.sentence.scope == "just_me"
 
 
+def routed_team_of(rule: TypologyRule) -> str | None:
+    """ADR-146 decision 8: the named team a sentence rule's alerts go to, or `None` (the case's)."""
+    params = sentence_of_rule(rule)
+    if params is None or params.sentence.team != "team":
+        return None
+    return params.sentence.team_id
+
+
+def writes_no_alert_node(rule: TypologyRule) -> bool:
+    """A rule whose alerts some members of the case may not read puts nothing in the case's graph:
+    one just for its author (K8), and one routed to a named team (ADR-146 decision 8). An `Alert`
+    node carries the finding's words to every member who may read its markings (expand, a node
+    list), which the queue's team check would not reach (rule 3)."""
+    return is_just_me(rule) or routed_team_of(rule) is not None
+
+
 def is_deployment_wide(rule: TypologyRule) -> bool:
     params = sentence_of_rule(rule)
     return params is not None and params.sentence.scope == "deployment"
@@ -86,7 +102,8 @@ def sentence_alert_fields(finding: Finding) -> dict[str, Any]:
         return {"rule_id": f"monitor:sentence:{rule.id}", "typology": None,
                 "severity": sentence.severity, "team": None, "dataset_id": dataset}  # fmt: skip
     return {"rule_id": f"typology:{rule.id}", "typology": "sentence",
-            "severity": sentence.severity, "team": team, "dataset_id": dataset}  # fmt: skip
+            "severity": sentence.severity, "team": team, "dataset_id": dataset,
+            "routed_team": routed_team_of(rule)}  # fmt: skip
 
 
 def sentence_rows(
@@ -259,12 +276,19 @@ async def run_scheduled_rule(
     hits = await judge_subjects(
         subjects, sentence, deployer, ctx, window=window, firsts=firsts, conditions=rest
     )
+    from .rule_evaluation import PartlyRaised
+
     raised = 0
-    for finding in _findings(rule, deployer, hits, sentence_words(sentence, gate.ontology)):
-        if await gate.seen(finding):
-            continue
-        await gate.raise_committed(finding)
-        raised += 1
+    try:
+        for finding in _findings(rule, deployer, hits, sentence_words(sentence, gate.ontology)):
+            if await gate.seen(finding):
+                continue
+            await gate.raise_committed(finding)
+            raised += 1
+    except Exception as error:
+        if raised:
+            raise PartlyRaised(raised, error) from error
+        raise
     return raised
 
 
@@ -275,6 +299,8 @@ __all__ = [
     "judge_sentence_rule",
     "rows_of_finding",
     "run_scheduled_rule",
+    "routed_team_of",
     "sentence_alert_fields",
+    "writes_no_alert_node",
     "sentence_rows",
 ]

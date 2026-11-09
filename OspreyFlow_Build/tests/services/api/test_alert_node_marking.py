@@ -167,13 +167,19 @@ async def test_after_a_commit_an_unreadable_cited_link_raises_the_row_with_no_no
     assert "rule_fired" in stores.said
 
 
-async def test_after_a_commit_an_unreadable_referent_node_still_raises_as_today() -> None:
-    """Nodes behave as they did before L2.8: an unreadable referent node stops the raise."""
+async def test_after_a_commit_an_unreadable_referent_node_raises_the_row_without_its_node() -> None:
+    """L2.10's carry (found in L2.8): outside a load (`raise_committed`, the sweep) an unreadable
+    referent node stopped the raise, and the sweep with it, at the same point every day. As a load
+    does, the row is now raised without its node, and why is said in the audit; the queue's own
+    check still withholds the alert from any reader who may not see what it names. Red with the
+    referent's error let through, as before."""
+    from services.api.rule_evaluation import WITHHELD_WORDS
+
     graph, stores = TxGraph({}, {}), Stores()
     gate = _sweep_gate(graph, stores)
-    with pytest.raises(RuntimeError):
-        await gate.raise_committed(_sweep_finding(gate, [], ["cust-gone"]))
-    assert stores.saved == []
+    alert = await gate.raise_committed(_sweep_finding(gate, [], ["cust-gone"]))
+    assert alert.alert_node_id is None and len(stores.saved) == 1
+    assert stores.withheld_because == [WITHHELD_WORDS["unseen_referent"]]
 
 
 # ---- why a node was withheld, said in the audit as it is -----------------------------------------

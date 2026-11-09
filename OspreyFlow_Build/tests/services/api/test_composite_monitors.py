@@ -28,7 +28,6 @@ from typing import Any
 import pytest
 from services.api import kyc_sweep, rule_evaluation, screening_refresh
 from services.api.dataset_scope import (
-    CompositeReadOnlyError,
     scope_to_case,
     set_case_datasets,
     stamping,
@@ -169,11 +168,15 @@ async def test_a_scheduled_rule_in_a_composite_case_raises_its_alert_into_the_la
 async def test_the_scheduled_alert_is_refused_with_the_refusal_back(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """With the refusal back, the node is refused by the stamping graph's last word; since L2.10
+    the alert is still raised, without its node, said in the audit (as a load does), rather than the
+    refusal stopping the slot."""
     _no_layer(monkeypatch)
     _store_, graph, queue, (executor, author) = await _a_scheduled_slot(monkeypatch)
-    with pytest.raises(CompositeReadOnlyError):
-        await executor.judge(_rule(dataset_id=BOTH), author, NOW)
-    assert queue.alerts == [] and graph.written_nodes == []
+    assert await executor.judge(_rule(dataset_id=BOTH), author, NOW) == 1
+    (alert,) = queue.alerts
+    assert alert.alert_node_id is None and graph.written_nodes == []
+    assert any(e.get("action") == "alert_node_withheld" for e in queue.audit)
 
 
 # --- a screening list's re-screening ----------------------------------------------------------
@@ -301,7 +304,9 @@ class _SweepGraph(_Graph):
         return Subgraph(nodes=nodes, edges=edges)
 
 
-async def _sweep(rule_dataset: str | None, *, with_the_store: bool = True) -> tuple[Any, ...]:
+async def _sweep(
+    rule_dataset: str | None, *, with_the_store: bool = True, first: TypologyRule | None = None
+) -> tuple[Any, ...]:
     from services.api.kyc_expiries import Lapse
     from services.api.kyc_sweep import sweep
 
@@ -330,6 +335,8 @@ async def _sweep(rule_dataset: str | None, *, with_the_store: bool = True) -> tu
 
     class _CaseRules:
         async def list_active_for_case(self, case: str) -> list[TypologyRule]:
+            if first is not None:
+                return [first.model_copy(update={"params": rule.params}), rule]
             return [rule]
 
     class _SweepValkey(_Queue):
@@ -361,6 +368,35 @@ async def test_the_daily_sweep_in_a_composite_case_raises_its_alert_into_the_lay
     (alert,) = graph.written_nodes
     assert alert.type == "Alert" and alert.datasets == [_layer_of(store)]
     assert graph.nodes["p-1"].datasets == [MEMBER]
+
+
+async def test_one_failing_rule_never_stops_the_daily_sweep_whole(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """L2.10's carry: a rule whose judgement fails in one case (here a read refused mid-sweep) is
+    caught, counted and audited in words, and the sweep goes on to the next rule and case. Red
+    with the per-customer catch removed: the error stops the sweep, the second case's alert is never
+    raised, and the day is never closed."""
+    from services.api import kyc_rules
+
+    real = kyc_rules.judge_lapsed
+    calls: list[str] = []
+
+    async def judge_lapsed(rule: Any, deployer: Any, customer_id: str, *rest: Any) -> Any:
+        calls.append(rule.id)
+        if rule.id == "rule-fails":
+            raise RuntimeError("a read refused")
+        return await real(rule, deployer, customer_id, *rest)
+
+    monkeypatch.setattr(kyc_sweep, "judge_lapsed", judge_lapsed)
+    failing = _rule(dataset_id=BOTH).model_copy(update={"id": "rule-fails"})
+    store, graph, queue, report = await _sweep(BOTH, first=failing)
+    assert calls == ["rule-fails", "rule-1"], "the second rule is judged after the first fails"
+    assert report.alerts == 1 and len(queue.alerts) == 1
+    assert report.failures == [f"rule rule-fails in case {CASE}: RuntimeError"]
+    (failed,) = [e for e in queue.audit if e.get("action") == "rule_evaluation_failed"]
+    assert failed["resolved_query"]["documents_not_judged"] == 1
+    assert "could not judge 1 lapsed document" in failed["resolved_query"]["words"]
 
 
 async def test_the_daily_sweep_finds_nothing_scoped_as_before(

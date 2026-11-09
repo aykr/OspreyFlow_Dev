@@ -25,7 +25,6 @@ What a mistake would do, and the case that catches it (each of ADR-134's own tes
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -33,17 +32,16 @@ from fastapi.testclient import TestClient
 from services.api.alerts import AlertStore
 from services.api.app import app, get_alerts_store, get_config, get_export_ledger
 from services.api.config import PostgresConfig
-from services.api.export import ExportLedgerEntry, ExportLedgerStore
+from services.api.export import ExportLedgerEntry
 from services.api.packs import item_visible
 
 from conduit_common.identity import new_id
-from schemas.analytics import EventFilter, EventListRequest, EventListResult, EventRecord
+from schemas.analytics import EventListRequest, EventListResult, EventRecord
 from schemas.domain import (
     Alert,
     AlertMode,
     AuditStub,
     Edge,
-    Handling,
     Node,
     Principal,
     Provenance,
@@ -307,6 +305,23 @@ async def test_an_alert_outside_the_adders_queue_is_not_found(aw: AlertWorld) ->
     assert aw.as_(EDITOR).get(f"{CASE}/packs/{pack}").json()["items"] == []
 
 
+async def test_an_alert_routed_to_a_team_is_withheld_in_a_pack_from_a_reader_outside_it(aw: AlertWorld) -> None:
+    """ADR-146 decision 8, wherever the alert is shown: a member of the team adds its routed alert
+    to a pack; a reader of the pack outside the team, cleared to read everything it cites, is told
+    only that something is withheld. Red with the pack's routing check (`routed_readable`) removed."""
+    team = f"team-{new_id()}"
+    member = EDITOR.model_copy(update={"roles": [*EDITOR.roles, f"role:{team}"]})
+    routed = await _plain_alert(aw, routed_team=team)
+    pack = _new_pack(aw.w)
+    assert _add_alert(aw, pack, routed, member).status_code == 201
+    assert _add_alert(aw, pack, routed).status_code == 404, "outside the team it is not in the queue"
+    outside = aw.as_(VIEWER).get(f"{CASE}/packs/{pack}").json()
+    assert (outside["withheld"], outside["items"]) == (True, [])
+    assert "Ardent" not in str(outside)
+    inside = aw.as_(member).get(f"{CASE}/packs/{pack}").json()
+    assert [i["kind"] for i in inside["items"]] == ["alert"]
+
+
 async def test_an_alert_item_is_withheld_when_what_it_cites_is_hidden_since(aw: AlertWorld) -> None:
     alert_id = await _plain_alert(aw)
     pack = _new_pack(aw.w)
@@ -334,6 +349,7 @@ def test_an_alert_trend_goes_into_a_pack_resting_on_what_it_counted(world: World
     """ADR-134 decision 3: a trend over alerts goes into a pack as any trend does — its snapshot
     rests on the handlings the alert trend counted, so a reader below them does not get it."""
     from services.api.app import get_typology_rules
+
     from schemas.trends import TrendDefinition
     from tests.services.api.test_alert_trends import NOW as LATER
     from tests.services.api.test_alert_trends import _Analytics as _AlertAnalytics

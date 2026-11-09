@@ -22,6 +22,7 @@ import duckdb
 import pytest
 from ulid import ULID
 
+from ports.analytics import AnalyticsPort, TrendLimitExceeded
 from schemas.analytics import (
     BaselineRequest,
     CrossFilterDimension,
@@ -38,11 +39,13 @@ from schemas.analytics import (
     HistogramRequest,
     InheritedEvents,
     SightingRequest,
+    TrendInterval,
+    TrendMeasure,
+    TrendRequest,
+    TrendResult,
     WeekdayHour,
 )
 from schemas.domain import Handling, Interval, Principal
-from ports.analytics import AnalyticsPort, TrendLimitExceeded
-from schemas.analytics import TrendInterval, TrendMeasure, TrendRequest, TrendResult
 from tests.conformance.registry import ANALYTICS_PORT_ADAPTERS, AnalyticsAdapterFactory
 
 pytestmark = pytest.mark.parametrize("factory", ANALYTICS_PORT_ADAPTERS, ids=str)
@@ -2399,6 +2402,28 @@ async def test_an_only_me_hotlist_alert_is_counted_for_its_owner_and_no_one_else
     assert owner.series == ["hotlists", "monitors"]
     assert colleague.series == ["monitors"] and colleague.events == 1
     assert stranger.events == 0
+
+
+async def test_a_team_routed_alert_is_counted_for_the_teams_members_alone(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """ADR-146 decision 8: a rule's alert routed to a named team is counted in its case for the
+    team's members alone (a member is whoever holds the team's role on this request). Not for a
+    member of the case outside the team, not for the rule's deployer as its owner, and not for a
+    team member reading another case. Red with the routed clause read as the case's audience, or
+    with the owner clause left open to `routed`."""
+    routed = _fact(raised_at=_week(0), audience="routed", team="team-1", owner_id="analyst-official")
+    plain = _fact(raised_at=_week(0))
+    member = STRANGER.model_copy(update={"roles": ["role:team-1"]})
+    other_team = STRANGER.model_copy(update={"roles": ["role:team-2"]})
+    in_team, outside, deployer, elsewhere = await _alert_trend(
+        factory, [routed, plain], _alerts(), member, other_team, OFFICIAL, member)
+    assert in_team.events == 2, "a member of the team counts the routed alert in its case"
+    assert outside.events == 1, "a case member outside the team does not"
+    assert deployer.events == 1, "the rule's deployer, outside the team, does not count it as its owner"
+    (other_case,) = await _alert_trend(
+        factory, [routed], AlertTrendRequest(investigation_scope="case-2", window=ALERT_WINDOW), member)
+    assert other_case.events == 0, "a team member counts it only in the case it was raised in"
 
 
 async def test_a_case_alert_is_counted_in_its_own_case_only(factory: AnalyticsAdapterFactory) -> None:

@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 import asyncpg
 
 from conduit_common.identity import new_id
-from schemas.domain import Monitor, Principal, WatchStatus
+from schemas.domain import Monitor, MonitorScheduleInput, Principal, WatchStatus
 
 from .dataset_scope import made_in, reach_clause
 
@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS monitors (
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
 CREATE INDEX IF NOT EXISTS monitors_owner_id_idx ON monitors (owner_id);
 ALTER TABLE monitors ADD COLUMN IF NOT EXISTS dataset_id TEXT;
+-- ADR-146 decision 4 (G16): each watched pattern also runs on its own schedule, daily by default.
+ALTER TABLE monitors ADD COLUMN IF NOT EXISTS every TEXT NOT NULL DEFAULT 'daily';
+ALTER TABLE monitors ADD COLUMN IF NOT EXISTS hour INTEGER NOT NULL DEFAULT 6;
+ALTER TABLE monitors ADD COLUMN IF NOT EXISTS weekday INTEGER;
+ALTER TABLE monitors ADD COLUMN IF NOT EXISTS last_slot TIMESTAMPTZ;
 """
 
 
@@ -46,7 +51,16 @@ def _row_to_monitor(row: asyncpg.Record) -> Monitor:
         status=row["status"],
         created_at=row["created_at"],
         dataset_id=row["dataset_id"],
+        every=row["every"],
+        hour=row["hour"],
+        weekday=row["weekday"],
     )
+
+
+_SELECT = (
+    "SELECT id, pattern_id, owner_id, status, created_at, dataset_id, every, hour, weekday "
+    "FROM monitors"
+)
 
 
 class MonitorStore:
@@ -97,8 +111,7 @@ class MonitorStore:
         reach, extra = reach_clause(principal, 3)
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id FROM monitors "
-                f"WHERE id = $1 AND owner_id = $2{reach}",
+                f"{_SELECT} WHERE id = $1 AND owner_id = $2{reach}",
                 monitor_id,
                 principal.id,
                 *extra,
@@ -111,8 +124,7 @@ class MonitorStore:
         reach, extra = reach_clause(principal, 2)
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id FROM monitors "
-                f"WHERE owner_id = $1{reach} ORDER BY created_at DESC",
+                f"{_SELECT} WHERE owner_id = $1{reach} ORDER BY created_at DESC",
                 principal.id,
                 *extra,
             )
@@ -123,9 +135,7 @@ class MonitorStore:
         reasoning `HotlistStore.list_all_active`'s own docstring gives; never exposed through a
         route."""
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT id, pattern_id, owner_id, status, created_at, dataset_id FROM monitors"
-            )
+            rows = await conn.fetch(_SELECT)
         return [_row_to_monitor(row) for row in rows]
 
     async def set_status(self, monitor_id: str, status: WatchStatus) -> None:
@@ -134,6 +144,44 @@ class MonitorStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 "UPDATE monitors SET status = $2 WHERE id = $1", monitor_id, status
+            )
+
+
+    async def set_schedule(
+        self, monitor_id: str, principal: Principal, schedule: MonitorScheduleInput
+    ) -> Monitor:
+        """ADR-146 decision 4: the watch's own schedule, set by its owner alone (in the query)."""
+        reach, extra = reach_clause(principal, 6)
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "UPDATE monitors SET every = $3, hour = $4, weekday = $5 "
+                f"WHERE id = $1 AND owner_id = $2{reach} "
+                "RETURNING id, pattern_id, owner_id, status, created_at, dataset_id, every, hour, "
+                "weekday",
+                monitor_id,
+                principal.id,
+                schedule.every,
+                schedule.hour,
+                schedule.weekday,
+                *extra,
+            )
+        if row is None:
+            raise MonitorNotFoundError(monitor_id)
+        return _row_to_monitor(row)
+
+    async def last_slot(self, monitor_id: str) -> datetime | None:
+        async with self._pool.acquire() as conn:
+            found = await conn.fetchval("SELECT last_slot FROM monitors WHERE id = $1", monitor_id)
+        return found if isinstance(found, datetime) else None
+
+    async def record_slot(self, monitor_id: str, slot: datetime) -> None:
+        """The slot judged: the next tick looks for slots after it."""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE monitors SET last_slot = $2 WHERE id = $1 "
+                "AND (last_slot IS NULL OR last_slot < $2)",
+                monitor_id,
+                slot,
             )
 
 

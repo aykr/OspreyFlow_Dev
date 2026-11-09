@@ -118,6 +118,8 @@ class Store(RaiserReads):
         *,
         kinds: Any = None,
         severities: Any = None,
+        show: Any = None,
+        older_than_days: Any = None,
         statuses: Any = None,
     ) -> list[QueueRow]:
         """`AlertStore.list_queue` (ADR-133 stage (a)), the shape `alert_queue.queue` reads since

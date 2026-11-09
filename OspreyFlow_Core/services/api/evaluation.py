@@ -49,6 +49,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from services.resolve.trigger import service_principal
 from valkey.asyncio import Valkey
@@ -272,47 +273,84 @@ async def evaluate_monitors_for_entry(
             recipient = recipient.model_copy(update={"datasets": [monitor.dataset_id]})
 
         async def _run(monitor: Monitor = monitor, recipient: Principal = recipient) -> list[Alert]:
-            try:
-                saved = await pattern_store.get_authorized(monitor.pattern_id, recipient)
-            except PatternNotFoundError:
-                # The pattern was deleted, or its owner changed — `PatternStore` has no delete
-                # today, so in practice this is "the owning principal this monitor's own row
-                # names no longer owns the pattern it was created against," ADR-036's own
-                # "the monitor stops" case, extended from principal validity to pattern validity.
-                await monitor_store.set_status(monitor.id, "stopped")
-                return []
-            await monitor_store.set_status(monitor.id, "active")
-            subgraph = await graph.match(saved.definition, recipient)
-            if not subgraph.nodes and not subgraph.edges:
-                return []
-            signature = _match_signature(subgraph)
-            sig_key = f"{_MONITOR_LAST_SIGNATURE_PREFIX}{monitor.id}"
-            last = await valkey.get(sig_key)
-            last_str = last.decode() if isinstance(last, bytes) else last
-            if last_str == signature:
-                return []
-            await valkey.set(sig_key, signature)
-            triggering_ids = [n.id for n in subgraph.nodes]
-            alert = await record_match(
-                graph=graph,
-                alert_store=alert_store,
-                audit=audit,
-                recipient=recipient,
-                rule_id=f"monitor:{monitor.id}",
-                matched_identifier=saved.name,
-                triggering_node_ids=triggering_ids,
-                policy="strict",  # irrelevant here — see this function's own docstring
+            return await match_monitor(
+                monitor, recipient, graph=graph, monitor_store=monitor_store,
+                pattern_store=pattern_store, alert_store=alert_store, audit=audit, valkey=valkey,
                 investigation_id=entry.investigation_id,
-                dataset_id=monitor.dataset_id,
-                # ADR-133 stage (a): a monitor's alert goes to its owner's team in the one queue.
-                team=recipient.org_unit,
-            )
-            return [alert] if alert is not None else []
+            )  # fmt: skip
 
         result = await _with_overlap_guard(f"{_MONITOR_LOCK_PREFIX}{monitor.id}", valkey, _run)
         all_alerts.extend(result.alert_list())
 
     return all_alerts
+
+
+async def match_monitor(
+    monitor: Monitor,
+    recipient: Principal,
+    *,
+    graph: GraphPort,
+    monitor_store: MonitorStore,
+    pattern_store: PatternStore,
+    alert_store: AlertStore,
+    audit: AuditWriter,
+    valkey: Valkey,
+    investigation_id: str | None,
+) -> list[Alert]:
+    """One watched pattern matched as its owner (`recipient`, resolved afresh and confined to the
+    monitor's dataset by the caller), raising an alert for a match unlike the last it raised: what
+    every load's change-stream entry runs, and what its own schedule runs (ADR-146 decision 4,
+    G16; `monitor_schedule.py`)."""
+    try:
+        saved = await pattern_store.get_authorized(monitor.pattern_id, recipient)
+    except PatternNotFoundError:
+        # The pattern was deleted, or its owner changed — `PatternStore` has no delete
+        # today, so in practice this is "the owning principal this monitor's own row
+        # names no longer owns the pattern it was created against," ADR-036's own
+        # "the monitor stops" case, extended from principal validity to pattern validity.
+        await monitor_store.set_status(monitor.id, "stopped")
+        return []
+    await monitor_store.set_status(monitor.id, "active")
+    subgraph = await graph.match(saved.definition, recipient)
+    if not subgraph.nodes and not subgraph.edges:
+        return []
+    signature = _match_signature(subgraph)
+    sig_key = f"{_MONITOR_LAST_SIGNATURE_PREFIX}{monitor.id}"
+    last = await valkey.get(sig_key)
+    last_str = last.decode() if isinstance(last, bytes) else last
+    if last_str == signature:
+        return []
+    await valkey.set(sig_key, signature)
+    triggering_ids = [n.id for n in subgraph.nodes]
+    alert = await record_match(
+        graph=graph,
+        alert_store=alert_store,
+        audit=audit,
+        recipient=recipient,
+        rule_id=f"monitor:{monitor.id}",
+        matched_identifier=saved.name,
+        triggering_node_ids=triggering_ids,
+        policy="strict",  # irrelevant here — see this function's own docstring
+        investigation_id=investigation_id,
+        dataset_id=monitor.dataset_id,
+        # ADR-133 stage (a): a monitor's alert goes to its owner's team in the one queue.
+        team=recipient.org_unit,
+    )
+    return [alert] if alert is not None else []
+
+
+async def match_monitor_guarded(
+    monitor: Monitor, recipient: Principal, **kwargs: Any
+) -> list[Alert]:
+    """`match_monitor` under the monitor's own overlap guard, as each load's evaluation takes it, so
+    a scheduled run and a load's never judge one watch at once."""
+    valkey: Valkey = kwargs["valkey"]
+
+    async def _run() -> list[Alert]:
+        return await match_monitor(monitor, recipient, **kwargs)
+
+    result = await _with_overlap_guard(f"{_MONITOR_LOCK_PREFIX}{monitor.id}", valkey, _run)
+    return result.alert_list()
 
 
 def _match_signature(subgraph: Subgraph) -> str:
@@ -328,4 +366,6 @@ __all__ = [
     "EvaluationResult",
     "evaluate_hotlists_for_entry",
     "evaluate_monitors_for_entry",
+    "match_monitor",
+    "match_monitor_guarded",
 ]

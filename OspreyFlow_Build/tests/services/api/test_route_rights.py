@@ -202,8 +202,9 @@ ROUTE_RIGHTS = {
     "list_exports_route": "read_export_ledger",
     "create_monitor_route": "keep_watches",
     "list_monitors_route": "keep_watches",
-    "list_alerts_route": "keep_watches",
-    "get_alert_route": "keep_watches",
+    # ADR-146 decision 4 (G16): a watched pattern's own schedule. (The inbox's two routes went in
+    # L2.10, decision 1.)
+    "set_monitor_schedule": "keep_watches",
     "open_alert_at_address": "read_alert_queue",
     "paths_route": "investigate",
     "connections_route": "investigate",
@@ -338,6 +339,13 @@ ROUTE_RIGHTS = {
     "send_back_alert_close": "triage_alerts",
     "alert_canvas": "triage_alerts",
     "assign_alert": "triage_alerts",  # ADR-133 stage (a)
+    # ADR-146 Amendment 1: *Suppress until…*, the team lead's; decision 8: the teams a rule may go to.
+    "suppress_alert": "triage_alerts",
+    "read_alert_teams": "read_alert_queue",
+    # ADR-146 decision 5: *What raises alerts*, counted from the reader's own queue.
+    "read_alert_sources": "read_alert_queue",
+    # ADR-146 decision 7: *Raise an alert…*, from the Glass's query results and selection bar.
+    "raise_an_alert": "investigate",
     "read_alert_assignees": "triage_alerts",
     "list_typology_rules": "read_alert_queue",
     "deploy_typology_rule": "deploy_rules",

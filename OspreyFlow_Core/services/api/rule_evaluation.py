@@ -75,6 +75,7 @@ from schemas.domain import (
 from .alerts import AlertStore
 from .audit import AuditWriter
 from .dataset_scope import (
+    CompositeReadOnlyError,
     analyst_layer,
     analyst_writes_into,
     read_only_layer,
@@ -451,7 +452,9 @@ async def judge(
 #: Why an alert was raised without its `Alert` node, one per path that withholds it (ADR-146
 #: decision 10): its referents restricted for different units (no single safe marking); a referent
 #: whose marking could not be read in the load; a cited link that could not be read.
-NodeWithheld = Literal["units", "unseen_referent", "unreadable_link", "originals_layer"]
+NodeWithheld = Literal[
+    "units", "unseen_referent", "unreadable_link", "originals_layer", "read_only_dataset"
+]
 WITHHELD_WORDS: dict[str, str] = {
     "units": "its referents' restricted markings belong to different units",
     "unseen_referent": "the marking of something it names could not be read, so no node was "
@@ -461,7 +464,21 @@ WITHHELD_WORDS: dict[str, str] = {
     "originals_layer": "it rests on the layer of the case this one was made from, which it reads "
     "and writes nothing into, so no node was written rather than one that names its subject "
     "elsewhere",
+    "read_only_dataset": "the dataset it would be written into is read-only here, so no node was "
+    "written; the alert is in the queue without it",
 }
+
+
+class PartlyRaised(Exception):  # noqa: N818 - a run that failed part-way, not a kind of error
+    """A run outside a load (a scheduled slot, a re-screening) that failed after raising some
+    alerts: what it raised is kept and counted, and the failure is said with it (L2.10's carry: a
+    failed slot counted none, and a failed re-screening dropped the rule's raised count)."""
+
+    def __init__(self, raised: int, cause: BaseException, *, customers: int = 0) -> None:
+        super().__init__(str(cause))
+        self.raised = raised
+        self.customers = customers
+        self.cause = cause
 
 
 class UnreadableAlertLink(RuntimeError):
@@ -575,10 +592,12 @@ async def write_alert_node(
     on the same match) is cited by the stored id, never the write's own, which no link holds and
     which the queue's check would read as hidden from every reader (L2.8b)."""
     record = writes if writes is not None else RuleWrites()
-    from .sentence_rules import is_just_me
+    from .sentence_rules import writes_no_alert_node
 
-    if is_just_me(finding.rule):
-        return None, finding  # an alert for its author alone puts nothing in the case's graph
+    if writes_no_alert_node(finding.rule):
+        # An alert for its author alone, or routed to a named team, puts nothing in the case's
+        # graph: its node would carry its words to members the queue does not show it to.
+        return None, finding
     into = await _alert_datasets(graph, scheme, finding)  # `_AlertInAReadOnlyLayer`: no node
     if finding.pending:
         # What the finding writes alongside (a screening hit's listed party, as the list asserts
@@ -1080,9 +1099,9 @@ class RuleGate:
             "event_ids": list(alert.event_ids),
         }
         await self._audit("rule_fired", detail, 1)
-        from .sentence_rules import is_just_me
+        from .sentence_rules import writes_no_alert_node
 
-        if node_id is None and not is_just_me(finding.rule):
+        if node_id is None and not writes_no_alert_node(finding.rule):
             await self._audit(
                 "alert_node_withheld",
                 {"rule_id": finding.rule.id, "alert_id": alert.id, "node_ids": finding.node_ids,
@@ -1096,9 +1115,9 @@ class RuleGate:
         """A finding raised outside any load's transaction (after commit, or by the daily sweep):
         its node in a transaction of its own, then its queue row. `writes` collects what it wrote,
         for the record of the load it follows."""
-        from .sentence_rules import is_just_me
+        from .sentence_rules import writes_no_alert_node
 
-        if is_just_me(finding.rule):
+        if writes_no_alert_node(finding.rule):
             return await self._raise_row(finding, None)  # nothing goes into the case's graph
         tx = await self.graph.begin_transaction()
         try:
@@ -1114,6 +1133,21 @@ class RuleGate:
         except _AlertInAReadOnlyLayer:
             await self.graph.rollback_transaction(tx)
             return await self._raise_row(finding, None, withheld="originals_layer")
+        except (CompositeReadOnlyError, RuntimeError) as error:
+            # L2.10's carry: outside a load, as in one, a node that cannot be written (a read-only
+            # dataset) or marked (a referent's marking not known, `_referent_handlings`) leaves the
+            # row raised without it, said in the audit, so one finding never stops a sweep. Not
+            # for a finding that writes alongside (a screening hit's listed party and `SAME_AS`):
+            # its row would cite what was never written, so its refusal stands.
+            await self.graph.rollback_transaction(tx)
+            if finding.pending:
+                raise
+            why: NodeWithheld = (
+                "read_only_dataset"
+                if isinstance(error, CompositeReadOnlyError)
+                else "unseen_referent"
+            )
+            return await self._raise_row(finding, None, withheld=why)
         except Exception:
             await self.graph.rollback_transaction(tx)
             raise

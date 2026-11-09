@@ -1,5 +1,11 @@
 """ADR-130 decision 1: a hotlist alert explains itself, read at display time (rule 3).
 
+Since L2.10 (ADR-146 decision 1) *what fired it* is on the one queue's explanation, the inbox gone:
+`watch_routes.with_what_fired_it` adds it to an explanation the queue has already served whole
+(`alert_queue.explain`, which refuses the whole alert, as one that does not exist, when any piece
+of its evidence is hidden: `test_alert_evidence_withheld.py`). `_view` below stands for that read:
+the referents read as the reader, and the alert refused (`None`) when any is hidden.
+
 Hermetic: the graph and the hotlist store are doubles, and each double REFUSES what the real one
 refuses (a node the reader cannot read is `None`; a hotlist another principal owns raises
 `HotlistNotFoundError`), so these cases can fail for the reason they claim. The real store and graph
@@ -13,10 +19,11 @@ from typing import Any
 
 import pytest
 from services.api.hotlists import HotlistNotFoundError
-from services.api.watch_routes import alert_to_view
+from services.api.watch_routes import with_what_fired_it
 
 from schemas.domain import (
     Alert,
+    AlertExplanation,
     AlertMode,
     AuditStub,
     Handling,
@@ -135,7 +142,15 @@ def _alert(node_ids: list[str], *, rule_id: str = "hotlist:hl-1") -> Alert:
 
 
 async def _view(alert: Alert, principal: Principal, graph: Any, hotlists: Any = None) -> Any:
-    return await alert_to_view(alert, principal, graph, NO_TRANSACTIONS, hotlists_store=hotlists, case="inbox-case")
+    """The queue's explanation of `alert` with *what fired it*, or `None` where the queue refuses
+    the alert whole (a referent hidden from the reader)."""
+    nodes = [await graph.get_node(i, principal) for i in alert.referent_node_ids]
+    if any(n is None for n in nodes):
+        return None
+    kind = "hotlist" if alert.rule_id.startswith("hotlist:") else (
+        "monitor" if alert.rule_id.startswith("monitor:") else "typology")  # fmt: skip
+    explained = AlertExplanation(alert=alert, summary="", nodes=[n for n in nodes if n], kind=kind)
+    return await with_what_fired_it(explained, principal, hotlists)
 
 
 async def test_the_owner_sees_the_hotlist_as_typed_and_its_review_date() -> None:
@@ -225,10 +240,7 @@ async def test_a_hidden_node_gives_no_fired_on_no_name_and_no_count() -> None:
     nodes = {"n1": _node("n1", [("secret_file.csv", "row 3")])}
     graph = _Graph(nodes, readers=set())  # the reader can no longer read it
     view = await _view(_alert(["n1"]), OWNER, graph, _Hotlists(_hotlist()))
-    assert view.evidence_available is False and view.referent_node_ids == []
-    assert view.fired_on is None
-    wire = view.model_dump_json()
-    assert "secret_file" not in wire and "+447700900918" not in wire and "more_files" not in wire
+    assert view is None, "the queue refuses the whole alert: nothing of what fired it is said"
 
 
 async def test_one_hidden_referent_withdraws_every_referents_detail() -> None:
@@ -239,7 +251,7 @@ async def test_one_hidden_referent_withdraws_every_referents_detail() -> None:
             return None if node_id == "n2" else await super().get_node(node_id, principal)
 
     view = await _view(_alert(["n1", "n2"]), OWNER, _OneHidden(nodes, {OWNER.id}), None)
-    assert view.fired_on is None and "a.csv" not in view.model_dump_json()
+    assert view is None, "one hidden referent withdraws the whole alert, and every file with it"
 
 
 async def test_a_notify_stub_alert_has_no_fired_on() -> None:
@@ -281,7 +293,9 @@ async def test_a_node_in_two_datasets_read_in_a_case_of_one_has_its_sources_with
     assert fired.type == "Endpoint" and fired.label == "+447700900918"
     assert fired.sources_withheld is True
     assert fired.files == [] and fired.more_files == 0
-    wire = view.model_dump_json()
+    # What fired it names none of them; the explanation's own nodes are the graph's answer, whose
+    # sources the adapter withholds the same way (`test_sources_withheld_live.py`).
+    wire = fired.model_dump_json()
     assert "calls.csv" not in wire and "x.csv" not in wire
 
 

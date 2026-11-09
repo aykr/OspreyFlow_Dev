@@ -37,6 +37,7 @@ from schemas.rights import Right, rights_for
 from schemas.sentences import WEEKDAYS, RuleSchedule, SentenceRuleParams
 
 from .investigations import AccessLevel, InsufficientAccessError, InvestigationNotFoundError
+from .rule_evaluation import PartlyRaised
 from .scheduler import DEFAULT_TIMEZONE, describe, due_slots, next_slot
 
 log = logging.getLogger(__name__)
@@ -185,6 +186,15 @@ class RuleScheduleExecutor:
             return
         try:
             raised = await self.judge(rule, author, latest)
+        except PartlyRaised as partly:
+            # The alerts it raised before failing stand, and are counted (L2.10's carry).
+            log.exception("the scheduled run of rule %s failed part-way", rule.id)
+            await self._record(
+                rule, latest, author.id, "failed",
+                f"Failed after {partly.raised:,} alert(s) raised: {partly.cause}.",
+                alerts=partly.raised,
+            )  # fmt: skip
+            return
         except Exception as error:  # noqa: BLE001 - recorded as failed, in words
             log.exception("the scheduled run of rule %s failed", rule.id)
             await self._record(rule, latest, author.id, "failed", f"Failed: {error}.")

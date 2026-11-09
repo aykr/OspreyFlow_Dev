@@ -9,6 +9,12 @@ verifying document remains. **Once a day, one replica:** the Conduit's lifespan 
 with a Valkey `SET NX` before sweeping, so two replicas never sweep the same day. **Disclosed:** a
 day the deployment is down is swept the next time it runs, since the range runs from the last
 sweep's day, not from yesterday.
+
+**One failure never stops the sweep (L2.10's carry).** Each case's rules, and each customer of a
+rule, are judged inside their own catch: a failure (an alert that cannot be written in a composite
+case's layer, a read refused) is logged, counted in the report's `failures`, and written to the
+rule's own audit (`rule_evaluation_failed`, with how many documents went unjudged), which the rule's
+*Changes* lists, so a person sees it; the rest of the day's sweep goes on, and the day is closed.
 """
 
 from __future__ import annotations
@@ -71,7 +77,13 @@ async def sweep(
         by_case[lapse.investigation_id][lapse.customer_id].append(lapse.document_id)
         report.lapses += 1
     for case, customers in by_case.items():
-        for rule in await rules.list_active_for_case(case):
+        try:
+            active = await rules.list_active_for_case(case)
+        except Exception as error:  # noqa: BLE001 - one case's trouble never stops the next
+            log.exception("KYC sweep: the rules of case %s could not be read", case)
+            report.failures.append(f"case {case}: {type(error).__name__}")
+            continue
+        for rule in active:
             if rule.params.typology != "document_verification":
                 continue
             gate = RuleGate(
@@ -100,17 +112,41 @@ async def sweep(
                 graph=graph, scheme=scheme, screening=None, compute=None, today=day
             )
             raised = 0
+            unjudged = 0
             try:
                 for customer_id, documents in customers.items():
-                    for finding in await judge_lapsed(
-                        rule, deployer, customer_id, documents, context
-                    ):
-                        if not await gate.seen(finding):
-                            await gate.raise_committed(finding)
-                            raised += 1
+                    # One customer's trouble never stops the rest, nor the next case: the sweep
+                    # claimed its day, and stopping here would stop at the same point every day.
+                    try:
+                        for finding in await judge_lapsed(
+                            rule, deployer, customer_id, documents, context
+                        ):
+                            if not await gate.seen(finding):
+                                await gate.raise_committed(finding)
+                                raised += 1
+                    except Exception as error:  # noqa: BLE001 - said, audited, and swept past
+                        log.exception("KYC sweep: rule %s, case %s", rule.id, case)
+                        unjudged += len(documents)
+                        report.failures.append(
+                            f"rule {rule.id} in case {case}: {type(error).__name__}"
+                        )
             finally:
                 set_case_datasets(None)
             report.alerts += raised
+            if unjudged:
+                # A failure a person sees: in the rule's own audit, which *Changes* lists.
+                await audit.record(
+                    principal=sweeper,
+                    action="rule_evaluation_failed",
+                    investigation_id=case,
+                    resolved_query={
+                        "rule_id": rule.id, "trigger": "daily_sweep", "day": day.isoformat(),
+                        "findings": raised, "documents_not_judged": unjudged,
+                        "words": (f"The daily KYC sweep could not judge {unjudged} lapsed "
+                                  "document(s) for this rule; the rest of the sweep went on."),
+                    },
+                    result_cardinality=raised,
+                )  # fmt: skip
             await audit.record(
                 principal=sweeper,
                 action="rule_evaluated",

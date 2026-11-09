@@ -102,11 +102,12 @@ def test_the_reports_viewer_keeps_their_list_and_has_no_detail() -> None:
     The alert's detail and its address are the place's, and refuse them at its gate."""
     viewer = _as("reports_viewer")
     rows, detail, address = _get(
-        viewer, [ROWS, f"/v1/investigations/{CASE}/alerts/{V1.id}", f"/v1/alerts/{V1.id}"], SHOWN, {"e-secret"}
+        viewer, [ROWS, f"/v1/investigations/{CASE}/alert-queue/{V1.id}", f"/v1/alerts/{V1.id}"], SHOWN,
+        {"e-secret"},
     )
     assert rows[0] == 200 and [r["alert"]["id"] for r in rows[1]] == [V1.id], rows
-    # The detail asks for `keep_watches` first, which the Reports Viewer lacks; the address its gate.
-    assert detail[0] == 403 and "right_required" in str(detail[1]), detail
+    # The detail (since L2.10 the queue's alone: the inbox is gone) and the address are the place's.
+    assert detail[0] == 403 and "place_required" in str(detail[1]), detail
     assert address[0] == 403 and "place_required" in str(address[1]), address
 
 

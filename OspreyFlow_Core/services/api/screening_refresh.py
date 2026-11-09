@@ -287,6 +287,8 @@ class Rescreener:
     page_size: int = 500
 
     async def __call__(self, diff: ListDiff) -> RescreenReport:
+        from .rule_evaluation import PartlyRaised
+
         report = RescreenReport()
         changed = diff.to_screen
         if not changed:
@@ -302,6 +304,19 @@ class Rescreener:
                     )
                 unit = deployer.org_unit
                 customers, raised = await self._rule(rule, deployer, changed, diff)
+            except PartlyRaised as partly:
+                # What it raised before failing stands, and is counted (L2.10's carry).
+                said = (f"rule “{rule.name}” could not finish re-screening, after "
+                        f"{partly.raised} alert(s) raised: {partly.cause}")  # fmt: skip
+                report.failures.append(said)
+                report.customers += partly.customers
+                report.alerts += partly.raised
+                if unit is not None:
+                    counts = report.unit(unit)
+                    counts.failures.append(said)
+                    counts.rescreened += partly.customers
+                    counts.alerts += partly.raised
+                continue
             except Exception as error:  # noqa: BLE001 - one rule's trouble never stops the rest
                 said = f"rule “{rule.name}” could not re-screen: {error}"
                 report.failures.append(said)
@@ -323,7 +338,7 @@ class Rescreener:
         diff: ListDiff,
     ) -> tuple[int, int]:
         from .kyc_rules import CUSTOMER_TYPES, KycContext, party_name, screening_finding
-        from .rule_evaluation import RuleGate
+        from .rule_evaluation import PartlyRaised, RuleGate
 
         params = rule.params
         assert isinstance(params, KycScreeningParams)
@@ -383,6 +398,10 @@ class Rescreener:
                     if page.next_cursor is None:
                         break
                     cursor = page.next_cursor
+        except Exception as error:
+            if raised:
+                raise PartlyRaised(raised, error, customers=customers) from error
+            raise
         finally:
             set_case_datasets(None)
         await self.audit.record(
