@@ -8,49 +8,45 @@ its places are copied into the case's own dataset, so the case stays one dataset
 loads.
 
 **What a copy is.** A `Location` of its own, never the gazetteer's node (rule 6: nothing is merged
-in storage), with an id made from the place's and the case dataset's (`copy_id`), so a re-copy
-writes the same node. It keeps the place's properties (its `osm_id` among them, stored) and the
+in storage), with an id made from the place's and the dataset's (`copy_id`), so a re-copy writes
+the same node. It keeps the place's properties (its `osm_id` among them, stored) and the
 gazetteer's handling, so every reader's clearance applies to it as to the place; its one source is
-the gazetteer (`gazetteer:<dataset>`, `place <node id>`: no path, no row of the extract); and its
-provenance names the gazetteer (`Provenance.gazetteer`), kept through any later write
+the gazetteer (`gazetteer:<dataset>`, `place`: no node id, path or row, rule 7); and its provenance
+names the gazetteer (`Provenance.gazetteer`), kept through any later write
 (`merge.merge_provenance`). **That provenance is what keeps decision 3b for a copy**: its source
 identifiers are withheld from every request reader (`ontology.handling.withhold_sources`) and never
 matched by the case's searches (`builders.match_any_field`), keyed on the provenance, not on a
 `gazetteer-*` dataset name, which a copy is not in. The place search keeps a copy as a place.
 
-**Who may.** The case's Author, with the right that changes what a case reads (`share_case`), a
-gazetteer of the Author's unit (a dataset they may choose, ADR-099 decision 3), into a case reading
-one source dataset of its own. A case reading a composite or nothing is refused in words.
+**Who may.** Adding or removing a gazetteer changes the dataset for every case reading it, so it
+is a dataset-level action (the orchestrator's review of P5, item 6): `PUT`/`DELETE
+/v1/datasets/{dataset}/gazetteers/{gazetteer}`, behind the dataset route's own gate and
+`run_pipelines`, the right that runs a load into a dataset; a gazetteer of the dataset's own unit
+only. A composite or a drawn dataset is refused, as for any load.
 
-**Recorded for the dataset.** Each addition is recorded against the dataset holding the copies
-(`dataset_gazetteers`), not the case: every case reading that dataset reads the copies, so each sees
-the gazetteer added, and a case's Author removing it removes it for all of them, as a load into
-the dataset is every reader's. A case deleted, or moved to another dataset, leaves the record with
-the copies it describes.
+**Recorded for the dataset** (`dataset_gazetteers`): every case reading it reads the copies and
+sees the gazetteer added; a case deleted, or moved to another dataset, leaves the record with the
+copies it describes.
 
-**Refreshed and removed.** A re-build of a gazetteer copies its places again into every dataset
-recorded for it (`refresh_cases`), drops the record of a dataset no longer there, and marks
-reverted the copies of places it no longer holds. Removing a gazetteer marks its copies reverted
-(`GraphPort.revert_elements`: never deleted, out of every read) and takes them out of the cases'
-working sets; **never another load's data**: a copy that another writer has also written (a source
-not the gazetteer's, as when a case's own load matched it) or that an analyst confirmed is the
-case's data now, and is kept. Judged on the copy alone, never on the links around it (rule 3).
+**Copied in pages**, each its own transaction, never one unbounded write. **A copy the case has
+written to** (another writer's source, as when a case's own load matched it by its `osm_id`, or a
+person's confirmation) **is the case's data now**: a re-build does not write over it, and a removal
+keeps it. **A removal also keeps a copy a link rests on**, read as the Conduit reads the dataset and
+every analyst layer of a case reading it, so no case is left a link to nothing; a kept copy keeps
+its gazetteer mark (3b holds). Every other copy is marked reverted (`GraphPort.revert_elements`:
+never deleted, out of every read) and taken out of the working sets. A re-build drops the record of
+a dataset no longer there, never writing into one, and reverts the copy of a place gone.
 
-**A case's own load may match a copy** by its `osm_id` (`find_node`, a load's lookup, which matches
-its one named field unguarded, ADR-147 Amendment 1 decision 3b): the identifier is the loader's own
-source row's, not one told it by the store, and what the load is told back is a count. The copy so
-matched carries the load's source too, keeps its provenance (`merge_provenance`) and so its
-identifiers stay withheld from every reader; a removal keeps it, as another writer's.
-
-**Read as the Conduit.** The places are read, and the copies found, by the Conduit's own service
-principal scoped to the one dataset (`_reader`), inside `sources_in_full` so the identifiers are
-copied. Nothing read here is sent to the Glass: the routes answer with the gazetteers' names, and
-whether any copy was kept, judged on the copies the asker may read.
+**Read as the Conduit.** The places are read, and the copies found, by the Conduit's own reader
+scoped to the one dataset (`_reader`), inside `sources_in_full` so the identifiers are copied.
+Nothing read here is sent to the Glass: the routes answer with the gazetteers' names, and the count
+of kept copies the asker may read.
 """
 
 from __future__ import annotations
 
 import hashlib
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -60,6 +56,7 @@ from ulid import ULID
 from ontology.handling import HandlingScheme, sources_in_full
 from ports.graph import GraphPort
 from schemas.domain import (
+    ExpandRequest,
     Node,
     NodeId,
     NodeWrite,
@@ -71,8 +68,10 @@ from schemas.domain import (
 
 #: A copy's one source names the gazetteer it was copied from.
 COPY_SOURCE_PREFIX = "gazetteer:"
-#: How many nodes one write, or one read of a page, takes at a time.
+#: How many nodes one write, or one read of a page, takes at a time; how many copies one link
+#: check asks about.
 _BATCH = 500
+_LINK_BATCH = 100
 
 
 @dataclass(frozen=True)
@@ -201,31 +200,52 @@ def copy_id(place_id: NodeId, case_dataset: str) -> NodeId:
     return str(ULID.from_bytes(time + digest[:10]))
 
 
-def _reader(scheme: HandlingScheme, dataset: str) -> Principal:
-    """The Conduit's own reader of one dataset: the scheme's highest clearance and every handling
-    code, so what it finds is the dataset's (bounded by a restricted code's unit, which no
-    gazetteer recipe sets). Never a request's principal; nothing it reads is sent."""
+def _reader(
+    scheme: HandlingScheme, datasets: list[str], *, unit: str = "system:case-gazetteers"
+) -> Principal:
+    """The Conduit's own reader of `datasets`: the scheme's highest clearance and every handling
+    code, and `unit` (the case dataset's own, so a link under a restricted code of that unit is
+    seen too). Never a request's principal; nothing it reads is sent."""
     return Principal(
         id="system:case-gazetteers",
         clearance=scheme.classification[-1],
-        org_unit="system:case-gazetteers",
+        org_unit=unit,
         receivable_handling_codes=list(scheme.handling_codes),
-        datasets=[dataset],
+        datasets=datasets,
     )
 
 
-async def _locations(graph: GraphPort, reader: Principal, dataset: str) -> list[Node]:
-    """Every `Location` of `dataset` that `reader` reads, whole (`sources_in_full`), paged to the
-    end (`next_cursor is None`, never an empty page, is the end)."""
-    found: list[Node] = []
+async def _pages(graph: GraphPort, reader: Principal, dataset: str) -> AsyncIterator[list[Node]]:
+    """`dataset`'s `Location`s that `reader` reads, whole (`sources_in_full`), a page at a time, to
+    the end (`next_cursor is None`, never an empty page, is the end: rule 2)."""
     cursor: NodeId | None = None
-    with sources_in_full():
-        while True:
+    while True:
+        with sources_in_full():
             page = await graph.list_nodes("Location", reader, cursor=cursor, limit=_BATCH)
-            found.extend(n for n in page.nodes if dataset in n.datasets)
-            cursor = page.next_cursor
-            if cursor is None:
-                return found
+        yield [n for n in page.nodes if dataset in n.datasets]
+        cursor = page.next_cursor
+        if cursor is None:
+            return
+
+
+async def _copies(
+    graph: GraphPort, scheme: HandlingScheme, gazetteer: str, case_dataset: str
+) -> list[Node]:
+    found: list[Node] = []
+    async for page in _pages(graph, _reader(scheme, [case_dataset]), case_dataset):
+        found.extend(n for n in page if n.provenance.gazetteer == gazetteer)
+    return found
+
+
+def _the_gazetteer_s_alone(copy: Node, gazetteer: str) -> bool:
+    """No other writer's source on it and no person's confirmation: what a re-build may write over
+    and a removal may revert. Otherwise it is the case's data now (rule 6)."""
+    own = f"{COPY_SOURCE_PREFIX}{gazetteer}"
+    return (
+        all(s.document_id == own for s in copy.provenance.sources)
+        and copy.provenance.confirmed_by is None
+        and copy.provenance.last_confirmed is None
+    )
 
 
 def _copy(place: Node, *, gazetteer: str, case_dataset: str, by: str, now: datetime) -> NodeWrite:
@@ -235,11 +255,11 @@ def _copy(place: Node, *, gazetteer: str, case_dataset: str, by: str, now: datet
         properties=dict(place.properties),
         provenance=Provenance(
             state=ProvenanceState.ASSERTED,
+            # The gazetteer alone: never the place's node id, nor the extract's path or row (rule
+            # 7). `copy_id` already ties the copy to its place.
             sources=[
                 SourceRef(
-                    document_id=f"{COPY_SOURCE_PREFIX}{gazetteer}",
-                    locator=f"place {place.id}",
-                    excerpt_hash="",
+                    document_id=f"{COPY_SOURCE_PREFIX}{gazetteer}", locator="place", excerpt_hash=""
                 )
             ],
             first_seen=now,
@@ -260,26 +280,38 @@ async def copy_places(
     gazetteer: str,
     case_dataset: str,
     by: str,
+    link_datasets: list[str] | None = None,
+    unit: str = "system:case-gazetteers",
 ) -> list[NodeId]:
-    """Copies every place of `gazetteer` into `case_dataset`, in one transaction, and marks
-    reverted the copies of places the gazetteer no longer holds (a re-build's), as `remove_copies`
-    judges them. Returns the copies' ids reverted, for the caller to take out of working sets."""
+    """Copies every place of `gazetteer` into `case_dataset`, **a page at a time, each page its own
+    transaction** (a region's places are never one unbounded write; a copy that fails part way is
+    finished by copying again, which writes the same nodes). **A copy the case has written to**
+    (another writer's source, or a confirmation) **is not written over**: what the case asserted
+    stands, whatever the gazetteer says now. Then marks reverted the copies of places the gazetteer
+    no longer holds, as `remove_copies` judges them. Returns the ids reverted, for the caller to
+    take out of working sets."""
     now = datetime.now(UTC)
-    places = await _locations(graph, _reader(scheme, gazetteer), gazetteer)
-    writes = [
-        _copy(p, gazetteer=gazetteer, case_dataset=case_dataset, by=by, now=now) for p in places
-    ]
-    tx = await graph.begin_transaction()
-    try:
-        for start in range(0, len(writes), _BATCH):
-            await graph.upsert_nodes(writes[start : start + _BATCH], tx)
-        await graph.commit_transaction(tx)
-    except BaseException:
-        await graph.rollback_transaction(tx)
-        raise
+    held = await _copies(graph, scheme, gazetteer, case_dataset)
+    the_case_s = {c.id for c in held if not _the_gazetteer_s_alone(c, gazetteer)}
+    written: set[NodeId] = set()
+    async for page in _pages(graph, _reader(scheme, [gazetteer]), gazetteer):
+        writes = [
+            _copy(p, gazetteer=gazetteer, case_dataset=case_dataset, by=by, now=now) for p in page
+        ]
+        written.update(w.id for w in writes)
+        writes = [w for w in writes if w.id not in the_case_s]
+        if not writes:
+            continue
+        tx = await graph.begin_transaction()
+        try:
+            await graph.upsert_nodes(writes, tx)
+            await graph.commit_transaction(tx)
+        except BaseException:
+            await graph.rollback_transaction(tx)
+            raise
     reverted, _kept = await remove_copies(
-        graph, scheme, gazetteer=gazetteer, case_dataset=case_dataset,
-        keep={w.id for w in writes},
+        graph, scheme, gazetteer=gazetteer, case_dataset=case_dataset, keep=written,
+        link_datasets=link_datasets, unit=unit,
     )  # fmt: skip
     return reverted
 
@@ -291,38 +323,47 @@ async def remove_copies(
     gazetteer: str,
     case_dataset: str,
     keep: set[NodeId] | frozenset[NodeId] = frozenset(),
+    link_datasets: list[str] | None = None,
+    unit: str = "system:case-gazetteers",
 ) -> tuple[list[NodeId], list[NodeId]]:
     """Marks reverted `gazetteer`'s copies in `case_dataset` (but those in `keep`) that are the
-    gazetteer's alone: every source on them the gazetteer's, and none confirmed by a person. A
-    copy another writer also wrote (a case's load matched it), or one an analyst confirmed, is the
-    case's data now and is kept (rule 6: never another load's data). Judged on the copy itself,
-    never on what is around it: a link resting on a copy goes out of every read with it, and comes
-    back when the gazetteer is added again (the copy's id is the same, and writing it revives it),
-    so whether a copy goes never depends on a link a reader may not see (rule 3).
-    Returns `(reverted, kept)`."""
-    own = f"{COPY_SOURCE_PREFIX}{gazetteer}"
-    copies = [
-        n
-        for n in await _locations(graph, _reader(scheme, case_dataset), case_dataset)
-        if n.provenance.gazetteer == gazetteer and n.id not in keep
-    ]
-    reverted = [
-        c.id
-        for c in copies
-        if all(s.document_id == own for s in c.provenance.sources)
-        and c.provenance.confirmed_by is None
-        and c.provenance.last_confirmed is None
-    ]
-    if reverted:
+    gazetteer's alone (`_the_gazetteer_s_alone`) **and that no link rests on**, so no case is left a
+    link to nothing (the orchestrator's review of P5, item 7). The links are read as the Conduit
+    reads the dataset and every analyst layer of a case reading it (`link_datasets`), at the
+    highest clearance, with every handling code, as the dataset's own unit. A kept copy keeps its
+    gazetteer mark, so decision 3b still holds for it. Returns `(reverted, kept)`, in batches."""
+    reader = _reader(scheme, list(dict.fromkeys([case_dataset, *(link_datasets or [])])), unit=unit)
+    copies = [c for c in await _copies(graph, scheme, gazetteer, case_dataset) if c.id not in keep]
+    alone = [c.id for c in copies if _the_gazetteer_s_alone(c, gazetteer)]
+    linked: set[NodeId] = set()
+    for start in range(0, len(alone), _LINK_BATCH):
+        around = await graph.expand(
+            ExpandRequest(node_ids=alone[start : start + _LINK_BATCH], depth=1), reader
+        )
+        for edge in around.edges:
+            linked.update((edge.source, edge.target))
+    reverted = [i for i in alone if i not in linked]
+    for start in range(0, len(reverted), _BATCH):
         tx = await graph.begin_transaction()
         try:
-            await graph.revert_elements(reverted, [], tx)
+            await graph.revert_elements(reverted[start : start + _BATCH], [], tx)
             await graph.commit_transaction(tx)
         except BaseException:
             await graph.rollback_transaction(tx)
             raise
     gone = set(reverted)
     return reverted, [c.id for c in copies if c.id not in gone]
+
+
+async def reading_datasets(datasets: object, case_dataset: str) -> list[str]:
+    """The analyst layers of every case reading `case_dataset`, where a case's own links to a copy
+    may be (ADR-143 Amendment 1)."""
+    layers: list[str] = []
+    for case in await datasets.cases_reading(case_dataset):  # type: ignore[attr-defined]
+        layer = await datasets.layer_of_case(case)  # type: ignore[attr-defined]
+        if layer:
+            layers.append(layer)
+    return layers
 
 
 async def refresh_cases(
@@ -339,7 +380,8 @@ async def refresh_cases(
             continue
         reverted += await copy_places(
             graph, scheme, gazetteer=gazetteer, case_dataset=added.case_dataset,
-            by=added.added_by,
+            by=added.added_by, link_datasets=await reading_datasets(datasets, added.case_dataset),
+            unit=held[added.case_dataset].owning_unit,
         )  # fmt: skip
     return reverted
 

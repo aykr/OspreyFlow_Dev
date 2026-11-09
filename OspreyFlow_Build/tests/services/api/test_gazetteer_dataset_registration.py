@@ -139,3 +139,17 @@ async def test_the_command_line_check_says_an_unreachable_database_in_words() ->
     with pytest.raises(DatasetsUnreachable) as raised:
         await check_unit_from_env("unit-7", region="rutland", connect=connect)
     assert "nothing was built" in str(raised.value) and "127.0.0.1" not in str(raised.value)
+
+
+async def test_a_unit_holding_only_a_gazetteer_holds_nothing() -> None:
+    """The orchestrator's review of P5, item 12: an earlier gazetteer's own dataset is not a unit's
+    data, so it does not make the unit one a build may name."""
+    from services.api.map_places import units_held
+
+    store = _held_by("unit-1")
+    store.datasets["gazetteer-osm-rutland"] = store.datasets["d-unit-1"].model_copy(
+        update={"id": "gazetteer-osm-rutland", "owning_unit": "unit-9"}
+    )
+    assert await units_held(store) == {"unit-1"}
+    with pytest.raises(UnknownUnit):
+        check_unit("unit-9", await units_held(store))

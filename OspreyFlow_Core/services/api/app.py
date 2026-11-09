@@ -7901,49 +7901,46 @@ async def map_place_search_route(
     return result
 
 
-async def _own_dataset(investigation_id: str, datasets: DatasetStore) -> str | None:
+async def _own_dataset(investigation_id: str, datasets: DatasetStore) -> Dataset | None:
     """The one source dataset the case reads of its own, where a gazetteer's copies are; `None`
     for a case reading a composite or nothing (ADR-147 Amendment 2)."""
     chosen = await datasets.chosen_of_case(investigation_id)
     if len(chosen) != 1 or chosen[0].kind != SOURCE_DATASET:
         return None
-    return chosen[0].id
+    return chosen[0]
 
 
-async def _refuse_without_own_dataset(investigation_id: str, datasets: DatasetStore) -> str:
-    own = await _own_dataset(investigation_id, datasets)
-    if own is None:
-        chosen = await datasets.chosen_of_case(investigation_id)
-        what = "a composite" if chosen else "no dataset"
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=_NO_OWN_DATASET.format(what=what)
-        )
-    return own
-
-
-async def _case_gazetteers_view(
-    investigation_id: str,
-    principal: Principal,
+async def _gazetteers_view(
+    dataset: Dataset | None,
     datasets: DatasetStore,
     store: Any,
     *,
-    copies_kept: bool = False,
+    copies_kept: int = 0,
 ) -> CaseGazetteers:
-    """The gazetteers of the reader's unit, and those the case's own dataset holds copies of
-    (ADR-147 Amendment 2: recorded for the dataset, so every case reading it sees them added)."""
-    own = await _own_dataset(investigation_id, datasets)
-    added = {a.gazetteer for a in await store.of_dataset(own)} if own else set()
+    """The gazetteers of `dataset`'s unit, and those it holds copies of (ADR-147 Amendment 2:
+    recorded for the dataset, so every case reading it sees them added)."""
+    if dataset is None:
+        return CaseGazetteers(gazetteers=[])
+    added = {a.gazetteer for a in await store.of_dataset(dataset.id)}
     offered = {
         d.id: d.name
         for d in await datasets.list_all()
-        if d.id.startswith(GAZETTEER_DATASET_PREFIX) and d.owning_unit == principal.org_unit
+        if d.id.startswith(GAZETTEER_DATASET_PREFIX) and d.owning_unit == dataset.owning_unit
     }
+    said = (
+        f"{copies_kept} {'place stays' if copies_kept == 1 else 'places stay'} in this dataset: "
+        "a case's own load, link or confirmation rests on "
+        f"{'it' if copies_kept == 1 else 'them'}."
+        if copies_kept
+        else None
+    )
     return CaseGazetteers(
         gazetteers=[
             CaseGazetteer(dataset_id=i, name=offered.get(i, i), added=i in added)
             for i in sorted(set(offered) | added)
         ],
         copies_kept=copies_kept,
+        said=said,
     )
 
 
@@ -7953,121 +7950,41 @@ async def _case_gazetteers_view(
 )
 async def case_gazetteers_route(
     investigation: InvestigationViewerDep,
-    principal: PrincipalDep,
     datasets: DatasetsDep,
     store: CaseGazetteersDep,
 ) -> CaseGazetteers:
-    """The gazetteers this case may add, and which it has (ADR-147 Amendment 2, the owner's ruling
-    6): names only, never a count of places (a count would take in places above the reader's
-    clearance). Viewer and `investigate`, as the place search is."""
-    return await _case_gazetteers_view(investigation.id, principal, datasets, store)
+    """The gazetteers the case's own dataset may take, and which it holds (ADR-147 Amendment 2, the
+    owner's ruling 6): names only, never a count of places (a count would take in places above the
+    reader's clearance). Viewer and `investigate`, as the place search is. A case reading a
+    composite or nothing is answered with none."""
+    return await _gazetteers_view(
+        await _own_dataset(investigation.id, datasets), datasets, store
+    )
 
 
 #: ADR-147 Amendment 2: the words a refused addition is said in.
-_NO_SUCH_GAZETTEER = "There is no gazetteer of that name for this case's unit."
-_NO_OWN_DATASET = (
-    "This case reads {what}, so a gazetteer's places cannot be copied into it: they are copied "
-    "into the one dataset a case reads of its own."
+_NO_SUCH_GAZETTEER = "There is no gazetteer of that name."
+_OTHER_UNITS_GAZETTEER = (
+    "That gazetteer was built for another unit than this dataset's: a dataset takes a gazetteer "
+    "built for its own unit. Build one for it in Admin › Maps."
 )
 
 
-@app.put(
-    "/v1/investigations/{investigation_id}/map/gazetteers/{dataset_id}",
-    dependencies=[Depends(require_right(Right.SHARE_CASE))],
-)
-async def add_case_gazetteer_route(
-    dataset_id: str,
-    investigation: InvestigationAuthorDep,
-    principal: PrincipalDep,
-    graph: GraphDep,
-    scheme: HandlingSchemeDep,
-    datasets: DatasetsDep,
-    store: CaseGazetteersDep,
-    working_set: WorkingSetDep,
-    audit: AuditDep,
-) -> CaseGazetteers:
-    """Adds a gazetteer to the case (ADR-147 Amendment 2, the owner's ruling 6): its places copied
-    into the case's own dataset (`case_gazetteers.copy_places`), so the case stays one dataset and
-    keeps its loads. Its Author's, with the right that changes what a case reads (as
-    `PUT .../datasets`), a gazetteer of the Author's unit only (ADR-099 decision 3), audited. Again
-    for a gazetteer already added copies its places again."""
-    held = (await datasets.egress_of([dataset_id])).get(dataset_id)
-    if (
-        held is None
-        or not dataset_id.startswith(GAZETTEER_DATASET_PREFIX)
-        or held.owning_unit != principal.org_unit
-    ):
+async def _dataset_and_gazetteer(
+    dataset_id: str, gazetteer_id: str, datasets: DatasetStore
+) -> Dataset:
+    """The dataset (a source, its gate passed) and the gazetteer it may take: one of the dataset's
+    own unit (the orchestrator's review of P5, item 3), refused in words otherwise."""
+    held = await datasets.egress_of([dataset_id, gazetteer_id])
+    dataset = held.get(dataset_id)
+    if dataset is None or dataset.kind != SOURCE_DATASET:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    gazetteer = held.get(gazetteer_id)
+    if gazetteer is None or not gazetteer_id.startswith(GAZETTEER_DATASET_PREFIX):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_GAZETTEER)
-    own = await _refuse_without_own_dataset(investigation.id, datasets)
-    added = case_gazetteers.AddedGazetteer(
-        case_dataset=own, gazetteer=dataset_id, added_in=investigation.id,
-        added_by=principal.id, added_at=datetime.now(UTC),
-    )  # fmt: skip
-    first = await store.add(added)
-    try:
-        reverted = await case_gazetteers.copy_places(
-            graph, scheme, gazetteer=dataset_id, case_dataset=own, by=principal.id
-        )
-    except BaseException:
-        if first:  # an earlier addition's record, and its copies, are left as they were
-            await store.remove(own, dataset_id)
-        raise
-    if reverted:
-        from .working_set_revert import remove_and_publish
-
-        await remove_and_publish(working_set, working_set.publisher, reverted, [])
-    await audit.record(
-        principal=principal,
-        action="add_case_gazetteer",
-        investigation_id=investigation.id,
-        resolved_query={"gazetteer": dataset_id},
-        result_cardinality=1,
-    )
-    return await _case_gazetteers_view(investigation.id, principal, datasets, store)
-
-
-@app.delete(
-    "/v1/investigations/{investigation_id}/map/gazetteers/{dataset_id}",
-    dependencies=[Depends(require_right(Right.SHARE_CASE))],
-)
-async def remove_case_gazetteer_route(
-    dataset_id: str,
-    investigation: InvestigationAuthorDep,
-    principal: PrincipalDep,
-    graph: GraphDep,
-    scheme: HandlingSchemeDep,
-    datasets: DatasetsDep,
-    store: CaseGazetteersDep,
-    working_set: WorkingSetDep,
-    audit: AuditDep,
-) -> CaseGazetteers:
-    """Removes a gazetteer from the case's own dataset, so from every case reading it (ADR-147
-    Amendment 2): its copies marked reverted and taken out of the working sets, but a copy another
-    writer also wrote or an analyst confirmed, which is the case's data now (rule 6;
-    `case_gazetteers.remove_copies`, judged on the copy alone). `copies_kept` says so, judged on the
-    kept copies the Author may read. Its Author's, audited."""
-    own = await _refuse_without_own_dataset(investigation.id, datasets)
-    if dataset_id not in {a.gazetteer for a in await store.of_dataset(own)}:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_GAZETTEER)
-    reverted, kept = await case_gazetteers.remove_copies(
-        graph, scheme, gazetteer=dataset_id, case_dataset=own
-    )
-    if reverted:
-        from .working_set_revert import remove_and_publish
-
-        await remove_and_publish(working_set, working_set.publisher, reverted, [])
-    await store.remove(own, dataset_id)
-    seen = bool(kept) and bool(await graph.get_nodes(kept, principal))
-    await audit.record(
-        principal=principal,
-        action="remove_case_gazetteer",
-        investigation_id=investigation.id,
-        resolved_query={"gazetteer": dataset_id},
-        result_cardinality=1,
-    )
-    return await _case_gazetteers_view(
-        investigation.id, principal, datasets, store, copies_kept=seen
-    )
+    if gazetteer.owning_unit != dataset.owning_unit:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_OTHER_UNITS_GAZETTEER)
+    return dataset
 
 
 @app.get("/v1/map/tiles/{provider_id}/{z}/{x}/{y}")
@@ -9235,6 +9152,101 @@ async def refuse_copying_a_drawn_dataset(
 
 
 NoLoadingAComposite = Depends(refuse_loading_a_composite)
+
+
+@app.put(
+    "/v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}",
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES)), NoLoadingAComposite],
+)
+async def add_dataset_gazetteer_route(
+    dataset_id: StudioDatasetDep,
+    gazetteer_id: str,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    datasets: DatasetsDep,
+    store: CaseGazetteersDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+) -> CaseGazetteers:
+    """Adds a gazetteer to a dataset (ADR-147 Amendment 2, the owner's ruling 6): its places copied
+    into it (`case_gazetteers.copy_places`), so every case reading it reads them and stays one
+    dataset that keeps its loads. **A dataset-level action** (the orchestrator's review of P5, item
+    6): behind the dataset route's own gate (a person one of whose cases loads into it,
+    `require_studio_dataset`) and `run_pipelines`, the right that runs a load into a dataset,
+    never one case's level; a composite or a drawn dataset is refused, as for any load. A gazetteer
+    of the dataset's own unit only. Again for a gazetteer already added copies its places again."""
+    dataset = await _dataset_and_gazetteer(dataset_id, gazetteer_id, datasets)
+    added = case_gazetteers.AddedGazetteer(
+        case_dataset=dataset_id, gazetteer=gazetteer_id, added_in=dataset_id,
+        added_by=principal.id, added_at=datetime.now(UTC),
+    )  # fmt: skip
+    first = await store.add(added)
+    try:
+        reverted = await case_gazetteers.copy_places(
+            graph, scheme, gazetteer=gazetteer_id, case_dataset=dataset_id, by=principal.id,
+            link_datasets=await case_gazetteers.reading_datasets(datasets, dataset_id),
+            unit=dataset.owning_unit,
+        )  # fmt: skip
+    except BaseException:
+        if first:  # an earlier addition's record, and its copies, are left as they were
+            await store.remove(dataset_id, gazetteer_id)
+        raise
+    if reverted:
+        from .working_set_revert import remove_and_publish
+
+        await remove_and_publish(working_set, working_set.publisher, reverted, [])
+    await audit.record(
+        principal=principal,
+        action="add_dataset_gazetteer",
+        resolved_query={"dataset_id": dataset_id, "gazetteer": gazetteer_id},
+        result_cardinality=1,
+    )
+    return await _gazetteers_view(dataset, datasets, store)
+
+
+@app.delete(
+    "/v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}",
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES)), NoLoadingAComposite],
+)
+async def remove_dataset_gazetteer_route(
+    dataset_id: StudioDatasetDep,
+    gazetteer_id: str,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    scheme: HandlingSchemeDep,
+    datasets: DatasetsDep,
+    store: CaseGazetteersDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+) -> CaseGazetteers:
+    """Removes a gazetteer from a dataset, so from every case reading it (ADR-147 Amendment 2): its
+    copies marked reverted and taken out of the working sets, **but a copy a case's own load, link
+    or confirmation rests on**, which is the case's data now and keeps its gazetteer mark (rule 6;
+    the orchestrator's review of P5, item 7; `case_gazetteers.remove_copies`), so no case is left
+    a link to nothing. `copies_kept` counts the kept copies the asker may read (rule 3) and `said`
+    says so. Gated as adding is; audited."""
+    dataset = await _dataset_and_gazetteer(dataset_id, gazetteer_id, datasets)
+    if gazetteer_id not in {a.gazetteer for a in await store.of_dataset(dataset_id)}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_GAZETTEER)
+    reverted, kept = await case_gazetteers.remove_copies(
+        graph, scheme, gazetteer=gazetteer_id, case_dataset=dataset_id,
+        link_datasets=await case_gazetteers.reading_datasets(datasets, dataset_id),
+        unit=dataset.owning_unit,
+    )  # fmt: skip
+    if reverted:
+        from .working_set_revert import remove_and_publish
+
+        await remove_and_publish(working_set, working_set.publisher, reverted, [])
+    await store.remove(dataset_id, gazetteer_id)
+    seen = len(await graph.get_nodes(kept, principal)) if kept else 0
+    await audit.record(
+        principal=principal,
+        action="remove_dataset_gazetteer",
+        resolved_query={"dataset_id": dataset_id, "gazetteer": gazetteer_id},
+        result_cardinality=1,
+    )
+    return await _gazetteers_view(dataset, datasets, store, copies_kept=seen)
 
 
 def _source_not_found() -> HTTPException:

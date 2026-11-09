@@ -13,7 +13,12 @@ from __future__ import annotations
 
 import pytest
 
-from tools.licence_check import find_runtime_offenders, runtime_allowed
+from tools import licence_check
+from tools.licence_check import (
+    find_runtime_offenders,
+    find_runtimes_awaiting_owner,
+    runtime_allowed,
+)
 
 
 def _dockerfile(licence: str | None, runtime: str = "java") -> str:
@@ -72,7 +77,7 @@ def test_a_java_runtime_the_image_does_not_declare_is_refused(carries: str) -> N
 
 
 def test_an_image_with_no_java_is_not_flagged() -> None:
-    planted = "FROM python:3.12-slim\nRUN apt-get install -y git\nCOPY scripts ./scripts\n"
+    planted = "FROM python:3.12-slim\nRUN apt-get install -y curl\nCOPY scripts ./scripts\n"
     assert find_runtime_offenders({"api": planted}) == []
 
 
@@ -87,3 +92,44 @@ def test_the_real_dockerfiles_pass_and_the_conduit_declares_its_java() -> None:
     assert find_runtime_offenders() == []
     conduit = (CORE / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
     assert 'org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"' in conduit
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "LABEL org.ospreyflow.runtime.node.licence='GPL-3.0-only'",
+        "LABEL org.ospreyflow.runtime.node.licence=GPL-3.0-only",
+        'LABEL maintainer="x" org.ospreyflow.runtime.node.licence="GPL-3.0-only" version=1',
+        'LABEL maintainer="x" \\\n      org.ospreyflow.runtime.node.licence="GPL-3.0-only"',
+        "LABEL org.ospreyflow.runtime.node.licence GPL-3.0-only",
+        'label org.ospreyflow.runtime.node.licence="GPL-3.0-only"',
+    ],
+    ids=["single-quoted", "unquoted", "among-others", "continued", "legacy-form", "lower-case"],
+)
+def test_a_declared_runtime_is_read_however_its_label_is_written(label: str) -> None:
+    """The orchestrator's review of P5, item 8: a label the leg could not read passed silently."""
+    planted = f"FROM node:22-slim\n{label}\n"
+    assert find_runtime_offenders({"x": planted}) == [("x", "node", "GPL-3.0-only")]
+
+
+GIT = "FROM python:3.12-slim\nRUN apt-get update && apt-get install -y --no-install-recommends \\\n    git curl\n"
+
+
+def test_git_installed_and_undeclared_is_refused() -> None:
+    assert find_runtime_offenders({"api": GIT}) == [("api", "git", "undeclared")]
+    assert find_runtime_offenders({"api": GIT.replace("git curl", "git-lfs curl")}) == []
+
+
+def test_git_declared_is_named_as_awaiting_the_owner_never_passed_silently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    declared = GIT + 'LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"\n'
+    assert find_runtime_offenders({"api": declared}) == []
+    assert find_runtimes_awaiting_owner({"api": declared}) == [("api", "git", "GPL-2.0-only")]
+    # Without the owner's question on record, it is an offender like any GPL runtime.
+    monkeypatch.setattr(licence_check, "AWAITING_OWNER", {})
+    assert find_runtime_offenders({"api": declared}) == [("api", "git", "GPL-2.0-only")]
+
+
+def test_the_conduit_declares_its_git_and_the_tree_names_it_awaiting() -> None:
+    assert ("services/api/Dockerfile", "git", "GPL-2.0-only") in find_runtimes_awaiting_owner()

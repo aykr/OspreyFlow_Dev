@@ -68,6 +68,9 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 # is dropped again.
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
+# `git` is GPL-2.0-only, which the licence register does not pass: declared, so `make licence-check`
+# names it on every run as awaiting the owner's ruling (the orchestrator's review of P5, item 8).
+LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"
 
 COPY --from=java /opt/jre /opt/java
 LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"

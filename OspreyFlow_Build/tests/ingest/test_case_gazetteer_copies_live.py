@@ -14,9 +14,10 @@ own dataset (`case_gazetteers.copy_places`). A reader of that case alone (its pr
   it) suggests nothing and says no `more` (decision 3b, keyed on the copy's provenance, since a copy
   is in no `gazetteer-*` dataset);
 - **a re-copy writes no second copy**, and a place the gazetteer no longer holds has its copy
-  reverted; **a removal reverts the copies** whatever rests on them, and a re-add brings a
-  case's link to one back; **a case's load writing onto a copy** keeps it a copy, withheld, and
-  makes it the case's, kept by a removal.
+  reverted; **a removal keeps the copy a case's link rests on** (in the dataset or a case's layer)
+  and reverts the rest; **a case's load writing onto a copy** keeps it a copy, withheld, and makes
+  it the case's: a re-build does not write over it and a removal keeps it; **a region is copied in
+  pages**, timed.
 
 Each shown red with its fix removed (`P5_RED_RECORD.md`). The routes themselves, over the
 Conduit's shared database, are `test_case_gazetteer_routes_live.py`. Live, so under `tests/ingest`
@@ -239,33 +240,88 @@ async def test_a_re_copy_writes_no_second_copy_and_reverts_a_place_gone(stores: 
     assert len(named.nodes) == 1
 
 
-async def test_a_removal_reverts_the_copies_and_a_re_add_brings_back_a_link_on_one(
+async def test_a_removal_keeps_a_copy_a_case_s_link_rests_on_in_the_dataset_or_a_layer(
     stores: Stores,
 ) -> None:
-    """A copy goes whatever rests on it (rule 3: never judged on a link a reader may not see); the
-    case's link to it goes out of every read with it, and comes back when the gazetteer is added
-    again, since the copy is written again under the same id."""
+    """The orchestrator's review of P5, item 7: a copy a case's own link rests on is kept with its
+    mark, so no case is left a link to nothing; the links read in the dataset and in a case's
+    analyst layer (`link_datasets`). Every other copy of the gazetteer's alone is reverted."""
     graph, _analytics, _ = stores
     await _plant(stores)
     await _copy(graph)
-    linked = copy_id("01JP5ASHWELL00000000000000", "case-a")
+    in_dataset = copy_id("01JP5ASHWELL00000000000000", "case-a")
+    in_layer = copy_id("01JP5ALIKE0100000000000000", "case-a")
     person = _place("01JP5PERSON000000000000000", "x").model_copy(
         update={"type": "Person", "properties": {"family_name": "Quill"}, "datasets": ["case-a"]}
     )
+    layer_link = _present_at(person.id, in_layer).model_copy(
+        update={"id": "01JP5LAYERLINK000000000000", "datasets": ["layer-a"]}
+    )
     tx = await graph.begin_transaction()
     await graph.upsert_nodes([person], tx)
-    await graph.upsert_edges([_present_at(person.id, linked)], tx)
+    await graph.upsert_edges([_present_at(person.id, in_dataset), layer_link], tx)
     await graph.commit_transaction(tx)
     reverted, kept = await remove_copies(
-        graph, SCHEME, gazetteer=GAZETTEER, case_dataset="case-a"
-    )
-    assert linked in reverted and kept == []
-    assert (await graph.suggest_nodes("Ashwe", CASE, limit=10)).nodes == []
+        graph, SCHEME, gazetteer=GAZETTEER, case_dataset="case-a", link_datasets=["layer-a"],
+        unit="unit-1",
+    )  # fmt: skip
+    assert sorted(kept) == sorted([in_dataset, in_layer])
+    assert in_dataset not in reverted and in_layer not in reverted and reverted
+    left = await graph.get_node(in_dataset, CASE)
+    assert left is not None and left.provenance.gazetteer == GAZETTEER
+    assert _no_identifier(left.properties)
     around = await graph.expand(ExpandRequest(node_ids=[person.id], depth=1), CASE)
-    assert linked not in {n.id for n in around.nodes} and around.edges == []
+    assert in_dataset in {n.id for n in around.nodes}  # no link to nothing
+
+
+async def test_a_rebuild_after_a_case_s_load_keeps_what_the_case_wrote(stores: Stores) -> None:
+    """Item 1: a copy the case has written to is the case's data now; a re-build does not write the
+    gazetteer's values back over it, though the merge would keep the newest."""
+    graph, _analytics, _ = stores
+    await _plant(stores)
     await _copy(graph)
-    back = await graph.expand(ExpandRequest(node_ids=[person.id], depth=1), CASE)
-    assert linked in {n.id for n in back.nodes} and len(back.edges) == 1
+    copy = copy_id("01JP5ASHWELL00000000000000", "case-a")
+    loaded = _place(copy, "Ashwell (the yard's spelling)", osm_id=PREFIX).model_copy(
+        update={
+            "datasets": ["case-a"],
+            "provenance": Provenance(
+                state=ProvenanceState.ASSERTED,
+                sources=[SourceRef(document_id="case-load", locator="row 7", excerpt_hash="")],
+                first_seen=datetime(2026, 2, 1, tzinfo=UTC),
+            ),
+        }
+    )
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([loaded], tx)
+    await graph.commit_transaction(tx)
+    await _copy(graph)  # the re-build's refresh
+    read = await graph.get_node(copy, CASE)
+    assert read is not None and read.properties["name"] == "Ashwell (the yard's spelling)"
+    assert read.provenance.gazetteer == GAZETTEER
+
+
+async def test_a_region_is_copied_in_bounded_pages_and_timed(stores: Stores) -> None:
+    """Item 9: 2,000 planted places (four pages of 500, each its own transaction), timed for the
+    report. Synthetic, so the figure is a rate per place on this stack, not a real region's."""
+    import time
+
+    graph, _analytics, _ = stores
+    places = [
+        _place(f"01JP5BULK{i:05d}000000000000"[:26], f"Bulkton {i}", osm_id=f"bulk-{i}")
+        for i in range(2000)
+    ]
+    for start in range(0, len(places), 500):
+        tx = await graph.begin_transaction()
+        await graph.upsert_nodes(places[start : start + 500], tx)
+        await graph.commit_transaction(tx)
+    began = time.perf_counter()
+    await _copy(graph)
+    took = time.perf_counter() - began
+    print(f"\nP5 TIMING: copied 2000 places in {took:.1f} s ({took / 2:.2f} s per 1,000)")
+    unlimited = CASE.model_copy(update={"datasets": None})
+    copies = [copy_id(p.id, "case-a") for p in places[:5]]
+    for made in copies:
+        assert await graph.get_node(made, unlimited) is not None
 
 
 async def test_a_case_s_load_writing_onto_a_copy_keeps_it_a_copy_and_the_case_s(

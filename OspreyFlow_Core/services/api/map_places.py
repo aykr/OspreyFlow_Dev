@@ -84,14 +84,19 @@ async def units_held(store: object) -> set[str]:
     pool = getattr(store, "pool", None)
     if pool is not None:
         async with pool.acquire() as connection:
-            rows = await connection.fetch("SELECT owning_unit FROM datasets")
+            # A gazetteer's own dataset is not a unit's data: a unit holding only an earlier
+            # gazetteer holds nothing (the orchestrator's review of P5, item 12).
+            rows = await connection.fetch(
+                "SELECT owning_unit FROM datasets WHERE id NOT LIKE $1",
+                GAZETTEER_DATASET_PREFIX + "%",
+            )
             try:
                 rows += await connection.fetch("SELECT owning_unit FROM investigations")
             except asyncpg.UndefinedTableError:
                 pass  # A deployment whose case store has not started yet holds no case.
         return {str(r["owning_unit"]) for r in rows}
     held = getattr(store, "datasets", {})
-    return {d.owning_unit for d in held.values()}
+    return {d.owning_unit for d in held.values() if not d.id.startswith(GAZETTEER_DATASET_PREFIX)}
 
 
 def check_unit(

@@ -200,11 +200,11 @@ ROUTE_RIGHTS = {
     "get_map_local_source_route": None,
     # ADR-147 Amendment 1 (P4): the map's place search over the case's gazetteer, as its other searches.
     "map_place_search_route": "investigate",
-    # ADR-147 Amendment 2 (the owner's ruling 6): a case's gazetteers, read as the place search is,
-    # changed as what the case reads is (`set_case_datasets_route`).
+    # ADR-147 Amendment 2 (the owner's ruling 6): a case's gazetteers, read as the place search is;
+    # added to or removed from a dataset by the right that loads into it (the review of P5, item 6).
     "case_gazetteers_route": "investigate",
-    "add_case_gazetteer_route": "share_case",
-    "remove_case_gazetteer_route": "share_case",
+    "add_dataset_gazetteer_route": "run_pipelines",
+    "remove_dataset_gazetteer_route": "run_pipelines",
     "build_basemap_route": "manage_geospatial",
     "verify_map_route": "manage_geospatial",
     "histogram_route": "investigate",

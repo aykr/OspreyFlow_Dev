@@ -179,10 +179,9 @@ RECORDED_CLASSPATH_EXCEPTIONS: dict[str, str] = {
 }
 
 _CLASSPATH = re.compile(r"^gpl-2\.0(-only)?\s+with\s+classpath-exception-2\.0$")
-#: A runtime an image declares: `LABEL org.ospreyflow.runtime.<name>.licence="<SPDX expression>"`.
-_RUNTIME_LABEL = re.compile(
-    r'^LABEL\s+org\.ospreyflow\.runtime\.([a-z0-9-]+)\.licence="([^"]+)"\s*$', re.M
-)
+#: A runtime an image declares: `org.ospreyflow.runtime.<name>.licence` on any `LABEL`, however it
+#: is quoted or laid out (several labels on one line, continued lines, the legacy `LABEL key value`).
+_RUNTIME_KEY = re.compile(r"^org\.ospreyflow\.runtime\.([a-z0-9-]+)\.licence$")
 #: A Java runtime in an image, however it got there: a JDK or JRE stage, a jlinked runtime, a
 #: runtime copied to `/opt/java`, or a distribution's package (`apt-get install openjdk-21-jre`,
 #: `default-jre`, `apk add openjdk21`).
@@ -192,6 +191,65 @@ _JAVA_IN_IMAGE = re.compile(
     r"|\b(openjdk-?\d+(-jre|-jdk)?(-headless)?|default-(jre|jdk)(-headless)?)\b",
     re.M | re.I,
 )
+#: `git` installed by a distribution's package manager: GPL-2.0, so it is declared like a runtime.
+_GIT_IN_IMAGE = re.compile(
+    r"\b(apt-get|apt|dnf|yum|microdnf)\b[^\n]*\binstall\b[^\n]*\bgit(?![\w-])"
+    r"|\bapk\s+add\b[^\n]*\bgit(?![\w-])",
+    re.I,
+)
+#: Runtimes an image carries under a licence the register does not pass, put to the owner and not
+#: yet ruled on: named on every run (never passed silently), not failed. The register is the
+#: owner's (the orchestrator's review of P5, item 8).
+AWAITING_OWNER: dict[str, str] = {
+    "git": "GPL-2.0-only: the Conduit runs it to publish recipes (09_INGEST_STUDIO.md §6, "
+    "services/api/studio_publish.py); put to the owner, 9 November 2026",
+}
+
+
+def _instructions(text: str) -> list[str]:
+    """A Dockerfile's instructions, each whole: continued lines joined, comments left out."""
+    joined = re.sub(r"\\\r?\n", " ", text)
+    return [
+        line.strip()
+        for line in joined.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+
+
+def declared_runtimes(text: str) -> dict[str, str]:
+    """Every `org.ospreyflow.runtime.<name>.licence` a Dockerfile's `LABEL`s declare."""
+    import shlex
+
+    found: dict[str, str] = {}
+    for instruction in _instructions(text):
+        word, _, rest = instruction.partition(" ")
+        if word.upper() != "LABEL":
+            continue
+        try:
+            tokens = shlex.split(rest)
+        except ValueError:
+            tokens = rest.split()
+        pairs = [t.split("=", 1) for t in tokens if "=" in t]
+        if not pairs and len(tokens) >= 2:  # the legacy form, `LABEL key value`
+            pairs = [[tokens[0], " ".join(tokens[1:])]]
+        for key, value in pairs:
+            named = _RUNTIME_KEY.match(key.strip())
+            if named:
+                found[named.group(1)] = value.strip()
+    return found
+
+
+def find_runtimes_awaiting_owner(
+    dockerfiles: dict[str, str] | None = None,
+) -> list[tuple[str, str, str]]:
+    """`(dockerfile, runtime, licence)` for each declared runtime the register does not pass that
+    is put to the owner (`AWAITING_OWNER`): said on every run, so never passed silently."""
+    return [
+        (name, runtime, licence)
+        for name, text in (_dockerfiles() if dockerfiles is None else dockerfiles).items()
+        for runtime, licence in declared_runtimes(text).items()
+        if runtime in AWAITING_OWNER and not runtime_allowed(licence, runtime)
+    ]
 
 
 def runtime_allowed(licence: str, runtime: str) -> bool:
@@ -218,14 +276,17 @@ def find_runtime_offenders(
     into an image, so the image says what it carries, and this reads it."""
     offenders: list[tuple[str, str, str]] = []
     for name, text in (_dockerfiles() if dockerfiles is None else dockerfiles).items():
-        declared = dict(_RUNTIME_LABEL.findall(text))
+        declared = declared_runtimes(text)
+        instructions = "\n".join(_instructions(text))
         offenders += [
             (name, runtime, licence)
             for runtime, licence in declared.items()
-            if not runtime_allowed(licence, runtime)
+            if not runtime_allowed(licence, runtime) and runtime not in AWAITING_OWNER
         ]
-        if _JAVA_IN_IMAGE.search(text) and "java" not in declared:
+        if _JAVA_IN_IMAGE.search(instructions) and "java" not in declared:
             offenders.append((name, "java", "undeclared"))
+        if _GIT_IN_IMAGE.search(instructions) and "git" not in declared:
+            offenders.append((name, "git", "undeclared"))
     return offenders
 
 
@@ -338,6 +399,13 @@ def main() -> int:
         print(
             f"licence-check: {dockerfile} carries the runtime {runtime!r} under {licence!r}, which "
             "is not on the spec/00_ARCHITECTURE.md §7 allowlist nor a recorded exception",
+            file=sys.stderr,
+        )
+
+    for dockerfile, runtime, licence in find_runtimes_awaiting_owner():
+        print(
+            f"licence-check: AWAITING THE OWNER: {dockerfile} carries {runtime!r} under {licence!r}, "
+            f"not on the allowlist ({AWAITING_OWNER[runtime]})",
             file=sys.stderr,
         )
 

@@ -10,8 +10,10 @@ own dataset, and then, through the routes a case reads its nodes by:
 - **the case's own searches never match a copy by an identifier**: `/search` by its `osm_id`, and
   `/suggest` on the identifier's prefix (twelve copies share it, more than a page) in both modes,
   find nothing and say no `more`;
-- `DELETE` reverts the copies (none another writer's, so none kept), the one the case's own link
-  rests on too: the place leaves the case's search.
+- adding and removing are the dataset's (`PUT`/`DELETE /v1/datasets/{dataset}/gazetteers/...`,
+  `run_pipelines`); `DELETE` keeps the copy the case's own link rests on (counted) and a SECRET
+  copy the case's load wrote to (kept, not counted to an OFFICIAL Author: rule 3), and reverts the
+  rest.
 
 Runs the real `services.api.app` over real ArcadeDB, Postgres and Valkey on a leased test stack, as
 `test_gazetteer_ids_withheld_live.py` does. Everything it writes is removed in teardown, pass or
@@ -128,9 +130,13 @@ async def _plant_gazetteer() -> str:
         )
         for i in range(12)
     ]  # fmt: skip
-    PLANTED.extend([place.id, *(n.id for n in alike)])
+    secret = place.model_copy(
+        update={"id": new_node_id(), "properties": {"name": f"Depot {TAG}", "osm_id": f"8{TAG}"},
+                "handling": _handling().model_copy(update={"classification": "SECRET"})}
+    )  # fmt: skip
+    PLANTED.extend([place.id, *(n.id for n in alike), secret.id])
     tx = await graph.begin_transaction()
-    await graph.upsert_nodes([place, *alike], tx)
+    await graph.upsert_nodes([place, *alike, secret], tx)
     await graph.commit_transaction(tx)
     await client.aclose()
     store = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
@@ -169,6 +175,25 @@ async def _plant_in_case(case_dataset: str, copy: str) -> tuple[str, dict[str, A
     await client.aclose()
     assert stored is not None
     return person.id, stored.model_dump(mode="json")
+
+
+async def _case_writes_onto(case_dataset: str, copy: str) -> None:
+    """The case's own load writing onto a copy (another writer's source), as a matching lookup."""
+    client, graph = await _graph()
+    unlimited = UNIT.model_copy(update={"datasets": None, "clearance": "SECRET"})
+    held = await graph.get_node(copy, unlimited)
+    assert held is not None
+    write = NodeWrite(
+        id=copy, type="Location", properties=dict(held.properties), handling=held.handling,
+        provenance=_provenance().model_copy(
+            update={"sources": [SourceRef(document_id="case-load", locator="row 2", excerpt_hash="")]}
+        ),
+        created_by="loader-1", created_at=now_utc(), datasets=[case_dataset],
+    )  # fmt: skip
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([write], tx)
+    await graph.commit_transaction(tx)
+    await client.aclose()
 
 
 async def _remove(ids: list[str]) -> None:
@@ -231,7 +256,7 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
 ) -> None:
     private_key, _ = keypair
     # A Source author too, so the Studio's upload (a load a composite case refuses) is theirs.
-    claims = default_claims(roles=["analyst", "source_author"])
+    claims = default_claims(roles=["analyst", "source_author", "loader"])
     headers = {"Authorization": f"Bearer {sign_token(private_key, claims)}"}
     PLANTED.clear()
     cases: list[str] = []
@@ -250,15 +275,14 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
             [own] = [d["id"] for d in reads if d["kind"] == "source"]
             case_datasets.append(own)
             # Every copy's id is known before anything is copied: teardown removes them all.
-            alike = PLANTED[1:13]
+            alike = PLANTED[1:14]  # the twelve and the SECRET depot
             PLANTED.extend(copy_id(i, own) for i in [place_id, *alike])
 
             offered = client.get(f"/v1/investigations/{case_id}/map/gazetteers", headers=headers)
             assert {"dataset_id": GAZETTEER, "name": f"Gazetteer: P5 live {TAG}",
                     "added": False} in offered.json()["gazetteers"], offered.text  # fmt: skip
-            added = client.put(
-                f"/v1/investigations/{case_id}/map/gazetteers/{GAZETTEER}", headers=headers
-            )
+            # A dataset-level action (the review of P5, item 6): the dataset's route, `run_pipelines`.
+            added = client.put(f"/v1/datasets/{own}/gazetteers/{GAZETTEER}", headers=headers)
             assert added.status_code == 200, added.text
             copy = copy_id(place_id, own)
 
@@ -317,15 +341,21 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
             )  # fmt: skip
             assert uploaded.status_code == 201, uploaded.text
 
-            removed = client.delete(
-                f"/v1/investigations/{case_id}/map/gazetteers/{GAZETTEER}", headers=headers
-            )
+            # A SECRET place's copy that the case's own load also wrote: kept, and not counted to an
+            # OFFICIAL Author (the review of P5, item 2; rule 3).
+            _run(_case_writes_onto(own, copy_id(PLANTED[13], own)))
+            removed = client.delete(f"/v1/datasets/{own}/gazetteers/{GAZETTEER}", headers=headers)
             assert removed.status_code == 200, removed.text
-            assert removed.json()["copies_kept"] is False
-            gone = client.post(
+            # The copy the case's link rests on is kept (item 7), and counted; the SECRET one is
+            # kept but not counted; every other copy is gone.
+            assert removed.json()["copies_kept"] == 1, removed.text
+            assert removed.json()["said"].startswith("1 place stays in this dataset")
+            assert "Depot" not in removed.text
+            still = client.post(
                 f"/v1/investigations/{case_id}/search", headers=headers, json={"query": NAME}
             )
-            assert gone.status_code == 200 and gone.json()["nodes"] == [], gone.text
+            assert [n["id"] for n in still.json()["nodes"]] == [copy], still.text
+            assert not _carries_an_identifier(still.text), still.text
             left = client.post(
                 f"/v1/investigations/{case_id}/suggest", headers=headers,
                 json={"query": f"Elsewhere {TAG}", "mode": "contains"},
