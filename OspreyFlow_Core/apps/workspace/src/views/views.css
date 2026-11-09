@@ -33,6 +33,12 @@
 .view-lens-banner__back { margin-left: auto; min-height: var(--h-control-24); }
 .view-lens-banner__back + .view-lens-banner__back { margin-left: 0; }
 .view-lens-banner__from { font-weight: 600; }
+.view-lens-banner__notes { min-height: var(--h-control-24); }
+/* A merged drawing's notes (ADR-143 Amendment 2 decision 7), under the banner's line. */
+.view-drawing-notes { flex-basis: 100%; margin: 0; display: grid; gap: var(--sp-4); max-height: 240px; overflow-y: auto; }
+.view-drawing-notes__row { display: grid; grid-template-columns: minmax(120px, 1fr) 3fr; gap: var(--sp-8); }
+.view-drawing-notes__label { font-weight: 600; }
+.view-drawing-notes__value { margin: 0; }
 
 /* The *Save as a view* form, over the canvas just above the selection bar. */
 .save-view-anchor {
