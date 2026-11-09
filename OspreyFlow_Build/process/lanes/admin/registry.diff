@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index bce4d1f..75541a2 100644
+index ee55235..00383d0 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -820,6 +820,12 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+@@ -907,6 +907,12 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
    "hand-over-a-teams-lead-by-keyboard",
    "name-a-teams-cover-by-keyboard",
    "end-a-teams-cover-by-keyboard",
