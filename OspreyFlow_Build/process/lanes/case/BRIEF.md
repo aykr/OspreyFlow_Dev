@@ -1,41 +1,40 @@
-# Case lane · brief L3.4 · promotion, and a removed case's layer merged or deleted
+# Case lane · brief L3.9 · merging a drawn dataset
 
-Written by the orchestrator, 9 November 2026, after L3.3's merge (`ab3d638`), for a **fresh case session** on
-the orchestrator's account. Read `process/lanes/case/REPORT.md` (L3.3), ADR-143 decisions 8 and 10 and
-Amendments 2–4 first. Rebase onto `main`. Opus, medium. Size L. The riskiest lane: access and existence-leak
-tests first, and the orchestrator's independent review before merge. After it comes L3.9 (merging a drawn
-dataset). Case-b (the sister lane) builds L3.7 and L3.8 beside you.
+Written by the orchestrator, 9 November 2026, after L3.4's merge (`32c6f49`), for a **fresh case session on the
+default account** (`ayan`). Read `process/lanes/case/REPORT.md` (L3.4), and in `spec/06_DECISIONS.md` ADR-143
+Amendment 2 decisions 6 and 7 and **Amendment 3** (L5 and L6 answered (a): where a fresh drawing's items live, and
+who merges a drawn dataset), and Amendment 5 (L3.4 as built), first. Rebase onto `main`. Opus, medium. Size L.
+After it comes L3.6 (the `drawn_watch` kind's queue cases, once rules' L2.10 is on main).
 
-**The lane, the stacks, the merge rule.** Case's map minus case-b's; a test stack by `stack_lease.sh acquire
-case "<purpose>" && …` only; Prompt L's rules (never stop on a question; schemas ride with the step; every live
-test removes what it writes; your own lane-reviewer, then make -k ci and make test at a commit rebased onto
-main, saved under gates/, with a leased live run including `test_route_rights.py` and every live file the
-change reaches). The Studio's *Analyst promotions* list lives in `ingest/runs/`, studio's: by agreement, through
-the orchestrator, and studio is building L1.5 now.
+**The lane, the stacks, the merge rule.** Case's map; the Studio's *Merge into a dataset…* screen lives in
+`apps/workspace/src/ingest/**` **by agreement with Lane 1** (studio is finishing L1.5, then L1.7: tell the
+orchestrator which files before you edit them, so studio rebases past them). Test stacks are on the owner's server
+only (b to g); Docker and stack a are off on this Mac, so never start Docker. Ask the orchestrator for a stack, then
+use main's `stack_lease.sh` (acquire, up, `remote case -- …`, down, release; `remote-log case` reattaches). `make
+test` runs on the server: `stack_lease.sh offline case -- sh -c 'make -k test SKIP_JS=1; cd ../OspreyFlow_Core &&
+make test-js'`. Ask before `make -k ci` or any Playwright here (two heavy runs at most on this Mac). Never call
+remote or offline while one of your runs is alive. Prompt L's rules: never stop on a question, except that
+loosening access, real data or contradicting an accepted ADR stops the piece. Your own lane-reviewer, then the
+gates at a commit rebased onto main, saved under `gates/`, with one leased live run including
+`test_route_rights.py` and every live file the change reaches. **Re-gate after any code change.** Report to the
+orchestrator **by message**. The riskiest work in the plan: access and existence-leak tests first; the
+orchestrator's independent review before merge.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 5, 6, 12 and 15 above all); ADR-143 decisions 1, 8 and 10 and
-Amendments 2–4; ADR-145 Amendment 4 decisions 8 and 11 (the promotion policy admin built in L2.4 part 2: Author
-promotes, or a second person reviews, the approvers being the dataset's Authors holding `review_promotions`);
-ADR-140 (one load).
+**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 5, 6, 12 and 15 above all; rule 6: nothing is merged in storage,
+resolution writes scored `SAME_AS` edges); ADR-143 Amendments 2, 3 and 5; ADR-140 (one load); ADR-145 Amendment 4
+decision 11 (who reviews).
 
-**Build** (the plan's row L3.4):
-1. **Promotion:** the sheet; one load; the dataset's policy and highest marking enforced; review by the policy's
-   approvers; *promotions overdue* (admin's L2.6 built the ageing against a seam: wire it).
-2. **The Studio's *Analyst promotions* list** in `ingest/runs/`, by agreement.
-3. **A removed case's layer merged** by the dataset's Authors as a promotion, with the read grant for that merge
-   only, and its delete (Amendment 2 decision 1). A composite case's layer is never merged, only deleted (the
-   orchestrator's settlement, admin's Q5); the owner may later choose a member merge.
-4. **Carried:** the withdrawal rule settled for this step (spec 03; `MORNING.md` item 60): `board_items.
-   promoted_at` set at promotion; an unseen promoted link stays and the withdrawer is told nothing. From
-   `CARRIES.md`: mount rules-b's alert badge overlay and the boards' Alerts panel if rules-b's L2.12 has landed.
+**Build** (the plan's row L3.9): the Studio's *Merge into a dataset…* with map, match, dry run and merge; a drawn
+dataset's items merged into a target dataset as one load under the target's policy and highest marking; matches
+proposed as scored inferred `SAME_AS`, never collapsed in storage, a person confirming (rules 5, 6); the drawing
+becomes a case view with its annotations; the merge reverted as a load is (L3.4's revert). Carried (CARRIES): the
+stale `test_valkey_store.py` branch case (rewrite for views, or remove, red first).
 
-**Ask the owner first (through the orchestrator; it stops only that piece): open question 2, online revert of
-a promotion.** Build the rest.
+**Tests first, each red by a plant at the real call site:** decisions 6 and 7's tests as ADR-143 names them; a merge
+into a dataset the merger may not write refused, and one above the target's highest marking refused, nothing
+written; no match proposed across a dataset the merger may not read, and a match's existence not revealed by a
+count, an order or a timing (rule 7); the dry run counts only what the merger may see; keyboard cases for every
+new action (rule 13), registry ids as a diff; axe in dark, light and GOV.UK.
 
-**Tests first, each red by a plant at the real call site:** ADR-143's promotion and policy tests; a promotion
-above the dataset's highest marking refused; the read grant for a layer merge ends with that merge; no
-promoted item is readable before review where the policy asks for one; decision 1's tests; keyboard cases
-(rule 13), registry ids as a diff; axe in dark, light and GOV.UK.
-
-**Exit.** The row's exit; make ci and make test green offline; live cases under a named lease and stack; a
-friction fragment. Report in Prompt L's format, then stop.
+**Exit.** The row's exit (decisions 6 and 7's tests); `make ci` and `make test` green; live cases under a named lease
+and stack; a friction fragment (one row). Report in Prompt L's format, then stop.
