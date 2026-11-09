@@ -117,7 +117,6 @@ async def test_the_owner_sees_the_hotlist_and_what_fired_it_and_a_stranger_the_h
         await graph.commit_transaction(tx)
         revoked = await _view(alert, OWNER, graph, hotlists)
         assert revoked is None, "the queue refuses the alert whole, so nothing of what fired it is said"
-        assert "pid_" not in revoked.model_dump_json()
 
 
 async def test_a_node_in_two_datasets_has_its_sources_withheld_from_a_case_of_one(stores) -> None:

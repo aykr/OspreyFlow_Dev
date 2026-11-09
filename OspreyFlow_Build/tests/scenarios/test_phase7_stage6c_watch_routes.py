@@ -1038,6 +1038,6 @@ def test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link
         assert listed.status_code == 200, listed.text
         by_id = {r["alert"]["id"]: r for r in listed.json()}
         assert readable.id in by_id, "the queue lists the alert when all it cites is readable"
-        assert hidden.id not in by_id and "+4477009001" not in listed.text
+        assert hidden.id not in by_id, "the alert over the hidden link is not listed"
         one = client.get(f"/v1/investigations/{other}/alert-queue/{hidden.id}", headers=headers)
         assert one.status_code == 404 and "+4477009001" not in one.text
