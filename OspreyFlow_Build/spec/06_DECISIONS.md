@@ -31008,7 +31008,7 @@ Studio's refused actions are disabled as before, and Admin › Roles still says 
 1. **Who can is said by role, never by person (the owner's ruling).** An action a person can't take says
    why and who can by naming the built-in roles that hold the right. For example: "You need Review
    promotions; the Data Engineer role has it. Ask an administrator to give it to you." With several roles:
-   "You need Load screening lists; the Data Engineer and Administrator roles have it. Ask an administrator to
+   "You need Load screening lists; the Administrator and Data Engineer roles have it. Ask an administrator to
    give you one." It never
    names a person, a role id, a role these words do not name (the Studio's older roles, which ADR-112
    folded into the Data Engineer), or the Super user preset (which is given as three roles). A custom role
