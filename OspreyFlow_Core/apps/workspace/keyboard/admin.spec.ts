@@ -149,6 +149,9 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
                          detail: "Only one of the dataset's Authors may merge a removed case's layer into it. Its Authors: eng-1." });  // prettier-ignore
     if (path === "settings/dataset-owners" && request.method() === "PUT") return json(200, request.postDataJSON());
     if (path === "settings/dataset-owners") return json(200, { owners_may_be: "people_and_teams" });
+    // L2.7: Policies' Grading scheme, read-only.
+    if (path === "/v1/grading-scheme")
+      return json(200, { scheme: "admiralty", source: ["A", "B", "C", "D", "E", "F"], intelligence: ["1", "2", "3", "4", "5", "6"], handling: ["P", "C"] });
     // ADR-140 Amendment 4: the Connections tab.
     if (path === "connections" && request.method() === "POST") {
       const sent = request.postDataJSON() as { kind: string; name: string };
@@ -494,6 +497,21 @@ test("a connection is named by keyboard", async ({ page }) => {
   await expect(page.getByText("Named Second folder.")).toBeVisible();
   expect(asked).toContain("POST connections");
   registerCovered(REGISTRY, "name-a-connection-by-keyboard");
+});
+
+// L2.7 (ADR-145 decision 12, ADR-143 Amendment 6; rule 13): the grading scheme read, and its change
+// command, the dry run's, copied by keyboard; nothing on the page changes the scheme.
+test("the grading scheme is read and its change command copied by keyboard", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "Grading scheme");
+  await expect(page.getByRole("table", { name: "The grades of admiralty" })).toContainText("A, B, C, D, E, F");
+  await press(page, "Copy the grading change command");
+  await expect(page.getByText("Copied. Run it in a terminal on the machine OspreyFlow runs on, the dry run first.")).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("ospreyflow grading change --to <scheme> --mapping <file> --dry-run");
+  expect(asked.filter((a) => !a.startsWith("GET "))).toEqual([]);
+  registerCovered(REGISTRY, "copy-the-grading-change-command-by-keyboard");
 });
 
 // L2.7 (ADR-140 Amendments 13 and 15; rule 13): an API connection's fields filled by keyboard, its

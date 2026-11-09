@@ -49,7 +49,7 @@ describe("the Admin place's sections (ADR-145 decision 5)", () => {
       "# People", "People and roles", "Roles", "Dashboard identities",
       "# Data", "Datasets", "Connections",
       "# Running", "Operations", "System", "Models", "Maps",
-      "# Policies", "Grading scheme (coming)", "Approval rights (coming)", "Uploads (coming)",
+      "# Policies", "Grading scheme", "Approval rights (coming)", "Uploads (coming)",
       "Audit",
       "Demo packs",
     ]); // prettier-ignore

@@ -1,7 +1,7 @@
 """The reader's *Needs you* route, L2.7 (`06_DECISIONS.md` ADR-145 decision 11, A2; Amendment 4
-decision 11, R7; ADR-090 Amendment 4; ADR-143 Amendment 4's *Open*, the strict reading). The real app,
-`get_principal`, the route, `_promotion_recipients`, `_reads_proposal_words` and `needs_you.py` run;
-the stores are stood in for, each answering as its real one does (`alerts_for` as
+decision 11, R7; ADR-090 Amendment 4; ADR-143 Amendment 4's *Open*, the strict reading). The real
+app, `get_principal`, the route, `_promotion_recipients`, `_reads_proposal_words` and `needs_you.py`
+run; the stores are stood in for, each answering as its real one does (`alerts_for` as
 `InMemoryAgeingStore`'s, which `test_promotion_ageing.py` holds to the Postgres one's contract).
 
 What a mistake would do, and the case that catches it (each shown red at its call site,
@@ -26,14 +26,14 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from ontology.handling import HandlingScheme
 from services.api.app import app
 from services.api.datasets import Dataset
 from services.api.investigations import AccessLevel, Investigation
 from services.api.link_types import ModelProposalView
-from services.api.promotion_ageing import InMemoryAgeingStore, PendingPromotion
 from services.api.needs_you import to_decide
+from services.api.promotion_ageing import InMemoryAgeingStore, PendingPromotion
 
+from ontology.handling import HandlingScheme
 from schemas.admin import PersonAccount, PromotionOverdueAlert
 from schemas.dataset_model import HomeCase
 from schemas.domain import Principal

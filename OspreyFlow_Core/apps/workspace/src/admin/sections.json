@@ -28,8 +28,7 @@
     {
       "label": "Policies",
       "sections": [
-        { "id": "grading-scheme", "label": "Grading scheme", "right": "administer_system",
-          "coming": "The deployment's grading scheme, read-only, with the command that changes it." },
+        { "id": "grading-scheme", "label": "Grading scheme", "right": "administer_system", "screen": "admin/sections/GradingScheme.tsx" },
         { "id": "approval-rights", "label": "Approval rights", "right": "administer_system",
           "coming": "Who may approve each kind of decision, how many people can, and a warning where fewer than two can." },
         { "id": "uploads", "label": "Uploads", "right": "administer_system",

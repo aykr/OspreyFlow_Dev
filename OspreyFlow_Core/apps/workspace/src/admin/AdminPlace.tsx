@@ -17,6 +17,7 @@ import { Connections } from "./sections/Connections";
 import { Dashboards } from "./sections/Dashboards";
 import { Datasets } from "./sections/Datasets";
 import { DemoPacks } from "./sections/DemoPacks";
+import { GradingScheme } from "./sections/GradingScheme";
 import { Maps } from "./sections/Maps";
 import { Models } from "./sections/Models";
 import { Operations } from "./sections/Operations";
@@ -53,6 +54,7 @@ export const ADMIN_GROUPS: AdminGroup[] = SECTIONS.groups;
 export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
   people: (api) => <People api={api} />,
   roles: (api) => <Roles api={api} />,
+  "grading-scheme": (api) => <GradingScheme api={api} />,
   dashboards: (api) => <Dashboards api={api} />,
   datasets: (api) => <Datasets api={api} />,
   connections: (api) => <Connections api={api} />,

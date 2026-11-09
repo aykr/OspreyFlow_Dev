@@ -12,6 +12,7 @@ What a mistake would do, and the case that catches it (each shown red at its cal
   `test_a_refused_connection_never_answers_what_was_sent`.
 """
 
+# ruff: noqa: F811 - `world` is the fixture, taken by name
 from __future__ import annotations
 
 import json
@@ -20,7 +21,12 @@ from typing import Any
 
 import pytest
 
-from tests.services.api.test_connector_routes import API, TOKEN, _as, world  # noqa: F401
+from tests.services.api.test_connector_routes import (
+    API,
+    TOKEN,
+    _as,
+    world,  # noqa: F401 - the fixture, by name
+)
 
 #: Each field an administrator could paste the value into, with the field the refusal names.
 PASTED: list[tuple[str, dict[str, Any], str]] = [

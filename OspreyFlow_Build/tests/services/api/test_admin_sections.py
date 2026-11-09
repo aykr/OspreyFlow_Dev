@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -71,10 +72,10 @@ NOT_A_SECTION_S = {
     # through their own route meanwhile).
     r"^/v1/admin/datasets/\{dataset_id\}/cases/\{investigation_id\}/delete$":
         "Admin › Datasets' Delete, the admin lane's screen to come",
-    # ADR-090 Amendment 4 (L2.7): Admin's Proposed types is removed, proposals being decided on the
-    # Studio's Model tab. These routes stay for proposals made before ADR-099 Amendment 3, which name
-    # no dataset (ADR-143 decision 5: the administrator's promotion "remains only" for those), with
-    # no screen of their own; `test_analyst_link_types.py` holds their access cases.
+    # ADR-090 Amendment 4 (L2.7): Admin's Proposed types is removed, proposals being decided on
+    # the Studio's Model tab. These routes stay for proposals made before ADR-099 Amendment 3,
+    # which name no dataset (ADR-143 decision 5: the administrator's promotion "remains only" for
+    # those), with no screen of their own; `test_analyst_link_types.py` holds their access cases.
     r"^/v1/admin/link-types": "the pre-Amendment 3 proposals, decided by the API alone since L2.7",
 }
 
@@ -208,7 +209,32 @@ def test_each_built_section_s_routes_need_its_right(section: str) -> None:
     s = next(x for x in built() if x["id"] == section)
     routes = section_routes(WORKSPACE_SRC, s["screen"], _routes())
     assert routes, f"{section}: its screen's walk found no route; the scan is not reading it"
-    assert unguarded(s["right"], routes) == []
+    assert unguarded(s["right"], _guarded_part(section, routes)) == []
+
+
+#: A section that reads a reference catalogue any signed-in person may read
+#: (`test_route_rights.py`'s `REFERENCE_CATALOGUES`), named here with exactly the routes it reads
+#: so: opening the section needs its right, but the catalogue never did, so it cannot loosen it.
+#: L2.7: Policies' Grading scheme, over `GET /v1/grading-scheme` (ADR-143 decision 11), alone.
+REFERENCE_READS: dict[str, set[str]] = {"grading-scheme": {"/v1/grading-scheme"}}
+
+
+def _guarded_part(section: str, routes: list[Any]) -> list[Any]:
+    return [r for r in routes if r.path not in REFERENCE_READS.get(section, set())]
+
+
+def test_a_section_reading_a_reference_catalogue_reads_it_and_nothing_unguarded() -> None:
+    """Each section named in `REFERENCE_READS` calls exactly those routes, each one a reference
+    catalogue of `test_route_rights.py` (so the exemption can neither hide another route nor name
+    a route that holds a unit's data)."""
+    from tests.services.api.test_route_rights import REFERENCE_CATALOGUES
+
+    by_path = {r.path: r for r in _routes()}
+    for section, paths in REFERENCE_READS.items():
+        s = next(x for x in built() if x["id"] == section)
+        walked = {r.path for r in section_routes(WORKSPACE_SRC, s["screen"], _routes())}
+        assert walked == paths, (section, walked)
+        assert {by_path[p].endpoint.__name__ for p in paths} <= REFERENCE_CATALOGUES
 
 
 def test_every_section_s_right_is_a_right() -> None:
@@ -225,7 +251,7 @@ def test_each_section_s_routes_refuse_a_principal_without_its_right(section: str
     from services.api.app import app, get_principal
 
     s = next(x for x in built() if x["id"] == section)
-    routes = section_routes(WORKSPACE_SRC, s["screen"], _routes())
+    routes = _guarded_part(section, section_routes(WORKSPACE_SRC, s["screen"], _routes()))
     who = Principal(id=f"section-{section}", clearance="SECRET", org_unit="unit-1",
                     roles=[f"right:{r.value}" for r in Right if r.value != s["right"]])  # fmt: skip
     app.dependency_overrides[get_principal] = lambda: who
@@ -246,7 +272,9 @@ def test_each_section_s_routes_refuse_a_principal_without_its_right(section: str
             )
     finally:
         app.dependency_overrides.pop(get_principal, None)
-    assert answers and all(code == 403 and why for _, code, why in answers), answers
+    # A section reading only a reference catalogue has none to refuse (`REFERENCE_READS`).
+    assert answers or section in REFERENCE_READS, section
+    assert all(code == 403 and why for _, code, why in answers), answers
 
 
 def test_every_admin_route_is_some_section_s() -> None:

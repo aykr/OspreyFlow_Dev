@@ -216,6 +216,10 @@ const EXTRA_STATES: Record<string, string[]> = {
     "rights=read_audit,read_rule_audit&serve=audit",
     "rights=read_audit,read_rule_audit&serve=audit&show=rules",
     "rights=operate_schedules&serve=operations",
+    // L2.7: Policies' Grading scheme, read-only with its command; Connections with an API connection
+    // listed and the form's SQL fields drawn.
+    "rights=administer_system&serve=policies&open=Grading%20scheme",
+    "rights=administer_system&serve=connections&open=Connections&show=sql",
   ],
 };
 
