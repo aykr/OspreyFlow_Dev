@@ -156,6 +156,12 @@ async def sweep(
     return report
 
 
+FAILED_WORDS_WITHOUT_COUNTS = (
+    "The daily KYC sweep could not judge every lapsed document for this rule; the rest of the "
+    "sweep went on."
+)
+
+
 async def _say_unjudged(
     audit: AuditWriter,
     sweeper: Principal,
@@ -180,6 +186,9 @@ async def _say_unjudged(
             "findings": raised, "documents_not_judged": unjudged,
             "words": (f"The daily KYC sweep could not judge {unjudged} lapsed document(s) for this "
                       f"rule{because}; the rest of the sweep went on."),
+            # Said instead to a reader the rule's firings are hidden from (rule 7, as a
+            # `rule_evaluated` entry's findings are withheld in `rule_holds.readable_rule_audit`).
+            "words_without_counts": FAILED_WORDS_WITHOUT_COUNTS,
         },
         result_cardinality=raised,
     )  # fmt: skip

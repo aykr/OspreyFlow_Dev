@@ -387,9 +387,16 @@ class CloseRefused(Exception):
 CloserCheck = Callable[[Alert], Awaitable[bool]]
 
 
+class NotTheHomeCasesAuthor(CloseRefused):
+    """ADR-146 decision 7: a dataset alert is closed by its home case's Authors alone; refused as
+    `not_the_home_cases_author` wherever a close is decided (dispose and approve alike)."""
+
+
 async def _refuse_a_dataset_alert_closer(alert: Alert, closer: CloserCheck | None) -> None:
     if alert.rule_id.startswith("analyst:dataset:") and (closer is None or not await closer(alert)):
-        raise CloseRefused("Only the Authors of the dataset's home case close a dataset alert.")
+        raise NotTheHomeCasesAuthor(
+            "Only the Authors of the dataset's home case close a dataset alert."
+        )
 
 
 def needs_second_person(row: QueueRow) -> bool:

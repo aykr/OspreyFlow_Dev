@@ -191,6 +191,27 @@ async def test_a_dataset_alert_is_closed_by_the_home_cases_authors_alone() -> No
     assert store.writes == ["triage d1"]
 
 
+
+async def test_a_dataset_alerts_close_is_refused_as_not_the_home_cases_author_wherever_decided() -> None:
+    """The orchestrator's review of L2.10: the approval of a proposed close refuses a closer who is
+    not an Author of a dataset alert's home case with the same code as the close itself
+    (`not_the_home_cases_author`), and keeps `own_change` for the proposer approving their own."""
+    from services.api.app import close_refusal
+
+    alert = _routed(id="d1", rule_id="analyst:dataset:ds-1", typology=None, routed_team=None,
+                    investigation_id=CASE)  # fmt: skip
+    store, graph, analytics = _team_world(alert)
+
+    async def no(_: Alert) -> bool:
+        return False
+
+    with pytest.raises(alert_queue.NotTheHomeCasesAuthor) as refused:
+        await alert_queue.approve_close(store, graph, analytics, CASE, "d1", MEMBER, closer=no)  # type: ignore[arg-type]
+    assert store.writes == []
+    assert close_refusal(refused.value).detail["error"] == "not_the_home_cases_author"
+    own = alert_queue.CloseRefused("You proposed closing this alert")
+    assert close_refusal(own).detail["error"] == "own_change"
+
 # --- a watched pattern on its own schedule (G16) ----------------------------------------------
 
 

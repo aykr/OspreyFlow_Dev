@@ -511,6 +511,14 @@ async def test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_it
     ):  # fmt: skip
         await stores["audit"].record(principal=ANALYST, action=action, investigation_id=case,
                                      resolved_query=detail, result_cardinality=1)  # fmt: skip
+    # The daily sweep's failure for the same rule, written by the sweep's own writer: its findings,
+    # its documents not judged, and both in its words (the orchestrator's review of L2.10, item 1).
+    from datetime import date
+
+    from services.api.kyc_sweep import _say_unjudged  # the writer at its real call site
+
+    await _say_unjudged(stores["audit"], ANALYST, case, rule_id, date(2026, 11, 9), raised=1, unjudged=3,
+                        why="the list held 7 rows")  # fmt: skip
     member = ANALYST.model_copy(update={"roles": [f"role:{team}"]})
     try:
         async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
@@ -525,6 +533,14 @@ async def test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_it
     assert "Okafor" not in str(outside.entries)
     (evaluated,) = [e for e in outside.entries if e.action == "rule_evaluated"]
     assert "findings" not in evaluated.detail and evaluated.detail.get("findings_withheld") is True
+    # The sweep's failure is said outside the team too, but with no count in it: not its findings,
+    # not its documents not judged, not in its words, not as its cardinality.
+    (failed,) = [e for e in outside.entries if e.action == "rule_evaluation_failed"]
+    assert failed.detail.get("findings_withheld") is True and failed.result_cardinality == 0
+    assert not {"findings", "documents_not_judged"} & failed.detail.keys()
+    assert not any(ch.isdigit() for ch in str(failed.detail["words"]))
+    (failed_inside,) = [e for e in inside.entries if e.action == "rule_evaluation_failed"]
+    assert failed_inside.detail["documents_not_judged"] == 3 and failed_inside.result_cardinality == 1
 
 
 async def test_an_alert_on_official_flows_into_a_secret_account_is_secret(

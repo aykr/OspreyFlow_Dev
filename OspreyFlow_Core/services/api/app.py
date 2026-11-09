@@ -13457,6 +13457,20 @@ def _home_case_author(
     return check
 
 
+def close_refusal(refused: alert_queue.CloseRefused) -> HTTPException:
+    """A refused close in words, its code by its reason: a dataset alert closed by someone not an
+    Author of its home case (ADR-146 decision 7) is `not_the_home_cases_author` wherever the close
+    is decided; the proposer approving their own close (ADR-133 decision 7) is `own_change`."""
+    code = (
+        "not_the_home_cases_author"
+        if isinstance(refused, alert_queue.NotTheHomeCasesAuthor)
+        else "own_change"
+    )
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail={"error": code, "message": str(refused)}
+    )
+
+
 async def _leads_today(request: Request, principal: Principal) -> set[str]:
     """The teams the reader acts as lead of today (ADR-146 Amendment 1): none where no custom-role
     store is attached."""
@@ -13629,10 +13643,7 @@ async def dispose_alert(
             closer=_home_case_author(investigations, principal),
         )
     except alert_queue.CloseRefused as refused:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "not_the_home_cases_author", "message": str(refused)},
-        ) from refused
+        raise close_refusal(refused) from refused
     action = "alert_close_proposed" if alert.status == "closing" else "alert_disposed"
     await _triage_audit(audit, principal, investigation.id, action, alert)
     return alert
@@ -13670,10 +13681,7 @@ async def approve_alert_close(
             closer=_home_case_author(investigations, principal),
         )
     except alert_queue.CloseRefused as refused:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "own_change", "message": str(refused)},
-        ) from refused
+        raise close_refusal(refused) from refused
     await _triage_audit(audit, principal, investigation.id, "alert_close_approved", alert)
     return alert
 

@@ -472,3 +472,59 @@ def test_neighbourhood_risk_is_read_at_viewer(
         assert read.json()["score"] == 1.0, "its own alert, at no hops"
         assert client.get(f"{base}/{node}", headers=_as(key, OUTSIDER)).status_code == 404
         assert client.get(f"{base}/{new_id()}", headers=_as(key, VIEWER)).status_code == 404
+
+
+def test_the_running_conduit_gives_the_alert_store_the_working_set_a_settle_purges_through(
+    api_env: None,
+) -> None:
+    """L2.10's carry (`test_read_path_purge.py`), through the real app and its lifespan: a settle on a
+    read path purges what it re-marked through `alerts_store.working_set`, so the running Conduit
+    must give the store the working-set service every other purge goes through; without it, the
+    copy keeps its old marking until the canvas next synchronises. Red with that line of the
+    lifespan removed (rule 12: the unit case presets the wiring, so only this case sees it)."""
+    from services.api.alerts import settle_repoints
+    from services.api.app import app
+    from services.api.working_set.service import WorkingSetService
+
+    with TestClient(app) as client:
+        store = app.state.alerts_store
+        assert isinstance(store.working_set, WorkingSetService)
+        assert store.working_set is app.state.working_set
+        # The settle a read path calls runs on the real store and graph with it, in the app's loop.
+        client.portal.call(settle_repoints, store, app.state.graph)  # type: ignore[union-attr]
+
+
+def test_a_member_whose_token_no_longer_carries_the_team_reads_nothing_routed_to_it(
+    api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-146 decision 8 through a real signed token (the orchestrator's review of L2.10): a team's
+    membership is the `role:<team>` its member's token carries, read on each request and never kept.
+    The same Editor, signed in with the team's role, is given the routed alert; signed in again
+    without it (they left the team), the queue does not show it to them."""
+    from schemas.domain import Alert, AlertMode
+
+    key, _ = keypair
+    case, team = asyncio.run(_case()), f"team-{new_id()}"
+    alert = Alert(id=new_id(), rule_id=f"typology:r-{new_id()}", owner_id=AUTHOR.id, mode=AlertMode.FULL,
+                  investigation_id=case, created_at=datetime.now(UTC), typology="sentence",
+                  words="a routed finding", routed_team=team)  # fmt: skip
+    from services.api.app import app
+
+    with TestClient(app) as client:
+        store = app.state.alerts_store
+        client.portal.call(store.save, alert)  # type: ignore[union-attr]
+        try:
+            def queued(**claims: object) -> list[str]:
+                got = client.get(f"/v1/investigations/{case}/alert-queue", headers=_as(key, EDITOR, **claims))
+                assert got.status_code == 200, got.text
+                return [row["alert"]["id"] for row in got.json()]
+
+            assert alert.id in queued(roles=["analyst", f"role:{team}"])
+            assert alert.id not in queued(roles=["analyst"])
+            assert alert.id not in queued(roles=["analyst", f"role:team-{new_id()}"])
+        finally:  # Prompt L: a live test removes what it writes to a shared stack
+            async def remove() -> None:
+                async with store._pool.acquire() as conn:  # noqa: SLF001 - the test's own clean-up
+                    await conn.execute("DELETE FROM alerts WHERE id = $1", alert.id)
+
+            client.portal.call(remove)  # type: ignore[union-attr]
