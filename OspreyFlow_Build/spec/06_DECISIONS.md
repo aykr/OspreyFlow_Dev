@@ -26547,7 +26547,7 @@ board, drawn item, promotion), `02_GLASS_FRONTEND.md` (boards) and `03_CONDUIT_M
 2. **Revert of a promotion online.** A revert today runs as an operator command with the Conduit
    stopped (ADR-127 Amendment 9). The prototype lets an analyst revert their own promotion from the
    board. An online path for promotion loads (small, one case's items) or the operator command only?
-   For the owner at L3.4.
+   For the owner at L3.4. **Settled (a), the operator command only** (Amendment 5 decision 8).
 3. Should the dataset's highest allowed marking (ADR-145 A3) bind pipeline loads as well as promotions?
    Recommendation: yes, as a load rule; its own amendment to ADR-140.
 4. Moving versus linking (C7): to be confirmed with one of the owner's field analysts before L3.3's
@@ -31227,14 +31227,21 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
    kept results, and is audited (a refusal after the audit is audited too). It is refused while a live
    link other than its own and the case's unpromoted drawing rests on one of its nodes (as a load's
    revert is, ADR-127 Amendment 6), and a promotion from a layer deleted since takes its elements
-   out with the layer. An online revert waits for the owner's ruling on open question 2.
+   out with the layer. **The owner ruled (a) on open question 2** (9 November 2026, through the
+   orchestrator): no online revert; the operator command is the only path. The board shows the
+   command to a data engineer and tells an analyst to ask one.
 9. **A link's type is checked against the dataset's live model**, its packs, as a node's is (C14).
    **A case's own proposed link types are usable on its boards at once** (decision 9), through
    `LinkTypeService.case_types` alone. A proposal's hidden storage label is never offered or accepted
    by name (the orchestrator's carried item). Their links are promoted only once live, through case-b's
    `promotion_refusals` (Amendment 4 decision 3).
 
-**Open.** Question 2 (online revert) is with the owner. The *Promotions overdue* sweep (ADR-145
+10. **A proposed link type's words go only to an accepter cleared for the case's marking.** The owner
+   ruled (b) on Amendment 4's open access question (9 November 2026, through the orchestrator): the
+   strict reading built meanwhile stands, in `link_types.may_read_proposal_words`; any other
+   `accept_types` holder is told only that a proposal exists above their clearance, without its words.
+
+**Open.** Nothing for the owner. The *Promotions overdue* sweep (ADR-145
 Amendment 6) is wired to this record when admin's L2.6 is on main (`WaitingFromStore`); until then the
 wiring is a patch in the case lane's folder.
 
