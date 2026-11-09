@@ -246,4 +246,17 @@ describe("the case's Figures (ADR-145 Amendment 4 decisions 8 and 10)", () => {
     fireEvent.click(button);
     expect(back).toHaveBeenCalledOnce();
   });
+
+  it("keeps the reader's focus when its parent draws again with an equal way back (WCAG 2.4.3)", async () => {
+    serve(queue);
+    const view = (onBack: () => void) => (
+      <ReportsView apiBaseUrl="http://x" bearerToken="t" investigationId="c1" canDownload={false}
+                   fromAlert={{ words: "the structuring alert", onBack }} />);  // prettier-ignore
+    const { rerender } = render(view(vi.fn()));
+    await screen.findByRole("note", { name: "Opened from an alert" });
+    const period = screen.getByRole("combobox", { name: "Period" });
+    period.focus();
+    rerender(view(vi.fn()));  // App builds the way back afresh on every render
+    expect(document.activeElement).toBe(period);
+  });
 });

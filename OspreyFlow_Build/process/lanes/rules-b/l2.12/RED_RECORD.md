@@ -110,3 +110,15 @@ closed ports (59991–59994), no lease.
 - **See the trend (patch), only with `read_reports`:** a new App case as the Rule author (no
   `read_reports`); plant, the button offered whatever the rights → FAILED; restored. Leaving the
   Dashboards now ends the trend's filter. The patch's App test sits before the evidence test's comment.
+
+## 11. After the final lane review (round 3, at the rebased head 9edc5d4)
+
+- **The way back keeps the reader's focus (WCAG 2.4.3):** App builds `journeyBack` afresh on every render,
+  and the Figures and the board focused it whenever the object changed, so any re-render pulled focus
+  back to *← Back to your alerts*. The keyboard harness passes one stable object, so it could not see this
+  (rule 12). New cases in `ReportsView.test.tsx` and `AlertMonitoringBoard.test.tsx` draw the parent again
+  with an equal, new way back after focus moved to Period / Rule: both FAILED on the code as it stood (focus
+  taken back); green with the effect keyed on the way back being present (`fromAlert !== null`), not on
+  its identity. That is the real call site's shape: a fresh object per render, as App passes it.
+- The rule-group table had two Glass copies (`AlertsPanel.groupOf`, `homeData.ruleGroupOf`); now one,
+  `figureParts.alertRuleGroup`, which both read (the Conduit's `_RULE_GROUP` is its counterpart).

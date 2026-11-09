@@ -113,6 +113,18 @@ describe("the Alert monitoring board", () => {
     fireEvent.click(within(note).getByRole("button", { name: "← Back to your alerts" }));
     expect(back).toHaveBeenCalledOnce();
   });
+
+  it("keeps the reader's focus when its parent draws again with an equal way back (WCAG 2.4.3)", async () => {
+    serve();
+    const board = (onBack: () => void) => (
+      <AlertMonitoringBoard api={API} fromAlert={{ words: "the structuring alert", onBack }} />);
+    const { rerender } = render(board(vi.fn()));
+    await screen.findByRole("note", { name: "Opened from an alert" });
+    const rule = screen.getByRole("combobox", { name: "Rule" });
+    rule.focus();
+    rerender(board(vi.fn()));  // App builds the way back afresh on every render
+    expect(document.activeElement).toBe(rule);
+  });
 });
 
 describe("a Superset board under the Glass's own board's slug", () => {

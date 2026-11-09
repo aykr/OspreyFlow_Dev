@@ -137,9 +137,11 @@ export interface ReportsViewProps extends ReportsApi {
 export function ReportsView({ canDownload, onOpenAlert, fromAlert = null, initialWeeks = 12, ...api }: ReportsViewProps) {
   const [weeks, setWeeks] = useState(PERIODS.includes(initialWeeks) ? initialWeeks : 12);
   const back = useRef<HTMLButtonElement>(null);
+  // Focus the way back when it first appears, not each time the parent hands over an equal one.
+  const opened = fromAlert !== null;
   useEffect(() => {
-    if (fromAlert) back.current?.focus();
-  }, [fromAlert]);
+    if (opened) back.current?.focus();
+  }, [opened]);
   const [figures, setFigures] = useState<ReportFigures | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 

@@ -58,9 +58,11 @@ export function AlertMonitoringBoard({ api, filter = {}, onOpenAlert, fromAlert 
   const [problem, setProblem] = useState<string | null>(null);
   const back = useRef<HTMLButtonElement>(null);
 
+  // Focus the way back when it first appears, not each time the parent hands over an equal one.
+  const opened = fromAlert !== null;
   useEffect(() => {
-    if (fromAlert) back.current?.focus();
-  }, [fromAlert]);
+    if (opened) back.current?.focus();
+  }, [opened]);
 
   useEffect(() => {
     let live = true;
