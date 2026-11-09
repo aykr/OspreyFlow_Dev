@@ -633,6 +633,12 @@ New ones are added at the bottom as they happen.
     here, so I removed them all, after checking every one was empty and none is tracked. The lane worktrees in
     `~/dev` were never synced. `.git` still holds leftover temporary objects from today's crashes (git warns about
     them); harmless, and left for you, or for a `git gc` when no lane is working.
+94. **Admin's L2.7 sent back after my independent review (about 20:45).** Needs you serves the overdue-promotion
+    alerts without the items' own marking (the gap I carried at 19:40), so it could show a reader what the Studio
+    hides. Also: only 4 of 69 keyboard specs rerun, and the words test missing most Admin sections. **My call:** no
+    above-clearance proposal flag in Needs you. It leaks whether any proposal is still open, and that reader
+    can't act on it (ADR-143 Am 4 (b), strict). Studio's L1.5 is clear once its live run is green (a GROUPING
+    SETS rule added in the last look). Rules is fixing ClickHouse's `event_frequency` on c.
 
 ## Evening, 7 November: your records of 7 November applied
 
