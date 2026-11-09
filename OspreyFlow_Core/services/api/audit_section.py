@@ -81,6 +81,8 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "set_drawn_picture",
         "choose_drawn_picture",
         "decide_board_match",
+        # L3.7 (ADR-143 Amendment 6): an analyst's change to an item's grading.
+        "grading_change",
     ),
     "loads_and_promotions": (
         "run_studio_recipe",
