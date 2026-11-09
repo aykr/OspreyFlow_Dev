@@ -14,7 +14,13 @@ What a mistake would do, and the case that catches it (each shown red at its cal
 - a dataset reached by no case of the reader's asked or listed:
   `test_only_the_datasets_the_readers_cases_load_into_are_asked`;
 - proposals counted for someone without `accept_types`:
-  `test_no_proposal_is_counted_without_accept_types`.
+  `test_no_proposal_is_counted_without_accept_types`;
+- a promotion served after it stopped waiting, its people read per alert:
+  `test_a_promotion_no_longer_waiting_is_not_shown`, `test_the_people_are_read_once_a_read`;
+- a dataset a case only reads reached: `test_a_dataset_a_case_only_reads_is_not_reached`;
+- an item marked above a reviewer served to them (an unmarked dataset, or one lowered while it
+  waits): `test_an_item_marked_above_a_reviewer_on_an_unmarked_dataset_is_not_served_to_them`,
+  `test_a_dataset_lowered_while_the_promotion_waits_widens_nothing` (CARRIES row 46).
 """
 
 from __future__ import annotations
