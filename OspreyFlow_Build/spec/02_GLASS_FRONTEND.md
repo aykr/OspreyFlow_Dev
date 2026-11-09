@@ -1296,8 +1296,11 @@ gives the rows to (ADR-146 Amendment 2 point 3; anyone else sees the counts alon
 its address only for someone Rules and Monitoring is offered to; for anyone else it is words. A *Drawing*
 panel (drawn, promoted, awaiting review, withdrawn) is drawn only when the report carries `drawing`, which
 it does not until promotions are built (L3.4). Opened from an alert (the Reports Viewer's journey, below),
-the tab says "From the ‹rule group› alert · ← Back to your alerts", the way back focused, and outlines the
-Alerts panel. Every action has its case in `keyboard/reports.spec.ts` (`REPORTS_ACTIONS`);
+the tab says "From alert: ‹the alert's title on Home› · ← Back to your alerts" (decision 10's "From alert
+A14": the workspace has no short alert number), the way back focused, and outlines the Alerts panel; leaving
+the tab ends the journey. The Alerts panel's row and the way back have their cases in
+`keyboard/alert-figures.spec.ts` (`ALERT_FIGURES_ACTIONS`); every other action has its case in
+`keyboard/reports.spec.ts` (`REPORTS_ACTIONS`);
 the view switch itself, never proved by keyboard before, in `keyboard/shell.spec.ts`
 (`views-chosen-by-keyboard`).
 
@@ -1348,7 +1351,8 @@ admin lane takes them; the Studio's door waits for its review, accept-type and m
 
 **Trends, report packs and their distribution (ADR-113, Amendments 1 to 3).** The Reports view's
 tabs are *Figures*, then — each only with its right (`rights/visibility.ts`) — *Trends*
-(run_analysis), *Packs* (record_assessment), *Published* (read_reports), then *Dashboards*.
+(run_analysis), *Packs* (record_assessment), *Published* (read_reports), then *Data feeds*
+(read_data_feeds); the *Dashboards* tab went with the second door (ADR-145 Amendment 4 decision 8).
 *Trends* builds a trend from `GET …/trends/options` only, which offers the core types and those of
 the case's own domain packs (ADR-126):
 - **Outside types.** A saved trend that uses a type outside them is marked "Uses link types outside
