@@ -67,6 +67,25 @@ test("the Studio's reminder opens 1 Model · n proposed by keyboard, its tip rea
   registerCovered(REGISTRY, "open-the-model-tab-from-the-studios-reminder-by-keyboard");
 });
 
+// The real path from Needs you into the Studio (`admin/needsYou/openings.ts`): the request App leaves
+// in the session before the case opens is taken by the Studio drawn on that dataset, which opens on
+// 1 Model; one for another dataset is left waiting.
+test("a Needs you request opens the Studio on its dataset's Model tab, and not on another's", async ({ page }) => {
+  await page.addInitScript(() =>
+    sessionStorage.setItem("osprey.needsYou.opening", JSON.stringify([{ kind: "studio", tab: "model", datasetId: "harbour-extract" }])),
+  );
+  await page.goto("/keyboard/ingest-studio-harness.html?proposed=1");
+  await expect(page.getByRole("tab", { name: "1 Model · 2 proposed" })).toHaveAttribute("aria-selected", "true");
+  expect(await page.evaluate(() => sessionStorage.getItem("osprey.needsYou.opening"))).toBeNull();
+  const other = await page.context().newPage();
+  await other.addInitScript(() =>
+    sessionStorage.setItem("osprey.needsYou.opening", JSON.stringify([{ kind: "studio", tab: "model", datasetId: "carrier-records" }])),
+  );
+  await other.goto("/keyboard/ingest-studio-harness.html?proposed=1");
+  await expect(other.getByRole("tab", { name: "3 Pipelines" })).toHaveAttribute("aria-selected", "true");
+  expect(await other.evaluate(() => sessionStorage.getItem("osprey.needsYou.opening"))).toContain("carrier-records");
+});
+
 // ADR-145 Amendment 4 decision 12 (L2.7): Home's What you can do, and what you answer for, by keyboard:
 // each line's why read with it, a case, a Model tab and Operations opened, and Why can I do this? opened.
 test("what you answer for opens where to act, its why read with each line, by keyboard", async ({ page }) => {

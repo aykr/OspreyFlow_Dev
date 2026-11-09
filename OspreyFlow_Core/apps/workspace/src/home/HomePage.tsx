@@ -45,7 +45,7 @@ export interface HomePageProps {
   marking: string | null;
   now?: Date;
   /** ADR-145 Amendment 4 decision 12 (L2.7): *What you can do, and what you answer for*, drawn by
-   * App from the person's own reads (`home/AnswersFor.tsx`). */
+   * App from the person's own reads (`home/AnswersForSection.tsx`). */
   answers?: ReactNode;
 }
 

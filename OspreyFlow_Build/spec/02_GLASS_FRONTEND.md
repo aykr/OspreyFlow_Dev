@@ -1445,6 +1445,28 @@ case, counted as the reader — Home adds no read path; a case that refuses (403
 fails is said. *The Glass* goes to *Choose a case*, *Ingest Studio* to *Choose the case to load into*,
 *Admin* to the Admin place with no case; the mark returns to Home from anywhere.
 
+**What you can do, and what you answer for** (ADR-145 Amendment 4 decision 12; L2.7;
+`home/answersFor.ts`, `home/AnswersForSection.tsx`) is worked out from the person's own reads alone:
+their rights, their roles, their case list and `GET /v1/me/needs-you`. It holds four things:
+- the places their rights open;
+- what they can do, by place, in `help/roles.ts`'s words, each with *Why can I do this?* naming their own
+  role that gives it (or "a right given to you alone", or "a role your administrator made");
+- their level in each case;
+- what they answer for, with what waits. That is: *Author of* each case they author; each promotion
+  overdue to them (opening Admin › Operations for a holder of `operate_schedules`); and each dataset's
+  proposed link types to decide (opening that dataset's Model tab). One above their clearance is said to
+  exist and opens nothing.
+
+**Not drawn yet, for want of a source Home may read** (said nowhere rather than invented):
+- a level given "through" a team, which the case list does not carry;
+- the *Lead of*, *Covering as lead until* and *Owner of watches* lines;
+- a waiting count on an *Author of* line;
+- for an Author who does not hold `operate_schedules`, a place to act on an overdue promotion. Its review
+  is L3.4's promotion screen.
+
+Each is to be added when its read exists: a team-level case listing, a reader's team and lead read, a
+reader's watches read, and L3.4's review route.
+
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
 running system, behind the same sign-in — *Admin* in the place switcher or Home's *Admin* card, a place
 of its own with no case (ADR-145 decision 1, ADR-110 Amendment 14). **Its sections (ADR-145 decision

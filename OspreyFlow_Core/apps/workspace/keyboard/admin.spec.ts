@@ -499,6 +499,44 @@ test("a connection is named by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "name-a-connection-by-keyboard");
 });
 
+// L2.7 (ADR-140 Amendments 13 and 15; rule 13): a SQL connection named with its fields by keyboard,
+// its secret by name, and a JSON connection bound to its dataset.
+test("a SQL and a JSON connection are named with their fields by keyboard", async ({ page }) => {
+  await serve(page);
+  const sent = sentTo(page, "POST", "/v1/admin/connections");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "Connections");
+  await page.getByLabel("Kind").selectOption("sql");
+  const type = async (name: string, text: string, clear = false) => {
+    await page.getByRole("textbox", { name, exact: true }).focus();
+    if (clear) await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type(text);
+  };
+  await type("Connection name", "Client replica (synthetic)");
+  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.keyboard.press("Space");
+  await type("Host", "replica.client.example");
+  await type("Database", "nomis");
+  await type("Read-only login", "osprey_reader");
+  await type("Secret's name (the login's password)", "NOMIS_REPLICA");
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Client replica (synthetic).")).toBeVisible();
+  registerCovered(REGISTRY, "name-a-sql-connection-by-keyboard");
+  await page.getByLabel("Kind").selectOption("json");
+  await type("Connection name", "Exports (synthetic)");
+  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.keyboard.press("Space");
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Exports (synthetic).")).toBeVisible();
+  expect(sent).toEqual([
+    { kind: "sql", name: "Client replica (synthetic)", datasets: ["enron"],
+      settings: { kind: "sql", host: "replica.client.example", port: 5432, database: "nomis", user: "osprey_reader",
+                  secret: "NOMIS_REPLICA", tls: "verify-full", schemas: ["public"] } },
+    { kind: "json", name: "Exports (synthetic)", datasets: ["enron"], settings: { kind: "json" } },
+  ]); // prettier-ignore
+  registerCovered(REGISTRY, "name-a-json-connection-by-keyboard");
+});
+
 // L2.7 (ADR-145 decision 12, ADR-143 Amendment 6; rule 13): the grading scheme read, and its change
 // command, the dry run's, copied by keyboard; nothing on the page changes the scheme.
 test("the grading scheme is read and its change command copied by keyboard", async ({ page, context }) => {
