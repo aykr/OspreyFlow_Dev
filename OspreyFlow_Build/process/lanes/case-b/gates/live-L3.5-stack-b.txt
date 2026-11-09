@@ -1,0 +1,22 @@
+F.......................                                                 [100%]
+=================================== FAILURES ===================================
+_____________ test_every_route_names_the_right_the_table_gives_it ______________
+
+    def test_every_route_names_the_right_the_table_gives_it() -> None:
+        routes = _routes()
+>       assert set(routes) == set(ROUTE_RIGHTS), (
+            f"in the app, not the table: {sorted(set(routes) - set(ROUTE_RIGHTS))}; "
+            f"in the table, not the app: {sorted(set(ROUTE_RIGHTS) - set(routes))}"
+        )
+E       AssertionError: in the app, not the table: ['models_admin_limits_route', 'models_admin_usage_route']; in the table, not the app: []
+E       assert {'accept_docu...e_route', ...} == {'accept_docu...e_route', ...}
+E         
+E         Extra items in the left set:
+E         'models_admin_limits_route'
+E         'models_admin_usage_route'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py:438: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+1 failed, 23 passed in 17.93s
