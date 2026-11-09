@@ -31479,7 +31479,7 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    (`tools/licence_check.find_runtime_offenders`) checks over every Dockerfile, and a Java stage, a
    `jlink`, an `/opt/java` or a distribution's Java package with no such label fails too. The labels are
    read however they are written (quoted or not, several on a line, continued, the legacy form).
-   **`git`** (GPL-2.0-only, in the image since round 13bf: the Conduit runs it to publish recipes,
+   **`git`** (GPL-2.0-only, already in the image: the Conduit runs it to publish recipes,
    `09_INGEST_STUDIO.md` §6) is declared the same way; the register does not pass it, so the leg names it
    on every run as **awaiting the owner** (`AWAITING_OWNER`), never silently, and an undeclared `git`
    fails.
@@ -31489,7 +31489,9 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
    `PUT`/`DELETE /v1/datasets/{dataset}/gazetteers/{gazetteer}`, behind the dataset route's own gate (a
    person one of whose cases loads into the dataset) and **`run_pipelines`**, the right that runs a load
    into a dataset, the narrowest that may write into it; a composite or a drawn dataset is refused, as for
-   any load. **The gazetteer must be of the dataset's own unit**, refused in words otherwise (409). The
+   any load. **The gazetteer must be of the dataset's own unit**; another unit's is refused with the same
+   404 and words as no gazetteer at all, so the answer tells nothing of which regions another unit has
+   built. The
    case's `GET /v1/investigations/{id}/map/gazetteers` (Viewer, `investigate`) lists the gazetteers of its
    own dataset's unit and which it holds, by name only, never a count of places.
    - **A copy** is a `Location` of its own (rule 6), its id made from the place's and the dataset's, with
@@ -31504,10 +31506,11 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
      added; a case deleted or moved leaves the record with the copies.
    - **Copied in pages of 500, each its own transaction**, never one unbounded write; a copy that fails
      part way is finished by copying again (the same nodes). A failed re-add leaves the earlier record.
-   - **A copy the case has made its own** (another writer's source, as when a case's own load matched it
-     by its `osm_id` through `find_node`, a load's lookup that 3b leaves unguarded since the identifier is
-     the loader's own row's; or a person's confirmation) **is the case's data now: a re-build never writes
-     over it**, though the store's merge keeps the newest write.
+   - **A copy the case has made its own** (another writer's source, as when a case's own upsert-mode load
+     matched and wrote onto it; or a person's confirmation) **is the case's data now: a re-build never
+     writes over it**, though the store's merge keeps the newest write. A reference-mode lookup
+     (`on_match: reference`, through `find_node`, which 3b leaves unguarded since the identifier is the
+     loader's own row's) finds the copy and links to it, writing nothing onto it.
    - **A re-build refreshes the rest**: the Admin route and both command-line builds copy the places again
      into every recorded dataset once the places commit, drop the record of a dataset no longer there
      (never writing into one).
@@ -31524,13 +31527,18 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
      signal. No link read at the highest clearance decides anything.
    - **Failures.** A copy that fails part way leaves its pages committed and the record in place, so
      the dataset is said to hold the gazetteer and adding it again finishes the copy, or removing it
-     stops it. One dataset's failed refresh is said in the build's words and neither fails the
-     committed build nor skips the datasets after it. Another unit's gazetteer is refused with the
+     stops it. Any refresh failure (one dataset's copy, or the records' own read) is said in the
+     build's words, naming no dataset, and neither fails the committed build nor skips the datasets
+     after it. A removal needs only its record, never the gazetteer's state now; a re-add is
+     recorded as the re-adder's. Another unit's gazetteer is refused with the
      same 404 and words as no gazetteer at all, so the answer tells nothing of which regions another
      unit has built. The copier reads as the dataset's own unit, so a restricted code is seen.
-   - **A real case load references a copy, never writes onto it**: a recipe's lookup by `osm_id`
-     finds the copy and links to it (`find_node`), so a load does not make the copy the case's; a
-     confirmation or a merge does.
+   - **Which loads make a copy the case's**: a reference-mode load (the gazetteer recipe's, proven
+     live) links to a copy without writing onto it, so it does not; an upsert-mode write onto the
+     copy's id, or a confirmation, does (both proven live).
+   - **The place search reads the removal records as its dependency**: a Conduit without them
+     answers 503, never offering a removed gazetteer's copies again. A removed gazetteer's copies are
+     left out after the store's scan, so they count toward its limit, and `more` says so (rule 2).
 
 3. **The gazetteer's unit a build setting (ruling 8).** The recipe's `unit-1` is no longer what a build
    uses: *Admin › Maps*' Build takes a unit (empty: the administrator's own), and `ospreyflow map build`
