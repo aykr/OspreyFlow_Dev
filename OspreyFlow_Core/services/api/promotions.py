@@ -99,6 +99,7 @@ class _LinkTypes(Protocol):
     async def promotion_refusals(
         self, investigation_id: str, principal: Principal, names: Sequence[str]
     ) -> dict[str, str | None]: ...
+    async def case_types(self, investigation_id: str, principal: Principal) -> dict[str, Any]: ...
 
 
 class _Investigations(Protocol):
@@ -141,7 +142,7 @@ class Promotions:
     #: The audit entry for a promotion ended rejected by anything but a reviewer's own *Reject*
     #: (the approval's re-check, a refused or failed load, a restored case, a deleted layer),
     #: which the route audits itself: no state change without its entry.
-    on_rejected: Callable[[PromotionRecord, str], Awaitable[None]] | None = None
+    on_rejected: Callable[[PromotionRecord, str, str | None], Awaitable[None]] | None = None
     #: A picture's Document as the last `_read` found it.
     _docs: dict[str, Node] = field(default_factory=dict)
 
@@ -204,8 +205,16 @@ class Promotions:
         """Every check each item fails, as (check, words) (decision 8's checks; `CHECKS`)."""
         highest = self.highest(dataset)
         node_types = set(await self.boards.node_types(case_id))
+        # A link of the case's own proposed type is stored under its storage label
+        # (`<NAME>__<proposal>`, decision 9) and asked of `promotion_refusals` by the name it reads
+        # as, which is what that service answers by (found through the real service, L3.4).
+        reads_as = await self._link_names(case_id, reader)
         link_names = sorted(
-            {r.element.type for r in reads if r.item.kind == "link" and r.element is not None}
+            {
+                reads_as.get(r.element.type, r.element.type)
+                for r in reads
+                if r.item.kind == "link" and r.element is not None
+            }
         )
         refusals: dict[str, str | None] = {}
         if link_names and self.link_types is not None:
@@ -238,14 +247,13 @@ class Promotions:
                     ("types", f"{element.type} is not a type of {dataset.name}'s model.")
                 )
             if read.item.kind == "link":
-                why = refusals.get(element.type)
+                name = reads_as.get(element.type, element.type)
+                why = refusals.get(name)
                 if why is not None:
                     problems.append(("types", why))
-                elif self.model_check_applies(element.type, refusals) and (
-                    element.type not in model_links
-                ):
+                elif self.model_check_applies(name, refusals) and name not in model_links:
                     problems.append(
-                        ("types", f"{element.type} is not a link type of {dataset.name}'s model.")
+                        ("types", f"{name} is not a link type of {dataset.name}'s model.")
                     )
             drawn = element.provenance.drawn
             if read.item.kind in ("node", "link"):
@@ -522,6 +530,15 @@ class Promotions:
             )
         return item.source in lands and item.target in lands
 
+    async def _link_names(self, case_id: str, reader: Principal) -> dict[str, str]:
+        """Each storage label a link of this case may have been written under, and the name it
+        reads as, from case-b's `LinkTypeService.case_types` (a proposal pending, accepted, or
+        accepted and live in the dataset's model); nothing without the service."""
+        if self.link_types is None:
+            return {}
+        offered = await self.link_types.case_types(case_id, reader)
+        return {t.storage_name: name for name, t in offered.items() if t.storage_name != name}
+
     def model_check_applies(self, name: str, refusals: dict[str, str | None]) -> bool:
         """C14 for a link: a type of the ontology goes only when the dataset's live model holds it,
         whatever `promotion_refusals` says (it answers `None` for every ontology type, leaving the
@@ -560,6 +577,7 @@ class Promotions:
         by: str | None,
         reason: str,
         audited_by_route: bool = False,
+        check: str | None = None,
     ) -> bool:
         """Every way a promotion ends rejected (a reviewer's, the approval's re-check, a refused or
         failed load, its layer deleted): recorded once, and a layer merge's read grant closed with
@@ -576,7 +594,7 @@ class Promotions:
         if record.grant_id is not None:
             await self.store.close_grant(record.grant_id, now)
         if done and not audited_by_route and self.on_rejected is not None:
-            await self.on_rejected(record, reason)
+            await self.on_rejected(record, reason, check)
         return done
 
     async def item_marked(self, case_id: str, item_id: str, marking: str) -> None:
@@ -807,7 +825,11 @@ class Promotions:
             )
             # Rule 3: the record keeps fixed words (it is listed to readers who may not read the
             # layer); the reviewer, who has read every item, is told which one and why.
-            await self.reject(record, was="awaiting_review", by=reviewer.id, reason=_CHANGED)
+            # The failing check's code goes to the audit trail, for the dataset's other Authors.
+            code = problems[failing[0][0].item.item_id][0][0] if failing else "withdrawn"
+            await self.reject(
+                record, was="awaiting_review", by=reviewer.id, reason=_CHANGED, check=code
+            )
             raise PromotionRefused("items_changed", f"Nothing was promoted. {why}")
 
     # --- views ----------------------------------------------------------------------------
@@ -821,7 +843,8 @@ class Promotions:
         why_not: str | None = None,
         reverts: bool = False,
         with_board: bool = False,
-        show_case: bool = True,
+        # Fails closed: a caller that forgets says nothing of the case (the lane review, minor 10).
+        show_case: bool = False,
         counts: tuple[int, int] | None = None,
     ) -> Promotion:
         """One promotion for `reader`. What it left out, with its labels as the sheet showed them,

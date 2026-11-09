@@ -362,6 +362,9 @@ class _LinkTypes:
     ) -> dict[str, str | None]:
         return dict.fromkeys(names, self.why)
 
+    async def case_types(self, case_id: str, principal: Principal) -> dict[str, Any]:
+        return {}  # its type is an ontology type, written under its own name
+
 
 def test_a_link_of_a_type_not_yet_live_is_refused_and_promotable_once_live(
     pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
@@ -914,10 +917,23 @@ def test_a_layer_merge_is_refused_to_a_non_author_and_for_an_open_case(pw: Simpl
     unknown = _as("dana").post("/v1/datasets/src/removed-cases/no-such-case/merge-sheet")
     assert opened.status_code == unknown.status_code == 404
     assert opened.json() == unknown.json()
-    for path in (f"removed-cases/{K}/delete/dry-run",):
-        assert _as("dana").post(f"/v1/datasets/src/{path}").json() == _as("dana").post(
-            "/v1/datasets/src/removed-cases/no-such-case/delete/dry-run"
-        ).json()
+    assert _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/delete/dry-run").json() == _as(
+        "dana"
+    ).post("/v1/datasets/src/removed-cases/no-such-case/delete/dry-run").json()
+
+
+def test_an_open_cases_layer_is_never_deleted_from_the_studio(pw: SimpleNamespace) -> None:
+    """The destructive path (the lane review, finding 6): Delete on an open case answers as an
+    unknown id does, 404, and withdraws nothing."""
+    board = _board()
+    drawn = _item(board)
+    deleted = _as("dana").delete(f"/v1/datasets/src/removed-cases/{K}/layer")
+    unknown = _as("dana").delete("/v1/datasets/src/removed-cases/no-such-case/layer")
+    assert deleted.status_code == unknown.status_code == 404
+    assert deleted.json() == unknown.json()
+    assert not pw.graph.node(drawn["element_id"]).audit.reverted
+    assert pw.items.items[drawn["item_id"]].withdrawn_at is None
+    assert "delete_layer" not in [r["action"] for r in pw.audit.records]
     pw.removed.add(K)
     answer = _as("fred").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet")
     assert answer.status_code == 403 and answer.json()["error"] == "not_an_author"
@@ -1035,7 +1051,7 @@ async def test_the_waiting_seam_lists_only_the_readers_unit_and_clearance(
 
 
 async def _run_the_command(
-    pw: SimpleNamespace, load_id: str, *, dry_run: bool, conduit_running: bool = False
+    pw: SimpleNamespace, load_id: str, *, dry_run: bool, conduit: str = "stopped"
 ) -> int:
     from scripts.revert_promotion import run
     from services.api.dataset_scope import stamping
@@ -1048,13 +1064,13 @@ async def _run_the_command(
     code = await run(
         load_id, reverted_by="ops", dry_run=dry_run, store=pw.store,
         graph=stamping(pw.graph, registry=pw.datasets), items=pw.items, audit=pw.audit,
-        invalidate=invalidate, conduit_running=lambda: _answers(conduit_running),
+        invalidate=invalidate, conduit=lambda: _answers((conduit, "planted")),
     )  # fmt: skip
     pw.cleared = cleared
     return code
 
 
-async def _answers(value: bool) -> bool:
+async def _answers(value: Any) -> Any:
     return value
 
 
@@ -1382,7 +1398,7 @@ def _reject_keeping_the_grant(monkeypatch: pytest.MonkeyPatch) -> None:
     """The plant: a rejection recorded without its grant closed, as before round 2."""
 
     async def kept(self: Promotions, record: Any, *, was: str, by: Any, reason: str,
-                   audited_by_route: bool = False) -> bool:  # fmt: skip
+                   audited_by_route: bool = False, check: Any = None) -> bool:  # fmt: skip
         return await self.store.decide(record.id, was=was, now="rejected", by=by,
                                        at=datetime.now(UTC), reason=reason)  # fmt: skip
 
@@ -1665,41 +1681,83 @@ def test_a_rejection_by_a_check_records_fixed_words(pw: SimpleNamespace) -> None
     reason = pw.store.records[promotion].reason or ""
     assert reason == promotions_module._CHANGED
     assert "Hidden" not in reason and "OFFICIAL" not in reason
+    # The audit says which check, for the dataset's other Authors; never the label.
+    (entry,) = [r for r in pw.audit.records if r["action"] == "promotion_rejected"]
+    assert entry["resolved_query"]["check"] == "marking" and "Hidden" not in str(entry)
 
 
-async def test_the_revert_is_refused_while_the_conduit_runs(pw: SimpleNamespace) -> None:
+async def test_the_revert_is_refused_unless_the_conduit_is_known_stopped(
+    pw: SimpleNamespace,
+) -> None:
     board, made, link_item, _ = _drawn()
     promoted = _promote(board, made["item_id"], link_item).json()
-    code = await _run_the_command(pw, promoted["load_id"], dry_run=False, conduit_running=True)
-    assert code == 1
+    for state in ("running", "unknown"):
+        code = await _run_the_command(pw, promoted["load_id"], dry_run=False, conduit=state)
+        assert code == 1, state
     assert pw.store.records[promoted["id"]].status == "committed"
     assert _carol_sees_it_from_b(made["element_id"])
     assert "revert_promotion" not in [r["action"] for r in pw.audit.records]
     # Its dry run writes nothing and needs no stop.
-    assert await _run_the_command(pw, promoted["load_id"], dry_run=True, conduit_running=True) == 0
+    assert await _run_the_command(pw, promoted["load_id"], dry_run=True, conduit="running") == 0
 
 
-async def test_the_running_conduit_check_fails_with_the_check_removed(
+async def test_the_conduit_is_stopped_only_where_its_host_resolves_and_nothing_listens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`conduit_state` itself, never stubbed: fails closed (the lane review, finding 2)."""
+    import asyncio
+    import socket
+
+    from scripts.revert_promotion import conduit_state
+
+    with socket.socket() as probe:  # a port nothing listens on
+        probe.bind(("127.0.0.1", 0))
+        free = probe.getsockname()[1]
+    monkeypatch.setenv("OSPREY_CONDUIT_URL", f"http://127.0.0.1:{free}")
+    assert (await conduit_state())[0] == "stopped"
+    monkeypatch.setenv("OSPREY_CONDUIT_URL", "http://no-such-conduit.invalid:8000")
+    assert (await conduit_state())[0] == "unknown"
+
+    async def answer(reader: Any, writer: Any) -> None:
+        await reader.read(1024)
+        writer.write(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(answer, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    monkeypatch.setenv("OSPREY_CONDUIT_URL", f"http://127.0.0.1:{port}")
+    try:
+        assert (await conduit_state())[0] == "running"
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+async def test_the_revert_reads_its_resting_links_inside_its_own_transaction(
     pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import scripts.revert_promotion as command
-
-    monkeypatch.setattr(command, "CONDUIT_RUNNING", "")  # keeps its words harmless below
+    """At the command's call site (the lane review, finding 4): the resting-link read is given
+    the very transaction the revert then writes and commits in."""
     board, made, link_item, _ = _drawn()
     promoted = _promote(board, made["item_id"], link_item).json()
-    from scripts.revert_promotion import run
-    from services.api.dataset_scope import stamping
+    graph = pw.graph
+    opened: list[Any] = []
+    asked: list[Any] = []
+    real_begin, real_touching = graph.begin_transaction, graph.live_edges_touching
 
-    async def nothing() -> None:
-        return None
+    async def begin() -> Any:
+        opened.append(await real_begin())
+        return opened[-1]
 
-    # The plant at the call site: the command given a check that says the Conduit is stopped.
-    code = await run(
-        promoted["load_id"], reverted_by="ops", dry_run=False, store=pw.store,
-        graph=stamping(pw.graph, registry=pw.datasets), items=pw.items, audit=pw.audit,
-        invalidate=nothing, conduit_running=lambda: _answers(False),
-    )  # fmt: skip
-    assert code == 0 and pw.store.records[promoted["id"]].status == "reverted"
+    async def touching(node_ids: Any, tx: Any = None) -> Any:
+        asked.append(tx)
+        return await real_touching(node_ids, tx=tx)
+
+    monkeypatch.setattr(graph, "begin_transaction", begin)
+    monkeypatch.setattr(graph, "live_edges_touching", touching)
+    assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 0
+    assert asked and asked[0] is not None and asked[0] in opened
 
 
 def test_a_promotion_with_an_ambiguous_link_id_writes_nothing(
@@ -1723,3 +1781,85 @@ def test_a_promotion_with_an_ambiguous_link_id_writes_nothing(
     (record,) = pw.store.records.values()
     assert record.status == "rejected" and record.reason == "The load was refused, and nothing was written."
     assert not _carol_sees_it_from_b(made["element_id"])
+
+
+def test_a_promotion_with_an_ambiguous_node_id_writes_nothing(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The node half of `_holders`' refusal, the fake refusing what the adapter refuses (the lane
+    review, finding 8): a second stored type comes to hold the drawn node's id after the checks."""
+    board, made, link_item, _ = _drawn()
+    graph = pw.graph
+    real = type(graph).promote_elements
+
+    async def racing(*args: Any) -> None:
+        graph.second_type_node_ids.add(made["element_id"])
+        await real(graph, *args)
+
+    monkeypatch.setattr(graph, "promote_elements", racing)
+    answer = _promote(board, made["item_id"], link_item)
+    assert answer.status_code == 409 and answer.json()["error"] == "ambiguous_item"
+    (record,) = pw.store.records.values()
+    assert record.status == "rejected" and not _carol_sees_it_from_b(made["element_id"])
+
+
+def _a_cases_own_type_accepted_and_live(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> tuple[str, list[str]]:
+    """K's own proposal, BRIBED (outside the ontology), and a BRIBED link drawn on a board of K
+    while it waits (under its storage label, as decision 9 writes it); then accepted by Dana for
+    `src` and made live in its model, through case-b's real service."""
+    import asyncio
+
+    from services.api.dataset_scope import set_case_datasets
+
+    async def get(case_id: str) -> Any:
+        return pw.cases.made[case_id]
+
+    monkeypatch.setattr(pw.cases, "get", get, raising=False)  # what the real service also asks
+    service = _the_real_link_types(pw, monkeypatch)
+    board = _board()
+    x, y = _item(board), _item(board, label="Y", properties={"family_name": "Y"})
+    layer = pw.items.items[x["item_id"]].dataset_id
+    alice = PEOPLE["alice"].model_copy(update={"datasets": ["src", layer]})
+    set_case_datasets(["src", layer], layer=layer)
+    try:
+        proposal = asyncio.run(service.propose(
+            K, alice, name="BRIBED", from_types=["Person"], to_types=["Person"], directed=True,
+            colour=None, thickness=None, label=None, reason="Paid an officer to carry items in",
+        ))  # fmt: skip
+    finally:
+        set_case_datasets(None)
+    linked = _link(board, x["element_id"], y["element_id"], type="BRIBED")
+    assert linked.status_code == 201, linked.text
+    # Waiting, it does not go: decision 9's refusal, through the real service.
+    (waiting,) = [i for i in _sheet(board)["items"] if i["kind"] == "link"]
+    assert waiting["problems"] and "not yet accepted" in waiting["problems"][0]
+    dana = PEOPLE["dana"].model_copy(update={"datasets": ["src"]})
+    asyncio.run(service.accept("src", proposal.id, dana, basis="probabilistic", reason="Useful"))
+    draft = asyncio.run(pw.models.draft("src"))
+    assert draft is not None
+    asyncio.run(pw.models.make_live("src", draft.version, dana))
+    return board, [x["item_id"], y["item_id"], linked.json()["item_id"]]
+
+
+def test_a_cases_own_accepted_and_live_type_is_promoted_through_the_real_service(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other branch of C14 (the lane review, finding 1): the case's own type, outside the
+    ontology, accepted and live, goes; the ontology types' model check never refuses it."""
+    board, ticked = _a_cases_own_type_accepted_and_live(pw, monkeypatch)
+    (link,) = [i for i in _sheet(board)["items"] if i["kind"] == "link"]
+    assert link["problems"] == [], link
+    answer = _promote(board, *ticked)
+    assert answer.status_code == 201, answer.text
+    assert answer.json()["links"] == 1
+
+
+def test_the_proposed_type_branch_fails_with_the_model_check_applied_to_every_type(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    board, ticked = _a_cases_own_type_accepted_and_live(pw, monkeypatch)
+    monkeypatch.setattr(Promotions, "model_check_applies", lambda self, name, refusals: True)
+    refused = _promote(board, *ticked)
+    assert refused.status_code == 422 and refused.json()["error"] == "check_failed"

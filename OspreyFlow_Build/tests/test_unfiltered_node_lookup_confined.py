@@ -121,6 +121,10 @@ def services_importing(root: Path, modules: tuple[str, ...] = OPERATOR_ONLY) -> 
                 # imported name (the independent review of L3.4, item 6).
                 else [node.module or "", *(f"{node.module}.{a.name}" for a in node.names)]
                 if isinstance(node, ast.ImportFrom)
+                # By string too: `importlib.import_module("scripts.revert_promotion")`,
+                # `__import__(...)` (the lane review, minor 13).
+                else [node.value]
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
                 else []
             )
             if any(n == m or n.startswith(m + ".") for n in names for m in modules):
@@ -143,8 +147,12 @@ def test_the_import_check_flags_a_service_importing_the_command(tmp_path: Path) 
     (tmp_path / "services/api/quiet.py").write_text("from scripts.revert_load import run\n")
     (tmp_path / "services/api/package.py").write_text("from scripts import revert_promotion\n")
     (tmp_path / "services/api/sibling.py").write_text("from scripts import revert_load\n")
+    (tmp_path / "services/api/by_name.py").write_text(
+        'import importlib\nm = importlib.import_module("scripts.revert_promotion")\n'
+    )
     assert services_importing(tmp_path) == {
-        "services/api/promotions.py", "services/api/other.py", "services/api/package.py"
+        "services/api/promotions.py", "services/api/other.py", "services/api/package.py",
+        "services/api/by_name.py",
     }
 
 

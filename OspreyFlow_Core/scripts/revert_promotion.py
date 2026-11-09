@@ -10,8 +10,9 @@ clears the Conduit's kept results (`cache:*` in the shared Valkey), since what w
 the promoted elements. Nothing is deleted.
 
 **Stop the Conduit**, as for any load's revert (ADR-127 Amendment 9): the command asks the Conduit's
-liveness route (`OSPREY_CONDUIT_URL`, default `http://api:8000`) and refuses while it answers, as
-`seed_internal` refuses a seed. There is no online revert:
+liveness route (`OSPREY_CONDUIT_URL`, default `http://api:8000`) and goes on only when it can tell
+the Conduit is stopped (its host resolves and nothing listens): an answer, a name that does not
+resolve, a timeout, anything else refuses. There is no online revert:
 the owner settled ADR-143 open question 2 as (a), this command alone (Amendment 5 decision 8), and
 it must never be routed through the Conduit.
 
@@ -31,7 +32,7 @@ import asyncio
 import os
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from services.api.audit import AuditWriter
 from services.api.board_store import PostgresBoardItemStore
@@ -129,20 +130,38 @@ CONDUIT_RUNNING = (
     "Amendment 9; ADR-143 Amendment 5 decision 8): a running Conduit could write a link onto its "
     "items between the check and the revert. Stop it and run again. Nothing was changed."
 )
+CONDUIT_UNKNOWN = (
+    "Refused: this command cannot tell whether the Conduit is stopped ({why}). Run it inside the "
+    "deployment's network, or set OSPREY_CONDUIT_URL to where the Conduit answers. Nothing was "
+    "changed."
+)
+Conduit = Literal["running", "stopped", "unknown"]
 
 
-async def conduit_answers() -> bool:
-    """Whether the Conduit answers its liveness route from here, as `seed_internal`'s
-    `_api_running` asks compose from the host: any answer means it runs."""
-    import httpx
+async def conduit_state() -> tuple[Conduit, str]:
+    """Whether the Conduit is running, asked of its address (`OSPREY_CONDUIT_URL`, default
+    `http://api:8000`). Fails closed: `stopped` only when its host resolves and the connection is
+    refused (nothing listens there); a connection accepted is `running` (something holds the
+    Conduit's port); a name that does not resolve (run from the host, say), a timeout or any other
+    failure is `unknown`, which refuses as `running` does (the lane review, finding 2). Asked as a
+    TCP connect: an HTTP client folds a refusal into its other failures."""
+    import socket
+    from urllib.parse import urlsplit
 
-    url = os.environ.get(CONDUIT_URL_SETTING, DEFAULT_CONDUIT_URL).rstrip("/") + "/healthz"
+    parts = urlsplit(os.environ.get(CONDUIT_URL_SETTING, DEFAULT_CONDUIT_URL))
+    host, port = parts.hostname or "", parts.port or (443 if parts.scheme == "https" else 80)
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            await client.get(url)
-    except httpx.HTTPError:
-        return False
-    return True
+        await asyncio.get_running_loop().getaddrinfo(host, port)
+    except (socket.gaierror, UnicodeError) as unresolved:
+        return "unknown", f"{host} does not resolve here: {unresolved}"
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=3.0)
+    except ConnectionRefusedError:
+        return "stopped", ""
+    except (OSError, TimeoutError) as failed:
+        return "unknown", f"{host}:{port}: {failed or type(failed).__name__}"
+    writer.close()
+    return "running", ""
 
 
 def stop_if_dry(dry_run: bool, says: str) -> bool:
@@ -162,7 +181,7 @@ async def run(
     items: Any,
     audit: Any,
     invalidate: Any,
-    conduit_running: Any = conduit_answers,
+    conduit: Any = conduit_state,
 ) -> int:
     record = await store.by_load(load_id)
     if record is None:
@@ -177,8 +196,9 @@ async def run(
         return 1
     if stop_if_dry(dry_run, says):
         return 0
-    if await conduit_running():
-        print(CONDUIT_RUNNING)
+    state, why = await conduit()
+    if state != "stopped":
+        print(CONDUIT_RUNNING if state == "running" else CONDUIT_UNKNOWN.format(why=why))
         return 1
     by = Principal(id=reverted_by, clearance="OFFICIAL", org_unit=record.unit)
     # Audited before anything is written (ADR-127 Amendment 23's order).

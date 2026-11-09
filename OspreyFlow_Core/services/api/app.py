@@ -4522,11 +4522,12 @@ def get_promotions(
         held = await investigations.admin_states([case_id])
         return held[case_id][0] if case_id in held else None
 
-    async def rejected(record: PromotionRecord, reason: str) -> None:
+    async def rejected(record: PromotionRecord, reason: str, check: str | None) -> None:
+        # The check's code (marking, types, graded, ends, withdrawn), never an item's label.
         await _audit_promotion(
             audit, principal, "promotion_rejected", record.case_id,
             len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
-            load_id=record.load_id, dataset_id=record.dataset_id, reason=reason,
+            load_id=record.load_id, dataset_id=record.dataset_id, reason=reason, check=check,
         )  # fmt: skip
 
     return Promotions(
@@ -4618,7 +4619,7 @@ async def promote_drawn_items(
         promotion_id=record.id, load_id=record.load_id, dataset_id=record.dataset_id,
         status=record.status, node_ids=list(record.node_ids), edge_ids=list(record.edge_ids),
     )  # fmt: skip
-    return await promotions.view(record, principal, with_board=True)
+    return await promotions.view(record, principal, with_board=True, show_case=True)
 
 
 @app.get(
@@ -4643,7 +4644,10 @@ async def list_board_promotions(
     counts = await promotions.shown_counts(held, principal)
     return PromotionsList(
         promotions=[
-            await promotions.view(r, principal, with_board=True, counts=counts[r.id]) for r in held
+            await promotions.view(
+                r, principal, with_board=True, counts=counts[r.id], show_case=True
+            )
+            for r in held
         ]
     )
 
@@ -9905,7 +9909,7 @@ async def decide_promotion(
         record.case_id, len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
         load_id=record.load_id, dataset_id=dataset_id, reason=body.reason,
     )  # fmt: skip
-    return await promotions.view(decided, principal)
+    return await promotions.view(decided, principal, show_case=True)  # one of its Authors
 
 
 # --- a removed case's layer (ADR-143 Amendment 2 decision 1) ---------------------------------
@@ -10089,7 +10093,7 @@ async def merge_removed_case_layer(
         len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
         load_id=record.load_id, dataset_id=dataset_id, status=record.status,
     )  # fmt: skip
-    return await promotions.view(record, principal)
+    return await promotions.view(record, principal, show_case=True)  # one of its Authors
 
 
 @app.post("/v1/datasets/{dataset_id}/removed-cases/{case_id}/delete/dry-run")

@@ -8,7 +8,7 @@
  import asyncio
  from collections.abc import Iterator
  from pathlib import Path
-@@ -722,17 +723,47 @@
+@@ -722,17 +723,62 @@
  # --- the one check every promotion writer calls (the independent review's item 4; rule 12) ------
  
  _CORE = Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
@@ -16,21 +16,36 @@
 +
 +#: The triggers a promotion's load is written under (ADR-143 decision 8; Amendment 2 decision 1).
 +PROMOTION_TRIGGERS = ("analyst_promotion", "layer_merge")
-+
-+
+ 
+ 
 +def _writes_a_promotion(tree: ast.AST) -> bool:
-+    """A load given a promotion's trigger: `trigger="analyst_promotion"` or `trigger="layer_merge"`
-+    as a call's keyword. Naming the trigger as a type or in SQL (the promotion's own record) writes
-+    nothing."""
-+    return any(
-+        isinstance(n, ast.keyword)
-+        and n.arg == "trigger"
-+        and isinstance(n.value, ast.Constant)
-+        and n.value.value in PROMOTION_TRIGGERS
++    """A module that writes a promotion: it calls `….promote_elements(…)`, the graph's own write
++    of one (however its trigger is spelled: a constant, a variable, a positional argument), or it
++    gives a load a promotion's trigger as `trigger="analyst_promotion"` or `trigger="layer_merge"`.
++    Naming the trigger as a type or in SQL (the promotion's own record) writes nothing, and a
++    module that defines `promote_elements` itself implements the port (an adapter, the stamping
++    wrapper passing it on), so its call of it is no promotion of its own."""
++    implements = any(
++        isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "promote_elements"
 +        for n in ast.walk(tree)
 +    )
- 
- 
++    return any(
++        (
++            isinstance(n, ast.keyword)
++            and n.arg == "trigger"
++            and isinstance(n.value, ast.Constant)
++            and n.value.value in PROMOTION_TRIGGERS
++        )
++        or (
++            not implements
++            and isinstance(n, ast.Call)
++            and isinstance(n.func, ast.Attribute)
++            and n.func.attr == "promote_elements"
++        )
++        for n in ast.walk(tree)
++    )
++
++
 +def _calls_the_check(tree: ast.AST) -> bool:
 +    """A real call of `….promotion_refusals(…)`: a definition of that name (a Protocol's), a
 +    comment or a string is not one."""
@@ -61,7 +76,7 @@
              missing.append(path.relative_to(root).as_posix())
      return missing
  
-@@ -741,6 +772,40 @@
+@@ -741,6 +787,60 @@
      assert _promotion_writers_missing_the_check(_CORE) == []
  
  
@@ -90,6 +105,26 @@
 +        '    return await loads.write(items, trigger="layer_merge")\n'
 +    )
 +    assert _promotion_writers_missing_the_check(tmp_path) == ["services/api/merges.py"]
++
++
++def test_a_writer_spelling_its_trigger_otherwise_is_found(tmp_path: Path) -> None:
++    """The lane review's finding 7: a trigger through a constant or positionally still writes
++    through `promote_elements`, and is flagged without the check."""
++    planted = tmp_path / "services/api/elsewhere.py"
++    planted.parent.mkdir(parents=True)
++    planted.write_text(
++        "TRIGGER = 'analyst_promotion'\n"
++        "async def promote(graph, ids, tx):\n"
++        "    await graph.promote_elements(ids, [], 'd', TRIGGER, tx)\n"
++    )
++    assert _promotion_writers_missing_the_check(tmp_path) == ["services/api/elsewhere.py"]
++    # A wrapper implementing the port passes the call on and is no writer.
++    (tmp_path / "services/api/wrapper.py").write_text(
++        "class Stamping:\n"
++        "    async def promote_elements(self, *a):\n"
++        "        return await self._inner.promote_elements(*a)\n"
++    )
++    assert _promotion_writers_missing_the_check(tmp_path) == ["services/api/elsewhere.py"]
 +
 +
 +def test_the_promotion_record_is_no_writer() -> None:

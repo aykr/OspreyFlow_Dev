@@ -75,6 +75,9 @@ class BoardGraph(FakeGraphPort):
 
         #: L3.4: each element a promotion stamped, by its load (the adapter's `promoted_by_load`).
         self.promoted_by: dict[str, str] = {}
+        #: Node ids a second stored vertex type also holds (ids are unique per type in the store,
+        #: not across it): the adapter's `_holders` refuses them, and so does this fake.
+        self.second_type_node_ids: set[str] = set()
         self._later: dict[str, list[Any]] = {}
         #: How many `promote_elements` calls were made: one per promotion (one load).
         self.promotions: int = 0
@@ -286,6 +289,10 @@ class BoardGraph(FakeGraphPort):
         self.promotions += 1
         # As the adapter's `_holders`: an id two stored elements of one kind both hold (two link
         # types' links under one id) refuses the whole call, naming how many, never which.
+        # Nodes first, as the adapter resolves `vertex` before `edge`.
+        unclear_nodes = set(node_ids) & self.second_type_node_ids
+        if unclear_nodes:
+            raise AmbiguousElementId("node", len(unclear_nodes))
         ambiguous = {e for e in set(edge_ids)
                      if sum(1 for held in self._graph_edges if held.id == e) > 1}  # fmt: skip
         if ambiguous:
