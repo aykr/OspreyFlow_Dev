@@ -1019,8 +1019,12 @@ as a test of its own beside it):
   `test_an_element_promoted_by_another_load_is_not_promoted_again`.
 - **A revert leaves no link resting on a node gone from the dataset.**
   `test_a_revert_is_refused_while_another_link_rests_on_its_items`.
-- **The ageing seam's read is filtered in the query** by the reader's unit and clearance (rule 3).
-  `test_the_waiting_read_is_filtered_by_unit_and_clearance_in_the_query` (real Postgres).
+- **A waiting promotion is listed only to one who may review it** (ADR-145 Amendment 4 decision
+  11: an Author of the dataset's home case holding `review_promotions`, or its unit's administrator,
+  of the dataset's current unit and cleared to its current highest marking), the reviewable datasets
+  passed into the store's query (rule 3). `test_waiting_promotions_contract.py` (nine readers, the
+  case store among its `STORES`); `test_the_waiting_read_is_filtered_by_the_readers_datasets_in_the_query`
+  (real Postgres); `test_the_waiting_seam_reads_the_datasets_unit_as_it_is_now`.
 
 ### 2.3 Resolution state
 

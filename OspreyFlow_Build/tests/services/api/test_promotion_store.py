@@ -5,9 +5,10 @@ Every case runs over a schema of its own, dropped afterwards whatever the test d
 promotion or grant is ever left in a shared stack's tables (the stacks are shared: a row a branch's
 schema allows and main's does not stops other lanes' runs).
 
-- The seam's reader filter is in the query (rule 3): `waiting(unit, markings)` returns only the
-  reader's unit's promotions at markings they reach, red with the filter not passed (the same call
-  unfiltered returns the others, so the data can tell).
+- The seam's reader filter is in the query (rule 3): `waiting(dataset_ids=…)` returns only the
+  promotions of the datasets the reader may review, red with the filter not passed (the same call
+  unfiltered returns the others, so the data can tell); who may review is the contract's
+  (`test_waiting_promotions_contract.py`).
 - A decision is written only from the status it was read with: of two at once, one wins.
 - A grant closes once and is never reopened.
 - What is written reads back whole (the element ids, the left-out list with its words).
@@ -74,27 +75,30 @@ async def test_a_promotion_reads_back_whole(store: PostgresPromotionStore) -> No
 
 async def _three(store: PostgresPromotionStore) -> tuple[str, str, str]:
     mine = _record(proposed_at=NOW)
-    other_unit = _record(unit="unit-2", proposed_at=NOW + timedelta(minutes=1))
-    above = _record(marking="SECRET", proposed_at=NOW + timedelta(minutes=2))
-    for r in (mine, other_unit, above):
+    other = _record(dataset_id="other", proposed_at=NOW + timedelta(minutes=1))
+    decided = _record(status="committed", proposed_at=NOW + timedelta(minutes=2))
+    for r in (mine, other, decided):
         await store.add(r)
-    return mine.id, other_unit.id, above.id
+    return mine.id, other.id, decided.id
 
 
-async def test_the_waiting_read_is_filtered_by_unit_and_clearance_in_the_query(
+async def test_the_waiting_read_is_filtered_by_the_readers_datasets_in_the_query(
     store: PostgresPromotionStore,
 ) -> None:
+    """The seam passes the datasets the reader may review (`WaitingFromStore.reviewable_datasets`,
+    admin's `may_review` asked of each dataset as it is now) into the WHERE clause (rule 3)."""
     mine, _, _ = await _three(store)
-    seen = await store.waiting(unit="unit-1", markings=["OFFICIAL", "OFFICIAL-SENSITIVE"])
-    assert [r.id for r in seen] == [mine]
+    assert await store.waiting_dataset_ids() == ["other", "src"]
+    assert [r.id for r in await store.waiting(dataset_ids=["src"])] == [mine]
+    assert await store.waiting(dataset_ids=[]) == []
 
 
 async def test_the_filter_check_fails_with_the_filter_not_passed(
     store: PostgresPromotionStore,
 ) -> None:
-    mine, other_unit, above = await _three(store)
+    mine, other, _ = await _three(store)
     # The plant: the seam's read made without the reader's filter.
-    assert [r.id for r in await store.waiting()] == [mine, other_unit, above]
+    assert [r.id for r in await store.waiting()] == [mine, other]
 
 
 async def test_a_decision_is_written_only_from_the_status_it_was_read_with(

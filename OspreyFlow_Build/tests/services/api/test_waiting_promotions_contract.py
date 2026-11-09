@@ -18,6 +18,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from ontology.handling import HandlingScheme
@@ -62,8 +64,49 @@ class ReferenceWaiting:
 
 
 Factory = Callable[[Sequence[PendingPromotion], Mapping[str, Sequence[str]]], WaitingPromotions]
+
+
+def case_promotion_store(
+    promotions: Sequence[PendingPromotion], authors: Mapping[str, Sequence[str]]
+) -> WaitingPromotions:
+    """L3.4's store (`promotion_store.WaitingFromStore` over `InMemoryPromotionStore`, whose
+    `waiting` is the Postgres store's in shape; `test_promotion_store.py` holds the query). Each
+    record keeps what was true at proposal: a unit since left and its items' own marking, below the
+    dataset's. The datasets hold what is true now, which is what the contract asks."""
+    from services.api.promotion_store import (
+        InMemoryPromotionStore,
+        PromotionRecord,
+        WaitingFromStore,
+    )
+
+    store = InMemoryPromotionStore()
+    datasets = {}
+    for p in promotions:
+        store.records[p.promotion_id] = PromotionRecord(
+            id=p.promotion_id, load_id=p.load_id, trigger="analyst_promotion", case_id="c-1",
+            board_id="b-1", dataset_id=p.dataset_id, layer_id="layer-c-1",
+            proposed_by=p.proposed_by, proposed_at=p.proposed_at, status="awaiting_review",
+            marking="OFFICIAL", unit="unit-at-proposal",
+        )  # fmt: skip
+        datasets[p.dataset_id] = SimpleNamespace(
+            name=p.dataset_name, owning_unit=p.dataset_unit, highest_marking=p.dataset_marking
+        )
+
+    class _Datasets:
+        async def egress_of(self, ids: Sequence[str]) -> dict[str, Any]:
+            return {d: datasets[d] for d in ids if d in datasets}
+
+    async def authors_of(dataset_id: str) -> Sequence[str]:
+        return authors.get(dataset_id, ())
+
+    return WaitingFromStore(
+        store=store, datasets=_Datasets(), pending=PendingPromotion, may_review=may_review,
+        authors_of=authors_of, scheme=SCHEME,
+    )  # fmt: skip
+
+
 #: Every store that claims the seam. L3.4 adds its own here.
-STORES: dict[str, Factory] = {"reference": ReferenceWaiting}
+STORES: dict[str, Factory] = {"reference": ReferenceWaiting, "case": case_promotion_store}
 
 
 def _p(pid: str, roles: list[str], *, unit: str = "unit-1", clearance: str = "SECRET") -> Principal:

@@ -795,6 +795,7 @@ from .promotion_store import (
     PostgresPromotionStore,
     PromotionRecord,
     PromotionStore,
+    WaitingFromStore,
 )
 from .promotions import (
     GAZETTEER_TAKES_NOTHING_DRAWN,
@@ -1166,8 +1167,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.admin_people = admin_people
     app.state.audit_section = audit_section
     app.state.promotion_ageing = promotion_ageing
-    # The seam case's L3.4 fills with the promotion record (`promotion_ageing.WaitingPromotions`).
-    app.state.waiting_promotions = promotion_ageing_module.NoPromotionsYet()
+    # ADR-145 Amendment 6's seam, answered by L3.4's promotion record (ADR-143 Amendment 5).
+    app.state.waiting_promotions = waiting_promotions_seam(
+        promotion_store, datasets_store, investigations, custom_roles, handling_scheme
+    )
     app.state.history = history
     app.state.sites = sites
     app.state.patterns_store = patterns_store
@@ -17263,6 +17266,32 @@ async def _promotion_recipients(
     return promotion_ageing_module.recipients_of(
         p, authors, people, custom, app.state.handling_scheme
     )
+
+
+def waiting_promotions_seam(
+    promotion_store: PromotionStore,
+    datasets: DatasetStore,
+    investigations: InvestigationStore,
+    custom_roles: Any,
+    scheme: HandlingScheme,
+) -> WaitingFromStore:
+    """Admin's seam (`promotion_ageing.WaitingPromotions`, ADR-145 Amendment 6) over L3.4's
+    promotion record: a waiting promotion listed only to one who `may_review` it, asked of the
+    dataset as it is now (its unit and highest marking, its home case's Authors, custom roles by
+    their current rights), the reviewable datasets passed into the store's query (rule 3)."""
+
+    async def authors_of(dataset_id: str) -> list[str]:
+        home = await datasets.home_case_of(dataset_id)
+        return await _authors_of(investigations, home.investigation_id) if home else []
+
+    async def custom() -> Mapping[str, Any]:
+        return await custom_roles.current_rights() if custom_roles is not None else {}
+
+    return WaitingFromStore(
+        store=promotion_store, datasets=datasets, pending=promotion_ageing_module.PendingPromotion,
+        may_review=promotion_ageing_module.may_review, authors_of=authors_of, scheme=scheme,
+        custom=custom,
+    )  # fmt: skip
 
 
 async def _authors_of(investigations: InvestigationStore, home_case_id: str) -> list[str]:

@@ -20,20 +20,26 @@ case's layer records a grant to that Author for that layer; the merge reads the 
 an open grant of its own; the grant closes when the merge closes (committed, rejected or cancelled)
 and is never reopened. Audited by the route.
 
-**Admin's ageing seam** (ADR-145 Amendment 6, `promotion_ageing.WaitingPromotions`): this store
-answers `waiting_for_review(reader)` filtered **in its own query** by the reader's unit and the
-markings their clearance reaches, and `all_waiting()` for the sweep, through `WaitingFromStore`.
+**Admin's ageing seam** (ADR-145 Amendment 6, `promotion_ageing.WaitingPromotions`): through
+`WaitingFromStore`, `waiting_for_review(reader)` lists a waiting promotion only to one who
+`may_review` it (admin's rule: an Author of the dataset's home case holding `review_promotions`, or
+the unit's administrator, of the dataset's **current** unit and cleared to its **current** highest
+marking), the eligible datasets passed **into this store's query** (rule 3); `all_waiting()` is the
+sweep's. `test_waiting_promotions_contract.py` holds it to the contract.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+import logging
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
 import asyncpg
+
+logger = logging.getLogger(__name__)
 
 Status = Literal["awaiting_review", "committed", "rejected", "reverted"]
 Trigger = Literal["analyst_promotion", "layer_merge"]
@@ -114,8 +120,10 @@ class PromotionStore(Protocol):
         reason: str | None = None,
     ) -> bool: ...
     async def waiting(
-        self, *, unit: str | None = None, markings: Sequence[str] | None = None
+        self, *, dataset_ids: Sequence[str] | None = None
     ) -> list[PromotionRecord]: ...
+    #: The datasets with a promotion waiting, and nothing of the promotions themselves.
+    async def waiting_dataset_ids(self) -> list[str]: ...
     async def open_grant(self, grant: LayerGrant) -> None: ...
     async def grant(self, grant_id: str) -> LayerGrant | None: ...
     async def close_grant(self, grant_id: str, at: datetime) -> None: ...
@@ -222,18 +230,20 @@ class InMemoryPromotionStore:
             )
         return True
 
-    async def waiting(
-        self, *, unit: str | None = None, markings: Sequence[str] | None = None
-    ) -> list[PromotionRecord]:
+    async def waiting(self, *, dataset_ids: Sequence[str] | None = None) -> list[PromotionRecord]:
         return sorted(
             (
                 r
                 for r in self.records.values()
                 if r.status == "awaiting_review"
-                and (unit is None or r.unit == unit)
-                and (markings is None or r.marking in markings)
+                and (dataset_ids is None or r.dataset_id in dataset_ids)
             ),
             key=lambda r: (r.proposed_at, r.id),
+        )
+
+    async def waiting_dataset_ids(self) -> list[str]:
+        return sorted(
+            {r.dataset_id for r in self.records.values() if r.status == "awaiting_review"}
         )
 
     async def open_grant(self, grant: LayerGrant) -> None:
@@ -468,21 +478,25 @@ class PostgresPromotionStore:
                 )  # fmt: skip
         return str(done).endswith(" 1")
 
-    async def waiting(
-        self, *, unit: str | None = None, markings: Sequence[str] | None = None
-    ) -> list[PromotionRecord]:
-        # The reader's filter is in the WHERE clause (rule 3): a promotion of another unit, or
-        # marked above the reader's clearance, is never read out of the table for them.
+    async def waiting(self, *, dataset_ids: Sequence[str] | None = None) -> list[PromotionRecord]:
+        # The reader's filter is in the WHERE clause (rule 3): a promotion of a dataset the reader
+        # may not review is never read out of the table for them.
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM promotions WHERE status = 'awaiting_review' "
-                "AND ($1::text IS NULL OR unit = $1) "
-                "AND ($2::text[] IS NULL OR marking = ANY($2::text[])) "
+                "AND ($1::text[] IS NULL OR dataset_id = ANY($1::text[])) "
                 "ORDER BY proposed_at, id",
-                unit,
-                list(markings) if markings is not None else None,
+                list(dataset_ids) if dataset_ids is not None else None,
             )
         return [_record(r) for r in rows]
+
+    async def waiting_dataset_ids(self) -> list[str]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT DISTINCT dataset_id FROM promotions WHERE status = 'awaiting_review' "
+                "ORDER BY dataset_id"
+            )
+        return [r["dataset_id"] for r in rows]
 
     async def open_grant(self, grant: LayerGrant) -> None:
         async with self._pool.acquire() as conn:
@@ -519,15 +533,22 @@ class _Datasets(Protocol):
 
 @dataclass
 class WaitingFromStore:
-    """`promotion_ageing.WaitingPromotions` (admin's seam), answered from this store. `pending`
-    builds the seam's own record (`promotion_ageing.PendingPromotion`) so this module imports
-    nothing of admin's; `clears` gives the markings a clearance reaches (the deployment's
-    scheme)."""
+    """`promotion_ageing.WaitingPromotions` (admin's seam), answered from this store.
+
+    A promotion is listed to a reader only if they `may_review` it (admin's `promotion_ageing.
+    may_review`, handed in so this module imports nothing of admin's), asked of each dataset with a
+    promotion waiting **as it stands now**: its current owning unit and highest marking (from
+    `datasets`), and its home case's Authors (`authors_of`), custom roles by their current rights
+    (`custom`). The datasets the reader may review are then passed into the store's own query, so
+    no other promotion is read for them (rule 3). `pending` builds admin's record."""
 
     store: PromotionStore
     datasets: _Datasets
     pending: Callable[..., Any]
-    clears: Callable[[str], Sequence[str]]
+    may_review: Callable[..., bool]
+    authors_of: Callable[[str], Awaitable[Sequence[str]]]
+    scheme: Any
+    custom: Callable[[], Awaitable[Mapping[str, Any]]] | None = None
     recorded: bool = field(default=True)
 
     async def _as_pending(self, records: Sequence[PromotionRecord]) -> list[Any]:
@@ -536,19 +557,47 @@ class WaitingFromStore:
         for r in records:
             dataset = held.get(r.dataset_id)
             if dataset is None:
+                # A deleted dataset's waiting promotions are rejected with it; one left is said,
+                # never dropped without a word (rule 2).
+                logger.warning(
+                    "promotion %s waits for dataset %s, which is no longer held: not listed",
+                    r.id, r.dataset_id,
+                )  # fmt: skip
                 continue
             out.append(
                 self.pending(
                     promotion_id=r.id, load_id=r.load_id, dataset_id=r.dataset_id,
-                    dataset_name=dataset.name, dataset_unit=r.unit, proposed_by=r.proposed_by,
-                    proposed_at=r.proposed_at, dataset_marking=dataset.highest_marking,
+                    dataset_name=dataset.name, dataset_unit=dataset.owning_unit,
+                    proposed_by=r.proposed_by, proposed_at=r.proposed_at,
+                    dataset_marking=dataset.highest_marking,
                 )
             )  # fmt: skip
         return out
 
+    async def reviewable_datasets(self, reader: Any) -> list[str]:
+        """The datasets with a promotion waiting that `reader` may review, now."""
+        ids = await self.store.waiting_dataset_ids()
+        held = await self.datasets.egress_of(ids)
+        custom = await self.custom() if self.custom is not None else None
+        out = []
+        for dataset_id in ids:
+            dataset = held.get(dataset_id)
+            if dataset is None:
+                continue
+            probe = self.pending(
+                promotion_id="", load_id="", dataset_id=dataset_id, dataset_name=dataset.name,
+                dataset_unit=dataset.owning_unit, proposed_by="", proposed_at=None,
+                dataset_marking=dataset.highest_marking,
+            )  # fmt: skip
+            authors = await self.authors_of(dataset_id)
+            if self.may_review(reader.id, reader.roles, reader.clearance, reader.org_unit, probe,
+                               authors, custom, self.scheme):  # fmt: skip
+                out.append(dataset_id)
+        return out
+
     async def waiting_for_review(self, reader: Any) -> list[Any]:
         return await self._as_pending(
-            await self.store.waiting(unit=reader.org_unit, markings=self.clears(reader.clearance))
+            await self.store.waiting(dataset_ids=await self.reviewable_datasets(reader))
         )
 
     async def all_waiting(self) -> list[Any]:

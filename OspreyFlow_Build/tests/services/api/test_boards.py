@@ -123,6 +123,10 @@ class _Cases:
         self.seed(case_id, {principal.id: AccessLevel.AUTHOR})
         return self.made[case_id]
 
+    async def list_grants(self, case_id: str) -> dict[str, AccessLevel]:
+        """As the store: each grantee's level on the case, nothing for a case it does not hold."""
+        return dict(self.grants.get(case_id, {}))
+
     async def get_authorized(
         self, case_id: str, principal: Principal, *, need: AccessLevel
     ) -> Investigation:

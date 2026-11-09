@@ -47,7 +47,7 @@ from services.api import promotions as promotions_module
 from services.api.app import app
 from services.api.datasets import COMPOSITE, Dataset
 from services.api.investigations import AccessLevel
-from services.api.promotion_store import InMemoryPromotionStore, WaitingFromStore
+from services.api.promotion_store import InMemoryPromotionStore
 from services.api.promotions import Promotions
 
 from .test_boards import (
@@ -1029,22 +1029,59 @@ async def test_reverting_a_promotion_leaves_the_items_in_the_layer_and_clears_th
 # --- admin's ageing seam (ADR-145 Amendment 6) -----------------------------------------------
 
 
-async def test_the_waiting_seam_lists_only_the_readers_unit_and_clearance(
-    pw: SimpleNamespace,
-) -> None:
+def _seam(pw: SimpleNamespace) -> Any:
+    """The seam as the lifespan builds it (`app.waiting_promotions_seam`)."""
+    from services.api import app as app_module
+
+    return app_module.waiting_promotions_seam(
+        pw.store, pw.datasets, pw.cases, None, app.state.handling_scheme
+    )
+
+
+async def test_the_waiting_seam_lists_only_those_who_may_review_it(pw: SimpleNamespace) -> None:
+    """ADR-145 Amendment 4 decision 11 through the lifespan's own wiring: dana (an Author of the
+    home case, holding review_promotions, cleared) is listed it; erin (an Author, below the
+    dataset's highest marking), fred (holding review_promotions, not an Author) and zed (another
+    unit) are not, though the items themselves are OFFICIAL. The contract's nine readers are
+    `test_waiting_promotions_contract.py`'s."""
     _policy(pw, "second_person_reviews")
     board = _board()
-    _promote(board, _item(board, marking="OFFICIAL-SENSITIVE")["item_id"])
-    seam = WaitingFromStore(
-        store=pw.store, datasets=pw.datasets, pending=SimpleNamespace,
-        clears=lambda c: [m for m in ("OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET")[
-            : ("OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET").index(c) + 1]],
-    )  # fmt: skip
+    _promote(board, _item(board)["item_id"])
+    pw.datasets.datasets["src"] = pw.datasets.datasets["src"].model_copy(update={"highest_marking": "SECRET"})
+    seam = _seam(pw)
     assert len(await seam.waiting_for_review(PEOPLE["dana"])) == 1
-    assert await seam.waiting_for_review(PEOPLE["erin"]) == []
-    assert await seam.waiting_for_review(PEOPLE["zed"]) == []
+    for who in ("erin", "fred", "zed"):
+        assert await seam.waiting_for_review(PEOPLE[who]) == [], who
     (waiting,) = await seam.all_waiting()
-    assert waiting.dataset_name == "Prison intel" and waiting.proposed_by == "alice"
+    assert (waiting.dataset_name, waiting.proposed_by, waiting.dataset_marking) == (
+        "Prison intel", "alice", "SECRET"
+    )
+
+
+async def test_the_waiting_seam_reads_the_datasets_unit_as_it_is_now(pw: SimpleNamespace) -> None:
+    """A dataset moved to another unit after the promotion was sent is reviewed by the new unit's
+    people, not the old: the seam reads the dataset's owning unit now, never the one recorded."""
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    _promote(board, _item(board)["item_id"])
+    pw.datasets.datasets["src"] = pw.datasets.datasets["src"].model_copy(update={"owning_unit": "unit-2"})
+    assert await _seam(pw).waiting_for_review(PEOPLE["dana"]) == []
+    (waiting,) = await _seam(pw).all_waiting()
+    assert waiting.dataset_unit == "unit-2"
+
+
+async def test_a_waiting_promotion_whose_dataset_is_gone_is_said_not_dropped(
+    pw: SimpleNamespace, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Rule 2: the sweep is not handed a promotion whose dataset is no longer held, and the log
+    says which one."""
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    _promote(board, _item(board)["item_id"])
+    del pw.datasets.datasets["src"]
+    with caplog.at_level("WARNING", logger="services.api.promotion_store"):
+        assert await _seam(pw).all_waiting() == []
+    assert "no longer held" in caplog.text
 
 
 # --- the operator command (scripts.revert_promotion) -----------------------------------------

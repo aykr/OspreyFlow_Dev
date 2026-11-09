@@ -31314,9 +31314,13 @@ decision 1 stand except where this says so. Spec 01 §2.2e, spec 02 §2.0b and s
      (`case-b-writer-gate-L3.4.patch`, for case-b), and `placesByRole.json` regenerated at the
      merge (`places-regeneration-L3.4.md`, for the orchestrator).
 
-**Open.** Nothing for the owner. The *Promotions overdue* sweep (ADR-145
-Amendment 6) is wired to this record when admin's L2.6 is on main (`WaitingFromStore`); until then the
-wiring is a patch in the case lane's folder.
+**Open.** Nothing for the owner. The *Promotions overdue* sweep (ADR-145 Amendment 6) is wired to
+this record (`app.waiting_promotions_seam`, in place of `NoPromotionsYet`): a promotion is listed to a
+reader only if admin's `promotion_ageing.may_review` admits them, asked of each dataset as it is now
+(its owning unit, highest marking and home case's Authors), never of what the promotion recorded at
+proposal, and the reviewable datasets go into the store's query (the independent review of L3.4,
+blocker 1). `test_waiting_promotions_contract.py` holds the case store to the nine readers; the
+lifespan's own sweep over the real record is `test_promotion_sweep_live.py`'s second case.
 
 **Tests.** `tests/conformance/graph_port/test_promotion.py`; `tests/services/api/test_promotions.py`;
 `tests/services/api/test_promotion_store.py` (real Postgres); `test_boards.py`'s proposed-type cases;
