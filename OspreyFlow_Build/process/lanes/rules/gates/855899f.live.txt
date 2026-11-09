@@ -1,0 +1,201 @@
+# L2.10's live run: the rules lease, stack c, run on its host by stack_lease.sh remote, at 855899f (tree cf7b869a7970bd9ef9a4bc02ea352396fcfbd0a0, rebased on main at c467064), start 2026-11-09T14:46:00Z
+# Files: ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py ../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_pack_store.py ../OspreyFlow_Build/tests/services/api/test_pack_store_query.py ../OspreyFlow_Build/tests/services/api/test_pack_export.py ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py ../OspreyFlow_Build/tests/services/api/test_alert_facts.py ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_monitors.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_hotlists.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_change_stream.py ../OspreyFlow_Build/tests/services/api/test_reports.py ../OspreyFlow_Build/tests/services/api/test_report_freshness.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_trend_store.py ../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_risk.py ../OspreyFlow_Build/tests/ingest/test_revert_load.py ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py 
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_restricted_event_visible_only_to_the_owning_unit_and_receivable_set[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_unrecognised_clearance_sees_nothing_rather_than_everything[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_load_geometries_and_get_geometry_round_trips_the_reprojected_point[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_get_geometry_defaults_to_the_latest_partition_version[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_get_geometry_can_pin_an_explicit_historical_version[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_get_geometry_for_an_unknown_ref_returns_none_not_an_error[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_get_geometries_batch_returns_only_the_matching_refs[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_unauthorised_get_geometry_cannot_distinguish_a_filtered_ref_from_a_missing_one[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_unauthorised_get_geometries_batch_silently_omits_hidden_refs[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_load_geometries_and_get_geometry_round_trips_a_polygon[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_get_geometries_batch_returns_points_and_polygons_together[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_list_boundaries_returns_only_polygon_rows[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_list_boundaries_defaults_to_the_latest_partition_version[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_unauthorised_list_boundaries_omits_a_hidden_boundary[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_load_events_and_histogram_round_trips_the_count[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_load_events_is_a_safe_no_op_on_an_empty_sequence[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_unauthorised_histogram_after_load_events_matches_a_corpus_without_the_hidden_event[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_geocode_records_the_covering_cell_on_each_event_with_a_point[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_geocode_a_point_on_a_shared_edge_lands_in_exactly_one_cell[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_geocode_twice_changes_nothing_the_second_time[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_geocode_clears_its_own_stale_value_and_leaves_other_sites_alone[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_geocode_neither_touches_nor_reveals_what_the_principal_cannot_see[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_geocode_uses_only_polygon_rows[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_geocode_refuses_an_inherited_filter[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_trend_counts_events_per_week[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_trend_counts_per_month[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_trend_over_the_links_named_counts_only_events_on_them_and_a_hidden_one_moves_nothing[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_unauthorised_event_moves_no_trend_point_total_or_classification[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_trend_sums_a_property_and_says_what_it_could_not_sum[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_trend_splits_series_by_a_property[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_trend_past_its_bounds_is_refused_not_cut[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_the_trend_bound_counts_only_what_the_reader_sees[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_trend_says_the_handling_it_counted_and_only_what_the_reader_sees[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_event_keeps_the_load_that_wrote_it[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retract_load_removes_that_loads_events_from_every_read_and_says_how_many[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retract_load_leaves_other_loads_and_unattributed_events_untouched[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retract_load_is_idempotent_and_an_unknown_load_removes_nothing[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retract_load_on_an_empty_store_removes_nothing[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_after_a_retract_no_read_for_any_principal_returns_or_counts_a_retracted_event[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_the_comparison_sees_a_missing_survivor_in_every_read[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_retract_does_not_cross_investigations_it_was_not_asked_about[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_takes_exactly_those_events_out_of_every_read[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_leaves_every_other_event_on_the_same_link[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_withdraw_events_by_id_takes_more_ids_than_one_statement_holds[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_restore_withdrawn_events_puts_back_exactly_what_that_load_withdrew[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_withdraw_and_restore_are_idempotent_and_ask_nothing_of_no_ids[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retracting_the_load_that_wrote_withdrawn_events_leaves_nothing_to_restore[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retracting_the_withdrawing_load_takes_its_own_events_and_no_other_loads[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retract_geometries_removes_the_named_refs_at_that_version_and_nothing_else[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retract_geometries_is_idempotent_and_takes_no_refs_as_nothing[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retract_geometries_counts_and_removes_a_row_no_reader_here_may_read[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_retract_geometries_leaves_a_polygon_of_the_same_ref_at_another_version[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_events_of_load_among_names_only_that_loads_events_whatever_their_marking[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_events_of_load_among_is_not_what_it_was_after_a_retract[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_alert_trend_counts_alerts_raised_per_week_and_month[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_alert_trend_splits_by_rule_typology_severity_or_outcome[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_alert_trend_filters_by_equalities[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_alert_resting_on_a_handling_the_reader_may_not_view_moves_nothing[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_alert_on_a_restricted_handling_is_counted_only_within_its_units[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_alert_with_handlings_not_known_is_counted_for_no_one[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_only_me_hotlist_alert_is_counted_for_its_owner_and_no_one_else[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_team_routed_alert_is_counted_for_the_teams_members_alone[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_case_alert_is_counted_in_its_own_case_only[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_alert_outside_the_readers_datasets_is_not_counted[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_alert_kept_twice_is_counted_once_as_it_now_is[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_alert_trend_past_its_bounds_is_refused_not_cut[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_alert_trend_counts_only_within_its_window[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_the_most_events_in_any_span_of_the_days_asked[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_a_subject_at_either_end_and_each_event_once[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_totals_the_amount_named_in_the_largest_span[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_says_the_first_event_ever_up_to_the_windows_end[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_only_this_case_and_the_link_types_named[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_counts_the_window_and_the_days_before_it[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_says_the_first_movement_in_the_window_and_the_last_before_it[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_movement_at_the_windows_start_is_in_the_window_not_before_it[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_counts_an_account_at_either_end_and_each_event_once[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_event_the_rules_author_may_not_see_is_not_activity[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_counts_only_this_case_and_the_link_types_named[analytics_clickhouse]
+122 failed, 658 passed, 3 warnings in 2270.20s (0:37:50)
+# exit 1 end 2026-11-09T15:37:46Z
+## retake without the analytics suite's ClickHouse variant (the leased stacks have no ClickHouse; the first pass's 122 failures, its listing cut by tail, are that variant as far as shown): the rules lease, stack c, run on its host by stack_lease.sh remote, at 855899f (tree cf7b869a7970bd9ef9a4bc02ea352396fcfbd0a0, rebased on main at a06d114), start 2026-11-09T15:39:17Z
+# Files: ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py ../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_pack_store.py ../OspreyFlow_Build/tests/services/api/test_pack_store_query.py ../OspreyFlow_Build/tests/services/api/test_pack_export.py ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py ../OspreyFlow_Build/tests/services/api/test_alert_facts.py ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_monitors.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_hotlists.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_change_stream.py ../OspreyFlow_Build/tests/services/api/test_reports.py ../OspreyFlow_Build/tests/services/api/test_report_freshness.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_trend_store.py ../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_risk.py ../OspreyFlow_Build/tests/ingest/test_revert_load.py ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py 
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/): .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE -k not analytics_clickhouse ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py ../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_pack_store.py ../OspreyFlow_Build/tests/services/api/test_pack_store_query.py ../OspreyFlow_Build/tests/services/api/test_pack_export.py ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py ../OspreyFlow_Build/tests/services/api/test_alert_facts.py ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_monitors.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_hotlists.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_change_stream.py ../OspreyFlow_Build/tests/services/api/test_reports.py ../OspreyFlow_Build/tests/services/api/test_report_freshness.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_trend_store.py ../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_risk.py ../OspreyFlow_Build/tests/ingest/test_revert_load.py ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py
+........................................................................ [ 11%]
+........................................................................ [ 22%]
+........................................................................ [ 33%]
+........................................................................ [ 44%]
+........................................................Timeout, server 185.154.146.242 not responding.
+# exit 255 end 2026-11-09T16:02:05Z
+# The retake above is lost and unmeasured: ssh to the server dropped at 16:02Z ("not responding") with its pytest still running there,
+# orphaned. This machine then restarted at about 17:09Z, and the lease on c was taken down and released. A new lease's retake follows.
+# The first pass is kept as it was, its head cut by tail -80. Its 122 failures are the analytics suite's analytics_clickhouse variant
+# as far as shown, and are recorded as NOT RUN, neither passed nor failed: the leased stacks had no ClickHouse then (the orchestrator).
+## the whole set, ClickHouse included, at a new lease after the restart (orchestrator's grant): the rules lease, stack c, by stack_lease.sh remote, at 855899f, start 2026-11-09T17:28:44Z
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules/.runs/20261109T172856Z/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py ../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_pack_store.py ../OspreyFlow_Build/tests/services/api/test_pack_store_query.py ../OspreyFlow_Build/tests/services/api/test_pack_export.py ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py ../OspreyFlow_Build/tests/services/api/test_alert_facts.py ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_monitors.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_hotlists.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_change_stream.py ../OspreyFlow_Build/tests/services/api/test_reports.py ../OspreyFlow_Build/tests/services/api/test_report_freshness.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_trend_store.py ../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_risk.py ../OspreyFlow_Build/tests/ingest/test_revert_load.py ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py
+No remote run recorded.
+# exit 2 end 2026-11-09T18:31:51Z
+# This run is LOST, and unmeasured. It ended on the server at 18:31Z with exit 1 (some failure), but its log is gone. My own
+# `stack_lease.sh offline rules` call at 18:30Z did it: the script on main had changed since this run began (ada8460: run records
+# moved to ~/osprey-runs/rules.meta), and the new script's prune of ~/osprey-runs/rules removed the old layout's .runs/<id>/log and
+# pid. So its "still running" check saw nothing alive and started the offline run. The result is unknown, not counted as
+# passed or failed. A retake follows.
+# (The orchestrator: lost to the script, fixed on main at dc0b7cd. A call is now refused before any copy while a run is alive, and the prune keeps .runs and .osprey-lease.)
+## retake of the whole set, ClickHouse included (the 17:28Z run's log lost to the script, dc0b7cd): the rules lease, stack c, by stack_lease.sh remote, at 855899f, start 2026-11-09T18:54:33Z
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261109T185444Z/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py ../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_pack_store.py ../OspreyFlow_Build/tests/services/api/test_pack_store_query.py ../OspreyFlow_Build/tests/services/api/test_pack_export.py ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py ../OspreyFlow_Build/tests/services/api/test_alert_facts.py ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_monitors.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_hotlists.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_change_stream.py ../OspreyFlow_Build/tests/services/api/test_reports.py ../OspreyFlow_Build/tests/services/api/test_report_freshness.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_trend_store.py ../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_risk.py ../OspreyFlow_Build/tests/ingest/test_revert_load.py ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py
+........................................................................ [  9%]
+........................................................................ [ 18%]
+........................................................................ [ 27%]
+........................................................................ [ 36%]
+........................................................................ [ 46%]
+........................................................................ [ 55%]
+........................................................................ [ 64%]
+........................................................................ [ 73%]
+........................................................................ [ 83%]
+........................................................................ [ 92%]
+......................F.....................................             [100%]
+=================================== FAILURES ===================================
+_ test_frequency_counts_the_most_events_in_any_span_of_the_days_asked[analytics_clickhouse] _
+
+factory = AnalyticsAdapterFactory(label='analytics_clickhouse', context=<function _analytics_clickhouse_factories.<locals>._context at 0x711391f77880>)
+
+    async def test_frequency_counts_the_most_events_in_any_span_of_the_days_asked(
+        factory: AnalyticsAdapterFactory,
+    ) -> None:
+        events = [_paid(0), _paid(1), _paid(2), _paid(10)]
+        async with factory.context(events) as adapter:
+            two = await adapter.event_frequency(_frequency(2), OFFICIAL)
+            one = await adapter.event_frequency(_frequency(1), OFFICIAL)
+>           thirty = await adapter.event_frequency(_frequency(30), OFFICIAL)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py:2525: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+packages/adapters/analytics_clickhouse/adapter.py:785: in event_frequency
+    rows = await self._ch.rows(
+packages/adapters/analytics_clickhouse/client.py:146: in rows
+    body = await self._post(f"{text} FORMAT JSONCompact", values, database=self._db(""))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <adapters.analytics_clickhouse.client.ClickHouseClient object at 0x711353886900>
+body = 'SELECT node, max(n), max(total) FROM (  SELECT node, count() OVER span AS n, sum(amount) OVER span AS total   FROM (S...(PARTITION BY node ORDER BY at   RANGE BETWEEN 2592000000 PRECEDING AND CURRENT ROW)) GROUP BY node FORMAT JSONCompact'
+query = {'param_p0': 'case-1', 'param_p1': '2026-03-01 00:00:00.000000', 'param_p2': '2026-05-31 00:00:00.000000', 'param_p3': 'acct-a', ...}
+database = 'conformance_01m70y5qaxc474asw7zexm5pe1'
+
+    async def _post(
+        self, body: str | bytes, query: dict[str, str], *, database: str | None
+    ) -> str:
+        params = {
+            **({"database": database} if database else {}),
+            "output_format_json_quote_64bit_integers": "0",
+            "date_time_input_format": "best_effort",
+            **query,
+        }
+        response = await self._http.post(
+            self._settings.url,
+            params=params,
+            content=body,
+            auth=(self._settings.user, self._settings.password),
+        )
+        if response.status_code != 200:
+>           raise ClickHouseError(response.text.strip())
+E           adapters.analytics_clickhouse.client.ClickHouseError: {
+E           	"meta":
+E           	[
+E           
+E           	],
+E           
+E           	"data":
+E           	[
+E           
+E           	],
+E           
+E           	"rows": 0,
+E           
+E           	"exception": "Code: 36. DB::Exception: Frame start offset for 'RANGE' frame must be a nonnegative 32-bit integer, '2592000000' of type 'UInt64' given. (BAD_ARGUMENTS) (version 25.8.33.6 (official build))"
+E           }
+
+packages/adapters/analytics_clickhouse/client.py:133: ClickHouseError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_pack_export.py::test_an_item_needing_its_originator_needs_a_justification_and_a_reference
+tests/services/api/test_pack_export.py::test_an_item_needing_its_originator_needs_a_justification_and_a_reference
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_the_most_events_in_any_span_of_the_days_asked[analytics_clickhouse]
+1 failed, 779 passed, 3 warnings in 3818.26s (1:03:38)
+# exit 1 end 2026-11-09T19:58:26Z
+# The retake above is the measurement at 855899f: 779 passed and 1 failed, of the same 780 cases as the first pass (658 + 122).
+# Its one failure was a real defect, in rules' event_frequency on ClickHouse (a RANGE offset of 2^31 ms or more is refused).
+# It is fixed at 1f04c2c (RED_RECORD §12), and the delta (the analytics suite whole, both adapters) is in gates/1f04c2c.live.txt: 254 passed.
+# Lease rules, stack c, 17:28Z to 20:05Z. Down and released.
