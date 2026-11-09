@@ -56,6 +56,11 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/boards/{board_id}/pictures"): V,
     ("GET", P + "/boards/{board_id}/nodes/{node_id}/picture"): V,
     ("GET", P + "/drawn-watches"): V,
+    # ADR-143 decision 8 (L3.4): promoting is the case's Author's (ADR-112 Amendment 4, I12, with
+    # promote_to_dataset); the board's own promotions are read at Viewer.
+    ("GET", P + "/boards/{board_id}/promotion-sheet"): A,
+    ("POST", P + "/boards/{board_id}/promotions"): A,
+    ("GET", P + "/boards/{board_id}/promotions"): V,
     # Closing or reopening a tab (ADR-084) changes only the caller's own strip, so Viewer suffices.
     ("PUT", P + "/tab"): V,
     ("POST", P + "/seed"): E,
@@ -331,6 +336,9 @@ OUTSIDE_CASE_LEVELS: dict[tuple[str, str], str] = {
     # dry, as counts, for cases they are no member of; Admin › Datasets' right is the gate, and
     # the counts are under the administrator's own handling.
     ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/{action}/dry-run"):
+        "Admin › Datasets: administer_system, never a case level",
+    # L3.4: an administrator deletes a removed case's layer after that dry run, the same way.
+    ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete"):
         "Admin › Datasets: administer_system, never a case level",
 }  # fmt: skip
 

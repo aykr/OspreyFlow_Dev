@@ -1,0 +1,139 @@
+--- a/OspreyFlow_Build/tests/services/api/test_analyst_link_types.py
++++ b/OspreyFlow_Build/tests/services/api/test_analyst_link_types.py
+@@ -19,6 +19,7 @@
+ 
+ from __future__ import annotations
+ 
++import ast
+ import asyncio
+ from collections.abc import Iterator
+ from pathlib import Path
+@@ -722,17 +723,62 @@
+ # --- the one check every promotion writer calls (the independent review's item 4; rule 12) ------
+ 
+ _CORE = Path(__file__).resolve().parents[4] / "OspreyFlow_Core"
++
++
++#: The triggers a promotion's load is written under (ADR-143 decision 8; Amendment 2 decision 1).
++PROMOTION_TRIGGERS = ("analyst_promotion", "layer_merge")
+ 
+ 
++def _writes_a_promotion(tree: ast.AST) -> bool:
++    """A module that writes a promotion: it calls `….promote_elements(…)`, the graph's own write
++    of one (however its trigger is spelled: a constant, a variable, a positional argument), or it
++    gives a load a promotion's trigger as `trigger="analyst_promotion"` or `trigger="layer_merge"`.
++    Naming the trigger as a type or in SQL (the promotion's own record) writes nothing, and a
++    module that defines `promote_elements` itself implements the port (an adapter, the stamping
++    wrapper passing it on), so its call of it is no promotion of its own."""
++    implements = any(
++        isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "promote_elements"
++        for n in ast.walk(tree)
++    )
++    return any(
++        (
++            isinstance(n, ast.keyword)
++            and n.arg == "trigger"
++            and isinstance(n.value, ast.Constant)
++            and n.value.value in PROMOTION_TRIGGERS
++        )
++        or (
++            not implements
++            and isinstance(n, ast.Call)
++            and isinstance(n.func, ast.Attribute)
++            and n.func.attr == "promote_elements"
++        )
++        for n in ast.walk(tree)
++    )
++
++
++def _calls_the_check(tree: ast.AST) -> bool:
++    """A real call of `….promotion_refusals(…)`: a definition of that name (a Protocol's), a
++    comment or a string is not one."""
++    return any(
++        isinstance(n, ast.Call)
++        and isinstance(n.func, ast.Attribute)
++        and n.func.attr == "promotion_refusals"
++        for n in ast.walk(tree)
++    )
++
++
+ def _promotion_writers_missing_the_check(root: Path) -> list[str]:
+     """Every module under `services` that writes a promotion (ADR-143 decision 8's load, trigger
+-    `analyst_promotion`) and never calls `LinkTypeService.promotion_refusals`, which says which
+-    links of a proposed, declined or not-yet-live type stay behind (decision 9). L3.4 builds the
+-    writer; this keeps it from skipping the check."""
++    `analyst_promotion` or `layer_merge`) and never calls `LinkTypeService.promotion_refusals`,
++    which says which links of a proposed, declined or not-yet-live type stay behind (decision 9).
++    L3.4 builds the writer; this keeps it from skipping the check. Read as syntax, not text (the
++    independent review of L3.4, item 3: the text check stayed green with the call deleted, since
++    the name is also the Protocol's)."""
+     missing = []
+     for path in sorted((root / "services").rglob("*.py")):
+-        text = path.read_text(encoding="utf-8")
+-        if "analyst_promotion" in text and "promotion_refusals(" not in text:
++        tree = ast.parse(path.read_text(encoding="utf-8"))
++        if _writes_a_promotion(tree) and not _calls_the_check(tree):
+             missing.append(path.relative_to(root).as_posix())
+     return missing
+ 
+@@ -741,6 +787,60 @@
+     assert _promotion_writers_missing_the_check(_CORE) == []
+ 
+ 
++def test_the_real_writer_with_its_call_deleted_is_found(tmp_path: Path) -> None:
++    """The plant in the real file: `services/api/promotions.py` as it is, its one
++    `promotion_refusals(...)` call taken out (the Protocol's definition of the name left in),
++    is flagged; as it is, it is not."""
++    real = (_CORE / "services/api/promotions.py").read_text(encoding="utf-8")
++    assert "self.link_types.promotion_refusals(" in real, "the call site moved: update the plant"
++    planted = tmp_path / "services/api/promotions.py"
++    planted.parent.mkdir(parents=True)
++    planted.write_text(real)
++    assert _promotion_writers_missing_the_check(tmp_path) == []
++    planted.write_text(
++        real.replace("await self.link_types.promotion_refusals(", "await _no_check(", 1)
++    )
++    assert "async def promotion_refusals(" in planted.read_text()
++    assert _promotion_writers_missing_the_check(tmp_path) == ["services/api/promotions.py"]
++
++
++def test_a_layer_merge_writer_without_the_check_is_found(tmp_path: Path) -> None:
++    planted = tmp_path / "services/api/merges.py"
++    planted.parent.mkdir(parents=True)
++    planted.write_text(
++        "async def merge(loads, items):\n"
++        '    return await loads.write(items, trigger="layer_merge")\n'
++    )
++    assert _promotion_writers_missing_the_check(tmp_path) == ["services/api/merges.py"]
++
++
++def test_a_writer_spelling_its_trigger_otherwise_is_found(tmp_path: Path) -> None:
++    """The lane review's finding 7: a trigger through a constant or positionally still writes
++    through `promote_elements`, and is flagged without the check."""
++    planted = tmp_path / "services/api/elsewhere.py"
++    planted.parent.mkdir(parents=True)
++    planted.write_text(
++        "TRIGGER = 'analyst_promotion'\n"
++        "async def promote(graph, ids, tx):\n"
++        "    await graph.promote_elements(ids, [], 'd', TRIGGER, tx)\n"
++    )
++    assert _promotion_writers_missing_the_check(tmp_path) == ["services/api/elsewhere.py"]
++    # A wrapper implementing the port passes the call on and is no writer.
++    (tmp_path / "services/api/wrapper.py").write_text(
++        "class Stamping:\n"
++        "    async def promote_elements(self, *a):\n"
++        "        return await self._inner.promote_elements(*a)\n"
++    )
++    assert _promotion_writers_missing_the_check(tmp_path) == ["services/api/elsewhere.py"]
++
++
++def test_the_promotion_record_is_no_writer() -> None:
++    """The record names both triggers, as a type and a CHECK constraint, and writes no load."""
++    store = _CORE / "services/api/promotion_store.py"
++    assert "analyst_promotion" in store.read_text(encoding="utf-8")
++    assert not _writes_a_promotion(ast.parse(store.read_text(encoding="utf-8")))
++
++
+ def test_a_planted_promotion_writer_without_the_check_is_found(tmp_path: Path) -> None:
+     """Red first, in the shape the real writer will take: a load written with the promotion's
+     trigger and no call to the check."""

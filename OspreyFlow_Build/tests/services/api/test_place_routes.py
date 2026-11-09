@@ -71,6 +71,11 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files|model)"
      r"|^/v1/datasets/\{dataset_id\}/(screening-subscriptions|reference-lists)|^/v1/studio/",
      frozenset({"ingest"}), "the Ingest Studio (Sources' lists and connectors, ADR-140 A13)"),
+    # L3.4: the Studio's Analyst promotions and a removed case's layer, under Runs (ADR-143
+    # decision 10, Amendment 2 decision 1; ingest/runs/promotionsApi.ts). A board's own
+    # promotions stay the Glass's (the rule below).
+    (r"^/v1/datasets/\{dataset_id\}/(promotions|removed-cases|layer-merges)",
+     frozenset({"ingest"}), "the Studio's Analyst promotions (ingest/runs/promotions.tsx)"),
     (r"", frozenset({"glass"}), "the Glass"),
 ]  # fmt: skip
 

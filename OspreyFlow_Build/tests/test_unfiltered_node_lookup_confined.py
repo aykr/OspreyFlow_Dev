@@ -26,7 +26,11 @@ CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 #: Each unfiltered internal lookup, and the one module that may use it.
 CONFINED = {
     "existing_node_ids": {"services/ingest/engine.py"},
-    "live_edges_touching": {"services/ingest/load_revert.py"},
+    # ADR-143 Amendment 5 decision 8: a promotion's revert asks whether a live link rests on its
+    # nodes, as a load's does, in the operator command alone (Conduit stopped, never routed; the
+    # orchestrator's ratification for L3.4, 9 November 2026). `test_no_service_imports_the_revert_
+    # command` holds that nothing under `services/` reaches it.
+    "live_edges_touching": {"services/ingest/load_revert.py", "scripts/revert_promotion.py"},
     "live_nodes_naming_geometry": {"services/ingest/load_revert.py"},
     # ADR-109 Amendment 10: the alert store's repoint settle follows a superseded Alert node to its
     # successor (round 3; the orchestrator's item 4).
@@ -86,11 +90,70 @@ def test_only_the_reverts_module_names_its_unfiltered_lookups() -> None:
         assert offenders == set(), f"these name GraphPort.{name}: {sorted(offenders)}"
 
 
+def _users(name: str) -> set[str]:
+    return callers(CORE / "services", CORE, name) | callers(CORE / "scripts", CORE, name)
+
+
 def test_the_module_each_lookup_is_confined_to_does_call_it() -> None:
+    """Under `services/` and `scripts/` (an operator command may be the module allowed): an entry
+    no module uses any more confines nothing, and fails here."""
     for name, allowed in CONFINED.items():
         if name == NAME:
             continue
-        assert callers(CORE / "services", CORE, name) == allowed, name
+        assert _users(name) == allowed, name
+
+
+#: The operator commands whose core asks an unfiltered lookup: never imported by a service.
+OPERATOR_ONLY = ("scripts.revert_promotion",)
+
+
+def services_importing(root: Path, modules: tuple[str, ...] = OPERATOR_ONLY) -> set[str]:
+    """The modules under `root`/services that import one of `modules` (or anything from it)."""
+    found: set[str] = set()
+    for path in sorted((root / "services").rglob("*.py")):
+        if ".venv" in path.parts or "node_modules" in path.parts:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names = (
+                [a.name for a in node.names]
+                if isinstance(node, ast.Import)
+                # `from scripts import revert_promotion` names the module as `scripts` plus the
+                # imported name (the independent review of L3.4, item 6).
+                else [node.module or "", *(f"{node.module}.{a.name}" for a in node.names)]
+                if isinstance(node, ast.ImportFrom)
+                # By string too: `importlib.import_module("scripts.revert_promotion")`,
+                # `__import__(...)` (the lane review, minor 13).
+                else [node.value]
+                if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                else []
+            )
+            if any(n == m or n.startswith(m + ".") for n in names for m in modules):
+                found.add(path.relative_to(root).as_posix())
+    return found
+
+
+def test_no_service_imports_the_revert_command() -> None:
+    """A route reaching `scripts/revert_promotion.py`'s core would ask `live_edges_touching` for a
+    reader: nothing under `services/` (the Conduit included) imports it."""
+    assert services_importing(CORE) == set()
+
+
+def test_the_import_check_flags_a_service_importing_the_command(tmp_path: Path) -> None:
+    (tmp_path / "services/api").mkdir(parents=True)
+    (tmp_path / "services/api/promotions.py").write_text(
+        "from scripts.revert_promotion import revert_promotion\n"
+    )
+    (tmp_path / "services/api/other.py").write_text("import scripts.revert_promotion as r\n")
+    (tmp_path / "services/api/quiet.py").write_text("from scripts.revert_load import run\n")
+    (tmp_path / "services/api/package.py").write_text("from scripts import revert_promotion\n")
+    (tmp_path / "services/api/sibling.py").write_text("from scripts import revert_load\n")
+    (tmp_path / "services/api/by_name.py").write_text(
+        'import importlib\nm = importlib.import_module("scripts.revert_promotion")\n'
+    )
+    assert services_importing(tmp_path) == {
+        "services/api/promotions.py", "services/api/other.py", "services/api/package.py",
+        "services/api/by_name.py",
+    }
 
 
 def test_the_check_flags_each_confined_lookup_outside_its_module(tmp_path: Path) -> None:

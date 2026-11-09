@@ -627,6 +627,8 @@ NON_JSON_ROUTES: dict[str, str] = {
     "GET /v1/investigations/{investigation_id}/boards/{board_id}/nodes/{node_id}/picture": "an image's bytes",
     "DELETE /v1/investigations/{investigation_id}/links/{edge_id}/notes/{note_id}": "204, no body",
     "DELETE /v1/admin/dashboards/{client_id}": "204, no body",
+    # L3.4 (ADR-143 Amendment 2 decision 1): a merge cancelled, its grant closed, answers nothing.
+    "DELETE /v1/datasets/{dataset_id}/layer-merges/{grant_id}": "204, no body",
     # L2.5 (ADR-145 Amendment 5 point 9): Name an Author.
     "PUT /v1/admin/cases/{case_id}/authors/{account_id}": "204, no body",
     "DELETE /v1/investigations/{investigation_id}/trends/{trend_id}": "204, no body",

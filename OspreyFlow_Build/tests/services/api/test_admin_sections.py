@@ -68,6 +68,12 @@ NOT_A_SECTION_S = {
     # ADR-145 Amendment 8 (L3.8): the ownership route is built; People's Disable… reads it in admin's L2.5b
     # (CARRIES), which removes this line.
     r"^/v1/admin/people/\{user_id\}/ownership$": "People's Disable…, not yet drawn (L2.5b)",
+    # L3.4 (ADR-143 Amendment 2 decision 1): an administrator's *Delete* of a removed case's layer,
+    # after Admin's own dry run. Its button in Admin › Datasets is the admin lane's screen, asked for
+    # through the orchestrator; until it lands no section calls it (the Studio's Authors delete
+    # through their own route meanwhile).
+    r"^/v1/admin/datasets/\{dataset_id\}/cases/\{investigation_id\}/delete$":
+        "Admin › Datasets' Delete, the admin lane's screen to come",
 }
 
 

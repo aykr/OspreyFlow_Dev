@@ -1,0 +1,46 @@
+# Round 2's minor: the merge's claim of its grant ignored (the close still made, its answer not asked), offline, over b47708a; restored after.
+# plant in services/api/promotions.py:
+#   - '        if not await self.store.close_grant(grant.id, datetime.now(UTC)):'
+#   + '        if not (await self.store.close_grant(grant.id, datetime.now(UTC)) or True):'
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ test_a_merge_whose_grant_another_merge_closed_meanwhile_records_nothing ____
+
+pw = namespace(datasets=<services.api.datasets.InMemoryDatasetStore object at 0x11e97e630>, cases=<tests.services.api.test_...at 0x11e958590>, store=<services.api.promotion_store.InMemoryPromotionStore object at 0x11ea349e0>, removed={'case-k'})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11e97dbe0>
+
+    def test_a_merge_whose_grant_another_merge_closed_meanwhile_records_nothing(
+        pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The claim is atomic (round 2's minor): a second merge through the same grant, closed by
+        the first after this one's grant was read open, is refused (403 `no_open_grant`) and records
+        no second promotion."""
+        first, _ = _removed_with_items(pw)
+        grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+        real = Promotions._plan
+    
+        async def raced(self: Promotions, *args: Any, **kwargs: Any) -> Any:
+            planned = await real(self, *args, **kwargs)
+            await self.store.close_grant(grant, datetime.now(UTC))  # the other merge's claim
+            return planned
+    
+        monkeypatch.setattr(Promotions, "_plan", raced)
+        answer = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                                  json={"item_ids": [first["item_id"]]})  # fmt: skip
+>       assert answer.status_code == 403 and answer.json()["error"] == "no_open_grant"
+E       assert (201 == 403)
+E        +  where 201 = <Response [201 Created]>.status_code
+
+../OspreyFlow_Build/tests/services/api/test_promotions.py:1588: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_promotions.py::test_a_merge_whose_grant_another_merge_closed_meanwhile_records_nothing
+1 failed, 98 deselected, 1 warning in 1.51s
+
+pytest exit 1
+# restored: True

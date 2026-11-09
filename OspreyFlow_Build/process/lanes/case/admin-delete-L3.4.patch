@@ -1,0 +1,147 @@
+diff --git a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+index 75f5942..6d52cbf 100644
+--- a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
++++ b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+@@ -220,6 +220,7 @@ POST   /v1/datasets/{dataset}/layer-merges/{grant}              merge the ticked
+ DELETE /v1/datasets/{dataset}/layer-merges/{grant}              *Cancel* (investigate): the grant closes, nothing merged
+ POST   /v1/datasets/{dataset}/removed-cases/{case}/delete/dry-run   *Delete*'s dry run for one of the dataset's Authors (investigate) (`LayerDryRun`): the layer's counts as their own handling takes them, promoted items included, and that deleting withdraws those not promoted, in words, nothing written but its audit entry (dry_run_layer_delete)
+ DELETE /v1/datasets/{dataset}/removed-cases/{case}/layer        *Delete* by one of the dataset's Authors (investigate) (`LayerDeleted`, in words, with no count: it would include what the deleter may not see): every element wholly the layer's withdrawn under `layer-delete:<case>`, never deleted; a promoted element is never touched; the layer's open merges closed and its waiting promotions rejected; audited as delete_layer before it is written
++POST   /v1/admin/datasets/{dataset}/cases/{case}/delete         the same *Delete* by an administrator of the dataset's current unit, its dry run shown first by Admin; administer_system; another unit's administrator is answered 404, as a dataset that does not exist (the owner's ruling of 9 November 2026, ADR-143 Amendment 5; `test_admin_delete_is_scoped_to_the_datasets_unit`)
+ ```
+ 
+ A promotion adds the dataset to the drawn elements themselves (`GraphPort.promote_elements`,
+diff --git a/OspreyFlow_Build/tests/services/api/test_admin_sections.py b/OspreyFlow_Build/tests/services/api/test_admin_sections.py
+index d8b6081..049578e 100644
+--- a/OspreyFlow_Build/tests/services/api/test_admin_sections.py
++++ b/OspreyFlow_Build/tests/services/api/test_admin_sections.py
+@@ -65,6 +65,12 @@ NOT_A_SECTION_S = {
+     # ADR-140 Amendment 13 (L1.6): Test connection's route is built; Admin › Connections' fields and
+     # its button are the admin lane's to build (requested through the orchestrator).
+     r"^/v1/admin/connections/\{connection_id\}/test$": "Admin › Connections' Test, not yet drawn",
++    # L3.4 (ADR-143 Amendment 2 decision 1): an administrator's *Delete* of a removed case's layer,
++    # after Admin's own dry run. Its button in Admin › Datasets is the admin lane's screen, asked for
++    # through the orchestrator; until it lands no section calls it (the Studio's Authors delete
++    # through their own route meanwhile).
++    r"^/v1/admin/datasets/\{dataset_id\}/cases/\{investigation_id\}/delete$":
++        "Admin › Datasets' Delete, the admin lane's screen to come",
+ }
+ 
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_investigation_levels.py b/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
+index 95a7f0d..14df024 100644
+--- a/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
++++ b/OspreyFlow_Build/tests/services/api/test_investigation_levels.py
+@@ -337,6 +337,9 @@ OUTSIDE_CASE_LEVELS: dict[tuple[str, str], str] = {
+     # the counts are under the administrator's own handling.
+     ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/{action}/dry-run"):
+         "Admin › Datasets: administer_system, never a case level",
++    # L3.4: an administrator deletes a removed case's layer after that dry run, the same way.
++    ("POST", "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete"):
++        "Admin › Datasets: administer_system, never a case level",
+ }  # fmt: skip
+ 
+ 
+diff --git a/OspreyFlow_Build/tests/services/api/test_promotions.py b/OspreyFlow_Build/tests/services/api/test_promotions.py
+index 5371e27..30b1c7b 100644
+--- a/OspreyFlow_Build/tests/services/api/test_promotions.py
++++ b/OspreyFlow_Build/tests/services/api/test_promotions.py
+@@ -1110,6 +1110,51 @@ def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace)
+     assert pw.items.items[spare["item_id"]].withdrawn_at is not None
+     actions = [r["action"] for r in pw.audit.records]
+     assert "delete_layer" in actions
++    # An administrator deletes too; a non-administrator not through Admin's route.
++    assert _as("fred").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 403
++
++
++def test_an_administrator_deletes_a_removed_cases_layer_and_never_an_open_ones(
++    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """Admin's own Delete (Admin › Datasets): an open case's layer answers 404 and nothing is
++    withdrawn; once the case is removed, its layer goes, audited before it is written."""
++    monkeypatch.setitem(PEOPLE, "ada", Principal(
++        id="ada", clearance="SECRET", org_unit=UNIT, roles=["osprey-admin"]
++    ))  # fmt: skip
++    board = _board()
++    drawn = _item(board)
++    refused = _as("ada").post(f"/v1/admin/datasets/src/cases/{K}/delete")
++    assert refused.status_code == 404, refused.text
++    assert not pw.graph.node(drawn["element_id"]).audit.reverted
++    pw.removed.add(K)
++    deleted = _as("ada").post(f"/v1/admin/datasets/src/cases/{K}/delete")
++    assert deleted.status_code == 200, deleted.text
++    assert set(deleted.json()) == {"investigation_id", "words"}
++    assert pw.graph.node(drawn["element_id"]).audit.reverted
++    assert "delete_layer" in [r["action"] for r in pw.audit.records]
++
++
++def test_admin_delete_is_scoped_to_the_datasets_unit(pw: SimpleNamespace) -> None:
++    """Rule 4 at the unit boundary (the independent review's round 2, item 1; the owner's ruling
++    of 9 November 2026): Admin's Delete is a destructive write with no undo, so only an administrator
++    of the dataset's current unit makes it. Another unit's administrator is answered exactly as
++    for a dataset that does not exist, and nothing is withdrawn; another unit's person without
++    `administer_system` is refused by the right first."""
++    PEOPLE["ada9"] = Principal(id="ada9", clearance="SECRET", org_unit="unit-2", roles=["osprey-admin"])
++    try:
++        board = _board()
++        drawn = _item(board)
++        pw.removed.add(K)
++        assert _as("zed").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 403
++        other = _as("ada9").post(f"/v1/admin/datasets/src/cases/{K}/delete")
++        unknown = _as("ada9").post(f"/v1/admin/datasets/no-such/cases/{K}/delete")
++        assert other.status_code == unknown.status_code == 404
++        assert other.json() == unknown.json()
++        assert not pw.graph.node(drawn["element_id"]).audit.reverted
++        assert "delete_layer" not in [r["action"] for r in pw.audit.records]
++    finally:
++        del PEOPLE["ada9"]
+ 
+ 
+ def test_the_delete_check_fails_with_the_layer_withdrawn_whole(
+diff --git a/OspreyFlow_Build/tests/services/api/test_route_rights.py b/OspreyFlow_Build/tests/services/api/test_route_rights.py
+index a5ed059..6abc4d6 100644
+--- a/OspreyFlow_Build/tests/services/api/test_route_rights.py
++++ b/OspreyFlow_Build/tests/services/api/test_route_rights.py
+@@ -97,6 +97,7 @@ ROUTE_RIGHTS = {
+     "cancel_layer_merge": "investigate",
+     "delete_removed_case_layer": "investigate",
+     "dry_run_delete_removed_case_layer": "investigate",
++    "admin_delete_removed_case_layer": "administer_system",
+     "start_a_drawing": "create_case",
+     "seed": "investigate",
+     "expand": "investigate",
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+index 3e9a007..a4f7149 100644
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -10205,6 +10205,31 @@ async def delete_removed_case_layer(
+                                graph, promotions, audit)  # fmt: skip
+ 
+ 
++@app.post(
++    "/v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete",
++    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
++)
++async def admin_delete_removed_case_layer(
++    dataset_id: str,
++    investigation_id: str,
++    principal: PrincipalDep,
++    datasets: DatasetsDep,
++    investigations: InvestigationsDep,
++    graph: GraphDep,
++    promotions: PromotionsDep,
++    audit: AuditDep,
++) -> LayerDeleted:
++    """*Delete* by an administrator (Admin › Datasets), after its dry run, of the dataset's own
++    unit alone (the owner's ruling of 9 November 2026; ADR-143 Amendment 5): a destructive write
++    with no undo. Another unit's administrator, or one with no unit, is answered as for a dataset
++    that does not exist, before anything is read (fails closed)."""
++    dataset = await _admin_dataset_of(datasets, dataset_id)
++    if principal.org_unit is None or dataset.owning_unit != principal.org_unit:
++        raise UnknownDatasetEgressError(dataset_id)
++    return await _delete_layer(dataset_id, investigation_id, principal, datasets, investigations,
++                               graph, promotions, audit)  # fmt: skip
++
++
+ @app.get("/v1/datasets/{dataset_id}/model", dependencies=_EDITS_THE_MODEL)
+ async def read_dataset_model(
+     dataset_id: StudioDatasetDep, models: TargetModelsDep

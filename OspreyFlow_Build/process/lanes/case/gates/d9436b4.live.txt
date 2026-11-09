@@ -1,0 +1,5 @@
+# L3.4 live run at d9436b4 (tree 52bf35d525f3e4d93b3567624effd8faf27a2419), alone, under lease case on stack c (ArcadeDB 2493, Postgres 55435), OSPREY_LANE=case, from 2026-11-09T08:28:25Z
+# files: ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_promotion_store.py ../OspreyFlow_Build/tests/services/api/test_board_store.py ../OspreyFlow_Build/tests/services/api/test_analyst_layer_store.py ../OspreyFlow_Build/tests/services/api/test_case_writes_store.py ../OspreyFlow_Build/tests/services/api/test_composite_writes_live.py ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_promotion.py::test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote[graph_arcadedb[gremlin]]
+1 failed, 405 passed, 1 warning in 3239.13s (0:53:59)
+pytest exit 1; 2026-11-09T09:22:27Z

@@ -917,6 +917,119 @@ The invariants, each with the test that fails if it is broken (rule 12):
 - **Restored in its own case's layer** (Amendment 2 decision 4).
   - `test_a_drawn_item_and_its_picture_come_back_in_their_cases_layer`, red with the layer lost.
 
+### 2.2e Promotion, and a removed case's layer (ADR-143 decisions 8 and 10; Amendment 2 decision 1; Amendment 5; L3.4)
+
+A **promotion** is a load (`load_id` `promotion-<id>`) that adds the case's source dataset to drawn
+elements of its analyst layer: each element's `datasets` gains the dataset (ADR-099 decision 2's
+union), as the same element, never a copy and never a merge (rule 6), stamped `promoted_by_load`. Its
+trigger is `analyst_promotion` (from a board) or `layer_merge` (a removed case's layer). The element
+stays `analyst_drawn`, keeping its marking and grading. Its record (`promotions`, the promotion's own
+ledger) holds ids and words only: the case, the board (never shown in the Studio: a board's id is its
+author's), the dataset and the layer, the proposer, its status (`awaiting_review`, `committed`,
+`rejected`, `reverted`), the reviewer and reason, the element ids and board items it carries, what it
+left out and why, its highest marking and the dataset's unit. The board's registry sets each item's
+`promoted_at` when it commits (the withdrawal reads it, §2.2d).
+
+A **merge read grant** (`promotion_layer_grants`) gives one of the dataset's Authors read access to
+one removed case's layer, opened by the merge sheet, read through by the merge alone, and closed when
+the merge is sent (committed at once, or sent for review: one grant, one merge), cancelled or refused;
+it is never reopened. A reviewer never reads through it.
+
+What holds, and the test that would fail if it did not (each red by a plant at its call site, kept
+as a test of its own beside it):
+
+- **One element, both datasets, one load, all or nothing** (decision 8; rule 6).
+  - Conformance: `test_a_promotion_adds_the_dataset_to_the_drawn_elements_themselves` (red with a
+    copy written), `test_a_promotion_with_a_withdrawn_element_writes_nothing` and
+    `test_a_promotion_with_a_superseded_element_writes_nothing` (red with the all-live check
+    removed).
+  - Route: `test_author_promotes_commits_one_load_and_case_b_reads_the_same_element`,
+    `test_a_promotion_with_an_item_changed_writes_nothing`.
+- **A link only with both its ends** in the dataset (loaded there, going now, or promoted before);
+  a picture and a match decision with their own drawn node going in this promotion, never with a
+  later, unrelated one; everything else listed with its reason (rule 2).
+  `test_a_link_whose_drawn_end_does_not_go_is_left_out_and_listed`,
+  `test_a_picture_goes_with_its_own_node_and_never_with_another`,
+  `test_a_picture_added_after_its_node_went_waits_for_its_own_promotion`,
+  `test_a_same_decided_later_never_goes_with_an_unrelated_promotion`.
+- **Nothing drawn goes into a gazetteer dataset** (ADR-147 Amendment 1 decision 2): no promotion
+  into one, and a removed case's layer never merged into one, only deleted.
+  `test_nothing_drawn_is_promoted_into_a_gazetteer_dataset`,
+  `test_a_removed_cases_layer_is_never_merged_into_a_gazetteer_dataset`.
+- **Within the dataset's highest allowed marking**, at the sheet and again at the route.
+  `test_a_marking_above_the_datasets_highest_is_refused_at_the_sheet_and_at_the_route`.
+- **A link of a type not yet live is not promoted** (decision 9; Amendment 4 decision 3, through
+  `promotion_refusals`). `test_a_link_of_a_type_not_yet_live_is_refused_and_promotable_once_live`.
+- **An ontology link type goes only when the dataset's live model holds it**, through case-b's real
+  `LinkTypeService` (which answers `None` for every ontology type).
+  `test_c14_holds_through_the_real_link_type_service`.
+- **A rejection's words, its proposer and its case reach only who may know the case**; a check's
+  rejection records fixed words. `test_a_rejections_words_and_proposer_reach_no_reader_who_may_not_know_the_case`,
+  `test_a_rejection_by_a_check_records_fixed_words`.
+- **A revert waits for the Conduit to stop** and reads its resting links inside its own transaction.
+  `test_the_revert_is_refused_while_the_conduit_runs`; conformance
+  `test_the_resting_link_read_inside_a_transaction_sees_what_it_wrote`.
+- **An open case is no removed case to probe** (strict 404) and **an ambiguous id refuses the load**.
+  `test_a_layer_merge_is_refused_to_a_non_author_and_for_an_open_case`,
+  `test_a_promotion_with_an_ambiguous_link_id_writes_nothing`.
+- **Nothing readable outside the case before review**, where the policy asks for a second person:
+  nothing is written to the graph until the approval.
+  `test_under_review_nothing_is_readable_outside_the_case_until_a_second_person_approves`.
+- **The approver is one of the dataset's Authors holding `review_promotions`, never the proposer**,
+  and reads exactly the promotion's elements through their own clearance; one who may not see every
+  item may not approve. `test_the_proposer_cannot_approve_their_own_promotion`,
+  `test_only_an_author_of_the_dataset_holding_review_promotions_decides`,
+  `test_a_reviewer_who_may_not_see_every_item_may_not_approve`.
+- **The merge's read grant ends with the merge**, however it ends, closes when the merge is sent
+  (so one grant makes one merge), and is used for a removed case alone: one restored since is
+  neither read nor merged nor approved.
+  `test_an_author_merges_a_removed_cases_layer_through_a_grant_that_ends_with_the_merge`,
+  `test_a_merge_waits_for_review_under_the_policy_and_its_grant_ends_when_it_is_sent`,
+  `test_the_one_merge_check_fails_with_the_grant_kept_at_send`,
+  `test_a_merge_rejected_by_the_approvals_recheck_closes_its_grant`,
+  `test_a_merge_whose_load_is_refused_closes_its_grant`,
+  `test_a_case_restored_since_its_sheet_was_opened_is_not_read_through_its_grant`,
+  `test_a_merge_waiting_for_review_is_not_approved_once_its_case_is_restored`,
+  `test_deleting_a_layer_rejects_what_still_waits_from_it`.
+- **A composite case's layer is never merged, only deleted**, and **a delete never touches what was
+  promoted**. `test_a_composite_cases_layer_is_never_merged_only_deleted`,
+  `test_deleting_a_layer_leaves_what_was_promoted_from_it`; conformance
+  `test_withdrawing_a_layer_leaves_what_was_promoted_from_it`.
+- **A revert leaves the elements in the layer only**, by the operator command, whose dry run writes
+  nothing. `test_reverting_a_promotion_leaves_the_elements_in_the_layer_only` (conformance),
+  `test_the_commands_dry_run_writes_nothing_and_the_real_run_reverts`.
+- **Every route refuses whom it is not for** (rule 4).
+  `test_every_promotion_route_refuses_a_non_member_as_a_missing_case`,
+  `test_every_layer_route_refuses_whom_it_is_not_for`.
+- **Nothing reaches a reader their handling or case does not allow** (rules 3 and 7): what a
+  promotion left out goes to its proposer alone; its case is named only to the dataset's Authors and
+  its proposer; a list leaves out a promotion above the reader's clearance, in its query, the
+  promotion's marking raised with an item edited while it waits; a withheld item is counted nowhere,
+  in the list as in *Details*; a decided promotion's elements are read for no reviewer; the sheet
+  lists only what its proposer may see now; a delete answers in words, with no count.
+  `test_what_was_left_out_goes_to_its_proposer_alone_and_the_case_to_whom_may_know_it`,
+  `test_the_boards_promotions_are_listed_only_as_the_reader_may_see_them`,
+  `test_an_item_raised_while_waiting_takes_its_promotion_out_of_a_lower_reviewers_reach`,
+  `test_a_reviewer_who_may_not_see_every_item_may_not_approve` (the counts),
+  `test_a_decided_promotions_details_read_none_of_its_layer`,
+  `test_the_sheet_lists_only_what_its_proposer_may_see_now`,
+  `test_the_removed_cases_count_is_only_what_the_author_may_see`;
+  `test_a_boards_list_is_filtered_by_clearance_in_the_query` (real Postgres).
+- **An approval runs every check again**, on the items as they are now.
+  `test_an_approval_runs_every_check_again_on_the_items_as_they_are_now`.
+- **One item, one open promotion; one element, one promotion's stamp.**
+  `test_an_item_waiting_for_review_is_in_no_second_promotion`; conformance
+  `test_an_element_promoted_by_another_load_is_not_promoted_again`.
+- **A revert leaves no link resting on a node gone from the dataset.**
+  `test_a_revert_is_refused_while_another_link_rests_on_its_items`.
+- **A waiting promotion is listed only to one who may review it** (ADR-145 Amendment 4 decision
+  11: an Author of the dataset's home case holding `review_promotions`, or its unit's administrator,
+  of the dataset's current unit and cleared to its current highest marking), the reviewable datasets
+  and the markings the reader's clearance reaches (the items' own, which an unmarked or lowered
+  dataset does not bound) both passed into the store's query (rule 3). `test_waiting_promotions_contract.py` (nine readers, the
+  case store among its `STORES`); `test_the_waiting_read_is_filtered_by_the_readers_datasets_in_the_query`
+  (real Postgres); `test_the_waiting_seam_reads_the_datasets_unit_as_it_is_now`.
+
 ### 2.3 Resolution state
 
 ```python

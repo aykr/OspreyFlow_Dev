@@ -42,6 +42,8 @@ from ports.graph import (
     FindLimitExceeded,
     LinkCloned,
     NodeSuggestions,
+    NotPromotable,
+    PromotionReverted,
     RarityTooLarge,
     RestoredElements,
     StoredLink,
@@ -796,7 +798,9 @@ class GraphArcadeDBAdapter:
             )
         ]
 
-    async def _record_ids(self, type_names: Sequence[str], ids: list[str]) -> list[str]:
+    async def _record_ids(
+        self, type_names: Sequence[str], ids: list[str], *, tx: TxId | None = None
+    ) -> list[str]:
         """The record ids of the elements holding `ids`, over each stored type in `type_names`
         (ADR-124 decision 6). One SQL query per type, run together: a type's own unique `id` index
         answers it, which Gremlin's `has("id", within(...))` does not (it scans the store). The
@@ -805,7 +809,7 @@ class GraphArcadeDBAdapter:
         so there is no missing type to read as no rows: any error is raised."""
         found = await asyncio.gather(
             *(
-                self._client.sql(render_record_id_lookup_sql(t), params={"ids": ids})
+                self._client.sql(render_record_id_lookup_sql(t), params={"ids": ids}, session_id=tx)
                 for t in type_names
             )
         )
@@ -1774,6 +1778,105 @@ class GraphArcadeDBAdapter:
                 session_id=tx,
             )
 
+    async def promote_elements(
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId],
+        dataset_id: str,
+        load_id: str,
+        tx: TxId,
+    ) -> None:
+        # Resolved and checked first, written after (all or nothing, ADR-143 decision 8): every id
+        # must be held by exactly one type of its kind and be live, or nothing is written.
+        wanted = len(set(node_ids)) + len(set(edge_ids))
+        plan = [
+            *(await self._holders("vertex", sorted(set(node_ids)), tx)),
+            *(await self._holders("edge", sorted(set(edge_ids)), tx)),
+        ]
+        rows: list[tuple[str, dict[str, Any]]] = []
+        for type_name, ids in plan:
+            found = await self._client.sql(
+                f"SELECT id, datasets, reverted, superseded_by, promoted_by_load FROM "
+                f"`{groovy_identifier(type_name)}` WHERE id IN :ids",
+                params={"ids": ids},
+                session_id=tx,
+            )
+            rows += [(type_name, r) for r in found]
+        # Live, and not promoted by another load already (one element, one promotion: a second
+        # stamp would leave the first load's revert taking back nothing).
+        live = [
+            (t, r)
+            for t, r in rows
+            if r.get("reverted") is not True
+            and not r.get("superseded_by")
+            and not r.get("promoted_by_load")
+        ]
+        self._refuse_unless_all_live(wanted, len(live))
+        for type_name, row in live:
+            await self._client.sql(
+                f"UPDATE `{groovy_identifier(type_name)}` SET datasets = :datasets, "
+                "promoted_by_load = :load WHERE id = :id",
+                params={
+                    "id": row["id"],
+                    "load": load_id,
+                    "datasets": merge_datasets(row.get("datasets"), [dataset_id]),
+                },
+                session_id=tx,
+            )
+
+    @staticmethod
+    def _refuse_unless_all_live(wanted: int, live: int) -> None:
+        """All or nothing (ADR-143 decision 8): refused before anything is written."""
+        if live != wanted:
+            raise NotPromotable(wanted - live)
+
+    async def revert_promotion(self, load_id: str, dataset_id: str, tx: TxId) -> PromotionReverted:
+        counts = {"vertex": 0, "edge": 0}
+        for kind in counts:
+            for type_name in await self._types_with_unique_id(kind):
+                name = groovy_identifier(type_name)
+                found = await self._client.sql(
+                    f"SELECT id, datasets FROM `{name}` WHERE promoted_by_load = :load",
+                    params={"load": load_id},
+                    session_id=tx,
+                )
+                for row in found:
+                    kept = sorted(set(row.get("datasets") or []) - {dataset_id})
+                    await self._client.sql(
+                        f"UPDATE `{name}` SET datasets = :datasets, promoted_by_load = null "
+                        "WHERE id = :id",
+                        params={"id": row["id"], "datasets": kept},
+                        session_id=tx,
+                    )
+                counts[kind] += len(found)
+        return PromotionReverted(nodes=counts["vertex"], edges=counts["edge"])
+
+    async def withdraw_layer(
+        self, dataset_id: str, withdrawal: str, tx: TxId
+    ) -> PromotionReverted:
+        # By the `datasets BY ITEM` index, then only an element wholly the layer's: one promoted
+        # from it holds the source too and is left (Amendment 2 decision 1).
+        counts = {"vertex": 0, "edge": 0}
+        for kind in counts:
+            for type_name in await self._types_with_unique_id(kind):
+                name = groovy_identifier(type_name)
+                found = await self._client.sql(
+                    f"SELECT id, datasets FROM `{name}` WHERE datasets CONTAINS :ds "
+                    "AND reverted = false",
+                    params={"ds": dataset_id},
+                    session_id=tx,
+                )
+                ids = [str(r["id"]) for r in found if list(r.get("datasets") or []) == [dataset_id]]
+                for chunk in _id_chunks(ids):
+                    await self._client.sql(
+                        f"UPDATE `{name}` SET reverted = true, withdrawn_by_load = :w "
+                        "WHERE id IN :ids AND reverted = false",
+                        params={"ids": chunk, "w": withdrawal},
+                        session_id=tx,
+                    )
+                counts[kind] += len(ids)
+        return PromotionReverted(nodes=counts["vertex"], edges=counts["edge"])
+
     async def restore_withdrawn(self, load_id: str, tx: TxId) -> RestoredElements:
         nodes: list[NodeId] = []
         for type_name in await self._types_with_unique_id("vertex"):
@@ -1861,19 +1964,22 @@ class GraphArcadeDBAdapter:
             for chunk in _id_chunks(found_ids)
         ]
 
-    async def live_edges_touching(self, node_ids: Sequence[NodeId]) -> set[EdgeId]:
+    async def live_edges_touching(
+        self, node_ids: Sequence[NodeId], tx: TxId | None = None
+    ) -> set[EdgeId]:
         found: set[EdgeId] = set()
         types = None
         for chunk in _id_chunks(node_ids):
             types = types if types is not None else await self._types_with_unique_id("vertex")
-            rids = await self._record_ids(types, chunk)
+            rids = await self._record_ids(types, chunk, tx=tx)
             if not rids:
                 continue
             # By record id, not by `has("id", ...)`: the node is read from its index, and only its
             # own links are walked. Live links only: neither reverted nor superseded, as every read.
             ids_literal = groovy_string_list_literal(rids)
             rows = await self._client.gremlin(
-                f'g.V({ids_literal}).bothE().has("reverted",false).hasNot("superseded_by").values("id")'
+                f'g.V({ids_literal}).bothE().has("reverted",false).hasNot("superseded_by").values("id")',
+                session_id=tx,
             )
             found.update(str(row["result"]) for row in rows)
         return found

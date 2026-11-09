@@ -124,7 +124,8 @@ import { LayoutMenu, type BubbleKey } from "./LayoutMenu";
 import { CommunitiesStatus, CommunitiesToggle } from "./CommunitiesControls";
 import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { DegreeMarkOverlay } from "./DegreeMarkOverlay";
-import { JudgementBadgeOverlay } from "./JudgementBadgeOverlay";
+import { JudgementBadgeOverlay, type NodeBadge } from "./JudgementBadgeOverlay";
+import { AlertBadgeOverlay } from "../reports/alertBadges";
 import { activePalette } from "../color/palette";
 import { onThemeChange } from "../theme/theme";
 import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
@@ -289,6 +290,9 @@ export interface GlassCanvasProps {
   /** ADR-070: how many judgements rest on each node, drawn as a small count beside it. Omitted or
    * empty, nothing is drawn. */
   judgementCounts?: ReadonlyMap<string, number>;
+  /** ADR-146 decision 9: a small badge on each item an open alert concerns, from the reader's own
+   * queue (`reports/alertBadges.tsx`). Omitted or empty, nothing is drawn. */
+  alertBadges?: ReadonlyMap<string, NodeBadge>;
   /** ADR-116: each node of a route put on the canvas from Find connections, with its degree from
    * From, drawn as a small mark beside it. Omitted or empty, nothing is drawn. */
   degreeMarks?: ReadonlyMap<string, number>;
@@ -461,6 +465,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       communityHulls,
       onGroupedCountChange,
       judgementCounts,
+      alertBadges,
       degreeMarks,
       onLinkAction,
       getEventsWindow,
@@ -3587,6 +3592,20 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           <JudgementBadgeOverlay
             sigmaRef={sigmaRef}
             counts={judgementCounts}
+            positionOf={(nodeId) => {
+              const sigma = sigmaRef.current;
+              if (!sigma || !graph.hasNode(nodeId) || isHiddenInGroup(nodeId)) return null;
+              return sigma.graphToViewport({
+                x: graph.getNodeAttribute(nodeId, "x") ?? 0,
+                y: graph.getNodeAttribute(nodeId, "y") ?? 0,
+              });
+            }}
+          />
+        )}
+        {alertBadges && alertBadges.size > 0 && (
+          <AlertBadgeOverlay
+            sigmaRef={sigmaRef}
+            badges={alertBadges}
             positionOf={(nodeId) => {
               const sigma = sigmaRef.current;
               if (!sigma || !graph.hasNode(nodeId) || isHiddenInGroup(nodeId)) return null;

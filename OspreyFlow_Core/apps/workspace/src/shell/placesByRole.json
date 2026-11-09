@@ -36,7 +36,13 @@
     "glass",
     "rules"
    ],
-   "answered_hidden": []
+   "answered_hidden": [
+    "cancel_layer_merge",
+    "delete_removed_case_layer",
+    "dry_run_delete_removed_case_layer",
+    "merge_removed_case_layer",
+    "open_layer_merge"
+   ]
   },
   "compliance": {
    "rights": [
@@ -285,7 +291,13 @@
    "places": [
     "glass"
    ],
-   "answered_hidden": []
+   "answered_hidden": [
+    "cancel_layer_merge",
+    "delete_removed_case_layer",
+    "dry_run_delete_removed_case_layer",
+    "merge_removed_case_layer",
+    "open_layer_merge"
+   ]
   },
   "right:keep_watches": {
    "rights": [
@@ -532,7 +544,11 @@
     "review_promotions"
    ],
    "places": [],
-   "answered_hidden": []
+   "answered_hidden": [
+    "decide_promotion",
+    "list_dataset_promotions",
+    "promotion_details"
+   ]
   },
   "right:run_analysis": {
    "rights": [

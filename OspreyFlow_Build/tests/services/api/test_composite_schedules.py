@@ -564,6 +564,19 @@ NOT_BY_THE_ROUTE = {
     "/v1/investigations/{investigation_id}/ingest/candidates/{candidate_id}/reject",
     # Makes a drawn dataset and its home case: it names no composite and writes into none.
     "/v1/datasets/drawn",
+    # L3.4 (ADR-143 decision 8, Amendment 2 decision 1). A promotion is never into a composite: a
+    # case reading one is refused at the sheet and the route (`Promotions._target`), so deciding
+    # one writes into none.
+    "/v1/datasets/{dataset_id}/promotions/{promotion_id}/decision",
+    # A composite case's layer is never merged: the sheet's body refuses it, 409
+    # `composite_never_merged`, before any grant or write (`test_promotions.py`'s
+    # `test_a_composite_cases_layer_is_never_merged_only_deleted`); the merge needs that grant.
+    "/v1/datasets/{dataset_id}/removed-cases/{case_id}/merge-sheet",
+    "/v1/datasets/{dataset_id}/layer-merges/{grant_id}",
+    # A dry run, writing nothing but its audit entry.
+    "/v1/datasets/{dataset_id}/removed-cases/{case_id}/delete/dry-run",
+    # Deleting a removed case's layer loads nothing, and is what a composite case's layer may have.
+    "/v1/datasets/{dataset_id}/removed-cases/{case_id}/layer",
 }
 _WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 
