@@ -582,6 +582,11 @@ New ones are added at the bottom as they happen.
     read grant can be reused. Platform's P5 has nine must-fixes, no leak: the set-up console's map Build broken
     by a required `--unit`, the Java image never scanned, the `git` exemption, incomplete red evidence, and an
     unaudited partial copy.
+89. **Your ruling, about 18:15 (git, revisited):** the Conduit does call git at runtime. Publishing a Studio recipe
+    commits it to a repository on the recipe volume, because spec 09 §6 makes the repository the record. So, (b):
+    studio replaces the git command with dulwich, under its Apache-2.0 licence, in L1.7 (CARRIES). Then git
+    leaves the image and the licence gate stops admitting it. Until then git stays declared, waiting on that
+    carry.
 
 ## Evening, 7 November: your records of 7 November applied
 
