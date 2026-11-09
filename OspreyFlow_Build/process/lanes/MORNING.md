@@ -369,6 +369,12 @@ New ones are added at the bottom as they happen.
     which a case's Author adds like any other; nothing is read across the dataset boundary. Platform's P3 merged
     (`246b51d`); platform is on P4, its last step.
 
+67. **Studio-b's L1.6 held, a strict default taken:** a SQL or API connection had no dataset scope, so any source
+    author could read any connection into any dataset they could edit. Settled strictly: a connection is bound to
+    the datasets an administrator names, and a source may name only a connection bound to its own dataset. Also
+    held for hidden files read, byte caps applied after the whole body was read, and connection secrets lost on
+    every `apply`.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
