@@ -418,6 +418,10 @@ New ones are added at the bottom as they happen.
     gazetteer's refresh and takes its places out of place search, the same for every copy. Overrule it if you
     would rather removal deleted unlinked copies and accepted that small existence signal.
 
+- **Docker, 9 November about 09:00 UTC (your word):** removed 21 exited containers, `govuk-*` (18) and `noggin*` /
+  `allmynoggins*` (3), plus earlier one exited `osprey-test-tls-*`. No volumes or images touched;
+  `buildx_buildkit_noggin-release0` (exited) left, as its name starts `buildx_`.
+
 ## Evening, 7 November: your records of 7 November applied
 
 Done from `process/inbox/specs_2026-11-07/` (its prompt's steps 1–3, 5 and 9; step 4 is sent):
