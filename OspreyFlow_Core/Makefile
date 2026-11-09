@@ -39,12 +39,10 @@ trivy-image-ingest:
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/ingest:ci
 
 # services/api's Dockerfile, Phase 3's own — same reasoning as
-# trivy-image-ingest above. trivy does not see the image's jlinked Java (ADR-147 Amendment 2), so
-# `tools/java_runtime_check.py` holds it to its declared version and to Temurin 21's newest.
+# trivy-image-ingest above.
 trivy-image-api:
 	docker build --pull -f services/api/Dockerfile -t ospreyflow/api:ci .
 	trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed ospreyflow/api:ci
-	PYTHONPATH=../OspreyFlow_Build .venv/bin/python -m tools.java_runtime_check --image ospreyflow/api:ci --latest
 
 # apps/workspace's Dockerfile — Phase 4's own, paid at Stage 2 §5a as a
 # recorded rule 8 repayment rather than an exception (spec/06_DECISIONS.md

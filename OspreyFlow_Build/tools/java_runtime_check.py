@@ -13,9 +13,11 @@ This check stands in that gap. The Dockerfile declares the runtime's version in 
 - that version must be Temurin 21's newest general-availability release (`--latest`, from
   Adoptium's API), so a quarterly update not taken fails the image's scan as a CVE would.
 
-Run by `make trivy-image-api` (`OspreyFlow_Core/Makefile`) after trivy, where Docker and the
-network are. Without `--image` or `--latest` it checks only that the label is there and well
-formed. Each refusal shown red in `tests/licence_check/test_java_runtime_check.py` (rule 15).
+Run by `make ci`'s `java-runtime-check` (this folder's Makefile, never Core's: Core stands
+alone, ADR-114 Amendment 2), after `core-check` has built the image, where Docker and the network
+are. Without `--image` or `--latest` it checks only that the label is there and well formed.
+Anything it cannot read (the image, or Adoptium's answer) is a refusal in words, never a pass.
+Each refusal shown red in `tests/licence_check/test_java_runtime_check.py` (rule 15).
 """
 
 from __future__ import annotations
@@ -28,12 +30,12 @@ import sys
 import urllib.request
 from pathlib import Path
 
+from tools.licence_check import label_pairs
+
 DOCKERFILE = (
     Path(__file__).resolve().parents[2] / "OspreyFlow_Core" / "services" / "api" / "Dockerfile"
 )
-LABEL = re.compile(
-    r"""^\s*LABEL\s+org\.ospreyflow\.runtime\.java\.version\s*=\s*["']?([^"'\s]+)["']?\s*$""", re.M
-)
+LABEL = "org.ospreyflow.runtime.java.version"
 RELEASE_LINE = re.compile(r"""^JAVA_VERSION\s*=\s*["']?([^"'\s]+)["']?\s*$""", re.M)
 #: `java -version`'s second line, as
 #: `OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)`.
@@ -57,7 +59,8 @@ def version_key(version: str) -> tuple[tuple[int, ...], int]:
 
 
 def declared_version(dockerfile: str) -> str | None:
-    found = LABEL.findall(dockerfile)
+    """The label's value, read as `licence-check` reads the licence labels (`label_pairs`)."""
+    found = [value for key, value in label_pairs(dockerfile) if key == LABEL]
     return found[0] if len(found) == 1 else None
 
 
@@ -99,8 +102,11 @@ def problems(dockerfile: str, runtime: Runtime | None, latest: list[str] | None)
         elif running != declared:
             found.append(f"the image runs Java {running}, its Dockerfile declares {declared}")
     if latest is not None:
+        unshaped = [name for name in latest if not _is_version(name)]
         if not latest:
             found.append("Adoptium named no Temurin 21 release")
+        elif unshaped:
+            found.append(f"Adoptium named a release of no Temurin shape: {unshaped[0]!r}")
         else:
             newest = max(latest, key=version_key)
             if version_key(newest) > pinned:
@@ -109,6 +115,10 @@ def problems(dockerfile: str, runtime: Runtime | None, latest: list[str] | None)
                     "repin the api Dockerfile's java stage by digest and its label"
                 )
     return found
+
+
+def _is_version(name: object) -> bool:
+    return isinstance(name, str) and VERSION.match(name.removeprefix("jdk-")) is not None
 
 
 def _image_runtime(image: str) -> Runtime:
@@ -122,17 +132,16 @@ def _image_runtime(image: str) -> Runtime:
 
 
 def _latest() -> list[str]:
-    """Adoptium's answer. Its front refuses Python's own User-Agent (403), so a client name is
-    sent. A failed fetch is a refusal (an empty answer), never a pass."""
+    """Adoptium's release names. Its front refuses Python's own User-Agent (403), so a client name
+    is sent. An answer of any other shape raises, and `main` refuses it."""
     request = urllib.request.Request(
         ADOPTIUM, headers={"User-Agent": "ospreyflow-java-runtime-check"}
     )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 (a fixed https URL)
-            return list(json.load(response)["releases"])
-    except (OSError, ValueError, KeyError) as exc:
-        print(f"java-runtime-check: Adoptium could not be read: {exc}", file=sys.stderr)
-        return []
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 (a fixed https URL)
+        releases = json.load(response)["releases"]
+    if not isinstance(releases, list):
+        raise ValueError(f"releases is {type(releases).__name__}, not a list")
+    return releases
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -141,8 +150,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--image", help="a built api image whose runtime is read")
     parser.add_argument("--latest", action="store_true", help="compare with Adoptium's newest")
     args = parser.parse_args(argv)
-    release = _image_runtime(args.image) if args.image else None
-    latest = _latest() if args.latest else None
+    # Whatever stops a read (no daemon, no such image, a network failure, a truncated or reshaped
+    # answer) is said in words and fails the check: an unread runtime or answer never passes.
+    try:
+        release = _image_runtime(args.image) if args.image else None
+    except Exception as exc:  # noqa: BLE001 (every failure is a refusal)
+        print(f"java-runtime-check: the image's runtime could not be read: {exc}", file=sys.stderr)
+        return 1
+    try:
+        latest = _latest() if args.latest else None
+    except Exception as exc:  # noqa: BLE001 (every failure is a refusal)
+        print(f"java-runtime-check: Adoptium could not be read: {exc!r}", file=sys.stderr)
+        return 1
     found = problems(args.dockerfile.read_text(), release, latest)
     for line in found:
         print(f"java-runtime-check: {line}", file=sys.stderr)
