@@ -14,10 +14,9 @@ own dataset (`case_gazetteers.copy_places`). A reader of that case alone (its pr
   it) suggests nothing and says no `more` (decision 3b, keyed on the copy's provenance, since a copy
   is in no `gazetteer-*` dataset);
 - **a re-copy writes no second copy**, and a place the gazetteer no longer holds has its copy
-  reverted; **a removal keeps the copy a case's link rests on** (in the dataset or a case's layer)
-  and reverts the rest; **a case's load writing onto a copy** keeps it a copy, withheld, and makes
-  it the case's: a re-build does not write over it and a removal keeps it; **a region is copied in
-  pages**, timed.
+  kept; **a case's load writing onto a copy** keeps it a copy, withheld, and makes it the case's:
+  a re-build does not write over it; **a region is copied in
+  pages**, timed. Removal (which deletes nothing, ruling (d)) is the routes' file's.
 
 Each shown red with its fix removed (`P5_RED_RECORD.md`). The routes themselves, over the
 Conduit's shared database, are `test_case_gazetteer_routes_live.py`. Live, so under `tests/ingest`
@@ -34,7 +33,7 @@ from pathlib import Path
 import duckdb
 import pytest
 from scripts.build_local_basemap import load_gazetteer
-from services.api.case_gazetteers import copy_id, copy_places, remove_copies
+from services.api.case_gazetteers import copy_id, copy_places
 from services.api.map_places import gazetteer_dataset_id, search_places
 from services.ingest.geometries import POINT_GEOMETRY_VERSION
 
@@ -49,6 +48,7 @@ from schemas.analytics import GeometryKind, GeometryRecord
 from schemas.domain import (
     EdgeWrite,
     ExpandRequest,
+    Handling,
     Interval,
     NodeWrite,
     Principal,
@@ -138,9 +138,9 @@ async def _plant(stores: Stores) -> None:
     )  # fmt: skip
 
 
-async def _copy(graph: GraphArcadeDBAdapter) -> list[str]:
+async def _copy(graph: GraphArcadeDBAdapter) -> int:
     return await copy_places(
-        graph, SCHEME, gazetteer=GAZETTEER, case_dataset="case-a", by="author-1"
+        graph, SCHEME, gazetteer=GAZETTEER, case_dataset="case-a", by="author-1", unit="unit-1"
     )
 
 
@@ -226,7 +226,9 @@ async def test_the_case_s_own_searches_never_match_a_copy_by_an_identifier(store
     assert len(await graph.search_nodes(PREFIX, unlimited)) == 2  # the place and its copy
 
 
-async def test_a_re_copy_writes_no_second_copy_and_reverts_a_place_gone(stores: Stores) -> None:
+async def test_a_re_copy_writes_no_second_copy_and_keeps_a_place_gone(stores: Stores) -> None:
+    """Ruling (d): a re-copy reverts nothing, so the copy of a place the gazetteer no longer holds
+    stays (no link is left to nothing)."""
     graph, _analytics, _ = stores
     await _plant(stores)
     await _copy(graph)
@@ -234,44 +236,11 @@ async def test_a_re_copy_writes_no_second_copy_and_reverts_a_place_gone(stores: 
     tx = await graph.begin_transaction()
     await graph.revert_elements([gone], [], tx)  # the gazetteer no longer holds it
     await graph.commit_transaction(tx)
-    reverted = await _copy(graph)
-    assert reverted == [copy_id(gone, "case-a")]
+    await _copy(graph)
+    unlimited = CASE.model_copy(update={"datasets": None})
+    assert await graph.get_node(copy_id(gone, "case-a"), unlimited) is not None
     named = await graph.suggest_nodes("Ashwe", CASE, limit=10)
     assert len(named.nodes) == 1
-
-
-async def test_a_removal_keeps_a_copy_a_case_s_link_rests_on_in_the_dataset_or_a_layer(
-    stores: Stores,
-) -> None:
-    """The orchestrator's review of P5, item 7: a copy a case's own link rests on is kept with its
-    mark, so no case is left a link to nothing; the links read in the dataset and in a case's
-    analyst layer (`link_datasets`). Every other copy of the gazetteer's alone is reverted."""
-    graph, _analytics, _ = stores
-    await _plant(stores)
-    await _copy(graph)
-    in_dataset = copy_id("01JP5ASHWELL00000000000000", "case-a")
-    in_layer = copy_id("01JP5ALIKE0100000000000000", "case-a")
-    person = _place("01JP5PERSON000000000000000", "x").model_copy(
-        update={"type": "Person", "properties": {"family_name": "Quill"}, "datasets": ["case-a"]}
-    )
-    layer_link = _present_at(person.id, in_layer).model_copy(
-        update={"id": "01JP5LAYERLINK000000000000", "datasets": ["layer-a"]}
-    )
-    tx = await graph.begin_transaction()
-    await graph.upsert_nodes([person], tx)
-    await graph.upsert_edges([_present_at(person.id, in_dataset), layer_link], tx)
-    await graph.commit_transaction(tx)
-    reverted, kept = await remove_copies(
-        graph, SCHEME, gazetteer=GAZETTEER, case_dataset="case-a", link_datasets=["layer-a"],
-        unit="unit-1",
-    )  # fmt: skip
-    assert sorted(kept) == sorted([in_dataset, in_layer])
-    assert in_dataset not in reverted and in_layer not in reverted and reverted
-    left = await graph.get_node(in_dataset, CASE)
-    assert left is not None and left.provenance.gazetteer == GAZETTEER
-    assert _no_identifier(left.properties)
-    around = await graph.expand(ExpandRequest(node_ids=[person.id], depth=1), CASE)
-    assert in_dataset in {n.id for n in around.nodes}  # no link to nothing
 
 
 async def test_a_rebuild_after_a_case_s_load_keeps_what_the_case_wrote(stores: Stores) -> None:
@@ -300,6 +269,71 @@ async def test_a_rebuild_after_a_case_s_load_keeps_what_the_case_wrote(stores: S
     assert read.provenance.gazetteer == GAZETTEER
 
 
+async def test_a_restricted_case_load_on_a_copy_is_still_the_case_s_at_a_rebuild(
+    stores: Stores,
+) -> None:
+    """The lane's review, item 5: a case load at a restricted code (uk-le's `R`, shown only to its
+    unit) raises the copy's code; the copier reads as the dataset's own unit, so it still sees the
+    copy as the case's and a re-build does not write over it."""
+    graph, _analytics, _ = stores
+    await _plant(stores)
+    await _copy(graph)
+    copy = copy_id("01JP5ASHWELL00000000000000", "case-a")
+    loaded = _place(copy, "Ashwell (restricted)", osm_id=PREFIX).model_copy(
+        update={
+            "datasets": ["case-a"],
+            "handling": Handling(classification="OFFICIAL", handling_code="R",
+                                 originator="unit-1", owning_unit="unit-1"),
+            "provenance": Provenance(
+                state=ProvenanceState.ASSERTED,
+                sources=[SourceRef(document_id="case-load", locator="row 4", excerpt_hash="")],
+                first_seen=datetime(2026, 2, 1, tzinfo=UTC),
+            ),
+        }
+    )  # fmt: skip
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([loaded], tx)
+    await graph.commit_transaction(tx)
+    await _copy(graph)
+    unit_reader = CASE.model_copy(update={"receivable_handling_codes": ["R"], "datasets": None})
+    read = await graph.get_node(copy, unit_reader)
+    assert read is not None and read.properties["name"] == "Ashwell (restricted)"
+
+
+async def test_a_real_case_load_then_a_refresh_keeps_one_copy_and_its_links(
+    stores: Stores, tmp_path: Path
+) -> None:
+    """The lane's review, item 9, at the real call sites: a load into the case's own dataset over
+    the same places (`load_gazetteer`, its lookups through `find_node` by `osm_id`) finds the copies
+    and creates none; a re-build's refresh (`refresh_cases`) then copies again without a second
+    set, the mark kept."""
+    from services.api.case_gazetteers import AddedGazetteer, InMemoryCaseGazetteerStore, refresh_cases
+    from services.api.datasets import Dataset, InMemoryDatasetStore
+
+    graph, analytics, extract = stores
+    await _load(stores)
+    await _copy(graph)
+    tx = await graph.begin_transaction()
+    report = await load_gazetteer(
+        extract, graph=graph, ontology=load_default_ontology(), tx=tx, principal=BUILDER,
+        load_id="load-case-a-osm", dataset="case-a", unit="unit-1",
+    )  # fmt: skip
+    await graph.commit_transaction(tx)
+    assert (report.nodes_created, report.nodes_referenced) == (0, 3)
+    store = InMemoryCaseGazetteerStore()
+    await store.add(AddedGazetteer(case_dataset="case-a", gazetteer=GAZETTEER, added_in="inv-a",
+                                   added_by="author-1", added_at=datetime(2026, 1, 1, tzinfo=UTC)))  # fmt: skip
+    datasets = InMemoryDatasetStore()
+    datasets.datasets["case-a"] = Dataset(
+        id="case-a", name="Case A", owning_unit="unit-1", created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        created_by="t",
+    )  # fmt: skip
+    refreshed = await refresh_cases(graph, SCHEME, store, datasets, GAZETTEER)
+    assert (refreshed.datasets, refreshed.failed) == (1, ())
+    found = await search_places(graph, analytics, PlaceSearchRequest(query="cranf"), CASE)
+    assert [p.name for p in found.places] == ["Cranford"]
+
+
 async def test_a_region_is_copied_in_bounded_pages_and_timed(stores: Stores) -> None:
     """Item 9: 2,000 planted places (four pages of 500, each its own transaction), timed for the
     report. Synthetic, so the figure is a rate per place on this stack, not a real region's."""
@@ -318,10 +352,16 @@ async def test_a_region_is_copied_in_bounded_pages_and_timed(stores: Stores) -> 
     await _copy(graph)
     took = time.perf_counter() - began
     print(f"\nP5 TIMING: copied 2000 places in {took:.1f} s ({took / 2:.2f} s per 1,000)")
-    unlimited = CASE.model_copy(update={"datasets": None})
-    copies = [copy_id(p.id, "case-a") for p in places[:5]]
-    for made in copies:
-        assert await graph.get_node(made, unlimited) is not None
+    # Every page was written, not only the first (the lane's review, item 7).
+    every = CASE  # the places are OFFICIAL, in the case's dataset
+    held, cursor = set(), None
+    while True:
+        page = await graph.list_nodes("Location", every, cursor=cursor, limit=500)
+        held |= {n.id for n in page.nodes if n.provenance.gazetteer == GAZETTEER}
+        cursor = page.next_cursor
+        if cursor is None:
+            break
+    assert {copy_id(p.id, "case-a") for p in places} <= held
 
 
 async def test_a_case_s_load_writing_onto_a_copy_keeps_it_a_copy_and_the_case_s(
@@ -329,8 +369,7 @@ async def test_a_case_s_load_writing_onto_a_copy_keeps_it_a_copy_and_the_case_s(
 ) -> None:
     """ADR-147 Amendment 2: a case's own load may match a copy by its `osm_id` and write onto it,
     through the store's real merge (`upsert_nodes`). Its provenance keeps the gazetteer, so its
-    identifiers stay withheld and unmatched; and it is now another writer's too, so a removal keeps
-    it (rule 6)."""
+    identifiers stay withheld and unmatched; and it is the case's now (rule 6)."""
     graph, _analytics, _ = stores
     await _plant(stores)
     await _copy(graph)
@@ -352,7 +391,3 @@ async def test_a_case_s_load_writing_onto_a_copy_keeps_it_a_copy_and_the_case_s(
     assert read is not None and read.provenance.gazetteer == GAZETTEER
     assert _no_identifier(read.properties), read.properties
     assert await graph.search_nodes(PREFIX, CASE) == []
-    _reverted, kept = await remove_copies(
-        graph, SCHEME, gazetteer=GAZETTEER, case_dataset="case-a"
-    )
-    assert copy in kept

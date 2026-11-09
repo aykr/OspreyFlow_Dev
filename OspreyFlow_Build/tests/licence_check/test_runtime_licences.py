@@ -117,19 +117,42 @@ GIT = "FROM python:3.12-slim\nRUN apt-get update && apt-get install -y --no-inst
 
 def test_git_installed_and_undeclared_is_refused() -> None:
     assert find_runtime_offenders({"api": GIT}) == [("api", "git", "undeclared")]
-    assert find_runtime_offenders({"api": GIT.replace("git curl", "git-lfs curl")}) == []
+    # `git-lfs` brings `git` with it, so it is `git` too.
+    assert find_runtime_offenders({"api": GIT.replace("git curl", "git-lfs curl")}) == [
+        ("api", "git", "undeclared")
+    ]
+    assert find_runtime_offenders({"api": GIT.replace("git curl", "gitk-viewer curl")}) == []
 
 
 def test_git_declared_is_named_as_awaiting_the_owner_never_passed_silently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     declared = GIT + 'LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"\n'
-    assert find_runtime_offenders({"api": declared}) == []
-    assert find_runtimes_awaiting_owner({"api": declared}) == [("api", "git", "GPL-2.0-only")]
+    conduit = "services/api/Dockerfile"
+    assert find_runtime_offenders({conduit: declared}) == []
+    assert find_runtimes_awaiting_owner({conduit: declared}) == [(conduit, "git", "GPL-2.0-only")]
+    # Pinned: in another image, or under another licence, it is an offender as usual.
+    assert find_runtime_offenders({"other": declared}) == [("other", "git", "GPL-2.0-only")]
+    agpl = declared.replace("GPL-2.0-only", "AGPL-3.0-only")
+    assert find_runtime_offenders({conduit: agpl}) == [(conduit, "git", "AGPL-3.0-only")]
     # Without the owner's question on record, it is an offender like any GPL runtime.
     monkeypatch.setattr(licence_check, "AWAITING_OWNER", {})
-    assert find_runtime_offenders({"api": declared}) == [("api", "git", "GPL-2.0-only")]
+    assert find_runtime_offenders({conduit: declared}) == [(conduit, "git", "GPL-2.0-only")]
 
 
 def test_the_conduit_declares_its_git_and_the_tree_names_it_awaiting() -> None:
     assert ("services/api/Dockerfile", "git", "GPL-2.0-only") in find_runtimes_awaiting_owner()
+
+
+def test_every_run_names_what_awaits_the_owner(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Named on every run, never silently passed: `main()` says it, and its summary counts it."""
+    monkeypatch.setattr(licence_check, "run_pip_licenses", lambda _path: [])
+    monkeypatch.setattr(licence_check, "find_data_licence_offenders", lambda: [])
+    monkeypatch.setattr(licence_check, "find_own_licence_violations", lambda: [])
+    monkeypatch.setattr("sys.argv", ["licence_check"])
+    assert licence_check.main() == 0
+    said = capsys.readouterr()
+    assert "AWAITING THE OWNER: services/api/Dockerfile carries 'git'" in said.err
+    assert "1 image runtime(s) awaiting the owner" in said.out

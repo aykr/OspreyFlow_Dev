@@ -30,22 +30,27 @@ copies it describes.
 
 **Copied in pages**, each its own transaction, never one unbounded write. **A copy the case has
 written to** (another writer's source, as when a case's own load matched it by its `osm_id`, or a
-person's confirmation) **is the case's data now**: a re-build does not write over it, and a removal
-keeps it. **A removal also keeps a copy a link rests on**, read as the Conduit reads the dataset and
-every analyst layer of a case reading it, so no case is left a link to nothing; a kept copy keeps
-its gazetteer mark (3b holds). Every other copy is marked reverted (`GraphPort.revert_elements`:
-never deleted, out of every read) and taken out of the working sets. A re-build drops the record of
-a dataset no longer there, never writing into one, and reverts the copy of a place gone.
+person's confirmation) **is the case's data now**: a re-build does not write over it.
+
+**Nothing is ever deleted** (the orchestrator's ruling (d), rule 3). A removal reverts no copy,
+whatever rests on it, so no case is left a link to nothing and nothing a reader may not see changes
+what anyone is told: every copy stays as the dataset's own, keeps its gazetteer mark (3b holds), is
+no longer refreshed, and is no longer offered by the place search (keyed on the mark and the
+removal record, `removed_among`, the same for every copy). The answer says so in words, with no
+count. Adding the gazetteer again takes the record back and re-links the same copies (`copy_id`),
+never a second set. A re-build reverts nothing either: the copy of a place the gazetteer no longer
+holds stays. A re-build drops the record of a dataset no longer there, never writing into one.
 
 **Read as the Conduit.** The places are read, and the copies found, by the Conduit's own reader
 scoped to the one dataset (`_reader`), inside `sources_in_full` so the identifiers are copied.
-Nothing read here is sent to the Glass: the routes answer with the gazetteers' names, and the count
-of kept copies the asker may read.
+Nothing read here is sent to the Glass: the routes answer with the gazetteers' names and fixed
+words.
 """
 
 from __future__ import annotations
 
 import hashlib
+import sys
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -56,7 +61,6 @@ from ulid import ULID
 from ontology.handling import HandlingScheme, sources_in_full
 from ports.graph import GraphPort
 from schemas.domain import (
-    ExpandRequest,
     Node,
     NodeId,
     NodeWrite,
@@ -68,10 +72,8 @@ from schemas.domain import (
 
 #: A copy's one source names the gazetteer it was copied from.
 COPY_SOURCE_PREFIX = "gazetteer:"
-#: How many nodes one write, or one read of a page, takes at a time; how many copies one link
-#: check asks about.
+#: How many nodes one write, or one read of a page, takes at a time.
 _BATCH = 500
-_LINK_BATCH = 100
 
 
 @dataclass(frozen=True)
@@ -100,6 +102,7 @@ CREATE TABLE IF NOT EXISTS dataset_gazetteers (
     added_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (case_dataset, gazetteer)
 );
+ALTER TABLE dataset_gazetteers ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ;
 """
 
     def __init__(self, pool: asyncpg.Pool) -> None:
@@ -116,28 +119,32 @@ CREATE TABLE IF NOT EXISTS dataset_gazetteers (
         await self.pool.close()
 
     async def add(self, added: AddedGazetteer) -> bool:
-        """Records `added`; `False` if the dataset held the gazetteer already (the first record
-        kept)."""
+        """Records `added`, or takes a removed record back; `False` if the dataset held the
+        gazetteer already (the first record kept)."""
         async with self.pool.acquire() as connection:
             made = await connection.fetchval(
-                "INSERT INTO dataset_gazetteers VALUES ($1, $2, $3, $4, $5) "
-                "ON CONFLICT (case_dataset, gazetteer) DO NOTHING RETURNING true",
+                "INSERT INTO dataset_gazetteers VALUES ($1, $2, $3, $4, $5, NULL) "
+                "ON CONFLICT (case_dataset, gazetteer) DO UPDATE SET removed_at = NULL "
+                "WHERE dataset_gazetteers.removed_at IS NOT NULL RETURNING true",
                 added.case_dataset, added.gazetteer, added.added_in, added.added_by,
                 added.added_at,
             )  # fmt: skip
         return bool(made)
 
     async def remove(self, case_dataset: str, gazetteer: str) -> None:
+        """Marks the record removed; kept, so its copies are known as a removed gazetteer's."""
         async with self.pool.acquire() as connection:
             await connection.execute(
-                "DELETE FROM dataset_gazetteers WHERE case_dataset = $1 AND gazetteer = $2",
+                "UPDATE dataset_gazetteers SET removed_at = now() "
+                "WHERE case_dataset = $1 AND gazetteer = $2 AND removed_at IS NULL",
                 case_dataset, gazetteer,
             )  # fmt: skip
 
     async def of_dataset(self, case_dataset: str) -> list[AddedGazetteer]:
         async with self.pool.acquire() as connection:
             rows = await connection.fetch(
-                "SELECT * FROM dataset_gazetteers WHERE case_dataset = $1 ORDER BY gazetteer",
+                "SELECT * FROM dataset_gazetteers WHERE case_dataset = $1 AND removed_at IS NULL "
+                "ORDER BY gazetteer",
                 case_dataset,
             )
         return [_added(r) for r in rows]
@@ -145,10 +152,21 @@ CREATE TABLE IF NOT EXISTS dataset_gazetteers (
     async def datasets_with(self, gazetteer: str) -> list[AddedGazetteer]:
         async with self.pool.acquire() as connection:
             rows = await connection.fetch(
-                "SELECT * FROM dataset_gazetteers WHERE gazetteer = $1 ORDER BY case_dataset",
+                "SELECT * FROM dataset_gazetteers WHERE gazetteer = $1 AND removed_at IS NULL "
+                "ORDER BY case_dataset",
                 gazetteer,
             )
         return [_added(r) for r in rows]
+
+    async def removed_among(self, datasets: list[str]) -> set[tuple[str, str]]:
+        """`(dataset, gazetteer)` for every gazetteer removed from one of `datasets`."""
+        async with self.pool.acquire() as connection:
+            rows = await connection.fetch(
+                "SELECT case_dataset, gazetteer FROM dataset_gazetteers "
+                "WHERE case_dataset = ANY($1::text[]) AND removed_at IS NOT NULL",
+                datasets,
+            )
+        return {(r["case_dataset"], r["gazetteer"]) for r in rows}
 
 
 def _added(row: asyncpg.Record) -> AddedGazetteer:
@@ -160,20 +178,23 @@ def _added(row: asyncpg.Record) -> AddedGazetteer:
 
 class InMemoryCaseGazetteerStore:
     """The same calls with no Postgres, for tests and a process without one, answering as the
-    Postgres store does (the first record kept)."""
+    Postgres store does (the first record kept, a removed one taken back)."""
 
     def __init__(self) -> None:
         self.added: dict[tuple[str, str], AddedGazetteer] = {}
+        self.removed: dict[tuple[str, str], AddedGazetteer] = {}
 
     async def add(self, added: AddedGazetteer) -> bool:
         key = (added.case_dataset, added.gazetteer)
         if key in self.added:
             return False
-        self.added[key] = added
+        self.added[key] = self.removed.pop(key, added)
         return True
 
     async def remove(self, case_dataset: str, gazetteer: str) -> None:
-        self.added.pop((case_dataset, gazetteer), None)
+        held = self.added.pop((case_dataset, gazetteer), None)
+        if held is not None:
+            self.removed[(case_dataset, gazetteer)] = held
 
     async def of_dataset(self, case_dataset: str) -> list[AddedGazetteer]:
         return sorted(
@@ -186,6 +207,9 @@ class InMemoryCaseGazetteerStore:
             (a for (_, held), a in self.added.items() if held == gazetteer),
             key=lambda a: a.case_dataset,
         )
+
+    async def removed_among(self, datasets: list[str]) -> set[tuple[str, str]]:
+        return {key for key in self.removed if key[0] in datasets}
 
 
 def copy_id(place_id: NodeId, case_dataset: str) -> NodeId:
@@ -200,12 +224,12 @@ def copy_id(place_id: NodeId, case_dataset: str) -> NodeId:
     return str(ULID.from_bytes(time + digest[:10]))
 
 
-def _reader(
-    scheme: HandlingScheme, datasets: list[str], *, unit: str = "system:case-gazetteers"
-) -> Principal:
-    """The Conduit's own reader of `datasets`: the scheme's highest clearance and every handling
-    code, and `unit` (the case dataset's own, so a link under a restricted code of that unit is
-    seen too). Never a request's principal; nothing it reads is sent."""
+def _reader(scheme: HandlingScheme, datasets: list[str], unit: str) -> Principal:
+    """The Conduit's own reader of `datasets`, for copying: the scheme's highest clearance, every
+    handling code and `unit`, the dataset's own (a restricted code shows only to its unit, so a copy
+    a case's restricted load raised, or a restricted place, is still seen: rule 2). Never a
+    request's principal; nothing it reads is sent, and nothing it reads decides what any reader is
+    told."""
     return Principal(
         id="system:case-gazetteers",
         clearance=scheme.classification[-1],
@@ -229,10 +253,10 @@ async def _pages(graph: GraphPort, reader: Principal, dataset: str) -> AsyncIter
 
 
 async def _copies(
-    graph: GraphPort, scheme: HandlingScheme, gazetteer: str, case_dataset: str
+    graph: GraphPort, scheme: HandlingScheme, gazetteer: str, case_dataset: str, unit: str
 ) -> list[Node]:
     found: list[Node] = []
-    async for page in _pages(graph, _reader(scheme, [case_dataset]), case_dataset):
+    async for page in _pages(graph, _reader(scheme, [case_dataset], unit), case_dataset):
         found.extend(n for n in page if n.provenance.gazetteer == gazetteer)
     return found
 
@@ -280,26 +304,26 @@ async def copy_places(
     gazetteer: str,
     case_dataset: str,
     by: str,
-    link_datasets: list[str] | None = None,
-    unit: str = "system:case-gazetteers",
-) -> list[NodeId]:
+    unit: str,
+) -> int:
     """Copies every place of `gazetteer` into `case_dataset`, **a page at a time, each page its own
     transaction** (a region's places are never one unbounded write; a copy that fails part way is
-    finished by copying again, which writes the same nodes). **A copy the case has written to**
-    (another writer's source, or a confirmation) **is not written over**: what the case asserted
-    stands, whatever the gazetteer says now. Then marks reverted the copies of places the gazetteer
-    no longer holds, as `remove_copies` judges them. Returns the ids reverted, for the caller to
-    take out of working sets."""
+    finished by copying again, which writes the same nodes, so a re-add re-links the copies a
+    removal left and never duplicates them). **A copy the case has made its own** (another
+    writer's source, or a confirmation) **is not written over**: what the case asserted stands.
+    Nothing is ever reverted here: a copy of a place the gazetteer no longer holds stays, as a
+    removed gazetteer's copies do (the orchestrator's ruling (d), rule 3). Returns how many copies
+    were written."""
     now = datetime.now(UTC)
-    held = await _copies(graph, scheme, gazetteer, case_dataset)
+    held = await _copies(graph, scheme, gazetteer, case_dataset, unit)
     the_case_s = {c.id for c in held if not _the_gazetteer_s_alone(c, gazetteer)}
-    written: set[NodeId] = set()
-    async for page in _pages(graph, _reader(scheme, [gazetteer]), gazetteer):
+    count = 0
+    async for page in _pages(graph, _reader(scheme, [gazetteer], unit), gazetteer):
         writes = [
-            _copy(p, gazetteer=gazetteer, case_dataset=case_dataset, by=by, now=now) for p in page
+            _copy(p, gazetteer=gazetteer, case_dataset=case_dataset, by=by, now=now)
+            for p in page
+            if copy_id(p.id, case_dataset) not in the_case_s
         ]
-        written.update(w.id for w in writes)
-        writes = [w for w in writes if w.id not in the_case_s]
         if not writes:
             continue
         tx = await graph.begin_transaction()
@@ -309,81 +333,46 @@ async def copy_places(
         except BaseException:
             await graph.rollback_transaction(tx)
             raise
-    reverted, _kept = await remove_copies(
-        graph, scheme, gazetteer=gazetteer, case_dataset=case_dataset, keep=written,
-        link_datasets=link_datasets, unit=unit,
-    )  # fmt: skip
-    return reverted
+        count += len(writes)
+    return count
 
 
-async def remove_copies(
-    graph: GraphPort,
-    scheme: HandlingScheme,
-    *,
-    gazetteer: str,
-    case_dataset: str,
-    keep: set[NodeId] | frozenset[NodeId] = frozenset(),
-    link_datasets: list[str] | None = None,
-    unit: str = "system:case-gazetteers",
-) -> tuple[list[NodeId], list[NodeId]]:
-    """Marks reverted `gazetteer`'s copies in `case_dataset` (but those in `keep`) that are the
-    gazetteer's alone (`_the_gazetteer_s_alone`) **and that no link rests on**, so no case is left a
-    link to nothing (the orchestrator's review of P5, item 7). The links are read as the Conduit
-    reads the dataset and every analyst layer of a case reading it (`link_datasets`), at the
-    highest clearance, with every handling code, as the dataset's own unit. A kept copy keeps its
-    gazetteer mark, so decision 3b still holds for it. Returns `(reverted, kept)`, in batches."""
-    reader = _reader(scheme, list(dict.fromkeys([case_dataset, *(link_datasets or [])])), unit=unit)
-    copies = [c for c in await _copies(graph, scheme, gazetteer, case_dataset) if c.id not in keep]
-    alone = [c.id for c in copies if _the_gazetteer_s_alone(c, gazetteer)]
-    linked: set[NodeId] = set()
-    for start in range(0, len(alone), _LINK_BATCH):
-        around = await graph.expand(
-            ExpandRequest(node_ids=alone[start : start + _LINK_BATCH], depth=1), reader
-        )
-        for edge in around.edges:
-            linked.update((edge.source, edge.target))
-    reverted = [i for i in alone if i not in linked]
-    for start in range(0, len(reverted), _BATCH):
-        tx = await graph.begin_transaction()
-        try:
-            await graph.revert_elements(reverted[start : start + _BATCH], [], tx)
-            await graph.commit_transaction(tx)
-        except BaseException:
-            await graph.rollback_transaction(tx)
-            raise
-    gone = set(reverted)
-    return reverted, [c.id for c in copies if c.id not in gone]
+@dataclass(frozen=True)
+class Refreshed:
+    """What a re-build's refresh did: how many datasets were given the places again, and the words
+    for each that could not be (the build itself, already committed, is not failed by them)."""
 
-
-async def reading_datasets(datasets: object, case_dataset: str) -> list[str]:
-    """The analyst layers of every case reading `case_dataset`, where a case's own links to a copy
-    may be (ADR-143 Amendment 1)."""
-    layers: list[str] = []
-    for case in await datasets.cases_reading(case_dataset):  # type: ignore[attr-defined]
-        layer = await datasets.layer_of_case(case)  # type: ignore[attr-defined]
-        if layer:
-            layers.append(layer)
-    return layers
+    datasets: int
+    failed: tuple[str, ...] = ()
 
 
 async def refresh_cases(
     graph: GraphPort, scheme: HandlingScheme, store: object, datasets: object, gazetteer: str
-) -> list[NodeId]:
+) -> Refreshed:
     """After a build of `gazetteer` commits: its places copied again into every dataset that holds
-    its copies. A dataset no longer there is dropped from the record, never written into. Returns
-    the copies reverted, across the datasets."""
-    reverted: list[NodeId] = []
+    it, not one it was removed from, each on its own: one dataset's failure is said and the others
+    are still refreshed. A dataset no longer there is dropped from the record, never written
+    into."""
+    done = 0
+    failed: list[str] = []
     for added in await store.datasets_with(gazetteer):  # type: ignore[attr-defined]
         held = await datasets.egress_of([added.case_dataset])  # type: ignore[attr-defined]
         if added.case_dataset not in held:
             await store.remove(added.case_dataset, gazetteer)  # type: ignore[attr-defined]
             continue
-        reverted += await copy_places(
-            graph, scheme, gazetteer=gazetteer, case_dataset=added.case_dataset,
-            by=added.added_by, link_datasets=await reading_datasets(datasets, added.case_dataset),
-            unit=held[added.case_dataset].owning_unit,
-        )  # fmt: skip
-    return reverted
+        try:
+            await copy_places(
+                graph, scheme, gazetteer=gazetteer, case_dataset=added.case_dataset,
+                by=added.added_by, unit=held[added.case_dataset].owning_unit,
+            )  # fmt: skip
+        except Exception as error:  # noqa: BLE001 - said in words, the others still refreshed
+            failed.append(
+                f"The dataset {added.case_dataset} was not given the places again "
+                f"({type(error).__name__}); build again to retry it."
+            )
+            continue
+        done += 1
+    return Refreshed(datasets=done, failed=tuple(failed))
 
 
 async def refresh_cases_from_env(graph: GraphPort, scheme: HandlingScheme, gazetteer: str) -> int:
@@ -397,8 +386,10 @@ async def refresh_cases_from_env(graph: GraphPort, scheme: HandlingScheme, gazet
     store = await CaseGazetteerStore.connect(dsn)
     datasets = await PostgresDatasetStore.connect(dsn)
     try:
-        await refresh_cases(graph, scheme, store, datasets, gazetteer)
-        return len(await store.datasets_with(gazetteer))
+        refreshed = await refresh_cases(graph, scheme, store, datasets, gazetteer)
+        for words in refreshed.failed:
+            print(words, file=sys.stderr)
+        return refreshed.datasets
     finally:
         await datasets.close()
         await store.close()

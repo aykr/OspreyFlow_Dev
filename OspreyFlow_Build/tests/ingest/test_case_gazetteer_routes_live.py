@@ -1,5 +1,5 @@
 """A case's gazetteers through the real routes (ADR-147 Amendment 2, the owner's ruling 6, option C):
-`PUT /v1/investigations/{id}/map/gazetteers/{dataset}` copies the gazetteer's places into the case's
+`PUT /v1/datasets/{dataset}/gazetteers/{gazetteer}` copies the gazetteer's places into the case's
 own dataset, and then, through the routes a case reads its nodes by:
 
 - **the case stays one dataset and keeps its loads**: `GET .../datasets` names its own dataset alone
@@ -11,9 +11,9 @@ own dataset, and then, through the routes a case reads its nodes by:
   `/suggest` on the identifier's prefix (twelve copies share it, more than a page) in both modes,
   find nothing and say no `more`;
 - adding and removing are the dataset's (`PUT`/`DELETE /v1/datasets/{dataset}/gazetteers/...`,
-  `run_pipelines`); `DELETE` keeps the copy the case's own link rests on (counted) and a SECRET
-  copy the case's load wrote to (kept, not counted to an OFFICIAL Author: rule 3), and reverts the
-  rest.
+  `run_pipelines`); **a removal deletes nothing** (the orchestrator's ruling (d), rule 3): a case
+  whose copy has a SECRET link resting on it and a case whose copies have none are answered alike
+  and then read alike; adding again re-links the same copies.
 
 Runs the real `services.api.app` over real ArcadeDB, Postgres and Valkey on a leased test stack, as
 `test_gazetteer_ids_withheld_live.py` does. Everything it writes is removed in teardown, pass or
@@ -177,21 +177,25 @@ async def _plant_in_case(case_dataset: str, copy: str) -> tuple[str, dict[str, A
     return person.id, stored.model_dump(mode="json")
 
 
-async def _case_writes_onto(case_dataset: str, copy: str) -> None:
-    """The case's own load writing onto a copy (another writer's source), as a matching lookup."""
+async def _hidden_link(case_dataset: str, copy: str) -> None:
+    """A SECRET person present at the copy, by a SECRET link: what an OFFICIAL Author may not
+    read, resting on the copy."""
     client, graph = await _graph()
-    unlimited = UNIT.model_copy(update={"datasets": None, "clearance": "SECRET"})
-    held = await graph.get_node(copy, unlimited)
-    assert held is not None
-    write = NodeWrite(
-        id=copy, type="Location", properties=dict(held.properties), handling=held.handling,
-        provenance=_provenance().model_copy(
-            update={"sources": [SourceRef(document_id="case-load", locator="row 2", excerpt_hash="")]}
-        ),
-        created_by="loader-1", created_at=now_utc(), datasets=[case_dataset],
+    secret = _handling().model_copy(update={"classification": "SECRET"})
+    person = NodeWrite(
+        id=new_node_id(), type="Person", properties={"family_name": f"Hidden{TAG}"},
+        provenance=_provenance(), handling=secret, created_by="loader-1", created_at=now_utc(),
+        datasets=[case_dataset],
     )  # fmt: skip
+    link = EdgeWrite(
+        id=new_edge_id(), type="PRESENT_AT", source=person.id, target=copy,
+        interval=Interval(valid_from=datetime(2026, 1, 1, tzinfo=UTC)), provenance=_provenance(),
+        handling=secret, created_by="loader-1", created_at=now_utc(), datasets=[case_dataset],
+    )  # fmt: skip
+    PLANTED.extend([person.id, link.id])
     tx = await graph.begin_transaction()
-    await graph.upsert_nodes([write], tx)
+    await graph.upsert_nodes([person], tx)
+    await graph.upsert_edges([link], tx)
     await graph.commit_transaction(tx)
     await client.aclose()
 
@@ -341,26 +345,54 @@ def test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still
             )  # fmt: skip
             assert uploaded.status_code == 201, uploaded.text
 
-            # A SECRET place's copy that the case's own load also wrote: kept, and not counted to an
-            # OFFICIAL Author (the review of P5, item 2; rule 3).
-            _run(_case_writes_onto(own, copy_id(PLANTED[13], own)))
+            # Ruling (d), rule 3: a link the Author may not read (SECRET, from a SECRET person)
+            # rests on one copy here; a second case's copies have none. Both removals answer alike
+            # and leave the Author reading alike: nothing is deleted.
+            _run(_hidden_link(own, copy_id(PLANTED[1], own)))
             removed = client.delete(f"/v1/datasets/{own}/gazetteers/{GAZETTEER}", headers=headers)
             assert removed.status_code == 200, removed.text
-            # The copy the case's link rests on is kept (item 7), and counted; the SECRET one is
-            # kept but not counted; every other copy is gone.
-            assert removed.json()["copies_kept"] == 1, removed.text
-            assert removed.json()["said"].startswith("1 place stays in this dataset")
-            assert "Depot" not in removed.text
-            still = client.post(
+            assert removed.json()["said"].startswith("The gazetteer is removed: its places stay")
+            assert "copies_kept" not in removed.json()
+            other = client.post("/v1/investigations", headers=headers, json=new_case())
+            other_id = other.json()["id"]
+            cases.append(other_id)
+            other_reads = client.get(
+                f"/v1/investigations/{other_id}/datasets", headers=headers
+            ).json()
+            [own_2] = [d["id"] for d in other_reads if d["kind"] == "source"]
+            case_datasets.append(own_2)
+            PLANTED.extend(copy_id(i, own_2) for i in [place_id, *alike])
+            assert client.put(
+                f"/v1/datasets/{own_2}/gazetteers/{GAZETTEER}", headers=headers
+            ).status_code == 200
+            removed_2 = client.delete(
+                f"/v1/datasets/{own_2}/gazetteers/{GAZETTEER}", headers=headers
+            )
+            assert removed_2.json() == removed.json()
+
+            def seen(case: str) -> tuple[int, bool, int]:
+                found = client.post(
+                    f"/v1/investigations/{case}/search", headers=headers, json={"query": NAME}
+                ).json()["nodes"]
+                assert not any(_carries_an_identifier(str(n)) for n in found)
+                hinted = client.post(
+                    f"/v1/investigations/{case}/suggest", headers=headers,
+                    json={"query": f"Elsewhere {TAG}", "mode": "contains"},
+                ).json()  # fmt: skip
+                listing = client.get(f"/v1/investigations/{case}/map/gazetteers", headers=headers)
+                added = [g for g in listing.json()["gazetteers"] if g["dataset_id"] == GAZETTEER]
+                return len(found), hinted["more"], len(hinted["nodes"]) + 10 * added[0]["added"]
+
+            # Every copy stays in both: the place by its name, the twelve by theirs.
+            assert seen(case_id) == seen(other_id) == (1, True, 10)
+            # Added again: the same copies, re-linked, never a second set.
+            assert client.put(
+                f"/v1/datasets/{own}/gazetteers/{GAZETTEER}", headers=headers
+            ).status_code == 200
+            again = client.post(
                 f"/v1/investigations/{case_id}/search", headers=headers, json={"query": NAME}
             )
-            assert [n["id"] for n in still.json()["nodes"]] == [copy], still.text
-            assert not _carries_an_identifier(still.text), still.text
-            left = client.post(
-                f"/v1/investigations/{case_id}/suggest", headers=headers,
-                json={"query": f"Elsewhere {TAG}", "mode": "contains"},
-            )  # fmt: skip
-            assert left.status_code == 200 and left.json()["nodes"] == [], left.text
+            assert [n["id"] for n in again.json()["nodes"]] == [copy], again.text
 
             # The control: the same upload in a case reading a composite (what adding the gazetteer
             # as a dataset made, Amendment 1's option (b)) is refused.

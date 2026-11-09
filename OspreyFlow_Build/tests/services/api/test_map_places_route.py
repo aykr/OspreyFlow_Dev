@@ -344,3 +344,29 @@ def test_a_case_s_copy_of_a_gazetteer_place_is_offered(world: World) -> None:
     body = _search().json()
     assert body["places"] == [{"id": "loc-copy", "name": "Cranwell", "lon": -0.5, "lat": 53.0}]
     assert OSM_ID not in str(body)
+
+
+def test_a_removed_gazetteer_s_copies_are_no_longer_offered(world: World) -> None:
+    """ADR-147 Amendment 2, the orchestrator's ruling (d): a removal deletes no copy, and the place
+    search stops offering them, keyed on their mark and the removal record."""
+    from services.api.case_gazetteers import AddedGazetteer, InMemoryCaseGazetteerStore
+
+    graph, analytics, _audit = world
+    copy = _location("loc-copy", dataset="case-data", name="Cranwell", geometry_ref="g-copy")
+    copy.provenance.gazetteer = "gazetteer-osm-rutland"
+    graph.nodes = [copy]
+    analytics.points["g-copy"] = _point("g-copy", -0.5, 53.0)
+    store = InMemoryCaseGazetteerStore()
+    app.state.case_gazetteers = store
+    try:
+        assert [p["name"] for p in _search().json()["places"]] == ["Cranwell"]
+        import asyncio
+
+        asyncio.run(store.add(AddedGazetteer(
+            case_dataset="case-data", gazetteer="gazetteer-osm-rutland", added_in="inv-1",
+            added_by="a", added_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )))  # fmt: skip
+        asyncio.run(store.remove("case-data", "gazetteer-osm-rutland"))
+        assert _search().json() == {"places": [], "more": False}
+    finally:
+        del app.state.case_gazetteers

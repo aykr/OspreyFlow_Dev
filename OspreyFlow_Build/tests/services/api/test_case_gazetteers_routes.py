@@ -17,6 +17,8 @@ from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 from services.api.app import (
@@ -178,8 +180,7 @@ def _dataset(dataset_id: str, unit: str, kind: str = "source") -> Dataset:
                    created_by="someone", kind=kind)  # type: ignore[arg-type]  # fmt: skip
 
 
-@pytest.fixture
-def world() -> Iterator[World]:
+def _make_world() -> World:
     graph = _Graph([PLACE])
     datasets = InMemoryDatasetStore()
     for held in (_dataset(GAZ, "unit-1"), _dataset("gazetteer-osm-elsewhere", "unit-2"),
@@ -200,7 +201,12 @@ def world() -> Iterator[World]:
     app.dependency_overrides[get_investigations] = AnyCase
     app.dependency_overrides[get_audit] = lambda: audit
     app.dependency_overrides[get_working_set] = lambda: working_set
-    yield graph, datasets, store, audit, working_set
+    return graph, datasets, store, audit, working_set
+
+
+@pytest.fixture
+def world() -> Iterator[World]:
+    yield _make_world()
     app.dependency_overrides.clear()
 
 
@@ -225,7 +231,7 @@ def test_the_dataset_unit_s_gazetteers_are_offered_by_name_and_none_is_added_yet
 ) -> None:
     assert _listing() == {
         "gazetteers": [{"dataset_id": GAZ, "name": "Gazetteer-Osm-Rutland", "added": False}],
-        "copies_kept": 0, "said": None,
+        "said": None,
     }  # fmt: skip
 
 
@@ -234,16 +240,20 @@ def test_only_a_gazetteer_may_be_added(world: World, gazetteer: str) -> None:
     graph, *_ = world
     response = _put(gazetteer)
     assert response.status_code == 404
-    assert response.json()["detail"] == "There is no gazetteer of that name."
+    assert response.json()["detail"].startswith("There is no gazetteer of that name")
     assert graph.written == []
 
 
-def test_another_unit_s_gazetteer_is_refused_in_words(world: World) -> None:
-    """The orchestrator's review of P5, item 3: the gazetteer's unit is the dataset's."""
+def test_another_unit_s_gazetteer_is_refused_as_one_that_does_not_exist(world: World) -> None:
+    """The orchestrator's review of P5, item 3: the gazetteer's unit is the dataset's. Refused with
+    the same status and words as no gazetteer at all, so the answer says nothing of which regions
+    another unit has built (the lane's review)."""
     graph, *_ = world
-    response = _put("gazetteer-osm-elsewhere")
-    assert response.status_code == 409
-    assert response.json()["detail"].startswith("That gazetteer was built for another unit")
+    other = _put("gazetteer-osm-elsewhere")
+    missing = _put("gazetteer-osm-nowhere")
+    assert (other.status_code, other.json()) == (missing.status_code, missing.json())
+    assert other.status_code == 404
+    assert other.json()["detail"].startswith("There is no gazetteer of that name for this dataset")
     assert graph.written == []
 
 
@@ -298,64 +308,69 @@ def test_adding_copies_each_place_into_the_dataset(world: World) -> None:
     assert {w.id for w in graph.written} == {copy.id}
 
 
-def test_copying_again_reverts_the_copy_of_a_place_the_gazetteer_no_longer_holds(
+def test_a_re_build_keeps_the_copy_of_a_place_the_gazetteer_no_longer_holds(
     world: World,
 ) -> None:
-    graph, _datasets, _store, _audit, working_set = world
+    """Ruling (d): nothing is reverted, a re-build's copy included, so no link rests on nothing."""
+    graph, *_ = world
     _put()
     del graph.nodes[PLACE.id]  # a re-build without it
     _put()
-    assert graph.reverted == [copy_id(PLACE.id, "case-a")]
-    assert working_set.removed == graph.reverted
+    assert graph.reverted == []
+    assert copy_id(PLACE.id, "case-a") in graph.nodes
 
 
-def _case_s_copies(graph: _Graph) -> dict[str, Node]:
-    """Copies a case has made its own: one its load wrote to, one an analyst confirmed, one its
-    link rests on, and one of those above the Author's clearance."""
-    written = _node("01JWRITTEN0000000000000000", "case-a", gazetteer=GAZ, name="Uppingham")
-    written.provenance.sources.append(
-        SourceRef(document_id="case-load", locator="row 3", excerpt_hash="")
-    )
-    confirmed = _node("01JCONFIRMED00000000000000", "case-a", gazetteer=GAZ, name="Oakham")
-    confirmed.provenance.confirmed_by = "analyst-2"
-    confirmed.provenance.last_confirmed = NOW
-    linked = _node("01JLINKED00000000000000000", "case-a", gazetteer=GAZ, name="Exton")
-    secret = _node("01JSECRET00000000000000000", "case-a", gazetteer=GAZ, name="Depot",
-                   classification="SECRET")  # fmt: skip
-    secret.provenance.sources.append(
-        SourceRef(document_id="case-load", locator="row 9", excerpt_hash="")
-    )
-    made = {str(n.properties["name"]): n for n in (written, confirmed, linked, secret)}
-    graph.nodes.update({n.id: n for n in made.values()})
-    # The case's link to Exton is in its analyst layer, not the dataset (ADR-143 Amendment 1).
-    graph.links.append(
-        Edge.model_construct(id="e1", source="someone", target=linked.id, datasets=["layer-inv-1"],
-                             handling=Handling(**HANDLING))  # fmt: skip
-    )
-    return made
+def _removed(*, hidden_link: bool) -> tuple[Any, Any, list[str], dict[str, Any]]:
+    """A dataset takes the gazetteer, and the gazetteer is removed, with or without a link the
+    Author may not read resting on the copy (above their clearance, in a case's analyst layer).
+    Returns what the Author is told and what they then read."""
+    graph, *_ = _make_world()
+    try:
+        _put()
+        copy = copy_id(PLACE.id, "case-a")
+        if hidden_link:
+            graph.links.append(Edge.model_construct(
+                id="e-hidden", source="someone", target=copy, datasets=["layer-inv-1"],
+                handling=Handling(**{**HANDLING, "classification": "SECRET"}),
+            ))  # fmt: skip
+        response = _delete()
+        listing = _listing()
+        held = [n.id for n in asyncio.run(graph.get_nodes([copy], AUTHOR))]
+        return response.status_code, response.json(), graph.reverted, {"listing": listing,
+                                                                       "held": held}  # fmt: skip
+    finally:
+        app.dependency_overrides.clear()
 
 
-def test_removing_reverts_the_gazetteer_s_own_copies_and_keeps_the_case_s(world: World) -> None:
-    """Rule 6 and item 7: a copy a case's own load wrote, an analyst confirmed or a case's link
-    rests on (in its analyst layer) is kept with its mark, so no link rests on nothing. Item 2:
-    `copies_kept` counts only the kept copies the Author may read (rule 3)."""
-    graph, _datasets, store, audit, working_set = world
+def test_a_removal_tells_the_author_the_same_whatever_rests_on_a_copy() -> None:
+    """The orchestrator's ruling (d) on P5's item 7 (rule 3): a removal deletes no copy, whatever
+    rests on it, so a link the Author may not read changes nothing they are told or then read."""
+    hidden = _removed(hidden_link=True)
+    none = _removed(hidden_link=False)
+    assert hidden == none
+    status, body, reverted, after = none
+    assert status == 200 and reverted == []
+    assert body["said"] == REMOVED_WORDS and "copies_kept" not in body
+    assert after["held"] == [copy_id(PLACE.id, "case-a")]
+    assert after["listing"]["gazetteers"][0]["added"] is False
+
+
+def test_removing_keeps_every_copy_with_its_mark_and_stops_its_refresh(world: World) -> None:
+    from services.api.case_gazetteers import refresh_cases
+
+    graph, datasets, store, audit, working_set = world
     _put()
-    kept = _case_s_copies(graph)
-    response = _delete()
-    assert response.status_code == 200, response.text
-    assert graph.reverted == [copy_id(PLACE.id, "case-a")]
-    assert working_set.removed == graph.reverted
-    body = response.json()
-    assert body["copies_kept"] == 3, body  # Uppingham, Oakham, Exton; not the SECRET depot
-    assert body["said"] == (
-        "3 places stay in this dataset: a case's own load, link or confirmation rests on them."
-    )
-    # The link was read in the layer of every case reading the dataset, as the dataset's unit.
-    assert {"case-a", "layer-inv-1"} <= set(graph.expanded_as[-1].datasets or [])
-    assert all(graph.nodes[n.id].provenance.gazetteer == GAZ for n in kept.values())
-    assert store.added == {}
+    copy = copy_id(PLACE.id, "case-a")
+    assert _delete().status_code == 200
+    assert graph.reverted == [] and working_set.removed == []
+    assert graph.nodes[copy].provenance.gazetteer == GAZ
     assert audit.records[-1]["action"] == "remove_dataset_gazetteer"
+    written = len(graph.written)
+    asyncio.run(refresh_cases(graph, load_uk_le_scheme(), store, datasets, GAZ))
+    assert len(graph.written) == written  # a removed gazetteer is not refreshed
+    # Added again: the same copies written again, never a second set.
+    _put()
+    assert {w.id for w in graph.written} == {copy}
 
 
 def test_a_rebuild_never_writes_over_what_a_case_asserted(world: World) -> None:
@@ -372,6 +387,12 @@ def test_a_rebuild_never_writes_over_what_a_case_asserted(world: World) -> None:
     assert graph.nodes[copy.id].properties["name"] == "Cranford (the case's spelling)"
 
 
+REMOVED_WORDS = (
+    "The gazetteer is removed: its places stay in this dataset as its own, and the map's place "
+    "search no longer offers them. A re-build no longer refreshes them; adding it again does."
+)
+
+
 def test_the_addition_is_the_dataset_s_so_every_case_reading_it_sees_it(world: World) -> None:
     graph, datasets, *_ = world
     datasets.cases["inv-2"] = ["case-a"]
@@ -381,19 +402,52 @@ def test_the_addition_is_the_dataset_s_so_every_case_reading_it_sees_it(world: W
     assert _listing("inv-1")["gazetteers"][0]["added"] is False
 
 
-def test_a_failed_copy_again_keeps_the_earlier_addition(
-    world: World, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("first", [True, False], ids=["first-add", "re-add"])
+def test_a_failed_copy_keeps_the_record_so_the_copies_written_can_be_removed(
+    world: World, monkeypatch: pytest.MonkeyPatch, first: bool
 ) -> None:
+    """The lane's review, item 4: pages already written are committed, so the record stays, the
+    dataset is said to hold the gazetteer, and a removal (or adding again) can follow."""
     _graph, _datasets, store, *_ = world
-    _put()
+    if not first:
+        _put()
 
-    async def fails(*_args: Any, **_kwargs: Any) -> list[str]:
-        raise RuntimeError("the store went away")
+    async def fails(*_args: Any, **_kwargs: Any) -> int:
+        raise RuntimeError("the store went away on page 2")
 
     monkeypatch.setattr("services.api.case_gazetteers.copy_places", fails)
     with pytest.raises(RuntimeError):
         _put()
     assert list(store.added) == [("case-a", GAZ)]
+    assert _listing()["gazetteers"][0]["added"] is True
+    assert _delete().status_code == 200
+
+
+async def test_one_dataset_s_failed_refresh_neither_stops_the_others_nor_the_build(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The lane's review, item 6: a re-build's refresh is said per dataset, never failing the
+    committed build or skipping the datasets after it."""
+    from services.api import case_gazetteers
+    from services.api.case_gazetteers import AddedGazetteer, refresh_cases
+
+    graph, datasets, store, *_ = world
+    datasets.datasets["case-b"] = _dataset("case-b", "unit-1")
+    for held in ("case-a", "case-b"):
+        await store.add(AddedGazetteer(case_dataset=held, gazetteer=GAZ, added_in=held,
+                                       added_by="author-1", added_at=NOW))  # fmt: skip
+    real = case_gazetteers.copy_places
+
+    async def flaky(*args: Any, **kwargs: Any) -> int:
+        if kwargs["case_dataset"] == "case-a":
+            raise RuntimeError("down")
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(case_gazetteers, "copy_places", flaky)
+    refreshed = await refresh_cases(graph, load_uk_le_scheme(), store, datasets, GAZ)
+    assert refreshed.datasets == 1 and len(refreshed.failed) == 1
+    assert "case-a" in refreshed.failed[0]
+    assert {w.datasets[0] for w in graph.written} == {"case-b"}
 
 
 async def test_a_rebuild_refreshes_each_dataset_and_drops_one_no_longer_there(

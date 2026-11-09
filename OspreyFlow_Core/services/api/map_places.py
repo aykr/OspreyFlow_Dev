@@ -204,7 +204,9 @@ async def register_gazetteer_dataset_from_env(
         await store.close()
 
 
-def is_gazetteer_place(node: Node, query: str) -> bool:
+def is_gazetteer_place(
+    node: Node, query: str, removed: set[tuple[str, str]] | frozenset[tuple[str, str]] = frozenset()
+) -> bool:
     """A gazetteer's place (a case's own copy of one, `provenance.gazetteer`, ADR-147 Amendment 2;
     or one in a gazetteer dataset: what the gazetteer holds, not a case's own location with a
     postcode) with a point, whose **name** holds `query`. The store is asked by name
@@ -213,6 +215,10 @@ def is_gazetteer_place(node: Node, query: str) -> bool:
     if node.type != "Location" or not node.properties.get("geometry_ref"):
         return False
     if not is_gazetteer_held(node):
+        return False
+    # A removed gazetteer's copy (ADR-147 Amendment 2, ruling (d)) is the dataset's own now.
+    mark = node.provenance.gazetteer
+    if mark is not None and any((d, mark) in removed for d in node.datasets):
         return False
     name = node.properties.get("name")
     return isinstance(name, str) and query.casefold() in name.casefold()
@@ -223,6 +229,8 @@ async def search_places(
     analytics: AnalyticsPort,
     body: PlaceSearchRequest,
     principal: Principal,
+    *,
+    removed: set[tuple[str, str]] | frozenset[tuple[str, str]] = frozenset(),
 ) -> PlaceSearchResponse:
     """The gazetteer's places matching `body.query`, read with `principal` (the case's), each with
     its point. A place whose point the reader may not see, or that has none (a boundary), is not
@@ -242,7 +250,7 @@ async def search_places(
         more = more or len(nodes) > SCAN_LIMIT
         for node in nodes[:SCAN_LIMIT]:
             found.setdefault(node.id, node)
-    candidates = [node for node in found.values() if is_gazetteer_place(node, query)]
+    candidates = [node for node in found.values() if is_gazetteer_place(node, query, removed)]
     refs = list(dict.fromkeys(str(node.properties["geometry_ref"]) for node in candidates))
     points = {
         record.geometry_ref: record

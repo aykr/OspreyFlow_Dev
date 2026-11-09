@@ -193,16 +193,18 @@ _JAVA_IN_IMAGE = re.compile(
 )
 #: `git` installed by a distribution's package manager: GPL-2.0, so it is declared like a runtime.
 _GIT_IN_IMAGE = re.compile(
-    r"\b(apt-get|apt|dnf|yum|microdnf)\b[^\n]*\binstall\b[^\n]*\bgit(?![\w-])"
-    r"|\bapk\s+add\b[^\n]*\bgit(?![\w-])",
+    r"\b(apt-get|apt|dnf|yum|microdnf)\b[^\n]*\binstall\b[^\n]*\bgit(-lfs)?(?![\w-])"
+    r"|\bapk\s+add\b[^\n]*\bgit(-lfs)?(?![\w-])",
     re.I,
 )
 #: Runtimes an image carries under a licence the register does not pass, put to the owner and not
 #: yet ruled on: named on every run (never passed silently), not failed. The register is the
 #: owner's (the orchestrator's review of P5, item 8).
-AWAITING_OWNER: dict[str, str] = {
-    "git": "GPL-2.0-only: the Conduit runs it to publish recipes (09_INGEST_STUDIO.md §6, "
-    "services/api/studio_publish.py); put to the owner, 9 November 2026",
+#: Each entry is pinned: this runtime, in this Dockerfile, under exactly this licence; anything else
+#: (another image, another licence) is an offender as usual.
+AWAITING_OWNER: dict[tuple[str, str, str], str] = {
+    ("services/api/Dockerfile", "git", "GPL-2.0-only"): "the Conduit runs it to publish recipes "
+    "(09_INGEST_STUDIO.md §6, services/api/studio_publish.py); put to the owner, 9 November 2026",
 }
 
 
@@ -248,7 +250,7 @@ def find_runtimes_awaiting_owner(
         (name, runtime, licence)
         for name, text in (_dockerfiles() if dockerfiles is None else dockerfiles).items()
         for runtime, licence in declared_runtimes(text).items()
-        if runtime in AWAITING_OWNER and not runtime_allowed(licence, runtime)
+        if (name, runtime, licence) in AWAITING_OWNER and not runtime_allowed(licence, runtime)
     ]
 
 
@@ -281,7 +283,8 @@ def find_runtime_offenders(
         offenders += [
             (name, runtime, licence)
             for runtime, licence in declared.items()
-            if not runtime_allowed(licence, runtime) and runtime not in AWAITING_OWNER
+            if not runtime_allowed(licence, runtime)
+            and (name, runtime, licence) not in AWAITING_OWNER
         ]
         if _JAVA_IN_IMAGE.search(instructions) and "java" not in declared:
             offenders.append((name, "java", "undeclared"))
@@ -402,10 +405,11 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    for dockerfile, runtime, licence in find_runtimes_awaiting_owner():
+    awaiting = find_runtimes_awaiting_owner()
+    for dockerfile, runtime, licence in awaiting:
         print(
             f"licence-check: AWAITING THE OWNER: {dockerfile} carries {runtime!r} under {licence!r}, "
-            f"not on the allowlist ({AWAITING_OWNER[runtime]})",
+            f"not on the allowlist ({AWAITING_OWNER[(dockerfile, runtime, licence)]})",
             file=sys.stderr,
         )
 
@@ -413,6 +417,7 @@ def main() -> int:
         return 1
     print(
         f"licence-check: {len(packages)} packages, all allowed "
+        f"({len(awaiting)} image runtime(s) awaiting the owner, named above) "
         f"({len(REGISTRY)} demo data licence(s) checked, all allowed or undeclared); "
         "this project's own LICENSE/NOTICE present and correct."
     )
