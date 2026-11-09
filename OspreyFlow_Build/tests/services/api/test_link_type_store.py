@@ -91,11 +91,21 @@ async def test_an_administrator_reads_only_their_own_units_proposals(
     listed = {p.id for p in await store.list_authorized(ADMIN_1)}
     assert mine.id in listed and theirs.id not in listed
     assert theirs.id in {p.id for p in await store.list_authorized(ADMIN_2)}
-    # L2.7: the administrator's list keeps to proposals naming no dataset, in the query itself.
-    bound = _proposal("unit-1").model_copy(update={"dataset_id": "ds-a"})
-    await store.create(bound)
-    legacy = {p.id for p in await store.list_authorized(ADMIN_1, without_dataset=True)}
-    assert bound.id not in legacy and bound.id in {p.id for p in await store.list_authorized(ADMIN_1)}
+
+
+async def test_the_administrators_list_keeps_to_proposals_naming_no_dataset(
+    own_store: LinkTypeProposalStore,
+) -> None:
+    """L2.7: `without_dataset` keeps the administrator's list to the proposals made before ADR-099
+    Amendment 3, in the query itself; a proposal naming a dataset is decided on its Model tab. Over a
+    schema of its own, dropped afterwards, so nothing is left in the shared table. Red with the
+    query's `AND dataset_id IS NULL` removed."""
+    legacy, bound = _proposal("unit-1"), _proposal("unit-1").model_copy(update={"dataset_id": "ds-a"})
+    await own_store.create(legacy)
+    await own_store.create(bound)
+    listed = {p.id for p in await own_store.list_authorized(ADMIN_1, without_dataset=True)}
+    assert legacy.id in listed and bound.id not in listed
+    assert bound.id in {p.id for p in await own_store.list_authorized(ADMIN_1)}
 
 
 async def test_a_decision_is_kept_and_a_decided_proposal_is_no_longer_pending(
