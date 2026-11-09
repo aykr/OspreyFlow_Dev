@@ -11,8 +11,11 @@ read passes none. So one argument at one call site decides whether a read path l
 `list_nodes`, `paths`, `match`, `most_connected`, `busiest_links`, `recently_confirmed`,
 `shared_contacts`, and any read added later) take the same one-line fault. This test holds every
 call site to it, structurally. Each call must pass, as its second argument, the principal its own
-method was given: never `None`, never a literal, never left out. (The orchestrator's review of P5
-round 3, the lane review's defect 5.)
+method was given: never `None`, never a literal, never left out. Every module of the adapter's
+package is read, a call through a module (`serialization.node_from_element_map(…)`) is held the
+same, and a deserialiser imported under another name or handed on as a value (`map(…)`) is refused,
+since either would hide a call from this test. (The lane review's defect 5; the orchestrator's
+re-review widened it.)
 """
 
 from __future__ import annotations
@@ -22,28 +25,45 @@ from pathlib import Path
 
 import pytest
 
-ADAPTER = (
+PACKAGE = (
     Path(__file__).resolve().parents[4]
-    / "OspreyFlow_Core" / "packages" / "adapters" / "graph_arcadedb" / "adapter.py"
-)  # fmt: skip
+    / "OspreyFlow_Core"
+    / "packages"
+    / "adapters"
+    / "graph_arcadedb"
+)
+ADAPTER = PACKAGE / "adapter.py"
 DESERIALISERS = {"node_from_element_map", "edge_from_element_map"}
 
 
+def _named(node: ast.AST) -> str | None:
+    """The deserialiser an expression names, as `name` or `module.name`."""
+    if isinstance(node, ast.Name) and node.id in DESERIALISERS:
+        return node.id
+    if isinstance(node, ast.Attribute) and node.attr in DESERIALISERS:
+        return node.attr
+    return None
+
+
 def offending_calls(source: str) -> list[tuple[str, int, str]]:
-    """Each deserialiser call inside a method that is not given that method's own `principal`, as
-    (method, line, why)."""
+    """Each deserialiser call inside a function that is not given that function's own `principal`,
+    each import of one under another name, and each use of one as a value, as (where, line, why)."""
+    tree = ast.parse(source)
     offences: list[tuple[str, int, str]] = []
-    for function in ast.walk(ast.parse(source)):
+    called: set[int] = set()
+    for imported in ast.walk(tree):
+        if isinstance(imported, ast.ImportFrom):
+            for alias in imported.names:
+                if alias.name in DESERIALISERS and alias.asname not in (None, alias.name):
+                    offences.append(("import", imported.lineno, f"imported as {alias.asname}"))
+    for function in ast.walk(tree):
         if not isinstance(function, ast.FunctionDef | ast.AsyncFunctionDef):
             continue
         params = {a.arg for a in (*function.args.args, *function.args.kwonlyargs)}
         for call in ast.walk(function):
-            if not (
-                isinstance(call, ast.Call)
-                and isinstance(call.func, ast.Name)
-                and call.func.id in DESERIALISERS
-            ):
+            if not (isinstance(call, ast.Call) and _named(call.func)):
                 continue
+            called.add(id(call.func))
             given = [*call.args[1:2], *(k.value for k in call.keywords if k.arg == "principal")]
             if not given:
                 offences.append((function.name, call.lineno, "no principal"))
@@ -51,20 +71,31 @@ def offending_calls(source: str) -> list[tuple[str, int, str]]:
                 offences.append((function.name, call.lineno, ast.unparse(given[0])))
             elif "principal" not in params:
                 offences.append((function.name, call.lineno, "a principal not its own"))
-    return offences
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Name | ast.Attribute)
+            and isinstance(node.ctx, ast.Load)
+            and _named(node)
+            and id(node) not in called
+        ):
+            offences.append(("value", node.lineno, f"{_named(node)} used as a value"))
+    return sorted(offences, key=lambda o: o[1])
 
 
 def test_every_read_in_the_adapter_withholds_by_its_caller_s_principal() -> None:
-    source = ADAPTER.read_text()
+    modules = sorted(PACKAGE.rglob("*.py"))
     calls = sum(
         1
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id in DESERIALISERS
+        for module in modules
+        for node in ast.walk(ast.parse(module.read_text()))
+        if isinstance(node, ast.Call) and _named(node.func)
     )
-    assert calls >= 20, "the adapter's reads were not found: the test would pass over nothing"
-    assert offending_calls(source) == []
+    assert ADAPTER in modules and calls >= 20, (
+        "the reads were not found: the test would pass over nothing"
+    )
+    assert {m.name: offending_calls(m.read_text()) for m in modules} == {
+        m.name: [] for m in modules
+    }
 
 
 @pytest.mark.parametrize(
@@ -94,3 +125,26 @@ class A:
         return node_from_element_map(element, principal)
 """
     assert offending_calls(source) == [("find", 4, "a principal not its own")]
+
+
+@pytest.mark.parametrize(
+    ("source", "why"),
+    [
+        (
+            "from . import serialization\nasync def f(r, principal):\n"
+            "    return serialization.node_from_element_map(r, None)\n",
+            ("f", 3, "None"),
+        ),
+        (
+            "from .serialization import node_from_element_map as read\n",
+            ("import", 1, "imported as read"),
+        ),
+        (
+            "async def f(rs, principal):\n    return list(map(node_from_element_map, rs))\n",
+            ("value", 2, "node_from_element_map used as a value"),
+        ),
+    ],
+    ids=["through-the-module", "aliased-import", "handed-on"],
+)
+def test_a_read_hidden_from_a_plain_call_is_named(source: str, why: tuple[str, int, str]) -> None:
+    assert offending_calls(source) == [why]
