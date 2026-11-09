@@ -107,3 +107,6 @@ closed ports (59991–59994), no lease.
   Home's list; replaces the role-less reader of round 1.
 - Round 2's item 1 (the worktree changing during the review) was this session's rebase onto main; no
   other agent was in the worktree (`ListAgents`, `pgrep`), and HEAD holds `.get` at both places.
+- **See the trend (patch), only with `read_reports`:** a new App case as the Rule author (no
+  `read_reports`); plant, the button offered whatever the rights → FAILED; restored. Leaving the
+  Dashboards now ends the trend's filter. The patch's App test sits before the evidence test's comment.
