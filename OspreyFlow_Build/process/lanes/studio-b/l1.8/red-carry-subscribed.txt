@@ -38,3 +38,17 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_subscribed_lists_seam.py::tes
 
 # Restored: both green
 2 passed in 1.25s
+
+# The orchestrator's addition (the studio lane's review of L1.5): a subscribed list at the three places a staged pipeline runs. Red before the fix, at main's three callers. Offline; no stack.
+# (A first run of the caller check passed with nothing scanned: its root was one folder short. Fixed and made to name the three modules it must read before it may pass, rule 15.)
+E       AssertionError: ["step 'with_establishment' looks up 'establishments', which names no list this dataset holds or subscribes to"]
+E       AssertionError: {"error":"recipe_rule","problems":["step 'with_establishment' looks up 'establishments', which names no list this dataset holds or subscribes to"]}
+E       assert 422 == 200
+E           services.ingest.staging_catalogue.StagingError: step 'with_establishment' looks up 'establishments', which names no list this dataset holds or subscribes to
+E           services.ingest.recipe_rules.RecipeRuleError: step 'with_establishment' looks up 'establishments', which names no list this dataset holds or subscribes to
+E       AssertionError: ['services/api/pipeline_run.py:545 prepare_staged_load', 'services/api/studio_staging.py:354 lists_for_run', 'services/api/studio_staging.py:313 run_staging', 'services/api/studio_verify.py:220 dry_run_staged_recipe']
+FAILED test_subscribed_lookup_call_sites.py::test_the_drawer_s_sample_reads_a_subscribed_list
+FAILED test_subscribed_lookup_call_sites.py::test_test_reads_a_subscribed_list
+FAILED test_subscribed_lookup_call_sites.py::test_the_run_reads_a_subscribed_list
+FAILED test_subscribed_lookup_call_sites.py::test_every_caller_hands_the_staging_engine_the_subscriptions
+4 failed, 2 passed, 1 warning in 3.62s

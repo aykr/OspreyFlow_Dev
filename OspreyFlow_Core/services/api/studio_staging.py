@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from services.ingest.pipeline import (
@@ -310,9 +310,12 @@ def preview_staging(
             wanted, references, dataset_id=draft.dataset_id or "", storage=storage,
             subscribed=subscribed_in(references),
         )  # fmt: skip
+        # The engine judges the steps again: it is told the subscriptions too (the studio lane's
+        # review of L1.5), or a subscribed list's Lookup is refused here though it saved.
         result = run_staging(
-            wanted, sources=read.tables, lists=lists, dataset_id=draft.dataset_id or ""
-        )
+            wanted, sources=read.tables, lists=lists, dataset_id=draft.dataset_id or "",
+            subscribed=subscribed_in(references),
+        )  # fmt: skip
     except StagingError as refused:
         return StagingPreview(
             step=body.step,
@@ -344,11 +347,3 @@ def preview_staging(
         profile=profile,
     )
 
-
-def staged_lists(
-    draft: StudioRecipeDraft,
-    steps: Sequence[StagingStep],
-    references: Sequence[ReferenceList],
-    storage: ObjectStorageConfig,
-) -> Mapping[str, StagedTable]:
-    return lists_for_run(steps, references, dataset_id=draft.dataset_id or "", storage=storage)
