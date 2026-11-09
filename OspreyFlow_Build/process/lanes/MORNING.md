@@ -547,6 +547,11 @@ New ones are added at the bottom as they happen.
     `test-runner@ospreyflow.invalid`). The server's venv is synced without the `extraction` extra (spaCy,
     transformers, torch), as CI's is on purpose (ADR-108 phase D), so cases needing spaCy skip there as in CI.
     Lanes record them as not run. My call: torch would add gigabytes to each lane's venv on the server.
+83. **Admin's L2.6 merged (`0194eec`)** after three independent review rounds. I gated it at the merge result, since
+    the lane's gates predated its last fixes. `make -k ci` and `make test` fail only where this machine fails
+    (Docker, the local `osprey.yaml` and Valkey) and on main's phone-extraction case. test-js: 2,775 passed;
+    `MatrixView.budget` failed under a load of 18 and passed alone twice. Also: case-b reopened on L3.8 (your
+    word), and two carries for studio from studio-b's review. Rules-b's and studio-b's fix rounds are in review.
 
 ## Evening, 7 November: your records of 7 November applied
 

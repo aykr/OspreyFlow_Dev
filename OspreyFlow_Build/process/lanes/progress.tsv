@@ -12,7 +12,7 @@ studio	L1.4	M	done	Phase 7b: the drawers for each step
 studio	L1.5	L	building	Phase 8: expert steps
 studio-b	L1.6	L	done	Phase 9: connectors; the screening-list connector and templates
 studio	L1.7	L	todo	Phase 10: Operations, external orchestration; Releases as YAML
-studio-b	L1.8	S	todo	The Studio's tips and who-can refusals; Domain model wording
+studio-b	L1.8	S	review	The Studio's tips and who-can refusals; Domain model wording
 glass	L2.1	M	done	The alerts gap map
 glass	L2.2	L	done	Three places: switcher, banner, Home, rail, GOV.UK header
 glass	L2.3	M	done	The case screen's first lightening
@@ -20,7 +20,7 @@ glass	L2.4	M	done	Admin regrouped into sections (part 1)
 admin	L2.4p2	L	done	Datasets' columns, Authors, linked cases, promotion policy; System's owners setting
 admin	L2.5	L	done	People and roles; custom roles; Rule author; teams and leads; Disable (what is owned today)
 admin	L2.5b	S	todo	Disable…'s full transfer list, from case's ownership route (after L3.8)
-admin	L2.6	M	building	Operations' promotions and ageing; Audit
+admin	L2.6	M	done	Operations' promotions and ageing; Audit
 admin	L2.7	M	todo	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	done	Alerts: G2, G3 and G9 fixed (access first)
 glass	L2.8b	M	done	Old records under the new check: audit words, held rows, pack items, Alert node re-marking
