@@ -31022,18 +31022,23 @@ decision 11 as built, and what they left open. Amendment 3 decision 3 is now met
      built at start `CONCURRENTLY`, each in a statement of its own outside the bootstrap's
      transaction (`audit.build_indexes`), so a large `audit_log` keeps taking audit writes, and so
      every route keeps answering, while they build; one left invalid by a crash is dropped and built
-     again at the next start (`test_an_index_left_invalid_by_a_crashed_build_is_built_again`). What no
-     test tells apart: a plain `CREATE INDEX` outside the transaction from a `CONCURRENTLY` one, since
-     both leave the same valid index; only the wait behind an open write would show it, and that is
-     left to review of `audit.build_indexes`.
+     again at the next start (`test_an_index_left_invalid_by_a_crashed_build_is_built_again`). An audit
+     write goes through while a build waits on an open one, which a plain `CREATE INDEX` would queue it
+     behind (`test_audit_writes_go_on_while_the_indexes_build`). An index another start is building
+     reads invalid exactly as a crashed one does, so the builder holds a session advisory lock keyed by
+     its schema, which a crashed builder's session lets go; a start that cannot take it leaves the
+     indexes alone and goes on, never dropping a build under way, and never waiting for it
+     (`test_a_start_never_drops_an_index_another_start_is_building`).
    - **The rule audit** (ADR-109 ruling 1; ADR-146 Amendment 2 returns it here) is never read from the
      stream. It is read for one case, through `readable_rule_audit` itself, behind the case rule-audit
      route's own gate and only for the Administrator (`osprey-admin`): an Author holding both rights is
      refused here and reads it in Rules and Monitoring. A filter narrows only after the read has
      withheld what it withholds. **This is an exception to ADR-146 Amendment 2 point 3** (a
-     `read_rule_audit` route is the Rules and Monitoring place's): the owner ruled that the rule audit
-     returns to Admin › Audit for the Administrator, and this route is that return, held to the
-     administrator's role.
+     `read_rule_audit` route is the Rules and Monitoring place's): the orchestrator's settlement of
+     8 November on rules' Q2 (a), recorded in ADR-146 Amendment 2 point 2 and on the owner's list for
+     review, returns the rule audit to Admin › Audit for the Administrator, and this route is that
+     return, held to the administrator's role (pinned by `test_place_routes.py`'s
+     `test_the_exception_is_pinned_to_one_route_and_its_checks`).
    - **The engines' history** (`model_admin_audit`, ADR-112 Amendment 7 decision 7) is read only by a
      holder of `manage_models` too (the orchestrator's ruling at review, the strict default: it names
      people of every unit, which a reader of one unit's entries must not read). Paged with its true
