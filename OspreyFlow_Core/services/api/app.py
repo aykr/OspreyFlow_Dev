@@ -10278,11 +10278,18 @@ async def drawn_merge_dry_run(
     body: DrawnMergeInput,
     principal: PrincipalDep,
     merges: DrawnMergesDep,
+    audit: AuditDep,
 ) -> DrawnMergeDryRun:
-    """The dry run: every check, nothing written."""
+    """The dry run: every check, nothing written but its audit entry (it reads the drawing for a
+    merge, as the sheet does)."""
     drawn, case_id = await merges.drawn(dataset_id)
     into = await merges.target(drawn, body.target_dataset_id, principal)
-    return await merges.dry_run(drawn, case_id, into, body, principal)
+    ran = await merges.dry_run(drawn, case_id, into, body, principal)
+    await _audit_promotion(
+        audit, principal, "dry_run_drawn_merge", case_id, ran.nodes + ran.links,
+        dataset_id=dataset_id, target_dataset_id=into.id,
+    )  # fmt: skip
+    return ran
 
 
 @app.post(
