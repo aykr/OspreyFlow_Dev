@@ -623,6 +623,12 @@ New ones are added at the bottom as they happen.
     rewrites, drops or computes a handling-bound column is refused. Also: forgeable `_ref` provenance, a refusal
     able to quote a cell value, Test blocking the event loop, an unbounded output, a cross-dataset test that
     couldn't fail, and three shared files committed on the branch.
+93. **Two of mine, fixed (about 20:00).** My census line at case-b's merge was too long, so main failed ruff
+    (E501); wrapped at `b0671be`. Also, Google Drive had left **11,633 empty `Icon` files** across the main
+    checkout, its `.venv` included. One inside `jsonschema_specifications`' schema folder broke the audit tests
+    here, so I removed them all, after checking every one was empty and none is tracked. The lane worktrees in
+    `~/dev` were never synced. `.git` still holds leftover temporary objects from today's crashes (git warns about
+    them); harmless, and left for you, or for a `git gc` when no lane is working.
 
 ## Evening, 7 November: your records of 7 November applied
 
