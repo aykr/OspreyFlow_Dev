@@ -48,9 +48,10 @@ unknown; worktrees intact). All seven were resumed in fresh sessions from their 
 vite on 5184 was left running (stopping it was refused to me); admin's stack-c lease passes to its resumed session.
 It happened again at about 05:40 UTC, platform's session included: Terminal.app itself had quit, with swap at 23 of
 24 GB (Docker's VM alone 11.4 GB), so memory pressure is the likely cause. All eight were reopened (platform fresh
-on P5). Three orphaned live pytest runs were left to finish; their leases pass to the resumed holders. An old
-container `osprey-probe-arcadedb-new` (arcadedb 26.10.1, created 7 October, 2.5 GB) is not a lane's; yours to
-remove if you want the memory back. The sisters (studio-b, case-b, rules-b) stay on `sol`: about 30% of the steps left.
+on P5). Three orphaned live pytest runs were left to finish; their leases pass to the resumed holders. **Corrected:** I told you
+`osprey-probe-arcadedb-new` was not a lane's; it was stack a's ArcadeDB under its old name (`lane_stacks.tsv`), and
+removing it took stack a down. Platform, holding a's lease, recreated it at 05:42 (127.0.0.1:2491, arcadedb
+26.10.1, empty databases). The lesson: I check `lane_stacks.tsv` before calling any container unused. The sisters (studio-b, case-b, rules-b) stay on `sol`: about 30% of the steps left.
 
 **A question for you (platform's P3; the licence register, so yours):** building the local basemap needs Java 21
 (planetiler). The only runtime here is Eclipse Temurin, GPL-2.0 with the Classpath exception, and spec/00 §7 says
