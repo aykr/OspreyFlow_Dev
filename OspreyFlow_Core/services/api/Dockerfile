@@ -42,8 +42,9 @@ COPY recipes ./recipes
 # program such as planetiler uses, without its tools, debug symbols or headers; the official image
 # pinned by its digest (the multi-architecture index, so arm64 and amd64 build alike): Temurin
 # 21.0.13+9, October 2026's update. trivy does not see a jlinked runtime, so the version label below
-# is held to the image's /opt/java/release and to Temurin 21's newest by `tools/java_runtime_check.py`
-# (`make trivy-image-api`); repin the digest and the label together.
+# is held to the built image's /opt/java/release and `java -version` (CI's `trivy-image-api` job),
+# and the digest to the one `eclipse-temurin:21-jdk` resolves to on Docker Hub now (Build's
+# `make ci`), by the build folder's `java_runtime_check`; repin the digest and the label together.
 FROM eclipse-temurin:21-jdk@sha256:ebfbb18d11ff163ee83b21258acf12248af48d22a0fdfdc68fa1a1516c05976a AS java
 RUN jlink \
       --add-modules java.base,java.compiler,java.desktop,java.instrument,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.security.jgss,java.sql,java.xml,jdk.crypto.ec,jdk.jfr,jdk.management,jdk.unsupported,jdk.zipfs \
@@ -73,7 +74,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 # `git` is GPL-2.0-only, which the licence register does not pass: declared, so `make licence-check`
 # names it on every run. The owner's ruling of 9 November 2026: replaced by dulwich (Apache-2.0),
-# studio's carry in L1.7, and then removed from this image.
+# studio-b's carry in L1.7a, and then removed from this image.
 LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"
 
 COPY --from=java /opt/jre /opt/java

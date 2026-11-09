@@ -1,9 +1,13 @@
-"""`tools/java_runtime_check.py` (ADR-147 Amendment 2, ruling 1; the orchestrator's review of P5
-round 3, item 2): `trivy image` does not see the Conduit's jlinked Temurin, so this check holds the
-runtime to its declared version and to Temurin 21's newest. Each refusal planted in the shape its
-input really takes: a Dockerfile `LABEL` line, `/opt/java/release` and `java -version` as the
-built image gave them on the test server (`gates/p5_image_check.sh`; `jlink` writes no
-`JAVA_RUNTIME_VERSION` there), and Adoptium's release names (rule 15)."""
+"""`tools/java_runtime_check.py` (ADR-147 Amendment 2, ruling 1): `trivy image` does not see the
+Conduit's jlinked Temurin, so this check holds the runtime to its declared version and its pin to
+the digest its tag resolves to on Docker Hub now (the orchestrator's call, over Adoptium's release
+list). Each refusal is planted in the shape its input really takes (rule 15):
+
+- a Dockerfile's `FROM … AS java` and `LABEL` lines;
+- `/opt/java/release` and `java -version`, as the built image gave them on the test server
+  (`gates/p5_image_check.sh`; `jlink` writes no `JAVA_RUNTIME_VERSION` there);
+- Docker Hub's answer for a tag (`{"name", "digest", "images", …}`, the index's digest), with the
+  real digests of `21-jdk` at 21.0.12.1+1 and at 21.0.13+9."""
 
 from __future__ import annotations
 
@@ -17,12 +21,20 @@ import pytest
 from tools import java_runtime_check as check
 from tools.java_runtime_check import problems, version_key
 
+#: `eclipse-temurin:21-jdk`'s index digest at 21.0.13+9 (29 October 2026), and before, at
+#: 21.0.12.1+1.
+NOW = "sha256:ebfbb18d11ff163ee83b21258acf12248af48d22a0fdfdc68fa1a1516c05976a"
+BEFORE = "sha256:f9bf7e9fe2f9bc4657537c1a7e20c768f0c3bafca41598263be4714783dd62eb"
+
 #: As the api Dockerfile writes it.
 DOCKERFILE = (
-    "FROM eclipse-temurin:21-jdk@sha256:" + "e" * 64 + " AS java\n"
+    "FROM python:3.12-slim AS builder\n"
+    f"FROM eclipse-temurin:21-jdk@{NOW} AS java\n"
+    "RUN jlink --add-modules java.base --output /opt/jre\n"
     'LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"\n'
     'LABEL org.ospreyflow.runtime.java.version="21.0.13+9"\n'
 )
+OLD_PIN = DOCKERFILE.replace(NOW, BEFORE).replace("21.0.13+9", "21.0.12.1+1")
 
 
 def _release(version: str) -> tuple[str, str]:
@@ -36,23 +48,21 @@ def _release(version: str) -> tuple[str, str]:
     )
 
 
-#: Adoptium's answer of 9 November 2026, newest first.
-ADOPTIUM = ["jdk-21.0.13+9", "jdk-21.0.12.1+1", "jdk-21.0.12+8", "jdk-21.0.11+10"]
+def test_the_runtime_declared_built_and_pinned_at_its_tag_passes() -> None:
+    assert problems(DOCKERFILE, _release("21.0.13+9"), NOW) == []
 
 
-def test_the_runtime_declared_built_and_newest_passes() -> None:
-    assert problems(DOCKERFILE, _release("21.0.13+9"), ADOPTIUM) == []
-
-
-def test_a_quarterly_update_not_taken_is_refused() -> None:
-    """The case trivy cannot see: the image is what it declares, and Temurin has moved on."""
-    pinned = DOCKERFILE.replace("21.0.13+9", "21.0.12.1+1")
-    [problem] = problems(pinned, _release("21.0.12.1+1"), ADOPTIUM)
-    assert "Temurin 21.0.13+9 is out and the image pins 21.0.12.1+1" in problem
+def test_a_pin_its_tag_has_moved_on_from_is_refused() -> None:
+    """The case trivy cannot see: the image is what it declares, and the tag now names another."""
+    [problem] = problems(OLD_PIN, _release("21.0.12.1+1"), NOW)
+    assert problem == (
+        f"eclipse-temurin:21-jdk now resolves to {NOW} and the image pins {BEFORE}: "
+        "repin the api Dockerfile's java stage by digest and its label"
+    )
 
 
 def test_a_label_that_drifted_from_the_digest_is_refused() -> None:
-    assert problems(DOCKERFILE, _release("21.0.12.1+1"), ADOPTIUM) == [
+    assert problems(DOCKERFILE, _release("21.0.12.1+1"), NOW) == [
         "the image's /opt/java/release names 21.0.12.1, its Dockerfile 21.0.13+9",
         "the image runs Java 21.0.12.1+1, its Dockerfile declares 21.0.13+9",
     ]
@@ -60,7 +70,7 @@ def test_a_label_that_drifted_from_the_digest_is_refused() -> None:
 
 def test_a_rebuild_of_the_same_version_is_told_apart_by_its_build() -> None:
     """`/opt/java/release` names no build: a `+8` image under a `+9` label is `java -version`'s."""
-    [problem] = problems(DOCKERFILE, _release("21.0.13+8"), ADOPTIUM)
+    [problem] = problems(DOCKERFILE, _release("21.0.13+8"), NOW)
     assert problem == "the image runs Java 21.0.13+8, its Dockerfile declares 21.0.13+9"
 
 
@@ -86,8 +96,25 @@ def test_a_runtime_naming_no_version_is_refused() -> None:
     assert "java -version names no single build" in problem
 
 
-def test_an_empty_answer_from_adoptium_is_refused_never_passed() -> None:
-    assert problems(DOCKERFILE, None, []) == ["Adoptium named no Temurin 21 release"]
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "FROM eclipse-temurin:21-jdk AS java",  # by tag alone: nothing pinned to compare
+        f"FROM eclipse-temurin@{NOW} AS java",  # by digest alone: no tag to ask after
+        f"FROM eclipse-temurin:21-jdk@{NOW} AS jre",  # not the Java stage
+    ],
+)
+def test_a_java_stage_not_pinned_by_tag_and_digest_is_refused(stage: str) -> None:
+    dockerfile = DOCKERFILE.replace(f"FROM eclipse-temurin:21-jdk@{NOW} AS java", stage)
+    assert problems(dockerfile, None, NOW) == [
+        "the api Dockerfile has no single Java stage pinned by digest"
+    ]
+
+
+@pytest.mark.parametrize("answer", ["", "latest", "sha256:abc", NOW.upper()])
+def test_an_answer_naming_no_digest_is_refused_never_passed(answer: str) -> None:
+    [problem] = problems(DOCKERFILE, None, answer)
+    assert problem.startswith("Docker Hub named no digest for eclipse-temurin:21-jdk")
 
 
 @pytest.mark.parametrize(
@@ -103,9 +130,12 @@ def test_versions_are_ordered_as_temurin_numbers_them(older: str, newer: str) ->
     assert version_key(older) < version_key(newer)
 
 
-def test_the_api_dockerfile_declares_its_runtime_s_version() -> None:
-    """The real Dockerfile, offline: its label is there and of Temurin's shape."""
-    assert problems(check.DOCKERFILE.read_text(), None, None) == []
+def test_the_api_dockerfile_declares_its_runtime_and_pins_its_java_stage() -> None:
+    """The real Dockerfile, offline: its label is there and of Temurin's shape, and its Java stage
+    is one official tag pinned by digest."""
+    real = check.DOCKERFILE.read_text()
+    assert problems(real, None, None) == []
+    assert check.java_stage(real) is not None
 
 
 @pytest.mark.parametrize(
@@ -123,12 +153,7 @@ def test_the_label_is_read_however_it_is_written(label: str) -> None:
     assert check.declared_version(f"FROM x AS java\n{label}\n") == "21.0.13+9"
 
 
-def test_a_release_name_of_no_temurin_shape_is_refused_in_words() -> None:
-    [problem] = problems(DOCKERFILE, None, ["jdk-21.0.13+9", "jdk-22-ea"])
-    assert problem == "Adoptium named a release of no Temurin shape: 'jdk-22-ea'"
-
-
-# `main` and `_latest` themselves, Adoptium's answer and the image read through their real code.
+# `main` and `_current` themselves: Docker Hub's answer and the image read through their real code.
 
 
 class _Answer:
@@ -145,13 +170,21 @@ class _Answer:
         return self.body
 
 
-def _dockerfile(tmp_path: Path, version: str = "21.0.13+9") -> str:
+def _dockerfile(tmp_path: Path, text: str = DOCKERFILE) -> str:
     path = tmp_path / "Dockerfile"
-    path.write_text(DOCKERFILE.replace("21.0.13+9", version))
+    path.write_text(text)
     return str(path)
 
 
-def _adoptium(monkeypatch: pytest.MonkeyPatch, answer: object) -> list[object]:
+def _hub(digest: object) -> dict[str, object]:
+    """Docker Hub's answer for a tag, in the shape it answers (fields as on 9 November 2026)."""
+    return {
+        "name": "21-jdk", "digest": digest, "last_updated": "2026-10-29T20:00:40.470353Z",
+        "images": [{"architecture": "amd64", "digest": "sha256:" + "0" * 64}],
+    }  # fmt: skip
+
+
+def _docker_hub(monkeypatch: pytest.MonkeyPatch, answer: object) -> list[object]:
     sent: list[object] = []
 
     def urlopen(request: object, timeout: float) -> _Answer:
@@ -164,47 +197,62 @@ def _adoptium(monkeypatch: pytest.MonkeyPatch, answer: object) -> list[object]:
     return sent
 
 
-def test_main_passes_the_newest_and_sends_a_client_name(
+def test_main_passes_a_current_pin_asking_after_the_dockerfile_s_own_tag(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    sent = _adoptium(monkeypatch, {"releases": ADOPTIUM})
-    assert check.main(["--latest", "--dockerfile", _dockerfile(tmp_path)]) == 0
-    assert "Temurin 21's newest" in capsys.readouterr().out
-    assert sent[0].get_header("User-agent") == "ospreyflow-java-runtime-check"  # type: ignore[attr-defined]
+    sent = _docker_hub(monkeypatch, _hub(NOW))
+    assert check.main(["--current", "--dockerfile", _dockerfile(tmp_path)]) == 0
+    assert "pinned at its tag's current digest" in capsys.readouterr().out
+    [request] = sent
+    assert request.full_url == (  # type: ignore[attr-defined]
+        "https://hub.docker.com/v2/repositories/library/eclipse-temurin/tags/21-jdk"
+    )
+    agent = request.get_header("User-agent")  # type: ignore[attr-defined]
+    assert agent == "ospreyflow-java-runtime-check"
+
+
+def test_main_refuses_a_pin_its_tag_has_moved_on_from(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _docker_hub(monkeypatch, _hub(NOW))
+    assert check.main(["--current", "--dockerfile", _dockerfile(tmp_path, OLD_PIN)]) == 1
+    assert f"now resolves to {NOW} and the image pins {BEFORE}" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
     "answer",
     [
         urllib.error.URLError("no route to host"),
-        urllib.error.HTTPError(check.ADOPTIUM, 403, "Forbidden", {}, None),  # type: ignore[arg-type]
-        http.client.IncompleteRead(b'{"releases": ["jdk-21'),
-        b'{"releases": ["jdk-21',  # truncated
-        {"releases": None},
-        {"versions": ["jdk-21.0.13+9"]},
-        {"releases": []},
+        urllib.error.HTTPError(check.HUB_TAG, 429, "Too Many Requests", {}, None),  # type: ignore[arg-type]
+        http.client.IncompleteRead(b'{"digest": "sha256:'),
+        b'{"digest": "sha256:',  # truncated
+        _hub(None),
+        {"name": "21-jdk"},
+        _hub(""),
     ],
-    ids=["unreachable", "403", "incomplete", "truncated", "null", "another-key", "empty"],
+    ids=["unreachable", "429", "incomplete", "truncated", "null", "no-digest", "empty"],
 )
-def test_main_refuses_whenever_adoptium_cannot_be_read(
+def test_main_refuses_whenever_docker_hub_cannot_be_read(
     answer: object,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A failed fetch is a refusal in words, never a pass and never a traceback."""
-    _adoptium(monkeypatch, answer)
-    assert check.main(["--latest", "--dockerfile", _dockerfile(tmp_path)]) == 1
+    _docker_hub(monkeypatch, answer)
+    assert check.main(["--current", "--dockerfile", _dockerfile(tmp_path)]) == 1
     said = capsys.readouterr().err
-    assert "Adoptium could not be read" in said or "Adoptium named no Temurin 21 release" in said
+    assert "Docker Hub could not be read" in said or "Docker Hub named no digest" in said
 
 
-def test_main_refuses_an_old_pin_against_adoptium_s_real_shape(
+def test_main_refuses_a_java_stage_it_cannot_ask_after(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    _adoptium(monkeypatch, {"releases": ADOPTIUM})
-    assert check.main(["--latest", "--dockerfile", _dockerfile(tmp_path, "21.0.12.1+1")]) == 1
-    assert "Temurin 21.0.13+9 is out" in capsys.readouterr().err
+    sent = _docker_hub(monkeypatch, _hub(NOW))
+    unpinned = DOCKERFILE.replace(f"@{NOW}", "")
+    assert check.main(["--current", "--dockerfile", _dockerfile(tmp_path, unpinned)]) == 1
+    assert "no single Java stage pinned by digest" in capsys.readouterr().err
+    assert sent == []
 
 
 def _docker(monkeypatch: pytest.MonkeyPatch, version: str | None) -> None:
@@ -223,6 +271,7 @@ def _docker(monkeypatch: pytest.MonkeyPatch, version: str | None) -> None:
 def test_main_reads_the_image_and_refuses_one_that_drifted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """CI's step (`P5_ci.diff`): `--image` alone, over the image the job has just built."""
     _docker(monkeypatch, "21.0.13+9")
     assert check.main(["--image", "api:ci", "--dockerfile", _dockerfile(tmp_path)]) == 0
     _docker(monkeypatch, "21.0.1+12")

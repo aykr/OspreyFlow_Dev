@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/Makefile b/OspreyFlow_Build/Makefile
-index 2cfcbf8..018a95a 100644
+index 2cfcbf8..23e74de 100644
 --- a/OspreyFlow_Build/Makefile
 +++ b/OspreyFlow_Build/Makefile
 @@ -4,7 +4,7 @@
@@ -26,10 +26,10 @@ index 2cfcbf8..018a95a 100644
  
 +# ADR-147 Amendment 2: `trivy image` does not see the Conduit image's jlinked Java, so the image
 +# `core-check`'s `trivy-image-api` has just built (`ospreyflow/api:ci`) is held to its Dockerfile's
-+# declared Java version (`/opt/java/release`, `java -version`) and to Temurin 21's newest
-+# (Adoptium's API). Here, not in Core's Makefile: Core stands alone (ADR-114 Amendment 2).
++# declared Java version (`/opt/java/release`, `java -version`), and its pin to the digest its tag
++# resolves to on Docker Hub now. Here, not in Core's Makefile: Core stands alone (ADR-114 Amendment 2).
 +java-runtime-check: core-check
-+	$(IN_CORE) $(TOOLS) $(PY) -m tools.java_runtime_check --image ospreyflow/api:ci --latest
++	$(IN_CORE) $(TOOLS) $(PY) -m tools.java_runtime_check --image ospreyflow/api:ci --current
 +
  # This folder's own Node checks, linted with the product's ESLint configuration.
  lint-tools:

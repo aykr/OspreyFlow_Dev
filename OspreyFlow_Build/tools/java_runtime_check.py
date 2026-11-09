@@ -1,4 +1,5 @@
-"""The Conduit image's Java runtime is the one its Dockerfile declares, and Temurin 21's newest.
+"""The Conduit image's Java runtime is the one its Dockerfile declares, pinned at its tag's current
+digest.
 
 ADR-147 Amendment 2 (the owner's ruling 1): the Conduit's image carries a jlinked Temurin 21,
 pinned by digest (`OspreyFlow_Core/services/api/Dockerfile`). `trivy image` does not see a runtime
@@ -10,13 +11,17 @@ This check stands in that gap. The Dockerfile declares the runtime's version in 
 - the built image must run that version (`--image`): `/opt/java/release`'s `JAVA_VERSION` (all
   `jlink` writes there besides `MODULES`) must be the label's version, and `java -version`'s
   build the label whole, so the label cannot drift from the digest it describes;
-- that version must be Temurin 21's newest general-availability release (`--latest`, from
-  Adoptium's API), so a quarterly update not taken fails the image's scan as a CVE would.
+- the Java stage's pinned digest must be the one its tag (`eclipse-temurin:21-jdk`) resolves to
+  on Docker Hub now (`--current`), so an update not taken fails as a CVE would. The orchestrator's
+  call: Docker Hub's tag, not Adoptium's release list, because the tag moves only once there is an
+  image to repin to. So CI is never red for days with nothing to take, and an old commit re-run
+  is red only if its pin is no longer the tag's.
 
-Run by `make ci`'s `java-runtime-check` (this folder's Makefile, never Core's: Core stands
-alone, ADR-114 Amendment 2), after `core-check` has built the image, where Docker and the network
-are. Without `--image` or `--latest` it checks only that the label is there and well formed.
-Anything it cannot read (the image, or Adoptium's answer) is a refusal in words, never a pass.
+`--image` runs in GitHub CI's `trivy-image-api` job, after the build (`P5_ci.diff`, the owner's
+file), and in Build's `make ci` after `core-check` (`JAVA_RUNTIME_CI.diff`), with `--current`.
+Never in Core's Makefile, which stands alone (ADR-114 Amendment 2). Without either flag it checks
+only that the label is there and well formed. Anything it cannot read (the image, the Dockerfile's
+pinned tag, or Docker Hub's answer) is a refusal in words, never a pass.
 Each refusal shown red in `tests/licence_check/test_java_runtime_check.py` (rule 15).
 """
 
@@ -30,7 +35,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from tools.licence_check import label_pairs
+from tools.licence_check import _instructions, label_pairs
 
 DOCKERFILE = (
     Path(__file__).resolve().parents[2] / "OspreyFlow_Core" / "services" / "api" / "Dockerfile"
@@ -41,12 +46,15 @@ RELEASE_LINE = re.compile(r"""^JAVA_VERSION\s*=\s*["']?([^"'\s]+)["']?\s*$""", r
 #: `OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)`.
 BUILD_LINE = re.compile(r"^.*Runtime Environment.*\(build ([^)\s]+)\)\s*$", re.M)
 VERSION = re.compile(r"^(\d+(?:\.\d+)*)\+(\d+)(?:-LTS)?$")
-#: Temurin 21's general-availability releases, newest first (the same query Adoptium's site makes).
-ADOPTIUM = (
-    "https://api.adoptium.net/v3/info/release_names?architecture=x64&heap_size=normal&image_type=jdk"
-    "&os=linux&page=0&page_size=20&project=jdk&release_type=ga&semver=false&sort_method=DATE"
-    "&sort_order=DESC&vendor=eclipse&version=%5B21%2C22%29"
+#: The Java stage, as the api Dockerfile writes it: an official image's tag pinned by digest.
+JAVA_STAGE = re.compile(
+    r"^FROM\s+(?:docker\.io/)?(?:library/)?(?P<repo>[a-z0-9._-]+):(?P<tag>[\w.-]+)"
+    r"@(?P<digest>sha256:[0-9a-f]{64})\s+AS\s+java\s*$",
+    re.I,
 )
+#: Docker Hub's answer for an official image's tag: its `digest` is the multi-architecture index's.
+HUB_TAG = "https://hub.docker.com/v2/repositories/library/{repo}/tags/{tag}"
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def version_key(version: str) -> tuple[tuple[int, ...], int]:
@@ -61,6 +69,16 @@ def version_key(version: str) -> tuple[tuple[int, ...], int]:
 def declared_version(dockerfile: str) -> str | None:
     """The label's value, read as `licence-check` reads the licence labels (`label_pairs`)."""
     found = [value for key, value in label_pairs(dockerfile) if key == LABEL]
+    return found[0] if len(found) == 1 else None
+
+
+def java_stage(dockerfile: str) -> tuple[str, str, str] | None:
+    """The Java stage's (repository, tag, digest), read from the Dockerfile's instructions."""
+    found = [
+        m.group("repo", "tag", "digest")
+        for m in map(JAVA_STAGE.match, _instructions(dockerfile))
+        if m
+    ]
     return found[0] if len(found) == 1 else None
 
 
@@ -79,13 +97,13 @@ def build_version(java_version: str) -> str | None:
 Runtime = tuple[str, str]  # (/opt/java/release, java -version's output)
 
 
-def problems(dockerfile: str, runtime: Runtime | None, latest: list[str] | None) -> list[str]:
+def problems(dockerfile: str, runtime: Runtime | None, current: str | None) -> list[str]:
     """Every reason the image's runtime fails, in words; none when it passes."""
     declared = declared_version(dockerfile)
     if declared is None:
         return ["the api Dockerfile declares no single org.ospreyflow.runtime.java.version label"]
     try:
-        pinned = version_key(declared)
+        version_key(declared)  # the label of Temurin's shape, or refused
     except ValueError as exc:
         return [f"the api Dockerfile's java version label: {exc}"]
     found: list[str] = []
@@ -101,24 +119,18 @@ def problems(dockerfile: str, runtime: Runtime | None, latest: list[str] | None)
             found.append("the image's java -version names no single build")
         elif running != declared:
             found.append(f"the image runs Java {running}, its Dockerfile declares {declared}")
-    if latest is not None:
-        unshaped = [name for name in latest if not _is_version(name)]
-        if not latest:
-            found.append("Adoptium named no Temurin 21 release")
-        elif unshaped:
-            found.append(f"Adoptium named a release of no Temurin shape: {unshaped[0]!r}")
-        else:
-            newest = max(latest, key=version_key)
-            if version_key(newest) > pinned:
-                found.append(
-                    f"Temurin {newest.removeprefix('jdk-')} is out and the image pins {declared}: "
-                    "repin the api Dockerfile's java stage by digest and its label"
-                )
+    if current is not None:
+        stage = java_stage(dockerfile)
+        if stage is None:
+            found.append("the api Dockerfile has no single Java stage pinned by digest")
+        elif not DIGEST.match(current):
+            found.append(f"Docker Hub named no digest for {stage[0]}:{stage[1]}: {current!r}")
+        elif current != stage[2]:
+            found.append(
+                f"{stage[0]}:{stage[1]} now resolves to {current} and the image pins {stage[2]}: "
+                "repin the api Dockerfile's java stage by digest and its label"
+            )
     return found
-
-
-def _is_version(name: object) -> bool:
-    return isinstance(name, str) and VERSION.match(name.removeprefix("jdk-")) is not None
 
 
 def _image_runtime(image: str) -> Runtime:
@@ -131,24 +143,28 @@ def _image_runtime(image: str) -> Runtime:
     return run("cat", "/opt/java/release").stdout, run("java", "-version").stderr
 
 
-def _latest() -> list[str]:
-    """Adoptium's release names. Its front refuses Python's own User-Agent (403), so a client name
-    is sent. An answer of any other shape raises, and `main` refuses it."""
-    request = urllib.request.Request(
-        ADOPTIUM, headers={"User-Agent": "ospreyflow-java-runtime-check"}
-    )
+def _current(dockerfile: str) -> str:
+    """The digest the Dockerfile's Java tag resolves to on Docker Hub now. An answer of any other
+    shape raises, and `main` refuses it; with no pinned Java stage there is nothing to ask."""
+    stage = java_stage(dockerfile)
+    if stage is None:
+        return ""
+    url = HUB_TAG.format(repo=stage[0], tag=stage[1])
+    request = urllib.request.Request(url, headers={"User-Agent": "ospreyflow-java-runtime-check"})
     with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 (a fixed https URL)
-        releases = json.load(response)["releases"]
-    if not isinstance(releases, list):
-        raise ValueError(f"releases is {type(releases).__name__}, not a list")
-    return releases
+        digest = json.load(response)["digest"]
+    if not isinstance(digest, str):
+        raise ValueError(f"digest is {type(digest).__name__}, not a string")
+    return digest
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m tools.java_runtime_check")
     parser.add_argument("--dockerfile", type=Path, default=DOCKERFILE)
     parser.add_argument("--image", help="a built api image whose runtime is read")
-    parser.add_argument("--latest", action="store_true", help="compare with Adoptium's newest")
+    parser.add_argument(
+        "--current", action="store_true", help="compare the pin with its tag's digest now"
+    )
     args = parser.parse_args(argv)
     # Whatever stops a read (no daemon, no such image, a network failure, a truncated or reshaped
     # answer) is said in words and fails the check: an unread runtime or answer never passes.
@@ -157,18 +173,20 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 (every failure is a refusal)
         print(f"java-runtime-check: the image's runtime could not be read: {exc}", file=sys.stderr)
         return 1
+    dockerfile = args.dockerfile.read_text()
     try:
-        latest = _latest() if args.latest else None
+        current = _current(dockerfile) if args.current else None
     except Exception as exc:  # noqa: BLE001 (every failure is a refusal)
-        print(f"java-runtime-check: Adoptium could not be read: {exc!r}", file=sys.stderr)
+        print(f"java-runtime-check: Docker Hub could not be read: {exc!r}", file=sys.stderr)
         return 1
-    found = problems(args.dockerfile.read_text(), release, latest)
+    found = problems(dockerfile, release, current)
     for line in found:
         print(f"java-runtime-check: {line}", file=sys.stderr)
     if not found:
-        print(f"java-runtime-check: Java {declared_version(args.dockerfile.read_text())} declared"
-              + (", the image runs it" if release is not None else "")
-              + (", Temurin 21's newest" if latest is not None else ""))  # fmt: skip
+        said = [f"Java {declared_version(dockerfile)} declared"]
+        said += ["the image runs it"] * (release is not None)
+        said += ["pinned at its tag's current digest"] * (current is not None)
+        print("java-runtime-check: " + ", ".join(said))
     return 1 if found else 0
 
 
