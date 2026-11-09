@@ -9025,7 +9025,7 @@ async def add_admin_connection(
     try:
         refuse_connection_hosts(body.settings)
     except ConnectorRefused as refused:
-        raise _connector_refused(refused) from refused
+        raise _connector_refused(refused, principal) from refused
     try:
         made = await sources.add_connection(body, principal)
     except SecretInUseError as exc:
@@ -9907,18 +9907,18 @@ async def register_dataset_source(
     try:
         connection = await sources.connection(body.connection_id)
     except UnknownConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"error": "unknown_connection", "detail": "There is no such connection."},
-        ) from exc
+        raise _no_such_connection() from exc
     if connection.kind != "files":
         try:
             refuse_unbound(connection, dataset_id)
         except ConnectorRefused as refused:
+            # Answered as an unknown connection is: another dataset's connection is not
+            # confirmed to exist (Amendment 13 decision 1; the orchestrator's review of
+            # Amendment 15, item 12).
             await _audit_refused_read(audit, principal, dataset_id, body.connection_id, refused)
-            raise _connector_refused(refused) from refused
+            raise _no_such_connection() from refused
         made = await _register_through_connection(
-            dataset_id, body, connection, request, principal, sources, studio_recipes
+            dataset_id, body, connection, request, principal, sources, studio_recipes, audit
         )
         await audit.record(
             principal=principal,
@@ -9983,11 +9983,31 @@ async def _audit_refused_read(
     )  # fmt: skip
 
 
-def _connector_refused(refused: ConnectorRefused) -> HTTPException:
+#: What a source author is told when a read through a connection is refused: fixed words, never
+#: the connection's host, address, schemas or anything else of its settings (Amendment 13
+#: decision 7; the orchestrator's review of Amendment 15, item 1). The refusal's own words are
+#: audited, and an administrator, who may see the connection's settings, is given them.
+READ_REFUSED_FOR_AUTHORS = (
+    "The read through this connection was refused, and nothing was read. An administrator can see "
+    "why: Test connection in Admin › Connections, or the audit log."
+)
+
+
+def _no_such_connection() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail={"error": "not_found", "detail": "There is no such connection."},
+    )
+
+
+def _connector_refused(refused: ConnectorRefused, principal: Principal) -> HTTPException:
+    """A refused connector read: its own words for an administrator, fixed words for anyone else."""
+    administrator = Right.ADMINISTER_SYSTEM in rights_for(principal.roles)
     return HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail={"error": "read_refused", "detail": str(refused)},
-    )
+        detail={"error": "read_refused",
+                "detail": str(refused) if administrator else READ_REFUSED_FOR_AUTHORS},
+    )  # fmt: skip
 
 
 async def _register_through_connection(
@@ -9998,6 +10018,7 @@ async def _register_through_connection(
     principal: Principal,
     sources: SourceStore,
     studio_recipes: StudioRecipeStore,
+    audit: AuditWriter,
 ) -> SourceTable:
     """A non-file source (ADR-140 Amendment 13): every check first, then one read into its own new
     file in the dataset's folder, then the source registered on that file; if registering is
@@ -10012,7 +10033,11 @@ async def _register_through_connection(
     try:
         target = source_file(dataset_id, body.location)
     except ConnectorRefused as refused:
-        raise _connector_refused(refused) from refused
+        # The source's own name, which the author wrote: nothing of the connection's in the words.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "source_name_refused", "detail": str(refused)},
+        ) from refused
     registered = {s.location for s in await sources.list_for(dataset_id)}
     if target.exists() or str(target) in registered:
         raise HTTPException(
@@ -10032,7 +10057,8 @@ async def _register_through_connection(
             readers=get_connector_readers(request),
         )  # fmt: skip
     except ConnectorRefused as refused:
-        raise _connector_refused(refused) from refused
+        await _audit_refused_read(audit, principal, dataset_id, connection.id, refused)
+        raise _connector_refused(refused, principal) from refused
     try:
         made = await sources.register(dataset_id, body, principal)
     except SourceAlreadyRegisteredError as exc:
@@ -10068,10 +10094,13 @@ async def read_connector_source(
     try:
         connection = await sources.connection(source.connection_id)
     except UnknownConnectionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": "not_found", "detail": "There is no such connection."},
-        ) from exc
+        raise _no_such_connection() from exc
+    if connection.kind != "files":
+        try:
+            refuse_unbound(connection, dataset_id)
+        except ConnectorRefused as refused:
+            await _audit_refused_read(audit, principal, dataset_id, source.connection_id, refused)
+            raise _no_such_connection() from refused
     if connection.kind == "files":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -10086,7 +10115,7 @@ async def read_connector_source(
         )  # fmt: skip
     except ConnectorRefused as refused:
         await _audit_refused_read(audit, principal, dataset_id, source.connection_id, refused)
-        raise _connector_refused(refused) from refused
+        raise _connector_refused(refused, principal) from refused
     await sources.set_cursor(source_id, rows.cursor)
     words = (
         f"{len(rows.rows)} rows read into {file.name}"

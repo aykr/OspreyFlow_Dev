@@ -28,7 +28,7 @@ from typing import Any
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from services.api.app import app
+from services.api.app import READ_REFUSED_FOR_AUTHORS, app
 from services.api.connector_reads import Readers
 from services.api.datasets import Dataset, InMemoryDatasetStore
 from services.api.sources import InMemorySourceStore
@@ -108,6 +108,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNam
     )
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(root))
     monkeypatch.setenv("OSPREY_CONNECTION_SECRET_TELCO", TOKEN)
+    monkeypatch.setenv("OSPREY_CONNECTOR_SECRETS", "TELCO")  # declared (Amendment 15)
     # No lookup leaves the machine: `sneaky.example` resolves inside, everything else to nothing.
     from services.api import connector_reads
 
@@ -295,7 +296,14 @@ def test_a_source_whose_first_read_is_refused_is_not_registered(world: SimpleNam
     off = _register(
         world, connection_id, {"kind": "api", "path": "/v1/numbers", "records_at": "data"}
     )
-    assert off.status_code == 422 and "egress allow-list" in off.text
+    # A source author is told fixed words, never the connection's host or why (Amendment 13
+    # decision 7; the orchestrator's review of Amendment 15, item 1); the audit holds the reason.
+    assert off.status_code == 422, off.text
+    assert off.json()["detail"]["detail"] == READ_REFUSED_FOR_AUTHORS
+    for leak in ("egress allow-list", "telco.example", "93.184.215.14", "OSPREY_CONNECTOR_EGRESS"):
+        assert leak not in off.text
+    assert any("egress allow-list" in str(e["resolved_query"].get("why", ""))
+               for e in world.audit.entries)  # fmt: skip
     assert world.sources._sources == {}
     assert list((world.root / "uploaded" / "ds-a").iterdir()) == []
 

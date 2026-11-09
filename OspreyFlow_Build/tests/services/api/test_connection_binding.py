@@ -91,6 +91,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNam
         (root / "uploaded" / d).mkdir(parents=True)
     monkeypatch.setenv("OSPREY_INGEST_ROOT", str(root))
     monkeypatch.setenv("OSPREY_CONNECTION_SECRET_TELCO_A", TOKEN)
+    monkeypatch.setenv("OSPREY_CONNECTOR_SECRETS", "TELCO_A")  # declared (Amendment 15)
     monkeypatch.setattr(connector_reads, "resolve_host", lambda host: ["93.184.215.14"])
     datasets = InMemoryDatasetStore()
     for d in ("ds-a", "ds-b"):
@@ -133,7 +134,7 @@ def test_an_author_of_another_dataset_cannot_register_through_its_connection(
 ) -> None:
     connection_id = _connection(world).json()["id"]
     refused = _register(world, "ds-b", connection_id, "author_b")
-    assert refused.status_code == 422 and "not bound to this dataset" in refused.text
+    assert refused.status_code == 404 and "not bound" not in refused.text
     assert list((world.root / "uploaded" / "ds-b").iterdir()) == []
     assert world.sources._sources == {}
     allowed = _register(world, "ds-a", connection_id, "author_a")
@@ -149,7 +150,7 @@ def test_refresh_now_through_an_unbound_connection_is_refused(world: SimpleNames
     world.sources._connections[connection_id] = bound.model_copy(update={"datasets": ["ds-b"]})
     refused = world.client.post(f"/v1/datasets/ds-a/sources/{made['id']}/read",
                                 headers=_as("author_a"))  # fmt: skip
-    assert refused.status_code == 422 and "not bound to this dataset" in refused.text
+    assert refused.status_code == 404 and "not bound" not in refused.text
     assert file.read_text() == held
 
 
@@ -187,10 +188,10 @@ def test_an_unknown_connection_is_404_and_a_refused_read_is_audited_without_path
                                 headers=_as("author_a"))  # fmt: skip
     assert unknown.status_code == 404, unknown.text
     refused = _register(world, "ds-b", "nope", "author_b")
-    assert refused.status_code == 422
+    assert refused.status_code == 404
     other = _connection(world, secret="TELCO_B", host="other.example").json()["id"]
     bad = _register(world, "ds-b", other, "author_b")
-    assert bad.status_code == 422
+    assert bad.status_code == 404
     refusals = [e for e in world.audit.entries if e["action"] == "connector_read_refused"]
     assert [e["resolved_query"]["dataset_id"] for e in refusals] == ["ds-b"]
     assert str(world.root) not in json.dumps([e.get("resolved_query") for e in world.audit.entries])
@@ -231,3 +232,23 @@ def test_a_source_author_is_shown_only_connections_bound_to_a_dataset_they_autho
     _connection(world, secret="TELCO_B", host="other.example", datasets=["ds-a", "ds-b"])
     assert [c["name"] for c in listed("author_b")] == ["Telco TELCO_B other.example"]
     assert all(not c.get("datasets") for c in listed("author_b"))
+
+
+def test_an_unbound_connection_answers_as_an_unknown_one(world: SimpleNamespace) -> None:
+    """Amendment 13 decision 1, the orchestrator's review of Amendment 15, item 12: another
+    dataset's connection is not confirmed to exist. Registering through it and Refresh now through
+    it answer exactly as a connection that does not exist does, status and body alike."""
+    connection_id = _connection(world).json()["id"]
+    unbound = _register(world, "ds-b", connection_id, "author_b")
+    unknown = _register(world, "ds-b", "no-such-connection", "author_b")
+    assert (unbound.status_code, unbound.json()) == (unknown.status_code, unknown.json())
+    assert unbound.status_code == 404
+    made = _register(world, "ds-a", connection_id, "author_a").json()
+    url = f"/v1/datasets/ds-a/sources/{made['id']}/read"
+    bound = world.sources._connections[connection_id]
+    world.sources._connections[connection_id] = bound.model_copy(update={"datasets": ["ds-b"]})
+    rebound = world.client.post(url, headers=_as("author_a"))
+    del world.sources._connections[connection_id]
+    gone = world.client.post(url, headers=_as("author_a"))
+    assert (rebound.status_code, rebound.json()) == (gone.status_code, gone.json())
+    assert rebound.status_code == 404
