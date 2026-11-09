@@ -213,7 +213,7 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
   const [teams, setTeams] = useState<AlertTeam[]>([]);
   useEffect(() => {
     listAlertTeams(api)
-      .then(setTeams)
+      .then((found) => setTeams(Array.isArray(found) ? found : []))
       .catch(() => setTeams([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.apiBaseUrl, props.bearerToken, props.investigationId]);

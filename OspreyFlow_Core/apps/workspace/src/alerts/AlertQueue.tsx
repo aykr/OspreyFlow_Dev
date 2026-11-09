@@ -614,7 +614,7 @@ function LeadTools(props: {
   const [why, setWhy] = useState("");
   useEffect(() => {
     listAlertTeams(api)
-      .then((teams) => setMembers(teams.find((t) => t.role_id === props.team)?.members ?? []))
+      .then((teams) => setMembers((Array.isArray(teams) ? teams : []).find((t) => t.role_id === props.team)?.members ?? []))
       .catch(() => setMembers([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.apiBaseUrl, api.bearerToken, api.investigationId, props.team]);
