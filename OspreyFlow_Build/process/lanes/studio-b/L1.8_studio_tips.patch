@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio-harness.tsx b/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio-harness.tsx
-index db80e25..c072ece 100644
+index db80e25..3ea15fa 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio-harness.tsx
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio-harness.tsx
 @@ -190,6 +190,9 @@ if (startParams.get("pipeline") === "reports-map")
@@ -18,12 +18,12 @@ index db80e25..c072ece 100644
          onOpenCase={setCaseId}
 -        rights={new Set(["revert_loads"])}
 +        // The rights the harness's routes grant, so the Studio offers what they would take (L1.8).
-+        rights={NO_RIGHTS ? new Set() : new Set([...RIGHTS, "revert_loads", "add_ingest_files", "load_screening_lists", "accept_types"])}
++        rights={NO_RIGHTS ? new Set() : new Set([...RIGHTS, "revert_loads", "add_ingest_files", "load_screening_lists", "accept_types", "read_held_rows", "decide_held_rows"])}
          username="engineer-1"
        />
        <p role="status" aria-label="Case the Studio works through">{caseId}</p>
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts
-index 94432d7..3f7ab54 100644
+index 94432d7..9cc05d5 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts
 @@ -664,8 +664,15 @@ test("a graph Preview is refused in words to a person without the right to test"
@@ -38,7 +38,7 @@ index 94432d7..3f7ab54 100644
 +  await run.focus();
 +  await expect(run).toBeFocused();
 +  await expect(run).toHaveAttribute("aria-disabled", "true");
-+  await expect(run).toHaveAccessibleDescription(/^You need Verify pipelines; the Data Engineer and Source author roles have it\./);
++  await expect(run).toHaveAccessibleDescription(/^You need Verify pipelines; the Data Engineer role has it\./);
 +  await page.keyboard.press("Enter");
 +  expect((await asked(page)).some((a) => a.path.endsWith("/preview-graph"))).toBe(false);
  });
@@ -78,7 +78,7 @@ index 7bf6c10..66ac3c7 100644
  );
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/studio-tips.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/studio-tips.spec.ts
 new file mode 100644
-index 0000000..c4d4130
+index 0000000..ef4c6cb
 --- /dev/null
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/studio-tips.spec.ts
 @@ -0,0 +1,62 @@
@@ -119,7 +119,7 @@ index 0000000..c4d4130
 +  await expect(register).toBeFocused();
 +  await expect(register).toHaveAttribute("aria-disabled", "true");
 +  await expect(register).toHaveAccessibleDescription(
-+    "You need Add ingest files; the Analyst, Data Engineer and Source author roles have it. Ask an administrator to give you one.",
++    "You need Add ingest files; the Analyst and Data Engineer roles have it. Ask an administrator to give you one.",
 +  );
 +  await page.keyboard.press("Enter");
 +  await page.keyboard.press("Space");
@@ -144,8 +144,37 @@ index 0000000..c4d4130
 +test("every registered Studio tips action has its own proving test case above", () => {
 +  assertAllCovered("STUDIO_TIPS_ACTIONS", STUDIO_TIPS_ACTIONS);
 +});
+diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/ConnectScreen.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/ConnectScreen.tsx
+index f4bdbb6..7df6da6 100644
+--- a/OspreyFlow_Core/apps/workspace/src/ingest/ConnectScreen.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/ingest/ConnectScreen.tsx
+@@ -45,6 +45,7 @@ import {
+   type HandlingScheme,
+   type IngestSourceListing,
+ } from "./api";
++import { RightButton } from "./studio/rightsGate";
+ 
+ export interface ConnectScreenProps {
+   apiBaseUrl: string;
+@@ -536,13 +537,14 @@ export function ConnectScreen({
+                   if (file) void handleChosenFile(file);
+                 }}
+               />
+-              <Button
++              <RightButton
++                right="add_ingest_files"
+                 variant="primary"
+                 disabled={uploading}
+                 onClick={() => fileInput.current?.click()}
+               >
+                 {uploading ? "Uploading…" : "Choose file…"}
+-              </Button>
++              </RightButton>
+               <span style={{ color: "var(--text-tertiary)" }}>From your computer</span>
+             </div>
+             {uploadError ? (
 diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/IngestStudio.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/IngestStudio.tsx
-index c8f81c4..44df4b7 100644
+index c8f81c4..f1c0e25 100644
 --- a/OspreyFlow_Core/apps/workspace/src/ingest/IngestStudio.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/ingest/IngestStudio.tsx
 @@ -5,8 +5,11 @@
@@ -204,16 +233,21 @@ index c8f81c4..44df4b7 100644
    const data = useStudioData(apiBaseUrl, bearerToken, investigationId);
    // Read again when the Sources tab registers or edits one, so the strip counts what the tab lists.
    const [sourcesGeneration, setSourcesGeneration] = useState(0);
-@@ -104,6 +114,8 @@ function Studio({
+@@ -104,8 +114,12 @@ function Studio({
      }
    }
  
-+  if (helpOpen) return <RolesHelpPage backTo="the Ingest Studio" onBack={() => setHelpOpen(false)} />;
-+
++  // The help page is drawn over the Studio, never instead of it: an open pipeline, map or form keeps
++  // what was typed while the page is read (the lane review of L1.8).
    return (
-     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
++    <>
++    {helpOpen && <RolesHelpPage backTo="the Ingest Studio" onBack={() => setHelpOpen(false)} />}
++    <div hidden={helpOpen} style={{ display: helpOpen ? "none" : "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
        <div
-@@ -131,13 +143,28 @@ function Studio({
+         style={{
+           display: "flex",
+@@ -131,13 +145,28 @@ function Studio({
            <span className="label">{`Working through the case “${servingCase.name}”: what loads here goes into ${datasetName}.`}</span>
          )}
          {problem && <span role="alert">{problem}</span>}
@@ -243,6 +277,13 @@ index c8f81c4..44df4b7 100644
          {place === "sources" && (
            <SourcesTab
              apiBaseUrl={apiBaseUrl}
+@@ -168,5 +197,6 @@ function Studio({
+         )}
+       </div>
+     </div>
++    </>
+   );
+ }
 diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/checks/ChecksScreen.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/checks/ChecksScreen.tsx
 index a7d0ce5..555d518 100644
 --- a/OspreyFlow_Core/apps/workspace/src/ingest/checks/ChecksScreen.tsx
@@ -323,18 +364,22 @@ index 5443e9d..26eda75 100644
        {problem && <p role="alert">{problem}</p>}
        <section aria-label="Pipelines" style={{ display: "grid", gap: "var(--sp-4)" }}>
 diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx
-index 4d2d2b5..b500818 100644
+index 4d2d2b5..5ff7f2e 100644
 --- a/OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx
-@@ -35,6 +35,7 @@ import {
+@@ -35,6 +35,11 @@ import {
  } from "../api";
  import { DEFAULT_TIMEZONE, ScheduleEditor } from "./ScheduleEditor";
  import { choiceOf, cronOf, type ScheduleChoice } from "./scheduleChoice";
 +import { RightButton } from "../studio/rightsGate";
++
++/** A deployed pipeline's schedule: its routes check `schedule_pipelines` and the source approver's studio
++ * role, which `publish_pipelines` gives (`require_studio_role`), so both are asked (the lane review of L1.8). */
++const SCHEDULE_RIGHTS = ["schedule_pipelines", "publish_pipelines"] as const;
  
  /** The run route answers one of two shapes; both carry index signatures in the generated types,
   * so `in` cannot discriminate them — a pipeline run is the one whose `branches` is a real list. */
-@@ -471,38 +472,38 @@ export function PublishScreen({
+@@ -471,38 +476,38 @@ export function PublishScreen({
  
        <div style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
          {mode === "deploy" && status === "draft" && draft && (
@@ -353,14 +398,14 @@ index 4d2d2b5..b500818 100644
          )}
          {mode === "operate" && canEditSchedule && (
 -          <Button onClick={() => void handleUpdateSchedule()} disabled={busy}>
-+          <RightButton right="schedule_pipelines" onClick={() => void handleUpdateSchedule()} disabled={busy}>
++          <RightButton right={SCHEDULE_RIGHTS} onClick={() => void handleUpdateSchedule()} disabled={busy}>
              {busy ? "Saving…" : "Update schedule"}
 -          </Button>
 +          </RightButton>
          )}
          {mode === "operate" && canEditSchedule && (draft?.schedule_cron || draft?.schedule_watch) && (
 -          <Button onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
-+          <RightButton right="schedule_pipelines" onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
++          <RightButton right={SCHEDULE_RIGHTS} onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
              {draft.schedule_paused ? "Resume schedule" : "Pause schedule"}
 -          </Button>
 +          </RightButton>
@@ -386,7 +431,7 @@ index 4d2d2b5..b500818 100644
        </div>
  
 diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/runs/RunsTab.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/runs/RunsTab.tsx
-index 16365f1..133e704 100644
+index 16365f1..6e9a180 100644
 --- a/OspreyFlow_Core/apps/workspace/src/ingest/runs/RunsTab.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/ingest/runs/RunsTab.tsx
 @@ -17,6 +17,7 @@ import { PublishScreen } from "../publish/PublishScreen";
@@ -397,19 +442,16 @@ index 16365f1..133e704 100644
  
  /** How many days the grid shows, today last (the prototype's nine). */
  export const GRID_DAYS = 9;
-@@ -108,9 +109,9 @@ export function RunsTab(props: RunsTabProps) {
+@@ -108,6 +109,8 @@ export function RunsTab(props: RunsTabProps) {
              ))}
            </Select>
          </label>
--        <Button disabled={!chosen} onClick={() => setOperating(chosen)}>
-+        <RightButton right="run_pipelines" disabled={!chosen} onClick={() => setOperating(chosen)}>
++        {/* Opens the controls, where Run now and the schedule each say why not on their own: a holder of
++            either right needs this way in (the lane review of L1.8). */}
+         <Button disabled={!chosen} onClick={() => setOperating(chosen)}>
            Run now or schedule
--        </Button>
-+        </RightButton>
-         {/* A watched file loads a minute after it settles (ADR-110 Amendment 4); this reads the
-             ledger again to show it, without leaving the tab. */}
-         <Button onClick={props.onChanged}>Read the runs again</Button>
-@@ -212,6 +213,8 @@ export function RunsTab(props: RunsTabProps) {
+         </Button>
+@@ -212,9 +215,11 @@ export function RunsTab(props: RunsTabProps) {
                it takes back is put back while it works.
              </p>
            )}
@@ -417,9 +459,13 @@ index 16365f1..133e704 100644
 +          {!props.canRevert && selectedCell.runs.some((r) => r.load_id) && <WhyNotLine right="revert_loads" />}
            {selectedCell.runs.some((r) => (r.rows_held ?? 0) > 0) && (
              <div>
-               <Button onClick={() => setShowHeld((shown) => !shown)}>{showHeld ? "Hide held rows" : "Open held rows"}</Button>
+-              <Button onClick={() => setShowHeld((shown) => !shown)}>{showHeld ? "Hide held rows" : "Open held rows"}</Button>
++              <RightButton right="read_held_rows" onClick={() => setShowHeld((shown) => !shown)}>{showHeld ? "Hide held rows" : "Open held rows"}</RightButton>
+             </div>
+           )}
+           {showHeld && (
 diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/sources/ScreeningLists.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/sources/ScreeningLists.tsx
-index eb95028..cf05e8b 100644
+index eb95028..2555048 100644
 --- a/OspreyFlow_Core/apps/workspace/src/ingest/sources/ScreeningLists.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/ingest/sources/ScreeningLists.tsx
 @@ -30,6 +30,7 @@ import {
@@ -450,6 +496,18 @@ index eb95028..cf05e8b 100644
        </div>
        <p className="label" style={{ margin: 0 }}>
          Each list is imported once for the deployment. This dataset&apos;s rules and lookups read only the lists it
+@@ -229,7 +234,10 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
+         />
+       ) : (
+         <div>
+-          <Button onClick={() => setImportingOwn(true)}>Import rows for one of this dataset&apos;s lists</Button>
++          {/* Its form reads the lists the dataset reads (edit_pipelines); the import adds the rows (add_ingest_files). */}
++          <RightButton right={["add_ingest_files", "edit_pipelines"]} onClick={() => setImportingOwn(true)}>
++            Import rows for one of this dataset&apos;s lists
++          </RightButton>
+         </div>
+       )}
+     </section>
 diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/sources/SourcePage.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/sources/SourcePage.tsx
 index 13930f5..5761634 100644
 --- a/OspreyFlow_Core/apps/workspace/src/ingest/sources/SourcePage.tsx
@@ -543,10 +601,10 @@ index 96c1b96..f2a7f83 100644
        </section>
 diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.test.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.test.tsx
 new file mode 100644
-index 0000000..030c6d5
+index 0000000..384fa77
 --- /dev/null
 +++ b/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.test.tsx
-@@ -0,0 +1,251 @@
+@@ -0,0 +1,291 @@
 +// @vitest-environment jsdom
 +// ADR-145 Amendment 4 decision 12 (L1.8): every Studio action a person can't take says why and who can,
 +// never only greyed out. What would fail if it were wrong:
@@ -682,6 +740,17 @@ index 0000000..030c6d5
 +    pressEverything(again);
 +  });
 +
++  it("on the schedule, for someone who may schedule but not deploy (its routes take both)", async () => {
++    const calls = serve(recipe(PUBLISHED));
++    as(new Set(["schedule_pipelines", "run_pipelines"]),
++      <PublishScreen apiBaseUrl="http://api" bearerToken="t" recipeId="r1" investigationId="inv-1" onBack={() => undefined} mode="operate" />);  // prettier-ignore
++    await refused("Update schedule", "Publish pipelines");
++    await refused("Pause schedule", "Publish pipelines");
++    expect((await screen.findByRole("button", { name: "Run now" })).hasAttribute("aria-disabled")).toBe(false);
++    for (const name of ["Update schedule", "Pause schedule"]) fireEvent.click(screen.getByRole("button", { name }));
++    expect(calls.filter(isWrite)).toEqual([]);
++  });
++
 +  it("on Test and on the load rules", async () => {
 +    const calls = serve((path) => (path.endsWith("/v1/ontology") ? { entity_types: [], edge_types: [] } : recipe(DRAFT)(path)));
 +    as(NONE, <VerifyScreen apiBaseUrl="http://api" investigationId="inv-1" bearerToken="t" recipeId="r1" onBack={() => undefined} />);
@@ -719,17 +788,33 @@ index 0000000..030c6d5
 +    });
 +    as(NONE, <SourcesTab apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" datasetId="ds-a" onOpenPipelines={() => undefined} />);
 +    // The tab's own line, beside each button's tip.
-+    const lines = await screen.findAllByText(/^You need Add ingest files; the Analyst, Data Engineer and Source author roles have it/);
++    const lines = await screen.findAllByText(/^You need Add ingest files; the Analyst and Data Engineer roles have it/);
 +    expect(lines.some((el) => el.tagName === "P")).toBe(true);
 +    await refused("Register a source", "Add ingest files");
 +    await refused("Add files", "Add ingest files");
 +    await refused("Import a list", "Load screening lists");
++    await refused("Import rows for one of this dataset's lists", "Add ingest files");
 +    expect(calls.filter(isWrite)).toEqual([]);
 +    fireEvent.click(await screen.findByRole("button", { name: /Open source Visits/ }));
 +    await refused("Edit governance", "Edit pipelines");
 +    await refused("Pause the refresh", "Schedule pipelines");
 +    await refused("Refresh now", "Add ingest files");
 +    pressEverything(calls);
++  });
++
++  it("on a pipeline's source: uploading a file", async () => {
++    const { ConnectScreen } = await vi.importActual<typeof import("../ConnectScreen")>("../ConnectScreen");
++    const calls = serve((path) => {
++      if (path === "/v1/ingest/connectors") return [{ id: "generic-csv", label: "CSV file", group: "Generic", structured: true, available: true }];
++      if (path === "/v1/handling-scheme") return { name: "uk", classification: ["OFFICIAL"], handling_codes: {} };
++      if (path.endsWith("/ingest/recipes")) return [];
++      if (path.endsWith("/ingest/source-files")) return { root: "/in", files: [] };
++      return undefined;
++    });
++    as(NONE, <ConnectScreen investigationId="inv-1" apiBaseUrl="http://api" bearerToken="t" />);
++    await refused("Choose file…", "Add ingest files");
++    fireEvent.click(screen.getByRole("button", { name: "Choose file…" }));
++    expect(calls.filter(isWrite)).toEqual([]);
 +  });
 +
 +  it("on a paused source: resuming its refresh", async () => {
@@ -748,10 +833,10 @@ index 0000000..030c6d5
 +    pressEverything(calls);
 +  });
 +
-+  it("on Runs: running or scheduling, and a load's revert", async () => {
++  it("on Runs: a day's held rows, and a load's revert", async () => {
 +    const runs: Record<string, ScheduleRunView[]> = {
 +      r1: [{ run_id: "a", trigger: "manual", started_at: "2026-11-04T09:00:00Z", outcome: "succeeded", run_as: "e",
-+        rows_read: 2, nodes_created: 2, nodes_referenced: 0, rows_rejected: 0, rows_held: 0, load_id: "01LOADA" }],
++        rows_read: 2, nodes_created: 2, nodes_referenced: 0, rows_rejected: 0, rows_held: 1, load_id: "01LOADA" }],
 +    };  // prettier-ignore
 +    const calls = serve(() => undefined);
 +    as(NONE,
@@ -759,10 +844,14 @@ index 0000000..030c6d5
 +        pipelines={[PUBLISHED]} runs={runs} level="editor" canRevert={false} username="e" onChanged={() => undefined}
 +        today={new Date("2026-11-05T12:00:00Z")} />,
 +    );  // prettier-ignore
-+    await refused("Run now or schedule", "Run pipelines");
-+    fireEvent.click(screen.getByRole("button", { name: "PIN calls, 4 Nov: succeeded" }));
++    // Run now or schedule only opens the controls, each of which says why not on its own.
++    expect(screen.getByRole("button", { name: "Run now or schedule" }).hasAttribute("aria-disabled")).toBe(false);
++    fireEvent.click(screen.getByRole("button", { name: /^PIN calls, 4 Nov: / }));
 +    const report = screen.getByRole("region", { name: "Run report" });
 +    expect(within(report).getByText("You need Revert loads; the Administrator and Data Engineer roles have it. Ask an administrator to give you one.")).toBeTruthy();
++    await refused("Open held rows", "Read held rows");
++    fireEvent.click(screen.getByRole("button", { name: "Open held rows" }));
++    expect(screen.queryByText("held-rows-panel")).toBeNull();
 +    expect(calls.filter(isWrite)).toEqual([]);
 +  });
 +
@@ -787,6 +876,15 @@ index 0000000..030c6d5
 +    fireEvent.click(back);
 +    expect(screen.getByRole("tab", { name: "3 Pipelines" })).toBeTruthy();
 +  });
++
++  it("keeps what was typed in the Studio while the help page is read", async () => {
++    serve((path) => (path.endsWith("/recipe-registry") ? [] : []));
++    render(<IngestStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" onOpenCase={() => undefined} rights={EVERY} />);
++    fireEvent.change(await screen.findByRole("textbox", { name: "Pipeline name" }), { target: { value: "Half-typed" } });
++    fireEvent.click(screen.getByRole("button", { name: "Roles, teams and Authors" }));
++    fireEvent.click(screen.getByRole("button", { name: "← Back to the Ingest Studio" }));
++    expect((screen.getByRole("textbox", { name: "Pipeline name" }) as HTMLInputElement).value).toBe("Half-typed");
++  });
 +});
 +
 +describe("a holder of every right", () => {
@@ -800,7 +898,7 @@ index 0000000..030c6d5
 +});
 diff --git a/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.tsx b/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.tsx
 new file mode 100644
-index 0000000..03af7c6
+index 0000000..c3b24c8
 --- /dev/null
 +++ b/OspreyFlow_Core/apps/workspace/src/ingest/studio/rightsGate.tsx
 @@ -0,0 +1,60 @@

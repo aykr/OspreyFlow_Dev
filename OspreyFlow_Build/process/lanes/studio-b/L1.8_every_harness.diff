@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
-index 37df445..c3345ee 100644
+index 37df445..eef9e8c 100644
 --- a/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
 +++ b/OspreyFlow_Core/apps/workspace/a11y/every-harness.spec.ts
 @@ -143,11 +143,16 @@ const EXTRA_STATES: Record<string, string[]> = {
@@ -14,7 +14,7 @@ index 37df445..c3345ee 100644
    // report with its revert command, and the held rows opened from it (Pipelines is the default).
    "ingest-studio-harness.html": [
      "tab=model", "tab=sources", "tab=runs", "tab=runs&cell=1", "tab=runs&cell=1&held=1",
-+    // L1.8: each place, and Test and Deploy, to someone holding no Studio right: why and who can, in words.
++    // L1.8: each place, and a day's run report, to someone holding no Studio right: why and who can, in words.
 +    "rights=none", "rights=none&tab=model", "rights=none&tab=sources", "rights=none&tab=runs&cell=1",
      // ADR-140 Amendment 4: the register wizard's governance step, a source's page, and a source
      // chosen in a pipeline.

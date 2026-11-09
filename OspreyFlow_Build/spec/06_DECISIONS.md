@@ -31005,8 +31005,9 @@ Built in Lane 1 (L1.8).
    why and who can by naming the built-in roles that hold the right. For example: "You need Review
    promotions; the Data Engineer role has it. Ask an administrator to give it to you." With several roles:
    "…; the Data Engineer and Source author roles have it. Ask an administrator to give you one." It never
-   names a person, a role id, or the Super user preset (which is given as three roles). A custom role is an
-   administrator's, so it is not named. Naming the people who hold a right would tell someone who is not an
+   names a person, a role id, a role these words do not name (the Studio's older roles, which ADR-112
+   folded into the Data Engineer), or the Super user preset (which is given as three roles). A custom role
+   is an administrator's, so it is not named. Naming the people who hold a right would tell someone who is not an
    administrator who holds it, which today only `manage_people` may read; the owner ruled against it, so
    Amendment 4 decision 12's example of named people is closed. No route says who holds a right.
 2. **One source for the words.** `help/roles.ts` gains `rolesHolding(right)` and `whyNotByRole(right)`. It
@@ -31014,20 +31015,24 @@ Built in Lane 1 (L1.8).
    to the routes, so the words cannot drift from the rights. A right whose id is not its name on screen is
    named in `RIGHT_NAMES`. `edit_target_model` is "Edit domain model" (ADR-140 Amendment 9 decision 1).
 3. **In the Studio, a refused action stays reachable.** Each Studio action whose route checks a right takes
-   it from `ingest/studio/rightsGate.tsx`, 18 buttons in all: Deploy, Deploy and run now, Update and Pause
-   schedule, Reopen, Run now, Run the test, Run preview, Save the load rules, New pipeline, Register a source,
-   Add files, Import a list, Pause or Resume a refresh, Refresh now, Edit governance, Run now or schedule. For
-   a person without the right, the button keeps its focus (`aria-disabled`, never `disabled`). It does nothing
-   when pressed, and its description is the why-and-who words (rule 13). Three whole parts say why in a line
-   instead: the Sources tab, a load's revert command, and the Model tab's proposed link types, whose own panel
-   hides from anyone who cannot accept types. While the person's rights are unknown, every action is offered
-   as before. Either way the route refuses as before (rule 3): this is words, not access control.
+   it from `ingest/studio/rightsGate.tsx`, 20 buttons in all: Deploy, Deploy and run now, Update and Pause
+   schedule (which ask `publish_pipelines` too, since their routes take the source approver's studio role),
+   Reopen, Run now, Run the test, Run preview, Save the load rules, New pipeline, a pipeline's Choose file…,
+   Register a source, Add files, Import a list, Import rows for one of this dataset's lists, Pause or Resume
+   a refresh, Refresh now, Edit governance, and Open held rows. *Run now or schedule* only opens the
+   controls, each of which says why not on its own, so it is not gated. For a person without the right, the
+   button keeps its focus (`aria-disabled`, never `disabled`). It does nothing when pressed, and its
+   description is the why-and-who words (rule 13). Three whole parts say why in a line instead: the Sources
+   tab, a load's revert command, and the Model tab's proposed link types, whose own panel hides from anyone
+   who cannot accept types. While the person's rights are unknown, every action is offered as before.
+   Either way the route refuses as before (rule 3): this is words, not access control.
 4. **The help page opens from the Studio.** *Roles, teams and Authors* opens from a button in the Studio's
-   header, and its way back is focused.
+   header, drawn over the Studio so nothing typed there is lost, and its way back is focused.
 5. **"Target model" never on screen.** `tools/ui_words_check.py` fails on the phrase in the Glass's copy
-   outside comments: in strings, template literals, JSX text across lines, attributes and JSON. It is wired
-   into `make ci` and CI. A right's name comes only through `rightName`, and `rightNames.test.ts` holds it to
-   the same rule.
+   outside comments: in strings, template literals (nested ones too), JSX text across lines, attributes and
+   JSON; its words apart by whitespace, a hyphen or JSX's `{" "}`. It is wired into `make ci` and CI at
+   L1.8's merge (`L1.8_ci_makefile.diff`). It cannot see words computed at run time: a right's name comes
+   through `rightName`, and `rightNames.test.ts` holds it, and Admin › Roles' `rightWords`, to the same rule.
 
 **Tests (shown red first, `process/lanes/studio-b/l1.8/`).** `rightsGate.test.tsx` renders each Studio
 surface with no rights. Every listed action is focusable, `aria-disabled` and described by the words, and
@@ -31039,7 +31044,9 @@ with the button not focusable, with the tip untied from it, with no gate, and wi
 states × dark, light and GOV.UK. `tests/test_ui_words_check.py` puts plants at the Glass's own shapes and was
 red against the real Glass before the wording (four findings).
 
-**Left.** The Studio's review and merge screens' tips arrive
-with those screens (L3.4, and the drawn-dataset merge). The Deploy refusal for a missing *source approver*
-studio role still says the role id in the server's words (`require_studio_role`). That is the Conduit's, and
-outside this step.
+**Left.** The Studio's review and merge screens' tips arrive with those screens (L3.4, and the drawn-dataset
+merge). Held rows' *Release and load* and its pair live in `alerts/HeldRowsPanel.tsx` (the rules lane's).
+The Studio gates the door to them by `read_held_rows`; the decisions inside still answer after the press.
+The Deploy refusal for a missing *source approver* studio role still says the role in the server's words
+(`require_studio_role`); that is the Conduit's, and outside this step. Admin › Roles names rights through
+its own `rightWords` until rules-b's `admin-tips.patch` lands.

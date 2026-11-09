@@ -176,3 +176,60 @@
      × opens *Roles, teams and Authors* from the Studio, and back
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
       Tests  1 failed | 11 passed (12)
+
+# The lane review of L1.8: plants for the gates it named, and for the three whole-part lines. Offline vitest; no stack.
+
+## plant: Run preview (ingest/dag/NodePreview.tsx, gate 0)
+      Tests  14 passed (14)
+
+## plant: Open held rows (ingest/runs/RunsTab.tsx, gate 0)
+     × on Runs: a day's held rows, and a load's revert
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 13 passed (14)
+
+## plant: Import rows for one of this dataset's lists (ingest/sources/ScreeningLists.tsx, gate 1)
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 13 passed (14)
+
+## plant: Choose file… (a pipeline's source upload) (ingest/ConnectScreen.tsx, gate 0)
+     × on a pipeline's source: uploading a file
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 13 passed (14)
+
+## plant: the Sources tab's own line removed (ingest/studio/SourcesTab.tsx)
+     × on Sources: the tab, registering, adding files, importing a list, and a source's own actions
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 13 passed (14)
+
+## plant: the revert's line removed (ingest/runs/RunsTab.tsx)
+     × on Runs: a day's held rows, and a load's revert
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 13 passed (14)
+
+## plant: the Model tab's proposals line removed (the panel shown to all) (ingest/IngestStudio.tsx)
+     × on Model: proposed link types, for someone who cannot accept types
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 13 passed (14)
+
+## plant: the schedule asks schedule_pipelines alone (ingest/publish/PublishScreen.tsx)
+      Tests  14 passed (14)
+
+## restored
+      Tests  14 passed (14)
+
+## plant again, after the schedule-only case was added: the schedule asks schedule_pipelines alone
+     × on the schedule, for someone who may schedule but not deploy (its routes take both)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 14 passed (15)
+
+## plant: Run preview's gate taken out (ingest/dag/NodePreview.tsx), its keyboard case (ingest-studio.spec.ts; the keyboard config's own copy on port 5197, 5185 being another lane's server)
+  ✘  1 keyboard/ingest-studio.spec.ts:663:1 › a graph Preview is refused in words to a person without the right to test
+    Error: expect(locator).toHaveAttribute(expected) failed
+  1 failed
+
+## restored
+      Tests  15 passed (15)
+  1 passed (2.7s)
+
+Note on the first restore line above ("22 passed (22)"): that run took `src/help` whole, so it counted rules-b's own `roles.test.ts` and `RolesHelpPage.test.tsx` (7 cases) beside `rightsGate.test.tsx` (12) and `rightNames.test.ts` (3).

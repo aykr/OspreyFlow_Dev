@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/apps/workspace/src/help/roles.ts b/OspreyFlow_Core/apps/workspace/src/help/roles.ts
-index 180474a..d5907b9 100644
+index 180474a..aab4afa 100644
 --- a/OspreyFlow_Core/apps/workspace/src/help/roles.ts
 +++ b/OspreyFlow_Core/apps/workspace/src/help/roles.ts
 @@ -97,9 +97,18 @@ export const RIGHT_WORDS: Partial<Record<Right, string>> = {
@@ -21,20 +21,21 @@ index 180474a..d5907b9 100644
    const words = right.replace(/_/g, " ");
    return words.charAt(0).toUpperCase() + words.slice(1);
  }
-@@ -132,4 +141,29 @@ export function whyNot(right: Right, holders: readonly string[]): string {
+@@ -132,4 +141,30 @@ export function whyNot(right: Right, holders: readonly string[]): string {
    return `${need}; ${who} ${holders.length === 1 ? "has" : "have"} it.`;
  }
  
 +const RECORDED_RIGHTS = (BY_ROLE as { roles: Record<string, { rights?: string[] }> }).roles;
 +
 +/** The roles that hold `right`, by name, read from `shell/placesByRole.json` (the record
-+ * `test_place_routes.py` holds to the routes, never copied here): each built-in role, worded or said
-+ * by its id; never the Super user preset, which is given as three roles, nor a role standing for one
-+ * right alone. A custom role is an administrator's, and not named here. */
++ * `test_place_routes.py` holds to the routes, never copied here): each built-in role these words name
++ * (`ROLE_WORDS`), never one said by its id (the Studio's older roles, which ADR-112 folded into the Data
++ * Engineer, are not offered), and never the Super user preset, which is given as three roles. A custom
++ * role is an administrator's, and not named here. */
 +export function rolesHolding(right: Right): string[] {
 +  return Object.entries(RECORDED_RIGHTS)
-+    .filter(([key, role]) => key !== "super" && key !== "none" && !key.startsWith("right:") && role.rights?.includes(right))
-+    .map(([key]) => ROLE_WORDS[key]?.name ?? rightName(key))
++    .filter(([key, role]) => key !== "super" && key in SAID_ROLES && role.rights?.includes(right))
++    .map(([key]) => SAID_ROLES[key]!.name)
 +    .sort((a, b) => a.localeCompare(b));
 +}
 +
@@ -53,13 +54,16 @@ index 180474a..d5907b9 100644
  export const HELP_TITLE = "Roles, teams and Authors";
 diff --git a/OspreyFlow_Core/apps/workspace/src/help/rightNames.test.ts b/OspreyFlow_Core/apps/workspace/src/help/rightNames.test.ts
 new file mode 100644
-index 0000000..3fc1b85
+index 0000000..d5a10b0
 --- /dev/null
 +++ b/OspreyFlow_Core/apps/workspace/src/help/rightNames.test.ts
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,68 @@
 +// L1.8: a right's name on screen, and who can, from `roles.ts`. What would fail if each were wrong:
 +// - a right's name saying "target model" where the screens say "domain model" (ADR-140 Amendment 9
 +//   decision 1), as `edit_target_model` did — `every right's name says what the screens say`;
++// - Admin › Roles building a right's name its own way, so "Edit target model" stays on screen there —
++//   `Admin's right names are these` (red until rules-b's `admin-tips.patch`, which makes Admin's
++//   `rightWords` this `rightName`; the lane review of L1.8);
 +// - who-can naming a role id, a person, the Super user preset or a role that does not hold the right —
 +//   `who can is the built-in roles that hold the right, by name`, read from `placesByRole.json`, the
 +//   record `test_place_routes.py` holds to the routes.
@@ -69,6 +73,7 @@ index 0000000..3fc1b85
 +
 +import { describe, expect, it } from "vitest";
 +
++import { rightWords } from "../admin/sections/Roles";
 +import BY_ROLE from "../shell/placesByRole.json";
 +import { rightName, rolesHolding, ROLE_WORDS, whyNotByRole, type Right } from "./roles";
 +
@@ -88,15 +93,22 @@ index 0000000..3fc1b85
 +    expect(rightName("review_promotions")).toBe("Review promotions");
 +  });
 +
++  it("Admin's right names are these", () => {
++    for (const right of DECLARED) expect(rightWords(right)).toBe(rightName(right));
++  });
++
 +  it("who can is the built-in roles that hold the right, by name", () => {
 +    for (const right of DECLARED) {
 +      const holders = Object.entries(RECORDED)
-+        .filter(([key, role]) => key !== "super" && key !== "none" && !key.startsWith("right:") && role.rights?.includes(right))
-+        .map(([key]) => ROLE_WORDS[key]?.name ?? rightName(key));
++        .filter(([key, role]) => key !== "super" && ROLE_WORDS[key] !== undefined && role.rights?.includes(right))
++        .map(([key]) => ROLE_WORDS[key]!.name);
 +      expect(rolesHolding(right).slice().sort()).toEqual(holders.slice().sort());
 +      const words = whyNotByRole(right);
 +      expect(words.startsWith(`You need ${rightName(right)}; `)).toBe(true);
 +      expect(words).not.toMatch(/_|Super user|target model/i);
++      // A name, never an id: every role named is one the words name.
++      const names = new Set(Object.values(ROLE_WORDS).map((r) => r.name));
++      for (const role of rolesHolding(right)) expect(names.has(role)).toBe(true);
 +    }
 +  });
 +
@@ -105,7 +117,10 @@ index 0000000..3fc1b85
 +      "You need Review promotions; the Data Engineer role has it. Ask an administrator to give it to you.",
 +    );
 +    expect(whyNotByRole("edit_pipelines")).toBe(
-+      "You need Edit pipelines; the Data Engineer and Source author roles have it. Ask an administrator to give you one.",
++      "You need Edit pipelines; the Data Engineer role has it. Ask an administrator to give it to you.",
++    );
++    expect(whyNotByRole("revert_loads")).toBe(
++      "You need Revert loads; the Administrator and Data Engineer roles have it. Ask an administrator to give you one.",
 +    );
 +    const nobody = DECLARED.find((r) => rolesHolding(r).length === 0);
 +    if (nobody) expect(whyNotByRole(nobody)).toBe(`You need ${rightName(nobody)}; no built-in role has it. Ask an administrator.`);
