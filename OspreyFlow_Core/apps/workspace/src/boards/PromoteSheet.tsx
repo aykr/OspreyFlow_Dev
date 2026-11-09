@@ -49,7 +49,7 @@ export function SheetChecklist({
                 {item.follows ? " — goes when its ends go" : ""}
               </label>
               {problems.length > 0 && (
-                <p id={`${id}-why`} className={govuk ? "govuk-hint govuk-checkboxes__hint" : "caption board__why"}>
+                <p id={`${id}-why`} className={govuk ? "govuk-checkboxes__hint board__why" : "caption board__why"}>
                   Cannot go: {problems.join(" ")}
                 </p>
               )}
@@ -125,9 +125,13 @@ export function PromoteSheet({ apiBaseUrl, bearerToken, caseId, boardId, govuk, 
         setSheet(answer.value);
         setTicked(startingTicks(answer.value.items ?? []));
       }
-      requestAnimationFrame(() => title.current?.focus());
     });
   }, [apiBaseUrl, bearerToken, caseId, boardId]);
+
+  // Into the sheet once it is drawn, and onto the outcome once sent.
+  useEffect(() => {
+    if (sheet || problem) title.current?.focus();
+  }, [sheet, done, problem]);
 
   const toggle = (itemId: string) =>
     setTicked((held) => {
@@ -146,7 +150,6 @@ export function PromoteSheet({ apiBaseUrl, bearerToken, caseId, boardId, govuk, 
     }
     setDone(answer.value);
     onPromoted(answer.value);
-    requestAnimationFrame(() => title.current?.focus());
   }
 
   const escape = (event: KeyboardEvent) => {

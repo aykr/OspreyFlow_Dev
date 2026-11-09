@@ -81,6 +81,11 @@ export function AnalystPromotions({ apiBaseUrl, bearerToken, datasetId, canRever
     void reload();
   }, [reload]);
 
+  // Into a promotion's details once they are drawn.
+  useEffect(() => {
+    if (open) heading.current?.focus();
+  }, [open]);
+
   async function details(p: Promotion): Promise<void> {
     setProblem(null);
     setRejecting(false);
@@ -91,7 +96,6 @@ export function AnalystPromotions({ apiBaseUrl, bearerToken, datasetId, canRever
       return;
     }
     setOpen(answer.value);
-    requestAnimationFrame(() => heading.current?.focus());
   }
 
   async function decide(approve: boolean): Promise<void> {
@@ -272,6 +276,7 @@ function RemovedCaseLayersPanel({
   const [deleting, setDeleting] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [merged, setMerged] = useState<Promotion | null>(null);
+  const sheetHeading = useRef<HTMLHeadingElement>(null);
 
   const reload = useCallback(async () => {
     const answer = await removedCases(apiBaseUrl, bearerToken, datasetId);
@@ -282,6 +287,11 @@ function RemovedCaseLayersPanel({
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Into the sheet once it is drawn, and onto its outcome once sent.
+  useEffect(() => {
+    if (sheet) sheetHeading.current?.focus();
+  }, [sheet, merged]);
 
   if (!layers || layers.cases.length === 0) return null;
 
@@ -388,7 +398,7 @@ function RemovedCaseLayersPanel({
             if (e.key === "Escape") void closeMerge();
           }}
         >
-          <h4 id="layer-merge-title" className={govuk ? "govuk-heading-s" : "label"}>
+          <h4 id="layer-merge-title" ref={sheetHeading} tabIndex={-1} className={govuk ? "govuk-heading-s" : "label"}>
             {merged ? "Merge sent" : `Merge ${sheet.case_name}'s layer into ${sheet.dataset_name}`}
           </h4>
           {merged ? (

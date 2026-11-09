@@ -90,6 +90,9 @@ const boards: HeldBoard[] = [
 ];
 let decided = false;
 let made = 0;
+// L3.4: what was promoted from a board here, and the promotions themselves.
+const promotedHere = new Set<string>();
+const promotions: Json[] = [];
 
 window.__BOARDS__ = { sent: [], caseMade: null };
 const json = (status: number, body: unknown) =>
@@ -186,7 +189,46 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
     return new Response(png, { status: 200, headers: { "Content-Type": "image/png" } });
   }
+  // L3.4: the board's own promotions, for a reader who may see it.
+  if (tail === "promotions" && method === "GET") return json(200, { promotions: promotions.filter((p) => p.board_id === b.id) });
   if (b.created_by !== reader) return json(403, { error: "not_the_boards_creator", detail: "Only the person who made this board draws on it." });
+  if (tail === "promotion-sheet") {
+    // As the Conduit's sheet: the drawn items not yet promoted, one failing a check and saying why.
+    return json(200, {
+      board_id: b.id, dataset_id: "src", dataset_name: "Prison intel", highest_marking: "OFFICIAL-SENSITIVE",
+      policy: params.get("policy") ?? "author_promotes",
+      items: [
+        ...Object.entries(b.items).filter(([id]) => !promotedHere.has(id)).map(([id, itemId]) => {
+          const node = b.nodes.find((n) => n.id === id)!;
+          const drawn = (node.provenance as Json).drawn as Json;
+          return { item_id: itemId, element_id: id, kind: "node", type: node.type, label: drawn.label, marking: "OFFICIAL", follows: false, problems: [] };
+        }),
+        { item_id: "i-high", element_id: "d-high", kind: "node", type: "Person", label: "Night caller", marking: "SECRET", follows: false,
+          problems: ["Marked SECRET, above Prison intel's highest allowed marking, OFFICIAL-SENSITIVE."] },
+      ],
+      checks: [
+        { name: "marking", passed: false, words: "Every marking within Prison intel's highest allowed, OFFICIAL-SENSITIVE: 1 above it" },
+        { name: "types", passed: true, words: "Every type in Prison intel's model" },
+        { name: "graded", passed: true, words: "Every item graded, with a source" },
+        { name: "ends", passed: true, words: "No link without both its ends: a link whose end does not go stays behind" },
+      ],
+      warnings: decided ? [] : ["M. Mercer looks like a loaded item and has no decision yet: decide Same or Not the same on the board first, or promote it as a separate item."],
+      recorded_as: "One load into Prison intel (trigger analyst_promotion), committed at once (the Author promotes).",
+    });  // prettier-ignore
+  }
+  if (tail === "promotions" && method === "POST") {
+    const ticked = ((body as Json).item_ids as string[]) ?? [];
+    const going = Object.entries(b.items).filter(([, itemId]) => ticked.includes(itemId)).map(([id]) => id);
+    going.forEach((id) => promotedHere.add(id));
+    const left = Object.entries(b.items).filter(([id, itemId]) => !ticked.includes(itemId) && !promotedHere.has(id))
+      .map(([id, itemId]) => ({ item_id: itemId, label: ((b.nodes.find((n) => n.id === id)!.provenance as Json).drawn as Json).label, why: "Not ticked." }));
+    const second = params.get("policy") === "second_person_reviews";
+    const p = { id: `p-${promotions.length + 1}`, load_id: `promotion-${promotions.length + 1}`, trigger: "analyst_promotion", dataset_id: "src",
+      dataset_name: "Prison intel", case_id: "c1", case_name: "Kestrel", board_id: b.id, proposed_by: reader, proposed_by_name: "Alice",
+      proposed_at: at, status: second ? "awaiting_review" : "committed", nodes: going.length, links: 0, left_out: left };  // prettier-ignore
+    promotions.push(p);
+    return json(201, p);
+  }
   if (tail === "share") {
     b.shared = true;
     return json(200, wire(b));
