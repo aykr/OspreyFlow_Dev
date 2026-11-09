@@ -13,6 +13,8 @@
 #   OspreyFlow_Build/scripts/stack_lease.sh ports <lane>                  the export line for the holder's stack
 #   OspreyFlow_Build/scripts/stack_lease.sh remote <lane> -- <command…>   run a command on a remote stack's own host,
 #                                                                          beside its containers (9 November 2026)
+#   OspreyFlow_Build/scripts/stack_lease.sh offline <lane> -- <command…>  the same on the server with no stack: the closed
+#                                                                          ports and no lane, e.g. make -k test SKIP_JS=1
 #   OspreyFlow_Build/scripts/stack_lease.sh remote-log <lane>             follow the lane's last remote run again (after
 #                                                                          a dropped ssh session), exiting with its code
 #
@@ -78,6 +80,62 @@ follow() {
     exit \$(cat \$l/exit 2>/dev/null || echo 255)" || code=$?
   [ "$code" = 255 ] && echo "The ssh session to $h ended before the run did, or the run left no exit code: follow it again with remote-log." >&2
   return "$code"
+}
+# Copy the caller's worktree to <host>:~/osprey-runs/<lane> (only what git tracks or would track; osprey.yaml as
+# committed), make the venv there, and start the command detached in the same relative folder with the given
+# exports, then follow it. Arguments: lane, host, exports, lease lock name (empty for none), stack name, command.
+run_on_host() {
+  local who="$1" h="$2" exports="$3" lockname="$4" s="$5" top rel rroot run rc
+  shift 5
+  rroot="${OSPREY_REMOTE_ROOT:-osprey-runs}/$who"
+  top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not inside a git worktree: run remote from your lane's checkout." >&2; return 1; }
+  rel="$(git rev-parse --show-prefix)"
+  list="$(mktemp)"; trap 'rm -f "$list" "$list.cmd"' EXIT
+  # What git tracks or would track, less the local osprey.yaml (sent as committed, below) and paths gone from disk.
+  ( cd "$top" && git ls-files -co --exclude-standard -z | tr '\0' '\n' \
+      | grep -v -x 'OspreyFlow_Core/osprey.yaml' | while IFS= read -r f; do [ -e "$f" ] && printf '%s\n' "$f"; done ) > "$list"
+  rssh "$h" "mkdir -p $rroot" || { echo "Could not reach $h." >&2; return 1; }
+  rsync -a --files-from="$list" "$top/" "$h:$rroot/" || { echo "Copying the worktree to $h failed." >&2; return 1; }
+  # Remove what the worktree no longer has (never the venv or caches), then the committed osprey.yaml.
+  rssh "$h" "cd $rroot && python3 -c 'import os,sys
+keep=set(sys.stdin.read().splitlines()); keep.add(\"OspreyFlow_Core/osprey.yaml\")
+skip=(\".venv\",\"node_modules\",\".pytest_cache\",\"__pycache__\",\".osprey-lease\",\".git\",\".runs\")
+for d,ds,fs in os.walk(\".\"):
+  ds[:]=[x for x in ds if x not in skip]
+  for f in fs:
+    p=os.path.relpath(os.path.join(d,f))
+    if p not in keep: os.remove(p)'" < "$list" || { echo "Pruning the copy on $h failed." >&2; return 1; }
+  ( cd "$top" && git show HEAD:OspreyFlow_Core/osprey.yaml ) | rssh "$h" "cat > $rroot/OspreyFlow_Core/osprey.yaml"
+  # The lease's info file mirrored for the port guard there; an offline run gets an empty lease directory.
+  if [ -n "$lockname" ]; then
+    rssh "$h" "rm -rf $rroot/.osprey-lease && mkdir -p $rroot/.osprey-lease/$lockname && cat > $rroot/.osprey-lease/$lockname/info" < "$(lock_of "$s")/info"
+  else
+    rssh "$h" "rm -rf $rroot/.osprey-lease && mkdir -p $rroot/.osprey-lease"
+  fi
+  rssh "$h" "cd $rroot/OspreyFlow_Core && ~/.local/bin/uv sync --frozen -q" || { echo "uv sync on $h failed." >&2; return 1; }
+  # The run is started detached on the host and logged there, so a dropped ssh session loses nothing:
+  # `remote-log <lane>` follows it again. A lane runs one remote command at a time.
+  run="$rroot/.runs/$(date -u +%Y%m%dT%H%M%SZ)"
+  { printf 'cd %q || exit 1\n' "$rroot/$rel"
+    printf 'export %s OSPREY_LEASE_DIR=$HOME/%s/.osprey-lease PATH=$HOME/.local/bin:$PATH\n' "$exports" "$rroot"
+    printf '%q ' "$@"; echo; } > "$list.cmd"
+  rc=0
+  rssh "$h" "if [ -f $rroot/.runs/last/pid ] && kill -0 \$(cat $rroot/.runs/last/pid) 2>/dev/null; then exit 3; fi
+    mkdir -p $run && cat > $run/cmd.sh && ln -sfn \$HOME/$run $rroot/.runs/last
+    cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; bash $run/cmd.sh; echo \$? > $run/exit' > $run/log 2>&1 < /dev/null &
+    exit 0" < "$list.cmd" || rc=$?
+  case $rc in
+    0) ;;
+    3) echo "$who's last remote run is still running on $h: follow it with remote-log $who, or wait for it." >&2; return 1 ;;
+    *) echo "Could not start the run on $h." >&2; return 1 ;;
+  esac
+  echo "Running on $h (stack $s, $rroot/$rel), logged at $run/log: $*" >&2
+  follow "$h" "$rroot"
+}
+# The host offline runs go to: $OSPREY_OFFLINE_HOST, or the first host lane_stack_hosts.tsv names.
+offline_host() {
+  if [ -n "${OSPREY_OFFLINE_HOST:-}" ]; then echo "$OSPREY_OFFLINE_HOST"; return; fi
+  [ -f "$HOSTS" ] && grep -v '^#' "$HOSTS" | awk -F'\t' 'NF >= 2 { print $2; exit }'
 }
 tunnel_sock() { echo "$DIR/tunnel-$1.sock"; }
 # One ssh connection carrying each of a remote stack's ports to this machine's 127.0.0.1.
@@ -215,53 +273,24 @@ case "$cmd" in
     [ -n "$s" ] || { echo "$who holds no stack: take one first (acquire)." >&2; exit 1; }
     h="$(host_of "$s")"
     [ -n "$h" ] || { echo "Stack $s runs on this machine: run the command here, not with remote." >&2; exit 1; }
-    top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not inside a git worktree: run remote from your lane's checkout." >&2; exit 1; }
-    rel="$(git rev-parse --show-prefix)"
-    rroot="${OSPREY_REMOTE_ROOT:-osprey-runs}/$who"
-    list="$(mktemp)"; trap 'rm -f "$list" "$list.cmd"' EXIT
-    # What git tracks or would track, less the local osprey.yaml (sent as committed, below) and paths gone from disk.
-    ( cd "$top" && git ls-files -co --exclude-standard -z | tr '\0' '\n' \
-        | grep -v -x 'OspreyFlow_Core/osprey.yaml' | while IFS= read -r f; do [ -e "$f" ] && printf '%s\n' "$f"; done ) > "$list"
-    rssh "$h" "mkdir -p $rroot" || { echo "Could not reach $h." >&2; exit 1; }
-    rsync -a --files-from="$list" "$top/" "$h:$rroot/" || { echo "Copying the worktree to $h failed." >&2; exit 1; }
-    # Remove what the worktree no longer has (never the venv or caches), then the committed osprey.yaml.
-    rssh "$h" "cd $rroot && python3 -c 'import os,sys
-keep=set(sys.stdin.read().splitlines()); keep.add(\"OspreyFlow_Core/osprey.yaml\")
-skip=(\".venv\",\"node_modules\",\".pytest_cache\",\"__pycache__\",\".osprey-lease\",\".git\",\".runs\")
-for d,ds,fs in os.walk(\".\"):
-  ds[:]=[x for x in ds if x not in skip]
-  for f in fs:
-    p=os.path.relpath(os.path.join(d,f))
-    if p not in keep: os.remove(p)'" < "$list" || { echo "Pruning the copy on $h failed." >&2; exit 1; }
-    ( cd "$top" && git show HEAD:OspreyFlow_Core/osprey.yaml ) | rssh "$h" "cat > $rroot/OspreyFlow_Core/osprey.yaml"
-    lockname="$(basename "$(lock_of "$s")")"
-    rssh "$h" "rm -rf $rroot/.osprey-lease && mkdir -p $rroot/.osprey-lease/$lockname && cat > $rroot/.osprey-lease/$lockname/info" < "$(lock_of "$s")/info"
-    rssh "$h" "cd $rroot/OspreyFlow_Core && ~/.local/bin/uv sync --frozen -q" || { echo "uv sync on $h failed." >&2; exit 1; }
-    # The run is started detached on the host and logged there, so a dropped ssh session loses nothing:
-    # `remote-log <lane>` follows it again. A lane runs one remote command at a time.
-    run="$rroot/.runs/$(date -u +%Y%m%dT%H%M%SZ)"
-    { printf 'cd %q || exit 1\n' "$rroot/$rel"
-      printf 'export %s OSPREY_LEASE_DIR=$HOME/%s/.osprey-lease PATH=$HOME/.local/bin:$PATH\n' "$(ports_line "$s" "$who")" "$rroot"
-      printf '%q ' "$@"; echo; } > "$list.cmd"
-    rc=0
-    rssh "$h" "if [ -f $rroot/.runs/last/pid ] && kill -0 \$(cat $rroot/.runs/last/pid) 2>/dev/null; then exit 3; fi
-      mkdir -p $run && cat > $run/cmd.sh && ln -sfn \$HOME/$run $rroot/.runs/last
-      cd \$HOME && nohup setsid bash -c 'echo \$\$ > $run/pid; bash $run/cmd.sh; echo \$? > $run/exit' > $run/log 2>&1 < /dev/null &
-      exit 0" < "$list.cmd" || rc=$?
-    case $rc in
-      0) ;;
-      3) echo "$who's last remote run is still running on $h: follow it with remote-log $who, or wait for it." >&2; exit 1 ;;
-      *) echo "Could not start the run on $h." >&2; exit 1 ;;
-    esac
-    echo "Running on $h (stack $s, $rroot/$rel), logged at $run/log: $*" >&2
-    follow "$h" "$rroot"
+    run_on_host "$who" "$h" "$(ports_line "$s" "$who")" "$(basename "$(lock_of "$s")")" "$s" "$@"
+    ;;
+  offline)
+    who="${2:?usage: stack_lease.sh offline <lane> -- <command…>}"
+    shift 2
+    [ "${1:-}" = "--" ] && shift
+    [ "$#" -gt 0 ] || { echo "usage: stack_lease.sh offline <lane> -- <command…>" >&2; exit 2; }
+    h="$(offline_host)"
+    [ -n "$h" ] || { echo "No host for offline runs: lane_stack_hosts.tsv names none (or set OSPREY_OFFLINE_HOST)." >&2; exit 1; }
+    # The closed ports, no lane and no lease: the port guard refuses every live port, as for an offline run here.
+    run_on_host "$who" "$h" "ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994" "" "offline" "$@"
     ;;
   remote-log)
     who="${2:?usage: stack_lease.sh remote-log <lane>}"
     s="$(held_by "$who")"
-    [ -n "$s" ] || { echo "$who holds no stack." >&2; exit 1; }
-    h="$(host_of "$s")"
-    [ -n "$h" ] || { echo "Stack $s runs on this machine: there is no remote run to follow." >&2; exit 1; }
+    h=""; [ -n "$s" ] && h="$(host_of "$s")"
+    [ -n "$h" ] || h="$(offline_host)"   # no remote stack held: the lane's offline run
+    [ -n "$h" ] || { echo "No host to follow a run on." >&2; exit 1; }
     follow "$h" "${OSPREY_REMOTE_ROOT:-osprey-runs}/$who"
     ;;
   ports)
@@ -283,7 +312,7 @@ for d,ds,fs in os.walk(\".\"):
     done
     ;;
   *)
-    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | remote-log <lane> | release <lane> | status" >&2
+    echo "usage: stack_lease.sh acquire <lane> \"<purpose>\" [a|b] | up <lane> | down <lane> | ports <lane> | remote <lane> -- <command…> | offline <lane> -- <command…> | remote-log <lane> | release <lane> | status" >&2
     exit 2
     ;;
 esac

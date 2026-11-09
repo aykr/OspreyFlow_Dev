@@ -536,3 +536,47 @@ def test_remote_log_follows_the_lane_s_last_run_on_its_host(lease, tmp_path: Pat
     text = log.read_text()  # a call's command spans lines in the log
     assert text.count("tail -n +1 -F") == 1, text
     assert "ospreyflow-test l=osprey-runs/case/.runs/last" in text, text
+
+
+# --- offline: a lane's offline tests on the server, with no stack (the owner, 9 November 2026) ----------------
+# The closed ports and no lane, as an offline run here; this machine keeps only what needs Node (test-js).
+
+
+def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(lease, tmp_path: Path) -> None:
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "make", "-k", "test", "SKIP_JS=1")
+    assert ran.returncode == 1 and "holds no stack" in ran.stderr  # remote still needs a lease
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    log.write_text("")
+    off = subprocess.run(["bash", str(SCRIPT), "offline", "case", "--", "make", "-k", "test", "SKIP_JS=1"],
+                         cwd=wt / "OspreyFlow_Build", env=env, capture_output=True, text=True)
+    assert off.returncode == 0, off.stderr
+    text = log.read_text()
+    assert "ospreyflow-test" in text
+    export = next(l for l in text.splitlines() if l.startswith("stdin export "))
+    for pin in ("ARCADEDB_HTTP_PORT=59991", "POSTGRES_PORT=59992", "VALKEY_PORT=59993", "CLICKHOUSE_HTTP_PORT=59994"):
+        assert pin in export, export
+    assert "OSPREY_LANE" not in export
+    assert "mkdir -p osprey-runs/case/.osprey-lease" in text and "/info" not in text  # an empty lease directory
+    assert "stdin make -k test SKIP_JS=1 " in text
+
+
+def test_remote_log_follows_an_offline_run_when_no_stack_is_held(lease, tmp_path: Path) -> None:
+    log = _remote_tools(tmp_path)
+    lease("status")
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    ran = subprocess.run(["bash", str(SCRIPT), "remote-log", "case"], env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert "ospreyflow-test l=osprey-runs/case/.runs/last" in log.read_text()
+
+
+def test_make_test_leaves_out_test_js_only_when_asked() -> None:
+    def dry(*extra: str) -> str:
+        return subprocess.run(["make", "-n", "-C", str(BUILD), "test", *extra],
+                              capture_output=True, text=True).stdout
+    assert "test-js" in dry()
+    skipped = dry("SKIP_JS=1")
+    assert "test-js" not in skipped and "pytest" in skipped
