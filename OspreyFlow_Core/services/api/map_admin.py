@@ -808,7 +808,7 @@ class MapAdmin:
             config = self.config()
             if any(p.id == provider.id for p in config.providers):
                 raise MapAdminRefused(f"There is already a map provider {_shown(provider.id)}.")
-            admissible(provider, None)
+            await asyncio.to_thread(admissible, provider, None)  # looks hosts up: off the loop
             self._save_map(self._validated(config.default, [*config.providers, provider]))
             fields = provider.model_dump(mode="json", exclude_none=True)
             await self._record(by, "provider_added", provider.id, {
@@ -826,7 +826,7 @@ class MapAdmin:
             old = self.provider(provider_id)
             if provider.id != provider_id:
                 raise MapAdminRefused("A provider's id cannot be changed; add a new provider.")
-            admissible(provider, old)
+            await asyncio.to_thread(admissible, provider, old)  # looks hosts up: off the loop
             providers = [provider if p.id == provider_id else p for p in config.providers]
             self._save_map(self._validated(config.default, providers))
             before, after = old.model_dump(mode="json"), provider.model_dump(mode="json")
@@ -1017,7 +1017,7 @@ class MapAdmin:
                     self._checked_area(area)
                     provider = self.provider(area.provider_id)
                     assert provider.cache is not None  # `_checked_area`
-                    self.refuse_inside(provider)
+                    await asyncio.to_thread(self.refuse_inside, provider)  # off the loop
                     key = self.key_for(provider.id)
                     for zoom in range(area.zoom_min, area.zoom_max + 1):
                         x0, x1, y0, y1 = tile_range_for_bbox(

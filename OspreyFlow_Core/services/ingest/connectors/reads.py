@@ -19,6 +19,7 @@ compact JSON, an empty or missing value as an empty cell.
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
@@ -187,7 +188,12 @@ async def read_api(
         page, next_url = 1, url
         for _ in range(MAX_PAGES):
             params = {settings.page_param: str(page)} if settings.pagination == "page" else None
-            pinned = before_request(next_url) if before_request is not None else None
+            # The check looks the host up, which blocks: off the event loop (L1.8's carry).
+            pinned = (
+                await asyncio.to_thread(before_request, next_url)
+                if before_request is not None
+                else None
+            )
             document, size = await _get(
                 client, next_url, params, room=MAX_BYTES - taken, addresses=pinned
             )

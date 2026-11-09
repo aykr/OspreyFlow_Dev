@@ -7903,7 +7903,7 @@ async def get_map_tile_route(
     map_admin = getattr(request.app.state, "map_admin", None)
     if map_admin is not None:
         try:
-            map_admin.refuse_inside(provider)
+            await asyncio.to_thread(map_admin.refuse_inside, provider)  # a lookup: off the loop
         except map_admin_module.MapAdminRefused as refused:
             raise HTTPException(status_code=refused.status, detail=refused.words) from None
     # ADR-147: a key set in *Admin › Maps* first, then `osprey.yaml`'s `env:` reference; a provider
@@ -9117,7 +9117,7 @@ async def add_admin_connection(
     # ADR-140 Amendment 13 (the orchestrator's review of L1.6): a host that is, or resolves to, an
     # address inside the deployment is refused before it is kept; the schema refuses written forms.
     try:
-        refuse_connection_hosts(body.settings)
+        await asyncio.to_thread(refuse_connection_hosts, body.settings)  # a lookup: off the loop
     except ConnectorRefused as refused:
         raise _connector_refused(refused, principal) from refused
     try:

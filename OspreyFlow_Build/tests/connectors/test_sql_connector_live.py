@@ -26,7 +26,11 @@ What a mistake would do, and the case that catches it:
 - an incremental refresh reading every row again, or skipping one —
   `test_visit_bookings_is_read_incrementally_and_a_refresh_reads_only_new_rows` (the exit);
 - a refused sign-in or a missing table read as no rows — `test_refusals_are_refused_in_words`;
-- a server without TLS accepted — `test_a_server_without_tls_is_refused`.
+- a server without TLS accepted — `test_a_server_without_tls_is_refused`;
+- the byte cap counted in characters, or checked only after a row past it is held —
+  `test_the_byte_cap_counts_bytes_not_characters`, `test_a_row_past_the_byte_cap_is_never_held`;
+- a byte cap kept by a filter that makes the server read the whole table —
+  `test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_it`.
 """
 
 from __future__ import annotations
@@ -199,6 +203,164 @@ async def test_a_watermark_on_a_time_reads_past_its_value(nomis: asyncpg.Connect
         connect=_no_tls,
     )
     assert [r["booking_id"] for r in got.rows] == ["3"]
+
+
+# --- The byte cap (the independent review of L1.6, carried into L1.8) ---------------------------
+# A read is capped at `reads.MAX_BYTES`, counted in bytes (UTF-8), not characters, and checked before
+# a row is held: the server keeps the running count, so a row past the cap is never sent, and the
+# row that crosses it is sent without its values. Shown red at main
+# (`process/lanes/studio-b/l1.8/red-carry-byte-cap.txt`).
+
+NOTES = SqlRead(table="nomis_replica_fixture.case_notes")
+
+
+async def _notes(conn: asyncpg.Connection, notes: list[str]) -> None:
+    """A synthetic notes table the fixture's reader may read; dropped with the fixture's schema."""
+    await conn.execute(f"""
+        CREATE TABLE nomis_replica_fixture.case_notes (note_id integer PRIMARY KEY, note text NOT NULL);
+        GRANT SELECT ON nomis_replica_fixture.case_notes TO {READER};
+    """)
+    await conn.executemany(
+        "INSERT INTO nomis_replica_fixture.case_notes VALUES ($1, $2)", list(enumerate(notes, 1))
+    )
+
+
+class _Counted:
+    """The connection a read is given, counting the bytes of every value its cursors hand over: what
+    the read came to hold. Everything else passes through."""
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+        self.received = 0
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+    def cursor(self, *args: Any, **kwargs: Any) -> Any:
+        rows = self._conn.cursor(*args, **kwargs)
+        counted = self
+
+        class _Rows:
+            def __aiter__(self) -> Any:
+                self._inner = rows.__aiter__()
+                return self
+
+            async def __anext__(self) -> Any:
+                record = await self._inner.__anext__()
+                counted.received += sum(
+                    len(str(v).encode("utf-8")) for v in record.values() if v is not None
+                )
+                return record
+
+        return _Rows()
+
+
+async def test_the_byte_cap_counts_bytes_not_characters(
+    nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """600 characters of `é` are 1,200 bytes: over a 1,000-byte cap, though under it in characters."""
+    from services.ingest.connectors import reads
+
+    await _notes(nomis, ["é" * 600])
+    monkeypatch.setattr(reads, "MAX_BYTES", 1000)
+    with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
+        await read_sql(_settings(), NOTES, secret=PASSWORD, connect=_no_tls)
+    monkeypatch.setattr(reads, "MAX_BYTES", 1300)
+    got = await read_sql(_settings(), NOTES, secret=PASSWORD, connect=_no_tls)
+    assert [r["note"] for r in got.rows] == ["é" * 600]
+
+
+FLAGS = SqlRead(table="nomis_replica_fixture.flags")
+
+
+async def test_the_read_counts_the_file_s_bytes_where_the_database_counts_fewer(
+    nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """300 rows of one truth value: the database writes each row as `(t)`, 3 bytes, 900 in all, under a
+    1,000-byte cap; the file holds each as `true`, 4 bytes, 1,200 in all. Only the read's own count, in
+    the file's UTF-8 bytes, refuses: the case that is red without it (the orchestrator's review of L1.8,
+    item 5; every other case's database count crosses first in this UTF-8 database). A non-UTF-8
+    source (LATIN1's one byte for `é`, two in the file) is the same shape."""
+    from services.ingest.connectors import reads
+
+    await nomis.execute(f"""
+        CREATE TABLE nomis_replica_fixture.flags (flag boolean NOT NULL);
+        INSERT INTO nomis_replica_fixture.flags SELECT true FROM generate_series(1, 300);
+        GRANT SELECT ON nomis_replica_fixture.flags TO {READER};
+    """)
+    database = await nomis.fetchval(
+        "SELECT sum(octet_length(ROW(flag)::text)) FROM nomis_replica_fixture.flags"
+    )
+    assert database == 900, database  # the server's own count stays under the cap
+    monkeypatch.setattr(reads, "MAX_BYTES", 1000)
+    with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
+        await read_sql(_settings(), FLAGS, secret=PASSWORD, connect=_no_tls)
+    monkeypatch.setattr(reads, "MAX_BYTES", 1200)
+    got = await read_sql(_settings(), FLAGS, secret=PASSWORD, connect=_no_tls)
+    assert len(got.rows) == 300 and got.rows[0] == {"flag": "true"}
+
+
+@pytest.mark.parametrize("watermark", [None, "note_id"], ids=["whole", "incremental"])
+async def test_a_row_past_the_byte_cap_is_never_held(
+    nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch, watermark: str | None
+) -> None:
+    """Three short notes, then three of 100 KB, under a 1,000-byte cap: refused, and the read never
+    holds more than the cap, however the rows after the cap are sized."""
+    from services.ingest.connectors import reads
+
+    await _notes(nomis, ["short note"] * 3 + ["x" * 100_000] * 3)
+    monkeypatch.setattr(reads, "MAX_BYTES", 1000)
+    held: list[_Counted] = []
+
+    async def counted(**kw: Any) -> Any:
+        held.append(_Counted(await _no_tls(**kw)))
+        return held[-1]
+
+    with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
+        await read_sql(_settings(), NOTES, secret=PASSWORD, watermark=watermark, connect=counted)
+    # The lower bound keeps the case honest: `_Counted` counts what comes through `conn.cursor(...)`,
+    # so a reader moved to `fetch` or `fetchrow` would read 0 here and pass without testing anything.
+    assert held and 0 < held[0].received <= 1000, held[0].received
+    monkeypatch.setattr(reads, "MAX_BYTES", 400_000)
+    got = await read_sql(_settings(), NOTES, secret=PASSWORD, watermark=watermark, connect=_no_tls)
+    assert [r["note_id"] for r in got.rows] == ["1", "2", "3", "4", "5", "6"]
+    assert got.columns == ["note_id", "note"]
+
+
+async def test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_it(
+    nomis: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """300,000 rows and a 1,000-byte cap: the read stops at the first row past the cap, so the server
+    reads about one fetch of the table, never all of it, as Postgres's own count of the rows its scan
+    read says (`pg_stat_user_tables.seq_tup_read`). A filter on the running total would make the
+    server read every row looking for rows to send (the lane review of L1.8). A statement timeout
+    could not tell the two apart: a full scan of two million rows finished inside half a second
+    (measured under lease studio-b on stack b, 9 November 2026, `l1.8/red-carry-byte-cap.txt`'s second
+    run). A whole read only: an incremental read's window sorts what its watermark admits before the
+    cursor stops (the connector's own comment says why that is not a scan past the cap)."""
+    from services.ingest.connectors import reads
+
+    await nomis.execute(f"""
+        CREATE TABLE nomis_replica_fixture.case_notes (note_id integer PRIMARY KEY, note text NOT NULL);
+        INSERT INTO nomis_replica_fixture.case_notes
+            SELECT n, 'synthetic note ' || n FROM generate_series(1, 300000) AS n;
+        GRANT SELECT ON nomis_replica_fixture.case_notes TO {READER};
+    """)
+    monkeypatch.setattr(reads, "MAX_BYTES", 1000)
+    with pytest.raises(ConnectorRefused, match="more than 1000 bytes"):
+        await read_sql(_settings(), NOTES, secret=PASSWORD, connect=_no_tls)
+    query = (
+        "SELECT seq_tup_read FROM pg_stat_user_tables "
+        "WHERE schemaname = 'nomis_replica_fixture' AND relname = 'case_notes'"
+    )
+    read = 0
+    for _ in range(50):  # the reader's session reports its counts as it ends
+        await nomis.execute("SELECT pg_stat_clear_snapshot()")
+        read = int(await nomis.fetchval(query) or 0)
+        if read:
+            break
+        await asyncio.sleep(0.1)
+    assert 0 < read < 50_000, read
 
 
 async def test_refusals_are_refused_in_words(nomis: asyncpg.Connection) -> None:

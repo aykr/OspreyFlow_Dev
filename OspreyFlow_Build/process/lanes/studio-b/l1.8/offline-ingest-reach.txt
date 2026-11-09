@@ -1,0 +1,5 @@
+# L1.8, the added carry: tests/ingest's files that reach pipeline_run, studio_staging or studio_verify (grep), run offline at 5a4292a on closed ports 59991–59994, no lease
+  35 ERROR ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py
+186 passed, 4 skipped, 1 warning, 46 errors in 151.53s (0:02:31)
+Files: test_handling_read_paths, test_load_report_markings, test_node_preview_access, test_phase7_exit_live, test_phase7_exit, test_pipeline_extract_markings, test_pipeline_graph, test_pipeline_run, test_reference_match_guard, test_referenced_in_change_stream, test_repoint_journal_callers_live, test_revert_load, test_row_keys, test_staged_counts, test_staged_pipeline_run, test_staged_run.
+The errors and skips are the files that need a stack (no store answers): test_pipeline_run.py, test_repoint_journal_callers_live.py, test_phase7_exit_live.py. They are the leased run's, with test_route_rights.py (the orchestrator's ruling).

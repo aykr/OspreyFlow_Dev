@@ -1,0 +1,24 @@
+ingest/dag/NodeDrawer.tsx:263: "target model" on screen: the screens say "domain model" (ADR-140 Amendment 9)
+ingest/dag/NodePreview.tsx:37: "target model" on screen: the screens say "domain model" (ADR-140 Amendment 9)
+ingest/studio/ModelTab.tsx:9: "Target model" on screen: the screens say "domain model" (ADR-140 Amendment 9)
+ingest/studio/ModelTab.tsx:10: "Target model" on screen: the screens say "domain model" (ADR-140 Amendment 9)
+ui-words-check: 4 violation(s)
+exit 1
+
+## The lane review of L1.8: the new plants (hyphen, {" "}, nested templates, a comment in a template's expression) against the gate as first committed (59a714c)
+E       AssertionError: assert ['ingest/dag/...ngle.ts', ...] == ['ingest/dag/...ngle.ts', ...]
+E       AssertionError: assert [('a/x.tsx', ...arget model')] == []
+FAILED ../OspreyFlow_Build/tests/test_ui_words_check.py::test_each_planted_shape_is_found
+FAILED ../OspreyFlow_Build/tests/test_ui_words_check.py::test_a_comment_inside_a_template_s_expression_is_a_comment
+2 failed, 6 passed in 0.81s
+## and with the lexer and pattern fixed
+8 passed in 0.74s
+
+# The orchestrator's review of L1.8 (its minor): eight new plants (&nbsp;, &#160;, \u00a0, \xa0; .js, .jsx, .mjs, .css), offline, 2026-11-09T16:45:59Z
+## red: against the gate before this change (BANNED without the non-breaking spaces, SUFFIXES without the four)
+E       AssertionError: assert ['ingest/dag/...ngle.ts', ...] == ['ingest/dag/...ngle.ts', ...]
+E         Right contains 8 more items, first extra item: 'ingest/z/NbspEscape.ts'
+1 failed, 7 deselected
+## green: with it
+8 passed
+## the real Glass with it: ui-words-check: no "target model" in the Glass's copy

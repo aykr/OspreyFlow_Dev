@@ -1,0 +1,29 @@
+# The spec gates after the follow-up review's spec change (ADR-145 Amendment 7 retitled, its Tests paragraph in the future tense), on the working tree over b712520, 2026-11-09T17:36:16Z, offline on the closed ports 59991-59994, no lease
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/studio-b/OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
+doc-citations-check: 2102 file(s) scanned, every cited path exists.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/studio-b/OspreyFlow_Build .venv/bin/python -m tools.decision_log_publication_check
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/studio-b/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/studio-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 92 items
+
+../OspreyFlow_Build/tests/test_stack_lease.py .......................... [ 28%]
+                                                                         [ 28%]
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py ...................... [ 52%]
+                                                                         [ 52%]
+../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 79%]
+...                                                                      [ 82%]
+../OspreyFlow_Build/tests/test_friction_assemble.py ......               [ 89%]
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 96%]
+../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [100%]
+
+============================= 92 passed in 32.01s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/studio-b/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
+exit 0

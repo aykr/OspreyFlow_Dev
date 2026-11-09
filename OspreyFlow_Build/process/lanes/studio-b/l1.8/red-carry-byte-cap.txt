@@ -1,0 +1,32 @@
+# L1.8 carry: the SQL byte cap, live under lease studio-b on stack a
+## red: main's services/ingest/connectors/sql_connector.py put back, the three new cases run (2026-11-09T11:02:05Z)
+E       Failed: DID NOT RAISE ConnectorRefused
+E       AssertionError: 100034
+E       AssertionError: 100034
+FAILED test_sql_connector_live.py::test_the_byte_cap_counts_bytes_not_characters
+FAILED test_sql_connector_live.py::test_a_row_past_the_byte_cap_is_never_held[whole]
+FAILED test_sql_connector_live.py::test_a_row_past_the_byte_cap_is_never_held[incremental]
+3 failed, 1 passed, 11 deselected in 6.99s
+
+## red: the first fix (ea22882), whose filter on the running total makes the server scan the table, the million-row case (2026-11-09T11:02:14Z)
+1 passed, 14 deselected in 4.90s
+
+## green: the branch's fix at 80768fe (2026-11-09T11:02:20Z)
+4 passed, 11 deselected in 3.79s
+
+# Second run, under lease studio-b on stack b: the case made two million rows and a 500 ms timeout (at 1 million and 1.5 s the first fix's full scan finished in time, so the case proved nothing)
+## red: the first fix (ea22882) (2026-11-09T11:04:42Z)
+1 passed, 14 deselected in 6.55s
+## red: main's connector (no window; the case passes there, by LIMIT) (2026-11-09T11:04:49Z)
+1 passed, 14 deselected in 6.16s
+## green: the branch's fix, the whole connector file (2026-11-09T11:04:56Z)
+15 passed in 15.15s
+
+# Third run, under lease studio-b on stack b: the scan case now reads Postgres's own count of rows scanned (seq_tup_read), since no timeout told the two queries apart (second run: at two million rows and 500 ms the first fix still passed)
+## red: the first fix (ea22882) (2026-11-09T11:06:20Z)
+E       AssertionError: 300000
+E       assert 300000 < 50000
+FAILED test_sql_connector_live.py::test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_it
+1 failed, 14 deselected in 3.48s
+## green: the branch's fix, the whole connector file (2026-11-09T11:06:25Z)
+15 passed in 10.33s

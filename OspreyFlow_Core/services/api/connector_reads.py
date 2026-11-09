@@ -14,11 +14,13 @@ audited or sent back. **Egress**: an API connection reaches only hosts on `OSPRE
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import ipaddress
 import os
 import re
 import socket
+import threading
 import time
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
@@ -166,6 +168,10 @@ SELF_NAMES = (
 )  # fmt: skip
 _OWN_FOR_SECONDS = 60.0
 _own_cache: tuple[float, list[Network]] | None = None
+#: One lookup at a time when the cache expires, so concurrent reads (each on a worker thread) do not
+#: each resolve every name and tie up the executor all `to_thread` work shares (the lane review of
+#: L1.8).
+_own_lock = threading.Lock()
 
 
 def _v4(column: str) -> ipaddress.IPv4Address:
@@ -215,20 +221,25 @@ def own_networks() -> list[Network]:
     and Docker's names for this machine resolve to, and the cluster's API. Looked up at most once
     a minute; asked only when a listed entry would admit a private address."""
     global _own_cache
-    now = time.monotonic()
-    if _own_cache is not None and now - _own_cache[0] < _OWN_FOR_SECONDS:
-        return _own_cache[1]
-    found = _proc_routes()
-    for name in SELF_NAMES:
-        for address in resolve_host(name):
-            ip = literal_ip(address)
-            if ip is not None:
-                found.append(ipaddress.ip_network(ip))
-    cluster = literal_ip(os.environ.get("KUBERNETES_SERVICE_HOST", ""))
-    if cluster is not None:
-        found.append(ipaddress.ip_network(cluster))
-    _own_cache = (now, found)
-    return found
+    cached = _own_cache
+    if cached is not None and time.monotonic() - cached[0] < _OWN_FOR_SECONDS:
+        return cached[1]
+    with _own_lock:
+        cached = _own_cache  # another thread may have looked them up while this one waited
+        now = time.monotonic()
+        if cached is not None and now - cached[0] < _OWN_FOR_SECONDS:
+            return cached[1]
+        found = _proc_routes()
+        for name in SELF_NAMES:
+            for address in resolve_host(name):
+                ip = literal_ip(address)
+                if ip is not None:
+                    found.append(ipaddress.ip_network(ip))
+        cluster = literal_ip(os.environ.get("KUBERNETES_SERVICE_HOST", ""))
+        if cluster is not None:
+            found.append(ipaddress.ip_network(cluster))
+        _own_cache = (now, found)
+        return found
 
 
 def is_own(ip: IpAddress, networks: Collection[Network]) -> bool:
@@ -388,7 +399,8 @@ async def read_rows(
     """The rows one read of `source` finds, through its connection."""
     settings, read = connection.settings, source.read
     if isinstance(settings, SqlConnectionSettings) and isinstance(read, SqlRead):
-        addresses = readers.sql_addresses(settings.host)
+        # Off the event loop: getaddrinfo blocks (the independent review of L1.6, in L1.8).
+        addresses = await asyncio.to_thread(readers.sql_addresses, settings.host)
         if read.table.split(".")[0] not in settings.schemas:
             raise ConnectorRefused(
                 f"the table {read.table} is not in a schema this connection may read "
@@ -473,9 +485,9 @@ async def check_connection(connection: Connection, readers: Readers) -> Connecti
     if found is not None:
         try:
             if found[0] == "sql":
-                addresses = readers.sql_addresses(found[1])
+                addresses = await asyncio.to_thread(readers.sql_addresses, found[1])
             else:
-                readers.check(*found)
+                await asyncio.to_thread(readers.check, *found)
         except ConnectorRefused as refused:
             return ConnectionTest(ok=False, words=str(refused))
     if isinstance(settings, SqlConnectionSettings):
