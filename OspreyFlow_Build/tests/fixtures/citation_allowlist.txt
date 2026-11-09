@@ -33,3 +33,4 @@ tools/ui_words_check.py
 tools/no_branches_check.py
 apps/workspace/src/help/roles.ts
 
+deploy/helm/ospreyflow/templates/ingress.yaml  # ADR-148 decision 2: the chart's optional Ingress, created by platform's P7 (process/BUILD_PLAN_PARALLEL_LANES.md's ownership row names it first); remove when P7 merges
