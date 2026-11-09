@@ -1,0 +1,35 @@
+diff --git a/OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py b/OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py
+index 0a5bffe..efe5622 100644
+--- a/OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py
++++ b/OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py
+@@ -266,7 +266,21 @@ OPEN_TO_ANY_SIGNED_IN = {
+     "get_map_local_source_route", "list_connectors", "list_domain_packs", "get_handling_scheme_route",
+     "get_yardstick_route", "get_grading_scheme_route", "list_transforms", "my_rights_route",
+     "model_engines_route", "case_model_engines_route", "issue_ws_ticket",
++} | {
++    # L3.4 (ADR-143 Amendment 2 decision 1), weighed at its independent review on 9 November: a
++    # removed case's layer listed, merged through its read grant (opened, read, merged, cancelled)
++    # or deleted, by one of the dataset's Authors alone. They name no right because owning a
++    # dataset needs none (ADR-145 Amendment 4 decision 3; the route asks it). Not open to anyone:
++    # the dataset's own gate answers 404 to a person none of whose cases loads into it, and each
++    # asks Author level on the dataset's home case (`test_promotions.py`'s rule 4 cases). A Reports
++    # Viewer reaches them only as such an Author, which decision 10 does not take from an owner.
++    "removed_case_layers", "open_layer_merge", "read_layer_merge", "merge_removed_case_layer",
++    "cancel_layer_merge", "delete_removed_case_layer", "dry_run_delete_removed_case_layer",
+ }  # fmt: skip
++#: Of those, the writes: the reader's own two, and L3.4's an Author's of the dataset alone.
++RIGHTLESS_WRITES = {"set_tab_state", "issue_ws_ticket", "open_layer_merge",
++                    "merge_removed_case_layer", "cancel_layer_merge", "delete_removed_case_layer",
++                    "dry_run_delete_removed_case_layer"}  # fmt: skip
+ 
+ 
+ def _routes_by_right() -> dict[str, tuple[str, str, str | None]]:
+@@ -310,7 +324,7 @@ def test_every_route_naming_no_right_is_one_weighed_for_the_viewer() -> None:
+         for name, (method, _, right) in _routes_by_right().items()
+         if right is None and method != "GET"
+     }
+-    assert writes == {"set_tab_state", "issue_ws_ticket"}
++    assert writes == RIGHTLESS_WRITES
+ 
+ 
+ def _answered_beyond(client: TestClient) -> dict[str, int]:
