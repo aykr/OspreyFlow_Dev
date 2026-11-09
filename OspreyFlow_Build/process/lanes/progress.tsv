@@ -43,8 +43,8 @@ case-b	L3.8	S	todo	The ownership route for Disable
 case	L3.9	L	todo	Merging a drawn dataset; the drawing as a case view (L5, L6 ruled)
 platform	P1	L	done	Models in Admin: engines, each job's model, keys write-only, connection test (ADR-135 Am 2)
 platform	P2	M	done	Model usage and limits
-platform	P3	L	building	Maps in Admin: providers and keys, basemap build and verify, prefetch, map CLI (ADR-147)
-platform	P4	M	todo	The analyst's map: basemap switch, place search, contrast in three themes
+platform	P3	L	done	Maps in Admin: providers and keys, basemap build and verify, prefetch, map CLI (ADR-147)
+platform	P4	M	building	The analyst's map: basemap switch, place search, contrast in three themes
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2a	M	todo	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed)
 docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)

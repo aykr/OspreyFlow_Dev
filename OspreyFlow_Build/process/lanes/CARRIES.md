@@ -9,7 +9,7 @@ takes them (then struck through with the brief's commit). Newest last.
 | admin | *Admin › Connections* gains the SQL and API connection settings' fields | studio-b, L1.6 | L2.7 |
 | admin | ADR-144 decision 6's count on *Admin › System*: cases converted to views, with the migration's report | case, L3.2 | L2.5b |
 | rules | The rule's list picker reads `GET /v1/datasets/{id}/reference-lists/offered`, so a rule offers only subscribed lists | studio-b, L1.6 | L2.10 or L2.11 |
-| rules | Ask to search (`patterns/api.ts`) shows `model_limit_reached` as it shows `engine_refused` | platform, P2 | L2.10 (saved patterns) |
+| ~~rules~~ | ~~Ask to search shows `model_limit_reached`~~ (done in platform's P3, `246b51d`) | platform, P2 | — |
 | case | L3.4: a withdrawal leaves in place a promoted link the withdrawer may not see (settled, `MORNING.md` item 60) | case, L3.3 | L3.4 |
 | studio-b | Wire the subscribed list ids into `studio_staging` and `reference_list_import`, and retire L1.4's stand-in import, once L1.4 is on main | studio-b, L1.6 | after L1.4 |
 | studio | L1.5 first: Test of a pipeline with no staging steps still counts over masked rows (pre-existing rule 3 oracle) | independent review of L1.4 | L1.5 |
