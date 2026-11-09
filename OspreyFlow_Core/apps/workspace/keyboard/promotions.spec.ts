@@ -100,7 +100,11 @@ test("a merge sheet is cancelled by keyboard, its grant closed", async ({ page }
 test("a removed case's layer is deleted after asking once, by keyboard", async ({ page }) => {
   await open(page);
   await press(page, "Delete… Old wing's layer");
-  await expect(page.getByRole("group", { name: "Delete Old wing's layer?" })).toBeVisible();
+  const question = page.getByRole("group", { name: "Delete Old wing's layer?" });
+  await expect(question).toBeVisible();
+  // Its dry run first, in words; nothing deleted yet.
+  await expect(question).toContainText("Nothing has been written");
+  expect((await sent(page)).some((s) => s.method === "POST" && s.path.endsWith("/delete/dry-run"))).toBe(true);
   expect((await sent(page)).some((s) => s.method === "DELETE" && s.path.endsWith("/layer"))).toBe(false);
   await press(page, "Delete the layer");
   await expect.poll(async () => (await sent(page)).some((s) => s.method === "DELETE" && s.path.endsWith("/removed-cases/c-old/layer"))).toBe(true);

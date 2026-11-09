@@ -18,6 +18,7 @@ import {
   datasetPromotions,
   decidePromotion,
   deleteLayer,
+  dryRunDeleteLayer,
   mergeLayer,
   openLayerMerge,
   promotionDetails,
@@ -273,7 +274,7 @@ function RemovedCaseLayersPanel({
   const [layers, setLayers] = useState<RemovedCaseLayers | null>(null);
   const [sheet, setSheet] = useState<LayerMergeSheet | null>(null);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{ caseId: string; would: string } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [merged, setMerged] = useState<Promotion | null>(null);
   const sheetHeading = useRef<HTMLHeadingElement>(null);
@@ -326,6 +327,17 @@ function RemovedCaseLayersPanel({
     await onChanged();
   }
 
+  async function askToDelete(caseId: string): Promise<void> {
+    setProblem(null);
+    // The dry run first, as Amendment 2 decision 1 asks: what would go, and nothing written.
+    const answer = await dryRunDeleteLayer(apiBaseUrl, bearerToken, datasetId, caseId);
+    if (!answer.ok) {
+      setProblem(answer.message);
+      return;
+    }
+    setDeleting({ caseId, would: answer.value.would });
+  }
+
   async function remove(caseId: string, name: string): Promise<void> {
     const answer = await deleteLayer(apiBaseUrl, bearerToken, datasetId, caseId);
     setDeleting(null);
@@ -333,7 +345,7 @@ function RemovedCaseLayersPanel({
       setProblem(answer.message);
       return;
     }
-    onSaid(`${name}'s layer deleted: ${answer.value.nodes} items and ${answer.value.links} links withdrawn. Promoted items were not touched.`);
+    onSaid(`${name}: ${answer.value.words}`);
     await reload();
   }
 
@@ -365,9 +377,11 @@ function RemovedCaseLayersPanel({
             ) : (
               <span className="label">{c.why_not}</span>
             )}{" "}
-            {deleting === c.investigation_id ? (
+            {deleting?.caseId === c.investigation_id ? (
               <span role="group" aria-label={`Delete ${c.name}'s layer?`}>
-                <span className="label">Delete {c.name}&apos;s layer? Its items are withdrawn and kept in the audit.</span>{" "}
+                <span className="label">
+                  {deleting.would} Delete it? Its items are withdrawn and kept in the audit.
+                </span>{" "}
                 <button type="button" className={govuk ? "govuk-button govuk-button--warning board__button" : "btn btn--danger board__button"} onClick={() => void remove(c.investigation_id, c.name)}>
                   Delete the layer
                 </button>{" "}
@@ -376,7 +390,7 @@ function RemovedCaseLayersPanel({
                 </button>
               </span>
             ) : (
-              <button type="button" className={govuk ? "govuk-button govuk-button--warning board__button" : "btn board__button"} onClick={() => setDeleting(c.investigation_id)}>
+              <button type="button" className={govuk ? "govuk-button govuk-button--warning board__button" : "btn board__button"} onClick={() => void askToDelete(c.investigation_id)}>
                 Delete…<span className="visually-hidden">{` ${c.name}'s layer`}</span>
               </button>
             )}

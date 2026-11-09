@@ -115,9 +115,13 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     promotions.unshift(merged);
     return json(201, merged);
   }
+  if (rest === "removed-cases/c-old/delete/dry-run" && method === "POST") {
+    return json(200, { investigation_id: "c-old", action: "delete", items: 3, links: 0, size_bytes: 512,
+      would: "Would delete 3 items and 0 links (512 bytes) from Old wing's layer. Promoted items are never touched. Nothing has been written." });  // prettier-ignore
+  }
   if (rest === "removed-cases/c-old/layer" && method === "DELETE") {
     cases.splice(0, cases.length);
-    return json(200, { investigation_id: "c-old", nodes: 3, links: 0 });
+    return json(200, { investigation_id: "c-old", words: "The layer was deleted: its items are withdrawn and kept in the audit. Promoted items were not touched." });
   }
   return json(404, {});
 };

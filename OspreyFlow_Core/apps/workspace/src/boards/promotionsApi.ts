@@ -6,6 +6,7 @@
 // "not found", exactly as one that never existed (rule 3).
 import type {
   LayerDeleted,
+  LayerDryRun,
   LayerMergeSheet,
   Promotion,
   PromotionDetails,
@@ -15,7 +16,7 @@ import type {
   SheetItem,
 } from "../../../../packages/schemas/generated";
 
-export type { LayerDeleted, LayerMergeSheet, Promotion, PromotionDetails, PromotionSheet, Promotions, RemovedCaseLayers, SheetItem };
+export type { LayerDeleted, LayerDryRun, LayerMergeSheet, Promotion, PromotionDetails, PromotionSheet, Promotions, RemovedCaseLayers, SheetItem };
 
 export type Answer<T> = { ok: true; value: T } | { ok: false; message: string; code?: string };
 
@@ -95,6 +96,14 @@ export const mergeLayer = (api: string, token: string, datasetId: string, grantI
 
 export const cancelLayerMerge = (api: string, token: string, datasetId: string, grantId: string) =>
   answered<null>(send(dataset(api, datasetId, `layer-merges/${encodeURIComponent(grantId)}`), token, { method: "DELETE" }), "The merge could not be cancelled", true);
+
+/** The Author's dry run of *Delete* (Amendment 2 decision 1): what it would touch, in counts as
+ * this reader's own handling takes them; nothing written. */
+export const dryRunDeleteLayer = (api: string, token: string, datasetId: string, caseId: string) =>
+  answered<LayerDryRun>(
+    send(dataset(api, datasetId, `removed-cases/${encodeURIComponent(caseId)}/delete/dry-run`), token, { method: "POST" }),
+    "The dry run could not be made",
+  );
 
 export const deleteLayer = (api: string, token: string, datasetId: string, caseId: string) =>
   answered<LayerDeleted>(
