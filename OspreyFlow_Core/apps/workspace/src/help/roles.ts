@@ -124,12 +124,4 @@ export const TEAM_WORDS = {
   through: (team: string) => `through ${team}`,
 } as const;
 
-/** Why a person cannot take an action, and who can (decision 12: never only greyed out). */
-export function whyNot(right: Right, holders: readonly string[]): string {
-  const need = `You need ${rightName(right)}`;
-  if (holders.length === 0) return `${need}; no one you can see has it. Ask an administrator.`;
-  const who = holders.length === 1 ? holders[0]! : `${holders.slice(0, -1).join(", ")} and ${holders.at(-1)!}`;
-  return `${need}; ${who} ${holders.length === 1 ? "has" : "have"} it.`;
-}
-
 export const HELP_TITLE = "Roles, teams and Authors";

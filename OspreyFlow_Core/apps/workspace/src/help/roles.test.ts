@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import BY_ROLE from "../shell/placesByRole.json";
-import { RIGHT_WORDS, ROLE_WORDS, rightSays, whyNot } from "./roles";
+import * as ROLES_MODULE from "./roles";
+import { RIGHT_WORDS, ROLE_WORDS, rightSays } from "./roles";
 
 const RIGHTS_PY = join(dirname(fileURLToPath(import.meta.url)), "../../../../packages/schemas/rights.py");
 
@@ -60,10 +61,11 @@ describe("the words for roles, teams and Authors", () => {
     expect(Object.keys(RIGHT_WORDS).filter((r) => !declaredRights(planted).includes(r))).toEqual(["create_case"]);
   });
 
-  it("say why an action cannot be taken and who can, never only that it cannot", () => {
-    expect(whyNot("review_promotions", ["D. Engineer", "S. Lead"])).toBe("You need Review promotions; D. Engineer and S. Lead have it.");
-    expect(whyNot("review_promotions", ["D. Engineer"])).toBe("You need Review promotions; D. Engineer has it.");
-    expect(whyNot("merge_datasets", [])).toBe("You need Merge datasets; no one you can see has it. Ask an administrator.");
+  it("name no person who holds a right: no refusal here takes people", () => {
+    // The owner's ruling (c) on ADR-145 Amendment 4 decision 12: a refusal names the roles that hold the
+    // right, never people (studio-b's `whyNotByRole`, L1.8). No export of these words takes holders.
+    const takesPeople = Object.entries(ROLES_MODULE).filter(([, v]) => typeof v === "function" && /holders|people/.test(String(v)));
+    expect(takesPeople.map(([k]) => k)).toEqual([]);
   });
 });
 
