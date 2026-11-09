@@ -510,6 +510,13 @@ New ones are added at the bottom as they happen.
     Stopped with `ospreyflow stop --name default` (data kept in its volumes), and Docker quit; memory went to
     64% free. **For you:** turn off Docker's "Start Docker Desktop when you sign in" so a reboot doesn't bring
     it back. Admin's L2.6 and rules-b's L2.12 are ready to merge, and my independent reviews of both are running.
+77. **Admin's L2.6 sent back after my independent review (about 15:35).** Six must-fixes, the access ones checked
+    against the code by me. Operations' waiting promotions are open to every `operate_schedules` holder, where
+    ADR-145 Am 4 decision 11 says the dataset's Authors with `review_promotions` and administrators. The
+    dataset-source settings' words (legal basis included) are shown in the audit beyond any Admin read. The
+    overdue alerts' reader is matched by stored id alone. The picker's `writers` read has no live test. Three
+    figures have no gate file, and some files are unlisted for ratification. **My calls:** the strict reading of
+    the accepted ADR for each, so none comes to you. A seam contract test is left for L3.4's promotion store.
 
 ## Evening, 7 November: your records of 7 November applied
 
