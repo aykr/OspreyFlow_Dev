@@ -9186,16 +9186,18 @@ async def add_dataset_gazetteer_route(
     # the dataset is said to hold the gazetteer, and adding it again finishes the copy, or removing
     # it stops it (the lane's review, item 4).
     await store.add(added)
-    await case_gazetteers.copy_places(
-        graph, scheme, gazetteer=gazetteer_id, case_dataset=dataset_id, by=principal.id,
-        unit=dataset.owning_unit,
-    )  # fmt: skip
+    # Audited before the copy (the orchestrator's review of round 3, item 6): a copy that fails part
+    # way leaves its pages committed, so it is never unaudited.
     await audit.record(
         principal=principal,
         action="add_dataset_gazetteer",
         resolved_query={"dataset_id": dataset_id, "gazetteer": gazetteer_id},
         result_cardinality=1,
     )
+    await case_gazetteers.copy_places(
+        graph, scheme, gazetteer=gazetteer_id, case_dataset=dataset_id, by=principal.id,
+        unit=dataset.owning_unit,
+    )  # fmt: skip
     return await _gazetteers_view(dataset, datasets, store)
 
 

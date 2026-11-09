@@ -273,6 +273,16 @@ def test_a_composite_takes_no_gazetteer(world: World) -> None:
     assert (graph.written, store.added) == ([], {})
 
 
+def test_only_a_place_held_by_the_gazetteer_s_dataset_alone_is_copied(world: World) -> None:
+    """The orchestrator's review of round 3 (a minor): a node the gazetteer's dataset shares with
+    another dataset is not the gazetteer's place alone, so it is never copied."""
+    graph, *_ = world
+    shared = _node("01JSHARED00000000000000000", GAZ, name="Shared", osm_id="node/7")
+    graph.nodes[shared.id] = shared.model_copy(update={"datasets": [GAZ, "case-b"]})
+    assert _put().status_code == 200
+    assert [w.id for w in graph.written] == [copy_id(PLACE.id, "case-a")]
+
+
 def test_adding_copies_each_place_into_the_dataset(world: World) -> None:
     graph, _datasets, store, audit, _ws = world
     response = _put()
@@ -397,10 +407,13 @@ def test_a_failed_copy_keeps_the_record_so_the_copies_written_can_be_removed(
     world: World, monkeypatch: pytest.MonkeyPatch, first: bool
 ) -> None:
     """The lane's review, item 4: pages already written are committed, so the record stays, the
-    dataset is said to hold the gazetteer, and a removal (or adding again) can follow."""
-    _graph, _datasets, store, *_ = world
+    dataset is said to hold the gazetteer, and a removal (or adding again) can follow. **The
+    addition is audited before the copy** (the orchestrator's review of round 3, item 6), so a copy
+    that fails part way, its pages committed, is never unaudited."""
+    _graph, _datasets, store, audit, _ws = world
     if not first:
         _put()
+    audited = len(audit.records)
 
     async def fails(*_args: Any, **_kwargs: Any) -> int:
         raise RuntimeError("the store went away on page 2")
@@ -408,6 +421,7 @@ def test_a_failed_copy_keeps_the_record_so_the_copies_written_can_be_removed(
     monkeypatch.setattr("services.api.case_gazetteers.copy_places", fails)
     with pytest.raises(RuntimeError):
         _put()
+    assert [r["action"] for r in audit.records[audited:]] == ["add_dataset_gazetteer"]
     assert list(store.added) == [("case-a", GAZ)]
     assert _listing()["gazetteers"][0]["added"] is True
     assert _delete().status_code == 200

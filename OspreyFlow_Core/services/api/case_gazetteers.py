@@ -328,7 +328,8 @@ async def copy_places(
         writes = [
             _copy(p, gazetteer=gazetteer, case_dataset=case_dataset, by=by, now=now)
             for p in page
-            if copy_id(p.id, case_dataset) not in the_case_s
+            # The gazetteer's place alone: a node its dataset shares with another is not copied.
+            if p.datasets == [gazetteer] and copy_id(p.id, case_dataset) not in the_case_s
         ]
         if not writes:
             continue
