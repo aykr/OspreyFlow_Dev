@@ -30862,20 +30862,30 @@ at the merge. Decision 11 and C13 stand; this says how they are built and narrow
    network, as a load's revert runs, with the mapping and any scheme file mounted read-only. After a change,
    and only then, the verb sets `grading.scheme` in `osprey.yaml` (edited in place, its comments kept; a scheme
    file copied beside it as `grading-scheme.yaml`), renders the deployment again (`harness.apply --reapply`)
-   and starts the Conduit. A refused change leaves the setting and starts the Conduit as it was; a change
-   stopped part way leaves the Conduit stopped and the setting unchanged, and says so.
-   (`tests/cli/test_grading_verb.py`.)
+   and starts the Conduit, reading the setting back first and saying so if the edit did not take or the
+   render fails. The command's exit 1 means only a refusal before any write (64, a usage error, nothing
+   opened); on those alone the verb starts the Conduit as it was. Any other exit (a stop part way, an
+   unforeseen failure, a killed one-shot) may have written: the Conduit is left stopped and the setting
+   unchanged, and the verb says so. (`tests/cli/test_grading_verb.py`;
+   `test_an_unforeseen_failure_exits_as_stopped_never_as_refused`.)
 2. **A dry run first, enforced (C13).** The dry run reports how many items each mapping line moves, writes
    nothing (no audit record, no table made) and gives a token naming the mapping, the two schemes and each live
    drawn item's id, grade, original and revision. The change is refused without that token, with another
-   mapping's, or once any drawing or edit has changed the state since. The audit records the token.
+   mapping's (between the same two schemes too), or once any drawing or edit has changed the state since.
+   The audit records the token, and is opened at its first record, so a refused change makes nothing.
    (`test_the_change_is_refused_without_its_dry_runs_token_for_this_state`,
+   `test_another_mapping_between_the_same_schemes_gives_another_token`,
    `test_an_edit_since_the_dry_run_is_another_state`; live, `test_the_command_changes_every_drawn_grade_in_the_real_stores`.)
-3. **The Conduit stopped.** The change, not its dry run, is refused while a Conduit answers (the script asks
-   its liveness route; the verb asks Docker and stops it only on `--stop-api`): a drawing or an edit during the
-   change, or between it and the restart in the new scheme, would be in the old one.
+3. **The Conduit stopped.** The change, not its dry run, is refused unless the Conduit is known to be
+   stopped: the script takes it as stopped only when no connection can be made to it on the deployment's
+   network, and any answer, a timeout or any other failure as running; the verb takes any Docker state but
+   exited, created or dead as running, and stops it only on `--stop-api`. A drawing or an edit during the
+   change, or between it and the restart in the new scheme, would be in the old one. The script is run
+   inside the deployment only (on the host its check cannot see the deployment's Conduit).
    (`test_the_change_is_refused_while_the_conduit_answers_before_any_store_is_opened`,
-   `test_the_change_is_refused_while_the_conduit_runs_unless_told_to_stop_it`.)
+   `test_the_conduit_is_taken_as_stopped_only_when_nothing_answers`,
+   `test_the_change_is_refused_while_the_conduit_runs_unless_told_to_stop_it`,
+   `test_a_conduit_not_stopped_is_taken_as_running`.)
 4. **The scheme file** (decision 11's third form). `grading.scheme` names `5x5x5`, `3x5x2` or a YAML file,
    beside `osprey.yaml` unless absolute, of the shape `GradingSchemeAnswer`: `scheme` (a name of its own, never a
    built-in one's), and each part's grades. `harness.render.load_config` reads it; the render writes its name as
@@ -30883,7 +30893,12 @@ at the merge. Decision 11 and C13 stand; this says how they are built and narrow
    not start without the grades. An opened board offers the scheme's grades (`grading_grades`). A grade of a
    built-in scheme is checked by `Grading` itself; a scheme file's, where a grade enters: the board routes and
    the change. A stored one is read as stored, since an original may be of a scheme the deployment no longer
-   has. `GRADING_PARTS` is the one list of the built-in schemes. (`test_grading_setting.py`,
+   has. A scheme file's grades are letters, digits and hyphens (they are written into `deployment.env`). The
+   rendered copy of `osprey.yaml` takes the scheme file with it. A scheme file is never edited in place once
+   items are graded in it: a change of its grades is a new file under a new name and a change to it (an item
+   whose grade its scheme no longer holds refuses the change, naming it). `GRADING_PARTS` is the one list of
+   the built-in schemes; neither the Conduit, the command line nor the Glass keeps its own.
+   (`test_grading_setting.py`,
    `test_a_scheme_files_grades_are_offered_and_checked`, `test_a_scheme_files_scheme_is_a_target_like_any`,
    `test_the_built_in_schemes_names_are_listed_once`.)
 5. **The grade alone, in place.** Each item is changed by `GraphPort.regrade_drawn`: its drawn grade and
@@ -30891,7 +30906,13 @@ at the merge. Decision 11 and C13 stand; this says how they are built and narrow
    and a node keeps its resolution state. This is a named exception to ADR-080's "every change is a supersede",
    as ADR-124 decision 11's strip is: the change is recorded in the audit trail, before the first write and after
    the last, with the original kept beside the new grade. The port answers False, writing nothing, for an
-   element gone, reverted, superseded or not drawn, and the run stops rather than count it changed.
+   element gone, reverted, superseded or not drawn (guarded in the write itself, its count checked), and the
+   run stops rather than count it changed. The Conduit's own graph (`dataset_scope.stamping`) refuses the
+   name, so no route can reach it. Promoted items are regraded with the rest: the grade is the deployment's
+   reclassification of every drawn item, not an edit of its claim. A consequence, stated so it is not a
+   surprise: a regrade changes the stored provenance, so a later revert of a load that restores a link's
+   prior state (`restore_link_state`) refuses a regraded link, as it refuses any link written since by any
+   writer; revert such a load before changing the scheme.
    (`test_regrade_drawn_changes_the_grade_and_original_alone` in the graph port's conformance suite;
    `test_the_change_is_the_grade_alone_in_place`; `test_an_element_gone_from_under_the_change_stops_it_saying_so`.)
 6. **What the change leaves alone.** A withdrawn item keeps the grade it was drawn with (decision 5's kept, never
@@ -30905,8 +30926,8 @@ at the merge. Decision 11 and C13 stand; this says how they are built and narrow
 7. **The operator's read across cases, offline only.** The command reads every case's board registry and the
    graph as the deployment's top clearance with every handling code and dataset: the one read of `board_items`
    that names no case (`01_DOMAIN_MODEL.md`), outside the Conduit, never a route, answered to no reader, so
-   rule 3 is not loosened. A restricted code scoped to another unit leaves such an item unreadable, and the
-   change is then refused, naming it. `--changed-by` is recorded as typed and said to be
+   rule 3 is not loosened (`test_the_conduits_graph_never_offers_regrade_drawn`). An item it still cannot
+   read back, for whatever reason, refuses the change, naming it. `--changed-by` is recorded as typed and said to be
    (`changed_by_as_typed`): no sign-in says who runs a command outside the Conduit; the verb passes
    `cli:<the operator's account>`.
 
