@@ -522,6 +522,9 @@ def test_a_second_remote_run_is_refused_while_the_last_is_alive(lease, tmp_path:
     ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true")
     assert ran.returncode == 1 and "still running" in ran.stderr and "remote-log case" in ran.stderr
     assert "tail -n +1 -F" not in log.read_text()
+    # refused before the copy that run is reading is touched (rules' finding, 9 November 2026)
+    text = log.read_text()
+    assert "rsync" not in text and "uv sync" not in text and "npm ci" not in text and "git add -A" not in text, text
 
 
 def test_remote_log_follows_the_lane_s_last_run_on_its_host(lease, tmp_path: Path) -> None:
@@ -600,5 +603,21 @@ def test_the_server_copy_is_a_repository_has_the_glass_packages_and_keeps_its_ru
     assert "npm ci" in text and "package-lock.json" in text
     assert "$HOME/.local/node/bin" in next(l for l in text.splitlines() if l.startswith("stdin export "))
     assert "osprey-runs/case.meta/runs/" in text
-    # nothing of the runs or the lease is kept inside the copy's root
-    assert "osprey-runs/case/.runs" not in text and "osprey-runs/case/.osprey-lease" not in text
+    # nothing of the runs or the lease is written inside the copy's root (the old place is only asked about)
+    for written in ("mkdir -p osprey-runs/case/.runs", "> osprey-runs/case/.runs", "osprey-runs/case/.osprey-lease"):
+        assert written not in text, written
+
+
+
+def test_a_run_in_the_old_layout_is_seen_and_its_folders_never_pruned(lease, tmp_path: Path) -> None:
+    """A run started before ada8460 keeps its log and pid in <copy>/.runs: a later call must see it alive and never
+    prune it (rules' live log was deleted so, 9 November 2026)."""
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    assert _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "true").returncode == 0
+    text = log.read_text()
+    assert "osprey-runs/case/.runs/last/pid" in text  # the old place asked
+    prune = next(l for l in text.splitlines() if l.startswith("skip=("))
+    assert '".runs"' in prune and '".osprey-lease"' in prune

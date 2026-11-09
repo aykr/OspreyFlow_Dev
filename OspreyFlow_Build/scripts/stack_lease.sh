@@ -91,6 +91,16 @@ run_on_host() {
   rmeta="$rroot.meta"   # the runs and the lease mirror, beside the copy, never in it
   top="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "Not inside a git worktree: run remote from your lane's checkout." >&2; return 1; }
   rel="$(git rev-parse --show-prefix)"
+  # Refused before anything is copied: a second call while the lane's last run is alive must not rewrite the
+  # copy that run is reading (found by rules, 9 November 2026). Checked again at the start, for a race.
+  rc=0
+  # A run started before the runs moved beside the copy (ada8460) keeps them inside it, in .runs: ask there too.
+  rssh "$h" "for f in $rmeta/runs/last/pid $rroot/.runs/last/pid; do if [ -f \$f ] && kill -0 \$(cat \$f) 2>/dev/null; then exit 3; fi; done" || rc=$?
+  case $rc in
+    0) ;;
+    3) echo "$who's last remote run is still running on $h: follow it with remote-log $who, or wait for it." >&2; return 1 ;;
+    *) echo "Could not reach $h." >&2; return 1 ;;
+  esac
   list="$(mktemp)"; trap 'rm -f "$list" "$list.cmd"' EXIT
   # What git tracks or would track, less the local osprey.yaml (sent as committed, below) and paths gone from disk.
   ( cd "$top" && git ls-files -co --exclude-standard -z | tr '\0' '\n' \
@@ -100,7 +110,7 @@ run_on_host() {
   # Remove what the worktree no longer has (never the venv or caches), then the committed osprey.yaml.
   rssh "$h" "cd $rroot && python3 -c 'import os,sys
 keep=set(sys.stdin.read().splitlines()); keep.add(\"OspreyFlow_Core/osprey.yaml\")
-skip=(\".venv\",\"node_modules\",\".pytest_cache\",\"__pycache__\",\".git\")
+skip=(\".venv\",\"node_modules\",\".pytest_cache\",\"__pycache__\",\".git\",\".runs\",\".osprey-lease\")
 for d,ds,fs in os.walk(\".\"):
   ds[:]=[x for x in ds if x not in skip]
   for f in fs:
