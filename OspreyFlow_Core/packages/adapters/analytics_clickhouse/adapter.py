@@ -891,8 +891,9 @@ class AnalyticsClickHouseAdapter:
         nodes: dict[str, NodeActivity] = {}
         for row in rows:
             node, n_recent, t_recent, a_recent, n_base, t_base, a_base, first, last, n_before = row
-            # ClickHouse's sumIf of nothing is 0, and minIf/maxIf of nothing a zero date: read
-            # through the counts, so an absent total or time is `None` as the contract says.
+            # ClickHouse's sumIf over no amount present is NULL (over no row at all, 0), and
+            # minIf/maxIf of nothing a zero date: each read through its count, so an absent total or
+            # time is `None` as the contract says.
             nodes[str(node)] = NodeActivity(
                 recent_count=int(n_recent),
                 recent_total=float(t_recent) if int(a_recent) else None,

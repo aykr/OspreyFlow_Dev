@@ -4,10 +4,12 @@ Amendment 1; ADR-112 Amendment 5 decision 4; ADR-145 Amendment 5 points 5 and 6)
 **Who reads a routed alert (rule 3).** A rule's *Alert goes to* may name a team. Its alerts are then
 read only by the team's members and by the Authors of the home case of the alert's dataset; the
 check is in the queue's query (`alerts.queue_scope`, `_routed_sql`), never a filter on a list. A
-member is whoever holds the team's role on this request (`alerts.reader_teams`), so leaving the
-role is leaving the team at once. Who answers for a dataset is read here, per read
-(`answers_for_datasets`): the reader's datasets whose home case they are an Author of, in their own
-name or through a team, in their own unit (`InvestigationStore.effective_level`).
+member is whoever holds the team's role on this request (`alerts.reader_teams`), so leaving the role
+is leaving the team from the member's next token: one already issued carries the role until it
+expires (ADR-146 Amendment 4 point 1, as ADR-145 Amendment 5 says of a token's lifetime). Who
+answers for a dataset is read here, per read (`answers_for_datasets`): the reader's datasets whose
+home case they are an Author of, in their own name or through a team, in their own unit
+(`InvestigationStore.effective_level`).
 
 **The lead's tools.** The team's acting lead (its cover while the cover lasts, else its lead,
 `custom_roles.acting_lead`) may give one of the team's alerts to a named member of the team and

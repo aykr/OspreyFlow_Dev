@@ -519,6 +519,10 @@ async def test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_it
 
     await _say_unjudged(stores["audit"], ANALYST, case, rule_id, date(2026, 11, 9), raised=1, unjudged=3,
                         why="the list held 7 rows")  # fmt: skip
+    # And a second rule's failure on a day it raised nothing: no firing to hide, the count all the same.
+    quiet_rule = f"r-{new_id()}"
+    await _say_unjudged(stores["audit"], ANALYST, case, quiet_rule, date(2026, 11, 9), raised=0, unjudged=5,
+                        why=None)  # fmt: skip
     member = ANALYST.model_copy(update={"roles": [f"role:{team}"]})
     try:
         async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
@@ -535,12 +539,23 @@ async def test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_it
     assert "findings" not in evaluated.detail and evaluated.detail.get("findings_withheld") is True
     # The sweep's failure is said outside the team too, but with no count in it: not its findings,
     # not its documents not judged, not in its words, not as its cardinality.
-    (failed,) = [e for e in outside.entries if e.action == "rule_evaluation_failed"]
+    (failed,) = [e for e in outside.entries if e.action == "rule_evaluation_failed" and e.detail["rule_id"] == rule_id]
     assert failed.detail.get("findings_withheld") is True and failed.result_cardinality == 0
     assert not {"findings", "documents_not_judged"} & failed.detail.keys()
     assert not any(ch.isdigit() for ch in str(failed.detail["words"]))
-    (failed_inside,) = [e for e in inside.entries if e.action == "rule_evaluation_failed"]
-    assert failed_inside.detail["documents_not_judged"] == 3 and failed_inside.result_cardinality == 1
+    # The documents not judged are counted across every customer the rule screens, not the
+    # reader's: no reader is given the number, not one who sees every firing (the team's member),
+    # and not anyone when the rule raised nothing (the orchestrator's re-review, item 1).
+    def failures(page: Any, rule: str) -> list[Any]:
+        return [e for e in page.entries if e.action == "rule_evaluation_failed" and e.detail["rule_id"] == rule]
+
+    (failed_inside,) = failures(inside, rule_id)
+    assert failed_inside.detail["findings"] == 1 and failed_inside.result_cardinality == 1  # its firings it sees
+    for entry in (failed_inside, *failures(inside, quiet_rule), *failures(outside, quiet_rule)):
+        assert not {"documents_not_judged", "words_without_counts"} & entry.detail.keys()
+        assert not any(ch.isdigit() for ch in str(entry.detail["words"])), entry.detail["words"]
+        assert "could not judge some lapsed documents" in str(entry.detail["words"])
+    assert len(failures(inside, quiet_rule)) == len(failures(outside, quiet_rule)) == 1
 
 
 async def test_an_alert_on_official_flows_into_a_secret_account_is_secret(

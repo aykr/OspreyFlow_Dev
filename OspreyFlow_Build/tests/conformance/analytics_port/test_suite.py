@@ -2726,17 +2726,20 @@ async def test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not(
     assert (a.baseline_count, a.baseline_total) == (2, None)
 
 
+@pytest.mark.parametrize("each", [9e28, 6e27])  # past the decimal's range; within it, past the limit
 @pytest.mark.parametrize("sign", [1, -1])
 async def test_a_total_past_the_decimals_range_is_refused_never_wrapped(
-    factory: AnalyticsAdapterFactory, sign: int
+    factory: AnalyticsAdapterFactory, sign: int, each: float
 ) -> None:
     """ADR-133 Amendment 10 (rule 2): two amounts of 9 × 10^28 each fit a decimal of 38 digits, 9
     after the point; their total does not. A frequency's span and an activity's window holding both
     are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
-    decimal wraps silently to a negative) and never cut. Either sign."""
+    decimal wraps silently to a negative) and never cut. Either sign. Two of 6 × 10^27 make a total
+    the decimal holds but the limit (10^28) refuses: there the adapter's own check alone refuses it,
+    with no overflow of the store's to do it instead (rule 15)."""
     from ports.analytics import AmountTotalOutOfRange
 
-    big = sign * 9e28
+    big = sign * each
     async with factory.context([_paid(0, big), _paid(1, big)]) as adapter:
         with pytest.raises(AmountTotalOutOfRange):
             await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)

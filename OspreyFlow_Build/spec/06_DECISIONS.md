@@ -32186,7 +32186,10 @@ owner to overrule. ADR-146 and its Amendments 1 and 2 are unchanged except where
    (`RuleSentence.team = "team"`, `team_id` its role id, refused at the route when no such team
    exists, 409 `unknown_team`). Its alerts carry `alerts.routed_team`. Who reads one is decided in the
    query, never after it (`alerts.queue_scope`, `_routed_sql`): a case member who is in the team on
-   this request (the custom role their token carries, `alerts.reader_teams`, never kept), or an Author
+   this request (the custom role their token carries, `alerts.reader_teams`, never kept; so a member who
+   leaves the team reads nothing routed to it from their next token, one already issued carrying the role
+   until it expires, as ADR-145 Amendment 5 says of a token's lifetime;
+   `test_a_member_whose_token_no_longer_carries_the_team_reads_nothing_routed_to_it`), or an Author
    of the home case of the alert's dataset (`AlertStore.answers_for`, the app's
    `alert_routing.answers_for_datasets`, read per read; unset, the team alone, fail closed). The same
    check holds wherever such an alert is shown: the queue's list, its counts, an alert's detail and
@@ -32322,8 +32325,9 @@ every analytics adapter. Neither decision is narrowed.
    `SUM` of a `DECIMAL(38, 9)` can wrap silently to a negative, and its window `SUM` raises an overflow; a `DOUBLE`
    sum beside each decimal one catches both. A frequency's span total or an activity's window or baseline total of
    10^28 or more, either sign, is refused whole by `AmountTotalOutOfRange` (`ports.analytics`, rule 2) on every
-   adapter, never wrapped, rounded or cut. A rule's evaluation that meets it fails, and its failure is in the rule's
-   audit, as any failure's. (`test_a_total_past_the_decimals_range_is_refused_never_wrapped[±1]`.)
+   adapter, never wrapped, rounded or cut. This amendment states the port's refusal alone; what a rule's evaluation
+   does on meeting it is that path's, as for any exception a read raises, and is not claimed here.
+   (`test_a_total_past_the_decimals_range_is_refused_never_wrapped[±1]`.)
 4. **`account_activity` is read the same way as `event_frequency`:** one `_decimal_amount` per adapter for both.
    (`test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not`, on both adapters.)
 
