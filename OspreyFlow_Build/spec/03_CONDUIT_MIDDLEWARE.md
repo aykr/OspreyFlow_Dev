@@ -811,8 +811,8 @@ GET    /v1/investigations/{id}/hotlists   the calling principal's own hotlists o
 PUT    /v1/investigations/{id}/hotlists/{hotlist_id}/audience   the owner's change of whom its alerts reach (only_me or team); another's hotlist is not found; 403 hotlist_audience_fixed, in words, when the deployment does not let owners choose, Editor (ADR-133 ruling 3)
 POST   /v1/investigations/{id}/monitors   create a standing query the evaluator watches, in its saved pattern's dataset and matched only within it, Editor
 GET    /v1/investigations/{id}/monitors   the calling principal's own monitors of the case's datasets, Viewer
-GET    /v1/investigations/{id}/alerts     the calling principal's own alerts of the case's datasets, Viewer
-GET    /v1/investigations/{id}/alerts/{alert_id}   one alert, expanded to its referents, Viewer
+PUT    /v1/investigations/{id}/monitors/{monitor_id}/schedule   its owner's schedule for the watched pattern (MonitorScheduleInput: daily, the default, weekly on a day, or never, at a whole hour), run one replica per slot as the owner resolved afresh; another's is not found, Viewer and keep_watches (ADR-146 decision 4, G16; Amendment 4)
+POST   /v1/investigations/{id}/raised-alerts   Raise an alert… (RaiseAlertInput): to the case (analyst:case) or the case's dataset (analyst:dataset, into its home case); 403 below Editor, 409 dataset_not_writable, no_home_case or not_the_datasets_own (a drawn item) in words, 404 for an item the raiser may not read, nothing written; investigate (ADR-146 decision 7, Amendment 4)
 GET    /v1/alerts/{alert_id}   an alert at its own address: the case it is worked in and its explanation there (AlertAtAddress); 404 alert_not_found alike for a missing alert and one the reader may not see, read_alert_queue (ADR-146 decision 6, Amendment 2)
 ```
 
@@ -993,7 +993,9 @@ typology, never the finding's words.
 `alert_node_withheld`. An entry naming a node, link or transaction the reader cannot see is withheld
 whole, before paging, so the total never counts it (one batched read per kind, the queue's check).
 
-**The case team's queue (phase B, ruling 3), since ADR-133 stage (a) the one queue for every kind.**
+**The case team's queue (phase B, ruling 3), since ADR-133 stage (a) the one queue for every kind;
+since L2.10 the only one (the inbox's `GET …/alerts` and `GET …/alerts/{id}` are gone, ADR-146
+decision 1).**
 It holds the case's typology alerts (the case's members') and the hotlist and monitor alerts the
 reader owns or that are shared with their team — the owner's organisational unit: a monitor's
 always, a hotlist's while its audience is `team`, never a `notify` stub — decided in the query
@@ -1003,11 +1005,14 @@ team or owner). The Reports view's typology figures count the typology alerts al
 monitoring figures (below) count every kind.
 
 ```
-GET    /v1/investigations/{id}/alert-queue   the one queue; ?status= active (default: open, claimed and closing), open, claimed, closing, closed or all; ?kind= and ?severity=, each repeatable, Viewer; its rows only to a reader Rules and Monitoring is offered to and to the Reports Viewer, 403 queue_rows_not_offered to any other (ADR-146 Amendment 2 point 3)
+GET    /v1/investigations/{id}/alert-queue   the one queue; ?status= active (default: open, claimed and closing), open, claimed, closing, closed or all; ?kind= and ?severity=, each repeatable; ?show= mine, team or unassigned (each leaving out an alert suppressed today; none, All, holds them) and ?older_than_days=, in the query (ADR-146 Amendment 4), Viewer; its rows only to a reader Rules and Monitoring is offered to and to the Reports Viewer, 403 queue_rows_not_offered to any other (ADR-146 Amendment 2 point 3)
 GET    /v1/investigations/{id}/alert-queue/counts   the queue as counts alone (AlertQueueCounts: open, claimed, closing), counted as the queue is; for a reader of the queue the place is not offered to, Viewer and read_alert_queue (ADR-146 Amendment 2 point 3)
 GET    /v1/investigations/{id}/alert-assignees   the case's Editors and Authors by grant, with names: whom an alert may be given to, Editor (ADR-133 stage (a))
-POST   /v1/investigations/{id}/alert-queue/{alert_id}/assign   open or claimed → claimed by the member named; a typology alert only (one shared with a team is claimed), 422 assignment_refused in words otherwise, Editor (ADR-133 stage (a))
-GET    /v1/investigations/{id}/alert-queue/{alert_id}   what fired it: nodes, cited links and ALERTED_ON, each transaction, Viewer
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/assign   open or claimed → claimed by the member named; a case alert, or a team's alert given by the team's lead (or cover) to a member of the team who holds the case (audited alert_handed_off); one shared with a unit, or an owner's, is claimed; 422 assignment_refused in words otherwise, Editor (ADR-133 stage (a); ADR-146 Amendment 1)
+POST   /v1/investigations/{id}/alert-queue/{alert_id}/suppress   Suppress until… (AlertSuppressInput: a day at most 90 days ahead and a reason), the team's lead or cover alone, status unchanged and counted open, 422 suppress_refused in words, Editor (ADR-146 Amendment 1)
+GET    /v1/investigations/{id}/alert-teams   the teams a rule's alerts may go to, by name; to a team's lead today, its members who hold the case, Viewer and read_alert_queue (ADR-146 decision 8)
+GET    /v1/investigations/{id}/alert-sources   What raises alerts (AlertSources): the case's rules and the reader's own watches, counted from the reader's own queue, with what is suppressed today, Viewer and read_alert_queue (ADR-146 decision 5)
+GET    /v1/investigations/{id}/alert-queue/{alert_id}   what fired it: nodes, cited links and ALERTED_ON, each transaction; for a watch alert, the hotlist's entry (to its owner) and each matched node's files and rows (fired_on); a routed alert's team and whether the reader leads it, Viewer
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/claim   open → claimed by the caller, Editor
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/release   claimed (by the caller) → open, Editor
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/disposition   → closed, true or false positive with a reason, Editor. In a case reading a composite, a true positive that would confirm anything not wholly the case's analyst layer's is 409 `composite_read_only` ("do this in a case that reads that dataset"), nothing written and the alert left as it was; one raised there, its node and `SAME_AS` in the layer, is closed (ADR-099 Amendment 15)
@@ -1022,9 +1027,12 @@ adapter's own access step (`alerts.read_evidence`; transactions in requests cut 
 the reads are the same whatever is hidden, and an alert is dropped before anything is counted, ordered
 or returned (ADR-146 decision 10, gap map G2: until 7 November 2026 the list read nodes alone). Claim,
 release, disposition, approve-close, send-back, assign and the canvas make the same check, so each
-refuses exactly what the list withholds, writing and auditing nothing. The reader's own alerts
-(`GET .../alerts`, the inbox until ADR-146 removes it) make it too: an alert whose evidence is not all
-readable comes with no words and no referents (G3). The summary names entities as the reader sees them,
+refuses exactly what the list withholds, writing and auditing nothing. The inbox that once
+listed the reader's own alerts with their words withheld (G3) is gone (L2.10): the queue withholds such
+an alert whole. **A rule's alert routed to a named team** (ADR-146 decision 8, Amendment 4) is read
+only by the team's members on the request and the Authors of the home case of its dataset, in the
+query (`queue_scope`), for the list, the counts, the detail, the address, every triage write, a pack's
+alert item and alert trends; it writes no `Alert` node. The summary names entities as the reader sees them,
 never by id. A move between statuses is one conditional update,
 so two members acting at once cannot both win: the loser gets 409 `alert_moved_on`. A true positive
 confirms the `Alert` node (asserted, `confirmed_by` the member, rule 5); a false positive leaves it

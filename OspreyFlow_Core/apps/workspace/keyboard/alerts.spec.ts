@@ -561,6 +561,24 @@ test("a rule is written as a sentence, shown as its drawn pattern and deployed, 
   registerCovered(REGISTRY, "build-a-rule-as-a-sentence-by-keyboard");
 });
 
+test("a sentence's alerts are sent to a named team, by keyboard (ADR-146 decision 8)", async ({ page }) => {
+  const state = await serve(page);
+  await page.route("**/*/v1/investigations/inv-1/alert-teams", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{ role_id: "team-7", display_name: "Prison intel", lead: false, members: [] }]) }),
+  );
+  await page.goto("/keyboard/alerts-harness.html");
+  await writeTheSentence(page);
+  // A native select: its keyboard is the browser's.
+  await page.getByRole("combobox", { name: "Alert goes to (team)" }).selectOption("team:team-7");
+  await page.getByLabel("Name of the sentence rule").fill("Listed people for the team");
+  await press(page, page.getByRole("button", { name: "Deploy the sentence" }));
+  await expect.poll(() => (state.sent.find((s) => s.path === "rules/sentence")?.body as { sentence?: Record<string, unknown> } | undefined)?.sentence).toMatchObject({
+    team: "team",
+    team_id: "team-7",
+  });
+  registerCovered(REGISTRY, "send-a-rules-alerts-to-a-named-team-by-keyboard");
+});
+
 test("a sentence is previewed on the last 90 days, by keyboard, and nothing is deployed", async ({ page }) => {
   const state = await serve(page);
   await page.goto("/keyboard/alerts-harness.html");

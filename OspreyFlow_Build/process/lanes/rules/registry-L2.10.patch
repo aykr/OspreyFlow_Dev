@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 4e64076..daecdf3 100644
+index 4e64076..ea53feb 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 @@ -251,7 +251,7 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
@@ -25,7 +25,7 @@ index 4e64076..daecdf3 100644
  ] as const);
  
  /**
-@@ -567,10 +572,15 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
+@@ -567,10 +572,16 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
    "show-an-alert-on-the-canvas-by-keyboard",
    "close-an-alert-with-a-reason-by-keyboard",
    // The owner's answer of 1 November 2026: the closing reason, one of a closed list of five; and
@@ -40,6 +40,7 @@ index 4e64076..daecdf3 100644
 +  "give-a-team-alert-to-a-member-by-keyboard",
 +  "suppress-a-team-alert-by-keyboard",
 +  "filter-what-raises-alerts-by-keyboard",
++  "send-a-rules-alerts-to-a-named-team-by-keyboard",
    "deploy-a-rule-by-keyboard",
    "retire-a-rule-by-keyboard",
    "release-held-rows-by-keyboard",
