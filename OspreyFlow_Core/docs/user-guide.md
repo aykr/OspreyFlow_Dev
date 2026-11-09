@@ -637,8 +637,8 @@ compare the two on the same case, and back.
   link's rarity term, each boost added, and the **raw sum on the client's scale**, beside the strength
   it is drawn at. With two people selected, **What these two share** does the same for them.
 
-**Who changes influencers.** An installation-wide set is proposed in **Monitoring → Connection
-strength** by someone holding the right to manage influencers, and takes effect only when **another**
+**Who changes influencers.** An installation-wide set is proposed in the Glass's **Connection
+strength** (on the rail) by someone holding the right to manage influencers, and takes effect only when **another**
 person with that right approves it; the proposer can withdraw it but never approve it, and every
 version is kept; a version may also choose the composition and the rarity measure. A case's **Author**
 may add influencers for that case, switch off installation-wide ones in it, or choose its composition

@@ -58,13 +58,23 @@ const FRAUD = [
 
 const MONITORING = [
   { title: "Hotlists and watches", says: "Put a number, an account or a person on a hotlist with a review date. When a load matches it, an alert says what matched, and which file and row put it there." },
-  { title: "Rules on every load", says: "Typology rules run as the data arrives, before it is committed, and their alerts land in one queue for the team." },
+  { title: "Rules on every load", says: "Typology rules run as the data arrives, before it is committed, and their alerts are worked in Rules and Monitoring." },
   { title: "Each alert explains itself", says: "An alert names its rule or hotlist entry, the entity it matched and its evidence. It is closed with a reason, and the reason stays on the record." },
 ]; // prettier-ignore
 
-// ADR-145 Amendment 4 decision 1: the four places, in the words the help page and the guides take from
-// `help/roles.ts`, so the welcome page cannot drift from them.
-const PLACES = Object.values(PLACE_WORDS).map((place) => ({ title: place.name, says: place.says }));
+// ADR-145 Amendment 4 decision 1: the four places, named as `help/roles.ts` names them. What each is for
+// is said as the guides say it (D2a): `PLACE_WORDS`' own sentences still name releases and one queue,
+// neither built yet, so they are not repeated here until they are.
+const PLACE_SAYS: Record<keyof typeof PLACE_WORDS, string> = {
+  glass: "Investigate a case: search, expand, map, read its figures and its boards.",
+  ingest: "Bring data in: sources, pipelines, the domain model and held rows.",
+  rules: "Work the alerts that rules and watches raise, and see what raises them.",
+  admin: "Run the deployment: people, roles, teams, datasets, models, maps and operations.",
+};
+const PLACES = (Object.keys(PLACE_WORDS) as (keyof typeof PLACE_WORDS)[]).map((key) => ({
+  title: PLACE_WORDS[key].name,
+  says: PLACE_SAYS[key],
+}));
 
 // ADR-143 as built (L3.3): drawing boards, in words. Promotion into a dataset is not built, so it is not
 // claimed here.

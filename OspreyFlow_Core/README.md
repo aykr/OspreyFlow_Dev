@@ -210,7 +210,7 @@ rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup
 Every operator task is an `ospreyflow`
 verb; `make` targets are for developers working on OspreyFlow itself.
 
-**Demo packs** load into cases of their own: three synthetic ones generated here, and two you
+**Demo packs** load into cases of their own: six synthetic ones generated here, and two you
 download — PaySim (simulated) and the **Enron email corpus, which is real people's data**: you fetch
 it from Carnegie Mellon University yourself, and `ospreyflow demo add enron --file <file>` checks it,
 says what it is and loads it only once you accept. No install adds it. The administration guide's

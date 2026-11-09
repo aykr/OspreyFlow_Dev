@@ -1268,8 +1268,9 @@ make itself synthetic by saying so.
 
 **Where lists live now.** Lists are imported and refreshed in the **Ingest Studio → 2 Sources**,
 under its screening lists (and, for `load_screening_lists`, from Rules and Monitoring), and each
-dataset subscribes to the lists its rules read. The paragraphs below, written for the Glass's former
-Monitoring → Lists, are being rewritten with the alerts journey (coming).
+dataset subscribes to the lists its rules read. **The rest of this section was written for the Glass's
+former Monitoring → Lists**, which no longer exists: read it for what a list does, not where. It is
+being rewritten with the alerts journey (coming).
 
 **Subscribing.** In the Glass, open **Monitoring → Lists** (it needs the `load_screening_lists` right,
 which the administrator and data-engineer roles hold). Under **Subscribe to a list**, give the list a
@@ -1337,8 +1338,7 @@ someone who should set influencers without the rest of a role.
 
 Every proposal, approval and rejection is in the case's rule audit, and every rule keeps its versions
 — who proposed each and who decided it. **After upgrading to this version**, a whole-deployment rule
-that was running waits for a second person's approval before it runs again; Monitoring → Rules lists
-it as waiting, "deployed before a second person's approval was needed".
+that was running waits for a second person's approval before it runs again, and is listed as waiting, "deployed before a second person's approval was needed".
 
 ### 9.7 Removing someone, and joining an organisation account
 
@@ -1666,8 +1666,8 @@ feed does not carry. Every figure is counted as the dashboard's account may see 
 
 **In the Glass**, the rail's **Dashboards** draws an **Alert monitoring** board itself, first among the
 boards, from the same figures counted as the person reading it: raised each week and by rule, closed
-by outcome, time to close, hotlist matches and the team view. Rules and Monitoring's *See the trend*
-and a Reports Viewer's *Open the dashboard* open it filtered to an alert's rule and period. It needs
+by outcome, time to close, hotlist matches and the team view. A Reports Viewer's *Open the dashboard*
+opens it filtered to an alert's rule and period. It needs
 no Superset set-up. For a board of your own in Superset, none ships as a file: build it from the `figures` table, filtered on these sections — for
 example a stacked bar of `raised_by_rule` by `week_start` and `label`, a bar of `closed` by
 `label`, a table of `time_to_close`, and a line of `hotlist_matches` — with a filter on

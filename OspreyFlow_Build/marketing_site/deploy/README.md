@@ -1,6 +1,6 @@
 # OspreyFlow website: going live
 
-The site is seven pages and a folder:
+The site is six pages and a folder:
 
 | File | What it is |
 | --- | --- |
@@ -92,7 +92,7 @@ reading the home page's decoded template, and runs in `make test`.
 - [ ] The Service Standard points on `public-sector.html` still match the latest re-audit in
       `process/gds/gds_compliance_report.md`.
 - [ ] `publish_pages.sh` copies every page in this folder, `drawing-boards.html` and `three-places.html` included.
-- [ ] `drawing-boards.html` says "importing a chart from another tool"; name i2 only once the import's ADR is accepted (the owner, 7 November 2026).
+- [ ] Importing a chart from another tool is not on `drawing-boards.html` now (9 November 2026); if it is added, say "another tool" and name i2 only once the import's ADR is accepted (the owner, 7 November 2026).
 - [ ] Every page opens at the new address, with no request to another site, no horizontal scroll at
       phone width, and the light and dark themes both readable.
 - [ ] The screenshots are still the current product. They come from the synthetic Prison Intelligence

@@ -96,8 +96,7 @@ act), and their **rights** (what they may do). A right never widens what a perso
 | `load_screening_lists`, `deploy_rules`, `read_rule_audit`, `read_alert_queue` | Screening lists and the rules that judge loads |
 | `create_case`, `share_case`, `investigate`, `run_analysis`, `read_reports` | Work in cases alongside analysts |
 
-It also carries `revert_loads`, for reverting a load — which no screen or command uses yet (section
-6.4). It attaches rules to a pipeline (section 3.8a) but does not write them: a rule written as a
+It also carries `revert_loads`, for reverting a load (section 6.4). It attaches rules to a pipeline (section 3.8a) but does not write them: a rule written as a
 sentence needs the analyst's `keep_watches` as well as `deploy_rules`, so an analyst writes it in
 Rules and Monitoring. It does **not** hold `edit_graph`, `confirm_inferred`, `extract_files`, `resolve_entities`,
 `export` or `read_report_feed`: those are the Analyst's and Reports Viewer's. An administrator can
@@ -429,8 +428,10 @@ Admin → Operations lists every one, and 4 Runs every one of the dataset's.
 ### 6.4 Reverting a load
 
 Every element a load writes carries its load's id, and reverting a load hides all of them from every
-read without deleting anything. **The revert exists in the product's code but is not yet reachable
-from a screen or a command**; when it is, it will need `revert_loads`.
+read without deleting anything. The Studio's **4 Runs** shows a holder of `revert_loads` the command
+that reverts a run's load, to run on the deployment's host:
+`python -m scripts.seed_internal <pack> --revert-load <load id> --reverted-by <your username> --stop-api`.
+*Coming:* a revert button on the screen.
 
 ## 7. The domain model
 
