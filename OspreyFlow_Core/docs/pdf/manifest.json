@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "a1082f319b9a6217bccfd012f01bd85ec4d1599c7b63e83033ff31d53340f597",
+    "body": "f20b4804137bcaa233b25ee77ca684b12b25fb51342d205710a77d60a452e80a",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -12,12 +12,22 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "9054c1137ce92e77625149f283ba8a57539c7840925f64da7bdbbc699cb97c6f",
-    "source": "a6fbc6e6fdfc89ff8eea5150cef15bed3a9ffc5a696150678ea6034d6dbee4ff",
-    "version": "1.59"
+    "pdf": "b6ccef0a5060ba10490638b1dce54a09edf92ce1e44837dfe3d24668eb14ddf4",
+    "source": "f79243826bfd414596adfab0f2e35d5c81a272ce399589123e6612358c057564",
+    "version": "1.60"
+  },
+  "architecture-guide.md": {
+    "body": "2ce9630fdb5203f8130d39982736853e4bf616b0d11bfa50592b48cabc03ba0d",
+    "images": {
+      "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
+      "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
+    },
+    "pdf": "1b047c04a2aae90310331645c2830238feceeec9a197782892815670c06f8fb1",
+    "source": "dea62d040e29ca5899b390e0bf467c888409989ac17beb99b11a10098cf11f1c",
+    "version": "1.0"
   },
   "developer-guide.md": {
-    "body": "1d3039cf7ce7baf1f47cd1b86545fc9cc7500b1b27f181226518218bb760815c",
+    "body": "ddf922eb91356a9b11cb0735f540fb9ad95e945de32011e0d296b943769ba3d3",
     "images": {
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/developer/01-studio-pipelines.png": "37cef8fe2178bcb0b1b53f406aefd85ba13b389a597f8764eb173a655f72c385",
@@ -35,12 +45,12 @@
       "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
       "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "ec58a3a649682593fbfa67db065c44dc206e435399e3909a01742aac0efaac17",
-    "source": "08f9efdec63c68719d99bacc9c45e0d13a6676686be476357763ea42f3ffb6b2",
-    "version": "1.27"
+    "pdf": "0220130f471e10ad7690ec32a81b660863217e5318bbe9311ff1324f7b3cbdd7",
+    "source": "ec39eaf4ed3bd63444c4ff891d6eca5c13098034d24b1596c967a3997bdd796b",
+    "version": "1.28"
   },
   "user-guide.md": {
-    "body": "fa06766938c53a8ec85c1d72de3b929a009bb257195f8347aa20fddce2960aa3",
+    "body": "e422618d89aa173017aeffc2383da986610d55065951c0567f1113ee059dcf44",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -69,8 +79,8 @@
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "8a85f96019c71dc15452a39a68516dbd37a86a10b708b9d85a9850ee4c52c8fe",
-    "source": "28638a02556d8bbe55be63e5c836f455e36cf824475bbf7b030f895f60b6a061",
-    "version": "1.38"
+    "pdf": "c699ddb4e511f3cf3c15833b2013fdb5b976cc2f78994b7b402115fe26b9c1df",
+    "source": "2bb3b30492ab45195428a52a58113bb397ad90ab33e8426604298909c2c9e64f",
+    "version": "1.39"
   }
 }
