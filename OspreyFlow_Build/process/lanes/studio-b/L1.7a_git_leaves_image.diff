@@ -1,0 +1,53 @@
+diff --git a/OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py b/OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py
+index 4139378..68c16cb 100644
+--- a/OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py
++++ b/OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py
+@@ -126,6 +126,19 @@ def test_nothing_the_conduit_image_carries_execs_git() -> None:
+     )
+ 
+ 
++def test_the_conduit_image_does_not_install_git() -> None:
++    """`git` is GPL-2.0-only and nothing the image carries execs it (the test above), so it is
++    not installed (the owner's ruling of 9 November 2026: it leaves the image, and the licence
++    gate stops admitting it)."""
++    dockerfile = (REPO_ROOT / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
++    installed = " ".join(
++        line.strip() for line in dockerfile.splitlines() if "apt-get install" in line
++    )
++    assert "git" not in installed.split(), (
++        f"services/api/Dockerfile installs `git` again: {installed!r}"
++    )
++
++
+ def test_the_conduit_image_carries_every_product_file_a_route_loads_at_runtime() -> None:
+     """**The third instance of one class — round 13cdc.**
+ 
+diff --git a/OspreyFlow_Core/services/api/Dockerfile b/OspreyFlow_Core/services/api/Dockerfile
+index 2307f04..e71bf07 100644
+--- a/OspreyFlow_Core/services/api/Dockerfile
++++ b/OspreyFlow_Core/services/api/Dockerfile
+@@ -47,19 +47,11 @@ FROM python:3.12-slim
+ # on packages this service does not touch.
+ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+ 
+-# **`git`, because the Conduit shells out to it and the image did not have it.**
+-# `09_INGEST_STUDIO.md` §6: "Publishing writes the recipe to version control, not only to the
+-# database. The studio is the editor; the repository is the record." `services/api/studio_publish.
+-# py` implements that with `asyncio.create_subprocess_exec("git", ...)`, so the binary is a
+-# runtime dependency of the Conduit in exactly the way a Python package is — and it was absent
+-# from every image this project has ever built. Publish returned a bare 500
+-# (`FileNotFoundError` from the exec) in every rendered deployment, while
+-# `tests/ingest/test_studio_publish_pipeline.py` passed throughout because it runs on the host,
+-# where `git` exists and the test `git init`s its own repository. Round 13bf, found walking the
+-# chain over the wire. `tests/test_connectors_are_carried_into_the_image.py` is what fails if it
+-# is dropped again.
+-RUN apt-get update && apt-get install -y --no-install-recommends git \
+-    && rm -rf /var/lib/apt/lists/*
++# **No `git`.** Round 13bf installed it because Publish execed it to commit a recipe
++# (`09_INGEST_STUDIO.md` §6: the repository is the record). Publish commits with dulwich
++# (Apache-2.0) since the owner's ruling of 9 November 2026, and `git` (GPL-2.0-only) left the
++# image. `tests/test_connectors_are_carried_into_the_image.py` fails if anything the image carries
++# execs `git`, or if it is installed here again.
+ 
+ RUN useradd --create-home --uid 10001 osprey
+ WORKDIR /app
