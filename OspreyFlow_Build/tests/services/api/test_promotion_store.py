@@ -11,6 +11,10 @@ schema allows and main's does not stops other lanes' runs).
 - A decision is written only from the status it was read with: of two at once, one wins.
 - A grant closes once and is never reopened.
 - What is written reads back whole (the element ids, the left-out list with its words).
+- A board's list is filtered by clearance in the query, as the Studio's is.
+- An open promotion's marking rises with an item edited above it, never falls, and a decided one
+  is left as it was decided.
+- What still waits from a layer is found by the layer (its delete rejects it).
 """
 
 from __future__ import annotations
@@ -164,3 +168,51 @@ async def test_a_deleted_layer_is_recorded_and_its_grants_closed(
     closed, kept = await store.grant(grant.id), await store.grant(other.id)
     assert closed is not None and closed.closed_at == NOW
     assert kept is not None and kept.closed_at is None
+
+
+async def test_a_boards_list_is_filtered_by_clearance_in_the_query(
+    store: PostgresPromotionStore,
+) -> None:
+    mine, other_unit, above = await _three(store)
+    seen = await store.of_board("case-k", "board-1", markings=["OFFICIAL", "OFFICIAL-SENSITIVE"])
+    assert {r.id for r in seen} == {mine, other_unit}
+    # The plant: the same read without the reader's markings returns the one above them.
+    assert above in {r.id for r in await store.of_board("case-k", "board-1")}
+
+
+RANKED = ["OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET", "TOP SECRET"]
+
+
+async def test_an_open_promotions_marking_rises_with_its_item_and_never_falls(
+    store: PostgresPromotionStore,
+) -> None:
+    waiting = _record()
+    decided = _record(item_ids=("i9",), status="committed")
+    other_case = _record(case_id="case-b")
+    for r in (waiting, decided, other_case):
+        await store.add(r)
+    await store.raise_marking("case-k", "i2", "OFFICIAL-SENSITIVE", RANKED)
+    held = await store.get(waiting.id)
+    assert held is not None and held.marking == "OFFICIAL-SENSITIVE"
+    # Never lowered by a later, lower edit.
+    await store.raise_marking("case-k", "i2", "OFFICIAL", RANKED)
+    held = await store.get(waiting.id)
+    assert held is not None and held.marking == "OFFICIAL-SENSITIVE"
+    # Another case's promotion holding the same item id, and a decided one, are untouched.
+    await store.raise_marking("case-k", "i9", "SECRET", RANKED)
+    for untouched in (decided, other_case):
+        again = await store.get(untouched.id)
+        assert again is not None and again.marking == "OFFICIAL"
+    # A marking the scheme does not hold changes nothing.
+    await store.raise_marking("case-k", "i2", "NOT A MARKING", RANKED)
+    held = await store.get(waiting.id)
+    assert held is not None and held.marking == "OFFICIAL-SENSITIVE"
+
+
+async def test_what_waits_from_a_layer_is_found_by_the_layer(store: PostgresPromotionStore) -> None:
+    waiting = _record()
+    decided = _record(status="rejected")
+    elsewhere = _record(layer_id="layer-b")
+    for r in (waiting, decided, elsewhere):
+        await store.add(r)
+    assert [r.id for r in await store.waiting_from_layer("layer-k")] == [waiting.id]

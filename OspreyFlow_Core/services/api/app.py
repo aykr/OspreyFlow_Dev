@@ -790,7 +790,12 @@ from .pipeline_run import (
     RecogniserFor,
 )
 from .principal_names import PrincipalNameDirectory
-from .promotion_store import InMemoryPromotionStore, PostgresPromotionStore, PromotionStore
+from .promotion_store import (
+    InMemoryPromotionStore,
+    PostgresPromotionStore,
+    PromotionRecord,
+    PromotionStore,
+)
 from .promotions import (
     GAZETTEER_TAKES_NOTHING_DRAWN,
     PromotionNotFound,
@@ -4292,12 +4297,20 @@ async def edit_drawn_item(
     body: DrawnItemEdit,
     principal: PrincipalDep,
     boards: BoardsDep,
+    promotion_store: PromotionStoreDep,
     audit: AuditDep,
     grading: GradingSettingsDep,
 ) -> DrawnItemMade:
-    """The author edits their own item; a marking is never lowered (decision 5)."""
+    """The author edits their own item; a marking is never lowered (decision 5). An item waiting
+    for review raises its promotion's marking with its own (ADR-143 Amendment 5 decision 6a)."""
     _graded_in_the_deployments_scheme(body.grading, grading)
     made = await boards.edit(investigation.id, item_id, body, principal)
+    if body.marking is not None:
+        # `PromotionsDep` is declared below this route: the store is reached directly, as
+        # `Promotions.item_marked` does (FastAPI drops a dependency it cannot resolve here).
+        await promotion_store.raise_marking(
+            investigation.id, item_id, body.marking, list(boards.scheme.classification)
+        )
     await _audit_board(audit, principal, "edit_drawn_item", investigation.id, item_id=item_id,
                        changed=sorted(body.model_dump(exclude_none=True)))  # fmt: skip
     return made
@@ -4499,6 +4512,8 @@ def get_promotions(
     boards: BoardsDep,
     store: PromotionStoreDep,
     investigations: InvestigationsDep,
+    principal: PrincipalDep,
+    audit: AuditDep,
 ) -> Promotions:
     # The people directory's names; ids where the app holds none (a test app with no lifespan).
     directory = getattr(request.app.state, "principal_names", None)
@@ -4506,6 +4521,13 @@ def get_promotions(
     async def case_name(case_id: str) -> str | None:
         held = await investigations.admin_states([case_id])
         return held[case_id][0] if case_id in held else None
+
+    async def rejected(record: PromotionRecord, reason: str) -> None:
+        await _audit_promotion(
+            audit, principal, "promotion_rejected", record.case_id,
+            len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
+            load_id=record.load_id, dataset_id=record.dataset_id, reason=reason,
+        )  # fmt: skip
 
     return Promotions(
         boards=boards,
@@ -4515,6 +4537,7 @@ def get_promotions(
         link_types=_promotion_refusals_of(request),
         names=directory.display_names if directory is not None else None,
         case_names=case_name,
+        on_rejected=rejected,
     )
 
 
@@ -4530,9 +4553,7 @@ PromotionsDep = Annotated[Promotions, Depends(get_promotions)]
 
 @app.exception_handler(PromotionRefused)
 async def _promotion_refused_handler(request: Request, exc: PromotionRefused) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status, content={"error": exc.code, "detail": exc.message}
-    )
+    return JSONResponse(status_code=exc.status, content={"error": exc.code, "detail": exc.message})
 
 
 @app.exception_handler(PromotionNotFound)
@@ -4618,14 +4639,15 @@ async def list_board_promotions(
     """*Promotions from this board* (decision 10): the outcome of each, for a reader who may see
     the board."""
     board = await boards.board(investigation.id, board_id, principal.id)
-    held = await promotions.store.of_board(investigation.id, board.id)
-    # Rule 3: a promotion carrying an item above the reader's clearance is not listed to them.
-    scheme = promotions.boards.scheme
+    # Rule 3: a promotion carrying an item above the reader's clearance is not listed to them,
+    # in the store's query; each listed with the counts of what this reader is shown.
+    held = await promotions.store.of_board(
+        investigation.id, board.id, markings=_markings_cleared(promotions, principal)
+    )
+    counts = await promotions.shown_counts(held, principal)
     return PromotionsList(
         promotions=[
-            await promotions.view(r, principal, with_board=True)
-            for r in held
-            if scheme.clears(principal.clearance, r.marking)
+            await promotions.view(r, principal, with_board=True, counts=counts[r.id]) for r in held
         ]
     )
 
@@ -8103,9 +8125,7 @@ async def get_map_tile_route(
     except MissingMapKeyError as missing:
         raise HTTPException(status_code=503, detail=str(missing)) from None
     except MissingCredentialError:
-        raise HTTPException(
-            status_code=503, detail=str(MissingMapKeyError(provider_id))
-        ) from None
+        raise HTTPException(status_code=503, detail=str(MissingMapKeyError(provider_id))) from None
     try:
         tile_bytes = await fetch_tile(url)
     except TileFetchFailed as failed:
@@ -9807,9 +9827,14 @@ async def list_dataset_promotions(
     # Rule 3: the reader's clearance is in the store's query, never applied after the read. Drawn
     # items carry only a permitted handling code (`Boards._handling`), so the classification is
     # the whole of their audience beyond the dataset the gate has already checked.
-    for record in await promotions.store.into(
+    held = await promotions.store.into(
         dataset_id, markings=_markings_cleared(promotions, principal)
-    ):
+    )
+    # An Author is given the counts *Details* would show them (Amendment 5 decision 6a). Anyone
+    # else reads none of the items; the recorded counts, of a promotion marked within their
+    # clearance (kept current by `item_marked`), say nothing they may not know.
+    shown = await promotions.shown_counts(held, principal) if author else {}
+    for record in held:
         own = record.proposed_by == principal.id
         out.append(
             await promotions.view(
@@ -9817,7 +9842,7 @@ async def list_dataset_promotions(
                 why_not="You sent this promotion: a second person must review it." if own
                 else why,
                 # The case is named to the dataset's Authors, who answer for it, and its proposer.
-                show_case=author or own,
+                show_case=author or own, counts=shown.get(record.id),
             )
         )  # fmt: skip
     return PromotionsList(promotions=out)
@@ -9828,11 +9853,16 @@ def _markings_cleared(promotions: Promotions, principal: Principal) -> list[str]
     return [m for m in scheme.classification if scheme.clears(principal.clearance, m)]
 
 
+def _cleared_for(promotions: Promotions, principal: Principal, record: Any) -> bool:
+    """Rule 3: a promotion marked above the reader's clearance is, to them, no promotion."""
+    return promotions.boards.scheme.clears(principal.clearance, record.marking)
+
+
 async def _reviewable(
     promotions: Promotions, dataset_id: str, promotion_id: str, principal: Principal
 ) -> Any:
     record = await promotions.of_dataset(dataset_id, promotion_id)
-    if not promotions.boards.scheme.clears(principal.clearance, record.marking):
+    if not _cleared_for(promotions, principal, record):
         raise PromotionNotFound
     if not await promotions.is_author_of(dataset_id, principal):
         raise PromotionRefused(
@@ -9986,9 +10016,7 @@ async def open_layer_merge(
     if dataset.kind == "composite":
         raise LayerActionRefused(409, "composite_never_merged", _COMPOSITE_NEVER_MERGED)
     if is_gazetteer(dataset):
-        raise LayerActionRefused(
-            409, "gazetteer_never_merged", GAZETTEER_TAKES_NOTHING_DRAWN
-        )
+        raise LayerActionRefused(409, "gazetteer_never_merged", GAZETTEER_TAKES_NOTHING_DRAWN)
     await _audit_promotion(
         audit, principal, "open_layer_merge", case_id, 0, dataset_id=dataset_id,
         layer_id=layer,
@@ -10011,6 +10039,7 @@ async def read_layer_merge(
     principal: PrincipalDep,
     datasets: DatasetsDep,
     promotions: PromotionsDep,
+    audit: AuditDep,
 ) -> LayerMergeSheet:
     """The merge sheet again, through its grant: refused once the merge has closed."""
     await _an_author(promotions, dataset_id, principal)
@@ -10018,13 +10047,16 @@ async def read_layer_merge(
     grant = await promotions.store.grant(grant_id)
     if grant is None:
         raise PromotionRefused("no_open_grant", "This merge is closed.", status=403)
-    _, case_name = await _merge_grant_case(promotions, grant_id)
-    return await promotions.merge_sheet(grant, dataset, case_name, principal)
+    case_id, case_name = await _merge_grant_case(promotions, grant_id)
+    sheet = await promotions.merge_sheet(grant, dataset, case_name, principal)
+    await _audit_promotion(
+        audit, principal, "read_layer_merge", case_id, len(sheet.items), dataset_id=dataset_id,
+        grant_id=grant_id, layer_id=grant.layer_id,
+    )  # fmt: skip
+    return sheet
 
 
-@app.post(
-    "/v1/datasets/{dataset_id}/layer-merges/{grant_id}", status_code=status.HTTP_201_CREATED
-)
+@app.post("/v1/datasets/{dataset_id}/layer-merges/{grant_id}", status_code=status.HTTP_201_CREATED)
 async def merge_removed_case_layer(
     dataset_id: StudioDatasetDep,
     grant_id: str,
@@ -10083,8 +10115,10 @@ async def dry_run_delete_removed_case_layer(
     return LayerDryRun(
         investigation_id=case_id, action="delete", items=row.items, links=row.links,
         size_bytes=row.size_bytes,
-        would=f"Would delete {counts} from {row.name}'s layer. Promoted items are never touched. "
-        "Nothing has been written.",
+        # The counts are the layer's as this reader may see it, promoted items included (they
+        # hold the layer too): the words say what goes, never "N deleted" (Amendment 2 decision 1).
+        would=f"{row.name}'s layer holds {counts}. Deleting it withdraws those not promoted; "
+        "promoted items are never touched. Nothing has been written.",
     )  # fmt: skip
 
 
@@ -10353,7 +10387,10 @@ async def _audit_type_decision(
         principal=principal,
         action=action,
         resolved_query={
-            "dataset_id": dataset_id, "proposal_id": found.id, "name": found.name, **more
+            "dataset_id": dataset_id,
+            "proposal_id": found.id,
+            "name": found.name,
+            **more,
         },
         result_cardinality=1,
         justification=why,

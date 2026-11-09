@@ -9,9 +9,9 @@ promotion `reverted`; clears its board items' `promoted_at`; audits it under `--
 clears the Conduit's kept results (`cache:*` in the shared Valkey), since what was counted included
 the promoted elements. Nothing is deleted.
 
-**Quiesce the Conduit**, as for any load's revert (ADR-127 Amendment 9). An online revert from the
-board waits for the owner's ruling on ADR-143 open question 2; until then this command is the only
-way, and it must never be routed through the Conduit.
+**Quiesce the Conduit**, as for any load's revert (ADR-127 Amendment 9). There is no online revert:
+the owner settled ADR-143 open question 2 as (a), this command alone (Amendment 5 decision 8), and
+it must never be routed through the Conduit.
 
 `--dry-run` says what would be reverted and writes nothing: it reads the promotion's record alone.
 

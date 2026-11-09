@@ -81,7 +81,17 @@ class PromotionStore(Protocol):
     async def add(self, record: PromotionRecord) -> None: ...
     async def get(self, promotion_id: str) -> PromotionRecord | None: ...
     async def by_load(self, load_id: str) -> PromotionRecord | None: ...
-    async def of_board(self, case_id: str, board_id: str) -> list[PromotionRecord]: ...
+    #: Rule 3: `markings`, when given, the markings the reader reaches, applied in the query.
+    async def of_board(
+        self, case_id: str, board_id: str, *, markings: Sequence[str] | None = None
+    ) -> list[PromotionRecord]: ...
+    #: An item of an open promotion edited to a higher marking: the promotion's marking rises
+    #: with it, so every reader filter (the lists, *Details*, the seam) reads it as it is now.
+    async def raise_marking(
+        self, case_id: str, item_id: str, marking: str, ranked: Sequence[str]
+    ) -> None: ...
+    #: The promotions still waiting that come from `layer_id`.
+    async def waiting_from_layer(self, layer_id: str) -> list[PromotionRecord]: ...
     #: Rule 3: `markings`, when given, the markings the reader reaches, applied in the query.
     async def into(
         self, dataset_id: str, *, markings: Sequence[str] | None = None
@@ -132,11 +142,38 @@ class InMemoryPromotionStore:
     async def by_load(self, load_id: str) -> PromotionRecord | None:
         return next((r for r in self.records.values() if r.load_id == load_id), None)
 
-    async def of_board(self, case_id: str, board_id: str) -> list[PromotionRecord]:
+    async def of_board(
+        self, case_id: str, board_id: str, *, markings: Sequence[str] | None = None
+    ) -> list[PromotionRecord]:
         return sorted(
-            (r for r in self.records.values() if r.case_id == case_id and r.board_id == board_id),
+            (
+                r
+                for r in self.records.values()
+                if r.case_id == case_id
+                and r.board_id == board_id
+                and (markings is None or r.marking in markings)
+            ),
             key=lambda r: (r.proposed_at, r.id),
         )
+
+    async def raise_marking(
+        self, case_id: str, item_id: str, marking: str, ranked: Sequence[str]
+    ) -> None:
+        for rid, r in list(self.records.items()):
+            if (
+                r.case_id == case_id
+                and r.status == "awaiting_review"
+                and item_id in r.item_ids
+                and marking in ranked
+                and (r.marking not in ranked or ranked.index(marking) > ranked.index(r.marking))
+            ):
+                self.records[rid] = replace(r, marking=marking)
+
+    async def waiting_from_layer(self, layer_id: str) -> list[PromotionRecord]:
+        return [
+            r for r in self.records.values()
+            if r.layer_id == layer_id and r.status == "awaiting_review"
+        ]  # fmt: skip
 
     async def into(
         self, dataset_id: str, *, markings: Sequence[str] | None = None
@@ -316,13 +353,46 @@ class PostgresPromotionStore:
             )
         return _record(row) if row is not None else None
 
-    async def of_board(self, case_id: str, board_id: str) -> list[PromotionRecord]:
+    async def of_board(
+        self, case_id: str, board_id: str, *, markings: Sequence[str] | None = None
+    ) -> list[PromotionRecord]:
+        # The reader's clearance is in the WHERE clause (rule 3), never applied after the read.
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM promotions WHERE case_id = $1 AND board_id = $2 "
+                "AND ($3::text[] IS NULL OR marking = ANY($3::text[])) "
                 "ORDER BY proposed_at, id",
                 case_id,
                 board_id,
+                list(markings) if markings is not None else None,
+            )
+        return [_record(r) for r in rows]
+
+    async def raise_marking(
+        self, case_id: str, item_id: str, marking: str, ranked: Sequence[str]
+    ) -> None:
+        if marking not in ranked:
+            return
+        # Every marking strictly below the new one, in the scheme's order: the row rises only
+        # from one of those, in one statement (never lowered, never raced into a lower one).
+        lower = list(ranked[: list(ranked).index(marking)])
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE promotions SET marking = $3 WHERE case_id = $1 "
+                "AND status = 'awaiting_review' AND $2 = ANY(item_ids) "
+                "AND marking = ANY($4::text[])",
+                case_id,
+                item_id,
+                marking,
+                lower,
+            )
+
+    async def waiting_from_layer(self, layer_id: str) -> list[PromotionRecord]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM promotions WHERE layer_id = $1 "
+                "AND status = 'awaiting_review' ORDER BY proposed_at, id",
+                layer_id,
             )
         return [_record(r) for r in rows]
 

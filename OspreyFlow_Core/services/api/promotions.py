@@ -30,8 +30,9 @@ orchestrator's settlement of admin's Q5), which is only deleted. Deleting withdr
 wholly the layer's (`withdraw_layer`); promoted items are never touched.
 
 **Revert.** A promotion is reverted like any load: with the Conduit stopped, by the operator command
-`python -m scripts.revert_promotion` (ADR-127 Amendment 9), whose core is `revert`. An online revert
-waits for the owner's ruling on ADR-143 open question 2.
+`python -m scripts.revert_promotion` (ADR-127 Amendment 9), whose core is `revert`. There is no
+online revert: the owner settled ADR-143 open question 2 as (a), the operator command alone
+(Amendment 5 decision 8).
 """
 
 from __future__ import annotations
@@ -97,6 +98,9 @@ class _LinkTypes(Protocol):
 
 class _Investigations(Protocol):
     async def get_authorized(self, case_id: str, principal: Principal, *, need: Any) -> Any: ...
+    async def admin_states(
+        self, investigation_ids: Sequence[str]
+    ) -> dict[str, tuple[str, bool]]: ...
 
 
 @dataclass(frozen=True)
@@ -129,6 +133,10 @@ class Promotions:
     #: Names for display, by account id (the people directory); ids where absent.
     names: Callable[[Sequence[str]], Awaitable[dict[str, str]]] | None = None
     case_names: Callable[[str], Awaitable[str | None]] | None = None
+    #: The audit entry for a promotion ended rejected by anything but a reviewer's own *Reject*
+    #: (the approval's re-check, a refused or failed load, a restored case, a deleted layer),
+    #: which the route audits itself: no state change without its entry.
+    on_rejected: Callable[[PromotionRecord, str], Awaitable[None]] | None = None
     #: A picture's Document as the last `_read` found it.
     _docs: dict[str, Node] = field(default_factory=dict)
 
@@ -528,6 +536,45 @@ class Promotions:
         they may not approve (another of the dataset's Authors may)."""
         return all(r.element is not None for r in reads)
 
+    async def reject(
+        self,
+        record: PromotionRecord,
+        *,
+        was: str,
+        by: str | None,
+        reason: str,
+        audited_by_route: bool = False,
+    ) -> bool:
+        """Every way a promotion ends rejected (a reviewer's, the approval's re-check, a refused or
+        failed load, its layer deleted): recorded once, and a layer merge's read grant closed with
+        it (Amendment 2 decision 1: the grant ends with the merge, whatever ends it)."""
+        now = datetime.now(UTC)
+        done = await self.store.decide(
+            record.id,
+            was=was,
+            now="rejected",
+            by=by,
+            at=now,
+            reason=reason,  # type: ignore[arg-type]
+        )
+        if record.grant_id is not None:
+            await self.store.close_grant(record.grant_id, now)
+        if done and not audited_by_route and self.on_rejected is not None:
+            await self.on_rejected(record, reason)
+        return done
+
+    async def item_marked(self, case_id: str, item_id: str, marking: str) -> None:
+        """An item edited to `marking`: an open promotion carrying it is marked as it is now."""
+        await self.store.raise_marking(
+            case_id, item_id, marking, list(self.boards.scheme.classification)
+        )
+
+    async def case_still_removed(self, case_id: str) -> bool:
+        """A removed case's layer is merged only while the case is still removed (Amendment 5
+        decision 7): one restored since is a live case again, read by its members alone."""
+        states = await self.investigations.admin_states([case_id])
+        return case_id in states and states[case_id][1]
+
     async def _commit(self, record: PromotionRecord, *, by: str | None) -> PromotionRecord:
         """The load itself: one graph transaction, all or nothing; then the registry's
         `promoted_at` (the withdrawal reads it, never the element). A load that fails leaves the
@@ -540,8 +587,8 @@ class Promotions:
             )
         except NotPromotable as gone:
             await graph.rollback_transaction(tx)
-            await self.store.decide(
-                record.id, was="awaiting_review", now="rejected", by=by, at=datetime.now(UTC),
+            await self.reject(
+                record, was="awaiting_review", by=by,
                 reason=f"Nothing was written: {gone.count} of its items changed since it was sent.",
             )  # fmt: skip
             raise PromotionRefused(
@@ -553,8 +600,8 @@ class Promotions:
             # Whatever refused the load (an ambiguous id, a composite, an unconverted case), the
             # promotion is not left waiting as if it could still be approved.
             await graph.rollback_transaction(tx)
-            await self.store.decide(
-                record.id, was="awaiting_review", now="rejected", by=by, at=datetime.now(UTC),
+            await self.reject(
+                record, was="awaiting_review", by=by,
                 reason="The load was refused, and nothing was written.",
             )  # fmt: skip
             raise
@@ -567,10 +614,9 @@ class Promotions:
         try:
             await graph.commit_transaction(tx)
         except Exception:
-            await self.store.decide(
-                record.id, was="committed", now="rejected", by=by, at=datetime.now(UTC),
-                reason="The load failed, and nothing was written.",
-            )  # fmt: skip
+            await self.reject(
+                record, was="committed", by=by, reason="The load failed, and nothing was written."
+            )
             raise
         await self.boards.items.mark_promoted(record.case_id, list(record.item_ids), now)
         if record.grant_id is not None:
@@ -599,21 +645,68 @@ class Promotions:
             raise PromotionNotFound
         return held
 
-    def _reviewer_read(self, record: PromotionRecord, reviewer: Principal) -> Principal:
-        """The reviewer reads the promotion's own elements, by id, from its layer and the dataset it
-        goes into (a drawn link's loaded end is there), through their own handling (Amendment 2
-        decision 1: "as a promotion reviewer reads what they review")."""
-        return reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
+    def _reviewer_read(self, record: PromotionRecord, reviewer: Principal) -> Principal | None:
+        """What the reviewer reads the promotion's own elements through, by id, with their own
+        handling (Amendment 2 decision 1: "as a promotion reviewer reads what they review"):
+        while it waits, its layer and the dataset it goes into (a drawn link's loaded end is
+        there); once committed, the dataset alone, where its elements now are. A rejected or
+        reverted promotion's elements are the case's layer's alone, read by its members and no
+        one else: nothing of them is read for it (rule 3; `None`)."""
+        if record.status == "awaiting_review":
+            return reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
+        if record.status == "committed":
+            return reviewer.model_copy(update={"datasets": [record.dataset_id]})
+        return None
 
-    async def details(self, record: PromotionRecord, reviewer: Principal) -> PromotionDetails:
+    async def _elements(
+        self, record: PromotionRecord, reviewer: Principal
+    ) -> tuple[list[Node], list[Edge]]:
         reader = self._reviewer_read(record, reviewer)
+        if reader is None:
+            return [], []
         nodes = await self.boards.graph.get_nodes(list(record.node_ids), reader)
         edges = await self.boards.graph.get_edges(list(record.edge_ids), reader)
+        return nodes, edges
+
+    async def shown_counts(
+        self, records: Sequence[PromotionRecord], reader: Principal
+    ) -> dict[str, tuple[int, int]]:
+        """Each promotion's counts as `reader` would be shown its items in *Details*, never as
+        recorded (Amendment 5 decision 6a: the counts of what is shown, never the difference).
+        One read per layer, not per promotion. A promotion whose elements are read for no one
+        (rejected, reverted) keeps its recorded counts: none of its items is shown to anyone."""
+        out: dict[str, tuple[int, int]] = {}
+        groups: dict[tuple[str, ...], list[PromotionRecord]] = {}
+        for record in records:
+            read = self._reviewer_read(record, reader)
+            if read is None:
+                out[record.id] = (len(record.node_ids), len(record.edge_ids))
+                continue
+            groups.setdefault(tuple(read.datasets), []).append(record)
+        for datasets, held in groups.items():
+            read = reader.model_copy(update={"datasets": list(datasets)})
+            node_ids = sorted({n for r in held for n in r.node_ids})
+            edge_ids = sorted({e for r in held for e in r.edge_ids})
+            nodes = {n.id for n in await self.boards.graph.get_nodes(node_ids, read)}
+            edges = {e.id for e in await self.boards.graph.get_edges(edge_ids, read)}
+            for r in held:
+                out[r.id] = (
+                    sum(1 for n in set(r.node_ids) if n in nodes),
+                    sum(1 for e in r.edge_ids if e in edges),
+                )
+        return out
+
+    async def details(self, record: PromotionRecord, reviewer: Principal) -> PromotionDetails:
+        nodes, edges = await self._elements(record, reviewer)
         items = [_detail(n, "node") for n in nodes] + [_detail(e, _kind(e)) for e in edges]
-        withheld = len(nodes) != len(set(record.node_ids)) or len(edges) != len(record.edge_ids)
+        read = self._reviewer_read(record, reviewer) is not None
+        withheld = read and (
+            len(nodes) != len(set(record.node_ids)) or len(edges) != len(record.edge_ids)
+        )
         promotion = await self.view(record, reviewer, show_case=True)
-        if withheld:
-            # Rule 7: no count beside the items that would say how many are withheld.
+        if read:
+            # Rule 7: the counts of what is shown, never beside a difference; the same counts
+            # the list gives this reader (`shown_counts`).
             promotion = promotion.model_copy(update={"nodes": len(nodes), "links": len(edges)})
         return PromotionDetails(promotion=promotion, items=items, withheld=withheld)
 
@@ -632,16 +725,25 @@ class Promotions:
                 status=403,
             )
         if approve:
+            if record.trigger == "layer_merge" and not await self.case_still_removed(
+                record.case_id
+            ):
+                await self.reject(
+                    record, was="awaiting_review", by=reviewer.id,
+                    reason="Nothing was written: the case was restored since the merge was sent.",
+                )  # fmt: skip
+                raise PromotionRefused(
+                    "case_open",
+                    "Nothing was merged: the case has been restored, so its layer is its own "
+                    "again.",
+                )
             await self.recheck(record, reviewer)
             return await self._commit(record, by=reviewer.id)
-        now = datetime.now(UTC)
-        if not await self.store.decide(
-            record.id, was="awaiting_review", now="rejected", by=reviewer.id, at=now,
-            reason=(reason or "").strip(),
+        if not await self.reject(
+            record, was="awaiting_review", by=reviewer.id, reason=(reason or "").strip(),
+            audited_by_route=True,
         ):  # fmt: skip
             raise PromotionRefused("already_decided", "This promotion has already been decided.")
-        if record.grant_id is not None:
-            await self.store.close_grant(record.grant_id, now)
         held = await self.store.get(record.id)
         assert held is not None
         return held
@@ -655,6 +757,7 @@ class Promotions:
         if held is None:
             raise PromotionNotFound
         reader = self._reviewer_read(record, reviewer)
+        assert reader is not None  # `decide` reads only a promotion still waiting
         items = [await self.boards.items.get(record.case_id, i) for i in record.item_ids]
         live = [i for i in items if i is not None and i.withdrawn_at is None]
         reads = await self._read(live, reader)
@@ -674,10 +777,9 @@ class Promotions:
                 if failing
                 else "One of its items was withdrawn since it was sent."
             )
-            await self.store.decide(
-                record.id, was="awaiting_review", now="rejected", by=reviewer.id,
-                at=datetime.now(UTC), reason=f"Nothing was written. {why}",
-            )  # fmt: skip
+            await self.reject(
+                record, was="awaiting_review", by=reviewer.id, reason=f"Nothing was written. {why}"
+            )
             raise PromotionRefused("items_changed", f"Nothing was promoted. {why}")
 
     # --- views ----------------------------------------------------------------------------
@@ -692,6 +794,7 @@ class Promotions:
         reverts: bool = False,
         with_board: bool = False,
         show_case: bool = True,
+        counts: tuple[int, int] | None = None,
     ) -> Promotion:
         """One promotion for `reader`. What it left out, with its labels as the sheet showed them,
         goes to its proposer alone (rule 3: an unticked item may be one no one else may see). The
@@ -717,7 +820,8 @@ class Promotions:
             reviewed_by_name=names.get(record.reviewed_by, record.reviewed_by)
             if record.reviewed_by else None,
             reviewed_at=record.reviewed_at, reason=record.reason,
-            nodes=len(record.node_ids), links=len(record.edge_ids),
+            nodes=counts[0] if counts else len(record.node_ids),
+            links=counts[1] if counts else len(record.edge_ids),
             left_out=[LeftOut(item_id=i, label=lab, why=why) for i, lab, why in record.left_out]
             if reader.id == record.proposed_by else [],
             revert_command=REVERT_COMMAND.format(load_id=record.load_id)
@@ -745,7 +849,9 @@ class Promotions:
         await self.store.open_grant(grant)
         return await self.merge_sheet(grant, dataset, case_name, author)
 
-    async def _granted(self, grant_id: str, dataset: Dataset, author: Principal) -> LayerGrant:
+    async def _granted(
+        self, grant_id: str, dataset: Dataset, author: Principal, *, case_checked: bool = True
+    ) -> LayerGrant:
         grant = await self.store.grant(grant_id)
         if (
             grant is None
@@ -758,6 +864,14 @@ class Promotions:
                 "no_open_grant",
                 "This merge is closed: open Merge into the dataset again to read the layer.",
                 status=403,
+            )
+        if case_checked and not await self.case_still_removed(grant.case_id):
+            # Restored since the sheet was opened: its layer is a live case's again, and the
+            # grant ends now, whether it is read, merged or cancelled next.
+            await self.store.close_grant(grant.id, datetime.now(UTC))
+            raise PromotionRefused(
+                "case_open",
+                "Only a removed case's layer can be merged: this case has been restored.",
             )
         return grant
 
@@ -800,7 +914,8 @@ class Promotions:
         return record
 
     async def cancel_merge(self, grant_id: str, dataset: Dataset, author: Principal) -> None:
-        grant = await self._granted(grant_id, dataset, author)
+        # Cancelling always closes the holder's grant, the case restored or not.
+        grant = await self._granted(grant_id, dataset, author, case_checked=False)
         await self.store.close_grant(grant.id, datetime.now(UTC))
 
     async def delete_layer(self, case_id: str, layer_id: str) -> LayerDeleted:
@@ -817,6 +932,13 @@ class Promotions:
         now = datetime.now(UTC)
         await self.store.close_grants_for_layer(layer_id, now)
         await self.store.mark_layer_deleted(layer_id, now)
+        # What still waits from the layer is rejected now, not left waiting (and ageing in
+        # *Promotions overdue*) until someone tries to approve it.
+        for waiting in await self.store.waiting_from_layer(layer_id):
+            await self.reject(
+                waiting, was="awaiting_review", by=None,
+                reason="Nothing was written: its case's layer was deleted.",
+            )  # fmt: skip
         held = await self.boards.items.in_case(case_id)
         unpromoted = [i.item_id for i in held if i.withdrawn_at is None and i.promoted_at is None]
         if unpromoted:
@@ -841,7 +963,7 @@ async def revert_promotion(
     """The revert of a committed promotion: the dataset taken back from exactly its elements in
     one transaction, the promotion recorded `reverted`, its items' `promoted_at` cleared. The
     operator command's core (`scripts.revert_promotion`), run with the Conduit stopped (ADR-127
-    Amendment 9); never a route until the owner rules on ADR-143 open question 2.
+    Amendment 9); never a route (ADR-143 open question 2, settled (a): Amendment 5 decision 8).
 
     Refused, as a load's revert is (ADR-127 Amendment 6, `live_edges_touching`), while a live link
     other than the promotion's own and the case's own unpromoted drawing rests on one of its

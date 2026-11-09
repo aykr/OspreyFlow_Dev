@@ -172,7 +172,9 @@ def test_author_promotes_commits_one_load_and_case_b_reads_the_same_element(
     assert not _carol_sees_it_from_b(made["element_id"])
     sheet = _sheet(board)
     assert {i["item_id"] for i in sheet["items"]} == {made["item_id"], link_item}
-    assert all(not i["problems"] for i in sheet["items"]) and all(c["passed"] for c in sheet["checks"])
+    assert all(not i["problems"] for i in sheet["items"]) and all(
+        c["passed"] for c in sheet["checks"]
+    )
     nodes_before = len(pw.graph._graph_nodes)
 
     answer = _promote(board, made["item_id"], link_item)
@@ -463,43 +465,181 @@ def test_only_an_author_of_the_dataset_holding_review_promotions_decides(
     assert pw.graph.promotions == 0
 
 
-def _raised_after_sending(pw: SimpleNamespace) -> tuple[str, dict[str, Any]]:
-    """Two items sent for review at OFFICIAL; then their author raises one to OFFICIAL-SENSITIVE
-    (an item waiting for review is not yet promoted, so it may still be edited). The promotion's
-    recorded marking is what was sent: OFFICIAL, so Erin (cleared to OFFICIAL) is shown it."""
+def _sent_for_review(pw: SimpleNamespace) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    """Two items sent for review at OFFICIAL: Erin (cleared to OFFICIAL) and Dana may both read
+    it."""
     _policy(pw, "second_person_reviews")
     board = _board()
     seen = _item(board)
     raised = _item(board, label="Hidden", properties={"family_name": "Hidden"})
     promotion = _promote(board, seen["item_id"], raised["item_id"]).json()["id"]
+    return promotion, seen, raised
+
+
+def _raised_by_its_author(raised: dict[str, Any]) -> None:
+    """An item waiting for review is not yet promoted, so its author may still edit it: raised to
+    OFFICIAL-SENSITIVE, above Erin's clearance."""
     edited = _as("alice").patch(f"/v1/investigations/{K}/board-items/{raised['item_id']}",
                                 json={"marking": "OFFICIAL-SENSITIVE"})  # fmt: skip
     assert edited.status_code == 200, edited.text
-    return promotion, raised
+
+
+def _raised_out_of_band(pw: SimpleNamespace, raised: dict[str, Any]) -> None:
+    """The element's marking raised in the graph by no route of this module (the case's own
+    marking tool, a migration): the promotion's record still says OFFICIAL, so only the read
+    itself can say what Erin may see."""
+    node = pw.graph.node(raised["element_id"])
+    pw.graph._graph_nodes[raised["element_id"]] = node.model_copy(
+        update={
+            "handling": node.handling.model_copy(update={"classification": "OFFICIAL-SENSITIVE"})
+        }
+    )
+
+
+def test_an_item_raised_while_waiting_takes_its_promotion_out_of_a_lower_reviewers_reach(
+    pw: SimpleNamespace,
+) -> None:
+    promotion, _, raised = _sent_for_review(pw)
+    assert [p["id"] for p in _studio("erin").json()["promotions"]] == [promotion]
+    _raised_by_its_author(raised)
+    assert pw.store.records[promotion].marking == "OFFICIAL-SENSITIVE"
+    # Rule 3: to Erin it is no promotion at all, in the list, in Details and at a decision.
+    assert _studio("erin").json()["promotions"] == []
+    assert _studio("erin", f"/{promotion}").status_code == 404
+    assert _studio("erin", f"/{promotion}/decision", "post", approve=True).status_code == 404
+    # Dana, cleared for it, still reads it whole.
+    (dana,) = _studio("dana").json()["promotions"]
+    assert (dana["nodes"], dana["links"]) == (2, 0)
+
+
+def test_the_raised_marking_check_fails_with_the_promotion_left_as_sent(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def kept(self: Any, *args: Any) -> None:
+        return None
+
+    monkeypatch.setattr(InMemoryPromotionStore, "raise_marking", kept)  # the plant
+    promotion, _, raised = _sent_for_review(pw)
+    _raised_by_its_author(raised)
+    assert [p["id"] for p in _studio("erin").json()["promotions"]] == [promotion]
+
+
+def test_the_lists_clearance_check_fails_with_every_marking_passed_to_the_query(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.api import app as app_module
+
+    promotion, _, raised = _sent_for_review(pw)
+    _raised_by_its_author(raised)
+    # The plant at the route's call site: the query given every marking, whatever the reader's.
+    monkeypatch.setattr(
+        app_module, "_markings_cleared",
+        lambda promotions, principal: list(promotions.boards.scheme.classification),
+    )  # fmt: skip
+    assert [p["id"] for p in _studio("erin").json()["promotions"]] == [promotion]
+
+
+def test_the_details_clearance_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.api import app as app_module
+
+    promotion, _, raised = _sent_for_review(pw)
+    _raised_by_its_author(raised)
+    monkeypatch.setattr(app_module, "_cleared_for", lambda *args: True)  # the plant
+    assert _studio("erin", f"/{promotion}").status_code == 200
+
+
+def _bob_reads_the_boards_promotions(pw: SimpleNamespace) -> list[Any]:
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    assert _as("alice").post(f"/v1/investigations/{K}/boards/{board}/share").status_code == 200
+    high = _item(board, marking="OFFICIAL-SENSITIVE", label="High", properties={"family_name": "H"})
+    assert _promote(board, high["item_id"]).status_code == 201
+    # Bob: K's Editor, cleared to OFFICIAL, reading the shared board.
+    answer = _as("bob").get(f"/v1/investigations/{K}/boards/{board}/promotions")
+    assert answer.status_code == 200, answer.text
+    return list(answer.json()["promotions"])
+
+
+def test_a_boards_promotions_are_filtered_by_clearance_in_the_query(pw: SimpleNamespace) -> None:
+    assert _bob_reads_the_boards_promotions(pw) == []
+
+
+def test_the_boards_clearance_check_fails_with_every_marking_passed_to_the_query(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.api import app as app_module
+
+    monkeypatch.setattr(
+        app_module, "_markings_cleared",
+        lambda promotions, principal: list(promotions.boards.scheme.classification),
+    )  # fmt: skip
+    assert _bob_reads_the_boards_promotions(pw) != []
 
 
 def test_a_reviewer_who_may_not_see_every_item_may_not_approve(pw: SimpleNamespace) -> None:
-    promotion, _ = _raised_after_sending(pw)
+    promotion, _, raised = _sent_for_review(pw)
+    _raised_out_of_band(pw, raised)
     (listed,) = _studio("erin").json()["promotions"]
     details = _studio("erin", f"/{promotion}").json()
     assert details["withheld"]
     assert {i["label"] for i in details["items"]} == {"Unknown male “Tall”"}
-    # Rule 7: no count beside the items that would say how many are withheld.
+    # Rule 7 (Amendment 5 decision 6a): the counts of what is shown, the same in the list as in
+    # Details, never beside a difference.
     assert (details["promotion"]["nodes"], details["promotion"]["links"]) == (1, 0)
+    assert (listed["nodes"], listed["links"]) == (1, 0)
     answer = _studio("erin", f"/{promotion}/decision", "post", approve=True)
     assert answer.status_code == 403 and answer.json()["error"] == "not_all_seen"
     assert pw.graph.promotions == 0
     # The promotion still waits: another Author may see it all.
     assert pw.store.records[promotion].status == "awaiting_review"
-    assert listed["nodes"] == 2  # as sent, before the edit; the list carries no withheld count
+
+
+def test_the_shown_counts_check_fails_with_the_recorded_counts_listed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def recorded(self: Promotions, records: Any, reader: Any) -> dict[str, Any]:
+        return {r.id: (len(r.node_ids), len(r.edge_ids)) for r in records}
+
+    monkeypatch.setattr(Promotions, "shown_counts", recorded)  # the plant
+    promotion, _, raised = _sent_for_review(pw)
+    _raised_out_of_band(pw, raised)
+    (listed,) = _studio("erin").json()["promotions"]
+    assert listed["nodes"] == 2  # the difference against Details' 1: what the check refuses
 
 
 def test_the_unseen_check_fails_with_the_check_removed(
     pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(Promotions, "reviewer_sees_all", staticmethod(lambda reads: True))
-    promotion, _ = _raised_after_sending(pw)
-    assert _studio("erin", f"/{promotion}/decision", "post", approve=True).status_code == 200
+    promotion, _, raised = _sent_for_review(pw)
+    _raised_out_of_band(pw, raised)
+    assert _studio("erin", f"/{promotion}/decision", "post", approve=True).status_code != 403
+
+
+def test_a_decided_promotions_details_read_none_of_its_layer(pw: SimpleNamespace) -> None:
+    promotion, seen, _ = _sent_for_review(pw)
+    rejected = _studio("dana", f"/{promotion}/decision", "post", approve=False, reason="No.")
+    assert rejected.status_code == 200, rejected.text
+    # The items are the case's layer's alone again: nothing of them is read for a reviewer.
+    _as("alice").patch(f"/v1/investigations/{K}/board-items/{seen['item_id']}",
+                       json={"label": "Renamed since"})  # fmt: skip
+    details = _studio("sam", f"/{promotion}").json()
+    assert details["items"] == [] and not details["withheld"]
+    assert details["promotion"]["status"] == "rejected"
+
+
+def test_the_decided_details_check_fails_with_the_layer_read_whatever_the_status(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def always(self: Promotions, record: Any, reviewer: Principal) -> Principal:
+        return reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
+
+    monkeypatch.setattr(Promotions, "_reviewer_read", always)  # the plant
+    promotion, _, _ = _sent_for_review(pw)
+    _studio("dana", f"/{promotion}/decision", "post", approve=False, reason="No.")
+    assert _studio("sam", f"/{promotion}").json()["items"] != []
 
 
 def test_an_approval_runs_every_check_again_on_the_items_as_they_are_now(
@@ -637,7 +777,9 @@ def test_every_promotion_route_refuses_a_non_member_as_a_missing_case(pw: Simple
     # A promotion of another dataset is not found through this one.
     assert _as("dana").get("/v1/datasets/src/promotions/no-such").status_code == 404
     # Bob, K's Editor, may not promote (Author level, I12); Rita, a Viewer, neither.
-    assert _as("bob").get(f"/v1/investigations/{K}/boards/{board}/promotion-sheet").status_code == 403
+    assert (
+        _as("bob").get(f"/v1/investigations/{K}/boards/{board}/promotion-sheet").status_code == 403
+    )
 
 
 # --- a removed case's layer (Amendment 2 decision 1) -----------------------------------------
@@ -679,7 +821,9 @@ def test_the_merge_grant_check_fails_with_the_grant_kept(
     monkeypatch.setattr(InMemoryPromotionStore, "close_grant", kept)
     first, _ = _removed_with_items(pw)
     grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
-    _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}", json={"item_ids": [first["item_id"]]})
+    _as("dana").post(
+        f"/v1/datasets/src/layer-merges/{grant}", json={"item_ids": [first["item_id"]]}
+    )
     assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 200
 
 
@@ -960,6 +1104,10 @@ async def test_a_revert_is_refused_while_another_link_rests_on_its_items(
     assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 1
     assert pw.store.records[promoted["id"]].status == "committed"
     assert _carol_sees_it_from_b(made["element_id"])
+    # Audited before it was tried, so its refusal is audited too (the trail says it did not
+    # happen).
+    actions = [r["action"] for r in pw.audit.records]
+    assert actions.index("revert_promotion") < actions.index("revert_promotion_refused")
 
 
 async def test_the_resting_link_check_fails_with_the_check_removed(
@@ -1066,3 +1214,316 @@ def test_the_gazetteer_merge_check_fails_with_the_check_removed(
     pw.removed.add("case-g")
     opened = _as("dana").post(f"/v1/datasets/{GAZ}/removed-cases/case-g/merge-sheet")
     assert opened.status_code == 200, opened.text
+
+
+# --- a restored case, and the grant's end whatever ends the merge (round 2) -----------------
+
+
+def test_a_case_restored_since_its_sheet_was_opened_is_not_read_through_its_grant(
+    pw: SimpleNamespace,
+) -> None:
+    _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    pw.removed.discard(K)  # the case is restored: its layer is its members' alone again
+    answer = _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}")
+    assert answer.status_code == 409 and answer.json()["error"] == "case_open"
+    assert pw.store.grants[grant].closed_at is not None
+    # Removed again, the old grant stays closed: it is never reopened.
+    pw.removed.add(K)
+    assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 403
+
+
+def test_the_restored_read_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def always(self: Promotions, case_id: str) -> bool:
+        return True
+
+    monkeypatch.setattr(Promotions, "case_still_removed", always)  # the plant
+    _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    pw.removed.discard(K)
+    assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 200
+
+
+def _merge_waiting(pw: SimpleNamespace, **item: Any) -> tuple[str, str, dict[str, Any]]:
+    _policy(pw, "second_person_reviews")
+    board = _board()
+    first = _item(board, **item)
+    pw.removed.add(K)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    merged = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                              json={"item_ids": [first["item_id"]]})  # fmt: skip
+    assert merged.status_code == 201 and merged.json()["status"] == "awaiting_review", merged.text
+    return merged.json()["id"], grant, first
+
+
+def test_a_merge_waiting_for_review_is_not_approved_once_its_case_is_restored(
+    pw: SimpleNamespace,
+) -> None:
+    promotion, grant, first = _merge_waiting(pw)
+    pw.removed.discard(K)
+    answer = _studio("sam", f"/{promotion}/decision", "post", approve=True)
+    assert answer.status_code == 409 and answer.json()["error"] == "case_open"
+    assert pw.store.records[promotion].status == "rejected"
+    assert pw.store.grants[grant].closed_at is not None
+    assert pw.graph.promotions == 0 and not _carol_sees_it_from_b(first["element_id"])
+    # The state change has its audit entry.
+    assert "promotion_rejected" in [r["action"] for r in pw.audit.records]
+
+
+def test_the_restored_approval_check_fails_with_the_check_removed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    promotion, _, first = _merge_waiting(pw)
+    pw.removed.discard(K)
+
+    async def always(self: Promotions, case_id: str) -> bool:
+        return True
+
+    monkeypatch.setattr(Promotions, "case_still_removed", always)  # the plant
+    assert _studio("sam", f"/{promotion}/decision", "post", approve=True).status_code == 200
+    assert _carol_sees_it_from_b(first["element_id"])
+
+
+def test_a_merge_rejected_by_the_approvals_recheck_closes_its_grant(pw: SimpleNamespace) -> None:
+    promotion, grant, _ = _merge_waiting(pw, marking="OFFICIAL-SENSITIVE")
+    held = pw.datasets.datasets["src"]
+    pw.datasets.datasets["src"] = held.model_copy(update={"highest_marking": "OFFICIAL"})
+    answer = _studio("sam", f"/{promotion}/decision", "post", approve=True)
+    assert answer.status_code == 409 and answer.json()["error"] == "items_changed"
+    assert pw.store.records[promotion].status == "rejected"
+    assert pw.store.grants[grant].closed_at is not None
+    stale = _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}")
+    assert stale.status_code == 403 and stale.json()["error"] == "no_open_grant"
+    assert "promotion_rejected" in [r["action"] for r in pw.audit.records]
+
+
+def _reject_keeping_the_grant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The plant: a rejection recorded without its grant closed, as before round 2."""
+
+    async def kept(self: Promotions, record: Any, *, was: str, by: Any, reason: str,
+                   audited_by_route: bool = False) -> bool:  # fmt: skip
+        return await self.store.decide(record.id, was=was, now="rejected", by=by,
+                                       at=datetime.now(UTC), reason=reason)  # fmt: skip
+
+    monkeypatch.setattr(Promotions, "reject", kept)
+
+
+def test_the_recheck_grant_check_fails_with_the_grant_kept(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _reject_keeping_the_grant(monkeypatch)
+    promotion, grant, _ = _merge_waiting(pw, marking="OFFICIAL-SENSITIVE")
+    held = pw.datasets.datasets["src"]
+    pw.datasets.datasets["src"] = held.model_copy(update={"highest_marking": "OFFICIAL"})
+    _studio("sam", f"/{promotion}/decision", "post", approve=True)
+    assert pw.store.grants[grant].closed_at is None
+
+
+def test_a_merge_whose_load_is_refused_closes_its_grant(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, _ = _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    _withdrawn_behind_the_sheet(pw, monkeypatch, first["element_id"])
+    answer = _as("dana").post(f"/v1/datasets/src/layer-merges/{grant}",
+                              json={"item_ids": [first["item_id"]]})  # fmt: skip
+    assert answer.status_code == 409 and answer.json()["error"] == "items_changed"
+    assert pw.store.grants[grant].closed_at is not None
+    assert "promotion_rejected" in [r["action"] for r in pw.audit.records]
+
+
+def test_the_refused_load_grant_check_fails_with_the_grant_kept(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _reject_keeping_the_grant(monkeypatch)
+    first, _ = _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    _withdrawn_behind_the_sheet(pw, monkeypatch, first["element_id"])
+    _as("dana").post(
+        f"/v1/datasets/src/layer-merges/{grant}", json={"item_ids": [first["item_id"]]}
+    )
+    assert pw.store.grants[grant].closed_at is None
+
+
+def test_deleting_a_layer_rejects_what_still_waits_from_it(pw: SimpleNamespace) -> None:
+    promotion, _, _ = _merge_waiting(pw)
+    assert _as("sam").delete(f"/v1/datasets/src/removed-cases/{K}/layer").status_code == 200
+    record = pw.store.records[promotion]
+    assert record.status == "rejected" and "layer was deleted" in (record.reason or "")
+    assert not [r for r in await_waiting(pw)]
+
+
+def await_waiting(pw: SimpleNamespace) -> list[Any]:
+    return [r for r in pw.store.records.values() if r.status == "awaiting_review"]
+
+
+def test_the_deleted_layer_check_fails_with_nothing_found_waiting(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def none(self: Any, layer_id: str) -> list[Any]:
+        return []
+
+    monkeypatch.setattr(InMemoryPromotionStore, "waiting_from_layer", none)  # the plant
+    promotion, _, _ = _merge_waiting(pw)
+    _as("sam").delete(f"/v1/datasets/src/removed-cases/{K}/layer")
+    assert pw.store.records[promotion].status == "awaiting_review"
+
+
+def test_reading_a_merge_sheet_through_its_grant_is_audited(pw: SimpleNamespace) -> None:
+    _removed_with_items(pw)
+    grant = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/merge-sheet").json()["grant_id"]
+    assert _as("dana").get(f"/v1/datasets/src/layer-merges/{grant}").status_code == 200
+    assert "read_layer_merge" in [r["action"] for r in pw.audit.records]
+
+
+def test_the_delete_dry_run_says_what_goes_not_a_count_deleted(pw: SimpleNamespace) -> None:
+    _removed_with_items(pw)
+    dry = _as("dana").post(f"/v1/datasets/src/removed-cases/{K}/delete/dry-run").json()
+    assert "Would delete" not in dry["would"] and "withdraws those not promoted" in dry["would"]
+
+
+# --- what follows a node, and only its own (round 1's fix, its test in round 2) -------------
+
+
+def _picture(board: str, node_id: str) -> None:
+    uploaded = _as("alice").put(
+        f"/v1/investigations/{K}/boards/{board}/nodes/{node_id}/picture",
+        params={"name": "tall.png", "marking": "OFFICIAL", "source_note": "Gate camera"},
+        content=b"\x89PNG drawn",
+    )
+    assert uploaded.status_code == 201, uploaded.text
+
+
+def _depicts(pw: SimpleNamespace) -> str:
+    (depicts,) = [e for e in pw.graph.edges() if e.type == "DEPICTS"]
+    return str(depicts.id)
+
+
+def test_a_picture_goes_with_its_own_node_and_never_with_another(pw: SimpleNamespace) -> None:
+    board = _board()
+    x = _item(board)
+    y = _item(board, label="Y", properties={"family_name": "Y"})
+    _picture(board, x["element_id"])
+    # Y alone: X's picture stays behind with X.
+    alone = _promote(board, y["item_id"]).json()
+    assert _depicts(pw) not in pw.store.records[alone["id"]].edge_ids
+    # X: its picture goes with it, Document and all.
+    with_x = pw.store.records[_promote(board, x["item_id"]).json()["id"]]
+    assert _depicts(pw) in with_x.edge_ids
+
+
+def _picture_follows_any_landed_node(monkeypatch: pytest.MonkeyPatch) -> None:
+    real = Promotions.ends_land
+
+    def loose(item: Any, lands: set[str], going: set[str]) -> bool:
+        if item.kind == "picture":
+            return item.target in lands  # the plant: any node in the dataset, going or not
+        return real(item, lands, going)
+
+    monkeypatch.setattr(Promotions, "ends_land", staticmethod(loose))
+
+
+def test_a_picture_added_after_its_node_went_waits_for_its_own_promotion(
+    pw: SimpleNamespace,
+) -> None:
+    board = _board()
+    x = _item(board)
+    y = _item(board, label="Y", properties={"family_name": "Y"})
+    assert _promote(board, x["item_id"]).status_code == 201
+    _picture(board, x["element_id"])
+    later = pw.store.records[_promote(board, y["item_id"]).json()["id"]]
+    assert _depicts(pw) not in later.edge_ids
+
+
+def test_the_picture_check_fails_with_a_picture_following_any_landed_node(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _picture_follows_any_landed_node(monkeypatch)
+    board = _board()
+    x = _item(board)
+    y = _item(board, label="Y", properties={"family_name": "Y"})
+    assert _promote(board, x["item_id"]).status_code == 201
+    _picture(board, x["element_id"])
+    later = pw.store.records[_promote(board, y["item_id"]).json()["id"]]
+    assert _depicts(pw) in later.edge_ids
+
+
+def _same_decided_after_its_node_went(pw: SimpleNamespace) -> tuple[str, dict[str, Any]]:
+    board = _board(start="selection", node_ids=["p-loaded"])
+    mercer = _item(board, label="Mercer", properties={"family_name": "Mercer"})
+    assert _promote(board, mercer["item_id"]).status_code == 201
+    decided = _as("alice").post(
+        f"/v1/investigations/{K}/boards/{board}/matches",
+        json={"drawn": mercer["element_id"], "loaded": "p-loaded", "same": True},
+    )
+    assert decided.status_code == 201, decided.text
+    other = _item(board, label="Other", properties={"family_name": "Other"})
+    return board, other
+
+
+def test_a_same_decided_later_never_goes_with_an_unrelated_promotion(pw: SimpleNamespace) -> None:
+    board, other = _same_decided_after_its_node_went(pw)
+    (same,) = [e.id for e in pw.graph.edges() if e.type == "SAME_AS"]
+    later = pw.store.records[_promote(board, other["item_id"]).json()["id"]]
+    assert same not in later.edge_ids
+
+
+def test_the_match_check_fails_with_a_match_following_any_promotion(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = Promotions.ends_land
+
+    def loose(item: Any, lands: set[str], going: set[str]) -> bool:
+        if item.kind == "match":
+            return item.source in lands and item.target in lands  # the plant: `going` dropped
+        return real(item, lands, going)
+
+    monkeypatch.setattr(Promotions, "ends_land", staticmethod(loose))
+    board, other = _same_decided_after_its_node_went(pw)
+    (same,) = [e.id for e in pw.graph.edges() if e.type == "SAME_AS"]
+    later = pw.store.records[_promote(board, other["item_id"]).json()["id"]]
+    assert same in later.edge_ids
+
+
+# --- the sheet lists only what its proposer may see now (round 1's fix) --------------------
+
+
+def _above_alices_clearance(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    """Two of Alice's items; one raised in the graph to SECRET, and Alice's clearance lowered to
+    OFFICIAL-SENSITIVE since (vetting reviewed): she may not see that one now."""
+    board = _board()
+    seen = _item(board)
+    hidden = _item(board, label="Hidden", properties={"family_name": "Hidden"})
+    node = pw.graph.node(hidden["element_id"])
+    pw.graph._graph_nodes[hidden["element_id"]] = node.model_copy(
+        update={"handling": node.handling.model_copy(update={"classification": "SECRET"})}
+    )
+    lowered = PEOPLE["alice"].model_copy(update={"clearance": "OFFICIAL-SENSITIVE"})
+    monkeypatch.setitem(PEOPLE, "alice", lowered)
+    return board, seen, hidden
+
+
+def test_the_sheet_lists_only_what_its_proposer_may_see_now(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    board, seen, hidden = _above_alices_clearance(pw, monkeypatch)
+    sheet = _sheet(board)
+    assert [i["item_id"] for i in sheet["items"]] == [seen["item_id"]]
+    assert all("Hidden" not in i["label"] for i in sheet["items"])
+    # Ticked by id all the same, it is no item of theirs.
+    assert _promote(board, hidden["item_id"]).status_code == 404
+
+
+def test_the_seen_check_fails_with_every_item_listed(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def every(self: Promotions, case_id: str, board_id: Any, reader: Principal) -> Any:
+        return await self._read(await self._pending_items(case_id, board_id), reader)
+
+    monkeypatch.setattr(Promotions, "_seen", every)  # the plant
+    board, seen, hidden = _above_alices_clearance(pw, monkeypatch)
+    assert hidden["item_id"] in [i["item_id"] for i in _sheet(board)["items"]]
