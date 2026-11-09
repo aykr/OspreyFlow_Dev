@@ -573,6 +573,15 @@ New ones are added at the bottom as they happen.
     main's own run there. That copy's own failures (no git, no Node, the run folders in its root) are being fixed
     before the verb reaches main. Platform's P5 and case's L3.4 are ready, and my independent reviews of both are
     running. Studio-b's L1.8 merges next.
+87. **Your ruling, about 18:05 (the licence register):** `git`, GPL-2.0-only and in the Conduit image since Round
+    13bf, leaves the image if nothing in the Conduit calls it at runtime, and the licence gate goes back to
+    refusing every GPL package. If something does call it, that comes back to you. Platform's P5 had let it
+    through as "awaiting the owner" with no question on record.
+88. **Sent back after my independent reviews (about 18:05):** case's L3.4, with two blockers confirmed in the
+    code. The waiting-promotions seam is wider than L2.6's contract (4 of its 9 readers fail), and a merge's
+    read grant can be reused. Platform's P5 has nine must-fixes, no leak: the set-up console's map Build broken
+    by a required `--unit`, the Java image never scanned, the `git` exemption, incomplete red evidence, and an
+    unaudited partial copy.
 
 ## Evening, 7 November: your records of 7 November applied
 
