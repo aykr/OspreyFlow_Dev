@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { currentBrand } from "../brand/brand";
 import type { AdminApi } from "./api";
+import { onOpening, takeOpening } from "./needsYou/openings";
 import SECTIONS from "./sections.json";
 import { Audit } from "./sections/Audit";
 import { Connections } from "./sections/Connections";
@@ -133,6 +134,18 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   const section = shown.find((s) => s.id === chosen) ?? shown.find((s) => s.screen) ?? shown[0];
   const heading = useRef<HTMLHeadingElement>(null);
   const moved = useRef(false);
+  // L2.7: *Needs you* asks for a section (Operations, for an overdue promotion); taken once.
+  useEffect(() => {
+    const take = () => {
+      const opening = takeOpening("admin");
+      if (opening) {
+        moved.current = true;
+        setChosen(opening.section);
+      }
+    };
+    take();
+    return onOpening(take);
+  }, []);
   useEffect(() => {
     // Choosing a section moves focus to its heading, as a page change would; the first draw does not.
     if (moved.current) heading.current?.focus();

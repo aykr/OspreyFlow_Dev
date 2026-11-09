@@ -44,6 +44,8 @@ import {
   type CrossFilterStore,
   type CrossFilterStoreState,
 } from "./crossfilter/store";
+import { NeedsYou } from "./admin/needsYou/NeedsYou";
+import { requestOpening, takeOpening } from "./admin/needsYou/openings";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
 import { LeftRail } from "./shell/LeftRail";
@@ -95,7 +97,8 @@ import { CaseSettings } from "./investigation/CaseSettings";
 import { CaseBrief } from "./investigation/CaseBrief";
 import type { AttachmentKind } from "./investigation/briefApi";
 import { placeOf, revealPanel } from "./investigation/openAttachment";
-import { caseIsOpenable, openCase, openCaseView } from "./investigation/cases";
+import { caseIsOpenable, listCases, openCase, openCaseView } from "./investigation/cases";
+import { caseForDataset } from "./ingest/studio/datasets";
 import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import { ViewLensBanner } from "./views/ViewLensBanner";
@@ -1414,8 +1417,49 @@ export function App() {
       />
     ) : null;
 
-  const account =
-    !isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null;
+  // ADR-145 decision 11 (A2), L2.7: *Needs you*, before the account wherever the account is shown. An
+  // overdue promotion opens Admin › Operations for a reader who holds `operate_schedules`; proposed
+  // link types open the Studio's Model tab on their dataset, through a case of the reader's that
+  // loads into it (`ingest/studio/datasets.ts`), as the Studio's own switcher does.
+  const openModelFor = (datasetId: string) => {
+    requestOpening({ kind: "studio", tab: "model", datasetId });
+    void listCases(API_BASE_URL, bearerToken ?? "")
+      .then((cases) => {
+        const caseId = caseForDataset(cases, datasetId, investigationId);
+        if (!caseId) {
+          takeOpening("studio"); // no case of theirs loads into it now: nothing to open
+          return;
+        }
+        if (caseId === investigationId) {
+          setStartChoice(null);
+          setView("ingest");
+        } else {
+          openCase(caseId, "ingest");
+        }
+      })
+      .catch(() => undefined);
+  };
+  const needsYou = bearerToken ? (
+    <NeedsYou
+      apiBaseUrl={API_BASE_URL}
+      bearerToken={bearerToken}
+      onOpenModel={rights?.has("accept_types") ? openModelFor : undefined}
+      onOpenOperations={
+        rights?.has("operate_schedules")
+          ? () => {
+              requestOpening({ kind: "admin", section: "operations" });
+              setStartChoice("admin");
+            }
+          : undefined
+      }
+    />
+  ) : null;
+  const account = (
+    <>
+      {needsYou}
+      {!isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null}
+    </>
+  );
   const startScreenShown =
     isDevBypass || bearerToken
       ? startScreen({
@@ -1590,6 +1634,7 @@ export function App() {
         }
         account={
           <>
+            {needsYou}
             {!isDevBypass && principal && (
               // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
               // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one

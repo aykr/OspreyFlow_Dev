@@ -231,6 +231,11 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   asked.push({ method, path, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
   const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   if (path === "/v1/investigations") return reply(CASES);
+  // L2.7 (ADR-145 decision 11): `?proposed=1` gives the reader two proposed link types to decide in
+  // this dataset, for the Model tab's count and the reminder (`needs-you.spec.ts`); otherwise none.
+  if (path === "/v1/me/needs-you")
+    return reply({ promotions_overdue: [], proposals: startParams.get("proposed") === "1"
+      ? [{ dataset_id: "harbour-extract", dataset_name: "Harbour prison extract (synthetic)", to_decide: 2, above_clearance: false }] : [] }); // prettier-ignore
   if (path === "/v1/handling-scheme") return reply(SCHEME);
   if (path === "/v1/ingest/connectors") return reply([{ id: "generic-csv", label: "CSV file", group: "Generic", structured: true, available: true }]);
   if (path === "/v1/ingest/connections") return reply([{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: day(30) }]);
