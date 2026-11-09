@@ -136,12 +136,20 @@ def test_the_rule_list_is_the_case_teams_and_nobody_elses(
     other_case = asyncio.run(_case())
     from services.api.app import app
 
+    # The list also holds every deployment-wide sentence (ADR-133 decision 1), and the shared stack
+    # holds other runs' (the orchestrator's note of 9 November: red on main for that alone), so
+    # each case is judged by the rules of its own that it lists.
+    def own(rules: list[dict[str, object]], of: str) -> list[dict[str, object]]:
+        return [r for r in rules if r.get("investigation_id") == of]
+
     with TestClient(app) as client:
-        client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+        made = client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
         listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
-        assert listed.status_code == 200 and len(listed.json()) == 1
-        assert client.get(f"/v1/investigations/{other_case}/rules",
-                          headers=_as(key, AUTHOR.id)).json() == []  # fmt: skip
+        assert listed.status_code == 200
+        assert [r["id"] for r in own(listed.json(), case)] == [made.json()["id"]]
+        elsewhere = client.get(f"/v1/investigations/{other_case}/rules", headers=_as(key, AUTHOR.id)).json()
+        assert made.json()["id"] not in [r["id"] for r in elsewhere], "another case never lists it"
+        assert own(elsewhere, other_case) == []
         assert client.get(f"/v1/investigations/{case}/rules",
                           headers=_as(key, OUTSIDER)).status_code == 404  # fmt: skip
 

@@ -867,7 +867,18 @@ async def _alerts_of(owner: Principal) -> list[Alert]:
 
 
 async def _hotlists_for(owner: Principal, typed: list[str]) -> list[str]:
-    """Hotlists made in the case's dataset, one per typed form; returns their ids."""
+    """Hotlists made in the case's dataset, one per typed form; returns their ids. The owner makes
+    them in a case of their own reading that dataset, as *Watch for this* does: a watch is matched
+    only while its owner still reaches its dataset (ADR-146 Amendment 4 point 7), and an owner with
+    no case reading it is refused, which these cases first ran into (L2.10's live run at 0ba0254)."""
+    from services.api.investigations import InvestigationStore
+
+    cases = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
+    try:
+        made = await cases.create(owner, name=f"Watches of {owner.id} {new_id()}")
+    finally:
+        await cases.close()
+    await give_case_its_dataset(made.id, owner)
     store = await HotlistStore.connect(PostgresConfig.from_env().dsn)
     try:
         in_case = owner.model_copy(update={"datasets": [dataset_for(owner)]})

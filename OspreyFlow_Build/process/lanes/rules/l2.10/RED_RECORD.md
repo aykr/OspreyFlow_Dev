@@ -208,3 +208,19 @@ at ef45fa1.
   field a run needs is given, found it. `RunResources` now holds the case store and builds the check
   over it and the dataset store, and both cases are green. The same `make ci` run found an unused
   `type: ignore` in `app.py`, now removed.
+
+## 11. The live set at 0ba0254 and its re-takes (rules lease, stack a)
+
+- **The set, 10:11–10:45Z.** 515 passed and 2 failed, both stage 6c's hotlist cases
+  (`test_phase7_stage6c_watch_routes.py`). Their owner held no level on any case reading the
+  hotlists' dataset, so Amendment 4 point 7's reach check refused them, as it should. That was the
+  test's shape, not the product's: a hotlist made with *Watch for this* is made from a case. The cases
+  now give the owner a case of their own reading the dataset, and both pass (re-take, 10:51Z). Their
+  red is the set's own run, which had no such case.
+- **`test_typology_rule_routes.py`'s rule list (red on main).** The list holds every deployment-wide
+  sentence (ADR-133 decision 1), and the shared stack holds other runs' sentences. The case is now
+  judged by its own rules, and another case must never list them. Red with `list_for_case`'s case
+  clause read as `$1::text IS NOT NULL`: another case listed this one's rule.
+- **The address timing case.** It passed in the set and again re-taken alone.
+- **Not rules': PID r1 and r14's interval cases.** These are the PID build's. The loaded `valid_from`
+  keeps the row's time of day where the plan expects the day's start. Sent to the orchestrator.
