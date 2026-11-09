@@ -199,3 +199,6 @@ FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_
 # Its one failure was a real defect, in rules' event_frequency on ClickHouse (a RANGE offset of 2^31 ms or more is refused).
 # It is fixed at 1f04c2c (RED_RECORD §12), and the delta (the analytics suite whole, both adapters) is in gates/1f04c2c.live.txt: 254 passed.
 # Lease rules, stack c, 17:28Z to 20:05Z. Down and released.
+# Corrections (the orchestrator's review): this branch's one base is main at 3be89a7. The headers' "rebased on main at
+# c467064" printed main's head at the time of the run, not the base. The fix named above as 1f04c2c was withdrawn after
+# review; the fix is 274d114 then 778c4d8, and its deltas are gates/274d114.live.txt and gates/778c4d8.live.txt.

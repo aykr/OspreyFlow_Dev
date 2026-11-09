@@ -32302,3 +32302,36 @@ from the orchestrator's review: `test_monitoring_queue.py::test_what_raises_aler
 explained team, and a watch whose owner has lost its dataset on the schedule and on a load;
 `test_monitors.py::test_a_watchs_schedule_is_set_by_its_owner_alone`; axe over the routed,
 suppressed and taken-back alerts and the Glass's watch actions in dark, light and GOV.UK.
+
+### ADR-133, Amendment 10 (9 November 2026) — declared amounts summed as decimals on both analytics adapters: rounding, no amount past the range, no silent overflow
+
+Status: written by the rules lane in L2.10, on the orchestrator's independent review of the same day (reserved through
+it). It records how `event_frequency` (decision 1) and `account_activity` (decision 2) read and sum a declared amount on
+every analytics adapter. Neither decision is narrowed.
+
+1. **Each amount is rounded to 9 places and read as a decimal of 38 digits, 9 after the point** (`Decimal(38,9)`; in
+   ClickHouse `Decimal128(9)`, read from the rounded number's shortest text). So a total a rule compares is the same on
+   DuckDB and ClickHouse: 0.1 and 0.2 make 0.3, never 0.30000000000000004 on one and 0.3 on the other, and a tenth
+   decimal place is rounded on both, never cut on one. (`test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not`,
+   its rounding case `0.1234567896 + 1.0000000004 == 1.12345679`;
+   `test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not`.)
+2. **An amount past that range (10^29 or more), inf or nan is no amount.** Its event is counted, and its amount is
+   neither summed nor counted as an amount, so a span or window holding no other amount has no total (`None`), never
+   0. (The same two cases, with 1e30 and "inf".)
+3. **No total wraps silently.** ClickHouse keeps its running sums in `Decimal256`, which cannot wrap. DuckDB's plain
+   `SUM` of a `DECIMAL(38, 9)` can wrap silently to a negative, and its window `SUM` raises an overflow; a `DOUBLE`
+   sum beside each decimal one catches both. A frequency's span total or an activity's window or baseline total of
+   10^28 or more, either sign, is refused whole by `AmountTotalOutOfRange` (`ports.analytics`, rule 2) on every
+   adapter, never wrapped, rounded or cut. A rule's evaluation that meets it fails, and its failure is in the rule's
+   audit, as any failure's. (`test_a_total_past_the_decimals_range_is_refused_never_wrapped[±1]`.)
+4. **`account_activity` is read the same way as `event_frequency`:** one `_decimal_amount` per adapter for both.
+   (`test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not`, on both adapters.)
+
+Each case is red on the shape it replaces:
+- DuckDB's DOUBLE sum: `0.30000000000000004 == 0.3`, for frequency and activity alike;
+- ClickHouse counting the Float64 beside a NULL decimal: `(2, 0.0) == (2, None)`;
+- the refusal removed: DuckDB's overflow raised raw, or a wrapped total.
+
+The records are `process/lanes/rules/l2.10/RED_RECORD.md` §12 to §12b.
+
+Open: none.

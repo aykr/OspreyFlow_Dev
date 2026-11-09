@@ -24,3 +24,6 @@ Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged
 #   1 failed, 15 passed, 240 deselected in 3.52s
 #   == the fix (running figures and ASOF JOIN on the DateTime64)
 #   16 passed, 240 deselected in 3.28s
+# Lease and runs (the orchestrator's review: the intervals from the server's own run records, ~/osprey-runs/rules.meta/runs):
+# the rules lease on stack c, taken after the release at 20:05Z. Its runs: the plants and the fix's frequency cases
+# 20:11:27–20:12:08Z, this suite 20:12:42–20:13:47Z. Down and released after it, about 20:14Z. Base: main at 3be89a7.

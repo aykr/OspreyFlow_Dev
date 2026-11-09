@@ -71,4 +71,5 @@ Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged
 #   E       assert 0.30000000000000004 == 0.3
 #   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_duckdb]
 #   1 failed, 259 deselected in 0.71s
-# Lease rules, stack c, 20:2xZ to 20:44Z; down and released.
+# Lease rules, stack c (from the server's run records): the five plants 20:21:09–20:22:35Z, this run 20:23:39–20:44:12Z; taken about 20:20Z, released at 20:44Z; down and released.
+# Base: main at 3be89a7.

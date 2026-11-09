@@ -283,3 +283,30 @@ It closed the first round's four items and found seven more. Each is built, red 
 - **Green:** the 13 frequency, access and case cases on c's ClickHouse.
 - **The live delta at 778c4d8:** `gates/778c4d8.live.txt`, the analytics suite whole and every live file that
   evaluates rules.
+
+### 12b. The orchestrator's independent review of L2.10 (at fea68fc)
+
+1. **A sweep failure's counts, for a reader its rule's firings are hidden from (rule 7).** `rule_holds.readable_rule_audit`
+   now withholds `rule_evaluation_failed` as it withholds `rule_evaluated`: no `findings`, no `documents_not_judged`,
+   cardinality 0, and words without counts (`kyc_sweep.FAILED_WORDS_WITHOUT_COUNTS`, written beside the counted words).
+   - The case: `test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_its_team`
+     (`tests/ingest/test_typology_rules.py`, live). The entry is written by the sweep's own writer, `_say_unjudged`.
+   - Red: on the live stack, with `rule_evaluation_failed` taken out of `_COUNTS_A_RULES_FINDINGS`
+     (`gates/<head>.live.txt`).
+2. **Re-gated at the head:** `gates/<head>.*`.
+3. **`account_activity`'s decimal, introduced unreported by 778c4d8's edit.** DuckDB now matches it, both read through one
+   `_decimal_amount`, with ADR-133 Amendment 10 and its four points. Overflow is refused, never wrapped, by
+   `AmountTotalOutOfRange`.
+   - Red on DuckDB offline: the activity case against DOUBLE (`(2, 0.30000000000000004) == (2, 0.3)`), and both signs of
+     the overflow case with the refusal removed (2 failed). The ClickHouse reds are in the live record.
+4. **The read-path purge through the real app.**
+   `test_the_running_conduit_gives_the_alert_store_the_working_set_a_settle_purges_through`
+   (`tests/ingest/test_typology_rule_routes.py`, live). Red with `app.py`'s `alerts_store.working_set = …` removed.
+5. **The tie case:** four tied events, the unique largest span (`most_in_span == 4`). Red with a ROWS frame on c.
+6. **Minors:**
+   - approve_close's dataset refusal is `not_the_home_cases_author`, as dispose's is (`close_refusal`), and its case is red
+     with the reason test removed (`assert 'own_change' == 'not_the_home_cases_author'`);
+   - the team-leave case through a real signed token:
+     `test_a_member_whose_token_no_longer_carries_the_team_reads_nothing_routed_to_it`, live;
+   - `chooseByTyping` is one shared helper (`keyboard/chooseByTyping.ts`);
+   - the records corrected (base 3be89a7; the lease intervals; the withdrawn fix's pointer).

@@ -13,7 +13,7 @@
      - `test_valkey_config`, main's own;
      - `test_webapp_preflight`'s GPU case, because the server has a GPU;
      - `test_layout`, tripped by the verb's own folders at the copy's root (since cleared).
-   - **`make test` on this Mac** (8e8b9ff): the same as the server's, plus 20 failures and 30 errors that need Docker. Each is named.
+   - **`make test` on this Mac** (8e8b9ff): 24 failed and 30 errors, each named: this machine's usual 4, plus 20 failures and 30 errors that need Docker.
    - **`test-js`:** 2,762 of 2,763. The miss is the MatrixView first-frame budget, run under load; it was green re-taken alone.
    - **`glass-a11y`:** 723 passed, every harness in dark, light and GOV.UK.
    - **`glass-keyboard`** (`registry-L2.10.patch` applied uncommitted): 689 passed. ALERTS_ACTIONS and WATCH_PANEL_ACTIONS are covered whole. Two failures are main's own, `boards.spec.ts:225` and its registry check `:423` (the keyboard harness gave the board no grades), fixed in f6def92 on lane/case and carried in CARRIES.md.
@@ -57,7 +57,12 @@
     - K11's scheduled-run notices need a home in the Studio's schedules (studio).
     - *Raise an alert…* on the selection bar and on a question's answer (case and questions).
     - Apply `registry-L2.10.patch`.
-    - Ratify the files outside rules' map: `analytics_clickhouse/adapter.py` and `analytics_duckdb/adapter.py` (`event_frequency`, 274d114 and 778c4d8), spec 04's `event_frequency` sentence, `App.tsx`, `App.test.tsx`, `inspector/Inspector.tsx`, `patterns/QueryBuilderPanel.tsx`, `rights/visibility.ts`, `reports/packText.ts` (rules-b's area, a one-line alert-item change), `a11y/every-harness.spec.ts`, `packs.py`, `analytics_duckdb/alert_facts.py`, the analytics suite, `test_route_rights.py`, `test_place_routes.py`, spec 01, 02 and 03, `citation_allowlist.txt`.
+    - Ratify the files outside rules' map, the schemas commit (9b845e0, d8390a6, e382474) going separately and first at merge:
+      - the Conduit: `investigations.py`, `recipe_run.py`, `run_resources.py`, `packs.py`, `app.py`'s routes;
+      - the analytics adapters and port: `analytics_clickhouse/adapter.py`, `analytics_duckdb/adapter.py` (`event_frequency`, `account_activity`) and `alert_facts.py`; `ports/analytics.py` (`AmountTotalOutOfRange`);
+      - the Glass: `App.tsx`, `App.test.tsx`, `inspector/Inspector.tsx`, `patterns/QueryBuilderPanel.tsx`, `patterns/api.ts`, `rights/visibility.ts`, `reports/packText.ts` (rules-b's area, a one-line alert-item change), `a11y/every-harness.spec.ts`;
+      - spec 01, 02, 03 and 04, and ADR-133 Amendment 10; `citation_allowlist.txt`;
+      - the tests this branch changes (other lanes' among them): tests/conformance/analytics_port/test_suite.py, tests/fixtures/citation_allowlist.txt, tests/ingest/test_alert_evidence_withheld_live.py, tests/ingest/test_kyc_rules.py, tests/ingest/test_typology_rule_routes.py, tests/ingest/test_typology_rules.py, tests/scenarios/ledger_monitoring_support.py, tests/scenarios/pid_monitoring_support.py, tests/scenarios/test_phase7_stage6c_watch_routes.py, tests/services/api/test_alert_evidence_withheld.py, tests/services/api/test_alert_node_marking.py, tests/services/api/test_alert_queue_counts.py, tests/services/api/test_alert_runs_partly_raised.py, tests/services/api/test_alert_view_explains_live.py, tests/services/api/test_alert_view_explains.py, tests/services/api/test_composite_monitors.py, tests/services/api/test_evaluation_touched_nodes.py, tests/services/api/test_evaluation.py, tests/services/api/test_investigation_levels.py, tests/services/api/test_load_records.py, tests/services/api/test_monitoring_queue.py, tests/services/api/test_monitors.py, tests/services/api/test_pack_alert_item.py, tests/services/api/test_place_routes.py, tests/services/api/test_raise_an_alert.py, tests/services/api/test_read_path_purge.py, tests/services/api/test_recipe_run_path.py, tests/services/api/test_revert_closes_alerts.py, tests/services/api/test_route_rights.py, tests/services/api/test_run_resources.py, tests/services/api/test_sentence_rules.py, tests/services/api/test_team_lead_and_watches.py.
     - The ADR-146 Amendment 4 reservation.
 13. **Questions for the owner:** none open. Q3 was ruled (a), as Amendment 4 point 9.
 14. **Commits** (rebased onto 3be89a7):
