@@ -291,9 +291,10 @@ It closed the first round's four items and found seven more. Each is built, red 
    cardinality 0, and words without counts (`kyc_sweep.FAILED_WORDS_WITHOUT_COUNTS`, written beside the counted words).
    - The case: `test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_its_team`
      (`tests/ingest/test_typology_rules.py`, live). The entry is written by the sweep's own writer, `_say_unjudged`.
-   - Red: on the live stack, with `rule_evaluation_failed` taken out of `_COUNTS_A_RULES_FINDINGS`
-     (`gates/<head>.live.txt`).
-2. **Re-gated at the head:** `gates/<head>.*`.
+   - Red: on c, with `rule_evaluation_failed` taken out of `_COUNTS_A_RULES_FINDINGS` (`findings_withheld` absent,
+     `gates/1e94fdf.live.txt`).
+2. **Re-gated at 1e94fdf** (`gates/1e94fdf.*`): `make -k ci` here, and `make test` with test-js on the server. Then the ClickHouse
+   fix at bb4466d (`gates/bb4466d.live.txt`).
 3. **`account_activity`'s decimal, introduced unreported by 778c4d8's edit.** DuckDB now matches it, both read through one
    `_decimal_amount`, with ADR-133 Amendment 10 and its four points. Overflow is refused, never wrapped, by
    `AmountTotalOutOfRange`.
@@ -310,3 +311,7 @@ It closed the first round's four items and found seven more. Each is built, red 
      `test_a_member_whose_token_no_longer_carries_the_team_reads_nothing_routed_to_it`, live;
    - `chooseByTyping` is one shared helper (`keyboard/chooseByTyping.ts`);
    - the records corrected (base 3be89a7; the lease intervals; the withdrawn fix's pointer).
+7. **The live run's own red at 1e94fdf.** Every ClickHouse activity case raised a `TypeError`: `sumIf` over amounts none of
+   which is present is NULL, and the refusal read it with `float()`. Offline, only DuckDB runs, which is why it passed there.
+   - Fixed at bb4466d: a NULL sum is no total.
+   - The analytics suite whole passed 266. The rounding plant, taken again, was red alone (`1.123456789 == 1.12345679`).

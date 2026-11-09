@@ -1,0 +1,8 @@
+# The delta at bb4466d (ClickHouse's refusal reading a NULL sum), the rules lease, stack c, by stack_lease.sh remote; base main at 3be89a7, start 2026-11-09T22:02:39Z
+== plant: ch_cut_not_rounded, again
+E       assert 1.123456789 == 1.12345679
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]
+1 failed, 3 passed, 262 deselected in 2.99s
+== the analytics suite whole, both adapters
+266 passed in 67.26s (0:01:07)
+# end 2026-11-09T22:04:55Z

@@ -45,6 +45,30 @@
 - **The five ClickHouse plants** were red on c, and the DuckDB ones offline.
 - **Records:** RED_RECORD §12 and §12a; `gates/274d114.live.txt` and `gates/778c4d8.live.txt`.
 
+**The orchestrator's independent review at fea68fc: sent back, and built** (RED_RECORD §12b):
+1. **Rule 7.** A sweep failure's counts are withheld from a reader its rule's firings are hidden from, as `rule_evaluated`'s are. Red on c with the withholding removed.
+2. **Re-gated at 1e94fdf:**
+   - `make -k ci` here: green apart from the image, opentofu and chart scans (Docker off);
+   - `make test` on the server: 9,531 passed, and 2 failed, both the host's (valkey_config, which is main's, and the GPU preflight);
+   - test-js: 2,762 of 2,763, the miss the MatrixView timing case.
+3. **`account_activity`.** It reads amounts as decimals on both adapters through one `_decimal_amount`, under ADR-133 Amendment 10:
+   - each amount is rounded to 9 places;
+   - one past 10^29, inf or nan is no amount;
+   - a total of 10^28 or more is refused (`AmountTotalOutOfRange`), never wrapped. DuckDB's plain decimal SUM was found to wrap silently.
+4. **The read-path purge** is proved through the real app. Red on c with the lifespan's line removed.
+5. **Ratification list** updated (item 12).
+6. **The tie case** is four tied events. Red on c with a ROWS frame (`6 == 4`).
+- **Minors:**
+  - approve_close's dataset refusal is `not_the_home_cases_author`;
+  - the team-leave case runs through a real signed token;
+  - one `chooseByTyping`;
+  - one friction row;
+  - the records' base, lease intervals and withdrawn-fix pointer corrected.
+- **Live, the rules lease on stack c:**
+  - The five plants were each red for their own reason. The delta at 1e94fdf passed 317, with 9 failures: a defect of that commit's own, a NULL activity sum read by `float()`.
+  - Fixed at bb4466d. Its delta, the analytics suite whole, passed 266 (`gates/1e94fdf.live.txt`, `gates/bb4466d.live.txt`).
+  - Released and down.
+
 11. **Decisions taken** (Prompt L, for the owner to overrule):
     - **Trends:** a routed alert is counted for its team's members alone, not the home case's Authors (the narrower answer).
     - **"My team":** offered only for a rule already saved with it.
@@ -77,6 +101,7 @@
     - records: a513b6e, 6263f6b, 7aef8ba;
     - the gates at 8e8b9ff: aef9bb2, 412f893, 855899f;
     - the ClickHouse fix: 1f04c2c, then 274d114 and 778c4d8 after two review rounds;
-    - the live and server records: 3b6ed0e, then the deltas at 274d114 and 778c4d8 with this report;
+    - the live and server records: 3b6ed0e, then the deltas at 274d114 and 778c4d8;
+    - the orchestrator's review: 77c5a56 api, 12d5488 analytics, 86366d7 workspace, 1e94fdf records, bb4466d the live run's fix, then the gates and this report;
     - then this report and the friction row.
 15. **Still running:** nothing. The lease on c is released, its stack is down, and no server run is alive.
