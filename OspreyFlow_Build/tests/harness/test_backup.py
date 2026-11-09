@@ -44,12 +44,136 @@ def no_resolver_changes(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[str]]
     return seen
 
 
-def test_a_self_contained_small_backs_up_to_its_configured_folder(tmp_path: Path) -> None:
-    """Decision 5: `ospreyflow backup` writes to `server.backups` (`components.storage.backups`)
-    by default on this mode; elsewhere it writes where it always has."""
-    assert backup.default_out_root(_own_server(tmp_path)) == Path("/srv/ospreyflow/backups")
-    lite = OspreyConfig.model_validate({})
-    assert backup.default_out_root(lite) == backup.DEFAULT_BACKUP_ROOT
+def _cloud_small(backups: str | None = None) -> OspreyConfig:
+    raw: dict[str, object] = {
+        "profile": "small",
+        "network": {"public_origin": "https://osprey.example.org"},
+        "external": {"postgres": {"host": "db.example.org"}},
+    }
+    if backups:
+        raw["components"] = {"storage": {"backups": backups}}
+    return OspreyConfig.model_validate(raw)
+
+
+def test_every_profile_backs_up_to_its_configured_folder(tmp_path: Path) -> None:
+    """ADR-114 Amendment 37 decisions 1 and 3: `components.storage.backups` is read for every
+    profile (local-lite, a cloud's Small, Small on a server of your own), and a set goes to that
+    folder's subfolder for the deployment (Amendment 33 decision 5 read it on a server only)."""
+    lite = OspreyConfig.model_validate({"components": {"storage": {"backups": str(tmp_path / "l")}}})
+    assert backup.default_out_root(lite) == tmp_path / "l" / "local-lite"
+    assert backup.default_out_root(_cloud_small(str(tmp_path / "c"))) == tmp_path / "c" / "small"
+    server = _own_server(tmp_path, backups=str(tmp_path / "s"))
+    assert backup.default_out_root(server) == tmp_path / "s" / "small"
+    # The placeholder a server named on purpose is still that server's folder (Amendment 33).
+    named = _own_server(tmp_path, backups=backup.LEGACY_PLACEHOLDER)
+    assert backup.default_out_root(named) == Path(backup.LEGACY_PLACEHOLDER) / "small"
+
+
+def test_a_config_without_a_backups_folder_falls_back_and_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision 2: an `osprey.yaml` written before Amendment 37 names no folder — none at all, or
+    the schema's `/var/lib/osprey/backups` placeholder the committed defaults carry, which nothing
+    off a server ever asked for — so the set goes to `~/OspreyFlow/backups`, and the backup says
+    so in its output."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    fallback = tmp_path / "home" / "OspreyFlow" / "backups"
+    for raw in ({}, {"components": {"storage": {"backups": backup.LEGACY_PLACEHOLDER}}}):
+        config = OspreyConfig.model_validate(raw)
+        root, notice = backup.backups_folder(config)
+        assert root == fallback
+        assert notice is not None and str(fallback) in notice and "folders.backups" in notice
+        assert backup.default_out_root(config) == fallback / "local-lite"
+    assert backup.backups_folder(_cloud_small(str(tmp_path / "c")))[1] is None
+    # Said where the operator reads it: the backup's own output.
+    path = tmp_path / "osprey.yaml"
+    path.write_text("{}\n")
+    (tmp_path / "generated" / "local-lite").mkdir(parents=True)
+    (tmp_path / "generated" / "local-lite" / "compose.yaml").write_text("services: {}\n")
+    seen: dict[str, object] = {}
+
+    def run_backup(**kwargs: object) -> Path:
+        seen.update(kwargs)
+        raise backup.BackupFailed("graph", "stopped by the test")
+
+    monkeypatch.setattr(backup, "run_backup", run_backup)
+    lines: list[str] = []
+    monkeypatch.setattr("builtins.print", lambda *a, **k: lines.append(" ".join(map(str, a))))
+    assert backup.main(["--config", str(path), "--generated-root", str(tmp_path / "generated")]) == 1
+    assert seen["out_root"] == fallback / "local-lite"
+    assert any(str(fallback) in line and "folders.backups" in line for line in lines), lines
+
+
+def test_no_backup_is_written_inside_the_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision 2: with no folder named, the set never lands in the checkout's `backups/` (where
+    three local-lite sets, 16 GB, were synced with `~/Documents`); and the one place a set's folder
+    is made refuses one inside the checkout, whatever chose it."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    checkout = backup.REPO_ROOT.resolve()
+    for raw in ({}, {"components": {"storage": {"backups": backup.LEGACY_PLACEHOLDER}}}):
+        chosen = backup.default_out_root(OspreyConfig.model_validate(raw)).resolve()
+        assert not chosen.is_relative_to(checkout), chosen
+    assert not hasattr(backup, "DEFAULT_BACKUP_ROOT")
+    # A stand-in checkout, so a regression here writes into a temporary folder, not the real one.
+    stand_in = tmp_path / "checkout"
+    stand_in.mkdir()
+    monkeypatch.setattr(backup, "REPO_ROOT", stand_in)
+    with pytest.raises(backup.BackupFailed, match="inside the checkout") as refused:
+        backup.new_set_folder(stand_in / "backups" / "local-lite", "local-lite")
+    assert str(stand_in.resolve()) in refused.value.detail
+    assert not (stand_in / "backups").exists()
+
+
+def test_an_out_root_inside_the_checkout_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Decision 2: `--out-root` is still honoured, but one inside the checkout is refused, naming
+    the checkout, before anything is run — by its relative spelling too."""
+    path = tmp_path / "osprey.yaml"
+    path.write_text(yaml.safe_dump({"components": {"storage": {"backups": str(tmp_path / "b")}}}))
+    (tmp_path / "generated" / "local-lite").mkdir(parents=True)
+    (tmp_path / "generated" / "local-lite" / "compose.yaml").write_text("services: {}\n")
+    ran: list[object] = []
+    monkeypatch.setattr(backup, "run_backup", lambda **kwargs: ran.append(kwargs))
+    monkeypatch.chdir(backup.REPO_ROOT)
+    common = ["--config", str(path), "--generated-root", str(tmp_path / "generated")]
+    for inside in (str(backup.REPO_ROOT / "backups"), "backups", "deploy/../backups"):
+        assert backup.main([*common, "--out-root", inside]) == 1
+        said = capsys.readouterr().err
+        assert "inside the checkout" in said and str(backup.REPO_ROOT.resolve()) in said
+    assert ran == []
+    # Outside it, the folder given is used as it is.
+    def run_backup(**kwargs: object) -> Path:
+        ran.append(kwargs["out_root"])
+        raise backup.BackupFailed("graph", "stopped by the test")
+
+    monkeypatch.setattr(backup, "run_backup", run_backup)
+    assert backup.main([*common, "--out-root", str(tmp_path / "elsewhere")]) == 1
+    assert ran == [tmp_path / "elsewhere"]
+
+
+def test_two_deployments_sets_go_to_their_own_subfolders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision 3 (ADR-138's rule): two deployments sharing one backups folder each write to
+    `<folder>/<deployment name>/`, so a set of one is never among the other's."""
+    monkeypatch.setattr(backup, "git_sha", lambda: "abc1234")
+    folder = tmp_path / "backups"
+
+    def named(name: str) -> OspreyConfig:
+        return OspreyConfig.model_validate(
+            {"deployment": {"name": name}, "components": {"storage": {"backups": str(folder)}}}
+        )
+
+    alpha, beta = backup.default_out_root(named("alpha")), backup.default_out_root(named("beta"))
+    assert (alpha, beta) == (folder / "alpha", folder / "beta")
+    made_alpha = backup.new_set_folder(alpha, "alpha")
+    made_beta = backup.new_set_folder(beta, "beta")
+    assert made_alpha.parent == folder / "alpha" and made_beta.parent == folder / "beta"
+    assert [p.name for p in (folder / "alpha").iterdir()] == [made_alpha.name]
+    assert [p.name for p in (folder / "beta").iterdir()] == [made_beta.name]
 
 
 def test_backup_main_writes_to_the_configured_folder_reaching_the_servers_names(
@@ -70,7 +194,7 @@ def test_backup_main_writes_to_the_configured_folder_reaching_the_servers_names(
 
     monkeypatch.setattr(backup, "run_backup", run_backup)
     assert backup.main(["--config", str(path), "--generated-root", str(tmp_path / "generated")]) == 1
-    assert seen["out_root"] == tmp_path / "backups"
+    assert seen["out_root"] == tmp_path / "backups" / "small"
     assert seen["id"] == "127.0.0.1"
     assert str(config.network.tls.certificate) in no_resolver_changes["trusted"]  # type: ignore[union-attr]
 
