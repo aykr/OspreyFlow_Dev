@@ -147,7 +147,7 @@ describe("Rules and Monitoring", () => {
       fireEvent.change(screen.getByRole("combobox", { name: "Whose alerts" }), { target: { value: show } });
       await waitFor(() => expect(calls).toContain(`GET alert-queue?status=active&show=${show}`));
     }
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Older than this many days" }), { target: { value: "7" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Older than, in days" }), { target: { value: "7" } });
     await waitFor(() => expect(calls).toContain("GET alert-queue?status=active&show=unassigned&older_than_days=7"));
     fireEvent.change(screen.getByRole("combobox", { name: "Whose alerts" }), { target: { value: "all" } });
     await waitFor(() => expect(calls).toContain("GET alert-queue?status=active&older_than_days=7"));

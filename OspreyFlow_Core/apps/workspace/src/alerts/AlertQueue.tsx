@@ -182,19 +182,18 @@ export function AlertQueue(props: AlertQueueProps) {
             </Select>
           </label>
           <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
-            Older than
+            Older than, in days
             <input
               className="input"
               type="number"
               min={1}
               inputMode="numeric"
-              aria-label="Older than this many days"
+              aria-label="Older than, in days"
               placeholder="any"
               value={olderThan}
               onChange={(e) => setOlderThan(e.target.value)}
               style={{ width: "6ch" }}
             />
-            days
           </label>
           <label className="label" style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
             Show

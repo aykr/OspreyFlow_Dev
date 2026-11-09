@@ -278,30 +278,100 @@ test("a closing reason is chosen from the closed list with the arrow keys, by ke
   registerCovered(REGISTRY, "choose-a-closing-reason-by-keyboard");
 });
 
-test("the watches are reached with the rules, and an inbox alert opened at its address, by keyboard", async ({ page }) => {
-  // ADR-146: the hotlists and watched patterns are kept with the rules (*What raises alerts*), and the
-  // inbox, beside the queue until L2.10 merges it, opens an alert at its own address (decision 6),
-  // never a case of its own.
+test("the watches are reached with the rules, by keyboard (ADR-146: one queue, the inbox gone)", async ({ page }) => {
+  // ADR-146: the hotlists and watched patterns are kept with the rules (*What raises alerts*); the
+  // inbox went in L2.10, its alerts in the one queue.
   await serve(page);
   const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
   await page.route("**/*/v1/investigations/inv-1/hotlists", (route) => route.fulfill(fulfil({ hotlists: [], audience_default: "only_me", audience_editable: true })));
   await page.route("**/*/v1/investigations/inv-1/monitors", (route) => route.fulfill(fulfil({ monitors: [] })));
   await page.route("**/*/v1/investigations/inv-1/patterns", (route) => route.fulfill(fulfil({ patterns: [] })));
-  await page.route("**/*/v1/investigations/inv-1/alerts", (route) =>
-    route.fulfill(fulfil({ alerts: [{
-      id: "w1", rule_id: "hotlist:hl-1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
-      evidence_available: true, investigation_id: "inv-1", created_at: "2026-09-22T00:00:00Z",
-      hotlist: { identifier: "07700 900918", kept_as_written: false, review_date: "2027-01-31" },
-      fired_on: [{ type: "Endpoint", label: "+447700900918", files: [{ name: "batch2.csv", row: 3 }], more_files: 0 }],
-    }] })),
-  );  // prettier-ignore
   await page.goto("/keyboard/alerts-harness.html");
-  await expect(page.getByRole("heading", { name: "Alert inbox" })).toBeVisible();
-  await press(page, page.getByRole("button", { name: "Open the alert" }));
-  await expect.poll(() => page.evaluate(() => window.__ALERTS__?.addressed)).toEqual(["w1"]);
+  await expect(page.getByRole("button", { name: /Open alert:/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Alert inbox" })).toHaveCount(0);
   await press(page, page.getByRole("tab", { name: "What raises alerts" }));
   await expect(page.getByRole("heading", { name: "Hotlists" })).toBeVisible();
-  registerCovered(REGISTRY, "reach-the-watches-and-alert-inbox-by-keyboard");
+  registerCovered(REGISTRY, "reach-the-watches-kept-with-the-rules-by-keyboard");
+});
+
+test("the queue is filtered by whose and by age, by keyboard (ADR-146 decision 2)", async ({ page }) => {
+  const state = await serve(page);
+  await page.goto("/keyboard/alerts-harness.html");
+  await page.getByRole("combobox", { name: "Whose alerts" }).selectOption("unassigned");
+  await expect.poll(() => state.queueSearches).toContain("?status=active&show=unassigned");
+  await page.getByRole("spinbutton", { name: "Older than, in days" }).focus();
+  await page.keyboard.type("7");
+  await expect.poll(() => state.queueSearches).toContain("?status=active&show=unassigned&older_than_days=7");
+  registerCovered(REGISTRY, "filter-the-queue-by-whose-and-age-by-keyboard");
+});
+
+async function serveARoutedAlert(page: Page, state: State) {
+  const routed = { ...alert(state), routed_team: "team-7" };
+  const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/*/v1/investigations/inv-1/alert-queue?*", (route) =>
+    route.fulfill(fulfil([{ alert: routed, summary: "4 movements from GB-MULE to GB-HUB", audience: "team", team: "team-7", team_name: "Prison intel" }])),
+  );
+  await page.route("**/*/v1/investigations/inv-1/alert-queue/a1", (route) =>
+    route.fulfill(fulfil({
+      alert: routed, summary: "4 movements from GB-MULE to GB-HUB", audience: "team", team: "team-7", team_name: "Prison intel",
+      lead: true, nodes: [account("n1", "GB-MULE"), account("n2", "GB-HUB")], edges: [],
+      transactions: [{ event_id: "v1", edge_id: "e1", source_id: "n1", target_id: "n2", occurred_at: "2026-09-01T09:00:00Z", amount: 9500 }],
+    })),
+  );  // prettier-ignore
+  await page.route("**/*/v1/investigations/inv-1/alert-teams", (route) =>
+    route.fulfill(fulfil([{ role_id: "team-7", display_name: "Prison intel", lead: true, members: ["analyst-2"] }])),
+  );
+  await page.route("**/*/v1/investigations/inv-1/alert-queue/a1/suppress", (route) => {
+    state.sent.push({ method: "POST", path: "alert-queue/a1/suppress", body: route.request().postDataJSON() });
+    return route.fulfill(fulfil({ ...routed, suppressed_until: "2026-12-01" }));
+  });
+}
+
+test("a team's lead gives one of its alerts to a member, by keyboard (ADR-146 Amendment 1)", async ({ page }) => {
+  const state = await serve(page);
+  await serveARoutedAlert(page, state);
+  await page.goto("/keyboard/alerts-harness.html");
+  await openTheAlert(page);
+  const lead = page.getByRole("group", { name: "As the team's lead" });
+  await lead.getByRole("combobox", { name: "Give to (a member of the team)" }).selectOption("analyst-2");
+  await press(page, lead.getByRole("button", { name: "Give to the member" }));
+  await expect.poll(() => state.sent.find((s) => s.path === "alert-queue/a1/assign")?.body).toEqual({ assignee: "analyst-2" });
+  registerCovered(REGISTRY, "give-a-team-alert-to-a-member-by-keyboard");
+});
+
+test("a team's lead suppresses one of its alerts until a day, with a reason, by keyboard (ADR-146 Amendment 1)", async ({ page }) => {
+  const state = await serve(page);
+  await serveARoutedAlert(page, state);
+  await page.goto("/keyboard/alerts-harness.html");
+  await openTheAlert(page);
+  const lead = page.getByRole("group", { name: "As the team's lead" });
+  await lead.getByLabel("Suppress until (at most 90 days ahead)").fill("2026-12-01");
+  await lead.getByLabel("Why, in words: the reason for suppressing it").focus();
+  await page.keyboard.type("A known pattern, reviewed weekly");
+  await press(page, lead.getByRole("button", { name: "Suppress until…" }));
+  await expect.poll(() => state.sent.find((s) => s.path === "alert-queue/a1/suppress")?.body).toEqual({
+    until: "2026-12-01", reason: "A known pattern, reviewed weekly",
+  });  // prettier-ignore
+  registerCovered(REGISTRY, "suppress-a-team-alert-by-keyboard");
+});
+
+test("What raises alerts is filtered by a column, by keyboard (ADR-146 decision 5)", async ({ page }) => {
+  await serve(page);
+  await page.route("**/*/v1/investigations/inv-1/alert-sources", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ sources: [
+      { id: "r1", rule_id: "typology:r1", name: "Deposits", source: "rule", kind: "rule", maker: "analyst-1", owner: "analyst-1", state: "live", alerts_30_days: 3, suppressed: [] },
+      { id: "h1", rule_id: "hotlist:h1", name: "Hotlist 07700 900918", source: "watch", kind: "hotlist", maker: "analyst-1", owner: "analyst-1", state: "live", alerts_30_days: 1, suppressed: [] },
+    ] }) }),
+  );  // prettier-ignore
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  const table = page.getByRole("table", { name: "Rules and watches" });
+  await expect(table.getByText("Deposits")).toBeVisible();
+  await page.getByRole("textbox", { name: "Filter by source" }).focus();
+  await page.keyboard.type("watch");
+  await expect(table.getByText("Deposits")).toHaveCount(0);
+  await expect(table.getByText("Hotlist 07700 900918")).toBeVisible();
+  registerCovered(REGISTRY, "filter-what-raises-alerts-by-keyboard");
 });
 
 test("the queue is filtered, by keyboard", async ({ page }) => {
