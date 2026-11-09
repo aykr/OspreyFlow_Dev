@@ -1109,23 +1109,3 @@ export const MATRIX_ACTIONS = defineActionRegistry("MATRIX_ACTIONS", [
   // ADR-139 decision 6: the link table sorts by connection strength and by its ends' rarity.
   "sort-links-by-strength-and-rarity-by-keyboard",
 ] as const);
-
-/** Studio › Sources' connectors and screening lists (ADR-140 Amendment 13; redesign phase 9): a list
- * subscribed by its id, imported through a format's template and through the blank template, refreshed
- * now and scheduled, a dataset's own list's rows imported, a source registered through a SQL connection
- * by its read, and read again by Refresh now. `keyboard/sources-connectors.spec.ts`. */
-export const SOURCES_CONNECTORS_ACTIONS = defineActionRegistry("SOURCES_CONNECTORS_ACTIONS", [
-  "subscribe-a-dataset-to-a-screening-list-by-keyboard",
-  "import-a-screening-list-through-a-template-by-keyboard",
-  "import-a-client-list-through-the-blank-template-by-keyboard",
-  "refresh-a-screening-list-now-by-keyboard",
-  "schedule-a-screening-lists-refresh-by-keyboard",
-  "import-a-datasets-own-list-rows-by-keyboard",
-  "register-a-source-through-a-sql-connection-by-keyboard",
-  "refresh-a-connector-source-now-by-keyboard",
-  // The lane review of L1.6: the API and JSON read steps, unsubscribing, and a schedule stopped.
-  "register-a-source-through-an-api-connection-by-keyboard",
-  "register-a-source-through-a-json-connection-by-keyboard",
-  "unsubscribe-a-dataset-from-a-screening-list-by-keyboard",
-  "refresh-a-screening-list-by-hand-only-by-keyboard",
-] as const);
