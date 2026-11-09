@@ -29894,6 +29894,63 @@ network of the lane's own and a stand-in provider (no hosted provider was called
 and change. The gateway's spend figures are tokens, not money, for every hosted entry: its own
 dashboard's "spend" is the tokens used.
 
+**As built in P3** (8 November 2026, the platform lane; the items carried from P2's independent review,
+`process/lanes/platform/BRIEF.md` P3 items 1–6). Amendment 3 is otherwise unchanged; where this says so it
+replaces one of its "Left" entries.
+1. **Old engine keys are revoked at every reconcile** (replacing "A changed master key leaves the old engine
+   keys in the gateway"). `GatewayAdmin.revoke_stale_engine_keys` reads every page of `GET /key/list`
+   (measured: SHA-256 hashes, newest first, at most 100 a page, `total_pages` given) before deleting
+   anything, and deletes by hash (`POST /key/delete`, measured: a hash is taken, an unknown one is 404,
+   the deleted key's next call 401) each key tagged `metadata.osprey_engine` that the current master key
+   would not derive for an enabled engine. A key without that tag is not the Conduit's and is left alone;
+   more than a hundred pages is refused in words, never cut short. Each engine key is now made with the
+   tag, so **an engine key made before P3 (by P2, merged the same day) stays untagged and is not revoked
+   by a later rotation**: the reconcile updates an existing key with `/key/update`, whose handling of
+   `metadata` was not measured, so it sends none. A deployment that rotates its master key after
+   running P2 removes those keys by hand (`/key/list`, `/key/delete` by hash), until a measured
+   amendment tags them.
+2. **Each engine's key is limited to its own engine's models** (`/key/generate` and `/key/update` with
+   `models`, the gateway's entry names of that engine alone). Measured: a key so limited is refused any
+   other model, held or not, 403 `key_model_access_denied`, naming the allowed models and never the key;
+   `/key/update` changes `models` at once.
+3. **The engine key's hash in a backup: kept in the spend tables, nowhere else.** Measured (platform lease,
+   stack a): after calls with an engine key its SHA-256 is in `LiteLLM_VerificationToken` and in the
+   `api_key` columns of `LiteLLM_SpendLogs`, `LiteLLM_DailyTagSpend` (which the usage reads),
+   `LiteLLM_DailyUserSpend` and `LiteLLM_DailyTeamSpend`; and, **once the key is deleted** (an engine
+   removed, or item 1's revocation), in `LiteLLM_DeletedVerificationToken` with the name's last four and
+   its metadata — found only by a second live run, since a first run on a fresh gateway has deleted
+   nothing. **Decided:** the four spend tables keep their rows, hash included, so a restore keeps its
+   usage; a hash opens nothing and the key it names is either current (and remade by the restore's first
+   start) or revoked. `LiteLLM_DeletedVerificationToken` joins the tables whose rows no backup holds
+   (`harness/backup.py`'s `GATEWAY_SEALED_TABLES`), since a restore has no use for a deleted key. The live
+   check (`test_model_gateway_live.py`'s `pg_dump` case) calls with the key, waits for the spend tables,
+   and fails if the hash is in any table of the kept dump but the four.
+4. **A garbled answer at start never stops the Conduit starting**: the first `ModelAdmin.start()` treats
+   any failure of the gateway's answer (a non-JSON 200 included) as a gateway not yet reachable, logged by
+   its kind and retried in the background as Amendment 3 decision 3 already says.
+5. **Why usage figures are not an unfiltered count under rule 7.** Rule 7 forbids the Glass an unfiltered
+   count of *graph data*: a figure about nodes, links or records that a person's access would have
+   filtered, so that the figure itself tells them something their access hides. Usage is not that: it
+   counts **calls to the model gateway and their tokens, per engine and per job**, from the gateway's own
+   tags (`osprey:<engine>/<job>`), which carry no case, dataset, entity, person or content (decision 2;
+   the planted-prompt and planted-id tests hold it). No access rule filters a call by what it was about,
+   because nothing about what it was about is kept, so there is nothing an unfiltered call count could
+   disclose that a filtered one would hide. It is deployment-wide operational data, shown only behind
+   `manage_models`. A figure per case, dataset or person would be a different thing and would need its
+   own decision; none is made.
+6. **The Glass shows `model_limit_reached` where it shows `engine_refused`** (Ask to search,
+   `patterns/api.ts`, in the Conduit's own words).
+7. **Minors**: no engine key is derived from an empty master key (refused); a hosted engine may not be
+   named `local` (`packages/schemas/deployment.py`); *Test the connection*'s calls are tagged
+   `osprey:<engine>/test`; `model_keys.py` closes its gateway client and audit.
+
+**Tests** (each shown red by a plant at its real call site, `process/lanes/platform/P3_RED_RECORD.md`):
+`tests/services/api/test_model_engine_keys.py` (rotation revokes, every page read, one engine's key refused
+another's models, garbled first answer, empty master, `local` refused, the test call's tag);
+`tests/adapters/model_litellm/test_stand_in_gateway_usage.py` (the stand-in refuses as measured);
+`tests/harness/test_gateway_backup.py::test_a_backup_holds_no_engine_key_of_the_gateway` (a deleted key's row
+left out); `test_model_gateway_live.py`'s `pg_dump` case (live, the platform lease on stack a);
+`apps/workspace/src/patterns/QueryBuilderPanel.test.tsx`.
 
 ### ADR-142, Amendment 4 (8 November 2026) — sister lanes and a third test stack
 
@@ -30052,3 +30109,174 @@ and with the evidence saved short; each red); `keyboard/shell.spec.ts`,
 `keyboard/rules-place.spec.ts`, `keyboard/alerts.spec.ts`, `keyboard/watch-panels.spec.ts`, each
 new case red with its handler removed; axe in dark, light and GOV.UK for the place, its tabs, its
 address and the switcher's count. Red records: `process/lanes/rules/l2.9/RED_RECORD.md`.
+
+## ADR-147 — Maps administration: providers and their keys in Admin under the model keys' rule, the local basemap built and verified in the Conduit, prefetch areas on a schedule — ACCEPTED (design)
+
+Status: accepted 8 November 2026; the owner's ruling of 8 November (map provider keys follow the model
+keys' rule: managed in Admin, write-only, never returned, logged or echoed, every change audited, behind
+`manage_geospatial`) and the orchestrator's settlement of the same day (the `osprey-admin` role check on
+`/v1/admin/geospatial/*` is kept beside the right); every other choice the platform lane's, under Prompt
+L's rule that a lane builds its recommended option and logs it (`process/lanes/platform/REPORT.md`,
+"Decisions taken"). Written by the platform lane in P3 (`07_BUILD_PLAN.md`'s lane table, row P3). The
+analyst's basemap switch and place search are P4's, under a later amendment. ADR-014, ADR-015, ADR-016,
+ADR-054 Amendment 4 and ADR-067 are otherwise unchanged; so is the set-up console's Geospatial screen
+but for its Build and Verify.
+
+**Context.** Maps had no Admin section. Providers were set only in `osprey.yaml`'s `map:`, read once at
+start; a hosted provider's key only as `credential: env:VAR` in the Conduit's environment; the set-up
+console's **Build local basemap** and **Verify** answered 501 (`harness/geospatial.py`: both need
+`services`/`adapters` modules the harness image does not carry, and the build a live graph);
+`/v1/admin/geospatial/*` existed with no screen calling it and asked for server paths in its body; prefetch
+ran only as `python -m services.api.prefetch` from an outside scheduler; and a WMTS provider with a key
+raised `NotImplementedError`, since a KVP `GetTile` request has no template to put one in
+(`07_BUILD_PLAN.md`, Phase 5's known gaps: the `endpoint` conflict, whose first half — `endpoint` a bare
+base URL — was already closed in `tile_proxy.py`).
+
+**Decision.**
+
+1. **Where things are kept.** `osprey.yaml`'s `map:` is where a deployment starts. The first change made
+   in *Admin › Maps* writes the **maps file** (`maps.yaml`), which then replaces `map:` whole, with the
+   prefetch areas, their schedule, each area's last run and the ids of the providers whose key is set.
+   A key typed in Admin goes to the **map key file** beside it (`map-keys.yaml`). Both are `600`, written
+   atomically, in a named volume of the Conduit's own (`map-settings`, at `/run/osprey/map-settings`,
+   made by `services/api/Dockerfile` for its user; `harness/render.py`, `harness/cluster.py`), read again
+   by every replica when they change, one change at a time under an advisory lock (`_Exclusive`, as
+   *Models*). **Never `osprey.yaml`, never a backup**: `ospreyflow backup` takes the maps file by its name
+   alone and never reads the key file; a restore puts the maps file back and names each provider whose
+   key must be entered again (`05_DEPLOYMENT.md` §6.1). The map serves the maps file's providers from the
+   next request, with no restart (`get_map_config`).
+2. **The key, under ADR-135 Amendment 2's rule.** `PUT /v1/admin/maps/providers/{id}/key` takes it once
+   (`SecretStr`), and no response, log record, audit row, maps file or backup carries it; each route reads
+   its own body so a validation refusal never echoes what was sent; a provider's record says only where a
+   key is (`set`, `env` for the installer's reference, `none`). A provider that takes no key, one the
+   browser fetches and one from a profile refuse one. **A key is given only to the address it was entered
+   for**: each key is recorded with its provider's address (`map_admin.address_of`: the source or
+   endpoint, service, layer, variables and key parameter), so an edit, an `osprey.yaml` changed under a
+   surviving key file, or a restored maps file never moves it; such a provider shows "entered for another
+   address". The tile proxy uses the Admin key before the `env:` reference; a provider that needs a key
+   and holds neither (an unset `env:` variable included) answers its tiles 503 in words naming Admin ›
+   Maps, never its address; a provider that refuses a tile answers 502 in fixed words with its status.
+   **No URL's query reaches a log record**: the tile proxy drops it from every record of the `httpx` and
+   `httpcore` loggers (httpx logs each request's URL at INFO), and its fetch raises errors of its own,
+   `from None`, that carry a status and nothing else.
+
+2a. **What Admin may name** (found by the lane's own review, before merge). **An `env:` reference is the
+   installer's alone**: one named in Admin would let a holder of `manage_geospatial` send any of the
+   Conduit's own secrets (its database password, its token-exchange secret) to an address of their
+   choosing, so a provider added there has none and an edit keeps the one `osprey.yaml` gave. **Its
+   addresses stay outside the deployment**: `https` or `http` to a dotted host name that is not
+   `localhost`, nor an IP address that is loopback, link-local (a cloud's metadata service), private,
+   reserved or multicast; no dotless name (a service of the deployment's own: `postgres`, `keycloak`), no
+   user or password in the address, no host filled by a variable; a `file://` only under the tiles folder.
+   A profile is set in `osprey.yaml`. A provider that takes a key is fetched by the Conduit. **After the
+   orchestrator's independent review:** an installer's key is bound to the installer's address as an
+   Admin key is to its own, so an edit that changes the address of a provider with an `env:` reference is
+   refused in words; the host and port are read from the address as written (any placeholder in either
+   refused), an IPv4 address in every form a resolver takes (`127.1`, `0x7f.1`, `2130706433`), a trailing
+   dot dropped before the dotless check, and the name resolved at save and again before every fetch of a
+   provider not exactly as `osprey.yaml` gives it (DNS can change between), any loopback, private,
+   link-local or metadata answer refused; a query parameter named like a key (`key`, `token`, `secret`,
+   `sig`, `auth`) must be `{credential}`, so a key is never typed into the address. **A maps file is
+   vetted as it is read**, whoever wrote it (a restore, a hand edit): a provider exactly as `osprey.yaml`
+   gives it stands; any other loses an `env:` reference that is not `osprey.yaml`'s for the same address,
+   and one whose address would be refused is left out, each logged by its id. `{credential}` may stand in
+   an address's query alone, for every provider (`MapProvider`), and the HTTP client's loggers (`httpx`
+   and each of `httpcore`'s own) drop everything a URL carries past its host. The tile route answers only
+   an image, so a name that resolves inside reads nothing but tiles back.
+3. **The local basemap is built and verified in the Conduit.** One code (`services/api/map_admin.py`):
+   *Admin › Maps* calls `/v1/admin/geospatial/build-basemap` and `/verify`; the set-up console and
+   `ospreyflow map build|verify` run `python -m services.api.map_admin` in the Conduit's container
+   (`docker compose exec`; the console holds no Conduit token before sign-in, and says so in words before
+   Launch). The build takes **a named region only** — no path from the Glass — and writes into the tiles
+   folder's **one writable door, `built/`**, laid over the read-only tiles mount as ADR-067's upload door
+   is, so the rest of the folder stays read-only to the Conduit; it is made and given to the Conduit's
+   user before every `up` (`harness.ingest_uploads.prepare`, the upload door's own step, now over each
+   writable door), so Docker never makes it as root. **No Java in the Conduit's image, while the owner
+   rules on its licence** (the orchestrator's interim, 8 November): the Temurin runtime is GPL-2.0 with the
+   Classpath exception and the licence register (`00_ARCHITECTURE.md` §7) passes no GPL; the options put
+   to the owner are a register entry for it (Java returns to the image, about 100 MB, `jlink`ed from
+   `eclipse-temurin:21-jdk` by digest, built and run offline in P3), planetiler in a container of its own
+   run by the command line, or no build in the product. The build is one function
+   (`map_admin.build_basemap`), so each is a small change; until then it refuses in the builder's own words
+   before fetching anything ("Java is not installed in the Conduit"), and the download and planetiler run
+   in worker threads, off the Conduit's event loop. **Planetiler's jar** is placed by `ospreyflow map build
+   <region> --planetiler-jar <path>` (into `<tiles>/planetiler/planetiler.jar`), which says the build runs
+   in the Conduit. The built provider (`osm-local-<region>`, ODbL, open) is registered in the maps file,
+   since `osprey.yaml` is read-only in the Conduit. The section shows each local file's state, the glyph
+   fonts' (`scripts/fetch_basemap_glyphs.py`) and whether the builder can run, in words.
+4. **The WMTS `endpoint` conflict, settled.** `MapProvider.credential_param` names the query parameter a
+   WMTS KVP request carries its key in (`key`, `apikey`, …): required beside a WMTS `credential`, refused
+   off a WMTS service; a template address keeps `{credential}`. `_build_wmts_kvp_url` no longer raises.
+5. **Prefetch areas** are named boxes (WGS84 degrees, zooms inclusive) for a provider the Conduit fetches
+   and caches (`proxy` not `none`, a `cache`), **at most 5,000 tiles an area** over its zooms, a larger
+   one refused in words with its count, never cut to fit (rule 2). They run by hand
+   (`POST /v1/admin/maps/prefetch`, `ospreyflow map prefetch`) or **on a schedule in the Conduit**
+   (every 6 hours, a day or a week, and no other; `PrefetchScheduler`, checked each minute), at most ten
+   tiles a second, a response past 4 MB refused as no tile, each tile fetched once and
+   kept; a run's failure is said on its own area in fixed words that carry neither the key nor the
+   address. The object store is called in worker threads, off the event loop. Two replicas may both run
+   an area; the second's fetches are cache hits. The `geometry_ref` areas `osprey.yaml` may name stay
+   `python -m services.api.prefetch`'s, which follows the maps file and its keys as the Conduit does
+   (`prefetch.effective_map`). A maps file that does not validate leaves the map on `osprey.yaml`'s, the
+   log saying why; a restore writes it beside the old and renames it over.
+6. **`ospreyflow map list|verify|prefetch|build`** for headless use, each the Conduit's own code in its
+   container, recorded in the maps' history as `cli:<user>`.
+7. **Attribution** is shown on every provider's row with its licence and note, as the map shows it.
+8. **Routes**, each behind `manage_geospatial` (rule 4): `GET /v1/admin/maps`, `GET …/history`,
+   `POST …/providers`, `PUT|DELETE …/providers/{id}`, `PUT|DELETE …/providers/{id}/key`,
+   `PUT …/default`, `PUT …/areas`, `PUT …/schedule`, `POST …/prefetch`; and the two geospatial routes,
+   which also keep the `osprey-admin` role check (the orchestrator's settlement; dropping it would loosen
+   access). Every change is audited in `map_admin_audit` (who, when, what, the provider, each changed
+   field's old and new value; never a key).
+
+**Tiers** are read off a provider (`map_admin.tier_of`): an OGC service is 4; a local file under ODbL is
+1, any other local file 2; anything hosted or from a profile 3.
+
+**Left, and why:**
+- **The build piece waits on the owner's licence ruling** (decision 3), and P3 merges without it if it has
+  not come. **A real planetiler run was not seen**: no jar on this machine (a download, the owner's call).
+  The build's own path ran on a small synthetic region: the real gazetteer load into ArcadeDB, committed
+  only when the build finishes (`tests/ingest/test_map_admin_build_end_to_end.py`, live), and through the
+  real route with the load stood in; planetiler's run is stood in throughout.
+- **A host name that resolves inside the deployment** (by a deployment's own DNS) is not caught by
+  decision 2a, which reads the name, not where it resolves; the tile route's image-only answer bounds it.
+- **A refusal's words name a sent value shaped like an id** (lower case, digits and hyphens): a key of that
+  shape pasted into a field a validator quotes would be echoed. No Maps validator quotes a value but the
+  provider's id.
+- **Verify does not check a keyed WMTS service** (it does not use the Admin key), and its capabilities
+  probe's failure is not yet said in words.
+- **No confirmation before Remove** (a provider, a key), as in *Models*.
+- **Registering a tier-4 service by its capabilities from the Glass** (`register_tier4_provider`) is not
+  in the section: the form takes the fields the registration discovers. A later amendment.
+- **Drawn or uploaded boundaries** for prefetch (`05_DEPLOYMENT.md` §2.2) are boxes here; a polygon is the
+  `geometry_ref` path's.
+
+**Tests that would fail if it were broken** (rule 12; each shown red by a plant at its real call site,
+`process/lanes/platform/P3_RED_RECORD.md`):
+- **Access (rule 4)**: every `/v1/admin/maps` and `/v1/admin/geospatial` route, found by walking the app's
+  routes, refuses an administrator holding every right but `manage_geospatial` and changes nothing
+  (`tests/services/api/test_map_admin_routes.py`); `test_route_rights.py` names each; the section's routes
+  are the section's (`test_admin_sections.py`).
+- **The key in nothing**: a planted key through the real key route, a malformed body, an unknown provider,
+  a provider that takes none and a refused provider is in no response, log record, audit row or maps file,
+  and reaches the tile proxy's upstream request alone (`test_map_admin_routes.py`, `test_map_admin.py`);
+  in no backup (`tests/harness/test_map_settings_backup.py`); never on the page after it is sent
+  (`Maps.test.tsx`, `keyboard/admin-maps.spec.ts`).
+- **The tile proxy**: the WMTS key in its parameter, the Admin key first, a missing key in words
+  (`test_tile_proxy.py`).
+- **Build and verify on a small synthetic region**: through the real route (`test_geospatial_admin_routes.py`)
+  and the service (`test_map_admin.py`), no server path accepted from the Glass; the set-up console and
+  the command line run the Conduit's code in its container (`test_webapp_geospatial.py`,
+  `tests/cli/test_map_verb.py`, `apps/harness/keyboard/setup-screens.spec.ts`).
+- **Prefetch**: the cap, a provider not cached, each tile fetched once with the key, failures in fixed
+  words, the schedule due and run (`test_map_admin.py`).
+- **Tier 1 in the demo and CI (rule 9)**: no maps file committed anywhere, and a Conduit with none serves
+  exactly the committed tier-1 map (`tests/test_demo_osprey_config_is_tier_1_only.py`).
+- **The deployment**: the volume, its variable, `built/` the one writable door (`test_map_settings_render.py`);
+  no Java in the image while the owner rules on its licence (`tests/test_conduit_image_java_licence.py`).
+- **Keyboard (rule 13)**: every Maps action by keyboard, each red when it does nothing
+  (`keyboard/admin-maps.spec.ts`, `MAPS_ACTIONS`); **axe** in the dark, light and GOV.UK themes on
+  `maps-harness.html` with each form open and the basemap built.
+
+**Cost.** A second settings file and volume beside the models file; a 100 MB Java runtime in the Conduit's
+image; one asyncio task per replica for the schedule.

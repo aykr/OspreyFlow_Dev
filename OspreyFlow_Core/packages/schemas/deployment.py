@@ -306,6 +306,10 @@ class ModelProviderConfig(BaseModel):
                 f"the provider name {value!r} is not one LiteLLM knows the shape of (lower-case, "
                 "such as openai or anthropic)"
             )
+        if value == LOCAL_ENGINE:
+            raise ValueError(
+                "local is this deployment's own engine; a provider outside it takes another name"
+            )
         return value
 
     @field_validator("roles")

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import fcntl
+import hashlib
 import json
 import logging
 import os
@@ -46,7 +47,7 @@ import yaml
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
 from adapters.model_litellm.connection import check_connection
-from adapters.model_litellm.usage import engine_key
+from adapters.model_litellm.usage import engine_key, usage_tag
 from schemas.deployment import ModelProviderConfig, ModelsConfig
 from schemas.model_admin import (
     AdminEngine,
@@ -231,6 +232,11 @@ def key_limits(limits: EngineLimits) -> dict[str, object]:
     }
 
 
+#: `/key/list`'s page (measured: at most 100) and how many pages are read before refusing.
+_KEY_PAGE = 100
+_MAX_KEY_PAGES = 100
+
+
 class GatewayAdmin:
     """LiteLLM's admin API, as measured (ADR-135 Amendments 2 and 3). Every failure becomes a
     `ModelAdminRefused` with fixed words and the status alone."""
@@ -337,31 +343,87 @@ class GatewayAdmin:
         if resp.status_code not in (200, 404):  # 404: none was held (measured)
             raise self._refused(resp, "the key's removal")
 
-    async def put_engine_key(self, provider: str, limits: EngineLimits) -> None:
-        """The engine's own gateway key with its limits: updated where the gateway holds it
-        (`/key/update`, measured to change them at once, `None` clearing one), made where it does
-        not (the update's 404, measured; then `/key/generate`). Never deleted to change it, which
-        would lose the budget's spend so far. **The key is only ever in a request's body**, never
-        its address: the HTTP client logs every address, so `GET /key/info?key=…` is never asked.
-        Every answer is discarded: the update's carries the key."""
-        key = engine_key(self._master, provider)
-        fields = key_limits(limits)
+    def _engine_key(self, provider: str) -> str:
+        """The engine's key, derived from the master key; **refused when there is no master key**,
+        from which anyone could derive every engine's key (P2's independent review)."""
+        if not self._master.strip():
+            raise ModelAdminRefused(
+                "The model gateway's master key is not set, so no engine's own key can be made. "
+                "Run ospreyflow doctor.",
+                status=502,
+            )
+        return engine_key(self._master, provider)
+
+    async def put_engine_key(self, provider: ModelProviderConfig, limits: EngineLimits) -> None:
+        """The engine's own gateway key with its limits and **its own models alone** (`models`,
+        measured: any other model is refused 403 `key_model_access_denied`, so one engine's key
+        cannot spend another's budget): updated where the gateway holds it (`/key/update`,
+        measured to change them at once, `None` clearing one), made where it does not (the
+        update's 404, measured; then `/key/generate`). Never deleted to change it, which would lose
+        the budget's spend so far. **The key is only ever in a request's body**, never its address:
+        the HTTP client logs every address, so `GET /key/info?key=…` is never asked. Every answer
+        is discarded: the update's carries the key."""
+        key = self._engine_key(provider.name)
+        # Never empty: an empty `models` is every model (measured); a provider takes at least one
+        # role (`ModelProviderConfig`), so there is always one.
+        roles = dict.fromkeys(provider.roles.values())
+        models = [gateway_model_name(provider.name, m) for m in roles]
+        fields = {**key_limits(limits), "models": models}
         resp = await self._call("POST", "/key/update", {"key": key, **fields})
         if resp.status_code == 404:
             # No alias: a key's alias must be unique (measured, 400), and a key derived under
             # another master key would then collide with the old one and stop every change.
             resp = await self._call("POST", "/key/generate", {
-                "key": key, **fields, "metadata": {"osprey_engine": provider},
+                "key": key, **fields, "metadata": {"osprey_engine": provider.name},
             })  # fmt: skip
         if resp.status_code != 200:
             raise self._refused(resp, "the engine's limits")
 
     async def delete_engine_key(self, provider: str) -> None:
-        resp = await self._call(
-            "POST", "/key/delete", {"keys": [engine_key(self._master, provider)]}
-        )
+        resp = await self._call("POST", "/key/delete", {"keys": [self._engine_key(provider)]})
         if resp.status_code not in (200, 404):  # 404: none was held (measured)
             raise self._refused(resp, "the engine's limits' removal")
+
+    async def revoke_stale_engine_keys(self, engines: Sequence[str]) -> int:
+        """Every key the gateway holds tagged `metadata.osprey_engine` that the current master key
+        would not derive for one of `engines` is deleted (ADR-135 Amendment 3, "As built in P3"):
+        after a master-key rotation the old engine keys would otherwise stay valid for whoever
+        holds the old master key. Every page of `/key/list` is read before anything is deleted
+        (measured: at most 100 a page, newest first, so deleting while reading would skip keys),
+        and each stale key is named by its SHA-256 alone (measured: `/key/delete` takes it), so no
+        old key travels anywhere. A key without the tag is someone else's and is left alone."""
+        current = {
+            hashlib.sha256(self._engine_key(e).encode()).hexdigest() for e in engines
+        }
+        stale: list[str] = []
+        page, pages = 1, 1
+        while page <= pages:
+            if page > _MAX_KEY_PAGES:
+                raise ModelAdminRefused(
+                    f"The model gateway holds more than {_MAX_KEY_PAGES * _KEY_PAGE} keys, so the "
+                    "engines' old keys were not looked for. Run ospreyflow doctor.",
+                    status=502,
+                )
+            resp = await self._call(
+                "GET", f"/key/list?return_full_object=true&page={page}&size={_KEY_PAGE}"
+            )
+            if resp.status_code != 200:
+                raise self._refused(resp, "the list of keys")
+            body = resp.json()
+            pages = int(body.get("total_pages") or 1)
+            for row in body.get("keys") or []:
+                token = str(dict(row).get("token") or "")
+                tagged = dict(dict(row).get("metadata") or {}).get("osprey_engine")
+                if tagged is not None and token and token not in current:
+                    stale.append(token)
+            page += 1
+        for token in stale:
+            resp = await self._call("POST", "/key/delete", {"keys": [token]})
+            if resp.status_code not in (200, 404):
+                raise self._refused(resp, "an old engine key's removal")
+        if stale:
+            log.info("revoked %d engine keys the current master key does not derive", len(stale))
+        return len(stale)
 
 
 # --- the audit ----------------------------------------------------------------------------------
@@ -478,9 +540,9 @@ class _Exclusive:
     replicas sharing the models file (an advisory lock on a file beside it, `fcntl.flock`), so two
     administrators, two replicas or the command line never write over each other's change."""
 
-    def __init__(self, folder: Path) -> None:
+    def __init__(self, folder: Path, name: str = ".models.lock") -> None:
         self._lock = asyncio.Lock()
-        self._path = folder / ".models.lock"
+        self._path = folder / name
         self._fd: int | None = None
 
     async def __aenter__(self) -> None:
@@ -630,7 +692,13 @@ class ModelAdmin:
         that cannot be reached is tried again in the background** (`retry_seconds`) until it
         answers (ADR-135 Amendment 3): until then a hosted engine's key may not exist there, and
         its calls would be refused."""
-        if not await self._start_once():
+        try:
+            done = await self._start_once()
+        except Exception as failed:  # noqa: BLE001 - a garbled answer never stops the Conduit
+            log.warning("model engines not reconciled with the gateway: %s",
+                        type(failed).__name__)  # fmt: skip
+            done = False
+        if not done:
             self._retrying = asyncio.create_task(self._keep_trying())
         self._on_change(self.routes())
 
@@ -718,7 +786,8 @@ class ModelAdmin:
             if model_id not in held:
                 await self._gateway.add_entry(p, model)
         for p in settings.providers:
-            await self._gateway.put_engine_key(p.name, settings.limits.get(p.name, EngineLimits()))
+            await self._gateway.put_engine_key(p, settings.limits.get(p.name, EngineLimits()))
+        await self._gateway.revoke_stale_engine_keys([p.name for p in settings.providers])
 
     async def _put_back(self, settings: ModelSettings, rebuilt: frozenset[str]) -> None:
         """After a change failed part-way: the gateway made equal to the file again, best effort;
@@ -985,7 +1054,8 @@ class ModelAdmin:
                     "it is asked anything and there is nothing to limit."
                 )
             before.append(current.limits.get(name, EngineLimits()))
-            await self._gateway.put_engine_key(name, limits)
+            provider = next(p for p in current.providers if p.name == name)
+            await self._gateway.put_engine_key(provider, limits)
             kept = {**current.limits, name: limits}
             self._save(current.model_copy(update={"limits": kept}, deep=True))
 
@@ -1016,8 +1086,10 @@ class ModelAdmin:
             result = ConnectionTestResult(engine=name, outcome="key_refused", ok=False, words=words)
         else:
             model = next(iter(provider.roles.values()))
+            # Tagged as the engine's `test` job, so the usage counts it apart (P2's review).
             check = await check_connection(
-                self._gateway.http, gateway_model_name(provider.name, model)
+                self._gateway.http, gateway_model_name(provider.name, model),
+                tag=usage_tag(provider.name, "test"),
             )
             result = ConnectionTestResult(
                 engine=name, outcome=check.outcome, ok=check.ok, words=check.words

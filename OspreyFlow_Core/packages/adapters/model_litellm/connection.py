@@ -108,17 +108,23 @@ def classify(status: int, body: str) -> Outcome:
     return "unreachable"
 
 
-async def check_connection(http: httpx.AsyncClient, model: str) -> ConnectionCheck:
+async def check_connection(
+    http: httpx.AsyncClient, model: str, *, tag: str | None = None
+) -> ConnectionCheck:
     """One completion of at most one token on `model` (the gateway's `model_name`, such as
-    `gemini/gemini-2.5-flash`), through the gateway the Conduit already signs in to."""
+    `gemini/gemini-2.5-flash`), through the gateway the Conduit already signs in to; tagged `tag`
+    (`osprey:<engine>/test`) when given, so the usage counts it."""
+    body: dict[str, object] = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Reply with OK."}],
+        "max_tokens": 1,
+    }
+    if tag is not None:
+        body["metadata"] = {"tags": [tag]}
     try:
         resp = await http.post(
             "/chat/completions",
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": "Reply with OK."}],
-                "max_tokens": 1,
-            },
+            json=body,
             timeout=30.0,
         )
     except httpx.HTTPError:

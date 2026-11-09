@@ -10,17 +10,18 @@ discipline for `require_studio_role` — exercised directly, no route needed to 
 `test_*_route_refuses_without_the_admin_role` is the route-level case for each of the two routes,
 proven against the real `TestClient`/real middleware stack, not only the bare dependency.
 
-`build_local_basemap` itself needs a real Geofabrik download, a real `planetiler.jar` and Java —
-none of which exist in this tree (`round 03`'s own finding, unchanged: `find . -iname
-"*.pmtiles"` returns nothing). What is tested here is the *route's own wiring* — SSE streaming in
-Launch's own shape, audit recording, error propagation — with `services.api.app.build_local_
-basemap` itself replaced by a fake that calls the same `progress` callback and returns the same
-`BasemapBuildResult` shape, the same "prove the wiring, not the external pipeline" boundary
-`tests/harness/test_webapp_launch.py` already draws for `harness.apply`.
+Since ADR-147 the build route takes a named region only and runs
+`services.api.map_admin.build_basemap`, which needs a Geofabrik download, a planetiler jar and Java,
+none of which a CI runner holds. What is tested here is the route's own wiring (SSE streaming in
+Launch's own shape, the audit, the graph transaction committed or rolled back, no server path taken
+from the caller) with the build or its download and planetiler run replaced, the boundary
+`tests/harness/test_webapp_launch.py` draws for `harness.apply`; the real gazetteer load is
+`tests/ingest/test_map_admin_build_end_to_end.py`'s.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +39,7 @@ from services.api.app import (
     get_principal,
     require_admin_role,
 )
+from services.api.map_admin import InMemoryMapAdminAudit, MapAdmin, MapKeyFile, MapSettingsFile
 
 from schemas.domain import Principal, TxId
 from schemas.mapconfig import MapConfig, MapProvider
@@ -117,7 +119,22 @@ def graph() -> _FakeGraph:
 
 
 @pytest.fixture
-def client(graph: _FakeGraph) -> TestClient:
+def map_admin(tmp_path: Path) -> Iterator[MapAdmin]:
+    """ADR-147: the build registers its provider in the maps file, through the app's `MapAdmin`."""
+    (tmp_path / "tiles" / "planetiler").mkdir(parents=True)
+    (tmp_path / "tiles" / "planetiler" / "planetiler.jar").write_bytes(b"PK synthetic jar")
+    admin = MapAdmin(
+        installed=_minimal_map_config(), settings_file=MapSettingsFile(tmp_path / "maps"),
+        key_file=MapKeyFile(tmp_path / "maps"), audit=InMemoryMapAdminAudit(),
+        tiles_root=tmp_path / "tiles", java=lambda _name: "/usr/bin/java",
+    )  # fmt: skip
+    app.state.map_admin = admin
+    yield admin
+    del app.state.map_admin
+
+
+@pytest.fixture
+def client(graph: _FakeGraph, map_admin: MapAdmin) -> TestClient:
     app.dependency_overrides[get_principal] = lambda: ADMIN
     app.dependency_overrides[get_graph] = lambda: graph
     app.dependency_overrides[get_ontology] = lambda: object()
@@ -147,11 +164,7 @@ def test_build_basemap_route_refuses_without_the_admin_role(graph: _FakeGraph) -
     try:
         response = TestClient(app).post(
             "/v1/admin/geospatial/build-basemap",
-            json={
-                "region": "great-britain",
-                "output_dir": "/tmp/x",
-                "planetiler_jar_path": "/tmp/p.jar",
-            },
+            json={"region": "great-britain"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -172,42 +185,42 @@ def test_verify_map_route_refuses_without_the_admin_role() -> None:
 def test_build_basemap_route_refuses_an_unknown_region(client: TestClient) -> None:
     response = client.post(
         "/v1/admin/geospatial/build-basemap",
-        json={"region": "narnia", "output_dir": "/tmp/x", "planetiler_jar_path": "/tmp/p.jar"},
+        json={"region": "narnia"},
     )
     assert response.status_code == 422
     assert "narnia" in response.json()["detail"]
 
 
-def test_build_basemap_route_streams_real_progress_and_completes(
-    client: TestClient, graph: _FakeGraph, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from services.api.app import BasemapBuildResult
-
+def _fake_gazetteer(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakeReport:
         nodes_created = 12
         nodes_referenced = 3
         rejections: list[str] = []
 
-    async def _fake_build(*, progress: Any, **_kwargs: Any) -> BasemapBuildResult:
+    async def _load(*_args: Any, **_kwargs: Any) -> _FakeReport:
+        return _FakeReport()
+
+    monkeypatch.setattr("services.api.app.load_gazetteer", _load)
+
+
+def test_build_basemap_route_streams_real_progress_and_completes(
+    client: TestClient, graph: _FakeGraph, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fake_gazetteer(monkeypatch)
+
+    async def _fake_build(
+        admin: Any, *, progress: Any, load_places: Any, settle: Any, **_kwargs: Any
+    ) -> tuple[str, int, int, int]:
         progress("Downloading the 'great-britain' Geofabrik extract...")
         progress("Running planetiler...")
         progress("Loading the OSM-derived gazetteer...")
-        return BasemapBuildResult(
-            pmtiles_path=Path("/tmp/great-britain.pmtiles"),
-            gazetteer_report=_FakeReport(),  # type: ignore[arg-type]
-            map_config=_minimal_map_config(),
-        )
+        counts = await load_places(Path("/tmp/great-britain.osm.pbf"))
+        await settle()  # as `map_admin.build_basemap` does, before it registers the provider
+        return ("great-britain.pmtiles", *counts)
 
-    monkeypatch.setattr("services.api.app.build_local_basemap", _fake_build)
+    monkeypatch.setattr("services.api.map_admin.build_basemap", _fake_build)
 
-    response = client.post(
-        "/v1/admin/geospatial/build-basemap",
-        json={
-            "region": "great-britain",
-            "output_dir": "/tmp/x",
-            "planetiler_jar_path": "/tmp/p.jar",
-        },
-    )
+    response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "great-britain"})
 
     assert response.status_code == 200
     events = _events(response.text)
@@ -222,25 +235,73 @@ def test_build_basemap_route_streams_real_progress_and_completes(
 def test_build_basemap_route_rolls_back_and_reports_a_real_failure(
     client: TestClient, graph: _FakeGraph, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _fake_build_that_fails(*, progress: Any, **_kwargs: Any) -> None:
+    _fake_gazetteer(monkeypatch)
+
+    async def _fake_build_that_fails(
+        admin: Any, *, progress: Any, load_places: Any, **_kwargs: Any
+    ) -> None:
         progress("Downloading the 'great-britain' Geofabrik extract...")
-        raise RuntimeError("no planetiler.jar at /tmp/p.jar")
+        await load_places(Path("/tmp/great-britain.osm.pbf"))
+        raise RuntimeError("planetiler stopped")
 
-    monkeypatch.setattr("services.api.app.build_local_basemap", _fake_build_that_fails)
+    monkeypatch.setattr("services.api.map_admin.build_basemap", _fake_build_that_fails)
 
-    response = client.post(
-        "/v1/admin/geospatial/build-basemap",
-        json={
-            "region": "great-britain",
-            "output_dir": "/tmp/x",
-            "planetiler_jar_path": "/tmp/p.jar",
-        },
-    )
+    response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "great-britain"})
 
     assert response.status_code == 200
     assert '"returncode": 1' in response.text
-    assert "no planetiler.jar" in response.text
+    # The independent review's minor 8: the error's own words (a path, a provider's answer) are the
+    # Conduit's log's, never the Glass's; the person is told it stopped, and by which kind of error.
+    assert "planetiler stopped" not in response.text
+    assert "The build stopped (RuntimeError)" in response.text
     assert graph.rolled_back and not graph.committed
+
+
+def test_build_basemap_route_takes_no_server_path_from_the_glass(client: TestClient) -> None:
+    """ADR-147: the tiles folder and the jar are the deployment's own; a body naming either is
+    refused, so no browser chooses where the Conduit writes or what it runs."""
+    response = client.post("/v1/admin/geospatial/build-basemap", json={
+        "region": "rutland", "output_dir": "/etc", "planetiler_jar_path": "/tmp/evil.jar",
+    })  # fmt: skip
+    assert response.status_code == 422
+    assert "/etc" not in response.text and "evil" not in response.text
+
+
+def test_the_real_build_on_a_small_synthetic_region_through_the_route(
+    client: TestClient, graph: _FakeGraph, map_admin: MapAdmin, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`map_admin.build_basemap` itself, through the route: a synthetic PBF-headed extract (never
+    downloaded, rule 9), planetiler's run standing in for the jar this machine does not hold
+    (`P3_RED_RECORD.md`), the gazetteer loader counted; the provider lands in the maps file as tier
+    1 and the map serves it with no restart."""
+    import scripts.build_local_basemap as basemap_script
+
+    _fake_gazetteer(monkeypatch)
+    jars: list[Path] = []
+
+    def downloader(region: str, dest: Path) -> Path:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"\x00\x00\x00\x0d\x0a\x09OSMHeader synthetic")
+        return dest
+
+    def planetiler(extract: Path, output: Path, *, jar_path: Path) -> Path:
+        jars.append(jar_path)
+        output.write_bytes(b"PMTiles\x03 synthetic")
+        return output
+
+    monkeypatch.setattr(basemap_script, "download_extract", downloader)
+    monkeypatch.setattr(basemap_script, "run_planetiler", planetiler)
+
+    response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "rutland"})
+
+    assert '"returncode": 0' in response.text, response.text
+    assert (map_admin.tiles_root / "built" / "rutland.pmtiles").is_file()
+    assert jars == [map_admin.tiles_root / "planetiler" / "planetiler.jar"]
+    provider = map_admin.provider("osm-local-rutland")
+    assert provider.source == "file:///data/tiles/built/rutland.pmtiles"
+    assert provider.licence.client_scope == "open" and graph.committed
+    listed = client.get("/v1/map/providers").json()
+    assert "osm-local-rutland" in [p["id"] for p in listed["providers"]]
 
 
 def test_verify_map_route_reports_the_real_verify_map_result() -> None:
@@ -295,3 +356,38 @@ def test_verify_map_route_reports_a_real_attribution_issue() -> None:
     body = response.json()
     assert body["passed"] is False
     assert body["issues"][0]["check"] == "attribution"
+
+
+def test_the_places_are_committed_before_the_provider_is_registered(
+    client: TestClient, graph: _FakeGraph, map_admin: MapAdmin, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The independent review's minor 9: a provider registered before its places are committed
+    would point the map at a basemap whose gazetteer a failed commit then lost."""
+    import scripts.build_local_basemap as basemap_script
+
+    _fake_gazetteer(monkeypatch)
+    order: list[str] = []
+
+    async def commit(tx: TxId) -> None:
+        order.append("commit")
+
+    graph.commit_transaction = commit  # type: ignore[method-assign]
+    real_register = map_admin.register_local
+
+    async def register(*args: Any, **kwargs: Any) -> None:
+        order.append("register")
+        await real_register(*args, **kwargs)
+
+    monkeypatch.setattr(map_admin, "register_local", register)
+
+    def downloader(region: str, dest: Path) -> Path:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"\x00\x00\x00\x0d\x0a\x09OSMHeader synthetic")
+        return dest
+
+    monkeypatch.setattr(basemap_script, "download_extract", downloader)
+    monkeypatch.setattr(basemap_script, "run_planetiler",
+                        lambda e, o, *, jar_path: o.write_bytes(b"PMTiles") and o)  # fmt: skip
+    response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "rutland"})
+    assert '"returncode": 0' in response.text, response.text
+    assert order == ["commit", "register"]

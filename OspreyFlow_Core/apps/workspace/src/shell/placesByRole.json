@@ -305,7 +305,19 @@
     "manage_geospatial"
    ],
    "places": [],
-   "answered_hidden": []
+   "answered_hidden": [
+    "maps_admin_add_provider_route",
+    "maps_admin_areas_route",
+    "maps_admin_default_route",
+    "maps_admin_edit_provider_route",
+    "maps_admin_history_route",
+    "maps_admin_prefetch_route",
+    "maps_admin_remove_key_route",
+    "maps_admin_remove_provider_route",
+    "maps_admin_schedule_route",
+    "maps_admin_set_key_route",
+    "maps_admin_view_route"
+   ]
   },
   "right:manage_models": {
    "rights": [

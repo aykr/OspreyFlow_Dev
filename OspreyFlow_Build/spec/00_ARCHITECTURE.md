@@ -233,7 +233,12 @@ Tier 3 providers are reached through a proxy in the Conduit, never directly from
 Three reasons, each sufficient on its own:
 
 - **Credentials.** An OS Data Hub key in frontend code is a published key. The registry holds a
-  reference (`env:OS_DATAHUB_API_KEY`); the proxy resolves it.
+  reference (`env:OS_DATAHUB_API_KEY`); the proxy resolves it. Since ADR-147 a key may instead be
+  set in *Admin › Maps* (write-only, behind `manage_geospatial`), kept in the Conduit's map key file
+  and used before the reference; it is in no response, log, audit row or backup. A template address
+  takes the key at `{credential}`; a WMTS service names the query parameter it goes in
+  (`credential_param`), since a KVP `GetTile` request has no template. A provider that needs a key
+  and holds none answers its tiles in words.
 - **Egress policy.** Default-deny egress is the platform's posture (`05_DEPLOYMENT.md` §7). The
   tile proxy is a named, auditable exception with one allowed destination, rather than the
   frontend acquiring general internet access.

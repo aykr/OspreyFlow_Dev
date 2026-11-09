@@ -214,6 +214,12 @@ GATEWAY_DB_PASSWORD = "OSPREY_LITELLM_DB_PASSWORD"
 #: folder (made by `services/api/Dockerfile`, owned by its user) on first mount, so it is writable
 #: by the Conduit's user on any host.
 MODEL_SETTINGS_PATH = "/run/osprey/model-settings"
+#: ADR-147 decision 1: where the Conduit keeps the maps file and the map key file, a named volume of
+#: its own made the same way (`services/api/Dockerfile` makes the folder, owned by its user).
+MAP_SETTINGS_PATH = "/run/osprey/map-settings"
+#: ADR-147 decision 3: the one writable folder inside the read-only tiles folder, where a basemap
+#: built in the Conduit is written (`services/api/map_admin.BUILT_FOLDER`).
+TILES_BUILT_SUBDIR = "built"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -981,6 +987,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             api_environment["OSPREY_RECIPE_REPO_ROOT"] = (
                 f"{config.components.storage.data}/{RECIPE_REPO_DIRNAME}"
             )
+            # ADR-147 decision 1: the maps file and the map key file, on their own volume.
+            api_environment["OSPREY_MAP_SETTINGS_DIR"] = MAP_SETTINGS_PATH
             # **Round 13cda — the Conduit could not reach a model at all.**
             # `adapters/model_litellm/client.py`'s `LiteLLMConfig.from_env` defaults to
             # `localhost:4000`, which inside the Conduit's own container is the Conduit. Every
@@ -1046,6 +1054,12 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                 # The built basemap, read-only, at the path a map provider's `source` names. See
                 # `StorageRoots.tiles`.
                 f"{host_folder_source(config.components.storage.tiles)}:{TILES_CONTAINER_PATH}:ro",
+                # ADR-147 decision 3: a basemap built in the Conduit is written here alone, a
+                # writable door laid over the read-only root as ADR-067's upload door is.
+                f"{host_folder_source(config.components.storage.tiles)}/{TILES_BUILT_SUBDIR}:"
+                f"{TILES_CONTAINER_PATH}/{TILES_BUILT_SUBDIR}",
+                # ADR-147 decision 1: the maps file and the map key file, the Conduit's alone.
+                f"map-settings:{MAP_SETTINGS_PATH}",
             ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
@@ -1192,6 +1206,8 @@ def _render_compose(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
             "osprey-staging": {"driver": "local"},
             # Round 13cda: without this the ~2.2GB model pull repeats on every `up`.
             "ollama-models": {"driver": "local"},
+            # ADR-147 decision 1: the maps file and the map key file, the Conduit's alone.
+            **({"map-settings": {"driver": "local"}} if "api" in services else {}),
             **({"whisper-models": {"driver": "local"}} if "whisper" in services else {}),
             # ADR-135 Amendment 2 decision 2: the models file, the Conduit's alone.
             **({"model-settings": {"driver": "local"}} if "litellm-db" in services else {}),

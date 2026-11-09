@@ -134,6 +134,8 @@ class DryRun:
     #: ADR-135 Amendment 2 with `05_DEPLOYMENT.md` §6.1: the engines whose key must be entered
     #: again, since no backup carries a key.
     keys_to_enter: tuple[str, ...] = ()
+    #: ADR-147: the map providers whose key was set in Admin; the backup holds none.
+    map_keys_to_enter: tuple[str, ...] = ()
 
     def render(self) -> str:
         lines = [
@@ -167,6 +169,13 @@ class DryRun:
                 f"              enter the key of {', '.join(self.keys_to_enter)} again,",
                 "              in Admin › Models or with ospreyflow models key <name>. The",
                 "              engines, their models and each job's default are restored.",
+            ]
+        if self.map_keys_to_enter:
+            lines += [
+                "",
+                "  map keys    no backup carries a key (05_DEPLOYMENT.md §6.1). After the restore,",
+                f"              enter the key of {', '.join(self.map_keys_to_enter)} again,",
+                "              in Admin › Maps. The providers and prefetch areas are restored.",
             ]
         lines += [
             "",
@@ -232,6 +241,7 @@ def dry_run_for(directory: Path, manifest: dict[str, Any]) -> DryRun:
         quiesced=bool(manifest["quiesced"]),
         empty=tuple(manifest.get("empty", ())),
         keys_to_enter=tuple(engines_with_keys(directory)),
+        map_keys_to_enter=tuple(map_providers_with_keys(directory)),
     )
 
 
@@ -637,6 +647,33 @@ def engines_with_keys(directory: Path) -> list[str]:
     return sorted(dict(recorded.get("keys") or {}))
 
 
+def map_providers_with_keys(directory: Path) -> list[str]:
+    """The map providers whose key the set's maps file says was set in Admin (ADR-147)."""
+    path = directory / "config" / "maps.yaml"
+    if not path.is_file():
+        return []
+    import yaml
+
+    recorded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return sorted(str(k) for k in recorded.get("keys_held") or [])
+
+
+def restore_maps_file(compose_file: Path, maps_file: Path) -> None:
+    """The maps file back into the Conduit's own volume (ADR-147 decision 1), written beside it and
+    renamed over it, so a Conduit reading it never meets half a file. A key file left on the
+    volume is not given to the restored providers unless each address is the one its key was
+    entered for (`map_admin.address_of`)."""
+    _run(
+        _compose(compose_file)
+        + ["exec", "-T", "api", "sh", "-c",
+           "umask 077 && cat > /run/osprey/map-settings/.maps-restored.yaml"
+           " && mv -f /run/osprey/map-settings/.maps-restored.yaml"
+           " /run/osprey/map-settings/maps.yaml"],  # fmt: skip
+        item="maps",
+        input=maps_file.read_text(encoding="utf-8"),
+    )
+
+
 def restore_models_file(compose_file: Path, models_file: Path) -> None:
     """The models file back into the Conduit's own volume (ADR-135 Amendment 2 decision 9)."""
     _run(
@@ -704,6 +741,8 @@ def run_restore(
         restore_identity(compose_file, held)
     for models_file in by_item.get("models", []):
         restore_models_file(compose_file, models_file)
+    for maps_file in by_item.get("maps", []):
+        restore_maps_file(compose_file, maps_file)
     return plan
 
 

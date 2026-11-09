@@ -153,6 +153,14 @@ class MapProvider(BaseModel):
         default=None,
         description="The provider's key, as env:VARIABLE — a name, never the key itself",
     )
+    #: ADR-147 decision 4: the query parameter a WMTS KVP `GetTile` request carries the key in (a
+    #: provider's own name for it, `key` or `apikey` say). A template address says where with
+    #: `{credential}`; a KVP request has no template, so it says here. Only for `service: wmts`.
+    credential_param: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$",
+        description="WMTS: the query parameter the provider's key goes in",
+    )
     proxy: Literal["required", "recommended", "none"] = Field(
         default="none",
         description="Whether tiles are fetched through the Conduit (which caches them and keeps "
@@ -164,7 +172,8 @@ class MapProvider(BaseModel):
     #: style reference. `None` only for `kind: image` (a site aerial photo
     #: has no basemap style of its own) and `kind: dem`.
     style: str | None = Field(
-        default=None, description="The map style: bundled:osprey-dark, bundled:osprey-light, or "
+        default=None,
+        description="The map style: bundled:osprey-dark, bundled:osprey-light, or "
         "the profile's own",
     )
     attribution: str = Field(description="The credit shown on the map, as the licence asks")
@@ -193,6 +202,47 @@ class MapProvider(BaseModel):
                 "never a literal value"
             )
         return self
+
+    @model_validator(mode="after")
+    def _a_key_goes_in_the_query_alone(self) -> MapProvider:
+        """ADR-147: `{credential}` only in an address's query. In its host a resolver would be sent
+        the key; in its port or path a log would keep it."""
+        for address in (self.source, self.endpoint):
+            if address is None or "{credential}" not in address:
+                continue
+            before, _, rest = address.partition("?")
+            query, _, fragment = rest.partition("#")
+            if "{credential}" in before or "{credential}" in fragment:
+                raise ValueError(
+                    f"provider {self.id!r} takes its key outside its address's query; put "
+                    "{credential} in the query"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _a_wmts_key_has_a_parameter(self) -> MapProvider:
+        if self.credential_param is not None and self.service is not OgcServiceKind.WMTS:
+            raise ValueError(
+                f"provider {self.id!r}: credential_param is only for a WMTS service; another "
+                "provider's address says where its key goes with {credential}"
+            )
+        if self.service is OgcServiceKind.WMTS and self.credential is not None:
+            if self.credential_param is None:
+                raise ValueError(
+                    f"provider {self.id!r} is a WMTS service with a credential, so it needs "
+                    "credential_param: the query parameter its key goes in"
+                )
+        return self
+
+    @property
+    def needs_key(self) -> bool:
+        """Whether its tiles cannot be fetched without a key (ADR-147)."""
+        address = f"{self.source or ''}{self.endpoint or ''}"
+        return (
+            self.credential is not None
+            or self.credential_param is not None
+            or "{credential}" in address
+        )
 
 
 class MapConfig(BaseModel):

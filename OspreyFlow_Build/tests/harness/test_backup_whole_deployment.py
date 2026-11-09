@@ -271,6 +271,7 @@ def test_the_set_names_the_recipes_item(
     monkeypatch.setattr(backup, "backup_identity", lambda c, d: touch(d))
     # ADR-135 Amendment 2: a deployment whose Models were never changed has no models file.
     monkeypatch.setattr(backup, "backup_models_file", lambda c, d: None)
+    monkeypatch.setattr(backup, "backup_maps_file", lambda c, d: None)
     monkeypatch.setattr(backup, "backup_object_store", lambda c, d, **kw: touch(d))
     monkeypatch.setattr(backup, "backup_analytics", lambda c, d, **kw: touch(d))
     seen: dict[str, str] = {}
@@ -385,6 +386,7 @@ def test_a_backup_set_holds_the_weights_file_and_its_checksum(
     monkeypatch.setattr(backup, "backup_identity", lambda c, d: touch(d))
     # ADR-135 Amendment 2: a deployment whose Models were never changed has no models file.
     monkeypatch.setattr(backup, "backup_models_file", lambda c, d: None)
+    monkeypatch.setattr(backup, "backup_maps_file", lambda c, d: None)
     monkeypatch.setattr(backup, "backup_object_store", lambda c, d, **kw: touch(d))
     monkeypatch.setattr(backup, "backup_analytics", lambda c, d, **kw: touch(d))
     monkeypatch.setattr(backup, "backup_recipes", lambda c, d, **kw: touch(d))

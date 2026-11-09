@@ -244,3 +244,55 @@ async def test_an_unpriced_entry_spends_nothing_so_its_budget_never_stops_it() -
                                                 "budget_duration": "1d"})  # fmt: skip
     async with _client(gateway, ENGINE_KEY) as engine:
         assert [(await _chat(engine)).status_code for _ in range(3)] == [200, 200, 200]
+
+
+# --- P3 (ADR-135 Amendment 3, "As built in P3"): measured 8 November 2026, platform lease, stack a --
+
+
+async def test_a_key_given_models_is_refused_any_other_model_in_the_measured_words() -> None:
+    """Measured: a key made with `models` is refused any other model, even one the gateway does not
+    hold, 403 `key_model_access_denied`, naming the models it may use and never the key."""
+    gateway = _gateway(Clock())
+    async with _client(gateway) as admin:
+        await _entry(admin)
+        made = await admin.post("/key/generate", json={
+            "key": ENGINE_KEY, "models": ["other/model"], "metadata": {"osprey_engine": "other"},
+        })  # fmt: skip
+        assert made.status_code == 200
+    async with _client(gateway, ENGINE_KEY) as engine:
+        refused = await _chat(engine)
+        unknown = await _chat(engine, model="zz/none")
+    for resp in (refused, unknown):
+        assert resp.status_code == 403, resp.text
+        assert resp.json()["error"]["type"] == "key_model_access_denied"
+        assert "WXYZ" not in resp.text
+    async with _client(gateway) as admin:
+        await admin.post("/key/update", json={"key": ENGINE_KEY, "models": ["gemini/gemini-2.5-flash"]})
+    async with _client(gateway, ENGINE_KEY) as engine:
+        assert (await _chat(engine)).status_code == 200
+
+
+async def test_the_key_list_is_hashes_newest_first_a_hundred_a_page_at_most() -> None:
+    """Measured: `GET /key/list?return_full_object=true` answers each key's SHA-256 (`token`), its
+    last four (`key_name`) and metadata, newest first, `size` at most 100 (422 above), with
+    `total_pages`; `POST /key/delete` takes a key's hash as well as the key (an unknown one, 404)."""
+    gateway = _gateway(Clock())
+    async with _client(gateway) as admin:
+        for i in range(5):
+            await admin.post("/key/generate", json={
+                "key": f"sk-osprey-pg-{i:04d}", "metadata": {"osprey_engine": f"p{i}"},
+            })  # fmt: skip
+        assert (await admin.get("/key/list", params={"size": 101})).status_code == 422
+        first = (await admin.get("/key/list", params={
+            "return_full_object": "true", "page": 1, "size": 2})).json()  # fmt: skip
+        assert first["total_pages"] == 3 and first["total_count"] == 5
+        assert [k["metadata"]["osprey_engine"] for k in first["keys"]] == ["p4", "p3"]
+        assert first["keys"][0]["token"] == hashlib.sha256(b"sk-osprey-pg-0004").hexdigest()
+        assert first["keys"][0]["key_name"] == "sk-...0004"
+        assert "sk-osprey-pg-0004" not in str(first)
+        bare = (await admin.get("/key/list")).json()
+        assert bare["keys"][0] == hashlib.sha256(b"sk-osprey-pg-0004").hexdigest()
+        by_hash = hashlib.sha256(b"sk-osprey-pg-0001").hexdigest()
+        assert (await admin.post("/key/delete", json={"keys": [by_hash]})).status_code == 200
+        assert (await admin.post("/key/delete", json={"keys": ["0" * 64]})).status_code == 404
+    assert "sk-osprey-pg-0001" not in gateway.virtual_keys()

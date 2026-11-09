@@ -100,6 +100,8 @@ SHARED_VOLUMES: dict[str, str] = {
     # ADR-135 Amendment 2 decision 2: the models file, shared by every Conduit replica, each of
     # which reads it again when it changes (`services/api/model_admin.py`).
     "model-settings": "model-settings",
+    # ADR-147 decision 1: the maps file and the map key file, shared by every Conduit replica.
+    "map-settings": "map-settings",
 }
 
 #: The release's own images for the job workers (ADR-114 Amendment 10 point 6).

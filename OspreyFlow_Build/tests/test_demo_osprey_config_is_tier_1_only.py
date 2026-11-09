@@ -11,8 +11,9 @@ demo config never needs to exercise (every entry here is already open).
 
 from __future__ import annotations
 
-from services.api.mapconfig_loader import load_map_config
+from pathlib import Path
 
+from services.api.mapconfig_loader import load_map_config
 from tools.layout import REPO as _REPO
 
 OSPREY_YAML = _REPO / "osprey.yaml"
@@ -32,3 +33,29 @@ def test_the_default_provider_is_tier_1_local_and_needs_no_credential() -> None:
     assert default.credential is None
     assert default.proxy == "none"
     assert default.source is not None and default.source.startswith("file://")
+
+
+def test_no_maps_file_is_committed_so_the_demo_and_ci_start_from_this_config() -> None:
+    """ADR-147: a deployment's maps file (`maps.yaml`, the Conduit's own volume) replaces
+    `osprey.yaml`'s `map:` once *Admin › Maps* changes it. One committed anywhere (a demo pack, a
+    fixture, a seed) could carry a non-open provider into the demo or CI past the two checks above,
+    so none is; the service's own tests write theirs to a temporary folder."""
+    import subprocess
+
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=_REPO, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    assert [p for p in tracked if p.rsplit("/", 1)[-1] in {"maps.yaml", "map-keys.yaml"}] == []
+
+
+def test_a_conduit_with_no_maps_file_serves_exactly_this_config(tmp_path: Path) -> None:
+    from services.api.map_admin import InMemoryMapAdminAudit, MapAdmin, MapKeyFile, MapSettingsFile
+
+    installed = load_map_config(OSPREY_YAML)
+    admin = MapAdmin(
+        installed=installed, settings_file=MapSettingsFile(tmp_path), key_file=MapKeyFile(tmp_path),
+        audit=InMemoryMapAdminAudit(), tiles_root=tmp_path,
+    )  # fmt: skip
+    assert admin.config() == installed
+    # Rule 9: tier 1 only, not merely local (an OS OpenData file is tier 2).
+    assert all(p.tier == 1 and p.key_state == "none" for p in admin.view().providers)

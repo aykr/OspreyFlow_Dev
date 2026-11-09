@@ -35,6 +35,10 @@ COPY scripts ./scripts
 COPY connectors ./connectors
 COPY recipes ./recipes
 
+# ADR-147 decision 3: the tier-1 basemap build (planetiler) needs Java 21, which is **not** in this
+# image while the owner rules on its licence: the Temurin runtime is GPL-2.0 with the Classpath
+# exception, and the licence register (`00_ARCHITECTURE.md` §7) passes no GPL. Until then *Build*
+# says in words that Java is not installed in the Conduit (`map_admin.MapAdmin.basemap`).
 FROM python:3.12-slim
 
 # Base-image OS packages lag the upstream image's own last-published point
@@ -92,6 +96,9 @@ RUN mkdir -p /var/lib/osprey/data && chown -R osprey:osprey /var/lib/osprey
 # owner and mode on first mount, so the Conduit's user can write it on any host.
 RUN mkdir -p /run/osprey/model-settings && chown osprey:osprey /run/osprey/model-settings \
     && chmod 700 /run/osprey/model-settings
+# ADR-147 decision 1: the maps file's and the map key file's folder, made the same way.
+RUN mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-settings \
+    && chmod 700 /run/osprey/map-settings
 
 USER osprey
 EXPOSE 8000

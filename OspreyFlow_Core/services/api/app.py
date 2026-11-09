@@ -57,7 +57,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
-from scripts.build_local_basemap import GEOFABRIK_REGIONS, BasemapBuildResult, build_local_basemap
+from scripts.build_local_basemap import GEOFABRIK_REGIONS, load_gazetteer
 from scripts.verify_map import verify_map
 from services.extract.writer import (
     NodeNotFoundError,
@@ -299,6 +299,17 @@ from schemas.ingest import (
     TransformDescriptor,
     VerifyReport,
 )
+from schemas.map_admin import (
+    BuildBasemapInput,
+    MapAdminHistory,
+    MapDefaultInput,
+    MapKeyInput,
+    MapProviderInput,
+    MapsAdminView,
+    PrefetchAreasInput,
+    PrefetchRun,
+    PrefetchScheduleInput,
+)
 from schemas.mapconfig import MapConfig, PublicMapConfig
 from schemas.model import OfferedEngines
 from schemas.model_admin import (
@@ -397,6 +408,7 @@ from . import compute_routes as compute_routes_module
 from . import connections as connections_module
 from . import dossier as dossier_module
 from . import kyc as kyc_module
+from . import map_admin as map_admin_module
 from . import model_admin as model_admin_module
 from . import model_usage as model_usage_module
 from . import ownership as ownership_module
@@ -477,6 +489,7 @@ from .compute_routes import (
 )
 from .config import ApiConfig, DeploymentModels, MonitoringSettings
 from .connection_strength import case_connection_strengths, case_legend, case_rarity
+from .credentials import MissingCredentialError
 from .custom_roles import (
     CustomRoleStore,
     RoleRefused,
@@ -884,7 +897,7 @@ from .tile_cache import (
     tile_cache_storage_config,
     write_cached_tile,
 )
-from .tile_proxy import build_upstream_url, fetch_tile
+from .tile_proxy import MissingMapKeyError, TileFetchFailed, build_upstream_url, fetch_tile
 from .trends import (
     TrendDefinitionRefused,
     TrendStore,
@@ -1255,6 +1268,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     superset_settings = SupersetSettings.from_env()
     app.state.superset_embedder = SupersetEmbedder(superset_settings) if superset_settings else None
     app.state.map_config = load_map_config(config.osprey_config_path)
+    # ADR-147: *Admin › Maps*; its maps file replaces `osprey.yaml`'s `map:` once changed there,
+    # and its prefetch areas run on their schedule in the Conduit.
+    map_admin_audit = await map_admin_module.PostgresMapAdminAudit.connect(config.postgres.dsn)
+    app.state.map_admin = map_admin_module.MapAdmin(
+        installed=app.state.map_config,
+        settings_file=map_admin_module.MapSettingsFile.from_env(),
+        key_file=map_admin_module.MapKeyFile.from_env(),
+        audit=map_admin_audit,
+    )
+    prefetch_schedule = map_admin_module.PrefetchScheduler(app.state.map_admin)
+    prefetch_schedule.start()
 
     # ADR-109 phase F, ruling 7: the daily sweep for verifying documents that lapse — the clock
     # passing is never a write the change stream could carry. One replica a day (a Valkey claim).
@@ -1336,6 +1360,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.model_admin = None
         await model_admin.close()
         await model_admin_audit.close()
+        await prefetch_schedule.close()
+        app.state.map_admin = None
+        await map_admin_audit.close()
         await gateway_http.aclose()
         await resources.close()
 
@@ -1489,7 +1516,24 @@ def get_ontology(request: Request) -> OntologySchema:
 
 
 def get_map_config(request: Request) -> MapConfig:
+    """ADR-147: the map as *Admin › Maps* holds it where the app has one (its maps file once changed
+    there, else `osprey.yaml`'s), so a change reaches the map with no restart."""
+    admin = getattr(request.app.state, "map_admin", None)
+    if admin is not None:
+        return admin.config()  # type: ignore[no-any-return]
     return request.app.state.map_config  # type: ignore[no-any-return]
+
+
+def get_map_admin(request: Request) -> map_admin_module.MapAdmin:
+    admin = getattr(request.app.state, "map_admin", None)
+    if admin is None:
+        raise HTTPException(status_code=503, detail="map administration is not running")
+    return admin  # type: ignore[no-any-return]
+
+
+def _map_key(request: Request, provider_id: str) -> str | None:
+    admin = getattr(request.app.state, "map_admin", None)
+    return admin.key_for(provider_id) if admin is not None else None
 
 
 def get_valkey(request: Request) -> Valkey:
@@ -1735,6 +1779,7 @@ HistoryDep = Annotated[InvestigationHistoryStore, Depends(get_history)]
 GraphDep = Annotated[GraphPort, Depends(get_graph)]
 OntologyDep = Annotated[OntologySchema, Depends(get_ontology)]
 MapConfigDep = Annotated[MapConfig, Depends(get_map_config)]
+MapAdminDep = Annotated[map_admin_module.MapAdmin, Depends(get_map_admin)]
 
 
 def get_link_notes(request: Request) -> LinkNoteService:
@@ -7594,6 +7639,7 @@ async def get_map_providers_route(
 
 @app.get("/v1/map/tiles/{provider_id}/{z}/{x}/{y}")
 async def get_map_tile_route(
+    request: Request,
     provider_id: str,
     z: int,
     x: int,
@@ -7630,8 +7676,37 @@ async def get_map_tile_route(
         if cached is not None:
             return Response(content=cached, media_type=image_content_type(cached))
 
-    url = build_upstream_url(provider, z, x, y)
-    tile_bytes = await fetch_tile(url)
+    map_admin = getattr(request.app.state, "map_admin", None)
+    if map_admin is not None:
+        try:
+            map_admin.refuse_inside(provider)
+        except map_admin_module.MapAdminRefused as refused:
+            raise HTTPException(status_code=refused.status, detail=refused.words) from None
+    # ADR-147: a key set in *Admin › Maps* first, then `osprey.yaml`'s `env:` reference; a provider
+    # that needs one and holds neither is said in words, never its address.
+    try:
+        url = build_upstream_url(provider, z, x, y, key=_map_key(request, provider_id))
+    except MissingMapKeyError as missing:
+        raise HTTPException(status_code=503, detail=str(missing)) from None
+    except MissingCredentialError:
+        raise HTTPException(
+            status_code=503, detail=str(MissingMapKeyError(provider_id))
+        ) from None
+    try:
+        tile_bytes = await fetch_tile(url)
+    except TileFetchFailed as failed:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"The map provider {provider_id!r} refused the tile (HTTP {failed.status}). If it "
+                "was refused for its key, set the key again in Admin › Maps."
+                if failed.status
+                else f"The map provider {provider_id!r} answered with something larger than any "
+                "tile, so it was not kept."
+                if failed.too_large
+                else f"The map provider {provider_id!r} could not be reached."
+            ),
+        ) from None
     if provider.cache is not None:
         write_cached_tile(tile_bytes, storage=tile_cache_storage, object_key=cache_key)
     return Response(content=tile_bytes, media_type=image_content_type(tile_bytes))
@@ -7687,14 +7762,8 @@ async def get_map_local_source_route(
 # only from the post-Launch admin console, which authenticates against this same Conduit.
 
 
-class BuildBasemapRequest(BaseModel):
-    region: str
-    output_dir: str
-    planetiler_jar_path: str
-
-
 class BuildBasemapResult(BaseModel):
-    pmtiles_path: str
+    pmtiles_file: str
     nodes_created: int
     nodes_referenced: int
     rejections: int
@@ -7705,17 +7774,20 @@ class BuildBasemapResult(BaseModel):
     dependencies=[Depends(require_right(Right.MANAGE_GEOSPATIAL))],
 )
 async def build_basemap_route(
-    body: BuildBasemapRequest,
+    request: Request,
     principal: Annotated[Principal, Depends(require_admin_role)],
     graph: GraphDep,
     ontology: OntologyDep,
-    config: ConfigDep,
     audit: AuditDep,
+    admin: MapAdminDep,
 ) -> StreamingResponse:
-    """Streamed the same way Launch is (`harness/webapp.py`'s own `_launch_events`) — one line of
-    real progress at a time, `build_local_basemap`'s own `progress` callback bridged into an SSE
-    generator via a queue, since the work itself is an in-process async call here, never a
-    subprocess (the Conduit already holds the one live `GraphPort` connection this needs)."""
+    """ADR-147: a named region only; the tiles folder and the planetiler jar are the deployment's
+    own (`map_admin.build_basemap`), never a path typed in the Glass, and the provider is registered
+    in the maps file. Streamed the same way Launch is (`harness/webapp.py`'s own `_launch_events`):
+    one line of real progress at a time, the build's `progress` callback bridged into an SSE
+    generator via a queue. The gazetteer loads in one graph transaction, rolled back if anything
+    fails."""
+    body = await _map_admin_body(request, BuildBasemapInput)
     if body.region not in GEOFABRIK_REGIONS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -7725,76 +7797,96 @@ async def build_basemap_route(
     async def _events() -> AsyncIterator[bytes]:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[str] = asyncio.Queue()
+        transaction: dict[str, str] = {}
+        audited = False
 
         def _progress(line: str) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, line)
 
-        async def _run_build() -> tuple[BasemapBuildResult | None, BaseException | None]:
+        async def _load_places(extract: Path) -> tuple[int, int, int]:
             tx = await graph.begin_transaction()
+            transaction["tx"] = tx
+            report = await load_gazetteer(
+                extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
+                load_id=f"load-osm-gazetteer-{body.region}",
+            )  # fmt: skip
+            return report.nodes_created, report.nodes_referenced, len(report.rejections)
+
+        async def _settle() -> None:
+            # Committed before the provider is registered (`map_admin.build_basemap`).
+            await graph.commit_transaction(transaction.pop("tx"))
+
+        async def _run_build() -> tuple[tuple[str, int, int, int] | None, BaseException | None]:
             try:
-                result = await build_local_basemap(
-                    region=body.region,
-                    output_dir=Path(body.output_dir),
-                    planetiler_jar_path=Path(body.planetiler_jar_path),
-                    osprey_config_path=Path(config.osprey_config_path),
-                    graph=graph,
-                    ontology=ontology,
-                    tx=tx,
-                    principal=principal,
-                    progress=_progress,
-                )
+                result = await map_admin_module.build_basemap(
+                    admin, by=principal.id, region=body.region, load_places=_load_places,
+                    progress=_progress, tiles_root=admin.tiles_root, settle=_settle,
+                )  # fmt: skip
             except BaseException as exc:  # noqa: BLE001 - reported to the caller, not swallowed
-                await graph.rollback_transaction(tx)
+                if "tx" in transaction:
+                    await graph.rollback_transaction(transaction.pop("tx"))
                 return None, exc
-            await graph.commit_transaction(tx)
             return result, None
 
-        task = asyncio.ensure_future(_run_build())
-        while True:
-            get_line = asyncio.ensure_future(queue.get())
-            done, _pending = await asyncio.wait(
-                {task, get_line}, return_when=asyncio.FIRST_COMPLETED
-            )
-            if get_line in done:
-                yield f"data: {json.dumps({'line': get_line.result()})}\n\n".encode()
-                continue
-            get_line.cancel()
-            break
-        # Drain whatever progress arrived after the build task itself finished but before this
-        # loop's own last `queue.get()` was scheduled — a real race the `asyncio.wait` above
-        # cannot close on its own, found writing this route's own first test.
-        while not queue.empty():
-            yield f"data: {json.dumps({'line': queue.get_nowait()})}\n\n".encode()
+        try:
+            task = asyncio.ensure_future(_run_build())
+            while True:
+                get_line = asyncio.ensure_future(queue.get())
+                done, _pending = await asyncio.wait(
+                    {task, get_line}, return_when=asyncio.FIRST_COMPLETED
+                )
+                if get_line in done:
+                    yield f"data: {json.dumps({'line': get_line.result()})}\n\n".encode()
+                    continue
+                get_line.cancel()
+                break
+            # Drain whatever progress arrived after the build task itself finished but before
+            # this loop's own last `queue.get()` was scheduled — a real race the `asyncio.wait`
+            # above cannot close on its own, found writing this route's own first test.
+            while not queue.empty():
+                yield f"data: {json.dumps({'line': queue.get_nowait()})}\n\n".encode()
 
-        result, error = task.result()
-        if error is not None:
+            result, error = task.result()
             await audit.record(
                 principal=principal,
                 action="geospatial_build_basemap",
                 resolved_query={"region": body.region},
-                result_cardinality=0,
+                result_cardinality=0 if error is not None else 1,
             )
+            audited = True
+            if error is not None:
+                # The independent review's minor 8: an error's own words (a path, a provider's
+                # answer) are the Conduit's log's; the Glass is told it stopped, and its kind.
+                if isinstance(error, map_admin_module.MapAdminRefused):
+                    words = error.words
+                else:
+                    logger.warning("the basemap build stopped: %s", error)
+                    words = (
+                        f"The build stopped ({type(error).__name__}). The Conduit's log has the "
+                        "reason."
+                    )
+                stopped = json.dumps({"returncode": 1, "error": words})
+                yield f"event: complete\ndata: {stopped}\n\n".encode()
+                return
+            assert result is not None
+            name, created, referenced, rejected = result
+            payload = BuildBasemapResult(
+                pmtiles_file=name, nodes_created=created, nodes_referenced=referenced,
+                rejections=rejected,
+            )  # fmt: skip
             yield (
-                f"event: complete\ndata: {json.dumps({'returncode': 1, 'error': str(error)})}\n\n"
+                f"event: complete\ndata: "
+                f"{json.dumps({'returncode': 0, 'result': payload.model_dump()})}\n\n"
             ).encode()
-            return
-        assert result is not None
-        await audit.record(
-            principal=principal,
-            action="geospatial_build_basemap",
-            resolved_query={"region": body.region},
-            result_cardinality=1,
-        )
-        payload = BuildBasemapResult(
-            pmtiles_path=str(result.pmtiles_path),
-            nodes_created=result.gazetteer_report.nodes_created,
-            nodes_referenced=result.gazetteer_report.nodes_referenced,
-            rejections=len(result.gazetteer_report.rejections),
-        )
-        yield (
-            f"event: complete\ndata: "
-            f"{json.dumps({'returncode': 0, 'result': payload.model_dump()})}\n\n"
-        ).encode()
+        finally:
+            # A stream the Glass abandoned still leaves its record (the review's minor 8).
+            if not audited:
+                await audit.record(
+                    principal=principal,
+                    action="geospatial_build_basemap",
+                    resolved_query={"region": body.region},
+                    result_cardinality=0,
+                )
 
     return StreamingResponse(_events(), media_type="text/event-stream")
 
@@ -7814,6 +7906,7 @@ class VerifyMapResult(BaseModel):
     "/v1/admin/geospatial/verify", dependencies=[Depends(require_right(Right.MANAGE_GEOSPATIAL))]
 )
 async def verify_map_route(
+    request: Request,
     principal: Annotated[Principal, Depends(require_admin_role)],
     map_config: MapConfigDep,
     audit: AuditDep,
@@ -7828,6 +7921,9 @@ async def verify_map_route(
         resolved_query={"provider_count": len(map_config.providers)},
         result_cardinality=len(report.issues),
     )
+    admin = getattr(request.app.state, "map_admin", None)
+    if admin is not None:
+        await admin.record_verify(principal.id, len(report.issues))
     return VerifyMapResult(
         passed=report.passed,
         issues=[
@@ -7835,6 +7931,144 @@ async def verify_map_route(
             for i in report.issues
         ],
     )
+
+
+# --- Admin › Maps (ADR-147) ------------------------------------------------------------------
+# Every route needs `manage_geospatial` (rule 4). None returns, logs or audits a key: each route
+# reads its own body, so no validation error can echo what was sent (ADR-135 Amendment 2's rule).
+
+_MANAGE_GEOSPATIAL = [Depends(require_right(Right.MANAGE_GEOSPATIAL))]
+
+
+async def _map_admin_body[Body: BaseModel](request: Request, shape: type[Body]) -> Body:
+    """A Maps route's body, read here rather than by FastAPI, whose 422 carries the input back. The
+    refusal names each field and why, never what was sent unless it is shaped like an id."""
+    raw = await request.body()
+    try:
+        return shape.model_validate_json(raw)
+    except ValidationError as invalid:
+        try:
+            sent = map_admin_module.sent_values(json.loads(raw))
+        except ValueError:
+            sent = {raw.decode("utf-8", "replace")}
+        words = map_admin_module.refusal_words(invalid, sent)
+        raise HTTPException(
+            status_code=422, detail={"error": "map_admin_refused", "detail": words}
+        ) from None
+
+
+def _map_admin_refused(refused: map_admin_module.MapAdminRefused) -> HTTPException:
+    return HTTPException(
+        status_code=refused.status, detail={"error": "map_admin_refused", "detail": refused.words}
+    )
+
+
+@app.get("/v1/admin/maps", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_view_route(admin: MapAdminDep) -> MapsAdminView:
+    return admin.view()
+
+
+@app.get("/v1/admin/maps/history", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_history_route(admin: MapAdminDep) -> MapAdminHistory:
+    return MapAdminHistory(entries=await admin.history())
+
+
+@app.post("/v1/admin/maps/providers", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_add_provider_route(
+    request: Request, principal: PrincipalDep, admin: MapAdminDep
+) -> MapsAdminView:
+    body = await _map_admin_body(request, MapProviderInput)
+    try:
+        return await admin.add_provider(principal.id, body.provider)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
+
+
+@app.put("/v1/admin/maps/providers/{provider_id}", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_edit_provider_route(
+    provider_id: str, request: Request, principal: PrincipalDep, admin: MapAdminDep
+) -> MapsAdminView:
+    body = await _map_admin_body(request, MapProviderInput)
+    try:
+        return await admin.edit_provider(principal.id, provider_id, body.provider)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
+
+
+@app.delete("/v1/admin/maps/providers/{provider_id}", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_remove_provider_route(
+    provider_id: str, principal: PrincipalDep, admin: MapAdminDep
+) -> MapsAdminView:
+    try:
+        return await admin.remove_provider(principal.id, provider_id)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
+
+
+@app.put("/v1/admin/maps/providers/{provider_id}/key", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_set_key_route(
+    provider_id: str, request: Request, principal: PrincipalDep, admin: MapAdminDep
+) -> MapsAdminView:
+    """Write-only: the key is in this request's body and goes to the map key file alone."""
+    body = await _map_admin_body(request, MapKeyInput)
+    try:
+        return await admin.set_key(principal.id, provider_id, body.key)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
+
+
+@app.delete("/v1/admin/maps/providers/{provider_id}/key", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_remove_key_route(
+    provider_id: str, principal: PrincipalDep, admin: MapAdminDep
+) -> MapsAdminView:
+    try:
+        return await admin.remove_key(principal.id, provider_id)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
+
+
+@app.put("/v1/admin/maps/default", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_default_route(
+    request: Request, principal: PrincipalDep, admin: MapAdminDep
+) -> MapsAdminView:
+    body = await _map_admin_body(request, MapDefaultInput)
+    try:
+        return await admin.set_default(principal.id, body.default)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
+
+
+@app.put("/v1/admin/maps/areas", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_areas_route(
+    request: Request, principal: PrincipalDep, admin: MapAdminDep
+) -> MapsAdminView:
+    body = await _map_admin_body(request, PrefetchAreasInput)
+    try:
+        return await admin.set_areas(principal.id, body.areas)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
+
+
+@app.put("/v1/admin/maps/schedule", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_schedule_route(
+    request: Request, principal: PrincipalDep, admin: MapAdminDep
+) -> MapsAdminView:
+    body = await _map_admin_body(request, PrefetchScheduleInput)
+    try:
+        return await admin.set_schedule(principal.id, body.schedule)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
+
+
+@app.post("/v1/admin/maps/prefetch", dependencies=_MANAGE_GEOSPATIAL)
+async def maps_admin_prefetch_route(
+    principal: PrincipalDep, admin: MapAdminDep
+) -> list[PrefetchRun]:
+    """Every area now, counts only; a failure is said on its own area in fixed words."""
+    try:
+        return await admin.run_prefetch(principal.id)
+    except map_admin_module.MapAdminRefused as refused:
+        raise _map_admin_refused(refused) from None
 
 
 # --- analytics -----------------------------------------------------------

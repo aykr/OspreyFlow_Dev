@@ -12,8 +12,8 @@ export { assertAllCovered, registerCovered } from "../../workspace/keyboard/acti
 
 // Every action on this surface that mutates state or reaches the network — each screen's own
 // "Save", the Governance screen's exceptions-panel add/remove, and the Geospatial screen's three
-// buttons (`build-basemap`/`verify` always refuse with a real 501, `harness/geospatial.py`'s own
-// docstring has the reason, but the *keyboard reachability* of the button that triggers the call
+// buttons (`build-basemap`/`verify` run the Conduit's own code in its container, ADR-147;
+// `harness/geospatial.py`'s own docstring has the reason), but the *keyboard reachability* of the button that triggers the call
 // is proven the same way regardless of what the backend returns). Every native
 // `<input>`/`<select>`/radio's own Tab-reachability needs no case here, the same exemption every
 // registry in the shared module already establishes for a native control.

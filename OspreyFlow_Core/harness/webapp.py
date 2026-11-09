@@ -18,8 +18,8 @@ The map, current as of this round:
 | `POST /api/real-data-exceptions` | `scripts.real_data_exceptions.add_exception` (CLI's `add`) |
 | `DELETE /api/real-data-exceptions/{dataset}` | `scripts.real_data_exceptions.remove_exception` |
 | `POST /api/geospatial/register-provider` | `harness.geospatial.register_provider_step` (real) |
-| `POST /api/geospatial/build-basemap` | `harness.geospatial.build_basemap_step` — always 501 |
-| `POST /api/geospatial/verify` | `harness.geospatial.verify_step` — always 501 |
+| `POST /api/geospatial/build-basemap` | `build_basemap_step`: the Conduit's, in its container |
+| `POST /api/geospatial/verify` | `verify_step`: the Conduit's, in its container (ADR-147) |
 | `GET /api/preflight/stream` | `harness.preflight.__main__.run_streaming` — real, live |
 | `POST /api/artefacts/generate` | `harness.render.render` + `diff_for` + `write` |
 | `GET /api/artefacts` | The last `generate`'s own result, held in `app.state` |
@@ -47,10 +47,10 @@ rather than swallowing it, per `CLAUDE.md` rule 2. **Any entry in an existing lo
 `06_DECISIONS.md` ADR-049 Stage 2 §6 ruling 3) is invalid until the owner adds it by hand — this
 module cannot see that gitignored file from here and must not try to migrate it.**
 
-`build-basemap` and `verify` always return 501 — `harness/geospatial.py`'s own docstring has the
-real, confirmed-by-import reason (both real functions pull in `services`/`adapters` modules
-`harness/Dockerfile` does not copy into this image), recorded as **Proposed, not decided** in
-`07_BUILD_PLAN.md`'s Stage 2 §6 part-B entry rather than silently worked around.
+`build-basemap` and `verify` run the Conduit's own code in its container (ADR-147 decision 6,
+P3), since both need `services`/`adapters` modules `harness/Dockerfile` does not copy into this
+image (`harness/geospatial.py`'s docstring); before Launch they say so in words (409). Until P3 they
+answered 501.
 
 **Preflight streams as Server-Sent Events, not a polled job.** Every check
 (`harness.preflight.ALL_CHECKS`) is already a plain, fast, synchronous function of a
@@ -290,6 +290,7 @@ def create_app(
     oidc_issuer: str | None = None,
     sign_in: SignInSettings | None = None,
     require_sign_in: bool = True,
+    map_runner: Any = None,
 ) -> FastAPI:
     if mode not in ("setup", "console"):
         raise ValueError(f"mode must be 'setup' or 'console', got {mode!r}")
@@ -468,19 +469,26 @@ def create_app(
             raise HTTPException(status_code=422, detail=exc.errors(include_context=False)) from exc
         return config.model_dump(mode="json", exclude_none=True)
 
+    # ADR-147 decision 6: the Conduit's own build and verify, run in its container.
+    runner_kw: dict[str, Any] = {} if map_runner is None else {"runner": map_runner}
+
     @app.post("/api/geospatial/build-basemap")
-    def post_build_basemap(_body: dict[str, Any] = Body(default={})) -> None:
+    def post_build_basemap(body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
         try:
-            build_basemap_step()
+            code, lines = build_basemap_step(_out_dir(), str(body.get("region", "")), **runner_kw)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         except GeospatialError as exc:
-            raise HTTPException(status_code=501, detail=str(exc)) from exc
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"returncode": code, "lines": lines}
 
     @app.post("/api/geospatial/verify")
-    def post_verify_map(_body: dict[str, Any] = Body(default={})) -> None:
+    def post_verify_map(_body: dict[str, Any] = Body(default={})) -> dict[str, Any]:
         try:
-            verify_step()
+            code, lines = verify_step(_out_dir(), **runner_kw)
         except GeospatialError as exc:
-            raise HTTPException(status_code=501, detail=str(exc)) from exc
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"returncode": code, "lines": lines}
 
     def _out_dir() -> Path:
         return out_root / generated_folder(_read_config(config_path))

@@ -28,6 +28,8 @@ original template-substitution behaviour unchanged.
 
 from __future__ import annotations
 
+import logging
+import re
 from collections.abc import Awaitable, Callable
 from typing import cast
 from urllib.parse import quote
@@ -37,8 +39,89 @@ from services.api.credentials import resolve_env_credential
 
 from schemas.mapconfig import MapProvider, OgcServiceKind
 
+# --- no map key in any log record (ADR-147 decision 2) -----------------------------------------
+#
+# A provider takes its key in the tile URL's query, so anything that logs a URL logs the key: httpx
+# logs every request's URL at INFO ("HTTP Request: GET https://…?key=…"), and its `HTTPStatusError`
+# names the URL. The query of every URL those loggers write is dropped here, and the fetch below
+# raises errors of its own that carry a status and nothing else.
 
-def _build_wmts_kvp_url(provider: MapProvider, z: int, x: int, y: int) -> str:
+#: Everything a URL carries past its host (path, query, fragment), which a key may be in.
+_URL_PAST_HOST = re.compile(r"(https?://[^\s/?#\"']+)[/?#][^\s\"']*")
+
+
+def _without_query(value: object) -> object:
+    text = str(value)
+    if "://" not in text:
+        return value
+    return _URL_PAST_HOST.sub(r"\1/…", text)
+
+
+class _NoUrlQuery(logging.Filter):
+    """Drops the query of every URL in a record of the HTTP client's loggers."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(_without_query(a) for a in record.args)
+        record.msg = _without_query(record.msg)
+        return True
+
+
+# A logger's filter applies to the records made on that logger alone, never a child's, so each of
+# httpcore's own loggers is named.
+for _name in ("httpx", "httpcore", "httpcore.connection", "httpcore.http11", "httpcore.http2",
+              "httpcore.proxy", "httpcore.socks"):  # fmt: skip
+    logging.getLogger(_name).addFilter(_NoUrlQuery())
+
+
+#: ADR-147 decision 5: the most a tile may be; a tile is tens of kilobytes, so anything past this is
+#: not one, and is read no further.
+MAX_TILE_BYTES = 4 * 1024 * 1024
+
+
+class TileFetchFailed(RuntimeError):
+    """The provider refused a tile, or could not be reached. Never its URL, which may carry a
+    key."""
+
+    def __init__(self, status: int | None, *, too_large: bool = False) -> None:
+        self.status = status
+        self.too_large = too_large
+        if too_large:
+            words = "the provider answered with something larger than any tile"
+        elif status:
+            words = f"the provider answered HTTP {status}"
+        else:
+            words = "the provider could not be reached"
+        super().__init__(words)
+
+
+class MissingMapKeyError(RuntimeError):
+    """A provider whose tiles need a key, with none held (ADR-147). Fixed words naming the provider
+    and where a key is set, never an address."""
+
+    def __init__(self, provider_id: str) -> None:
+        self.provider_id = provider_id
+        super().__init__(
+            f"The map provider {provider_id!r} needs a key and none is set. Someone who manages "
+            "geospatial settings can set it in Admin › Maps."
+        )
+
+
+def _key_for(provider: MapProvider, key: str | None) -> str | None:
+    """The key a request carries: the one set in *Admin › Maps* (`key`) first, then `osprey.yaml`'s
+    `credential: env:VAR`; refused in words where the provider needs one and neither is held."""
+    if key is not None:
+        return key
+    if provider.credential is not None:
+        return resolve_env_credential(provider.credential)
+    if provider.needs_key:
+        raise MissingMapKeyError(provider.id)
+    return None
+
+
+def _build_wmts_kvp_url(
+    provider: MapProvider, z: int, x: int, y: int, key: str | None = None
+) -> str:
     """A real WMTS KVP `GetTile` request against a bare service `endpoint`
     — see this module's own docstring for why `endpoint` is never a
     template for a WMTS provider. Every one of `layer`/`tile_matrix_set`/
@@ -62,18 +145,17 @@ def _build_wmts_kvp_url(provider: MapProvider, z: int, x: int, y: int) -> str:
             "KVP GetTile request (register_tier4_provider discovers these; copy them into "
             "osprey.yaml the same way layer already is)"
         )
-    if provider.credential is not None:
-        # Resolving *where* a credential belongs in a KVP GetTile request is
-        # a real, separate naming gap, already disclosed for the
-        # template path
-        # (`{credential}`'s own placeholder-naming flag below) — no shipped
-        # or tested provider exercises a credentialed WMTS KVP request yet,
-        # so this raises rather than guessing a query-parameter name.
-        raise NotImplementedError(
-            f"provider {provider.id!r} declares a credential, but no KVP query-parameter name "
-            "for it is defined yet — flagged, not guessed"
-        )
     extra_params = "".join(f"&{quote(k)}={quote(v)}" for k, v in provider.variables.items())
+    secret = _key_for(provider, key)
+    if secret is not None and provider.credential_param is None:
+        raise ValueError(
+            f"provider {provider.id!r} is a WMTS service holding a key but names no "
+            "credential_param for it, so the key has nowhere to go"
+        )
+    if secret is not None:
+        # `credential_param` is required with a WMTS credential (`MapProvider`'s own check), and a
+        # key set in Admin needs it too (`needs_key`), so it is set here.
+        extra_params += f"&{quote(cast(str, provider.credential_param))}={quote(secret, safe='')}"
     # `missing` above already proves each of these four is not None for a `service: wmts`
     # provider that reaches this point — the `cast`s tell mypy what the raise already enforces
     # at runtime, without repeating it as a redundant assertion.
@@ -86,37 +168,49 @@ def _build_wmts_kvp_url(provider: MapProvider, z: int, x: int, y: int) -> str:
     )
 
 
-def build_upstream_url(provider: MapProvider, z: int, x: int, y: int) -> str:
+def build_upstream_url(
+    provider: MapProvider, z: int, x: int, y: int, *, key: str | None = None
+) -> str:
     """A real WMTS KVP `GetTile` URL for `service: wmts` (see
     `_build_wmts_kvp_url`); otherwise substitutes `{z}`/`{x}`/`{y}`, every
     `provider.variables` entry, and — when `provider.credential` is set —
     a `{credential}` placeholder with the resolved value, into
     `provider.endpoint or provider.source` as a template.
 
-    `{credential}` as the placeholder name is this checkpoint's own naming
-    choice: `MapProvider`'s schema has no field naming which template
-    placeholder a credential fills, and the architecture doc doesn't say
-    either — flagged here rather than guessed silently.
+    A key set in *Admin › Maps* (`key`, read from the Conduit's map key file) comes before
+    `osprey.yaml`'s `credential: env:VAR`; a provider that needs a key and holds neither is
+    refused in words (`MissingMapKeyError`). `{credential}` is where a template takes it, and a WMTS
+    request's `credential_param` names its query parameter (ADR-147 decision 4).
     """
     if provider.service is OgcServiceKind.WMTS:
-        return _build_wmts_kvp_url(provider, z, x, y)
+        return _build_wmts_kvp_url(provider, z, x, y, key)
     template = provider.endpoint or provider.source
     if template is None:
         raise ValueError(f"provider {provider.id!r} has no endpoint or source template to proxy")
     values: dict[str, str] = {**provider.variables, "z": str(z), "x": str(x), "y": str(y)}
-    if provider.credential is not None:
-        values["credential"] = resolve_env_credential(provider.credential)
+    secret = _key_for(provider, key)
+    if secret is not None:
+        values["credential"] = quote(secret, safe="")
     return template.format(**values)
 
 
 async def _http_get(url: str) -> bytes:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, timeout=10.0)
-        response.raise_for_status()
-        return response.content
+    """`TileFetchFailed` for a refusal or a failed connection, raised `from None`, so neither
+    httpx's message nor its traceback (both name the URL) reaches a log."""
+    try:
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", url, timeout=10.0) as response:
+                if response.status_code >= 400:
+                    raise TileFetchFailed(response.status_code)
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    body += chunk
+                    if len(body) > MAX_TILE_BYTES:
+                        raise TileFetchFailed(None, too_large=True)
+                return bytes(body)
+    except (httpx.HTTPError, httpx.InvalidURL):
+        raise TileFetchFailed(None) from None
 
 
-async def fetch_tile(
-    url: str, *, http_get: Callable[[str], Awaitable[bytes]] = _http_get
-) -> bytes:
+async def fetch_tile(url: str, *, http_get: Callable[[str], Awaitable[bytes]] = _http_get) -> bytes:
     return await http_get(url)

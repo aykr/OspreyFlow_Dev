@@ -74,6 +74,10 @@ export type Profile = string | null;
  */
 export type Credential = string | null;
 /**
+ * WMTS: the query parameter the provider's key goes in
+ */
+export type CredentialParam = string | null;
+/**
  * Whether tiles are fetched through the Conduit (which caches them and keeps the key on the server) rather than by the browser
  */
 export type Proxy = "required" | "recommended" | "none";
@@ -111,6 +115,7 @@ export interface MapProvider {
   profile?: Profile;
   variables?: Variables;
   credential?: Credential;
+  credential_param?: CredentialParam;
   proxy?: Proxy;
   /**
    * Keep fetched tiles a while

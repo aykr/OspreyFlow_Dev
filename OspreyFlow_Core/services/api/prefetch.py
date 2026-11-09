@@ -32,7 +32,7 @@ import argparse
 import asyncio
 import os
 import sys
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -97,6 +97,7 @@ async def prefetch_area(
     *,
     storage: ObjectStorageConfig,
     http_get: Callable[[str], Awaitable[bytes]] | None = None,
+    key: str | None = None,
 ) -> PrefetchReport:
     """Warms every tile covering `geometry_ref`'s stored polygon, across
     `provider.zoom_min..provider.zoom_max`. Raises naming what is missing
@@ -134,7 +135,7 @@ async def prefetch_area(
             ) is not None:
                 tiles_already_cached += 1
                 continue
-            url = build_upstream_url(provider, zoom, x, y)
+            url = build_upstream_url(provider, zoom, x, y, key=key)
             tile_bytes = await fetch(url)
             write_cached_tile(tile_bytes, storage=storage, object_key=cache_key)
             tiles_fetched += 1
@@ -147,8 +148,28 @@ async def prefetch_area(
     )
 
 
+def effective_map(
+    config_path: Path, environ: Mapping[str, str] = os.environ
+) -> tuple[MapConfig, Callable[[str], str | None]]:
+    """The map and the keys as the Conduit holds them (ADR-147 decision 1): the maps file's
+    providers once *Admin › Maps* has changed them, else `osprey.yaml`'s, and each key set there,
+    for its own address only (`MapAdmin.key_for`)."""
+    from .map_admin import InMemoryMapAdminAudit, MapAdmin, MapKeyFile, MapSettingsFile
+
+    admin = MapAdmin(
+        installed=load_map_config(config_path),
+        settings_file=MapSettingsFile.from_env(environ),
+        key_file=MapKeyFile.from_env(environ),
+        audit=InMemoryMapAdminAudit(),
+    )
+    return admin.config(), admin.key_for
+
+
 async def prefetch_all(
-    config: MapConfig, principal: Principal, analytics: AnalyticsPort
+    config: MapConfig,
+    principal: Principal,
+    analytics: AnalyticsPort,
+    key_for: Callable[[str], str | None] = lambda _provider_id: None,
 ) -> list[PrefetchReport]:
     """Every `prefetch_areas` entry of every provider that declares a
     cache — what an external cron/CronJob actually invokes via this
@@ -160,7 +181,10 @@ async def prefetch_all(
             continue
         for geometry_ref in provider.cache.prefetch_areas:
             reports.append(
-                await prefetch_area(provider, geometry_ref, principal, analytics, storage=storage)
+                await prefetch_area(
+                    provider, geometry_ref, principal, analytics, storage=storage,
+                    key=key_for(provider.id),
+                )  # fmt: skip
             )
     return reports
 
@@ -182,7 +206,7 @@ async def _run(args: argparse.Namespace) -> int:
 
     from ontology.handling import load_uk_le_scheme
 
-    config = load_map_config(args.config_path)
+    config, key_for = effective_map(args.config_path)
     scheme = load_uk_le_scheme()
     # A system principal, the same category `AnalyticsPort.load_geometries`
     # itself is (`packages/ports/analytics.py`'s own "not principal-scoped
@@ -202,7 +226,7 @@ async def _run(args: argparse.Namespace) -> int:
         handling_scheme=scheme,
     )
 
-    reports = await prefetch_all(config, principal, analytics)
+    reports = await prefetch_all(config, principal, analytics, key_for)
     for report in reports:
         print(
             f"prefetch: {report.provider_id}/{report.geometry_ref}: "

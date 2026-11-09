@@ -62,8 +62,6 @@ NOT_WALKED = ("design/", "brand/")
 NOT_A_SECTION_S = {
     # Monitoring › Lists in the Glass calls these (`test_place_routes.py`'s first rule).
     r"^/v1/admin/screening-lists": "the Glass's Monitoring › Lists",
-    # Run by `ospreyflow` and the site geospatial wizard, not by a screen (App.tsx's note).
-    r"^/v1/admin/geospatial/": "the geospatial wizard's, no screen",
 }
 
 

@@ -29,6 +29,7 @@ import yaml
 
 from . import demo, starters
 from . import deployments as named
+from . import maps as map_verbs
 from . import models as engine_keys
 from .answers import (
     MODES,
@@ -75,7 +76,7 @@ from .run import (
 VERBS = (
     "doctor", "install", "start", "stop", "status", "open", "logs", "demo", "backup", "restore",
     "update", "uninstall", "repair-sign-in", "switch", "models", "apply", "deployments",
-    "starters",
+    "starters", "map",
 )  # fmt: skip
 _NOT_INSTALLED = "Nothing is installed here yet — run ospreyflow install."
 
@@ -352,6 +353,20 @@ def _parser() -> argparse.ArgumentParser:
         "remove-key", help="remove a provider's key", parents=[common]
     )
     remove.add_argument("name")
+
+    # ADR-147 decision 6: the basemap providers and the local basemap, for headless use.
+    maps = verbs.add_parser(
+        "map", help="list the map providers, verify them, run the prefetch areas, build the basemap"
+    )
+    map_actions = maps.add_subparsers(dest="action", metavar="ACTION", required=True)
+    map_actions.add_parser("list", help="each provider, its tier, its key's state and its state")
+    map_actions.add_parser("verify", help="check attribution, and a tier-4 service's CRS and zooms")
+    map_actions.add_parser("prefetch", help="fetch every prefetch area's tiles now")
+    build = map_actions.add_parser("build", help="build the tier-1 basemap in the Conduit")
+    build.add_argument("region", help="a named region (rutland, great-britain, …)")
+    build.add_argument(
+        "--planetiler-jar", type=Path, help="planetiler's release jar, copied into the tiles folder"
+    )
 
     uninstall = verbs.add_parser("uninstall", help="remove the deployment")
     uninstall.add_argument("--keep-data", action="store_true")
@@ -1214,6 +1229,33 @@ def _uninstall(args: argparse.Namespace, ctx: _Context) -> int:
     return 0
 
 
+def _map(args: argparse.Namespace, ctx: _Context) -> int:
+    """ADR-147 decision 6: through the Conduit's own *Maps* code inside its container, so the
+    command line and *Admin › Maps* are one code with one audit (`cli/ospreyflow/maps.py`)."""
+    directory = ctx.deployed()
+    in_conduit = [*compose(directory), "exec", "-T", "api", *map_verbs.MAP_PATH]
+    who = f"cli:{getpass.getuser()}"
+    if args.action == "list":
+        code, out = ctx.capture([*in_conduit, "list"])
+        print(out, end="")
+        return code
+    if args.action == "build":
+        tiles = map_verbs.tiles_folder(ctx.config_path)
+        if args.planetiler_jar is not None:
+            placed = map_verbs.place_jar(args.planetiler_jar, tiles)
+            print(f"The map builder is in the tiles folder: {placed}")
+        print(
+            f"The {args.region} basemap is built by the Conduit, in its container: it downloads "
+            "the region's extract, runs planetiler and loads the place names."
+        )
+        ctx.step(
+            f"build the {args.region} basemap", [*in_conduit, "build", args.region, "--by", who]
+        )
+        return 0
+    ctx.step(f"{args.action} the maps", [*in_conduit, args.action, "--by", who])
+    return 0
+
+
 def _models(args: argparse.Namespace, ctx: _Context) -> int:
     """ADR-135 decision 3, Amendment 2 decision 8: through the Conduit's own key path inside its
     container, so the gateway, the models file and the audit are *Admin › Models*' own. The key is
@@ -1301,6 +1343,8 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
         return _repair_sign_in(args, ctx)
     if verb == "models":
         return _models(args, ctx)
+    if verb == "map":
+        return _map(args, ctx)
     if verb == "apply":
         return _apply_settings(ctx)
     raise AssertionError(verb)  # pragma: no cover - argparse refuses any other verb

@@ -785,6 +785,10 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
+| `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
+| `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
+| `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
+| `ospreyflow map build <region> [--planetiler-jar <path>]` | Builds the tier-1 basemap in the Conduit (the jar copied into the tiles folder first); while the Conduit's image carries no Java, it says so and builds nothing |
 | `ospreyflow uninstall [--keep-data] [--yes]` | Removes the containers; with `--keep-data` the data volumes stay, and the next install of the same deployment finds them; without it cases, accounts and indexes go too. Your checkout, `osprey.yaml` and your own folders are never touched. (Before the stores had named volumes, section 13, a reinstall did not find the stores' data) |
 
 Every command takes `--name <name>` to act on a deployment kept by name, or `--name default` for the
@@ -1417,6 +1421,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `map.providers.profile` | str or none | none | A ready-made provider (providers/<profile>.yaml) to use |
 | `map.providers.variables` | mapping | — | Values the profile's addresses are filled with |
 | `map.providers.credential` | str or none | none | The provider's key, as env:VARIABLE — a name, never the key itself |
+| `map.providers.credential_param` | str or none | none | WMTS: the query parameter the provider's key goes in |
 | `map.providers.proxy` | `required` \| `recommended` \| `none` | `none` | Whether tiles are fetched through the Conduit (which caches them and keeps the key on the server) rather than by the browser |
 | `map.providers.cache` | section or none | none | Keeping fetched tiles a while (online providers only). |
 | `map.providers.cache.ttl_days` | int | required | How long a fetched tile is kept, in days |

@@ -1,6 +1,12 @@
 import { useState } from "react";
 
-import { ApiError, buildLocalBasemap, registerLocalProvider, verifyMap } from "../api/client";
+import { ApiError, buildLocalBasemap, registerLocalProvider, verifyMap, type MapStepResult } from "../api/client";
+
+/** What a Build or Verify said: the Conduit's own lines, or its refusal in words. */
+function said(result: MapStepResult, done: string, failed: string): string {
+  const head = result.returncode === 0 ? done : failed;
+  return [head, ...result.lines].join("\n");
+}
 
 export function GeospatialScreen() {
   const [providerId, setProviderId] = useState("");
@@ -8,6 +14,7 @@ export function GeospatialScreen() {
   const [pmtilesPath, setPmtilesPath] = useState("");
   const [registerResult, setRegisterResult] = useState<string | null>(null);
   const [registerError, setRegisterError] = useState<string | null>(null);
+  const [region, setRegion] = useState("rutland");
   const [buildResult, setBuildResult] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -31,10 +38,9 @@ export function GeospatialScreen() {
   }
 
   async function handleBuild() {
-    setBuildResult(null);
+    setBuildResult("Building… this can take many minutes for a large region.");
     try {
-      await buildLocalBasemap();
-      setBuildResult("Build local basemap succeeded.");
+      setBuildResult(said(await buildLocalBasemap(region), "Built.", "The build did not finish."));
     } catch (exc) {
       setBuildResult(exc instanceof ApiError ? exc.body : String(exc));
     }
@@ -43,8 +49,7 @@ export function GeospatialScreen() {
   async function handleVerify() {
     setVerifyResult(null);
     try {
-      await verifyMap();
-      setVerifyResult("Verify succeeded.");
+      setVerifyResult(said(await verifyMap(), "Verify passed.", "Verify found issues."));
     } catch (exc) {
       setVerifyResult(exc instanceof ApiError ? exc.body : String(exc));
     }
@@ -89,18 +94,34 @@ export function GeospatialScreen() {
 
       <h3>Build local basemap</h3>
       <p>
-        Downloads a Geofabrik extract, runs planetiler, loads the OSM-derived gazetteer
-        (<code>05_DEPLOYMENT.md</code> §2.2). Not available from this setup harness this round —
-        see the result below for the real reason.
+        Built by the Conduit once the deployment is launched: it downloads the region&apos;s
+        Geofabrik extract, runs planetiler and loads the place names (<code>05_DEPLOYMENT.md</code>{" "}
+        §2.2). Rutland is small enough to build in minutes. The same as{" "}
+        <code>ospreyflow map build</code>.
       </p>
-      {buildResult && <p role="status">{buildResult}</p>}
+      <label htmlFor="geo-region">Region</label>
+      <input
+        id="geo-region"
+        className="input"
+        value={region}
+        onChange={(event) => setRegion(event.target.value)}
+      />
+      {buildResult && (
+        <p role="status" style={{ whiteSpace: "pre-line" }}>
+          {buildResult}
+        </p>
+      )}
       <button type="button" className="btn" onClick={handleBuild}>
         Build local basemap
       </button>
 
       <h3>Verify</h3>
-      <p>Checks attribution and, for a tier-4 provider, CRS/zoom.</p>
-      {verifyResult && <p role="status">{verifyResult}</p>}
+      <p>Checks attribution and, for a tier-4 provider, CRS/zoom. The same as <code>ospreyflow map verify</code>.</p>
+      {verifyResult && (
+        <p role="status" style={{ whiteSpace: "pre-line" }}>
+          {verifyResult}
+        </p>
+      )}
       <button type="button" className="btn" onClick={handleVerify}>
         Verify
       </button>

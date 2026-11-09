@@ -28,20 +28,21 @@ this image's own `/admin` — one bearer token authenticates both surfaces) — 
 today by anyone holding a valid admin token, in the one process that already has every module
 these two actions need.
 
-**Disclosed, not built here: this image's own Geospatial screen does not call them.** Stage 2 §7
-(the post-launch admin console) has no React shell yet — `apps/harness/src` renders the six setup
-screens and nothing else, confirmed directly (`find apps/harness/src -iname "*console*" -o -iname
-"*admin*"` returns nothing). A `mode="console"` branch inside `GeospatialScreen.tsx` with no
-console context anywhere to actually render it in would be dead code no test could genuinely
-exercise — the same "the check must run against the shape the real caller produces" discipline
-`CLAUDE.md` rule 15 already states. Wiring this screen to the two routes above is real work owed
-to whoever builds Stage 2 §7's own console shell, not silently dropped; `build_basemap_step`/
-`verify_step` below are unchanged, and correctly still refuse — the setup-mode Geospatial screen
-still cannot perform either action, which remains true regardless of what the Conduit can now do.
+**Settled in P3 (ADR-147 decision 6): Build and Verify run the Conduit's own code in its
+container** (`docker compose exec api python -m services.api.map_admin build|verify`, what
+`ospreyflow map` runs), so the 501s below are gone; the set-up console holds no Conduit token
+before sign-in, so it goes by the deployment's compose file, as the command line does. The history
+of the earlier position follows.
+
+**Until P3 this image's Geospatial screen did not call them**, and `build_basemap_step` and
+`verify_step` refused with 501s; the history is in `07_BUILD_PLAN.md`'s Stage 2 §6 part B entry.
 """
 
 from __future__ import annotations
 
+import re
+import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 from scripts.geo_local_provider import register_local_provider
@@ -75,29 +76,45 @@ def register_provider_step(
     )
 
 
-def build_basemap_step() -> None:
-    """Always raises — this module's own docstring has the real, confirmed-by-import reason.
-    Never called with real arguments because there is nothing that would use them: the block is
-    before the point any region/output-dir/jar-path parameter would matter."""
-    raise GeospatialError(
-        "Build local basemap is not available from the setup harness. "
-        "scripts.build_local_basemap imports services.ingest and adapters.graph_arcadedb, neither "
-        "of which harness/Dockerfile copies into this image, and its own build_local_basemap() "
-        "needs a live GraphPort transaction against a running ArcadeDB besides. Run "
-        "`python -m scripts.build_local_basemap` directly against a running deployment instead "
-        "(05_DEPLOYMENT.md §2.2's own CLI-equivalent path) — see harness/geospatial.py's own "
-        "docstring and 07_BUILD_PLAN.md Stage 2 §6 part B for the two undecided options."
-    )
+#: The Conduit's own *Maps* code (`services/api/map_admin.py`), run in its container (ADR-147
+#: decision 6), the same command `ospreyflow map` runs.
+MAP_PATH = ("python", "-m", "services.api.map_admin")
+#: Who the set-up console's changes are recorded as in the maps' history.
+BY = "setup-console"
+_REGION = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
+
+MapRunner = Callable[[list[str]], tuple[int, str]]
 
 
-def verify_step() -> None:
-    """Always raises, for the matching reason — `scripts.verify_map` imports
-    `services.api.mapconfig_loader` and `services.api.tier4_registration`, neither of which
-    `harness/Dockerfile` copies into this image."""
-    raise GeospatialError(
-        "Verify is not available from the setup harness. scripts.verify_map imports "
-        "services.api.mapconfig_loader and services.api.tier4_registration, neither of which "
-        "harness/Dockerfile copies into this image. Run `python -m scripts.verify_map` directly "
-        "against osprey.yaml instead — see harness/geospatial.py's own docstring and "
-        "07_BUILD_PLAN.md Stage 2 §6 part B for the two undecided options."
-    )
+def run_captured(argv: list[str]) -> tuple[int, str]:
+    done = subprocess.run(argv, capture_output=True, text=True, check=False)
+    return done.returncode, done.stdout + done.stderr
+
+
+def _in_conduit(deployment: Path, *words: str) -> list[str]:
+    if not (deployment / "compose.yaml").is_file():
+        raise GeospatialError(
+            "There is no deployment to build or verify the map in yet. Launch it first: the map "
+            "is built and verified by the Conduit."
+        )
+    return [
+        "docker", "compose", "--env-file", str(deployment / "deployment.env"),
+        "-f", str(deployment / "compose.yaml"), "exec", "-T", "api", *MAP_PATH, *words,
+        "--by", BY,
+    ]  # fmt: skip
+
+
+def build_basemap_step(
+    deployment: Path, region: str, *, runner: MapRunner = run_captured
+) -> tuple[int, list[str]]:
+    """ADR-147 decision 6: the Conduit's own build, in its container, as `ospreyflow map build`
+    runs it; the exit status and the Conduit's own printed lines (fixed words, never a key)."""
+    if not _REGION.fullmatch(region):
+        raise ValueError("a region is a short lower-case name, such as rutland")
+    code, out = runner(_in_conduit(deployment, "build", region))
+    return code, [line for line in out.splitlines() if line.strip()]
+
+
+def verify_step(deployment: Path, *, runner: MapRunner = run_captured) -> tuple[int, list[str]]:
+    code, out = runner(_in_conduit(deployment, "verify"))
+    return code, [line for line in out.splitlines() if line.strip()]

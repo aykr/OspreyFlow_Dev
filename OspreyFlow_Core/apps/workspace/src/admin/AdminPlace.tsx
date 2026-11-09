@@ -15,6 +15,7 @@ import { Connections } from "./sections/Connections";
 import { Dashboards } from "./sections/Dashboards";
 import { Datasets } from "./sections/Datasets";
 import { DemoPacks } from "./sections/DemoPacks";
+import { Maps } from "./sections/Maps";
 import { Models } from "./sections/Models";
 import { People } from "./sections/People";
 import { ProposedTypesSection } from "./sections/ProposedTypes";
@@ -59,6 +60,8 @@ export const SCREENS: Record<string, (api: AdminApi) => ReactNode> = {
   system: (api) => <System api={api} />,
   // ADR-135 Amendment 2: engines, each job's default and their keys (platform lane P1).
   models: (api) => <Models api={api} />,
+  // ADR-147: the basemap providers, their keys, the local basemap and prefetch (platform lane P3).
+  maps: (api) => <Maps api={api} />,
   "demo-packs": (api) => <DemoPacks api={api} />,
 };
 

@@ -40,8 +40,11 @@ def docker_cp_of(present: set[str]) -> Any:
     copied, any other is refused with the daemon's own words and a non-zero exit."""
 
     def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        if "exec" in command and any("model-settings/models.yaml" in w for w in command):
-            # ADR-135 Amendment 2: a fresh deployment's Conduit holds no models file yet.
+        if "exec" in command and any(
+            f in w for w in command for f in ("model-settings/models.yaml", "map-settings/maps.yaml")
+        ):
+            # ADR-135 Amendment 2, ADR-147: a fresh deployment's Conduit holds no models file and
+            # no maps file yet.
             return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
         assert "cp" in command, command
         source, target = command[-2], Path(command[-1])

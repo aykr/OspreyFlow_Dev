@@ -84,16 +84,85 @@ def test_a_missing_field_is_422_not_a_500(tmp_path: Path) -> None:
     assert response.status_code == 422
 
 
-def test_build_basemap_refuses_with_the_real_reason(tmp_path: Path) -> None:
-    client = _client(tmp_path / "osprey.yaml")
-    response = client.post("/api/geospatial/build-basemap", json={})
-    assert response.status_code == 501
-    assert "services.ingest" in response.json()["detail"]
-    assert "adapters.graph_arcadedb" in response.json()["detail"]
+class _Runner:
+    """`docker compose exec` as the set-up console runs it: each command recorded, answered with an
+    exit status and the Conduit's printed lines."""
+
+    def __init__(self, code: int = 0, out: str = "") -> None:
+        self.calls: list[list[str]] = []
+        self.code, self.out = code, out
+
+    def __call__(self, argv: list[str]) -> tuple[int, str]:
+        self.calls.append(argv)
+        return self.code, self.out
 
 
-def test_verify_refuses_with_the_real_reason(tmp_path: Path) -> None:
-    client = _client(tmp_path / "osprey.yaml")
+def _deployed(tmp_path: Path, runner: _Runner) -> tuple[TestClient, Path]:
+    """A config, and its generated deployment folder holding a compose file (Launch has run)."""
+    from harness.render import load_config
+
+    from schemas.deployment import generated_folder
+
+    config = tmp_path / "osprey.yaml"
+    config.write_text("profile: local-lite\n", encoding="utf-8")
+    folder = tmp_path / "out" / generated_folder(load_config(config))
+    folder.mkdir(parents=True)
+    (folder / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+    app = create_app(config_path=config, out_root=tmp_path / "out", map_runner=runner)
+    return TestClient(app, client=("127.0.0.1", 51000)), folder
+
+
+def test_build_basemap_runs_the_conduit_s_own_build_in_its_container(tmp_path: Path) -> None:
+    """ADR-147 decision 6: the set-up console's Build is the Conduit's (`services.api.map_admin`),
+    run in the Conduit's container as `ospreyflow map build` runs it, never a 501 and never a
+    second build on the harness's side."""
+    runner = _Runner(0, "Built rutland.pmtiles: 3 places created, 1 already known, 0 rejected.\n")
+    client, folder = _deployed(tmp_path, runner)
+
+    response = client.post("/api/geospatial/build-basemap", json={"region": "rutland"})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"returncode": 0, "lines": [
+        "Built rutland.pmtiles: 3 places created, 1 already known, 0 rejected."]}  # fmt: skip
+    assert runner.calls == [[
+        "docker", "compose", "--env-file", str(folder / "deployment.env"),
+        "-f", str(folder / "compose.yaml"), "exec", "-T", "api",
+        "python", "-m", "services.api.map_admin", "build", "rutland", "--by", "setup-console",
+    ]]  # fmt: skip
+
+
+def test_verify_runs_the_conduit_s_own_verify_and_says_its_answer(tmp_path: Path) -> None:
+    runner = _Runner(1, "osm-local: attribution: missing\nVerify found issues.\n")
+    client, _folder = _deployed(tmp_path, runner)
+
     response = client.post("/api/geospatial/verify", json={})
-    assert response.status_code == 501
-    assert "services.api" in response.json()["detail"]
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "returncode": 1, "lines": ["osm-local: attribution: missing", "Verify found issues."]
+    }  # fmt: skip
+    assert runner.calls[0][-3:] == ["verify", "--by", "setup-console"]
+
+
+def test_before_launch_build_and_verify_say_so_in_words(tmp_path: Path) -> None:
+    runner = _Runner()
+    config = tmp_path / "osprey.yaml"
+    config.write_text("profile: local-lite\n", encoding="utf-8")
+    client = TestClient(
+        create_app(config_path=config, out_root=tmp_path / "out", map_runner=runner),
+        client=("127.0.0.1", 51000),
+    )
+    for path, body in (("build-basemap", {"region": "rutland"}), ("verify", {})):
+        response = client.post(f"/api/geospatial/{path}", json=body)
+        assert response.status_code == 409
+        assert "Launch" in response.json()["detail"]
+    assert runner.calls == []
+
+
+def test_a_region_not_shaped_like_one_is_refused_before_anything_runs(tmp_path: Path) -> None:
+    runner = _Runner()
+    client, _folder = _deployed(tmp_path, runner)
+    for region in ("--by", "rutland; rm -rf /", "", "Rutland"):
+        response = client.post("/api/geospatial/build-basemap", json={"region": region})
+        assert response.status_code == 422, region
+    assert runner.calls == []

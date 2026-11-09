@@ -22,7 +22,8 @@
       "sections": [
         { "id": "operations", "label": "Operations", "right": "operate_schedules", "screen": "admin/Schedules.tsx" },
         { "id": "system", "label": "System", "right": "administer_system", "screen": "admin/sections/System.tsx" },
-        { "id": "models", "label": "Models", "right": "manage_models", "screen": "admin/sections/Models.tsx" }
+        { "id": "models", "label": "Models", "right": "manage_models", "screen": "admin/sections/Models.tsx" },
+        { "id": "maps", "label": "Maps", "right": "manage_geospatial", "screen": "admin/sections/Maps.tsx" }
       ]
     },
     {

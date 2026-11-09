@@ -1,0 +1,33 @@
+
+Running 24 tests using 2 workers
+
+[WebServer] 23:17:53 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 23:17:53 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 23:17:53 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+[WebServer] 23:17:53 [vite] (client) [console.error] Encountered two children with the same key, `gemini`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+  ✓   1 keyboard/admin-models.spec.ts:29:1 › an engine is added by keyboard (375ms)
+  ✓   2 keyboard/admin-maps.spec.ts:29:1 › a provider is added by keyboard (491ms)
+  ✓   3 keyboard/admin-models.spec.ts:43:1 › an engine is edited by keyboard (217ms)
+  ✓   4 keyboard/admin-maps.spec.ts:42:1 › a provider is edited by keyboard (254ms)
+  ✓   5 keyboard/admin-models.spec.ts:52:1 › a lost key is entered again by keyboard, and the field is empty afterwards (233ms)
+  ✓   6 keyboard/admin-maps.spec.ts:51:1 › a provider's key is entered by keyboard, and the field is empty afterwards (209ms)
+  ✓   7 keyboard/admin-models.spec.ts:62:1 › a key is rotated by keyboard (230ms)
+  ✓   8 keyboard/admin-maps.spec.ts:63:1 › a provider's key is removed by keyboard (151ms)
+  ✓   9 keyboard/admin-models.spec.ts:71:1 › a key is removed by keyboard (173ms)
+  ✓  10 keyboard/admin-maps.spec.ts:70:1 › the map's default is chosen by keyboard (214ms)
+  ✓  11 keyboard/admin-models.spec.ts:78:1 › an engine's connection is tested by keyboard (169ms)
+  ✓  12 keyboard/admin-maps.spec.ts:77:1 › a provider is removed by keyboard (184ms)
+  ✓  13 keyboard/admin-models.spec.ts:85:1 › each job's default engine is set by keyboard (162ms)
+  ✓  14 keyboard/admin-maps.spec.ts:84:1 › the basemap is built by keyboard, its lines shown (193ms)
+  ✓  15 keyboard/admin-models.spec.ts:94:1 › an engine is removed by keyboard (184ms)
+  ✓  16 keyboard/admin-maps.spec.ts:94:1 › the providers are verified by keyboard (181ms)
+  ✓  17 keyboard/admin-models.spec.ts:102:1 › an engine's limits are set by keyboard (213ms)
+  ✓  18 keyboard/admin-maps.spec.ts:101:1 › a prefetch area is added by keyboard (275ms)
+  ✓  20 keyboard/admin-maps.spec.ts:115:1 › a prefetch area is removed by keyboard (145ms)
+  ✓  21 keyboard/admin-maps.spec.ts:122:1 › the prefetch schedule is set by keyboard (149ms)
+  ✓  22 keyboard/admin-maps.spec.ts:130:1 › every prefetch area is fetched now by keyboard (146ms)
+  ✓  23 keyboard/admin-maps.spec.ts:138:1 › every registered Maps action has its own proving test case above (136ms)
+  ✓  19 keyboard/admin-models.spec.ts:118:1 › the usage's period is chosen by keyboard, and days are chosen by keyboard (1.3s)
+  ✓  24 keyboard/admin-models.spec.ts:138:1 › every registered Models action has its own proving test case above (124ms)
+
+  24 passed (4.9s)
