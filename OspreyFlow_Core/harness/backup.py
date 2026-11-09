@@ -64,6 +64,7 @@ import argparse
 import base64
 import hashlib
 import json
+import re
 import shlex
 import shutil
 import subprocess
@@ -635,6 +636,65 @@ AUDIT_DISPOSITION: dict[str, Any] = {
     ),
     "where_it_is": "postgres/dump.sql, table audit_log",
 }
+
+
+#: A set's folder name, `<UTC stamp>-<deployment>-<sha>` (`new_set_folder`).
+SET_NAME = re.compile(r"^(?P<stamp>\d{8}T\d{6}Z)-(?P<name>.+)-(?P<sha>[^-]+)$")
+
+
+@dataclass(frozen=True)
+class FoundSet:
+    """A deployment's set, where it is. `belongs_in` is the deployment's own folder when the set is
+    still in an old place (ADR-114 Amendment 37 decision 3), else None."""
+
+    path: Path
+    belongs_in: Path | None = None
+
+    def move_command(self) -> str | None:
+        """The one command that moves it to where it belongs; the operator runs it, never us."""
+        if self.belongs_in is None:
+            return None
+        to = shlex.quote(str(self.belongs_in))
+        return f"mkdir -p {to} && mv {shlex.quote(str(self.path))} {to}/"
+
+
+def sets_in(folder: Path, name: str | None = None) -> list[Path]:
+    """The sets directly in `folder` (named as `new_set_folder` names one; never a failed backup's
+    `.incomplete`), only `name`'s when it is given."""
+    if not folder.is_dir():
+        return []
+    found = []
+    for child in folder.iterdir():
+        matched = SET_NAME.match(child.name)
+        if child.is_dir() and matched and (name is None or matched["name"] == name):
+            found.append(child)
+    return found
+
+
+def old_places(config: OspreyConfig, name: str) -> list[tuple[Path, str | None]]:
+    """Where `name`'s sets were written before Amendment 37, each with the name its sets must carry
+    to be this deployment's (None: every set there is): the checkout's `backups/` (every install
+    off a server), a named deployment's own `backups/` (ADR-138), and the top of the backups folder
+    (Amendment 33's server)."""
+    return [
+        (REPO_ROOT / "backups", name),
+        (Path.home() / ".ospreyflow" / "deployments" / name / "backups", None),
+        (backups_folder(config)[0], name),
+    ]
+
+
+def find_sets(config: OspreyConfig, name: str) -> list[FoundSet]:
+    """`name`'s sets, newest first: its own folder's, then any still in an old place, each with
+    where it belongs."""
+    home = backups_folder(config)[0] / name
+    found = [FoundSet(path) for path in sets_in(home)]
+    seen = {home.resolve()}
+    for folder, carrying in old_places(config, name):
+        if folder.resolve() in seen:
+            continue
+        seen.add(folder.resolve())
+        found += [FoundSet(path, home) for path in sets_in(folder, carrying)]
+    return sorted(found, key=lambda s: (s.path.name, s.belongs_in is None), reverse=True)
 
 
 def new_set_folder(out_root: Path, profile: str) -> Path:
