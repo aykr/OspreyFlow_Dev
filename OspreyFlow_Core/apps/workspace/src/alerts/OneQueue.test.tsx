@@ -79,13 +79,17 @@ describe("an alert's detail", () => {
     const calls = serve({
       "GET alert-queue": [routed],
       "GET alert-queue/r1": { ...routed, nodes: [node], edges: [], transactions: [], lead: true, team_name: "Prison intel" },
-      "GET alert-teams": [{ role_id: "team-7", display_name: "Prison intel", lead: true, members: ["member-2"] }],
+      "GET alert-teams": [{ role_id: "team-7", display_name: "Prison intel", lead: true, members: ["member-2"], member_names: { "member-2": "Mo Member" } }],
       "POST alert-queue/r1/suppress": { ...routed.alert, suppressed_until: "2026-12-01" },
       "POST alert-queue/r1/assign": { ...routed.alert, assignee: "member-2", status: "claimed" },
     });
     render(<AlertQueue {...API} level="editor" accountId="me" onCanvas={vi.fn()} openAlertId="r1" />);
     const tools = await screen.findByRole("group", { name: "As the team's lead" });
-    fireEvent.change(await within(tools).findByRole("combobox", { name: "Give to (a member of the team)" }), { target: { value: "member-2" } });
+    const give = await within(tools).findByRole("combobox", { name: "Give to (a member of the team)" });
+    // ADR-106: the member by name, never by their identity-provider id.
+    expect(await within(give).findByRole("option", { name: "Mo Member" })).toBeTruthy();
+    expect(within(give).queryByRole("option", { name: "member-2" })).toBeNull();
+    fireEvent.change(give, { target: { value: "member-2" } });
     fireEvent.click(within(tools).getByRole("button", { name: "Give to the member" }));
     await waitFor(() => expect(calls.some((c) => c.path === "POST alert-queue/r1/assign")).toBe(true));
     const suppress = within(await screen.findByRole("group", { name: "As the team's lead" })).getByRole("button", { name: "Suppress until…" }) as HTMLButtonElement;

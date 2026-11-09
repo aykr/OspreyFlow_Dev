@@ -332,7 +332,7 @@ async function serveARoutedAlert(page: Page, state: State) {
     })),
   );  // prettier-ignore
   await page.route("**/*/v1/investigations/inv-1/alert-teams", (route) =>
-    route.fulfill(fulfil([{ role_id: "team-7", display_name: "Prison intel", lead: true, members: ["analyst-2"] }])),
+    route.fulfill(fulfil([{ role_id: "team-7", display_name: "Prison intel", lead: true, members: ["analyst-2"], member_names: { "analyst-2": "Priya Shah" } }])),
   );
   await page.route("**/*/v1/investigations/inv-1/alert-queue/a1/suppress", (route) => {
     state.sent.push({ method: "POST", path: "alert-queue/a1/suppress", body: route.request().postDataJSON() });
@@ -545,19 +545,23 @@ test("an Editor is offered triage but neither deployment nor the audit", async (
 // ADR-133 stage (b): a rule written as a sentence, blank by blank, its drawn pattern shown, previewed
 // on the last 90 days and deployed — each step proven at the server it reached.
 async function writeTheSentence(page: Page) {
+  // Every blank by keys alone (rule 13; the lane-reviewer's round on the L2.10 fix): each select by
+  // typing its option's label, the count typed over the field's own.
   await press(page, page.getByRole("tab", { name: "What raises alerts" }));
-  await page.getByRole("combobox", { name: "Subject" }).focus();
-  await page.getByRole("combobox", { name: "Subject" }).selectOption("Person");
+  await chooseByTyping(page, page.getByRole("combobox", { name: "Subject" }), "Person");
   await press(page, page.getByRole("button", { name: "Add a condition" }));
-  await page.getByRole("combobox", { name: "Condition 1: property" }).selectOption("listing");
-  await page.getByRole("combobox", { name: "Condition 1: test" }).selectOption("one_of");
+  await chooseByTyping(page, page.getByRole("combobox", { name: "Condition 1: property" }), "listing");
+  await chooseByTyping(page, page.getByRole("combobox", { name: "Condition 1: test" }), "one_of");
   for (const value of ["sanction", "pep"]) {
     await page.getByRole("checkbox", { name: `Condition 1: ${value}` }).focus();
     await page.keyboard.press("Space");
   }
-  await page.getByRole("combobox", { name: "Frequency" }).selectOption("count");
-  await page.getByLabel("Times or more").fill("3");
-  await page.getByRole("combobox", { name: "Severity" }).selectOption("high");
+  await chooseByTyping(page, page.getByRole("combobox", { name: "Frequency" }), "count");
+  await page.getByLabel("Times or more").focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type("3");
+  await expect(page.getByLabel("Times or more")).toHaveValue("3");
+  await chooseByTyping(page, page.getByRole("combobox", { name: "Severity" }), "high");
 }
 
 const WRITTEN = {

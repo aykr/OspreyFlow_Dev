@@ -609,12 +609,17 @@ function LeadTools(props: {
 }) {
   const { api, alertId } = props;
   const [members, setMembers] = useState<string[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
   const [chosen, setChosen] = useState("");
   const [until, setUntil] = useState("");
   const [why, setWhy] = useState("");
   useEffect(() => {
     listAlertTeams(api)
-      .then((teams) => setMembers((Array.isArray(teams) ? teams : []).find((t) => t.role_id === props.team)?.members ?? []))
+      .then((teams) => {
+        const team = (Array.isArray(teams) ? teams : []).find((t) => t.role_id === props.team);
+        setMembers(team?.members ?? []);
+        setNames(team?.member_names ?? {});
+      })
       .catch(() => setMembers([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.apiBaseUrl, api.bearerToken, api.investigationId, props.team]);
@@ -631,12 +636,12 @@ function LeadTools(props: {
               <option value="">Choose a member…</option>
               {members.map((m) => (
                 <option key={m} value={m}>
-                  {m}
+                  {names[m] ?? m}
                 </option>
               ))}
             </Select>
           </label>
-          <Button disabled={props.busy || !chosen} onClick={() => void props.act(() => assignAlert(api, alertId, chosen), `Given to ${chosen}.`)}>
+          <Button disabled={props.busy || !chosen} onClick={() => void props.act(() => assignAlert(api, alertId, chosen), `Given to ${names[chosen] ?? chosen}.`)}>
             Give to the member
           </Button>
         </div>
