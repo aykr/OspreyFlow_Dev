@@ -282,7 +282,10 @@ class InMemoryCaseViewStore:
         return len(boards)
 
     async def unmerge_boards(self, case_id: str, load_id: str) -> int:
-        held = [v for v in self.views.values() if v.case_id == case_id and v.merged_load == load_id]
+        held = [
+            v for v in self.views.values()
+            if v.case_id == case_id and not v.drawing and v.merged_load == load_id
+        ]  # fmt: skip
         for view in held:
             self.views[view.id] = _unmerged(view)
         return len(held)

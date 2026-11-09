@@ -54,13 +54,13 @@ PLANTS = [
    "second_person"),
   ("the revert leaving the merge's matches live",
    "scripts/revert_promotion.py",
-   "            assert merge is not None\n            await merge.undo_writes(record, tx)",
-   "            pass",
+   "        if drawn_merge and merge is not None:  # refused above without it",
+   "        if False:",
    "reverting_a_merge"),
   ("the revert leaving the case on the target and its views",
    "scripts/revert_promotion.py",
-   "        assert merge is not None\n        await merge.undo(record)",
-   "        pass",
+   "    if drawn_merge and merge is not None:\n        await merge.undo(record)",
+   "    if False:\n        await merge.undo(record)",
    "reverting_a_merge"),
   ("the revert taking no stores for a drawn merge",
    "scripts/revert_promotion.py",
@@ -82,10 +82,10 @@ PLANTS = [
    "        if read and record.trigger == \"drawn_merge\" and self.merges is not None:",
    "        if False:",
    "reads_the_matches_they_approve"),
-  ("a changed match left waiting (403 to every reviewer, as before the fix)",
+  ("a changed match not rejected (the reject condition's match term removed)",
    "services/api/promotions.py",
-   "            and await self.merges.recheck(record, reviewer)\n        )",
-   "            and await self.merges.recheck(record, reviewer)\n        )\n        if matched:\n            raise PromotionRefused(\"not_all_seen\", \"x\", status=403)",
+   "        if len(live) != len(record.item_ids) or failing or matched_changed:",
+   "        if len(live) != len(record.item_ids) or failing:",
    "match_changed_is_rejected"),
   ("the merge claimed after the graph commit",
    "services/api/promotions.py",
@@ -117,6 +117,42 @@ PLANTS = [
    "                or pick[0] not in going\n",
    "",
    "marked_above_the_targets_highest_or_of_an_unticked"),
+  # The second review's findings.
+  ("the merge's own plan checking links against the drawing's proposals",
+   "services/api/drawn_merge.py",
+   "            reads, target, case_id, read, into_its_own_dataset=False\n        )\n        goes, left",
+   "            reads, target, case_id, read\n        )\n        goes, left",
+   "link_the_targets_model_lacks_refuses_the_merge_itself"),
+  ("the approval's re-check checking links against the drawing's proposals",
+   "services/api/promotions.py",
+   "            into_its_own_dataset=record.trigger != \"drawn_merge\",",
+   "",
+   "checks_each_link_against_the_targets_model_again"),
+  ("a reviewer who may not receive a match rejecting it (no unseen answer)",
+   "services/api/drawn_merge.py",
+   "            return \"unseen\"\n        read = reviewer",
+   "            pass\n        read = reviewer",
+   "may_not_receive_a_match"),
+  ("a match's marking moved not noticed",
+   "services/api/drawn_merge.py",
+   "            if stricter != Handling.model_validate_json(r.handling):\n                return \"changed\"",
+   "            pass",
+   "marking_rose_while_waiting"),
+  ("the target's highest lowered not noticed",
+   "services/api/drawn_merge.py",
+   "            if not self.scheme.clears(highest, stricter.classification):\n                return \"changed\"\n        return None",
+   "        return None",
+   "highest_once_lowered"),
+  ("a merged view's chosen counting the drawn nodes the merge added",
+   "services/api/case_views.py",
+   "            chosen=len(set(self.node_ids) - set(self.merged_added))",
+   "            chosen=len(set(self.node_ids))",
+   "chosen_counts_the_boards_own"),
+  ("a merged drawing's items offered to a later promotion",
+   "services/api/promotions.py",
+   "            and i.dataset_id not in sealed\n",
+   "",
+   "failed_view_step_left_promote_nothing"),
 ]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 out = []
@@ -132,7 +168,10 @@ for words, f, old, new, k in PLANTS:
         r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", T, "-q", "-p", "no:cacheprovider", "-k", k], cwd=CORE, env=env, capture_output=True, text=True)
     finally:
         p.write_text(src)
-    tail = [l for l in r.stdout.splitlines() if l.startswith(("FAILED", "E  ", ">  ")) or " passed" in l or " failed" in l][:10]
+    lines = r.stdout.splitlines()
+    # Every FAILED line and the summary (each parametrisation's outcome), then the first assertion.
+    tail = [l for l in lines if l.startswith("FAILED") or " passed" in l or " failed" in l]
+    tail += [l for l in lines if l.startswith("E  ")][:3]
     out.append(f"## {words}\nplant in {f}; -k {k}; exit {r.returncode}\n" + "\n".join(tail) + "\n")
     print(words, "->", "RED" if r.returncode else "GREEN (plant not caught!)")
 r = subprocess.run([".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", T, "-q", "-p", "no:cacheprovider"], cwd=CORE, env=env, capture_output=True, text=True)

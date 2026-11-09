@@ -111,7 +111,7 @@ class _Investigations(Protocol):
 
 class _MergeCommit(Protocol):
     async def writes(self, record: PromotionRecord, tx: Any) -> None: ...
-    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> bool: ...
+    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> str | None: ...
     async def before_commit(self, record: PromotionRecord) -> None: ...
     def is_already_merged(self, error: Exception) -> bool: ...
     async def undo_before_commit(self, record: PromotionRecord) -> None: ...
@@ -324,9 +324,16 @@ class Promotions:
         # An item an open promotion already carries is not offered again: one item, one open
         # promotion, so no two loads stamp one element.
         open_ = await self.store.pending_item_ids(case_id)
+        # A merged drawing's items are kept read-only for its audit (L3.9): promoted by no one,
+        # even from a board the merge left a board (the second review, item 8).
+        sealed = {
+            d for d in {i.dataset_id for i in held}
+            if await self.boards.datasets.drawn_merged_of(d) is not None
+        }  # fmt: skip
         return [
             i for i in held
             if i.withdrawn_at is None and i.promoted_at is None and i.item_id not in open_
+            and i.dataset_id not in sealed
         ]  # fmt: skip
 
     def _checks(
@@ -501,6 +508,7 @@ class Promotions:
         left: Sequence[LeftOut],
         grant_id: str | None = None,
         extra_markings: Sequence[str] = (),
+        matches: Sequence[Any] = (),
     ) -> PromotionRecord:
         if not goes:
             raise PromotionRefused(
@@ -529,7 +537,7 @@ class Promotions:
             edge_ids=tuple(edge_ids), item_ids=tuple(r.item.item_id for r in goes),
             left_out=tuple((x.item_id, x.label, x.why) for x in left), grant_id=grant_id,
         )  # fmt: skip
-        await self.store.add(record)
+        await self.store.add(record, matches=matches)
         return record
 
     async def promote(
@@ -725,12 +733,17 @@ class Promotions:
         try:
             await graph.commit_transaction(tx)
         except Exception:
-            await self.reject(
-                record, was="committed", by=by, reason="The load failed, and nothing was written."
-            )
-            if drawn_merge:
-                assert self.merges is not None
-                await self.merges.undo_before_commit(record)
+            # The claim undone first, so a failing rejection cannot leave the drawing claimed
+            # with nothing loaded (the second review, item 7).
+            try:
+                if drawn_merge:
+                    assert self.merges is not None
+                    await self.merges.undo_before_commit(record)
+            finally:
+                await self.reject(
+                    record, was="committed", by=by,
+                    reason="The load failed, and nothing was written.",
+                )  # fmt: skip
             raise
         await self.boards.items.mark_promoted(record.case_id, list(record.item_ids), now)
         if record.grant_id is not None:
@@ -899,22 +912,30 @@ class Promotions:
         )  # fmt: skip
         failing = [(r, problems[r.item.item_id][0][1]) for r in reads if problems[r.item.item_id]]
         # A drawn dataset's merge: each chosen match too, as the reviewer reads it now, once every
-        # item has passed (L3.9). The reviewer clears the promotion's marking (the routes ask it),
-        # which covers every match as chosen, so a match end they cannot read now was withdrawn
-        # or raised since: changed, and rejected, never left waiting (the lane review, item 6).
-        matched = (
+        # item has passed (L3.9; the second review, item 1): one they may not receive as chosen,
+        # 403 and it waits for another reviewer; one changed since, rejected, never left waiting.
+        matched = None
+        if (
             record.trigger == "drawn_merge"
             and len(live) == len(record.item_ids)
             and not failing
             and self.merges is not None
-            and await self.merges.recheck(record, reviewer)
-        )
-        if len(live) != len(record.item_ids) or failing or matched:
+        ):
+            matched = await self.merges.recheck(record, reviewer)
+        if matched == "unseen":
+            raise PromotionRefused(
+                "not_all_seen",
+                "You may not see every match in this merge, so you may not approve it: ask "
+                "another of the dataset's Authors who may review promotions.",
+                status=403,
+            )
+        matched_changed = matched == "changed"
+        if len(live) != len(record.item_ids) or failing or matched_changed:
             why = (
                 f"{self._label(failing[0][0])} has changed since it was sent: {failing[0][1]}"
                 if failing
                 else "One of its matches has changed since it was sent."
-                if matched
+                if matched_changed
                 else "One of its items was withdrawn since it was sent."
             )
             # Rule 3: the record keeps fixed words (it is listed to readers who may not read the
@@ -924,7 +945,7 @@ class Promotions:
                 problems[failing[0][0].item.item_id][0][0]
                 if failing
                 else "matches"
-                if matched
+                if matched_changed
                 else "withdrawn"
             )
             await self.reject(

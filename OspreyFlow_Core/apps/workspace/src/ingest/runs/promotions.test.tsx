@@ -155,4 +155,20 @@ describe("Analyst promotions", () => {
     await screen.findByText(/No analyst promotion/);
     expect(screen.queryByText(/Removed cases/)).toBeNull();
   });
+
+  it("shows a drawn merge's matches to its reviewer before they approve (L3.9)", async () => {
+    const p = P({ trigger: "drawn_merge", case_name: "Night visits" });
+    serve({
+      "GET /v1/datasets/src/promotions": () => ({ status: 200, body: { promotions: [p] } }),
+      "GET /v1/datasets/src/promotions/p1": () => ({
+        status: 200,
+        body: { ...DETAILS(p).body, matches: [{ drawn: "e1", drawn_label: "Mercer", loaded: "p-loaded", loaded_label: "Mercer", loaded_type: "Person", score: 1, why: "chosen at the merge" }] },
+      }),
+    });
+    show();
+    await screen.findByText("promotion-1");
+    fireEvent.click(screen.getByRole("button", { name: /Review/ }));
+    const list = await screen.findByRole("list", { name: "Proposed matches" });
+    expect(list.textContent).toBe("Mercer and Mercer (Person), 100%");
+  });
 });

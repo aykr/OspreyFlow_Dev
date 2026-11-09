@@ -117,8 +117,7 @@ async def revert_promotion(
                 f"{len(others)} link(s) written since rest on its items: revert those first.",
             )
         await graph.revert_promotion(record.load_id, record.dataset_id, tx)
-        if drawn_merge:
-            assert merge is not None
+        if drawn_merge and merge is not None:  # refused above without it
             await merge.undo_writes(record, tx)
         if layer_deleted:
             await graph.withdraw_layer(
@@ -134,8 +133,7 @@ async def revert_promotion(
         raise PromotionRefused("already_decided", "This promotion has changed since it was read.")
     await graph.commit_transaction(tx)
     await items.mark_promoted(record.case_id, list(record.item_ids), None)
-    if drawn_merge:
-        assert merge is not None
+    if drawn_merge and merge is not None:
         await merge.undo(record)
     if layer_deleted:
         await items.withdraw(

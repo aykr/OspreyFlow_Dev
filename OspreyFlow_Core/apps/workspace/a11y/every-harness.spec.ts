@@ -98,6 +98,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   "promotions-harness.html": [
     "press=Review%20load%20promotion-wing-1",
     "press=Review%20load%20promotion-wing-1%7CReject%20with%20a%20reason",
+    // L3.9: a drawn merge's details, with the matches its reviewer approves.
+    "press=Review%20load%20promotion-drawn-1",
     "revert=1",
     "as=alice",
     "as=fred",

@@ -97,7 +97,10 @@ class LayerGrant:
 
 
 class PromotionStore(Protocol):
-    async def add(self, record: PromotionRecord) -> None: ...
+    #: The record, and a drawn merge's matches with it, written together (L3.9).
+    async def add(
+        self, record: PromotionRecord, *, matches: Sequence[MergeMatchRow] = ()
+    ) -> None: ...
     async def get(self, promotion_id: str) -> PromotionRecord | None: ...
     async def by_load(self, load_id: str) -> PromotionRecord | None: ...
     #: Rule 3: `markings`, when given, the markings the reader reaches, applied in the query.
@@ -162,8 +165,12 @@ class InMemoryPromotionStore:
     async def layer_deleted(self, layer_id: str) -> bool:
         return layer_id in self.deleted_layers
 
-    async def add(self, record: PromotionRecord) -> None:
+    async def add(
+        self, record: PromotionRecord, *, matches: Sequence[MergeMatchRow] = ()
+    ) -> None:
         self.records[record.id] = record
+        if matches:
+            self.matches[record.id] = list(matches)
 
     async def get(self, promotion_id: str) -> PromotionRecord | None:
         return self.records.get(promotion_id)
@@ -385,6 +392,14 @@ def _record(row: Any) -> PromotionRecord:
     )
 
 
+async def _insert_matches(conn: Any, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None:
+    await conn.executemany(
+        "INSERT INTO promotion_matches (promotion_id, position, drawn, loaded, score, handling) "
+        "VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
+        [(promotion_id, n, r.drawn, r.loaded, r.score, r.handling) for n, r in enumerate(rows)],
+    )
+
+
 class PostgresPromotionStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
@@ -399,8 +414,10 @@ class PostgresPromotionStore:
     async def close(self) -> None:
         await self._pool.close()
 
-    async def add(self, record: PromotionRecord) -> None:
-        async with self._pool.acquire() as conn:
+    async def add(
+        self, record: PromotionRecord, *, matches: Sequence[MergeMatchRow] = ()
+    ) -> None:
+        async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 f"INSERT INTO promotions ({_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, "
                 "$10, $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20)",
@@ -411,6 +428,8 @@ class PostgresPromotionStore:
                 json.dumps([list(x) for x in record.left_out]), record.reviewed_by,
                 record.reviewed_at, record.reason, record.grant_id,
             )  # fmt: skip
+            if matches:
+                await _insert_matches(conn, record.id, matches)
 
     async def get(self, promotion_id: str) -> PromotionRecord | None:
         async with self._pool.acquire() as conn:
@@ -594,12 +613,7 @@ class PostgresPromotionStore:
 
     async def add_matches(self, promotion_id: str, rows: Sequence[MergeMatchRow]) -> None:
         async with self._pool.acquire() as conn:
-            await conn.executemany(
-                "INSERT INTO promotion_matches (promotion_id, position, drawn, loaded, score, "
-                "handling) VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
-                [(promotion_id, n, r.drawn, r.loaded, r.score, r.handling)
-                 for n, r in enumerate(rows)],
-            )  # fmt: skip
+            await _insert_matches(conn, promotion_id, rows)
 
     async def matches_of(self, promotion_id: str) -> list[MergeMatchRow]:
         async with self._pool.acquire() as conn:

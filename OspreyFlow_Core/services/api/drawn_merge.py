@@ -73,6 +73,7 @@ from .datasets import DRAWN, SOURCE, Dataset, DrawnAlreadyMerged, DrawnMerged
 from .evidence_brief import display_name
 from .promotion_store import MergeMatchRow, PromotionRecord
 from .promotions import PromotionRefused, Promotions, _Read, is_gazetteer
+from .rule_evaluation import handling_readable
 
 logger = logging.getLogger(__name__)
 
@@ -326,11 +327,12 @@ class DrawnMerges:
             )
         goes, left, rows = await self._plan(drawn, case_id, target, body, reader)
         markings = [Handling.model_validate_json(r.handling).classification for r in rows]
+        # The record and its matches in one store write (the second review, item 13).
         record = await promotions._record(
             trigger="drawn_merge", case_id=case_id, board_id=None, dataset=target,
             layer_id=drawn.id, proposer=reader, goes=goes, left=left, extra_markings=markings,
+            matches=rows,
         )  # fmt: skip
-        await promotions.store.add_matches(record.id, rows)
         if promotions.commits_at_once(target):
             return await promotions._commit(record, by=None)
         return record
@@ -386,31 +388,38 @@ class MergeCommit:
         ]
         self._written[record.id] = list(await self.graph.upsert_edges(writes, tx))
 
-    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> bool:
-        """At an approval: whether any match has changed since it was chosen, as the reviewer reads
-        it now: an end gone from their read (withdrawn, or raised above the promotion's marking,
-        which they clear), its marking moved, its loaded end out of the target, or the target's
-        highest lowered below it."""
+    async def recheck(self, record: PromotionRecord, reviewer: Principal) -> str | None:
+        """At an approval, each match as the reviewer reads it now (the second review, item 1):
+        `unseen` when they may not receive a match as it was chosen (its stored handling: its
+        classification, a restricted code, the unit), so they may not approve and another reviewer
+        may (403, it waits); `changed` when they may and it has moved since: an end gone from their
+        read (withdrawn, raised, or out of the target), its marking moved, or the target's highest
+        lowered below it (rejected, never left waiting); `None` otherwise."""
         rows = await self.promotions_store.matches_of(record.id)
         if not rows:
-            return False
+            return None
+        if not all(
+            handling_readable(self.scheme, reviewer, Handling.model_validate_json(r.handling))
+            for r in rows
+        ):
+            return "unseen"
         read = reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
         ids = sorted({x for r in rows for x in (r.drawn, r.loaded)})
         nodes = {n.id: n for n in await self.graph.get_nodes(ids, read)}
         if any(i not in nodes for i in ids):
-            return True
+            return "changed"
         held = (await self.datasets.egress_of([record.dataset_id])).get(record.dataset_id)
         highest = (held.highest_marking if held else None) or self.scheme.classification[-1]
         for r in rows:
             ends = (nodes[r.drawn].handling, nodes[r.loaded].handling)
             stricter = merge_handling(*ends, self.scheme)
-            if (
-                stricter != Handling.model_validate_json(r.handling)
-                or record.dataset_id not in nodes[r.loaded].datasets
-                or not self.scheme.clears(highest, stricter.classification)
-            ):
-                return True
-        return False
+            if stricter != Handling.model_validate_json(r.handling):
+                return "changed"
+            # (A loaded end read here is in the target: the read is the target and the drawing,
+            # and a loaded node is in no drawing.)
+            if not self.scheme.clears(highest, stricter.classification):
+                return "changed"
+        return None
 
     async def before_commit(self, record: PromotionRecord) -> None:
         """Before the graph commits: the matches' link ids recorded (so the revert can always find
@@ -439,13 +448,19 @@ class MergeCommit:
 
     async def after(self, record: PromotionRecord) -> None:
         """Decision 7, once the load is committed: the drawing's boards become views. A failure
-        here is logged and leaves them boards, on which nothing is drawn any more (the drawing is
-        read-only: `Boards._own_item`, `Boards.into`); the merge itself stands."""
-        drawn: dict[str, list[str]] = {}
-        for item in await self.items.in_case(record.case_id):
-            if item.kind == "node" and item.dataset_id == record.layer_id and not item.withdrawn_at:
-                drawn.setdefault(item.board_id, []).append(item.element_id)
+        here is logged, never raised past the committed load (its route still audits it), and
+        leaves them boards: drawing on one goes into the case's layer (`Boards.into`), the
+        drawing's own items are changed by no one (`Boards._own_item`) and promoted by no one
+        (`Promotions._pending_items`)."""
         try:
+            drawn: dict[str, list[str]] = {}
+            for item in await self.items.in_case(record.case_id):
+                if (
+                    item.kind == "node"
+                    and item.dataset_id == record.layer_id
+                    and not item.withdrawn_at
+                ):
+                    drawn.setdefault(item.board_id, []).append(item.element_id)
             await self.views.merge_boards(record.case_id, record.load_id, drawn)
         except Exception:
             logger.exception(

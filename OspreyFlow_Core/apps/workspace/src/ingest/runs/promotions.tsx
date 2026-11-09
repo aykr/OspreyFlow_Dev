@@ -204,6 +204,20 @@ export function AnalystPromotions({ apiBaseUrl, bearerToken, datasetId, canRever
               </div>
             ))}
           </dl>
+          {/* A drawn dataset's merge (L3.9): the matches it proposes are approved with it, so the
+              reviewer reads each, as the Conduit gives it to them. */}
+          {(open.matches ?? []).length > 0 && (
+            <>
+              <h5 className={govuk ? "govuk-heading-s" : "label"}>Proposed as the same, for a person to confirm later</h5>
+              <ul className={govuk ? "govuk-list" : undefined} aria-label="Proposed matches">
+                {(open.matches ?? []).map((m) => (
+                  <li key={`${m.drawn} ${m.loaded}`}>
+                    {m.drawn_label} and {m.loaded_label} ({m.loaded_type}), {Math.round(m.score * 100)}%
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <LeftOutList promotion={open.promotion} govuk={govuk} />
           {open.promotion.may_review && !rejecting && (
             <div className="board__row">

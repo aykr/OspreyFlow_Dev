@@ -35,11 +35,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from schemas.dataset_model import HomeCase
-from schemas.domain import SAME_AS, Principal, ProvenanceState
 from services.api.boards import Boards
 from services.api.datasets import COMPOSITE, Dataset
 from services.api.investigations import AccessLevel
+
+from schemas.dataset_model import HomeCase
+from schemas.domain import SAME_AS, Principal, ProvenanceState
 
 from .test_boards import GRADE, PEOPLE, UNIT, _as, _item, _loaded
 from .test_promotions import HOME, pw, world  # noqa: F401  (the fixtures)
@@ -361,6 +362,11 @@ def test_the_dry_run_counts_only_what_the_merger_may_see_and_writes_nothing(
 def _merge(mw: SimpleNamespace, drawn: SimpleNamespace, who: str = "dana", **over: Any) -> Any:
     match = [{"drawn": drawn.mercer["element_id"], "loaded": "p-loaded"}]
     return _step(mw, "merge", who, item_ids=_ids(drawn), matches=match, **over)
+
+
+def _share_view(mw: SimpleNamespace) -> None:
+    shared = _as("alice").post(f"/v1/investigations/{mw.home}/views/{mw.board}/share")
+    assert shared.status_code == 200, shared.text
 
 
 def _open_board_as_view(mw: SimpleNamespace, who: str = "alice") -> dict[str, Any]:
@@ -695,11 +701,11 @@ def test_a_match_marked_above_the_targets_highest_or_of_an_unticked_item_is_refu
                   matches=[{"drawn": hidden["element_id"], "loaded": "p-secret"}])  # fmt: skip
     assert _said(above) == (422, "check_failed")
     assert "above Prison intel's highest allowed marking" in above.json()["detail"]
-    unticked = _step(mw, "merge", "dana", item_ids=[drawn.tall["item_id"]],
-                     matches=[{"drawn": drawn.mercer["element_id"], "loaded": "p-loaded"}])  # fmt: skip
+    mercer_match = [{"drawn": drawn.mercer["element_id"], "loaded": "p-loaded"}]
+    unticked = _step(mw, "merge", "dana", item_ids=[drawn.tall["item_id"]], matches=mercer_match)
     assert _said(unticked) == (422, "not_a_match")
-    alike_not = _step(mw, "merge", "dana", item_ids=_ids(drawn),
-                      matches=[{"drawn": drawn.tall["element_id"], "loaded": "p-loaded"}])  # fmt: skip
+    tall_match = [{"drawn": drawn.tall["element_id"], "loaded": "p-loaded"}]
+    alike_not = _step(mw, "merge", "dana", item_ids=_ids(drawn), matches=tall_match)
     assert _said(alike_not) == (422, "not_a_match")
     _nothing_written(mw, drawn.mercer["element_id"])
 
@@ -713,8 +719,10 @@ def test_the_view_keeps_its_sharing_and_drawing_again_opens_a_new_board_from_it(
     body = _merge(mw, drawn).json()
     assert mw.views.views[mw.board].shared is True
     assert _open_board_as_view(mw, "erin")["view"]["merged_load"] == body["load_id"]
-    again = _as("alice").post(f"/v1/investigations/{mw.home}/boards",
-                              json={"name": "Again", "start": "view", "view_id": mw.board})  # fmt: skip
+    again = _as("alice").post(
+        f"/v1/investigations/{mw.home}/boards",
+        json={"name": "Again", "start": "view", "view_id": mw.board},
+    )
     assert again.status_code == 201, again.text
     item = _item(again.json()["id"], case=mw.home, label="Later")
     # Into the case's layer now: the drawing is read-only, the target is loaded data.
@@ -728,7 +736,182 @@ def test_a_merged_view_counts_nothing_a_reader_may_not_see(mw: SimpleNamespace) 
     drawn = _three(mw)
     _draw(mw, label="Courier", marking="SECRET")
     assert _merge(mw, drawn).status_code == 201
-    assert _as("alice").post(f"/v1/investigations/{mw.home}/views/{mw.board}/share").status_code == 200
+    _share_view(mw)
     erin, alice = _open_board_as_view(mw, "erin"), _open_board_as_view(mw)
     assert erin["missing"] == alice["missing"] == 0
     assert erin["view"]["chosen"] == alice["view"]["chosen"]
+
+
+# --- the second review's findings --------------------------------------------------------------
+
+
+def test_a_link_the_targets_model_lacks_refuses_the_merge_itself(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 4 at the merge's own write path (`DrawnMerges._plan`), not the sheet's alone."""
+    from services.api.promotions import Promotions
+
+    from .test_promotions import _LinkTypes
+
+    _target_packs(mw, monkeypatch, ["fibo"])
+    mercer = _draw(mw, label="Mercer", properties={"family_name": "Mercer"})
+    tall = _draw(mw)
+    cell = _as("alice").post(
+        f"/v1/investigations/{mw.home}/boards/{mw.board}/links",
+        json={"type": "SHARED_CELL_WITH", "label": "same cell", "marking": "OFFICIAL",
+              "grading": GRADE, "source_note": "Wing roll", "source": mercer["element_id"],
+              "target": tall["element_id"]},
+    )  # fmt: skip
+    assert cell.status_code == 201, cell.text
+    monkeypatch.setattr(app_state(), "link_types", _LinkTypes(None), raising=False)
+    monkeypatch.setattr(Promotions, "model_check_applies", lambda self, name, refusals: False)
+    ticked = [mercer["item_id"], tall["item_id"], cell.json()["item_id"]]
+    answer = _step(mw, "merge", "dana", item_ids=ticked)
+    assert _said(answer) == (422, "check_failed"), answer.text
+    _nothing_written(mw, mercer["element_id"])
+
+
+def test_an_approval_checks_each_link_against_the_targets_model_again(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 4 at the approval's re-check (`Promotions.recheck`): the target's model narrowed while
+    the merge waits refuses it, whatever the drawing's proposals say."""
+    from services.api.promotions import Promotions
+
+    from .test_promotions import _LinkTypes
+
+    _second_person(mw)
+    packs = {"src": ["niem"], mw.drawn: ["niem"]}
+    real = mw.models.live
+
+    async def live(dataset_id: str) -> Any:
+        held = packs.get(dataset_id)
+        return SimpleNamespace(packs=held) if held is not None else await real(dataset_id)
+
+    monkeypatch.setattr(mw.models, "live", live)
+    mercer = _draw(mw, label="Mercer", properties={"family_name": "Mercer"})
+    tall = _draw(mw)
+    cell = _as("alice").post(
+        f"/v1/investigations/{mw.home}/boards/{mw.board}/links",
+        json={"type": "SHARED_CELL_WITH", "label": "same cell", "marking": "OFFICIAL",
+              "grading": GRADE, "source_note": "Wing roll", "source": mercer["element_id"],
+              "target": tall["element_id"]},
+    )  # fmt: skip
+    sent = _step(mw, "merge", "dana",
+                 item_ids=[mercer["item_id"], tall["item_id"], cell.json()["item_id"]])  # fmt: skip
+    assert sent.status_code == 201, sent.text
+    packs["src"] = ["fibo"]  # the target's model narrowed while the merge waits
+    monkeypatch.setattr(app_state(), "link_types", _LinkTypes(None), raising=False)
+    monkeypatch.setattr(Promotions, "model_check_applies", lambda self, name, refusals: False)
+    approved = _as("erin").post(f"/v1/datasets/src/promotions/{sent.json()['id']}/decision",
+                                json={"approve": True})  # fmt: skip
+    assert _said(approved) == (409, "items_changed"), approved.text
+    assert mw.store.records[sent.json()["id"]].status == "rejected"
+
+
+def _restricted(mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """A loaded person in `src` under the restricted code R, which Dana may receive and Erin and
+    Sam may not; and a drawn person alike it."""
+    held = _loaded("p-restricted", family_name="Restricted")
+    mw.graph._graph_nodes["p-restricted"] = held.model_copy(
+        update={"handling": held.handling.model_copy(update={"handling_code": "R"})}
+    )
+    monkeypatch.setitem(PEOPLE, "dana", PEOPLE["dana"].model_copy(
+        update={"receivable_handling_codes": ["R"]}))  # fmt: skip
+    return _draw(mw, label="Restricted", properties={"family_name": "Restricted"})
+
+
+def test_a_reviewer_who_may_not_receive_a_match_may_not_approve_and_the_merge_waits(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 1: a match end the reviewer may not receive (a restricted code, not only a marking)
+    is 403 `not_all_seen`, the merge waiting for another reviewer, never rejected for them."""
+    _second_person(mw)
+    drawn = _restricted(mw, monkeypatch)
+    sent = _step(mw, "merge", "dana", item_ids=[drawn["item_id"]],
+                 matches=[{"drawn": drawn["element_id"], "loaded": "p-restricted"}])  # fmt: skip
+    assert sent.status_code == 201, sent.text
+    decision = f"/v1/datasets/src/promotions/{sent.json()['id']}/decision"
+    refused = _as("erin").post(decision, json={"approve": True})
+    assert _said(refused) == (403, "not_all_seen"), refused.text
+    assert mw.store.records[sent.json()["id"]].status == "awaiting_review"
+    monkeypatch.setitem(PEOPLE, "sam", PEOPLE["sam"].model_copy(
+        update={"receivable_handling_codes": ["R"]}))  # fmt: skip
+    approved = _as("sam").post(decision, json={"approve": True})
+    assert approved.status_code == 200, approved.text
+
+
+def _sent_and_waiting(mw: SimpleNamespace) -> tuple[SimpleNamespace, str]:
+    _second_person(mw)
+    drawn = _three(mw)
+    sent = _merge(mw, drawn)
+    assert sent.status_code == 201, sent.text
+    return drawn, sent.json()["id"]
+
+
+def _approved_by_sam(mw: SimpleNamespace, promotion_id: str) -> Any:
+    return _as("sam").post(f"/v1/datasets/src/promotions/{promotion_id}/decision",
+                           json={"approve": True})  # fmt: skip
+
+
+def test_a_match_whose_marking_rose_while_waiting_rejects_the_merge(mw: SimpleNamespace) -> None:
+    """Item 5: the loaded end raised within the reviewer's clearance (Sam, SECRET)."""
+    drawn, promotion = _sent_and_waiting(mw)
+    loaded = mw.graph._graph_nodes["p-loaded"]
+    mw.graph._graph_nodes["p-loaded"] = loaded.model_copy(
+        update={"handling": loaded.handling.model_copy(
+            update={"classification": "OFFICIAL-SENSITIVE"})}
+    )  # fmt: skip
+    assert _said(_approved_by_sam(mw, promotion)) == (409, "items_changed")
+    assert mw.store.records[promotion].status == "rejected"
+    assert mw.graph.node(drawn.mercer["element_id"]).datasets == [mw.drawn]
+
+
+def test_a_match_above_the_targets_highest_once_lowered_rejects_the_merge(
+    mw: SimpleNamespace,
+) -> None:
+    """Item 5: the target's highest lowered below a match while it waits."""
+    loaded = mw.graph._graph_nodes["p-loaded"]
+    mw.graph._graph_nodes["p-loaded"] = loaded.model_copy(
+        update={"handling": loaded.handling.model_copy(
+            update={"classification": "OFFICIAL-SENSITIVE"})}
+    )  # fmt: skip
+    drawn, promotion = _sent_and_waiting(mw)
+    mw.datasets.datasets["src"] = mw.datasets.datasets["src"].model_copy(
+        update={"highest_marking": "OFFICIAL"}
+    )
+    assert _said(_approved_by_sam(mw, promotion)) == (409, "items_changed")
+    assert mw.store.records[promotion].status == "rejected"
+
+
+def test_a_merged_view_chosen_counts_the_boards_own_references_alone(mw: SimpleNamespace) -> None:
+    """Item 3 (rule 7): `chosen` is the board's own references (none: it began blank), never the
+    drawn nodes the merge added, some of which a reader may not see."""
+    drawn = _three(mw)
+    _draw(mw, label="Courier", marking="SECRET")
+    assert _merge(mw, drawn).status_code == 201
+    _share_view(mw)
+    assert _open_board_as_view(mw, "erin")["view"]["chosen"] == 0
+    listed = _as("erin").get(f"/v1/investigations/{mw.home}/views").json()
+    assert [v["chosen"] for v in listed if v["id"] == mw.board] == [0]
+
+
+def test_boards_a_failed_view_step_left_promote_nothing_of_the_drawing(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Item 8: the boards' step after the commit fails (logged, the merge standing and audited);
+    the boards stay boards, and none of the drawing's items is offered to a promotion from one."""
+
+    async def fails(*args: Any, **kwargs: Any) -> int:
+        raise RuntimeError("views store unavailable")
+
+    drawn = _three(mw)
+    _draw(mw, label="Unticked")
+    monkeypatch.setattr(mw.views, "merge_boards", fails)
+    answer = _merge(mw, drawn)
+    assert answer.status_code == 201, answer.text
+    assert "merge_drawn_dataset" in [r["action"] for r in mw.audit.records]
+    assert mw.views.views[mw.board].drawing is True
+    sheet = _as("alice").get(f"/v1/investigations/{mw.home}/boards/{mw.board}/promotion-sheet")
+    assert sheet.status_code == 200, sheet.text
+    assert sheet.json()["items"] == []
