@@ -30778,10 +30778,14 @@ strict option taken wherever one was offered, each shown red at its real call si
    `::/96` among it: `::7f00:1` is loopback) and `fec0::/10` as global; both are refused by name, and
    no list admits either. `::/96` is refused, not carried.
 10. **Each checked address in the resolver's order.** The Conduit resolves with `getaddrinfo`'s own
-    order and `AI_ADDRCONFIG` (a family with no route left out), not sorted as text. A SQL connection
-    and an API request try each checked address in turn, moving on only when one cannot be reached; a
-    TLS, certificate or sign-in refusal, or any answer, stops at once, so no second address is sent
-    the password or the request.
+    order and `AI_ADDRCONFIG` (a family with no route left out), not sorted as text. **SQL:** each
+    checked address is first only reached over plain TCP, nothing sent, for up to 5 seconds; asyncpg is
+    given the first that answers and no other, so whatever then fails (TLS, the certificate, the
+    sign-in, a timeout or a reset after the password went) is final and no second server is ever sent
+    the password (the lane review of this round). **API:** each checked address is tried in turn only
+    while its connection or handshake does not complete (`ConnectError`, `ConnectTimeout`), when
+    nothing has been sent; any TLS error, a certificate refusal or any answer stops at once, so no
+    second address is sent the request or its token.
 11. **Connection secrets reach the Conduit alone** (as ADR-135 decision 2 keeps a model key to the
     gateway). The operator declares each connection's secret by name in `osprey.yaml`'s
     `connectors.secrets`; render blanks each declared `OSPREY_CONNECTION_SECRET_<NAME>` in the own
