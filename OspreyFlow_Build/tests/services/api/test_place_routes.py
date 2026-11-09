@@ -103,9 +103,7 @@ ENTRY = {
     # The queue, the first read of R&M's first tab, Alerts (ADR-146 decision 2).
     "rules": {"read_alert_queue"},
     "admin": {"list_people_route", "list_dashboards_route", "list_schedules_route",
-              "admin_datasets_route", "list_link_type_proposals_route",
-              # ADR-145 Amendment 3 decision 3: `read_audit` opens Admin once Audit is built (L2.6).
-              "read_audit_section"},
+              "admin_datasets_route", "list_link_type_proposals_route"},
 }  # fmt: skip
 
 #: A place's gate (ADR-146 decision 2): a check its every route makes, passed by any one of the
