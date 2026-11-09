@@ -396,3 +396,21 @@ async def test_a_start_that_left_the_indexes_builds_them_once_free(world: Simple
             await second.close()
         await other.close()
     assert await world.raw.fetchval(audit_module._INDEX_STATE_SQL, "audit_log_org_unit_idx") is True
+
+
+async def test_units_are_recorded_from_this_deployments_own_date(world: SimpleNamespace) -> None:
+    """Written once when the column is added at a start (now); a deployment that already had it
+    takes its earliest entry recording a unit; a later start changes neither."""
+    added = await world.reader.units_from()
+    assert added is not None and abs((datetime.now(UTC) - added).total_seconds()) < 120
+    await world.raw.execute("DELETE FROM audit_log_units_from")
+    early = datetime(2026, 11, 2, 8, 0, tzinfo=UTC)
+    await world.raw.execute(
+        "INSERT INTO audit_log (recorded_at, principal_id, action, resolved_query, "
+        "result_cardinality, org_unit) VALUES ($1, 'adm-a', 'probe', '{}', 1, 'unit-a')", early)  # fmt: skip
+    again = await AuditWriter.connect(world.dsn)
+    await again.close()
+    assert await world.reader.units_from() == early
+    later = await AuditWriter.connect(world.dsn)
+    await later.close()
+    assert await world.reader.units_from() == early

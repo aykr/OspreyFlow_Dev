@@ -516,3 +516,20 @@ def test_an_overdue_alert_is_read_without_its_other_recipients() -> None:
         recipients=["rev-1", "adm-2"], words="Promotion load-7 into Prison records has waited 3 days.")))  # fmt: skip
     [notice] = asyncio.run(store.alerts_for("rev-1"))
     assert "adm-2" not in notice.model_dump_json() and "recipients" not in notice.model_dump()
+
+
+def test_the_note_names_the_deployments_own_date(world: SimpleNamespace) -> None:
+    """Item 9: entries written before this deployment's audit recorded units are named by its own
+    date, not a fixed one."""
+    world.monkeypatch.setattr(world.reader, "units_from",
+                              _async(datetime(2027, 3, 4, 23, 30, tzinfo=UTC)))  # fmt: skip
+    for who in ("adm-1", "aud-1"):
+        note = world.client.get("/v1/admin/audit", headers=_as(who)).json()["note"]
+        assert "written before 4 March 2027" in note and "8 November 2026" not in note, note
+
+
+def _async(value: Any) -> Any:
+    async def answer(*_: Any, **__: Any) -> Any:
+        return value
+
+    return answer
