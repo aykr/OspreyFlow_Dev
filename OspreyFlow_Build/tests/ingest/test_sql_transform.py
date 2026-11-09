@@ -659,15 +659,17 @@ def test_a_step_giving_more_bytes_than_its_limit_is_refused_not_cut() -> None:
 
 
 def test_a_hundred_million_rows_are_refused_at_the_limit_in_words() -> None:
-    """The review's own shape, at the real limits: refused promptly, before the rows become
-    Python values."""
+    """The review's own shape, at the real limits: refused in words, never cut short, before the
+    rows become Python values. Which of the three real limits trips first is the machine's: the row
+    or memory limit on the Mac, the time limit on a loaded server (2dd1877's live set); each has its
+    own case above, so here any of the three is the refusal."""
     with pytest.raises(StagingError) as refused:
         run_sql_step(
             _step("SELECT unnest(range(100000000)) AS n, _ref FROM visits", ("visits",)),
             [_tables()["visits"]], marked=(),
         )  # fmt: skip
     words = " ".join(refused.value.problems)
-    assert "never cut short" in words or "memory limit" in words, words
+    assert any(w in words for w in ("never cut short", "memory limit", "time limit")), words
 
 
 # 6. Another dataset's staged Parquet, by its object-store or file path (rule 3).
