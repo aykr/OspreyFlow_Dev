@@ -347,7 +347,8 @@ def test_the_route_check_fails_with_the_check_removed(
 
     monkeypatch.setattr(Promotions, "_problems", no_problems)
     board, made = _lowered(pw)
-    assert _promote(board, made["item_id"]).status_code == 201
+    answer = _promote(board, made["item_id"])
+    assert answer.status_code == 201, answer.text
 
 
 # --- types (decision 9; ADR-143 Amendment 4 decision 3) -------------------------------------
@@ -1085,7 +1086,14 @@ def test_the_board_composite_check_fails_with_the_check_removed(
     monkeypatch.setattr(promotions_module, "is_composite", lambda _d: False)
     _composite(pw, K)
     board = _board()
+    made = _item(board)
     assert _sheet(board).get("refused") is None
+    # Through the route itself (round 2's minor): with `_target`'s check gone, a second, separate
+    # guard still refuses it, the composite case's own read-only write gate, so nothing is
+    # recorded and the composite's refusal holds in depth.
+    answer = _promote(board, made["item_id"])
+    assert answer.status_code == 409 and answer.json()["error"] == "composite_read_only"
+    assert not pw.store.records and pw.graph.promotions == 0
 
 
 def test_deleting_a_layer_leaves_what_was_promoted_from_it(pw: SimpleNamespace) -> None:
@@ -1438,7 +1446,8 @@ def test_the_gazetteer_check_fails_with_the_check_removed(
     _gazetteer(pw, K)
     board = _board()
     made = _item(board)
-    assert _promote(board, made["item_id"]).status_code == 201
+    answer = _promote(board, made["item_id"])
+    assert answer.status_code == 201, answer.text
 
 
 def test_a_removed_cases_layer_is_never_merged_into_a_gazetteer_dataset(
