@@ -505,6 +505,11 @@ New ones are added at the bottom as they happen.
     ArcadeDB), 76 tests in 31 seconds on the server, 2 minutes with the copy. One failure is main's own: a stale
     branch test in `test_valkey_store.py` (carried to case). The lanes now rerun through `remote`. The stray
     files are in `~/OspreyFlow/stray-2026-11-09/`, and the Drive sync of `~/Documents` is off (your word).
+76. **Docker off again (your word, about 15:00).** Docker Desktop had started itself after the reboot and run
+    your `default` deployment (`osprey-local-lite`, 15 containers) for about 2 hours, with swap at 9 of 10 GB.
+    Stopped with `ospreyflow stop --name default` (data kept in its volumes), and Docker quit; memory went to
+    64% free. **For you:** turn off Docker's "Start Docker Desktop when you sign in" so a reboot doesn't bring
+    it back. Admin's L2.6 and rules-b's L2.12 are ready to merge, and my independent reviews of both are running.
 
 ## Evening, 7 November: your records of 7 November applied
 
