@@ -913,6 +913,16 @@ class Alert(BaseModel):
     #: second person may read). A typology alert's team is the case's members, not a unit, and it
     #: carries `None` here.
     team: str | None = None
+    #: ADR-146 decision 8: the named team a rule's alert goes to (a team's role id, ADR-112
+    #: Amendment 5): only the team's members, and the Authors of the home case of the alert's
+    #: dataset, may read it (a rule 3 read, in the queue's query). `None` for every other alert.
+    routed_team: str | None = None
+    #: ADR-146 Amendment 1: *Suppress until…*, by the team's lead or cover: the last day it is
+    #: suppressed (inclusive, at most 90 days ahead), the reason and who set it. It ends by itself:
+    #: after that day it reads as never suppressed. A suppressed alert stays open and counted open.
+    suppressed_until: date | None = None
+    suppress_reason: str | None = None
+    suppressed_by: str | None = None
 
 
 #: ADR-126 decision 1: the domain packs a case can carry, defined once here. `ontology.packs`
@@ -967,6 +977,10 @@ class Hotlist(BaseModel):
     audience: HotlistAudience = "only_me"
 
 
+#: ADR-146 decision 4: how often a saved pattern runs on its own, beside every load.
+MonitorCadence = Literal["daily", "weekly", "never"]
+
+
 class Monitor(BaseModel):
     """A saved pattern being watched — `02_GLASS_FRONTEND.md` §3.3: "A saved visual query run...
     against new data." Phase 7 Stage 6b/6c. References a `SavedPattern` by `pattern_id`, never
@@ -994,6 +1008,30 @@ class Monitor(BaseModel):
     #: ADR-099 Amendment 3: the dataset of the case it was made in; read only in a case reading
     #: it. `None` for one made before, until `stamp_datasets` places it.
     dataset_id: str | None = None
+    #: ADR-146 decision 4 (G16): a saved pattern is also run on its own schedule, daily by default,
+    #: set per watch, at a whole hour in Europe/London, as its owner resolved afresh; `never` runs
+    #: it only as data loads.
+    every: MonitorCadence = "daily"
+    hour: int = Field(default=6, ge=0, le=23)
+    #: 1 (Monday) to 7 (Sunday), for a weekly schedule only.
+    weekday: int | None = Field(default=None, ge=1, le=7)
+
+
+class MonitorScheduleInput(BaseModel):
+    """A watch's schedule (ADR-146 decision 4, G16): every day, every week on one day, or never
+    (as data loads only), at a whole hour."""
+
+    every: MonitorCadence = "daily"
+    hour: int = Field(default=6, ge=0, le=23)
+    weekday: int | None = Field(default=None, ge=1, le=7)
+
+    @model_validator(mode="after")
+    def _a_day_for_a_week(self) -> MonitorScheduleInput:
+        if self.every == "weekly" and self.weekday is None:
+            raise ValueError("a weekly schedule names the day of the week it runs on")
+        if self.every != "weekly" and self.weekday is not None:
+            raise ValueError("only a weekly schedule names a day of the week")
+        return self
 
 
 # --- Typology rules (06_DECISIONS.md ADR-109) ---------------------------------
@@ -1046,7 +1084,9 @@ CLOSING_REASONS: dict[str, str] = {
 #: `Alert.rule_id`'s prefix (`typology:`, `hotlist:`, `monitor:`); a scheduled run's notice is none
 #: of these and is never queued.
 AlertSeverity = Literal["low", "medium", "high"]
-AlertKind = Literal["typology", "hotlist", "monitor"]
+#: ADR-146 decision 1 adds `analyst`: raised by hand (*Raise an alert…*, R4), `rule_id`
+#: `analyst:case:<id>` or `analyst:dataset:<id>`. (`drawn_watch` is L3.3's, ADR-143 Amendment 2.)
+AlertKind = Literal["typology", "hotlist", "monitor", "analyst"]
 #: ADR-133 ruling 3: whom a hotlist's alerts reach — its owner alone, or its owner's team too.
 HotlistAudience = Literal["only_me", "team"]
 #: Who may see a queued alert, in words the Glass shows: the case's members (a typology alert), the
@@ -1540,6 +1580,12 @@ class QueuedAlert(BaseModel):
     #: ADR-106 Amendment 1, as `AlertExplanation.assignee_name`: the display name of
     #: `alert.assignee`, resolved for the rows served, never stored (step 9e).
     assignee_name: str | None = None
+    #: ADR-146 decision 8: the display name of the team a routed alert goes to.
+    team_name: str | None = None
+    #: ADR-146 Amendment 1: suppressed today (`alert.suppressed_until` not passed). Still open.
+    suppressed: bool = False
+    #: ADR-146 Amendment 1, the lead's tools: the reader acts as lead of the alert's team today.
+    lead: bool = False
 
 
 class ExplainedTransaction(BaseModel):
@@ -1552,6 +1598,42 @@ class ExplainedTransaction(BaseModel):
     target_id: NodeId
     occurred_at: datetime
     amount: float | None = None
+
+
+class AlertHotlist(BaseModel):
+    """ADR-130 decision 1: the hotlist a `hotlist:` alert came from, read at display time and only
+    for the hotlist's owner. The identifier is as typed (else as stored)."""
+
+    identifier: str
+    kept_as_written: bool
+    review_date: date
+
+
+class FiredFile(BaseModel):
+    """One source file of a matched node: its name (the final path segment of the document id; two
+    loads' `calls.csv` are two entries), and what is cited in it. `row` is the single row (its
+    offset under the header, counted from 0; the Glass shows it counted from 1, ADR-131) when
+    exactly one `row N` is cited and nothing else; otherwise `rows` counts the distinct `row N`
+    locators and `records` the distinct locators of any other form (ADR-130 Amendment 1)."""
+
+    name: str
+    row: int | None = None
+    rows: int | None = None
+    records: int | None = None
+
+
+class FiredOn(BaseModel):
+    """ADR-130 decision 1: what a matched node is, and where it was read from. `files` are in the
+    order of first appearance, at most five; `more_files` counts the rest.
+
+    ADR-130 Amendment 1: when the node belongs to a dataset the reader's case does not read, its
+    sources are not said at all: `sources_withheld` is true, `files` is empty and `more_files` 0."""
+
+    type: str
+    label: str
+    files: list[FiredFile]
+    more_files: int
+    sources_withheld: bool = False
 
 
 class AlertExplanation(BaseModel):
@@ -1577,6 +1659,14 @@ class AlertExplanation(BaseModel):
     #: ADR-106 Amendment 1: the display name of `alert.assignee`, resolved the same way (step 9e:
     #: "Claimed by" named the assignee by an identity-provider id).
     assignee_name: str | None = None
+    #: ADR-146 decision 1: *what fired it* (the identifier, the file, the row) on every watch
+    #: alert, as the inbox said it before the inbox went (ADR-130 decision 1): the hotlist's entry,
+    #: to its owner alone, and each matched node's sources, read as the reader.
+    hotlist: AlertHotlist | None = None
+    fired_on: list[FiredOn] | None = None
+    team_name: str | None = None
+    suppressed: bool = False
+    lead: bool = False
 
 
 class AlertAtAddress(BaseModel):
@@ -1636,6 +1726,113 @@ class AlertAssignee(BaseModel):
 
     id: str
     name: str | None = None
+
+
+#: ADR-146 Amendment 1: a suppression ends at most this many days ahead.
+SUPPRESS_DAYS_MAX: Final = 90
+
+
+class AlertSuppressInput(BaseModel):
+    """*Suppress until…* (ADR-146 Amendment 1): a reason and the last day, at most 90 days ahead
+    (checked at the route against today). Only the team's lead, or its cover while the cover lasts,
+    may suppress one of the team's alerts."""
+
+    until: date
+    reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("reason")
+    @classmethod
+    def _a_reason_in_words(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("suppressing an alert needs a reason")
+        return value.strip()
+
+
+#: ADR-146 decision 7: where an analyst's alert goes: the case, or the case's dataset.
+RaisedTo = Literal["case", "dataset"]
+
+
+class RaiseAlertInput(BaseModel):
+    """*Raise an alert…* (ADR-146 decision 7, R4): a title, a severity, a reason and where it goes,
+    with its evidence: the items and the query or question that found them. Refused at the route to
+    a case or dataset the raiser may not write, and a dataset alert citing an item that is not the
+    dataset's own (a drawn item, which only its case can see)."""
+
+    title: str = Field(min_length=1, max_length=200)
+    severity: AlertSeverity = "medium"
+    reason: str = Field(min_length=1, max_length=2000)
+    to: RaisedTo = "case"
+    #: The dataset, for an alert raised to the dataset: one the case reads.
+    dataset_id: str | None = None
+    node_ids: list[NodeId] = Field(min_length=1, max_length=200)
+    edge_ids: list[EdgeId] = Field(default_factory=list, max_length=400)
+    #: What found them, in words: the query or the question.
+    found_by: str | None = Field(default=None, max_length=500)
+
+    @field_validator("title", "reason")
+    @classmethod
+    def _words(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("an alert needs a title and a reason in words")
+        return value.strip()
+
+    @model_validator(mode="after")
+    def _a_dataset_for_a_dataset_alert(self) -> RaiseAlertInput:
+        if self.to == "dataset" and self.dataset_id is None:
+            raise ValueError("an alert raised to the dataset names the dataset")
+        if self.to == "case" and self.dataset_id is not None:
+            raise ValueError("an alert raised to the case names no dataset")
+        return self
+
+
+AlertSourceKind = Literal["rule", "hotlist", "watched_pattern"]
+
+
+class SuppressedAlert(BaseModel):
+    alert_id: str
+    until: date
+    reason: str
+    by: str
+
+
+class AlertSource(BaseModel):
+    """One row of *What raises alerts* (ADR-146 decision 5): a rule or a watch, whoever made it.
+    Its counts are the reader's queue's, so an alert they may not see is not counted (rule 7)."""
+
+    id: str
+    #: The `rule_id` its alerts carry, which the queue's rows name.
+    rule_id: str
+    name: str
+    source: Literal["rule", "watch"]
+    kind: AlertSourceKind
+    maker: str
+    maker_name: str | None = None
+    dataset_id: str | None = None
+    #: A person's id, or a team's display name for a rule routed to a team.
+    owner: str
+    state: Literal["draft", "live", "stopped"]
+    expires_on: date | None = None
+    last_fired_at: datetime | None = None
+    alerts_30_days: int = 0
+    #: The share of its closed alerts closed as not of interest (false positive), 0 to 1, or
+    #: `None` when none is closed.
+    not_of_interest: float | None = None
+    #: ADR-146 Amendment 1: the alerts of this rule or watch suppressed today, beside it.
+    suppressed: list[SuppressedAlert] = Field(default_factory=list)
+
+
+class AlertSources(BaseModel):
+    sources: list[AlertSource]
+
+
+class AlertTeam(BaseModel):
+    """A team a rule's alerts may go to (ADR-146 decision 8), and for its lead today the members
+    of it who hold the case, whom its alerts may be given to (Amendment 1)."""
+
+    role_id: str
+    display_name: str
+    lead: bool = False
+    members: list[str] = Field(default_factory=list)
 
 
 class HotlistAudienceInput(BaseModel):
@@ -1940,6 +2137,16 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     AlertExplanation,
     AlertAtAddress,
     AlertQueueCounts,
+    AlertSuppressInput,
+    AlertTeam,
+    RaiseAlertInput,
+    AlertSource,
+    AlertSources,
+    SuppressedAlert,
+    MonitorScheduleInput,
+    AlertHotlist,
+    FiredOn,
+    FiredFile,
     AlertDispositionInput,
     HeldRowDecision,
     Judgement,
