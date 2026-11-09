@@ -15,6 +15,7 @@ import { HomePage } from "../src/home/HomePage";
 import type { HomeSummary } from "../src/home/homeData";
 import { RolesHelpPage } from "../src/help/RolesHelpPage";
 import { ALERT_MONITORING, AlertMonitoringBoard } from "../src/reports/AlertMonitoringBoard";
+import { journeyWords } from "../src/reports/journey";
 import { EmbeddedDashboards } from "../src/reports/EmbeddedDashboards";
 import { ReportsPlace } from "../src/reports/ReportsPlace";
 import { applyHarnessBrand } from "./brandHarness";
@@ -82,7 +83,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
 const api = { apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "inv-1" };
 const params = new URLSearchParams(window.location.search);
-const fromAlert = params.get("from") === "alert" ? { words: "alert: Hotlist alert in Operation Kestrel (synthetic)", onBack: () => did("back to your alerts") } : null;
+const fromAlert = params.get("from") === "alert" ? { words: journeyWords({ title: "Hotlist alert in Operation Kestrel (synthetic)" }), onBack: () => did("back to your alerts") } : null;
 
 const SUMMARY: HomeSummary = {
   glass: [{ tone: "info", text: "1 case open to you" }],

@@ -98,3 +98,12 @@ closed ports (59991–59994), no lease.
   `<label>`, fixed by moving it beside; 56 axe and 34 keyboard passed with the patch applied.
 - **Rule 1, honestly:** the Alerts panel's tests (§3) and the board's (§5) were written beside the code and
   passed first; their reds are plants, not a first run.
+
+## 10. After the lane review (round 2)
+- **The newest few under a filter:** a new case with six newer rows of another group; plant, the queue
+  cut to the newest five before the filter (`fetchNewestAlerts(api, NEWEST_FEW)`) → FAILED; restored.
+- **The reached half, planted where rights are given:** the Reports Viewer's own role without
+  `read_reports` (`ROLE_RIGHTS` patched) is stopped at the Figures and both board routes and still reads
+  Home's list; replaces the role-less reader of round 1.
+- Round 2's item 1 (the worktree changing during the review) was this session's rebase onto main; no
+  other agent was in the worktree (`ListAgents`, `pgrep`), and HEAD holds `.get` at both places.

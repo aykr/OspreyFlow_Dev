@@ -108,3 +108,18 @@ describe("the Alerts panel", () => {
     expect(screen.getByRole("region", { name: "Alerts" }).getAttribute("data-outlined")).toBe("true");
   });
 });
+
+describe("the newest few under a filter", () => {
+  it("are the group's own newest, even when more than a few newer alerts of other groups come first", async () => {
+    // Six typology alerts newer than the one hotlist alert: cut before the filter, the hotlist row is lost.
+    const newer = Array.from({ length: 6 }, (_, i) =>
+      row(`t${i}`, "typology", "open", `2026-11-08T1${i}:00:00Z`, "structuring"),
+    );
+    serve(() => json(200, [...newer, row("h-old", "hotlist", "open", "2026-11-01T09:00:00Z")]));
+    render(<AlertsPanel api={API} monitoring={MONITORING} now={NOW} only={{ label: "hotlists", typology: "" }} />);
+    const list = await screen.findByRole("list", { name: "Newest alerts" });
+    expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      expect.stringMatching(/^Hotlists: Alpha Ltd h-old/),
+    ]);
+  });
+});

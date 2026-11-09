@@ -124,13 +124,22 @@ def test_the_refusals_are_the_gate_s_own(client: TestClient) -> None:
     assert {"open_alert_at_address", "explain_alert"} <= opened
 
 
-def test_the_reached_half_can_fail() -> None:
-    """The red half of `test_a_reports_viewer_reaches_figures_and_the_boards`: a reader without the
-    Reports Viewer's rights is stopped at every destination, so that case would report them."""
+def test_the_reached_half_can_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The red half of `test_a_reports_viewer_reaches_figures_and_the_boards`, planted where the
+    rights are really given: the Reports Viewer's own role without `read_reports` is stopped at the
+    Figures and the boards (and still reads Home's list, by `read_alert_queue`), so that case would
+    report them."""
     from services.api.app import app, get_principal
 
-    nobody = Principal(id="nobody-1", clearance="SECRET", org_unit="unit-1", roles=[])
-    app.dependency_overrides[get_principal] = lambda: nobody
+    from schemas.rights import ROLE_RIGHTS, Right
+
+    monkeypatch.setitem(
+        ROLE_RIGHTS, "reports_viewer", ROLE_RIGHTS["reports_viewer"] - {Right.READ_REPORTS}
+    )
+    viewer = Principal(
+        id="viewer-2", clearance="SECRET", org_unit="unit-1", roles=["reports_viewer"]
+    )
+    app.dependency_overrides[get_principal] = lambda: viewer
     try:
         client = TestClient(app, raise_server_exceptions=False)
         stopped = {
@@ -138,4 +147,4 @@ def test_the_reached_half_can_fail() -> None:
         }
     finally:
         app.dependency_overrides.pop(get_principal, None)
-    assert stopped == set(REACHED)
+    assert stopped == set(REACHED) - {"read_alert_queue"}

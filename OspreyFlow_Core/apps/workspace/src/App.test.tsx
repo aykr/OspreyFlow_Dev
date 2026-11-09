@@ -538,7 +538,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
   });
 
   // ADR-145 Amendment 4 decision 10: the Reports Viewer's journey, noted over the case switch's reload,
-  // lands on the case's Figures under "From the … alert · ← Back to your alerts", or on the Alert
+  // lands on the case's Figures under "From alert: ‹its title› · ← Back to your alerts", or on the Alert
   // monitoring board filtered to the alert; Back goes Home. Never the alert's address.
   let asked: string[] = [];
   const asViewer = () => {
