@@ -930,6 +930,7 @@ from .studio_recipes import (
 from .studio_staging import (
     StagedTestInputs,
     dataset_reference_lists,
+    draft_marked,
     pipeline_from_yaml,
     pipeline_yaml,
     preview_staging,
@@ -10738,6 +10739,7 @@ async def _save_pipeline(
                 models, recipe.dataset_id, staging_storage, lists=list_store
             ),
             dataset_id=recipe.dataset_id,
+            marked=draft_marked(recipe),
         )
         if p not in problems
     )
@@ -10863,7 +10865,7 @@ async def check_studio_recipe_sql(
     SELECT, in its words, before it is saved: one SELECT, its inputs and nothing else, no file or
     network function, its `_ref` columns carried. Nothing runs over a row; the drawer's live sample
     (`…/staging-preview`) shows what it gives."""
-    check = sql_check(body.pipeline, body.step)
+    check = sql_check(body.pipeline, body.step, marked=draft_marked(recipe))
     await audit.record(
         principal=principal,
         action="check_studio_recipe_sql",
@@ -11475,6 +11477,7 @@ async def publish_studio_recipe(
                 models, recipe.dataset_id, staging_storage, lists=list_store
             ),
             dataset_id=recipe.dataset_id,
+            marked=draft_marked(recipe),
         )
         if unjudged:
             return JSONResponse(  # type: ignore[return-value]

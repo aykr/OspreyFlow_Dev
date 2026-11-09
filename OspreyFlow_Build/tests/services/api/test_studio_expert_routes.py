@@ -310,3 +310,31 @@ def test_the_yaml_save_of_another_unit_s_recipe_is_not_found(expert: TestClient)
     text = expert.get(f"{RECIPE_URL}/pipeline/yaml").json()["text"]
     _draft(expert).owning_unit = "unit-2"
     assert expert.put(f"{RECIPE_URL}/pipeline/yaml", json={"text": text}).status_code == 404
+
+
+@pytest.mark.parametrize("bound", ["source", "map"])
+def test_a_marking_bound_to_a_column_refuses_a_folding_sql_step_at_save_and_check_sql(
+    expert: TestClient, tmp_path: Path, bound: str
+) -> None:
+    """The orchestrator's review of L1.5, item 1, at the routes: the exit's SELECT joins and
+    aggregates, which a pipeline sharing one marking may do; once the draft binds a marking to a
+    column (the source's `handling_columns`, or an element's binding in Map), the same SELECT is
+    refused at save and at Check SQL, in words. Red with the routes passing no marked columns."""
+    graph = _draft(expert).pipeline
+    assert expert.put(f"{RECIPE_URL}/pipeline", json=graph.model_dump(mode="json")).status_code == 200
+    draft = _draft(expert)
+    if bound == "source":
+        draft.handling = {**draft.handling, "handling_columns": {"classification": "visit_class"}}
+    else:
+        template = draft.row_template.model_copy(deep=True)
+        template.entities[0].handling = {"classification": {"field": "visit_class"}}
+        draft.row_template = template
+    saved = expert.put(f"{RECIPE_URL}/pipeline", json=graph.model_dump(mode="json"))
+    assert saved.status_code == 422, saved.text
+    assert any("binds a marking to a column" in p for p in saved.json()["problems"])
+    checked = expert.post(
+        f"{RECIPE_URL}/sql-check",
+        json={"pipeline": graph.model_dump(mode="json"), "step": _sql_node(graph).id},
+    )
+    assert checked.status_code == 200, checked.text
+    assert any("binds a marking to a column" in p for p in checked.json()["problems"])

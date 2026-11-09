@@ -101,6 +101,20 @@ def handling_bindings(override: Mapping[str, Any] | None) -> dict[str, str]:
     }
 
 
+def marked_columns(
+    template: RowTemplate | None, handling_columns: Mapping[str, str] | None
+) -> frozenset[str]:
+    """Every column a marking is bound to (ADR-127 decision 3): those the source declares for a
+    part (`defaults.handling_columns`) and those an element's `handling` binds. Map judges each
+    row's marking from these cells, so a SQL step over a pipeline with any runs row by row and
+    passes each through as it is (ADR-140 Amendment 14; the orchestrator's review of L1.5)."""
+    found = set((handling_columns or {}).values())
+    if template is not None:
+        for element in template_elements(template):
+            found.update(handling_bindings(element.handling).values())
+    return frozenset(found)
+
+
 def literal_handling(override: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """`override` without its column bindings: what is fixed for every row."""
     if override is None:

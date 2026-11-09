@@ -373,12 +373,15 @@ def staging_rule_violations(
     sources: Collection[str],
     lists: Collection[ReferenceList],
     dataset_id: str,
+    marked: Collection[str],
     subscribed: Collection[str] = (),
 ) -> list[str]:
     """What the save gate refuses in a `staging:` list, in words (the redesign's phase 7: "a join
     must name a key; a step must be fed"). `sources`: the pipeline's source tables. `lists`: the
-    lists the caller can see; a Lookup reads only what `readable_lists` gives. A join's keys, and
-    a Derive's settings and columns, are refused by the schema itself."""
+    lists the caller can see; a Lookup reads only what `readable_lists` gives. `marked`: the
+    columns the pipeline binds a marking to (`recipe_rules.marked_columns`), which a SQL step
+    passes through row by row. A join's keys, and a Derive's settings and columns, are refused by
+    the schema itself."""
     problems: list[str] = []
     known: list[str] = list(sources)
     readable, clashes = readable_lists(lists, dataset_id=dataset_id, subscribed=subscribed)
@@ -421,7 +424,7 @@ def staging_rule_violations(
         if isinstance(step, SqlStep):
             from .sql_transform import sql_gate_problems
 
-            problems.extend(sql_gate_problems(step))
+            problems.extend(sql_gate_problems(step, marked=marked))
         if isinstance(step, FuzzyMatchStep) and position != len(steps) - 1:
             # Map reads the last step's table and knows its matched columns there, so what it
             # writes from them is written inferred (R13). A later step could carry a matched
@@ -695,6 +698,7 @@ def run_staging(
     sources: Mapping[str, StagedTable],
     lists: Mapping[str, StagedTable],
     dataset_id: str,
+    marked: Collection[str],
     subscribed: Collection[str] = (),
     may_read: Callable[[StagedRef], bool] | None = None,
 ) -> StagingResult:
@@ -724,6 +728,7 @@ def run_staging(
         sources=list(sources),
         lists=references,
         dataset_id=dataset_id,
+        marked=marked,
         subscribed=subscribed,
     )
     if problems:
@@ -750,7 +755,7 @@ def run_staging(
             from .sql_transform import run_sql_step
 
             done = (*run_sql_step(
-                step, [tables[name] for name in step.inputs], readable=may_read
+                step, [tables[name] for name in step.inputs], marked=marked, readable=may_read
             ), [])  # fmt: skip
         elif isinstance(step, FuzzyMatchStep):
             from .fuzzy_match import run_fuzzy_step

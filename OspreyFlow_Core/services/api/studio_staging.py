@@ -30,6 +30,7 @@ from services.ingest.pipeline import (
     step_record_violations,
 )
 from services.ingest.profiler import profile_source
+from services.ingest.recipe_rules import marked_columns
 from services.ingest.reference_list_import import kept_lists, lists_for_run
 from services.ingest.sql_transform import sql_gate_problems
 from services.ingest.staged_run import staging_rejection_record, step_counts
@@ -60,7 +61,7 @@ from schemas.staging import LookupStep, SqlStep, StagingStep, step_inputs
 
 from .list_connector import ListStore, deployment_references, subscribed_list_ids
 from .run_source import branch_location, topological
-from .studio_map import resolve_source_handling
+from .studio_map import draft_handling_columns, resolve_source_handling
 from .studio_profile import _read_rows, offered_to, row_markings, sample_markings
 from .target_models import TargetModelStore
 
@@ -114,11 +115,22 @@ def source_nodes(pipeline: PipelineGraph) -> list[PipelineNode]:
     return [n for n in topological(pipeline) if n.kind is PipelineNodeKind.SOURCE]
 
 
+def draft_marked(draft: StudioRecipeDraft) -> frozenset[str]:
+    """The columns the draft binds a marking to, its source's and its Map's (ADR-140 Amendment 14):
+    a SQL step over them runs row by row."""
+    return marked_columns(draft.row_template, draft_handling_columns(draft))
+
+
 def staging_gate(
-    pipeline: PipelineGraph, *, references: Sequence[ReferenceList], dataset_id: str | None
+    pipeline: PipelineGraph,
+    *,
+    references: Sequence[ReferenceList],
+    dataset_id: str | None,
+    marked: frozenset[str],
 ) -> list[str]:
     """Every refusal of the pipeline's steps, in words; empty for a pipeline with none, or none
-    wrong. A dataset-less draft has no lists, so a Lookup is refused as naming none."""
+    wrong. A dataset-less draft has no lists, so a Lookup is refused as naming none. `marked`: the
+    draft's marked columns (`draft_marked`)."""
     problems = staging_graph_violations(pipeline)
     if problems:
         return problems
@@ -130,6 +142,7 @@ def staging_gate(
         sources=[n.id for n in source_nodes(pipeline)],
         lists=references,
         dataset_id=dataset_id or "",
+        marked=marked,
         subscribed=subscribed_in(references),
     )
 
@@ -294,7 +307,9 @@ def preview_staging(
     problems.extend(not_offered)
     problems.extend(
         p
-        for p in staging_gate(pipeline, references=references, dataset_id=draft.dataset_id)
+        for p in staging_gate(
+            pipeline, references=references, dataset_id=draft.dataset_id, marked=draft_marked(draft)
+        )
         if p not in problems
     )
     unsaved = _unsaved_sources(draft, pipeline)
@@ -343,6 +358,7 @@ def preview_staging(
         result = run_staging(
             wanted, sources=read.tables, lists=lists, dataset_id=draft.dataset_id or "",
             subscribed=subscribed_in(references),
+            marked=draft_marked(draft),
         )  # fmt: skip
     except StagingError as refused:
         return StagingPreview(
@@ -407,7 +423,7 @@ def pipeline_from_yaml(text: str) -> tuple[PipelineGraph | None, list[str]]:
         return None, words
 
 
-def sql_check(pipeline: PipelineGraph, step_id: str) -> SqlCheck:
+def sql_check(pipeline: PipelineGraph, step_id: str, *, marked: frozenset[str]) -> SqlCheck:
     """The sandbox's gate for one SQL step of `pipeline`, in its words; and the step's own record
     refused, if it is (a missing summary, a key it does not declare)."""
     node = next((n for n in pipeline.nodes if n.id == step_id), None)
@@ -419,4 +435,4 @@ def sql_check(pipeline: PipelineGraph, step_id: str) -> SqlCheck:
     steps = staging_from_pipeline(PipelineGraph(nodes=[node], edges=[])) or []
     (step,) = steps
     assert isinstance(step, SqlStep)
-    return SqlCheck(step=step_id, problems=sql_gate_problems(step))
+    return SqlCheck(step=step_id, problems=sql_gate_problems(step, marked=marked))

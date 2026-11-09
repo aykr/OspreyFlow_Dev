@@ -273,11 +273,11 @@ def test_a_fuzzy_match_is_the_last_step() -> None:
 
     problems = staging_rule_violations(
         [step, DeriveStep.model_validate(after)],
-        sources=["visits", "owners"], lists=[], dataset_id="pid",
+        sources=["visits", "owners"], lists=[], dataset_id="pid", marked=()
     )  # fmt: skip
     assert any("is the last step" in p for p in problems), problems
     assert staging_rule_violations([step], sources=["visits", "owners"], lists=[],
-                                   dataset_id="pid") == []  # fmt: skip
+                                   dataset_id="pid", marked=()) == []  # fmt: skip
 
 
 @pytest.mark.parametrize(
@@ -334,7 +334,7 @@ def test_a_step_with_too_many_pairs_and_no_blocking_key_is_refused() -> None:
 
 def test_run_staging_runs_a_fuzzy_match_at_the_real_call_site() -> None:
     result = run_staging(
-        [FuzzyMatchStep.model_validate(_step(0.6))], sources=_sources(), lists={}, dataset_id="pid"
+        [FuzzyMatchStep.model_validate(_step(0.6))], sources=_sources(), lists={}, dataset_id="pid", marked=()
     )
     assert result.reports[0].matched == 3
     assert "match_score" in result.output.columns

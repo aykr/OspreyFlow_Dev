@@ -69,7 +69,7 @@ async def test_a_lookup_reads_a_deployment_list_only_while_the_dataset_subscribe
             await store.subscribe("ds-a", list_id, "author-1")
         refs = await dataset_reference_lists(_Models(), dataset, STORAGE, lists=store)
         gate = staging_rule_violations([_lookup()], sources=["customers"], lists=refs,
-                                       dataset_id=dataset, subscribed=subscribed_in(refs))  # fmt: skip
+                                       dataset_id=dataset, subscribed=subscribed_in(refs), marked=())  # fmt: skip
         assert (gate == []) is expect_readable, (dataset, gate)
     await store.unsubscribe("ds-a", list_id)
     refs = await dataset_reference_lists(_Models(), "ds-a", STORAGE, lists=store)

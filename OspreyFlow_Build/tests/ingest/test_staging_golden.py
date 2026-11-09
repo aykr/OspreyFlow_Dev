@@ -52,7 +52,7 @@ def run_case(case: dict[str, Any]) -> StagingResult:
         sources=sources,
         lists=lists,
         dataset_id=case["dataset_id"],
-        subscribed=case.get("subscribed", []),
+        subscribed=case.get("subscribed", []), marked=()
     )
 
 

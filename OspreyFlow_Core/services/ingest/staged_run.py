@@ -35,6 +35,7 @@ from schemas.ingest import (
 from schemas.staging import FuzzyMatchStep, SqlStep, StagingStep
 
 from .engine import DryRunResult, RowKeys, dry_run_recipe, run_recipe
+from .recipe_rules import marked_columns
 from .staging import ObjectStorageConfig
 from .staging_catalogue import (
     StagedRef,
@@ -168,6 +169,7 @@ def _stage(
         sources=sources,
         lists=lists,
         dataset_id=dataset_id,
+        marked=marked_columns(recipe.row_template, recipe.defaults.handling_columns),
         subscribed=subscribed,
         may_read=may_read,
     )
@@ -325,7 +327,9 @@ async def dry_run_staged_recipe(
     row_keys: RowKeys | None = None,
     investigation_scope: str | None = None,
 ) -> StagedTest:
-    staging = _stage(recipe, sources, lists, dataset_id, subscribed)
+    # Off the event loop, as Preview and the run are: a SQL step and Splink can each take seconds
+    # (the orchestrator's review of L1.5, item 4).
+    staging = await asyncio.to_thread(_stage, recipe, sources, lists, dataset_id, subscribed)
     rows, refs = map_input(staging.output)
     result = await dry_run_recipe(
         recipe,
