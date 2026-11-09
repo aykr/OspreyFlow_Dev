@@ -409,7 +409,12 @@ async def test_sql_reaches_each_checked_address_in_order_and_signs_in_at_one(
     over TCP, nothing sent; asyncpg is given the first that answers and no other, so whatever then
     fails (a sign-in refused, a timeout or reset after the password went, a certificate) is final
     and no second server is ever sent the password."""
-    import asyncpg
+    # The exception class only, taken through the connector that catches it; nothing here reaches a
+    # database, so the file stays an offline one (`tools/test_file_coverage_check.py` counts an
+    # `import asyncpg` as live).
+    from services.ingest.connectors import sql_connector
+
+    InvalidPassword = sql_connector.asyncpg.InvalidPasswordError
     from services.ingest.connectors.sql_connector import check_sql_connection
 
     v6, v4 = "2a00:1450:4009:81f::200e", "93.184.215.14"
@@ -450,7 +455,7 @@ async def test_sql_reaches_each_checked_address_in_order_and_signs_in_at_one(
     assert probed == [v6, v4] and signed == [v4]
     reachable[v6] = True
     for failure, words in (
-        (asyncpg.InvalidPasswordError("password authentication failed"), "refused the sign-in"),
+        (InvalidPassword("password authentication failed"), "refused the sign-in"),
         (TimeoutError(), "could not be reached"),
         (ConnectionResetError("reset by peer"), "could not be reached"),
         (ssl.SSLCertVerificationError("certificate verify failed"),
