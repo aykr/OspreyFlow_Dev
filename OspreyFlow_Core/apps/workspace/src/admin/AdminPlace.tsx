@@ -25,6 +25,8 @@ import { People } from "./sections/People";
 import { Roles } from "./sections/Roles";
 import { System } from "./sections/System";
 import "./admin.css";
+import { HELP_TITLE } from "../help/roles";
+import { RolesHelpPage } from "../help/RolesHelpPage";
 
 export { feedFreshness } from "./sections/Dashboards";
 export { joinWords, removalWords, ROLES } from "./sections/People";
@@ -151,9 +153,21 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
     if (moved.current) heading.current?.focus();
   }, [chosen]);
   const govuk = currentBrand() === "govuk";
+  // ADR-145 Amendment 4 decision 12: *Roles, teams and Authors*, the one help page, opened from here.
+  const [help, setHelp] = useState(false);
+  if (help) {
+    return (
+      <section aria-label="Admin" className="admin-place">
+        <RolesHelpPage backTo="Admin" onBack={() => setHelp(false)} />
+      </section>
+    );
+  }
   return (
     <section aria-label="Admin" className="admin-place">
       <h2 className={govuk ? "govuk-heading-l admin-place__title" : "value admin-place__title"}>Admin</h2>
+      <div>
+        <button type="button" className={govuk ? "govuk-link" : "btn"} onClick={() => setHelp(true)}>{HELP_TITLE}</button>
+      </div>
       {!section && <p className="label">Your account holds no administration right.</p>}
       {section && (
         <div className="admin-place__body">

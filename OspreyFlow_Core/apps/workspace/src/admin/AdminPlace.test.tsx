@@ -595,3 +595,16 @@ describe("people: join a refused organisation arrival", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });
+
+describe("Roles, teams and Authors from Admin (ADR-145 Amendment 4 decision 12)", () => {
+  it("opens the one help page and comes back to Admin", () => {
+    serve();
+    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
+    fireEvent.click(screen.getByRole("button", { name: "Roles, teams and Authors" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Roles, teams and Authors" })).toBeTruthy();
+    const back = screen.getByRole("button", { name: "← Back to Admin" });
+    expect(document.activeElement).toBe(back);
+    fireEvent.click(back);
+    expect(screen.getByRole("navigation", { name: "Admin sections" })).toBeTruthy();
+  });
+});

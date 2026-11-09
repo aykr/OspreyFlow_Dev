@@ -668,6 +668,25 @@ test("a custom role is made by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "make-a-custom-role-by-keyboard");
 });
 
+// ADR-145 Amendment 4 decision 12 (L2.12): each right's tip is read with its box when it takes focus,
+// and the one help page opens from Admin and is left, by keyboard.
+test("a right's tip is read with its box, and Roles, teams and Authors is opened and left, by keyboard", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await open(page, "Roles");
+  await press(page, "New role");
+  const box = page.getByLabel("Review promotions");
+  await box.focus();
+  await expect(box).toHaveAccessibleDescription("Review items proposed for a dataset.");
+  registerCovered(REGISTRY, "read-a-rights-tip-by-keyboard");
+  await press(page, "Roles, teams and Authors");
+  await expect(page.getByRole("heading", { level: 2, name: "Roles, teams and Authors" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "← Back to Admin" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("navigation", { name: "Admin sections" })).toBeVisible();
+  registerCovered(REGISTRY, "open-and-leave-roles-teams-and-authors-from-admin-by-keyboard");
+});
+
 test("a custom role's versions are shown by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/admin-harness.html?rights=manage_people");
