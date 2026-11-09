@@ -30992,6 +30992,79 @@ of every install), and the answers file's commented example in `cli/ospreyflow/a
 
 Open: none.
 
+### ADR-114, Amendment 38 (9 November 2026) — the backups folder as built (P5b): what Amendment 37 left open, and a deployment's name never a profile's
+
+**Why.** Building Amendment 37 (step P5b, the platform-b lane) met five questions its text does not
+answer, and its own lane-reviewer found that its subfolder rule lets two deployments share sets.
+Platform-b took a recommended option for each and built it, and the orchestrator ratified them on
+9 November 2026 and asked for them here (rule 11). Overrule any of them.
+
+**Decisions:**
+
+1. **The schema's placeholder is no folder named, off a server of your own.** The committed
+   `osprey.yaml` and the schema's default carry `components.storage.backups: /var/lib/osprey/backups`,
+   which no install off a server ever chose, because before Amendment 37 the backup wrote to the
+   checkout whatever this setting said. So an `osprey.yaml` that keeps the placeholder is treated as
+   naming no folder, as one without the key is (Amendment 37 decision 2): the set goes to
+   `~/OspreyFlow/backups` and says so. A blank value is the same. On Small on a server of your own
+   (no `external:`) Amendment 33 always wrote the folder, so the placeholder there is that server's
+   chosen folder. Setup refuses the placeholder off a server, naming the reason, so a choice of it is
+   never set aside without a word. The schema's default is unchanged: changing it would move every
+   rendered `OSPREY_BACKUP_ROOT`.
+2. **A cloud install gets no default folder.** Its server is built elsewhere, and a folder on the
+   installer's own machine would mean nothing there. So the answers write `folders.backups` for a
+   cloud install only when it is given; the backup on that server then follows decision 1. The
+   install's prompts ask for the folder on lite, beside its other folder questions. The guided page
+   asks on its Folders screen, and the answers file is read for every profile.
+3. **`ospreyflow restore` with no set lists the deployment's sets**, newest first, each old one with
+   its move command. A set's bare name is looked for in the deployment's folder first, then in the
+   old places. A folder (any argument with a `/`, or starting `~` or `.`) is used as given, as before.
+4. **The old places, and whose sets they hold.** The old places are the checkout's `backups/`, a
+   named deployment's `~/.ospreyflow/deployments/<name>/backups` (ADR-138), and the top of the
+   backups folder (Amendment 33's server). The first and third held every deployment's sets, so only
+   sets whose name carries this deployment's name (`<stamp>-<name>-<sha>`) are offered for it. The
+   second is the deployment's own, so all its sets are. A failed backup's `<set>.incomplete` is never
+   a set. `doctor` names every set in the checkout, each with the move to its own deployment's
+   subfolder.
+5. **The checkout is the git checkout**, the folder above `OspreyFlow_Core` that holds `.git`. So
+   `OspreyFlow_Build/` and the root are refused as well (only `OspreyFlow_Core/backups/` was ever
+   gitignored). A folder is compared by what it is, not its spelling: a link, a bind mount, or another
+   letter case on macOS's case-insensitive disk is the folder it shows. `doctor` fails on a backups
+   folder inside the checkout, where every backup and every update would be refused.
+6. **A deployment is never installed under a profile's name.** The checkout's own deployment is
+   named by its profile (`local-lite`, `small`, `cluster`), so `install --name local-lite` would
+   share its backups subfolder, against ADR-138. The install refuses it. A deployment installed by
+   such a name before this amendment is still reached by it.
+7. **Two checkouts on one machine sharing one backups folder is not supported.** Each checkout's own
+   deployment is `local-lite`, so both would write to `<folder>/local-lite/`. Give each its own
+   folder at setup. Nothing detects it yet: a set does not record which checkout made it, so `doctor`
+   cannot tell one checkout's set from another's. Recording it in the manifest is left for later.
+8. **The macOS sync roots are checked on macOS only; a `OneDrive` folder on any system** (one is
+   synced wherever it is seen, for example under `/mnt/c/Users/…` in WSL). `doctor --config
+   <answers>` checks the answers' own folder, so the warning comes before the install.
+
+**Tests** (each shown red by a plant at its call site; platform-b's `plants.md` records them):
+
+| Invariant | Test |
+| --- | --- |
+| the placeholder and a blank are no folder named; a server's placeholder is its folder | `tests/harness/test_backup.py::test_a_config_without_a_backups_folder_falls_back_and_says_so`, `::test_every_profile_backs_up_to_its_configured_folder` |
+| setup refuses the placeholder off a server | `tests/cli/test_answers.py::test_the_schemas_placeholder_named_as_the_backups_folder_is_refused_off_a_server` |
+| a cloud install gets no default; the prompt asks on lite | `tests/cli/test_answers.py::test_folders_backups_is_read_for_every_profile`; `tests/cli/test_install.py::test_install_asks_for_the_backups_folder` |
+| restore lists, looks in the deployment's folder first, offers only its own sets, never an `.incomplete` | `tests/harness/test_restore_finds_sets.py` (all three) |
+| a path is used as given | `tests/harness/test_host_tools_reach_the_server.py::test_restore_answers_the_servers_names` |
+| the git checkout, by what a folder is | `tests/harness/test_backup.py::test_a_folder_anywhere_in_the_git_checkout_is_refused`, `::test_the_checkout_spelt_another_way_is_still_the_checkout`; `tests/cli/test_doctor.py::test_a_backups_folder_inside_the_checkout_fails_the_doctor` |
+| the update's backup follows the rule, and its fake refuses what the real backup refuses | `tests/harness/test_update_apply.py::test_an_updates_backup_is_never_written_inside_the_checkout` |
+| a profile's name refused at install, and still reached once installed | `tests/cli/test_named_deployments.py::test_what_cannot_be_a_named_deployment_is_refused_in_words`, `::test_the_profile_names_refused_are_the_schemas_profiles`, `::test_a_deployment_installed_by_a_profiles_name_before_is_still_reached` |
+| the doctor and the backup apply one folder rule | `tests/cli/test_doctor.py::test_the_doctor_and_the_backup_agree_on_the_folder` |
+| sync roots, links and case; the answers' folder before the install | `tests/cli/test_doctor.py::test_doctor_warns_a_backups_folder_a_sync_client_copies`, `::test_a_plain_backups_folder_or_one_reached_through_a_link_is_judged_by_where_it_is`, `::test_the_doctor_warns_of_the_answers_backups_folder_before_the_install` |
+| a set not all readable is said to be at least its size, with sudo | `tests/cli/test_doctor.py::test_a_set_the_doctor_cannot_read_all_of_is_said_to_be_at_least_its_size` |
+
+Decision 7 has no test, because nothing enforces it yet. That is the gap it names.
+
+**Built by:** the platform-b lane, with Amendment 37, as step P5b.
+
+Open: decision 7's detection (which checkout made a set).
+
 ### ADR-145, Amendment 6 (8 November 2026) — Audit and Operations' ageing as built (L2.6)
 
 Status: built in Lane 2's L2.6 (admin), recorded for review; the lane's decisions are logged in
