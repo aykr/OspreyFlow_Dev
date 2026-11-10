@@ -106,6 +106,10 @@ def main() -> int:
     compose = ["docker", "compose", "-p", NAME, "-f", str(directory / "compose.yaml")]
     python = str(CORE / ".venv" / "bin" / "python")
     ok = False
+    # The image tags this run itself creates, by name. Teardown removes these and nothing else:
+    # 10 November, a cleanup by "every tag new since the start" deleted three images another lane
+    # built on this server while the run was going.
+    tagged_by_us: list[str] = []
     try:
         # A defect older than P5b, routed to the orchestrator: the preflight resolves the published
         # `${OSPREY_ARCADEDB_PORT:-2480}` against the process environment, not the deployment's
@@ -152,6 +156,8 @@ def main() -> int:
                 ["docker", "inspect", "--format", "{{.Image}}", "osprey-small-workspace-1"],
                 capture_output=True, text=True, check=True,
             ).stdout.strip()
+            images = [rendered["services"][n]["image"] for n in built]
+            tagged_by_us.extend(i for i in images if i not in tags_before)
             run(["docker", "tag", workspace, rendered["services"]["workspace"]["image"]], env)
             run([*compose, "--env-file", str(directory / "deployment.env"), "build",
                  *[n for n in built if n != "workspace"]], env)  # fmt: skip
@@ -202,7 +208,8 @@ def main() -> int:
     finally:
         say("teardown: down -v on " + NAME + " only, then the throwaway folders")
         if (directory / "compose.yaml").is_file():
-            down = guarded([*compose, "down", "-v", "--remove-orphans"], home)
+            envfile = ["--env-file", str(directory / "deployment.env")]
+            down = guarded([*compose, *envfile, "down", "-v", "--remove-orphans"], home)
             say("$ " + " ".join(down))
             subprocess.run(down, env=env, cwd=CORE, check=False)
         left = subprocess.run(["docker", "volume", "ls", "-q", "--filter", f"name={NAME}"],
@@ -211,10 +218,10 @@ def main() -> int:
         if left:
             subprocess.run(["docker", "volume", "rm", *left], check=False)
         shutil.rmtree(scratch, ignore_errors=True)
-        made_tags = sorted(image_tags() - tags_before)
+        made_tags = sorted(t for t in set(tagged_by_us) if t not in tags_before)
         if made_tags:
             subprocess.run(["docker", "rmi", *made_tags], check=False)
-        say(f"image tags this run made, removed: {made_tags or 'none'}")
+        say(f"image tags this run made, removed by name: {made_tags or 'none'}")
         still = subprocess.run(["docker", "ps", "-aq", "--filter", f"name={NAME}"],
                                capture_output=True, text=True, check=False).stdout.split()  # fmt: skip
         say(f"teardown done: containers left {len(still)}, volumes left {len(left)} (removed)")
