@@ -392,3 +392,58 @@ async def test_a_borrowed_layer_is_read_only_for_an_owner_holding_a_level_on_its
 
     assert original_layer in await case_read_set(store, "copy", PEOPLE["alice"], holds)
     assert original_layer not in await case_read_set(store, "copy", PEOPLE["bob"], holds)
+
+
+async def test_a_drawn_item_re_marked_above_its_owner_raises_nothing_and_claims_nothing(
+    run: SimpleNamespace,
+) -> None:
+    """Rule 3: the run reads the drawn item as its owner, through the adapter. Bob (OFFICIAL) drew
+    it; once it is re-marked SECRET it is not his to see, so a load meeting it neither raises an
+    alert nor spends the one alert per match."""
+    drawn = _item(_board("bob"), who="bob", label="Tall", properties={"family_name": "Tall"})
+    held = run.world.graph._graph_nodes[drawn["element_id"]]
+    run.world.graph._graph_nodes[drawn["element_id"]] = held.model_copy(
+        update={"handling": held.handling.model_copy(update={"classification": "SECRET"})}
+    )
+    alike = _load(run, "p-alike", family_name="Tall")
+    alerts = _Alerts()
+    await _after_run(_deps(run, alerts), alike)
+    assert alerts.saved == [] and run.world.items.matches == {}
+
+
+async def test_one_watchs_failure_never_skips_the_others(run: SimpleNamespace) -> None:
+    """Two cases' watches on the same dataset: the first's save fails, the second is still raised,
+    and the failure is raised once both have run (for the caller to audit)."""
+    _tall()
+    _item(_board("carol", B), who="carol", case=B, label="Tall", properties={"family_name": "Tall"})
+    alike = _load(run, "p-alike", family_name="Tall")
+    saved: list[str] = []
+
+    async def raise_alert(match: DrawnWatchMatch) -> None:
+        if not saved:  # whichever watch runs first
+            saved.append("failed")
+            raise RuntimeError("the alert store is down")
+        saved.append(match.watch.case_id)
+
+    run.run.raise_alert = raise_alert
+    with pytest.raises(RuntimeError, match="the alert store is down"):
+        await run.run.after_load("src", [alike])
+    assert saved[0] == "failed" and len(saved) == 2 and saved[1] in (K, B)
+
+
+async def test_a_claim_not_given_back_keeps_the_saves_own_failure(
+    run: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _tall()
+    alike = _load(run, "p-alike", family_name="Tall", pnc_id="PNC-1")
+
+    async def failing_save(match: DrawnWatchMatch) -> None:
+        raise RuntimeError("the alert store is down")
+
+    async def failing_release(watch: Any, loaded_id: str) -> None:
+        raise ConnectionError("the board store is down too")
+
+    run.run.raise_alert = failing_save
+    monkeypatch.setattr(run.world.items, "release_match", failing_release)
+    with pytest.raises(RuntimeError, match="the alert store is down"):
+        await run.run.after_load("src", [alike])

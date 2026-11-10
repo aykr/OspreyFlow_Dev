@@ -1,14 +1,14 @@
 ## a link type requiring a property offered and drawn
 plant in services/api/boards.py; -k requires_a_property; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_boards.py::test_a_link_type_whose_model_requires_a_property_is_not_offered_nor_drawn
-1 failed, 72 deselected, 1 warning in 1.59s
+1 failed, 72 deselected, 1 warning in 1.57s
 E       AssertionError: assert 'ROLE_IN' not in ['ADJOINS', 'ASSOCIATE_OF', 'ATTRIBUTED_TO', 'BENEFICIAL_OWNER_OF', 'COMMUNICATED_WITH', 'COMPROMISES', ...]
 
 ## a match raised again on every load (no claim)
 plant in services/api/drawn_watches.py; -k one_alert_per_match or each_case_gets; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_loaded_node_like_a_drawn_item_raises_one_alert_per_match_per_case
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_each_case_gets_its_own_alert_for_the_same_loaded_node
-2 failed, 14 deselected, 1 warning in 1.86s
+2 failed, 17 deselected, 1 warning in 1.56s
 E       assert 1 == 0
 E       assert 2 == 0
 
@@ -16,74 +16,75 @@ E       assert 2 == 0
 plant in services/api/drawn_watches.py; -k owner_may_not_see or counted_by_what; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_a_node_the_owner_may_not_see
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_load_counted_by_what_it_raised_never_by_what_it_read
-2 failed, 14 deselected, 1 warning in 1.57s
+2 failed, 17 deselected, 1 warning in 1.54s
 E       assert 1 == 0
 E       assert 2 == 1
 
 ## a watch run for a case that reads the dataset no more
 plant in services/api/drawn_watches.py; -k reads_the_dataset_no_more; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_once_the_case_reads_the_dataset_no_more
-1 failed, 15 deselected, 1 warning in 1.68s
+1 failed, 18 deselected, 1 warning in 1.53s
 E       assert 1 == 0
 
 ## a pair decided on the board raised all the same
 plant in services/api/drawn_watches.py; -k decided_on_the_board; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_pair_decided_on_the_board_raises_nothing
-1 failed, 15 deselected, 1 warning in 1.64s
+1 failed, 18 deselected, 1 warning in 1.52s
 E       assert 1 == 0
 
 ## a drawn node taken for a loaded one
 plant in services/api/drawn_watches.py; -k unalike_of_another_type_or_drawn; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_a_node_unalike_of_another_type_or_drawn
-1 failed, 15 deselected, 1 warning in 1.81s
+1 failed, 18 deselected, 1 warning in 1.54s
 E       assert 1 == 0
 
 ## a watch run for an owner gone
 plant in services/api/drawn_watches.py; -k owner_gone; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_another_datasets_load_an_ended_watch_or_an_owner_gone
-1 failed, 15 deselected, 1 warning in 1.64s
+1 failed, 18 deselected, 1 warning in 1.53s
 E       assert 1 == 0
 
 ## a node of another type taken as alike
 plant in services/api/boards.py; -k unalike_of_another_type_or_drawn; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_a_node_unalike_of_another_type_or_drawn
-1 failed, 15 deselected, 1 warning in 1.54s
+1 failed, 18 deselected, 1 warning in 1.52s
 E       assert 2 == 0
 
 ## the drawn item left out of the alert's evidence (shown to a reader who may not see it)
 plant in services/api/drawn_watches.py; -k drawn_item_the_reader_may_not_see; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue.py::test_an_alert_over_a_drawn_item_the_reader_may_not_see_is_withheld_whole
-1 failed, 4 deselected in 0.52s
-E       AssertionError: assert ['01M72MPP041...X0C450EKQFZ2'] == ['01M72MPP041...X0C450EKQFZ2']
+1 failed, 4 deselected in 0.44s
+E       AssertionError: assert ['01M72T2XVS6...9R19G04QZ5V7'] == ['01M72T2XVS6...9R19G04QZ5V7']
 E         
-E         At index 1 diff: '01M72MPP05JFBDX0C450EKQFZ0' != '01M72MPP05JFBDX0C450EKQFZ2'
+E         At index 1 diff: '01M72T2XVS6R5R9R19G04QZ5V5' != '01M72T2XVS6R5R9R19G04QZ5V7'
 
 ## the loaded node left out of the alert's evidence
 plant in services/api/drawn_watches.py; -k loaded_node_the_reader_may_not_see; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue.py::test_an_alert_over_a_loaded_node_the_reader_may_not_see_is_withheld
 1 failed, 4 deselected in 0.44s
-E       AssertionError: assert ['01M72MPPQS8...15EJRRWN1J40'] == ['01M72MPPQS8...15EJRRWN1J40']
+E       AssertionError: assert ['01M72T2YHMV...RSW71RWDCZ1B'] == ['01M72T2YHMV...RSW71RWDCZ1B']
 E         
-E         At index 1 diff: '01M72MPPQT4DXA15EJRRWN1J3Z' != '01M72MPPQT4DXA15EJRRWN1J40'
+E         At index 1 diff: '01M72T2YHNED8DRSW71RWDCZ1A' != '01M72T2YHNED8DRSW71RWDCZ1B'
 
 ## the drawn watches never run after a recipe's load
 plant in services/api/recipe_run.py; -k dataset_it_loaded_into; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into
-1 failed, 15 deselected, 1 warning in 1.60s
+1 failed, 18 deselected, 1 warning in 1.53s
 E       AssertionError: the drawn watches were not run after the load
 E       assert 0 == 1
 E        +  where 0 = len([])
 
 ## a drawn watch's failure failing the load (not caught and audited)
 plant in services/api/recipe_run.py; -k failing_drawn_watch_run; exit 1
+    raise failed
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_failing_drawn_watch_run_is_audited_never_the_loads_failure
-1 failed, 15 deselected, 1 warning in 1.84s
+1 failed, 18 deselected, 1 warning in 1.53s
 E           RuntimeError: the alert store is down
 
 ## a run without the drawn watch stores running them (no fail-closed check)
 plant in services/api/recipe_run.py; -k without_the_drawn_watch_stores; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_run_without_the_drawn_watch_stores_or_a_dataset_raises_nothing
-1 failed, 15 deselected, 1 warning in 1.58s
+1 failed, 18 deselected, 1 warning in 1.46s
 E       assert [{'principal'...ized'"}, ...}] == []
 E         
 E         Left contains 3 more items, first extra item: {'principal': Principal(id='loader-1', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=[], ...: {'load_id': 'load-9', 'drawn_watches': True, 'error': "'NoneType' object has no attribute 'active_watches_on'"}, ...}
@@ -91,50 +92,75 @@ E         Left contains 3 more items, first extra item: {'principal': Principal(
 ## the route not handing the run the board items
 plant in services/api/app.py; -k manual_run; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_run_path.py::test_the_run_route_runs_through_run_recipe_as_as_a_manual_run
-1 failed, 2 deselected in 1.61s
+1 failed, 2 deselected in 1.48s
 E           AssertionError: board_items
-E           assert None is <object object at 0x11d6fc5d0>
-E            +  where None = getattr(RecipeRunDeps(graph=<object object at 0x11d6fc3d0>, ontology=<object object at 0x11d6fc410>, analytics=<object object ...h_reach=<object object at 0x11d6fc5c0>, board_items=None, datasets=None, investigations=<object object at 0x11d6fc5f0>), 'board_items')
+E           assert None is <object object at 0x1169585d0>
+E            +  where None = getattr(RecipeRunDeps(graph=<object object at 0x1169583d0>, ontology=<object object at 0x116958410>, analytics=<object object ...h_reach=<object object at 0x1169585c0>, board_items=None, datasets=None, investigations=<object object at 0x1169585f0>), 'board_items')
 
 ## a command-line load not handed the drawn watches
 plant in services/api/run_resources.py; -k run_dependencies_are_the_stores; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_run_resources.py::test_the_run_dependencies_are_the_stores_the_builder_opened
-1 failed, 9 deselected in 1.02s
+1 failed, 9 deselected in 1.00s
 E           AssertionError: assert (None is not None or 'board_items' == 'online_geocode'
-E            +  where None = getattr(RecipeRunDeps(graph=<tests.services.api.test_run_resources._Graph object at 0x1100f6930>, ontology=<object object at 0..., board_items=None, datasets=None, investigations=<tests.services.api.test_run_resources._Store object at 0x1101955e0>), 'board_items')
-E            +    where 'board_items' = Field(name='board_items',type='BoardItemStore | None',default=None,default_factory=<dataclasses._MISSING_TYPE object at 0x100fc0aa0>,init=True,repr=True,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD).name
+E            +  where None = getattr(RecipeRunDeps(graph=<tests.services.api.test_run_resources._Graph object at 0x114da6240>, ontology=<object object at 0..., board_items=None, datasets=None, investigations=<tests.services.api.test_run_resources._Store object at 0x114e351f0>), 'board_items')
+E            +    where 'board_items' = Field(name='board_items',type='BoardItemStore | None',default=None,default_factory=<dataclasses._MISSING_TYPE object at 0x102c3cd40>,init=True,repr=True,hash=None,compare=True,metadata=mappingproxy({}),kw_only=False,_field_type=_FIELD).name
 
 ## a command-line load's board store left open
 plant in services/api/run_resources.py; -k closing_closes; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_run_resources.py::test_closing_closes_everything_the_builder_opened
-1 failed, 9 deselected in 1.03s
+1 failed, 9 deselected in 1.01s
 E       assert False
-E        +  where False = all(<generator object test_closing_closes_everything_the_builder_opened.<locals>.<genexpr> at 0x119c84a00>)
+E        +  where False = all(<generator object test_closing_closes_everything_the_builder_opened.<locals>.<genexpr> at 0x112324940>)
 
 ## a watch run for an owner who may no longer open its case (no level check)
 plant in services/api/drawn_watches.py; -k may_no_longer_open_the_case; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_nothing_is_raised_for_an_owner_who_may_no_longer_open_the_case
-1 failed, 15 deselected, 1 warning in 1.75s
+1 failed, 18 deselected, 1 warning in 2.15s
 E       assert 1 == 0
 
 ## a member's load never meeting a watch on its composite
 plant in services/api/drawn_watches.py; -k reading_a_composite; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_watch_in_a_case_reading_a_composite_is_run_by_a_load_into_a_member
-1 failed, 15 deselected, 1 warning in 1.54s
+1 failed, 18 deselected, 1 warning in 1.50s
 E       assert 0 == 1
 
 ## a claim kept when its alert could not be saved
 plant in services/api/drawn_watches.py; -k could_not_be_saved; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_match_whose_alert_could_not_be_saved_is_raised_by_the_next_load
-1 failed, 15 deselected, 1 warning in 1.53s
+1 failed, 18 deselected, 1 warning in 1.49s
 E       AssertionError: assert {('case-k', '...timezone.utc)} == {}
 E         
 E         Left contains 1 more item:
 
+## the drawn item read above its owner (uncleared: a re-marked item still matched)
+plant in services/api/drawn_watches.py; -k re_marked_above_its_owner; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_drawn_item_re_marked_above_its_owner_raises_nothing_and_claims_nothing
+1 failed, 18 deselected, 1 warning in 1.51s
+E       AssertionError: assert ([(Alert(id='0...basis=None)])] == []
+E         
+E         Left contains one more item: (Alert(id='01M72T3HK9AAQNJRRD1GNFEGVA', rule_id='drawn_watch:01M72T3HK81ZPTBFBWQSPKYY87', owner_id='bob', mode=<AlertM...ion_code=None, sanitisation_code=None, originator='unit-1', owning_unit='unit-1', review_date=None, legal_basis=None)])
+
+## one watch's failure skipping the rest
+plant in services/api/drawn_watches.py; -k never_skips_the_others; exit 1
+E           failed and 1 == 2)
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_one_watchs_failure_never_skips_the_others
+1 failed, 18 deselected, 1 warning in 1.51s
+E       AssertionError: assert ('failed' == 'failed'
+E         
+E           failed and 1 == 2)
+
+## a failed give-back put in place of the save's own failure
+plant in services/api/drawn_watches.py; -k keeps_the_saves_own_failure; exit 1
+    raise failed
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_claim_not_given_back_keeps_the_saves_own_failure
+1 failed, 18 deselected, 1 warning in 1.51s
+E       RuntimeError: the alert store is down
+E       ConnectionError: the board store is down too
+
 ## what fired it left off a drawn watch's alert
 plant in services/api/watch_routes.py; -k what_fired_it; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue.py::test_what_fired_it_names_the_loaded_nodes_file_and_row_not_the_drawn_item
-1 failed, 4 deselected in 0.45s
+1 failed, 4 deselected in 0.44s
 E       AssertionError: assert [] == [('Name of p-...'doc-1', 1)])]
 E         
 E         Right contains one more item: ('Name of p-1', [('doc-1', 1)])
@@ -142,7 +168,7 @@ E         Right contains one more item: ('Name of p-1', [('doc-1', 1)])
 ## what fired it naming the drawn item as loaded
 plant in services/api/watch_routes.py; -k what_fired_it; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue.py::test_what_fired_it_names_the_loaded_nodes_file_and_row_not_the_drawn_item
-1 failed, 4 deselected in 0.44s
+1 failed, 4 deselected in 0.42s
 E       AssertionError: assert [('Name of d-...'doc-1', 1)])] == [('Name of p-...'doc-1', 1)])]
 E         
 E         At index 0 diff: ('Name of d-1', [('doc-1', 1)]) != ('Name of p-1', [('doc-1', 1)])
@@ -150,16 +176,16 @@ E         At index 0 diff: ('Name of d-1', [('doc-1', 1)]) != ('Name of p-1', [(
 ## a borrowed layer read for an owner who may not open its case
 plant in services/api/drawn_watches.py; -k borrowed_layer; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_borrowed_layer_is_read_only_for_an_owner_holding_a_level_on_its_case
-1 failed, 15 deselected, 1 warning in 1.52s
-E       AssertionError: assert '01M72MQC4JN6KE64Q159962TRE' not in ['src', '01M72MQC4JN6KE64Q159962TRE']
+1 failed, 18 deselected, 1 warning in 1.45s
+E       AssertionError: assert '01M72T3RYTPYCBY547834N8SE5' not in ['src', '01M72T3RYTPYCBY547834N8SE5']
 
 ## a run without the case store running the drawn watches
 plant in services/api/recipe_run.py; -k without_the_drawn_watch_stores; exit 1
 FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_run_without_the_drawn_watch_stores_or_a_dataset_raises_nothing
-1 failed, 15 deselected, 1 warning in 1.70s
+1 failed, 18 deselected, 1 warning in 1.48s
 E       assert [{'principal'...ized'"}, ...}] == []
 E         
 E         Left contains one more item: {'principal': Principal(id='loader-1', clearance='SECRET', org_unit='unit-1', receivable_handling_codes=[], roles=[], ...ry': {'load_id': 'load-9', 'drawn_watches': True, 'error': "'NoneType' object has no attribute 'get_authorized'"}, ...}
 
 ## restored
-107 passed, 1 warning in 2.48s
+110 passed, 1 warning in 2.43s

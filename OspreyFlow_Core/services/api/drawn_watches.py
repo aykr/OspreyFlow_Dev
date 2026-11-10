@@ -36,6 +36,7 @@ own provenance names, read as the reader with the rest of the evidence.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -63,6 +64,8 @@ class DrawnWatchMatch:
     load_id: str | None
     matched_at: datetime
 
+
+_log = logging.getLogger(__name__)
 
 #: ADR-146 decision 1: a watch set by drawing, told apart by its rule's prefix
 #: (`alerts._KIND_SQL`).
@@ -155,11 +158,19 @@ class DrawnWatchRun:
         if not node_ids:
             return 0
         raised = 0
+        failed: Exception | None = None
         # A watch on a composite is on each of its members (the case reads them all).
         watched = [dataset_id, *(c.id for c in await self.datasets.composites_of(dataset_id))]
         for on in watched:
             for watch in await self.items.active_watches_on(on):
-                raised += await self._run(watch, dataset_id, node_ids, load_id)
+                # One watch's failure (its owner's resolution, its save) never skips the rest; the
+                # first is raised once every watch has run, for the caller to audit.
+                try:
+                    raised += await self._run(watch, dataset_id, node_ids, load_id)
+                except Exception as error:  # noqa: BLE001 - raised again below
+                    failed = failed or error
+        if failed is not None:
+            raise failed
         return raised
 
     async def _run(
@@ -208,8 +219,12 @@ class DrawnWatchRun:
                                     why=why, load_id=load_id, matched_at=now)
                 )  # fmt: skip
             except BaseException:
-                # Not raised, so not claimed: the next load meeting it raises it.
-                await self.items.release_match(watch, node.id)
+                # Not raised, so not claimed: the next load meeting it raises it. A failure to give
+                # the claim back is logged, never put in place of the save's own failure.
+                try:
+                    await self.items.release_match(watch, node.id)
+                except Exception:  # noqa: BLE001
+                    _log.warning("a drawn watch's claim was not given back", exc_info=True)
                 raise
             raised += 1
         return raised
