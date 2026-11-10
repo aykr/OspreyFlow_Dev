@@ -219,3 +219,46 @@ On the server, offline: 10,522 passed, with 16 failed and 13 errors.
   executor, the ledgers, Run now, a Studio load and the list refresh's schedule);
 - the rule store and route live files, and the migration's store file;
 - the run-path offline files.
+
+## §14 The orchestrator's independent review at 291787c: four must-fixes (gates `038213e.plants-offline.txt`, `5b4c6ba.{live,plants-live}.txt`)
+
+Each fix is red by a plant at its own call site, then restored.
+
+1. **A slot read the author's whole case scope** (rule 3). `_judge_stored` matched with the principal it was
+   handed, which `check_case` had scoped to the whole case (`scope_to_case`): the case's layer and its other
+   datasets with it. A slot also ran on after the case stopped reading the rule's dataset.
+   - `RuleScheduleExecutor.reach` (`rule_editor.rule_reach_of`) now narrows the author in `_author`, for every
+     slot and refresh alike. A case that no longer reads the dataset is *refused* in words, so three such
+     refusals stop the rule.
+   - Tests: `test_rule_schedule_reach.py`, through `app._rule_schedule_executor`.
+   - Plant A, `reach` removed: the slot read `['ds-1', 'ds-2', 'layer-1']`; the dataset-changed case ran over
+     `['ds-2', 'layer-1']`.
+2. **`POST …/rules` made a pattern or template rule live for the whole case**, untested. Ruled by the
+   orchestrator: it is now kept just for its author (decision 12).
+   - `TypologyRuleInput.just_me` and a `just_me` column. `is_just_me` reads both forms of the rule, so its
+     alert is a monitor-kind row for the author alone and writes no `Alert` node. A case-wide one gets 409
+     `use_the_rule_editor`.
+   - The form says so, and its five keyboard cases end at a just-for-me rule.
+   - Plant D, `just_me` read by nothing: the alert came back as `typology:rule-t`.
+   - Plant E, the form sending no `just_me`: all five keyboard cases failed.
+   - Plant G, the route's refusal removed, live: the case-wide rule was made (201, no `error`).
+3. **A Rule author's rule never ran on a schedule or a refresh.** The executor asked `deploy_rules`.
+   Decision 13 is built as the orchestrator accepted it: the author must hold `author_rules` or
+   `deploy_rules`, at a load (`RuleGate._deployer`), a slot and a refresh. A whole-deployment rule keeps its
+   own rights.
+   - Plant B, `deploy_rules` alone: `test_a_rule_authors_scheduled_rule_runs_as_them` failed with
+     `[] == ['author']`.
+   - Plant C, the load check removed: a `reports_viewer` author's rule raised its alert.
+   - The live fixtures whose rules run at a load now give their author Analyst's role (`ANALYST`,
+     `SECRET_LOADER`, `OFFICER`, the record test's owner). The first delta, at 038213e, found 64 such tests
+     failing; those fixtures are fixed.
+4. **Rule 12: whoever asked for a make-live approving it.**
+   `test_whoever_asked_for_a_make_live_cannot_approve_it`. Plant F, approve's `asked_by` clause removed, live:
+   the approval went through (200, no `detail`).
+
+**The live delta at 5b4c6ba**, on a fresh stack b: every live file touching rules, schedules and the loads that
+run them (50 files), 666 passed and 3 failed.
+- The three are `test_kyc_rules.py`'s trust, status and repoint cases. They see the screening matches that
+  earlier cases in the file left in the shared ArcadeDB graph.
+- They fail alike with this change taken out (the writing-right check and the fixture roles removed, a fresh
+  stack, 4 failed), so the dependence is already there and isn't this change's. Carried.

@@ -1,4 +1,4 @@
-# rules lane · report · L2.11, the rule editor: declared dataset, draft, Test and Make live, the rule files, the migration (10 November 2026; resumed once, gated at 05ec309)
+# rules lane · report · L2.11, the rule editor: declared dataset, draft, Test and Make live, the rule files, the migration (10 November 2026; resumed once; the review's must-fixes, gated at 0f319d4)
 
 **What is done, half-done and untouched**
 
@@ -43,7 +43,27 @@
    - My lane-reviewer's 29 findings were all built, with plants (RED_RECORD §10).
    - The orchestrator's conditions were met: list_refresh runs, the ci wiring is a diff, registries are passed by their literal names, test_schedule_notice is repointed, and Make live is gated on deploy_rules.
    - rules-b's L2.11a codec is integrated (RED_RECORD §8).
-6. **Carries for tomorrow** (the orchestrator's no-new-scope note):
+6. **The orchestrator's independent review at 291787c: four must-fixes, built** (RED_RECORD §14; Amendment 6 point 11, decisions 12 and 13). Each is red by a plant at its call site.
+   1. **Rule 3.** A scheduled or refreshed rule now reads its declared dataset alone, never the author's whole case scope (the layer included). Once its case stops reading that dataset, it is refused in words.
+   2. **`POST …/rules`.** It keeps a pattern or template rule just for its author: the author's own alerts, no `Alert` node. A case-wide one is refused, 409 `use_the_rule_editor`. The form says so, and its five keyboard cases end at a just-for-me rule.
+   3. **Who a rule runs as.** On a load, a slot and a refresh, the author must hold `author_rules` or `deploy_rules`. So a Rule author's scheduled rule runs.
+   4. **Rule 12.** Whoever asked for a make-live can't approve it; this is now tested.
+   - **Re-gated:**
+     - offline: the rule files pass, and the five offline plants are red;
+     - live, at 5b4c6ba on a fresh stack b: 666 passed, and the two live plants are red. The three KYC failures are an existing order dependence; they fail alike without this change;
+     - `make -k ci` and `make test`: make -k ci on the server at 0f319d4 (`gates/0f319d4.ci-server.txt`) is green apart from `test-file-coverage-check`, which waits on `L2.11_ci_yml.diff`. The eight trivy image scans, opentofu and chart ran for real and passed. make test on the server at 877971a (`gates/877971a.test.txt`): 10,531 passed, with 15 failed and 13 errors:
+       - the new live files the unapplied diff leaves in, and the coverage test;
+       - valkey_config and the GPU preflight;
+       - two `test_alerts_and_the_layer` cases, the same fixture gap as decision 13's others. Fixed at 0f319d4; the file passes, 12 of 12.
+7. **Ratification list:** files this step changed outside the rules lane's own (`apps/workspace/src/alerts/**`, and the alerts, rules, watches and monitoring modules and routes):
+   - Ratified earlier: `scripts/migrate_rules_to_datasets.py`, `services/api/audit_section.py`'s actions, the Studio list routes' refresh hooks in `app.py`, `recipe_run.py`'s fields, and the schemas (`sentences.py`, `domain.py`, `monitoring.py`, the new `rule_editor.py`, `generate_ts.py` and `generated/`).
+   - New since: `run_resources.py`'s `rule_lists` and `rule_reach` (§13); `domain.py`'s `TypologyRuleInput.just_me` (decision 12); the keyboard harnesses and `a11y/every-harness.spec.ts`.
+   - Ingest's test fixtures, given a role so that their rules run (decision 13): `tests/ingest/{test_typology_rules,test_kyc_rules,test_rule_writes_in_the_record,test_typology_rule_routes}.py`.
+   - `tests/services/api/{test_schedule_notice,test_load_records,test_recipe_run_path,test_run_resources}.py`.
+8. **Carries for tomorrow** (the orchestrator's no-new-scope note):
+   - **The template-to-draft path.** The editor's draft, *Test* and *Make live* for a pattern or template rule (decision 12's open point). *Test* previews sentences only.
+   - **The composite list ambiguity** (the review's item 5).
+   - **`test_kyc_rules.py`'s order dependence.** Three cases read the screening matches that earlier cases left in the shared ArcadeDB graph. Seen on main's gates too.
    - **Does a scheduled run's notice still reach a screen after L2.10?** The one queue gives a notice no kind (`alerts._KIND_SQL`), so it sits only in its owner's own list (`AlertStore.list_authorized`). Whether the Glass still shows that list is unverified. It loses a notice; it is not an access problem.
    - **Main's test-file `ruff` drift**, seen while fixing: `test_rule_editor_routes.py` and several app.py `# fmt: skip` blocks don't pass `ruff format --check` run from Core. They pass the project's own lint.
 
