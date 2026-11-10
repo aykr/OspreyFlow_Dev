@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.61** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.62** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.62 | 2026-11-10 | §9.10: Admin's screen offers the dry runs, though its delete route exists, named. |
 | 1.61 | 2026-11-10 | Promotion as built (case lane's L3.4). §9.10: a removed case's layer merged or deleted by the dataset's Authors in the Ingest Studio, Admin's dry runs. §9.11: promotions waiting for review, listed and overdue. §9.2: its words are copies of `help/roles.ts`, held to it by a test. §9.9: Disable's confirming button. |
 | 1.60 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §9.1: Admin as a place of its own, its sections and each one's right, the coming ones said so. §9.2: the roles in the Glass's own words, the places each opens, every right in plain words, custom roles and the Super user. §9.3: the invite form as built. §9.5 and §9.6: where lists and influencers now live. New §9.8 teams and leads, §9.9 Disable and what a person owns, §9.10 datasets, their Authors and linked cases, §9.11 Operations and Audit. §10.1: Admin › Models. New §10a: Admin › Maps. §12: the Alert monitoring board in the Glass. §13: backups to a folder named at setup, coming. The architecture has its own guide now. |
 | 1.59 | 2026-11-09 | §7: `grading.scheme`, the scheme drawn items are graded in (a built-in scheme or a scheme file). §8: `ospreyflow grading change`, its dry run and its change (ADR-143 decision 11 and Amendment 6). Appendix A regenerated: the `grading` section. |
@@ -1416,7 +1417,8 @@ marking it may hold** (or the deployment's highest), its **Egress** (section 10)
   size (never the layer's contents), the home case tagged. For a removed case's layer, **Merge ‹case›
   into the dataset (dry run)** and **Delete ‹case›'s layer (dry run)** say what each would do. The
   merge and the delete themselves are done by the dataset's Authors in the Ingest Studio's 4 Runs
-  (developer guide, section 7.8); Admin offers the dry runs only.
+  (developer guide, section 7.8); Admin's screen offers the dry runs only, though its delete route
+  exists (`POST /v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete`, `administer_system`).
 
 **Who may be an owner.** Admin → System's **Dataset owners may be** is *People and teams* (the default),
 *People only* or *Teams only*. It governs every naming of a dataset's owners; a client who wants no

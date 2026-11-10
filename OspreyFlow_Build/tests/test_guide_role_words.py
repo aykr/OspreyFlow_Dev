@@ -3,8 +3,9 @@ decision 12): `apps/workspace/src/help/roles.ts` holds them, and the guides, the
 page copy them by hand. This test holds every copy to that file, so a copy cannot drift from it.
 
 What a drift would do, and the case that catches it:
-- a role's sentence changed in `roles.ts` and not in a guide's role table, or the other way round —
-  `test_each_role_row_says_what_roles_ts_says`;
+- a role's sentence changed in `roles.ts` and not in a guide's role table, or the other way round, or a
+  role renamed or dropped from a table (each copy lists the five built-in roles, and the Super user
+  where it says the places each opens) — `test_each_role_row_says_what_roles_ts_says`;
 - a role's *Places it opens* naming a place `placesByRole.json` does not give it —
   `test_each_role_row_opens_the_places_recorded`;
 - a right worded in `roles.ts` and missing from, or worded differently in, the administration guide's
@@ -40,7 +41,7 @@ COPIES = [
     CORE / "docs" / "developer-guide.md",
     BUILD / "spec" / "10_ADMINISTRATION_GUIDE.md",
     CORE / "README.md",
-    CORE / "README_DRAFT.md",
+    BUILD / "process" / "lanes" / "docs" / "README_DRAFT.md",
 ]
 RIGHTS_COPIES = [CORE / "docs" / "administration-guide.md", BUILD / "spec" / "10_ADMINISTRATION_GUIDE.md"]
 
@@ -118,13 +119,30 @@ EXISTING = [p for p in COPIES if p.exists()]
 each_copy = pytest.mark.parametrize("path", EXISTING, ids=[p.name for p in EXISTING])
 
 
+#: The five built-in roles every copy's role table lists; the Super user preset is listed where the
+#: table says the places each opens (the administration guide), and said in prose elsewhere.
+BUILT_IN = ("analyst", "data_engineer", "osprey-admin", "reports_viewer", "rule_author")
+
+
 def role_drift(text: str, words: dict) -> list[str]:
+    """Each role table's rows against roles.ts: every row a role roles.ts names, saying what it says,
+    and every built-in role (and, in a table of the places each opens, the Super user) listed, so a
+    role renamed or dropped on either side fails."""
     by_name = {name: says for name, says in words["roles"].values()}
     drift = []
-    for row in rows_of(text, "Role"):
-        name = _bold(row[0])
-        if name in by_name and _plain(row[1]) != by_name[name].rstrip("."):
-            drift.append(f"{name}: {row[1]!r} is not {by_name[name]!r}")
+    for head, rows in tables(text):
+        if head != "Role":
+            continue
+        named = [_bold(row[0]) for row in rows]
+        for row, name in zip(rows, named):
+            if name not in by_name:
+                drift.append(f"{row[0]!r} is not a role in roles.ts")
+            elif _plain(row[1]) != by_name[name].rstrip("."):
+                drift.append(f"{name}: {row[1]!r} is not {by_name[name]!r}")
+        wanted = list(BUILT_IN) + (["super"] if rows and len(rows[0]) > 2 else [])
+        for key in wanted:
+            if key in words["roles"] and words["roles"][key][0] not in named:
+                drift.append(f"{words['roles'][key][0]} missing from a role table")
     return drift
 
 
@@ -203,12 +221,7 @@ def test_each_place_row_names_a_place_of_roles_ts(path: Path) -> None:
 
 @each_copy
 def test_the_welcome_page_says_each_place_as_the_guides_do(path: Path) -> None:
-    says = place_says()
-    assert set(says) == set(WORDS["places"]), "PLACE_SAYS names other places than PLACE_WORDS"
-    for row in rows_of(path.read_text(encoding="utf-8"), "Place"):
-        key = _place_key(_bold(row[0]) or row[0], WORDS)
-        sentence = _plain(row[2] if len(row) > 2 and row[1].startswith("`") else row[1])
-        assert key and sentence == says[key].rstrip("."), f"{row[0]}: {sentence!r} is not {says[key]!r}"
+    assert place_drift(path.read_text(encoding="utf-8"), WORDS, place_says()) == []
 
 
 def test_the_copies_are_read() -> None:
@@ -252,9 +265,43 @@ def test_roles_ts_changed_is_caught() -> None:
     assert rights_drift(text, roles_ts(source)) == ["draw_on_boards: \"Draw on a case's boards.\" is not 'Draw on boards.'"]
 
 
-def test_the_welcome_page_drifting_is_caught() -> None:
-    source = WELCOME.read_text(encoding="utf-8").replace("the domain model and held rows.", "and releases.", 1)
-    says = place_says(source)
+def test_a_role_renamed_or_dropped_is_caught() -> None:
     text = (CORE / "docs" / "user-guide.md").read_text(encoding="utf-8")
-    row = next(r for r in rows_of(text, "Place") if _bold(r[0]) == "Ingest Studio")
-    assert _plain(row[2]) != says["ingest"].rstrip(".")
+    renamed = text.replace("| **Rule author** |", "| **Rules author** |", 1)
+    dropped = re.sub(r"^\| \*\*Reports Viewer\*\* .*\n", "", text, count=1, flags=re.M)
+    assert renamed != text and dropped != text
+    assert role_drift(renamed, WORDS) == [
+        "'**Rules author**' is not a role in roles.ts",
+        "Rule author missing from a role table",
+    ]
+    assert role_drift(dropped, WORDS) == ["Reports Viewer missing from a role table"]
+    admin = RIGHTS_COPIES[0].read_text(encoding="utf-8")
+    no_super = re.sub(r"^\| \*\*Super user\*\* .*\n", "", admin, count=1, flags=re.M)
+    assert role_drift(no_super, WORDS) == ["Super user missing from a role table"]
+
+
+def place_drift(text: str, words: dict, says: dict[str, str]) -> list[str]:
+    """Each place table's rows against PLACE_WORDS' names and PLACE_SAYS' sentences."""
+    drift = []
+    if set(says) != set(words["places"]):
+        drift.append("PLACE_SAYS names other places than PLACE_WORDS")
+    for row in rows_of(text, "Place"):
+        key = _place_key(_bold(row[0]) or row[0], words)
+        sentence = _plain(row[2] if len(row) > 2 and row[1].startswith("`") else row[1])
+        if not key:
+            drift.append(f"{row[0]!r} is not a place in roles.ts")
+        elif sentence != says[key].rstrip("."):
+            drift.append(f"{row[0]}: {sentence!r} is not {says[key]!r}")
+    return drift
+
+
+def test_the_welcome_page_drifting_is_caught() -> None:
+    text = (CORE / "docs" / "user-guide.md").read_text(encoding="utf-8")
+    source = WELCOME.read_text(encoding="utf-8")
+    planted = source.replace("the domain model and held rows.", "and releases.", 1)
+    assert planted != source
+    assert place_drift(text, WORDS, place_says(source)) == []
+    assert place_drift(text, WORDS, place_says(planted)) == [
+        "**Ingest Studio**: 'Bring data in: sources, pipelines, the domain model and held rows' "
+        "is not 'Bring data in: sources, pipelines, and releases.'"
+    ]

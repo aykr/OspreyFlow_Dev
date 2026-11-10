@@ -1204,7 +1204,8 @@ marking it may hold** (or the deployment's highest), its **Egress** (section 10)
   size (never the layer's contents), the home case tagged. For a removed case's layer, **Merge ‹case›
   into the dataset (dry run)** and **Delete ‹case›'s layer (dry run)** say what each would do. The
   merge and the delete themselves are done by the dataset's Authors in the Ingest Studio's 4 Runs
-  (developer guide, section 7.8); Admin offers the dry runs only.
+  (developer guide, section 7.8); Admin's screen offers the dry runs only, though its delete route
+  exists (`POST /v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete`, `administer_system`).
 
 **Who may be an owner.** Admin → System's **Dataset owners may be** is *People and teams* (the default),
 *People only* or *Teams only*. It governs every naming of a dataset's owners; a client who wants no

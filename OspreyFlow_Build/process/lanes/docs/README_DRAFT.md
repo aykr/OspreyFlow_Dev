@@ -2,7 +2,7 @@
 
 > **Draft for the owner's approval (9 November 2026).** This page is published with the repository,
 > so what it claims is published too. It describes the product as built on `main`; anything not yet
-> built is marked *coming*. It replaces `README.md`, which stays as it was until the owner approves this draft.
+> built is marked *coming*. It replaces `OspreyFlow_Core/README.md`, which stays as it was until the owner approves this draft; it is kept here, outside `OspreyFlow_Core`, so the user repository's export does not publish it first. Its links are written from `OspreyFlow_Core`, where it will live.
 
 OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering,
 fraud detection, and event monitoring and alerting, developed by Solirius Reply and released under the

@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.29** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.30** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.30 | 2026-11-10 | §3: 4 Runs lists Analyst promotions and Removed cases' layers. §9.1: the routes of promotion, its review and a removed case's layer, and Admin's delete of one. §7.8: Admin's screen offers dry runs, though its delete route exists. |
 | 1.29 | 2026-11-10 | Promotion as built (case lane's L3.4). §7.8: promotion as one load, the Studio's *Analyst promotions* in 4 Runs with its review, the revert command, and a removed case's layer merged or deleted. §9.1: an alert's address also asks Rules and Monitoring's gate. |
 | 1.28 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §1: the four places; the architecture has its own guide. §3: the Studio's four steps (1 Model, 2 Sources, 3 Pipelines, 4 Runs), the readiness strip, guided and expert mode; *Make live* and its owner step; SQL, API and JSON sources and screening lists in 2 Sources; staging steps with a live sample; expert steps coming. §6: held rows in Rules and Monitoring and 4 Runs; Admin → Operations. New §7.8: a case's analyst layer, drawn datasets, link types proposed by analysts, and promotion (coming). §9.1: the routes of views, boards, drawings, link types, an alert's address, dataset models, ownership, model and map administration and the grading scheme. §9.3: the commands. Coming, and said so: releases between environments. |
 | 1.27 | 2026-11-05 | Describes v0.4.12 (v0.4.11 was not released). No change to its content. |
@@ -116,7 +117,7 @@ pipelines (and how many are untested) and its last run. Its four steps are tabs:
 | **1 Model** | The dataset's **domain model**: the POLE core and the packs over it (section 3.3), and the link types analysts proposed, to accept into the draft or decline (section 7.8) |
 | **2 Sources** | **Source tables**, each registered with **Register a source** and given a page of its own; the **screening lists** (section 8); and **Files added to the dataset**, with **Add files** |
 | **3 Pipelines** | Each pipeline, built in a drawer beside it: **guided** mode (a numbered list of steps, the default) or **expert** mode (the canvas). The choice is kept for you in this browser |
-| **4 Runs** | One row per deployed pipeline and one cell per day; **Run now**, its schedule and its folder watch; held rows; and the command that reverts a load |
+| **4 Runs** | One row per deployed pipeline and one cell per day; **Run now**, its schedule and its folder watch; held rows; the command that reverts a load; and, under the grid, **Analyst promotions** and **Removed cases' layers** (section 7.8) |
 
 **A recipe** is what a pipeline is stored as: a declarative YAML description of how one source
 becomes part of the dataset's graph. What it loads goes into the dataset. *Coming:* **Releases**,
@@ -745,7 +746,8 @@ lets you read that one layer for that one merge (recorded in the audit, and ende
 sent or cancelled); the merge is a promotion like any other, under the same policy. **Delete…** shows
 what it would do, then "Its items are withdrawn and kept in the audit." Both need `investigate`, so a
 Reports Viewer does neither. A composite case's layer is never merged, only deleted. Nothing deletes a
-layer on its own. Admin → Datasets offers the merge and the delete as a dry run only.
+layer on its own. Admin → Datasets' screen offers the merge and the delete as a dry run only, though the
+administrator's delete route exists (section 9.1).
 
 **Coming:** merging a drawn dataset into another. A waiting promotion grows overdue after the days
 set in Admin → Operations (administration guide, section 9.11).
@@ -806,6 +808,12 @@ signed in like every other route. Its `info.version` is the release the deployme
 | `GET …/boards` and a board's reads, its matches, pictures and `…/drawn-watches` | `investigate` |
 | `POST …/boards`, a board's share and delete, `…/items`, `…/links`, `…/layout`, its matches and pictures | `draw_on_boards` and `investigate`; only the board's creator draws |
 | `POST /v1/drawings`; `POST /v1/datasets/drawn` | `create_case` (a drawing also `draw_on_boards` and `investigate`) |
+| `GET …/boards/{board_id}/promotion-sheet`; `POST …/boards/{board_id}/promotions` | `promote_to_dataset` and `investigate`, the case's Author level, and the board your own |
+| `GET …/boards/{board_id}/promotions` | as a board's reads |
+| `GET /v1/datasets/{dataset_id}/promotions`, `…/promotions/{promotion_id}`; `POST …/promotions/{promotion_id}/decision` | `review_promotions`; deciding, one of the dataset's Authors, never the promotion's sender |
+| `GET /v1/datasets/{dataset_id}/removed-cases`; `GET …/layer-merges/{grant_id}` | one of the dataset's Authors (owning needs no right) |
+| `POST …/removed-cases/{case_id}/merge-sheet`; `POST`, `DELETE …/layer-merges/{grant_id}` (merge, cancel); `POST …/removed-cases/{case_id}/delete/dry-run`; `DELETE …/removed-cases/{case_id}/layer` | `investigate`, as one of the dataset's Authors |
+| `POST /v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete` | `administer_system`, within the dataset's own unit (another unit's administrator is answered as for no such dataset) |
 | `GET …/link-types`; `POST …/link-types/promotable` | `investigate` |
 | `POST …/link-types`; `POST …/link-types/{proposal_id}/withdraw` | `propose_types`, Editor |
 | `GET /v1/datasets/{dataset_id}/model/proposals`; `POST …/proposals/{proposal_id}/accept`, `…/decline` | `accept_types`, behind the dataset's own gate |
