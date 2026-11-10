@@ -990,8 +990,10 @@ async def preview_sentence(
     *,
     now: datetime | None = None,
     cap: int = MAX_NODES,
+    days: int = PREVIEW_DAYS,
 ) -> RulePreview:
-    """What the rule would have raised over the last `PREVIEW_DAYS` days, run as its author over
+    """What the rule would have raised over the last `days` days (`PREVIEW_DAYS` for the builder's
+    preview; ADR-146's *Test* runs over `RULE_TEST_DAYS`), run as its author over
     stored data. Reads only; it has no store to write to. Its subjects are counted as the author
     first (`match_count`, the access step in the store): past `cap` the preview is refused with
     `limit_exceeded`, never counted in part. Frequencies are counted over the window; a first time
@@ -1004,10 +1006,10 @@ async def preview_sentence(
     if counted > cap:
         raise LimitExceededError(LimitExceeded(cap_kind="nodes", cap=cap, would_be=counted))
     stamp = now or datetime.now(UTC)
-    window = Interval(valid_from=stamp - timedelta(days=PREVIEW_DAYS), valid_to=stamp)
+    window = Interval(valid_from=stamp - timedelta(days=days), valid_to=stamp)
     words = sentence_words(sentence, ontology)
     if counted == 0:
-        return RulePreview(would_raise=0, words=words)
+        return RulePreview(days=days, would_raise=0, words=words)
     matched = await ctx.graph.match(pattern.model_copy(update={"limit": cap}), author)
     subjects = sorted((n for n in matched.nodes if n.type == sentence.subject), key=lambda n: n.id)
     _, rest = _split(sentence, ontology)
@@ -1020,7 +1022,7 @@ async def preview_sentence(
         )
         for h in sorted(hits, key=lambda h: (node_name(h.node), h.node.id))[:PREVIEW_EXAMPLES]
     ]
-    return RulePreview(would_raise=len(hits), examples=examples, words=words)
+    return RulePreview(days=days, would_raise=len(hits), examples=examples, words=words)
 
 
 __all__ = [
