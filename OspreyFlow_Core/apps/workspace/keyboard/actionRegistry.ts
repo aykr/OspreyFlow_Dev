@@ -1231,3 +1231,9 @@ export const SOURCES_CONNECTORS_ACTIONS = defineActionRegistry("SOURCES_CONNECTO
   "unsubscribe-a-dataset-from-a-screening-list-by-keyboard",
   "refresh-a-screening-list-by-hand-only-by-keyboard",
 ] as const);
+
+// ADR-145 Amendment 4 decision 12 (L1.8): the Studio's who-can tips and its door to the help page.
+export const STUDIO_TIPS_ACTIONS = defineActionRegistry("STUDIO_TIPS_ACTIONS", [
+  "reach-a-refused-studio-actions-tip-by-keyboard",
+  "open-roles-teams-and-authors-from-the-studio-by-keyboard",
+] as const);

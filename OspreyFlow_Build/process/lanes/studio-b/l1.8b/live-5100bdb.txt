@@ -1,0 +1,291 @@
+Running on ospreyflow-test (stack d, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b.meta/runs/20261110T115319Z/log: sh process/lanes/studio-b/l1.8b/live_publish.sh
+.......................                                                  [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+______ test_each_right_is_refused_without_it_and_needs_the_case_level_too ______
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:53:30] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route __
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:53:35] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+___________________ test_hotlist_create_and_list_round_trip ____________________
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:56:47] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.app:app.py:1191 start-up flagged 2 published recipe(s) as stale: 01M72N1H13HT6JG4E7MJ8Q2HSJ, 01M72N0EBBDBYYVNWA0W6QMNKS
+____________ test_monitor_create_requires_owning_the_pattern_first _____________
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:56:53] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 5 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:56:59] "GET /jwks.json HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2026 11:57:04] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 5 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 5 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+__ test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets ___
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:57:11] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 5 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_b14_an_alert_opens_at_its_address_in_its_case_with_its_entities _____
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:57:17] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 5 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_________ test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling _________
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 5 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:57:27] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 5 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:57:33] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:57:45] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link_is_hidden _
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:57:59] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+============================= slowest 30 durations =============================
+40.36s call     tests/ingest/test_studio_publish_pipeline.py::test_a_backfilled_row_whose_file_has_no_pins_runs
+36.14s call     tests/ingest/test_studio_publish_pipeline.py::test_a_row_and_file_both_unpinned_writing_fibo_is_refused
+35.60s call     tests/ingest/test_studio_publish_pipeline.py::test_a_pack_bump_blocks_the_run_of_a_recipe_naming_that_pack
+35.46s call     tests/ingest/test_studio_publish_pipeline.py::test_a_file_with_its_own_pins_wins_over_the_row_s
+19.27s call     tests/ingest/test_studio_publish_pipeline.py::test_running_a_published_recipe_attributes_load_id_recipe_id_and_version
+17.09s call     tests/ingest/test_studio_publish_pipeline.py::test_flagging_a_recipe_after_an_ontology_edit_actually_blocks_its_run
+12.41s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+11.84s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link_is_hidden
+11.78s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable
+7.20s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+6.91s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+6.31s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_b14_an_alert_opens_at_its_address_in_its_case_with_its_entities
+6.26s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets
+6.06s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+5.01s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest
+5.00s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_hotlist_create_and_list_round_trip
+4.98s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_monitor_create_requires_owning_the_pattern_first
+4.14s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling
+0.56s teardown tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest
+0.43s teardown tests/scenarios/test_phase7_stage6c_watch_routes.py::test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets
+0.42s teardown tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+0.37s teardown tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+0.36s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.29s teardown tests/scenarios/test_phase7_stage6c_watch_routes.py::test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling
+0.23s teardown tests/scenarios/test_phase7_stage6c_watch_routes.py::test_hotlist_create_and_list_round_trip
+0.22s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.20s teardown tests/scenarios/test_phase7_stage6c_watch_routes.py::test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link_is_hidden
+0.18s call     tests/ingest/test_studio_publish_pipeline.py::test_publishing_stamps_the_pack_versions_in_the_row_and_the_committed_file
+0.18s teardown tests/scenarios/test_phase7_stage6c_watch_routes.py::test_monitor_create_requires_owning_the_pattern_first
+0.11s setup    tests/scenarios/test_phase7_stage6c_watch_routes.py::test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_running_a_published_recipe_attributes_load_id_recipe_id_and_version
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_flagging_a_recipe_after_an_ontology_edit_actually_blocks_its_run
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_publishing_stamps_the_pack_versions_in_the_row_and_the_committed_file
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_a_pack_bump_blocks_the_run_of_a_recipe_naming_that_pack
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_build_recipe_without_pack_versions_is_refused
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_a_backfilled_row_whose_file_has_no_pins_runs
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_a_file_with_its_own_pins_wins_over_the_row_s
+PASSED ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py::test_a_row_and_file_both_unpinned_writing_fibo_is_refused
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_hotlist_create_and_list_round_trip
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_monitor_create_requires_owning_the_pattern_first
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_the_alert_routes_name_a_nodes_sources_only_within_the_cases_datasets
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_b14_an_alert_opens_at_its_address_in_its_case_with_its_entities
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_app_lifespan_does_not_reopen_the_unbounded_pool_ceiling
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_pool_with_no_declared_minimum_is_named
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_owned_by_one_analyst_fires_from_a_different_analysts_own_ingest
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+PASSED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_an_alerts_words_are_withheld_through_a_second_cases_route_when_its_link_is_hidden
+23 passed, 1 warning in 280.28s (0:04:40)
+# live files exit 0
+.FF.                                                                     [100%]
+=================================== FAILURES ===================================
+_____________ test_the_rehearsal_reset_restores_the_starting_state _____________
+
+seeded = "Loading as osprey-demo-engineer, the demo engineer's username: no --run-as was given, so this is a local stack withou...nIf a rehearsal reset ever refuses, restore it with: ospreyflow restore <the folder ospreyflow backup printed> --yes\n"
+
+    async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> None:
+        ontology, scheme = load_deployment_ontology(), load_uk_le_scheme()
+        reports_id = seed_pid.reports_recipe_id()
+        plan = pid_plan.build_plan("demo")
+        async with opened() as live:
+            # The starting state (ADR-127 Amendment 45): the reports recipe a draft, mapped from the
+            # committed file, neither verified nor published, listed once, not live.
+            assert reports_id not in [r.recipe_id for r in await live.store.feeding([PID.id])], (
+                "the reports recipe is not published at the start"
+            )
+            drafts = [
+                d for d in await live.store.list_drafts(live.persona) if d.recipe_id == reports_id
+            ]
+            committed = seed_pid._recipe(seed_pid.reports_recipe_file())
+            assert len(drafts) == 1 and drafts[0].row_template == committed.row_template
+            assert drafts[0].verified_at is None
+            start_analysts = await _make_an_analysts_link(live, plan)
+            start = await snapshot(live)
+            start_version = drafts[0].version
+            start_reports = (seed_pid.listed_folder(INGEST) / pid_files.REPORTS).read_bytes()
+    
+            # Chapter 4: the fallback publication, the reports (twice), then the incident links.
+            fallback_principal = live.persona.model_copy(update={"datasets": [PID.id]})
+            published = await seed_pid.publish_reports_fallback(
+                live.store, fallback_principal, ontology=ontology, scheme=scheme, repo_root=RECIPES,
+                commit=commit_recipe_file, audit=live.resources.audit, now=datetime.now(UTC),
+                source_location=seed_pid.source_of(INGEST, pid_files.REPORTS),
+            )  # fmt: skip
+            assert published.status is StudioRecipeStatus.PUBLISHED and published.pipeline is not None
+            # The deployment's own path: its real job queue and its configured switch (off).
+            deps = live.resources.run_deps()
+            assert deps.config.post_ingest_resolution is False
+            queue = live.resources.jobs.stream_key(JOB_TYPE_RESOLVE_ENTITY_TYPE)
+            queued_before = await live.resources.valkey.xlen(queue)
+            rows = {
+                reports_id: published,
+                seed_pid.incidents_recipe_id(): await live.store.get(seed_pid.incidents_recipe_id()),
+                seed_pid.comms_recipe_id(): await live.store.get(seed_pid.comms_recipe_id()),
+            }
+    
+            async def run(item: seed_pid.Resolved) -> Any:
+                return await run_recipe_as(
+                    deps, principal=live.persona, recipe=rows[item.recipe_id],
+                    investigation_id=live.case_id, source_location=item.source, trigger="manual",
+                )  # fmt: skip
+    
+            stages = [seed_pid.resolve(s, INGEST) for s in pid_files.SEED_ORDER[15:]]
+            loaded = await seed_pid.loaded_so_far(live.resources.recipe_runs, live.case_id, stages)
+>           reports_report = (await seed_pid.run_stages(stages[:1], loaded, run=run))[0].report
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:342: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/seed_pid.py:829: in run_stages
+    report = await run(item)
+             ^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:335: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:186: in run_recipe_as
+    report = await _execute_recipe_run(
+services/api/recipe_run.py:261: in _execute_recipe_run
+    report = await run_published_pipeline(
+services/api/pipeline_run.py:712: in run_published_pipeline
+    branch_report = await run_published_recipe(
+services/api/studio_publish.py:811: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:811: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pid-seed-live/ingest/uploaded/prison-intelligence/pid_intel_reports.csv'
+dataset_id = 'prison-intelligence'
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+>           raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+E           services.api.studio_profile.SourceUnreadableError: That file is not in the ingest folder. Choose it from the folder's files, or upload it.
+
+services/api/studio_profile.py:106: SourceUnreadableError
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job _____
+
+seeded = "Loading as osprey-demo-engineer, the demo engineer's username: no --run-as was given, so this is a local stack withou...nIf a rehearsal reset ever refuses, restore it with: ospreyflow restore <the folder ospreyflow backup printed> --yes\n"
+
+    async def test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job(seeded: str) -> None:
+        ontology, scheme = load_deployment_ontology(), load_uk_le_scheme()
+        async with opened(resolution=True) as live:
+            deps = live.resources.run_deps()
+            assert deps.config.post_ingest_resolution is True
+            queue = live.resources.jobs.stream_key(JOB_TYPE_RESOLVE_ENTITY_TYPE)
+            before = await live.resources.valkey.xlen(queue)
+>           published = await seed_pid.publish_reports_fallback(
+                live.store,
+                live.persona.model_copy(update={"datasets": [PID.id]}),
+                ontology=ontology, scheme=scheme, repo_root=RECIPES, commit=commit_recipe_file,
+                audit=live.resources.audit, now=datetime.now(UTC),
+            )  # fmt: skip
+E           TypeError: publish_reports_fallback() missing 1 required keyword-only argument: 'source_location'
+
+../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:403: TypeError
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+==================================== PASSES ====================================
+_______________________ test_a_second_seed_adds_nothing ________________________
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_the_demo_analyst_fetches_one_picture_through_the_picture_route ______
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+============================= slowest 30 durations =============================
+2171.97s setup    tests/ingest/test_pid_seed_live.py::test_a_second_seed_adds_nothing
+133.38s call     tests/ingest/test_pid_seed_live.py::test_a_second_seed_adds_nothing
+5.91s call     tests/ingest/test_pid_seed_live.py::test_the_demo_analyst_fetches_one_picture_through_the_picture_route
+3.12s call     tests/ingest/test_pid_seed_live.py::test_the_rehearsal_reset_restores_the_starting_state
+1.99s call     tests/ingest/test_pid_seed_live.py::test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job
+
+(7 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_a_second_seed_adds_nothing
+PASSED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_the_demo_analyst_fetches_one_picture_through_the_picture_route
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_the_rehearsal_reset_restores_the_starting_state
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job
+2 failed, 2 passed in 2318.75s (0:38:38)
+# slow seed exit 1
+Wall time: 2602 s, exit 1 (stack d, the lease studio-b took at 2026-11-10T11:52:59Z; set-up before it 17 s)
+# remote exit 1

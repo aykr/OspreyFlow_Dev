@@ -1,0 +1,10 @@
+# head 1712cad (the tips merged over L2.7): the hand-resolved Model-place gate planted out, then restored
+## plant: rights && !rights.has("accept_types") ? -> false ? (the proposals panel shown to all; src/ingest/IngestStudio.tsx)
+1
+     × on Model: proposed link types, for someone who cannot accept types 13ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+## restored
+ Test Files  1 passed (1)
+      Tests  15 passed (15)

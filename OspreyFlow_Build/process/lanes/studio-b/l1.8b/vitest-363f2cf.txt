@@ -1,0 +1,84 @@
+# vitest at 363f2cf (main e4a2223): src/help src/ingest src/admin keyboard/registryCoverage.test.ts, which hold rightsGate, rightNames, StudioNeedsYou (it renders IngestStudio) and the registry coverage
+ ✓ src/ingest/map/LinkList.test.tsx (13 tests) 331ms
+ ✓ src/ingest/ConnectScreenUpload.test.tsx (10 tests) 581ms
+ ✓ src/admin/sections/Maps.test.tsx (7 tests) 570ms
+ ✓ src/admin/sections/Connections.test.tsx (5 tests) 476ms
+ ✓ src/ingest/map/MapEditor.links.test.tsx (10 tests) 852ms
+ ✓ src/admin/PeopleAndRoles.test.tsx (12 tests) 991ms
+ ✓ src/ingest/dag/PipelineStudio.test.tsx (16 tests) 1327ms
+ ✓ src/admin/adminWords.test.tsx (22 tests) 1015ms
+ ✓ src/ingest/ConnectScreenDeduplicate.test.tsx (18 tests) 1510ms
+ ✓ src/admin/sections/Datasets.test.tsx (7 tests) 509ms
+ ✓ src/ingest/ConnectScreenMarking.test.tsx (22 tests) 1757ms
+ ✓ src/ingest/map/EntityList.test.tsx (6 tests) 413ms
+ ✓ src/admin/Schedules.test.tsx (11 tests) 627ms
+ ✓ src/admin/AdminPlace.test.tsx (38 tests) 1729ms
+ ✓ src/ingest/publish/ScheduleEditor.test.tsx (9 tests) 820ms
+   ✓ the structured schedule (9)
+     ✓ explains a chosen schedule in words with its next five runs, then saves it with its zone 337ms
+ ✓ src/ingest/IngestStudio.test.tsx (8 tests) 455ms
+ ✓ src/ingest/sources/connectors.test.tsx (6 tests) 513ms
+ ✓ src/ingest/map/MapEditor.handling.test.tsx (4 tests) 460ms
+ ✓ src/ingest/publish/PublishScreen.test.tsx (9 tests) 529ms
+ ✓ src/ingest/sources/sources.test.tsx (9 tests) 571ms
+ ✓ src/ingest/map/ElementInspector.handling.test.tsx (47 tests) 724ms
+ ✓ src/admin/sections/Models.test.tsx (5 tests) 488ms
+ ✓ src/admin/needsYou/StudioNeedsYou.test.tsx (6 tests) 383ms
+ ✓ src/admin/sections/ModelsUsage.test.tsx (4 tests) 471ms
+   ✓ limits (3)
+     ✓ sends whole numbers, blank as no limit, and shows the limits in words 328ms
+ ✓ src/ingest/runs/RunsTab.test.tsx (6 tests) 610ms
+   ✓ the Runs tab (6)
+     ✓ draws one row per deployed pipeline and a cell per day, in words 338ms
+ ✓ src/admin/AdminSections.test.tsx (16 tests) 470ms
+ ✓ src/ingest/publish/PublishScreen.deduplicate.test.tsx (6 tests) 366ms
+ ✓ src/help/RolesHelpPage.test.tsx (1 test) 356ms
+   ✓ the help page (1)
+     ✓ draws every right's words from roles.ts, and its way back has focus 353ms
+ ✓ src/ingest/ConnectScreenPinned.test.tsx (3 tests) 306ms
+ ✓ src/ingest/map/MapEditor.rawIdentifiers.test.tsx (3 tests) 227ms
+ ✓ src/admin/sections/Audit.test.tsx (10 tests) 504ms
+ ✓ src/ingest/runs/promotions.test.tsx (10 tests) 497ms
+ ✓ src/ingest/runs/drawnMerge.test.tsx (6 tests) 637ms
+ ✓ src/ingest/checks/ChecksScreen.test.tsx (6 tests) 269ms
+ ✓ src/ingest/map/ElementInspector.content.test.tsx (14 tests) 253ms
+ ✓ src/admin/needsYou/NeedsYou.test.tsx (7 tests) 308ms
+ ✓ src/ingest/map/MapEditor.source.test.tsx (4 tests) 296ms
+ ✓ src/ingest/publish/runNowWait.test.tsx (3 tests) 241ms
+ ✓ src/ingest/map/MapEditor.rename.test.tsx (4 tests) 240ms
+ ✓ src/ingest/map/FieldBindingEditor.valuemap.test.tsx (4 tests) 169ms
+ ✓ src/ingest/verify/VerifyScreen.rows.test.tsx (1 test) 179ms
+ ✓ src/ingest/dag/PipelineCanvas.test.tsx (4 tests) 174ms
+ ✓ src/ingest/verify/VerifyScreen.test.tsx (2 tests) 189ms
+ ✓ src/ingest/dag/NodePreview.test.tsx (6 tests) 196ms
+ ✓ src/admin/sections/GradingScheme.test.tsx (4 tests) 341ms
+ ✓ src/ingest/map/SourceFieldsPanel.ignore.test.tsx (3 tests) 208ms
+ ✓ src/ingest/fileSize.test.ts (4 tests) 13ms
+ ✓ src/admin/updateNotice.test.ts (5 tests) 21ms
+ ✓ src/ingest/map/rowTemplate.test.ts (19 tests) 5ms
+ ✓ src/ingest/map/FieldBindingEditor.bind.test.tsx (2 tests) 179ms
+ ✓ src/ingest/verify/VerifyScreen.deduplicate.test.tsx (5 tests) 276ms
+ ✓ src/help/roles.test.ts (6 tests) 10ms
+ ✓ src/ingest/map/ElementInspector.identifiers.test.tsx (2 tests) 32ms
+ ✓ src/ingest/map/FieldBindingEditor.names.test.tsx (6 tests) 86ms
+ ✓ keyboard/registryCoverage.test.ts (57 tests) 7ms
+ ✓ src/ingest/dag/pipelineGraphEdit.test.ts (4 tests) 5ms
+ ✓ src/ingest/ConnectScreen.test.ts (4 tests) 3ms
+ ✓ src/ingest/publish/scheduleChoice.test.ts (10 tests) 4ms
+ ✓ src/ingest/dag/stagingSteps.test.ts (5 tests) 4ms
+ ✓ src/ingest/percent.test.ts (3 tests) 4ms
+ ✓ src/ingest/studio/datasets.test.ts (6 tests) 5ms
+ ✓ src/help/rightNames.test.ts (4 tests) 24ms
+ ✓ src/ingest/map/mapCanvasColours.test.ts (10 tests) 2ms
+ ✓ src/ingest/draftSave.test.ts (4 tests) 4ms
+ ✓ src/ingest/runs/runsGrid.test.ts (6 tests) 7ms
+ ✓ src/ingest/rowTemplateSave.test.ts (1 test) 5ms
+ ✓ src/ingest/map/mapGraphSync.test.ts (2 tests) 4ms
+ ✓ src/ingest/map/FieldBindingEditor.parts.test.tsx (1 test) 23ms
+ ✓ src/ingest/map/ElementInspector.names.test.tsx (3 tests) 53ms
+ ✓ src/admin/refusals.test.tsx (2 tests) 108ms
+ ✓ src/ingest/studio/rightsGate.test.tsx (15 tests) 537ms
+ ✓ src/ingest/dag/studioMode.test.ts (4 tests) 3ms
+ Test Files  72 passed (72)
+      Tests  617 passed (617)
+# exit 0

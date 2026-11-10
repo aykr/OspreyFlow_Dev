@@ -1,0 +1,7 @@
+# head 1712cad, the put-back before the lane review's minors: the new cases, red first. The rival and empty-aside cases guard behaviour already right (the empty aside's red is a plant)
+# command: pytest -q -rA tests/services/api/test_recipe_repository.py -k '<the five>'
+PASSED tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to
+PASSED tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
+FAILED tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_leaves_the_file_rather_than_removing_it - AssertionError: a recipe was removed for want of a commit
+FAILED tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too - AssertionError: the file is ahead
+FAILED tests/services/api/test_recipe_repository.py::test_a_recipes_file_in_head_counts_as_holding_no_recipe - AssertionError: the refused recipe's file is left

@@ -1,0 +1,6 @@
+# head f94a0e4, before the fix: the re-review's cases. The non-commit HEAD is red first; the rival, directory and first-use cases guard what holds, red by plants
+# command: pytest -q -rA tests/services/api/test_recipe_repository.py -k 'same_recipe_is_what or not_a_commit_is_refused or directory_at_the_recipe or first_use_sweep'
+PASSED tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to
+PASSED tests/services/api/test_recipe_repository.py::test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written
+PASSED tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock
+FAILED tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_is_refused_before_the_write - AssertionError: written before

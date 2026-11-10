@@ -36,12 +36,14 @@ ID_CASES = [f"test_a_recipe_id_that_is_not_one_file_name_is_refused[{case}]"
 RACE = "test_a_real_writer_moving_head_mid_commit_is_refused"
 FAKE_REFUSAL = "test_a_failed_commit_is_an_error_not_a_quiet_success"
 LOCK_PROBE = "test_the_index_is_read_and_written_under_a_lock_another_process_honours"
+PUT_BACK = "                _put_back_as_head_holds(repo, repo_root, relative_path)\n"
+AFTER_WRITE_PUT_BACK = "            except _FailedAfterTheWrite as failed:\n" + PUT_BACK
+AFTER_COMMIT_PUT_BACK = "            except Exception:\n" + PUT_BACK
 LOCKED = (
     "        with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):\n"
     "            _sweep_asides(repo_root)\n"
-    "            written = _write_recipe_file(repo_root, relative_path, data)\n"
-    "            _stage_and_commit(repo, path, written, data, message)\n"
 )
+STAGE = "                _stage_and_commit(repo, path, written, data, message)\n"
 ACQUIRE = (
     "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS\n"
     "    if not _REPOSITORY_LOCK.acquire(timeout=PUBLISH_LOCK_WAIT_SECONDS):\n"
@@ -77,7 +79,9 @@ PLANTS = [
      [("    except Exception as exc:  # dulwich", "    except ZeroDivisionError as exc:  # dulwich")],
      [REPO_TESTS], ["test_a_failed_write_is_a_typed_error_not_a_bare_500"]),
     ("index-not-written", "the index never written: `index.write()` -> `pass`",
-     [("    index.write()\n", "    pass  # PLANT\n")], [REPO_TESTS, COMMIT_TESTS],
+     [("    index[path] = index_entry_from_stat(written, blob.id)\n    index.write()\n",
+       "    index[path] = index_entry_from_stat(written, blob.id)\n    pass  # PLANT\n")],
+     [REPO_TESTS, COMMIT_TESTS],
      ["test_publish_writes_a_commit_real_git_reads",
       "test_the_file_is_committed_at_the_path_the_registry_row_will_name"]),
     ("index-after-head", "the index written after HEAD moves (the order the review flagged)",
@@ -136,8 +140,9 @@ PLANTS = [
      [REPO_TESTS], [ID_CASES[3], ID_CASES[4], ID_CASES[5], ID_CASES[6]]),
     ("directory-link-followed", "a symbolic link followed at `recipes/`: `O_NOFOLLOW` dropped from "
      "the directory's open",
-     [("os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)",
-       "os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)  # PLANT")], [REPO_TESTS],
+     [("                inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)",
+       "                inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)  # PLANT")],
+     [REPO_TESTS],
      ["test_a_symlinked_recipes_directory_is_refused"]),
     ("file-link-replaced", "a symbolic link where the file goes not refused: "
      "`if not stat.S_ISREG(...)` -> `if False`",
@@ -153,9 +158,8 @@ PLANTS = [
      [REPO_TESTS], [LOCK_PROBE]),
     ("lock-after-the-write", "the publish flock taken after the recipe file is written: over the "
      "index and the commit only",
-     [(LOCKED, LOCKED.replace(", _publish_lock(repo, deadline):", ":  # PLANT").replace(
-         "            _stage_and_commit(",
-         "            with _publish_lock(repo, deadline):\n                _stage_and_commit("))],
+     [(LOCKED, LOCKED.replace(", _publish_lock(repo, deadline):", ":  # PLANT")),
+      (STAGE, "                with _publish_lock(repo, deadline):  # PLANT\n    " + STAGE)],
      [REPO_TESTS], [LOCK_PROBE]),
     ("lock-file-link-followed", "the lock file opened following a link: `O_NOFOLLOW` dropped",
      [("os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC", "os.O_RDWR | os.O_CREAT | os.O_CLOEXEC")],
@@ -230,6 +234,48 @@ PLANTS = [
                 "        with Repo(str(repo_root)) as early:\n"
                 "            early.open_index(config=ConfigFile())\n" + ACQUIRE)],
      [REPO_TESTS], [LOCK_PROBE], "outside the lock: ['index read']"),
+    ("refused-left-ahead", "a refused publish leaves its file and index as it wrote them, "
+     "ahead of HEAD (L1.7a's carry): neither put-back called",
+     [(AFTER_WRITE_PUT_BACK, AFTER_WRITE_PUT_BACK.replace(PUT_BACK, "                pass  # PLANT\n")),
+      (AFTER_COMMIT_PUT_BACK, AFTER_COMMIT_PUT_BACK.replace(PUT_BACK, "                pass  # PLANT\n"))],
+     [REPO_TESTS],
+     ["test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it",
+      "test_a_new_recipe_refused_is_not_left_on_the_volume",
+      "test_a_failure_after_staging_leaves_nothing_committed",
+      "test_a_failure_after_the_rename_is_put_back_too"]),
+    ("after-rename-not-put-back", "a failure after the rename left ahead: that put-back alone removed",
+     [(AFTER_WRITE_PUT_BACK, AFTER_WRITE_PUT_BACK.replace(PUT_BACK, "                pass  # PLANT\n"))],
+     [REPO_TESTS], ["test_a_failure_after_the_rename_is_put_back_too"], "the file is ahead"),
+    ("put-back-file-only", "the file put back, its index entry not: the index half alone removed",
+     [("            index[path] = index_entry_from_stat(written, Blob.from_string(committed).id)\n",
+       "            pass  # PLANT\n")], [REPO_TESTS],
+     # Not the same-recipe rival's case: the rival's own `git add` staged its bytes already.
+     ["test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it"]),
+    ("aside-empty-not-ours", "an empty aside not taken as ours: only a .git-only aside swept",
+     [('                ours = sorted(os.listdir(left)) in ([], [".git"])\n',
+       '                ours = sorted(os.listdir(left)) in ([".git"],)  # PLANT\n')], [REPO_TESTS],
+     ["test_an_empty_stale_aside_is_swept"], "an empty stale aside is still there"),
+    ("aside-contents-unchecked", "an aside of mkdtemp's shape swept whatever it holds",
+     [("                ours = sorted(os.listdir(left)) in ([], [\".git\"])\n",
+       "                ours = True  # PLANT\n")], [REPO_TESTS],
+     ["test_an_aside_holding_more_than_a_git_directory_is_kept"], "holding more than .git was swept"),
+    ("put-back-reads-the-parent", "the put-back reads the parent the publish read at the start, not "
+     "the current HEAD: a rival's commit of the same recipe undone",
+     [("            head_id: ObjectID | None = repo.refs[HEADREF]\n",
+       "            head_id: ObjectID | None = repo[repo.refs[HEADREF]].parents[0]  # PLANT\n")],
+     [REPO_TESTS], ["test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to"],
+     "not to the current HEAD"),
+    ("tree-written-as-the-recipe", "the put-back writes whatever HEAD holds at the path, a tree too",
+     [("                if not isinstance(blob, Blob):\n", "                if False:  # PLANT\n")],
+     [REPO_TESTS], ["test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written"],
+     "a tree was written"),
+    ("no-commit-head-not-refused-first", "a HEAD that is no commit refused only after the write",
+     [("            _refuse_a_head_that_is_no_commit(repo)\n", "")], [REPO_TESTS],
+     ["test_a_head_that_is_not_a_commit_is_refused_before_the_write"], "written before"),
+    ("first-use-unlocked", "the in-process lock not taken, so the first-use sweep runs under no lock",
+     [(ACQUIRE, "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS  # PLANT\n"),
+      ("        _REPOSITORY_LOCK.release()\n", "        pass  # PLANT\n")], [REPO_TESTS],
+     ["test_the_first_use_sweep_runs_under_the_in_process_lock"], "(lock, flock file) (False, False)"),
 ]
 
 def run(files: list[str]) -> str:

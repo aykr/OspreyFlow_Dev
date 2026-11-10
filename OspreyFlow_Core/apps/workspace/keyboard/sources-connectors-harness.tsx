@@ -4,7 +4,8 @@
 // `?view=source` a SQL source's page (`&connection=c-sql&step=1` opens the wizard on a connection's
 // read step), `?view=import&template=blank` and `?view=schedule` the import and
 // schedule forms drawn open. With `?serve=1` the harness answers its own requests with synthetic data,
-// for the axe scans of `a11y/every-harness.spec.ts`; `?manage=1` as whoever may load lists.
+// for the axe scans of `a11y/every-harness.spec.ts`; `?manage=1` as whoever may load lists; `?rights=none` as
+// someone holding no Studio right, so each action says why and who can (L1.8).
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -13,6 +14,7 @@ import type { DeploymentList, SourceTable } from "../../../packages/schemas/gene
 import { RegisterSourceWizard } from "../src/ingest/sources/RegisterSourceWizard";
 import { ImportListForm, ScheduleForm, ScreeningLists } from "../src/ingest/sources/ScreeningLists";
 import { SourcePage } from "../src/ingest/sources/SourcePage";
+import { StudioRights } from "../src/ingest/studio/rightsGate";
 import { applyHarnessBrand } from "./brandHarness";
 
 const API = { apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused" };
@@ -122,6 +124,8 @@ if (!container) throw new Error("#root not found");
 createRoot(container).render(
   <main style={{ padding: "var(--sp-16)" }}>
     <h1 style={{ fontSize: "var(--fs-16)" }}>Sources</h1>
-    <Harness />
+    <StudioRights.Provider value={params.get("rights") === "none" ? new Set() : null}>
+      <Harness />
+    </StudioRights.Provider>
   </main>,
 );

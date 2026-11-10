@@ -31522,6 +31522,49 @@ by name.
 **Cost and what is open.** A horizontally scaled deployment still has one checkout per instance (the stated gap in
 `write_and_commit_recipe`). An operator's own git on the volume is not serialised with a publish (point 6).
 
+### ADR-140, Amendment 18 (10 November 2026) — L1.7a's carries: a refused publish puts the file back as HEAD holds it; the aside sweep only for an empty or .git-only aside; Amendment 17 point 6 corrected
+
+Status: accepted. Written in the studio-b lane with part 2 of L1.7a's brief, from the orchestrator's final review of
+L1.7a (the carries on `process/lanes/CARRIES.md`). Amendment 17 stands as accepted; this amendment adds to its
+points 5 and 6 and corrects one sentence of point 6.
+
+**Context.** `load_published_recipe` reads a published recipe from the working tree. A publish refused after it
+wrote `recipes/<id>.yaml` left the file ahead of `HEAD`, so a run could read bytes no commit holds. The aside sweep
+of point 6 removed any stale aside of `tempfile.mkdtemp`'s shape, whatever it held. And point 6 said the sweep runs
+"under the lock" with no exception, which is untrue at first use: the in-process lock is held, but the `flock`'s
+file lives in a `.git` that does not exist yet.
+
+**Decision.**
+1. **A refused publish puts the file back as `HEAD` holds it** (adding to point 5). Once the new bytes are in place
+   (after `os.replace`), any failure puts the recipe's file and its index entry back as the current `HEAD` holds
+   them, a rival's commit included. A recipe `HEAD` does not hold, including where `HEAD` holds `recipes` as a file,
+   is removed. A `HEAD` that is no commit (an annotated tag, say) refuses the publish before the write, since what
+   it holds cannot be read and a write could be neither committed nor put back. Where `HEAD` holds no file at the
+   path (a directory there), the put-back leaves the file as written and logs why, and never writes a tree as the
+   recipe. Neither the put-back nor the removal follows a link below the root. The put-back is best effort: its own failure is logged, and the publish's error is the one raised. A
+   refusal before the write (an id, a link, a foreign `.git`, a `HEAD` that is no commit, the lock's wait) has
+   written nothing to put back.
+2. **The aside sweep removes only what a first use makes** (adding to point 6): an aside of `mkdtemp`'s shape that
+   is empty or holds one `.git` and nothing else. One holding anything more is kept, however old.
+3. **Point 6 corrected.** At first use the stale aside is swept under the in-process lock, before the `flock`
+   exists; by any later publish it is swept under both.
+
+**Tests** (`OspreyFlow_Build/tests/services/api/test_recipe_repository.py`; red first in
+`process/lanes/studio-b/l1.8b/red-carry-*.txt`, and by plants in `l1.7a/red_plants.py`):
+- **Decision 1:**
+  - `test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it`,
+    `test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to`,
+    `test_a_new_recipe_refused_is_not_left_on_the_volume` and `test_a_failure_after_the_rename_is_put_back_too`;
+  - `test_a_recipes_file_in_head_counts_as_holding_no_recipe`,
+    `test_a_head_that_is_not_a_commit_is_refused_before_the_write` and
+    `test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written`;
+  - the same-recipe rival commits through git's plumbing, so its case passes only when the put-back reads the
+    current `HEAD`, not the parent the publish read (plant `put-back-reads-the-parent`);
+  - `test_a_failure_after_staging_leaves_nothing_committed` (extended).
+- **Decision 2:** `test_an_aside_holding_more_than_a_git_directory_is_kept` and `test_an_empty_stale_aside_is_swept`.
+- **Decision 3:** `test_the_first_use_sweep_runs_under_the_in_process_lock`, probing the first sweep (the lock held,
+  the `flock`'s file not yet there) and a later one (both); red with the in-process lock not taken.
+
 ### ADR-145, Amendment 8 (9 November 2026) — Disable and the items an administrator may not see (L3.8)
 
 **The owner's ruling of 9 November 2026** (case-b's L3.8 question, access): when a person being disabled owns

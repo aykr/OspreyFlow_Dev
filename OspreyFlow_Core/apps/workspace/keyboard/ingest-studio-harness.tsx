@@ -191,6 +191,9 @@ if (startParams.get("pipeline") === "reports-map")
 // ready (409 `recipe_not_ready_for_profile`) and a row past the sample (404).
 const RIGHTS = new Set(["edit_pipelines", "verify_pipelines", "publish_pipelines", "run_pipelines", "schedule_pipelines"]);
 if (startParams.get("rights") === "no-test") RIGHTS.delete("verify_pipelines");
+// `?rights=none` (L1.8): a person holding no Studio right, so every action says why and who can.
+const NO_RIGHTS = startParams.get("rights") === "none";
+if (NO_RIGHTS) RIGHTS.clear();
 const STUDIO_ROLES = new Set(["source_author", "source_approver", "loader"]);
 if (startParams.get("rights") === "no-approve") STUDIO_ROLES.delete("source_approver");
 const KNOWN_KINDS = new Set(["domain_model", "source", "profile", "map", "extract", "enrich", "load",
@@ -475,7 +478,8 @@ function Host() {
         bearerToken="unused"
         investigationId={caseId}
         onOpenCase={setCaseId}
-        rights={new Set(["revert_loads", ...(RIGHTS.has("write_sql_transforms") ? ["write_sql_transforms"] : [])])}
+        // The rights the harness's routes grant, so the Studio offers what they would take (L1.8).
+        rights={NO_RIGHTS ? new Set() : new Set([...RIGHTS, "revert_loads", "add_ingest_files", "load_screening_lists", "accept_types", "read_held_rows", "decide_held_rows"])}
         username="engineer-1"
       />
       <p role="status" aria-label="Case the Studio works through">{caseId}</p>
