@@ -682,13 +682,16 @@ def test_files_only_brings_the_files_up_to_date_and_runs_nothing(
     changed = refresh.files_up_to_date(repo)
     assert changed == {"proxy_changed": True, "theme_changed": False, "routing_changed": False}
     assert "pull_and_verify qwen2.5:14b-instruct" in (out / "compose.yaml").read_text()
-    assert refresh.main(["--files-only"], repo_root=repo) == 0
-    said = capsys.readouterr().out.strip().splitlines()[-1]
-    assert json.loads(said) == {
-        "proxy_changed": False,
-        "theme_changed": False,
-        "routing_changed": False,
-    }
+    # The pass above restarted nothing, so the restart it found is still owed (ADR-114 Amendment
+    # 39's pending record): `--files-only` hands it to `update`, once.
+    for owed in (True, False):
+        assert refresh.main(["--files-only"], repo_root=repo) == 0
+        said = capsys.readouterr().out.strip().splitlines()[-1]
+        assert json.loads(said) == {
+            "proxy_changed": owed,
+            "theme_changed": False,
+            "routing_changed": False,
+        }
 
 
 def _proxy_published_bare(out: Path, ports: list[str]) -> None:

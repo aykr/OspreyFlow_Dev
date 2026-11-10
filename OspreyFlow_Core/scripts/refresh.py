@@ -42,6 +42,7 @@ is still `python -m harness.apply`. Every compose call reads the deployment's ow
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import json
 import os
 import re
@@ -193,7 +194,8 @@ def _find_deployment_dir(repo_root: Path) -> Path:
     preferred = generated / generated_folder(load_config(repo_root / "osprey.yaml"))
     if (preferred / "compose.yaml").is_file():
         return preferred
-    found = sorted(p.parent for p in generated.glob("*/compose.yaml"))
+    # Never a stage a refresh killed outright left behind (`.<name>.refresh-staging`).
+    found = sorted(p.parent for p in generated.glob("[!.]*/compose.yaml"))
     if len(found) == 1:
         return found[0]
     raise NothingToRefresh(
@@ -358,9 +360,11 @@ def _unset_required(directory: Path) -> list[str]:
     held: dict[str, str] = {}
     env_path = directory / "deployment.env"
     for line in env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []:
-        name, sep, value = line.partition("=")
+        name, sep, value = line.strip().removeprefix("export ").partition("=")
         if sep and not name.startswith("#"):
             held[name.strip()] = value.strip()
+    # Compose takes a value from the shell before the env file, as `update` and `start` run it.
+    held.update({name: os.environ[name] for name in required if os.environ.get(name)})
     return sorted(name for name in required if held.get(name, "") in ("", '""', "''"))
 
 
@@ -713,14 +717,47 @@ def _files_up_to_date(directory: Path, repo_root: Path) -> dict[str, bool]:
     result Compose can interpolate is moved into place; a refusal changes nothing in the folder."""
     if _predates_the_gateway_database(directory):
         raise RefreshFailed(before_the_gateway_database(directory))
+    # One refresh of a deployment at a time: two would share one stage.
+    lock = (directory.parent / f".{directory.name}.refresh-lock").open("a")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock.close()
+        raise RefreshFailed(
+            "another refresh of this deployment is under way, so nothing was changed; wait for it "
+            "to finish, then run this again."
+        ) from None
+    try:
+        return _files_up_to_date_staged(directory, repo_root)
+    finally:
+        lock.close()
+
+
+#: The restarts a files pass found needed, kept in the deployment's `state/` from before its files
+#: move until `start --build` has done them, so a run that dies in between loses none.
+PENDING_RESTARTS = "refresh-pending.json"
+
+
+def _pending(directory: Path) -> dict[str, bool]:
+    path = directory / "state" / PENDING_RESTARTS
+    try:
+        return {str(k): bool(v) for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _files_up_to_date_staged(directory: Path, repo_root: Path) -> dict[str, bool]:
     stage = directory.parent / f".{directory.name}.refresh-staging"
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(mode=0o700)  # private before anything is copied in: it holds deployment.env
     stage.chmod(0o700)  # whatever the umask took off
     try:
+        linked = set()
         for path in directory.iterdir():
-            if path.is_file() and not path.is_symlink():
+            if path.is_file():  # a symlinked file by what it holds, written back through its link
                 shutil.copy2(path, stage / path.name)
+                if path.is_symlink():
+                    linked.add(path.name)
             elif path.name in _STAGED_FOLDERS and path.is_dir():
                 shutil.copytree(path, stage / path.name, symlinks=True)
         changed = _files_up_to_date_in(stage, repo_root)
@@ -741,7 +778,12 @@ def _files_up_to_date(directory: Path, repo_root: Path) -> dict[str, bool]:
         # A file a service mounts on its own (`./glass.json:…`) is written in place instead: a
         # rename gives it a new inode, and the running container would keep the old one (the
         # workspace serves `glass.json` per visit, and nothing restarts it). None holds a secret.
-        mounted = _mounted_files(stage)
+        in_place = _mounted_files(stage) | linked
+        # What must restart, kept before anything moves (with what an earlier run left undone).
+        earlier = _pending(directory)
+        changed = {k: bool(v) or earlier.get(k, False) for k, v in changed.items()}
+        (directory / "state").mkdir(exist_ok=True)
+        (directory / "state" / PENDING_RESTARTS).write_text(json.dumps(changed), encoding="utf-8")
         files = sorted(
             (p for p in stage.iterdir() if p.is_file()), key=lambda p: p.name == "deployment.env"
         )
@@ -749,11 +791,14 @@ def _files_up_to_date(directory: Path, repo_root: Path) -> dict[str, bool]:
             target = directory / path.name
             if target.is_file() and target.read_bytes() == path.read_bytes():
                 continue
-            if path.name in mounted and target.is_file():
+            if path.name in in_place and target.is_file():
                 with target.open("r+b") as handle:
                     handle.write(path.read_bytes())
                     handle.truncate()
             else:
+                if target.exists() and os.geteuid() == 0:  # under sudo: the old file's owner
+                    held = target.stat()
+                    os.chown(path, held.st_uid, held.st_gid)
                 os.replace(path, target)
         for path in stage.iterdir():
             if path.is_dir() and path.name in _STAGED_FOLDERS:
@@ -832,6 +877,8 @@ def refresh(
         store_volumes.move(directory / "compose.yaml", run=docker or store_volumes._subprocess)
     except store_volumes.StoresNotMoved as failed:
         held.put_back()
+        # The files are as they were, so nothing they called for is owed.
+        (directory / "state" / PENDING_RESTARTS).unlink(missing_ok=True)
         raise RefreshFailed(failed.words(files_put_back=True)) from failed
     # Defect 9 (ADR-114 Amendment 33): `up` alone would start `ollama-models` again for its changed
     # command, but start the gateway and the Conduit on the new model beside it, before it is there.
@@ -853,6 +900,8 @@ def refresh(
         run(clear_theme_cache(compose))
         run([*compose, "restart", "keycloak"])
         run([*compose, "up", "-d", "--wait"])
+    # Every restart the files called for is done (ADR-114 Amendment 39's pending record).
+    (directory / "state" / PENDING_RESTARTS).unlink(missing_ok=True)
     identity = _identity_origin(directory / "deployment.env")
     code = register(
         [
@@ -878,6 +927,8 @@ def main(argv: Sequence[str] | None = None, *, repo_root: Path = REPO_ROOT) -> i
         try:
             _for_an_update(repo_root)
             changed = files_up_to_date(repo_root)
+            # Handed to `update`, which restarts what it names, or rolls the files back.
+            (_find_deployment_dir(repo_root) / "state" / PENDING_RESTARTS).unlink(missing_ok=True)
         except (NothingToRefresh, RefreshFailed) as error:
             print(f"refresh: {error}", file=sys.stderr)
             return 1
