@@ -1,4 +1,4 @@
-# as of 2026-11-11T06:40Z
+# as of 2026-11-11T09:15Z
 platform	P7	running on the test server since 06:13; merges on render, cp-policy-check and the gates (Am 8); two review rounds on your return, then merges without you	11 Nov, ~14:00	B
 admin	P10	Entra ID claims: the mapping and access tests on the server from 07:08; profile wiring after P7; two review rounds	12 Nov	B
 case	P9	cut: encrypted S3 backup, one timed restore; a fresh sol session once P7 merges	12–13 Nov	B
@@ -14,6 +14,5 @@ rules	UPG-check	the real update to the published v0.5.0, on the server from 07:0
 rules	hyg	an access step: two rounds; studio's finding fixed on the server	11 Nov, afternoon	A
 rules-b	T3b	ready; the merger's review on your return	11 Nov, ~12:00	A
 docs	D2d	the review's nine must-fixes, then merge without you (Am 8)	11 Nov, afternoon	A
-studio-b	L1.10b	lands on your return	11 Nov, ~12:00	A
 platform-b	carries	after P11 part 1 (chart quoting first)	12 Nov	B
 orchestrator	your laptop	rebuild your local deployment after the whole build	after D2c	B

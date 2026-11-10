@@ -1,0 +1,21 @@
+# head 5e8736b; plant: a staged public dataset's rows never judged
+# command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
+# must fail: test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts; for the reason 'DID NOT RAISE'; all failed: yes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_rendered_every_pack_is_seeded_as_before
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_every_pack_declares_its_highest_marking
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_hmps_declaration_is_the_highest_it_writes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_fixture_corps_declaration_is_the_highest_it_writes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_ledgers_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_prison_intelligences_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_the_scale_cohorts_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_a_staged_public_dataset_is_seeded_as_before
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_enrons_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
+FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts - Failed: DID NOT RAISE SeedRefused
+1 failed, 16 passed in 8.06s

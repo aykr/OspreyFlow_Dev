@@ -16,9 +16,11 @@ filter already decided this principal may see that node at all).
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 
+from services.ingest.ceiling import DeploymentCeiling, refuse_rows_above_the_ceiling
 from services.ingest.engine import RowKeys, dry_run_recipe
 from services.ingest.pipeline import staging_from_pipeline
 from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, _shape_mask
@@ -266,6 +268,17 @@ async def run_verify(
             row_keys=row_keys,
             investigation_scope=investigation_id,
         )
+        # ADR-148 Amendment 3: the dry run judged the sample against the deployment's ceiling, as
+        # the load judges every row, after the same `deduplicate` check. The rest of the file is
+        # judged too, so a file the load would refuse is told here in its words, but only for an
+        # author cleared to read every row of it: the refusal would otherwise tell of a row the
+        # sample's guard keeps from them (rules 3 and 4). Off the loop, as the load's is.
+        if not sample_is_whole_source and await asyncio.to_thread(
+            lambda: sample_markings(draft, scheme, all_rows).readable_by(principal, scheme)
+        ):
+            await asyncio.to_thread(
+                refuse_rows_above_the_ceiling, recipe, all_rows, DeploymentCeiling.from_env()
+            )
 
     # Each simulated node and link is masked by its own resolved marking (ADR-127 decision 3: the
     # source's own is only the lowest a row may carry), and a rejected row, which resolved to none,

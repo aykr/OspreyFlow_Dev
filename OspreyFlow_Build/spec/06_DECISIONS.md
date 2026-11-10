@@ -33414,3 +33414,101 @@ sprint. With the orchestrator's adjustments, which the owner accepted.*
 **The test that would fail.** `progress.tsv` shows P7a, P7b and P9b as their own steps, and P8 as deferred; a merge
 of P11, P12 or P7b that edits another step's template, or a shared file other than by platform's diff, is sent
 back at the trial merge.
+
+### ADR-148, Amendment 3 (10 November 2026) — the ceiling's carries as built (L1.10b)
+
+Status: accepted. Written in the studio-b lane at step L1.10b. The orchestrator accepted points 1 and 3 as first
+built on 10 November. Both then changed by the orchestrator's own review findings of the same day: public judged
+by what it stages rather than declared, and Test's strict option (its finding 1, "keep it"). The merge confirms
+them as written here. It closes three of Amendment 2's carries: the other demo packs' declarations, a refused staged
+run's working tables, and Test not judging the ceiling.
+
+1. **Every demo pack declares its highest marking, each proved against what it writes, but public, judged by
+   what it stages** (`scripts/seed_internal.py`,
+   `tests/test_seed_internal_ceiling.py`):
+   - **SECRET:** hmp and fixture-corp. Each writes one SECRET link by design: HMP's network holds a SECRET
+     `IN_CONFLICT_WITH` (`demo_fixtures.hmp_network`), and Fixture Corp's path spokes a SECRET shortcut (the
+     access-control suite's). The proof shows SECRET is reached, so the declaration is not higher than the pack
+     writes. Both stay refused under any ceiling below SECRET, as they were when undeclared, now in words that
+     give their declared marking.
+   - **OFFICIAL:** ledger, prison-intelligence, prison-intelligence-scale and enron, joining cyber-intrusion and
+     PaySim.
+     - A pack that loads through recipes is proved by the ceiling's own judgement (`refuse_rows_above_the_ceiling`)
+       of each recipe it loads and the rows it loads through it. For the Prison Intelligence Dataset that is every
+       file the seed writes, its recipes binding a classification column, and the monitoring batches.
+     - What a pack writes directly is proved over its real builders, recorded by a graph that writes nothing:
+       HMP's three steps (the recipes, the network and the places) with every event they give the analytics
+       store and the map's geometry; Fixture Corp's three writers; the Ledger's direct writes.
+     - Enron is real data and never in a test (rule 9): its builders are proved over a synthetic pair and message
+       to stamp the handling the seed gives them.
+   - **public declares nothing.** It loads the recipe the administrator staged (`scripts.public_dataset stage`),
+     not the catalogue's, so no declaration could be proved. Its staged recipe and every row of its file are
+     judged instead, on the host and before the seed makes its case or writes anything, as the load would judge
+     them (`seed_internal._refuse_staged_rows_above_the_ceiling`). A staged dataset that cannot be read is refused
+     under a ceiling too.
+   - A test holds every pack to a declaration (or, for public, that judgement) and to a proof, named by the
+     proving test itself, so a new pack is added with both. A pack added without a declaration is still judged
+     as the scheme's highest (Amendment 2 decision 5).
+2. **A staged run refused at the ceiling leaves no step table.** A marking a column sets is judged by `run_recipe`,
+   after the step tables (`<bucket>/loads/<load_id>/staged/`) are written. On that row check's refusal (`load`
+   or `unreadable`) the run removes the tables it wrote, by their own paths and no other run's, then refuses as
+   before (`staged_run.remove_step_tables_on`). That holds in the pipeline's staged branch (`pipeline_run`) and
+   in the staged engine's own load (`run_staged_recipe`).
+   - A table the store will not remove is logged, and the rest are still removed: the person is told the
+     refusal, not a store error.
+   - The backstop's later refusal (`write`) is not answered this way. It comes after the load's raw and
+     resolved rows are staged, as on any load. Nor is any refusal other than the ceiling's: a run refused for
+     another cause keeps its step tables, as it did before this amendment (a carry, below).
+   - A run the ceiling passes keeps its tables, since a re-map reads them.
+3. **Test (Verify) judges the ceiling**, so a file above it is told before Load, in the load's own words and as
+   the same 422 `above_the_deployments_highest_marking`.
+   - `engine.dry_run_recipe` judges the rows it runs as `run_recipe` judges every row. So Test and the Map and Load
+     Previews that run it refuse what the load would.
+   - **On a pipeline without steps**, Verify judges the rest of the file too, not only its sample of 10,000. It
+     does so after the dry run, so Test refuses in the load's order (`deduplicate` first), and off the event loop.
+     **The strict option, for access:** the rest of the file is judged only for an author cleared to read every
+     row of it. Otherwise the refusal would tell of a row the sample's guard keeps from them (rules 3 and 4).
+     For such an author Test passes what its sample shows, and the load, which judges every row, refuses the file.
+   - **On a staged pipeline**, Test judges the rows it runs: the first rows of each source, after the steps. The run
+     still judges every row.
+   - Verify's withheld guards (rules 3 and 4) stay first and unchanged, on both paths: a case not reading the
+     dataset, and a reader not cleared for the sample, get the guard's words, never the ceiling's. The words name
+     the deployment's limit, never a row's content.
+   - On a staged pipeline the clearance guard reads the sources' raw rows. The rows the ceiling then judges are
+     the last step's, which can hold a Lookup's list rows. Those are the dataset's own, read by whoever reads
+     the dataset, which the route's dataset guard has already judged (`studio_staging.row_reader`). So the
+     ceiling's words tell such a reader nothing the guards keep from them.
+
+**Tests** (each red first, `process/lanes/studio-b/l1.10b/red_plants.py`):
+- **Point 1:** `tests/test_seed_internal_ceiling.py`:
+  - `test_every_pack_declares_its_highest_marking` and
+    `test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest`, which plants an undeclared pack;
+  - one proof per pack, `test_<pack>s_declaration_...`, and public's four cases,
+    `test_a_staged_public_dataset_...`.
+- **Point 2:** `tests/services/api/test_deployment_ceiling_staged.py`, which covers the branch, the engine's own
+  load, no other run's tables touched, a passed run keeping its tables, a store that will not remove a table, and
+  only the row check's refusals removing them. `tests/ingest/test_deployment_ceiling_staged_live.py` measures
+  the removal against the object store itself.
+- **Point 3:** `tests/services/api/test_deployment_ceiling_verify.py`, which covers:
+  - the load's words, and the unreadable words;
+  - the file past the sample, and the strict option for an author not cleared for it;
+  - the withheld guards first, on both paths;
+  - a staged pipeline;
+  - at the ceiling, and none set.
+
+**The staged cases' fixture.** L1.7's Join refuses to pair rows of differing markings
+(`staging_catalogue.refuse_a_differing_marking`), and an unmarked table differs from any marking (it fails closed;
+a declared default marking for such a source is ADR-140 Amendment 19, reserved). So the staged cases mark each owner
+as the bookings it joins (`test_deployment_ceiling_staged.marked_inputs`), the SECRET booking meeting a SECRET owner,
+and the refusal is the ceiling's. The controls show the Join met those owners (`joined_owners`), so the guard was
+passed, not skipped.
+
+**Still carried:**
+- From Amendment 2:
+  - the drawn item (case-b);
+  - cloud-platform's OFFICIAL-SENSITIVE default (P7).
+  - (The promotion and drawn-merge writes are closed by Amendment 4.)
+- New: a staged pipeline's Test judges only the rows it runs (the first 10,000 of each source, after the steps),
+  so a staged file above the ceiling past them is told only at Load.
+- New: a backstop refusal after raw staging leaves that load's raw and resolved rows staged, on any load.
+- New: a staged run refused for a cause other than the ceiling keeps its step tables.

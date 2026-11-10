@@ -71,7 +71,7 @@ studio-b	tips	S	done	The Studio's tips (L1.8's patches over L2.7) and L1.7a's ca
 case	L3.H1	S	done	A hygiene step: one read-set rule, a home case kept, the run report's drawn-watch count (merged 6cb82e4)
 platform-b	P5b proof	S	done	ADR-114 Am 38 decision 9's owed live proof of the update path (merged 7b303bd)
 case	L3.H2	S	done	Drawn watches on every load; the ceiling on promotions and drawn merges; home-case tests (merged b6570fd)
-studio-b	L1.10b	S	building	The ceiling's carries: packs' declarations, staged tables on refusal, Verify judging the ceiling
+studio-b	L1.10b	S	done	The ceiling's carries: packs' declarations, staged tables on refusal, Verify judging the ceiling (merged 85f2447)
 platform-b	T2	S	done	Tooling: per-lane Playwright ports, docker-shelling tests skipped without local stacks, constant-named registries (merged 5471f6c)
 rules-b	T3	S	done	Dialogs' and invisible text's colour contrast actually gated in every-harness (merged ea3ba26)
 rules	UPG	S	done	Rehearse the v0.4.12 to v0.5.0 upgrade on the test server, before the publish: four runs; run 4 passed on platform-b's d85f514 (refusal, the one-time apply, the migrations, end state); update's real pull, pin and rollback owed to the post-tag check (merged e620588)

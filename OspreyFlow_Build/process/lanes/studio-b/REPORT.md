@@ -1,15 +1,20 @@
-# studio-b · L1.10, the deployment's marking ceiling (ADR-148 decision 10, Amendment 2) · on main f2ef3b3
+# studio-b · brief L1.10b, the ceiling's carries (ADR-148 Amendment 3) · code a3e3ea3, rebased on main 77200db
 
-1. **The setting:** `deployment.highest_marking`, rendered as `OSPREY_HIGHEST_MARKING`; when it is not set, the ceiling is the scheme's highest. An unknown value stops the Conduit's start. It is in the guide's appendix A (1.66, this lane's row; the guide is the docs lane's).
-2. **The refusals** (`services/ingest/ceiling.py`) come before anything is written. Their words name the limit, never the content.
-   - **Loads:** `run_recipe` judges each distinct classification combination once; a row above the ceiling, or one whose classification cannot be read, refuses the whole load. A staged pipeline's fixed markings are judged before its step tables are written.
-   - **Imports:** document and entity-picture uploads get a 422 `above_the_deployments_highest_marking`.
-   - **Backstop and packs:** `dataset_scope`'s upserts, bulk loads and supersedes refuse too. `seed_internal` refuses a pack up front; cyber-intrusion and PaySim declare OFFICIAL.
-3. **Read and write** (Amendment 2): read-side fallbacks stay at the scheme's highest; only writes are capped.
-4. **Tests, plants, reviews:** 4 test files. 26 plants (`l1.10/red_plants.py`), each red for its reason; green 35. Two lane-review rounds, all 11 must-fixes and the minors fixed.
-5. **Gates:**
-   - **Live**, stack d at 47a2e15 (`l1.10/live-47a2e15.*`): 3,292 passed and 35 failed, all the run's, plus main's `test_schedule_notice` collection error.
-   - **make test** at a38f8b4: 10,558 passed and 4 failed; vitest 2,968 passed and 1 failed. Three are host-bound; the lane's own two (citations, the guide's PDF) are fixed. **make -k ci:** red only for Docker.
-6. **For admin:** `L1.10_system_ceiling.diff`, the ceiling shown on System.
-7. **Carries:** the drawn item (case-b); promotion and drawn-merge writes (case); the cloud-platform OFFICIAL-SENSITIVE default (P7); the other packs' declarations; dropping a refused staged run's working tables; Verify judging the ceiling.
-8. **Left:** L1.9 after P7. **Running:** nothing; no lease is held.
+1. **Packs** (`seed_internal.py`):
+   - hmp and fixture-corp declare SECRET. Each writes one SECRET link by design, and the proof shows it is reached.
+   - ledger, both prison-intelligence packs and enron declare OFFICIAL. Each is proved through its real builders, or by the ceiling's own row check over its files.
+   - **public** declares nothing: its staged recipe and rows are judged on the host before the seed starts.
+2. **Staged tables:** a run the ceiling's row check refuses removes its own step tables (`staged_run.remove_step_tables_on`), both in the pipeline's branch and in the staged engine. A removal error is logged, and the refusal is still told. Measured live against MinIO (`tests/ingest/test_deployment_ceiling_staged_live.py`: its own bucket, a lease guard, teardown). After the rebase, L1.7's join guard refuses rows of differing markings, so each owner is marked as the bookings it joins (`marked_inputs`), and the controls show the Join met them.
+3. **Test judges the ceiling:** the dry run judges its rows as the load does. Verify then judges the rest of an unstaged file, after the dry run, off the loop, in the load's words. The withheld guards come first on both paths.
+4. **Decisions taken:**
+   - **The strict option** (rules 3 and 4; the orchestrator's finding 1): Verify judges past its sample only for an author cleared to read every row of the file. So an uncleared author's file that is above the ceiling past the sample passes Test and is refused only at Load, short of brief point 3 for that author.
+   - **public** is judged by what it stages, not declared (finding 2). **Only the row check's refusals** ("load", "unreadable") remove step tables.
+5. **Plants:** 27 in `l1.10b/red_plants.py`, each red for its reason at 5e8736b, none by the join guard; green 32.
+6. **Reviews:** my lane-reviewer's (twice, the second after the rebase), the orchestrator's and the merger's; every finding is fixed or carried.
+7. **Gates:** make test and make -k ci on the server; the live set on stack d. Files and explanation in `gates/` (named in the ready-to-merge).
+8. **Ratified:** `tests/ingest/recipe_test_support.py`'s `LocalStore.delete_file` (studio's file). The studio lane was told of it, and of the `engine.dry_run_recipe` and `studio_verify` edits.
+9. **Carries:**
+   - Am 3's own: a staged Test judges only its sample; a backstop refusal after raw staging, or a refusal other than the ceiling's, keeps the staged rows and tables.
+   - The merger's 5, 6, 9 and 11, which the merger carries.
+   - Still from Am 2: the drawn item (case-b), and cloud-platform's default (P7).
+10. **Left:** L1.9, after P7.

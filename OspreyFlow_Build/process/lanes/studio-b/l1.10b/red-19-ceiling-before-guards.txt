@@ -1,0 +1,13 @@
+# head 5e8736b; plant: Test without steps judges the ceiling before its withheld guards
+# command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py
+# must fail: test_the_withheld_guards_come_before_the_ceiling_without_steps; all failed: yes
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_passes_a_file_at_the_ceiling
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_with_no_ceiling_set_test_passes_as_before
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it - AssertionError: {"error":"above_the_deployments_highest_marking","detail":"This load would write rows marked above this deployment's highest marking, OFFICIAL, so nothing was loaded. Mark the source no higher than OFFICIAL, or load it into a d...
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_without_steps - assert False
+2 failed, 7 passed, 1 warning in 1.99s

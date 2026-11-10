@@ -1,0 +1,25 @@
+# stack d, bucket ospreyflow-staging, under studio-b's lease: what L1.10b's first live file wrote at 19:33:13Z (the 66966fa run), before and after removal
+## before
+   ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/normalised.parquet 2026-11-10 19:33:14+00:00
+   ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/staged/titled.parquet 2026-11-10 19:33:13+00:00
+   ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/staged None
+   ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/staged/with_establishment.parquet 2026-11-10 19:33:13+00:00
+   ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/staged/with_owner.parquet 2026-11-10 19:33:13+00:00
+   ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2-vb/raw.parquet 2026-11-10 19:33:13+00:00
+   ospreyflow-staging/loads/ceiling-refused-2d4448d206ca/staged None
+   ospreyflow-staging/loads/ld-no-1/raw.parquet 2026-11-10 19:33:13+00:00
+   ospreyflow-staging/reference_lists/pid/establishments@v3.parquet 2026-11-10 19:33:13+00:00
+## after
+   ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2-vb absent
+   ospreyflow-staging/loads/ceiling-refused-2d4448d206ca absent
+   ospreyflow-staging/loads/ld-no-1 absent
+   ospreyflow-staging/reference_lists/pid/establishments@v3.parquet absent
+## ceiling-* load folders left: ['ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2']
+## a second pass on ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2 3
+  delete_dir: [Errno 2] Path does not exist 'ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/'. Detail: [errno 2] No such file or directory
+  now: 3
+## ceiling-* load folders left: ['ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2']
+  marker ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/staged/ : [Errno 2] Path does not exist 'ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/staged
+  marker ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2/ : [Errno 2] Path does not exist 'ospreyflow-staging/loads/ceiling-passed-ab6ba75c55b2'. Deta
+  now: 3 | objects under it: 0
+## The folder above holds no object (0 files); MinIO still lists the empty prefix. No data of the first live file is left on stack d.

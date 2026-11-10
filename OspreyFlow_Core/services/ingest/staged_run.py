@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import logging
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -34,6 +35,8 @@ from schemas.ingest import (
 )
 from schemas.staging import FuzzyMatchStep, SqlStep, StagingStep
 
+from . import staging as _staging
+from .ceiling import AboveTheDeploymentCeiling
 from .engine import DryRunResult, RowKeys, dry_run_recipe, run_recipe
 from .recipe_rules import marked_columns
 from .staging import ObjectStorageConfig
@@ -49,6 +52,8 @@ from .staging_catalogue import (
     stage_sources_and_lists,
     stage_table_counted,
 )
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -241,6 +246,38 @@ async def prepare_staged_load(
     )
 
 
+#: The ceiling's refusals made by `run_recipe`'s own row check, before raw staging, its first write
+#: (ADR-148 Amendment 2 decision 2). The backstop's ("write") comes later, when the load's raw and
+#: resolved rows are already staged, so it is not answered by removing the step tables alone.
+ROW_REFUSALS = frozenset({"load", "unreadable"})
+
+
+def remove_step_tables(prepared: PreparedStaging, storage: ObjectStorageConfig) -> None:
+    """Remove the step tables a staged load wrote (ADR-148 Amendment 3 point 2): a load the
+    deployment's ceiling refuses is judged after them, since its rows are the last step's table,
+    and a refused load leaves nothing behind. Only this load's own tables, by the paths it wrote.
+    A table the store will not remove, or a store not reached, is logged and the rest still
+    removed: the caller's refusal, never an error of the removal's, is what the person is told."""
+    try:
+        fs = _staging.filesystem(storage)
+    except Exception:  # the store not reached: logged, the refusal still told
+        _log.warning("a refused load's step tables were not removed", exc_info=True)
+        return
+    for path in prepared.paths.values():
+        try:
+            fs.delete_file(path)
+        except Exception:  # any error here is logged, never told in place of the refusal
+            _log.warning("a refused load's step table %s was not removed", path, exc_info=True)
+
+
+async def remove_step_tables_on(
+    refused: AboveTheDeploymentCeiling, prepared: PreparedStaging, storage: ObjectStorageConfig
+) -> None:
+    """On the ceiling's row refusal, the step tables removed (`remove_step_tables`)."""
+    if refused.kind in ROW_REFUSALS:
+        await asyncio.to_thread(remove_step_tables, prepared, storage)
+
+
 def finish_staged_report(report: LoadReport, prepared: PreparedStaging) -> None:
     """The load report of a staged run: the steps' rejections before Map's, each with its refs;
     the sources' rows as rows read; and each step's counts (Amendment 12)."""
@@ -284,24 +321,28 @@ async def run_staged_recipe(
         storage=storage,
         may_read=may_read,
     )
-    report, events = await run_recipe(
-        recipe,
-        prepared.rows,
-        graph=graph,
-        ontology=ontology,
-        tx=tx,
-        principal=principal,
-        load_id=load_id,
-        investigation_scope=investigation_scope,
-        source=prepared.table.name,
-        storage=storage,
-        scheme=scheme,
-        row_keys=row_keys,
-        written=written,
-        row_refs=prepared.refs,
-        stage_raw=prepared.stage_raw,
-        **engine,
-    )
+    try:
+        report, events = await run_recipe(
+            recipe,
+            prepared.rows,
+            graph=graph,
+            ontology=ontology,
+            tx=tx,
+            principal=principal,
+            load_id=load_id,
+            investigation_scope=investigation_scope,
+            source=prepared.table.name,
+            storage=storage,
+            scheme=scheme,
+            row_keys=row_keys,
+            written=written,
+            row_refs=prepared.refs,
+            stage_raw=prepared.stage_raw,
+            **engine,
+        )
+    except AboveTheDeploymentCeiling as refused:
+        await remove_step_tables_on(refused, prepared, storage)
+        raise
     finish_staged_report(report, prepared)
     return StagedLoad(
         report,

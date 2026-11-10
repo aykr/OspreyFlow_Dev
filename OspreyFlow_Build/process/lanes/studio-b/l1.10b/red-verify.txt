@@ -1,0 +1,8 @@
+# The first red of item 3 at 350f8b9's parent tree (before the fix), cut to its summary from 512 KB: each test asked Verify and was answered 200 where the ceiling refuses.
+E       assert 200 == 422
+E       assert 200 == 422
+E       assert 200 == 422
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling
+3 failed, 2 passed, 1 warning in 3.28s

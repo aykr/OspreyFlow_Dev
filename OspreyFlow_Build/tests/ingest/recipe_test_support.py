@@ -68,6 +68,10 @@ class LocalStore:
     def get_file_info(self, path: str) -> Any:
         return self._fs.get_file_info(path)
 
+    def delete_file(self, path: str) -> None:
+        # As the object store's: a file that is not there is refused, not passed over.
+        self._fs.delete_file(path)
+
 
 @pytest.fixture(autouse=True)
 def local_staging(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

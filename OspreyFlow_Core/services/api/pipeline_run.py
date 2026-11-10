@@ -70,7 +70,11 @@ from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
 from services.extract.writer import write_candidate
 from services.geocoder.match import match_place_mention
-from services.ingest.ceiling import DeploymentCeiling, refuse_fixed_markings_above_the_ceiling
+from services.ingest.ceiling import (
+    AboveTheDeploymentCeiling,
+    DeploymentCeiling,
+    refuse_fixed_markings_above_the_ceiling,
+)
 from services.ingest.engine import distinct_markings
 from services.ingest.geometries import POINT_GEOMETRY_VERSION
 from services.ingest.metering import StagingMeter
@@ -82,7 +86,11 @@ from services.ingest.pipeline import (
 )
 from services.ingest.recipe_rules import RecipeRuleError
 from services.ingest.reference_list_import import lists_for_run
-from services.ingest.staged_run import finish_staged_report, prepare_staged_load
+from services.ingest.staged_run import (
+    finish_staged_report,
+    prepare_staged_load,
+    remove_step_tables_on,
+)
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import StagingError
 from services.ingest.watermark import RefreshRead
@@ -563,21 +571,27 @@ async def _run_staged_branch(
         )
     except StagingError as refused:
         raise RecipeRuleError(refused.problems) from refused
-    branch, events, held = await load_with_rules(
-        recipe,
-        prepared.rows,
-        principal,
-        graph=graph,
-        ontology=ontology,
-        load_id=load_id,
-        investigation_scope=investigation_scope,
-        source=prepared.table.name,
-        media=media,
-        rules=rules,
-        scheme=scheme,
-        sink=sink,
-        staged=prepared,
-    )
+    try:
+        branch, events, held = await load_with_rules(
+            recipe,
+            prepared.rows,
+            principal,
+            graph=graph,
+            ontology=ontology,
+            load_id=load_id,
+            investigation_scope=investigation_scope,
+            source=prepared.table.name,
+            media=media,
+            rules=rules,
+            scheme=scheme,
+            sink=sink,
+            staged=prepared,
+        )
+    except AboveTheDeploymentCeiling as refused:
+        # ADR-148 Amendment 3 point 2: a marking a column sets is judged by `run_recipe`, after the
+        # step tables were written; a load its row check refuses leaves none of them behind.
+        await remove_step_tables_on(refused, prepared, storage)
+        raise
     finish_staged_report(branch, prepared)
     if meter is not None:
         meter.add(prepared.rows_staged, prepared.parquet_bytes)
