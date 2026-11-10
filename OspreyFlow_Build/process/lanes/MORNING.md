@@ -45,6 +45,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 5. **The demo deployment for screenshots** (D2b needs one, and Docker is off on this Mac). **Chose:** a separate named
    deployment built from `main` on your test server, never touching `osprey-small`. **To overrule:** say where
    instead.
+6. **Merging in batches where steps don't overlap** (your question about parallelism). **Chose:** studio's L1.5,
+   platform's P5 and docs' D2a merge together into one merge result, gated once, right after admin's L2.7, instead
+   of one after another (about 1½ hours saved). A failing batch is split to find the cause. Steps that touch the same
+   files still merge one at a time. **To overrule:** say "one at a time".
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

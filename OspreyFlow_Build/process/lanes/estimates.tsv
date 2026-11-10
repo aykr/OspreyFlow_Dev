@@ -1,11 +1,11 @@
-# as of 2026-11-10T05:33:16Z
+# as of 2026-11-10T05:36:14Z
 admin	L2.7	merge gating now	~06:15
-studio	L1.5	clear; merges after L2.7	~07:00
-platform	P5	clear; merges after L1.5	~07:45
-docs	D2a	in independent review, then merge	~08:30
-rules	L2.10	last plants, re-review, merge	~09:00
-studio-b	L1.7a	dulwich: ci, review, merge	~09:30
-platform-b	P5b	after docs: rows, PDF, gates, review	~10:30
+studio	L1.5	clear; batch merge with P5 and D2a after L2.7	~07:15
+platform	P5	clear; batch merge with L1.5 and D2a	~07:15
+docs	D2a	in review; batch merge with L1.5 and P5	~07:15 (if the review is clear)
+rules	L2.10	last plants, re-review, merge	~08:30
+studio-b	L1.7a	in review, then merge	~08:30
+platform-b	P5b	after D2a: rows, PDF, gates, review	~09:30
 case	L3.9	type-mapping rework, gates, review	~13:00–15:00
 admin	L2.5b	full Disable transfer, after L2.7	~10:00–11:00
 studio-b	tips	Studio's tips patches, after L2.7	~09:30–10:30
