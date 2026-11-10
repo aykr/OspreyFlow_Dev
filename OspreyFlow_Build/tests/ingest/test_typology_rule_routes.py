@@ -442,7 +442,7 @@ def test_only_a_pattern_the_author_saved_is_deployed_as_a_rule(
 
     with TestClient(app) as client:
         path = f"/v1/investigations/{case}/rules"
-        body = {"name": "Drawn", "params": {"typology": "pattern", "pattern_id": theirs}}
+        body = {"name": "Drawn", "params": {"typology": "pattern", "pattern_id": theirs}, "just_me": True}
         refused = client.post(path, headers=_as(key, AUTHOR.id), json=body)
         assert refused.status_code == 422 and "only a pattern you saved" in refused.json()["detail"]
         made = client.post(path, headers=_as(key, AUTHOR.id), json={**body, "params": {"typology": "pattern", "pattern_id": mine}})

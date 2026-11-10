@@ -1,0 +1,39 @@
+### plant A: the executor's reach removed (app._rule_schedule_executor)
+E       AssertionError: assert ['ds-1', 'ds-2', 'layer-1'] == ['ds-1']
+E         
+E         Left contains 2 more items, first extra item: 'ds-2'
+E         Use -v to get more diff
+E       AssertionError: assert [Principal(id..., 'layer-1'])] == []
+E         
+E         Left contains one more item: Principal(id='author', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=['analyst'], datasets=['ds-2', 'layer-1'])
+E         Use -v to get more diff
+### plant B: the executor asks deploy_rules alone, as before
+E       AssertionError: assert [] == ['author']
+E         
+E         Right contains one more item: 'author'
+E         Use -v to get more diff
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_schedule_reach.py::test_a_rule_authors_scheduled_rule_runs_as_them
+1 failed, 3 passed in 1.70s
+### plant C: RuleGate._deployer's writing-right check removed
+E           AssertionError: ['reports_viewer']
+E           assert 1 == 0
+E            +  where 1 = len([Alert(id='01M7356TG3H6TC266VRXJE30F8', rule_id='typology:rule-s', owner_id='author', mode=<AlertMode.FULL: 'full'>, r...None, severity='medium', team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None)])
+E            +    where [Alert(id='01M7356TG3H6TC266VRXJE30F8', rule_id='typology:rule-s', owner_id='author', mode=<AlertMode.FULL: 'full'>, r...None, severity='medium', team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None)] = <tests.services.api.test_sentence_rules._Recorder object at 0x10f676ff0>.alerts
+### plant D: a template's just_me read by nothing (is_just_me and the alert's fields on sentences alone)
+E       AssertionError: assert ('typology:ru...one, 'author') == ('monitor:sen...one, 'author')
+E         
+E         At index 0 diff: 'typology:rule-t' != 'monitor:sentence:rule-t'
+E         Use -v to get more diff
+### plant E: the deploy form sends no just_me (keyboard/alerts.spec.ts, the five cases through the form)
+  1) keyboard/alerts.spec.ts:433:1 › a template fills the rule form, which is then deployed, by keyboard (ADR-133 stage a) 
+    -   "just_me": true,
+  2) keyboard/alerts.spec.ts:454:1 › a rule is deployed and another retired, by keyboard ───────────
+    -   "just_me": true,
+  3) keyboard/alerts.spec.ts:480:1 › a KYC screening rule is deployed with its switch, by keyboard ─
+    -   "just_me": true,
+  4) keyboard/alerts.spec.ts:500:1 › a pattern drawn in the Query builder is deployed as a rule, by keyboard 
+    -   "just_me": true,
+  5) keyboard/alerts.spec.ts:760:1 › an AML template is deployed with its jurisdiction list, by keyboard (ADR-133 stage c) 
+    -   "just_me": true,
+  5 failed
+  2 passed (15.9s)

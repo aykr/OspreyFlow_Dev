@@ -70,8 +70,8 @@ ONTOLOGY = load_deployment_ontology()
 CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
 RECIPE = load_recipe(CORE / "packages/demo_fixtures/ledger_onboarding_recipe.yaml")
 SYNTHETIC_LIST = CORE / "packages/demo_fixtures/screening_list_synthetic.yaml"
-OFFICER = Principal(id="kyc-officer", clearance="OFFICIAL", org_unit="verify")
-SECRET_LOADER = Principal(id="kyc-secret-loader", clearance="SECRET", org_unit="verify")
+OFFICER = Principal(id="kyc-officer", clearance="OFFICIAL", org_unit="verify", roles=["analyst"])  # deploy_rules: may have written a rule (ADR-146 Amendment 6 decision 13)
+SECRET_LOADER = Principal(id="kyc-secret-loader", clearance="SECRET", org_unit="verify", roles=["analyst"])  # deploys rules too: deploy_rules (ADR-146 Amendment 6 decision 13)
 SHARED_PHONE = "447700900777"
 
 
