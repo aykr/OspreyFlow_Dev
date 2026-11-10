@@ -1,0 +1,20 @@
+# head 3a662a8; no plant
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_rendered_every_pack_is_seeded_as_before
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_every_pack_declares_its_highest_marking
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_hmps_declaration_is_the_highest_it_writes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_fixture_corps_declaration_is_the_highest_it_writes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_ledgers_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_prison_intelligences_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_the_scale_cohorts_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_the_public_datasets_declaration_holds_for_every_recipe
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_enrons_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
+18 passed, 1 warning in 8.73s

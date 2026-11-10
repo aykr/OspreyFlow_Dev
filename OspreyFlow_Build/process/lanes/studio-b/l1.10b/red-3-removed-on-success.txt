@@ -1,0 +1,8 @@
+# head 3a662a8; plant: a run the ceiling passes loses its step tables too
+# command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py
+# must fail: test_a_staged_run_within_the_ceiling_keeps_its_step_tables; for the reason "AssertionError: assert [] == ['titled.parq"; all failed: yes
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables - AssertionError: the run the ceiling passed staged nothing
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables - AssertionError: assert [] == ['titled.parq...wner.parquet']
+2 failed, 2 passed, 1 warning in 2.09s
