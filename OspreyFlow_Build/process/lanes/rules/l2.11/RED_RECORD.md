@@ -192,3 +192,23 @@ BPMN states included. **`make -k ci`** (closed ports, `OSPREY_LANE` unset): gree
 - `test-file-coverage-check`, red only on the three new live files that `L2.11_ci_yml.diff` wires. With that
   diff applied it reports "916 test file(s), 0 allowlisted, no new drift"
   (`7ee2d56.coverage-with-diff.txt`). The diff was not committed, and both files were restored.
+
+## §13 `make test` at eae4092 found the run paths without the list reader or reach (gate `eae4092.test.txt`)
+
+On the server, offline: 10,522 passed, with 16 failed and 13 errors.
+- **Expected:**
+  - the three new live files run, because the Makefile ignores for them are in the unapplied `L2.11_ci_yml.diff`;
+  - `test_test_file_coverage_check`, which fails for the same reason;
+  - the server's usual pair: valkey_config (main's own) and the webapp's GPU preflight.
+- **Not expected:** four failures in `test_recipe_run_path.py`, `test_run_resources.py` and `test_load_records.py`.
+  L2.11 added `rule_lists` and `rule_reach` to `RecipeRunDeps`, and only the route was given them:
+  - `from_state` (the scheduled and folder-watched runs) read them as state attributes, which a running
+    Conduit doesn't hold, so they were always None;
+  - `RunResources` (the command line) never built them.
+
+  So on those paths, a rule on a composite read only the composite's own id, not its members, and a rule
+  naming a list could not run.
+- **Fixed:** both are now built from the stores each path holds, as `watch_reach` is.
+  `test_a_scheduled_run_reads_a_rules_list_and_a_composites_members_through_the_states_stores` is red,
+  alone, with `from_state`'s building removed. `test_run_resources`' every-field check now holds them, and the
+  route's run-path test passes both. The tests were fixed in the same change.

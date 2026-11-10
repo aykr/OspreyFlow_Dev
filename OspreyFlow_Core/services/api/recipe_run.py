@@ -133,6 +133,23 @@ class RecipeRunDeps:
                 lambda: getattr(state, "datasets", None),
                 lambda: getattr(state, "investigations", None),
             )
+        datasets = getattr(state, "datasets", None)
+        if datasets is not None:
+            # ADR-146 decision 3 (L2.11): the scheduled and folder-watched runs read a rule's named
+            # list and its dataset's reach (a composite's members) from the state's own stores, as
+            # the route's getters do (`app._rule_lists_of`, `app._rule_reach_from`); the state holds
+            # no attribute of either name, so read as fields they were always None on these runs.
+            from . import rule_editor
+
+            if values.get("rule_lists") is None:
+                values["rule_lists"] = rule_editor.rule_list_reader(
+                    datasets=datasets,
+                    models=getattr(state, "target_models", None),
+                    lists=getattr(state, "list_store", None),
+                    rows_kept=getattr(state, "list_rows", None),
+                )
+            if values.get("rule_reach") is None:
+                values["rule_reach"] = rule_editor.rule_reach_of(datasets)
         return cls(**values)
 
 
