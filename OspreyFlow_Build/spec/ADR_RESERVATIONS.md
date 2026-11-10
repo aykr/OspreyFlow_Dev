@@ -105,6 +105,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-148 Amendment 2 | The deployment's marking ceiling as built (L1.10, decision 10): the setting, loads and imports above it refused before a write, in words naming the limit; System shows it | studio-b | 2026-11-10 | written |
 | ADR-135 Amendment 4 | The model route on the cloud-platform profile: the client's own approved gateway, or Bedrock (P11) | platform | 2026-11-10 | written |
 | ADR-135 Amendment 5 | Laurium as a second extraction engine behind ModelPort.extract, chosen at setup (P12) | platform | 2026-11-10 | written |
+| ADR-148 Amendment 3 | The ceiling's carries as built (L1.10b): every demo pack declares and proves its highest marking, a refused staged run's step tables removed, and Test judging the ceiling | studio-b | 2026-11-10 | reserved |
 
 ## Baseline
 
