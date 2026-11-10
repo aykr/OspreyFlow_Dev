@@ -2,7 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Id = string;
 export type LoadId = string;
-export type Trigger = "analyst_promotion" | "layer_merge";
+export type Trigger = "analyst_promotion" | "layer_merge" | "drawn_merge";
 export type DatasetId = string;
 export type DatasetName = string;
 export type CaseId = string;
@@ -32,8 +32,17 @@ export type Label1 = string;
 export type Marking = string;
 export type SourceNote = string | null;
 export type Grading = string | null;
+export type GoesInAs = string | null;
 export type Items = DetailItem[];
 export type Withheld = boolean;
+export type Drawn = string;
+export type DrawnLabel = string;
+export type Loaded = string;
+export type LoadedLabel = string;
+export type LoadedType = string;
+export type Score = number;
+export type Why1 = string;
+export type Matches = MergeMatch[];
 
 /**
  * What a reviewer reads of the promotion they review: its own items, nothing else of the
@@ -45,6 +54,7 @@ export interface PromotionDetails {
   promotion: Promotion;
   items: Items;
   withheld?: Withheld;
+  matches?: Matches;
 }
 /**
  * One promotion (decision 10): the load, what it adds as counts, who, the case, its status.
@@ -88,4 +98,19 @@ export interface DetailItem {
   marking: Marking;
   source_note?: SourceNote;
   grading?: Grading;
+  goes_in_as?: GoesInAs;
+}
+/**
+ * Step 2, *Match*: a drawn node and a loaded node of the target the reader may see, offered
+ * as alike. Chosen, it is written as a scored, `inferred` `SAME_AS` with the merge (rule 5): a
+ * person confirms it later, and nothing is collapsed in storage (rule 6).
+ */
+export interface MergeMatch {
+  drawn: Drawn;
+  drawn_label: DrawnLabel;
+  loaded: Loaded;
+  loaded_label: LoadedLabel;
+  loaded_type: LoadedType;
+  score: Score;
+  why: Why1;
 }

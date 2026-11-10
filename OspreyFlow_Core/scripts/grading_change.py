@@ -66,6 +66,7 @@ from services.api.board_store import _ITEM_COLUMNS, _item
 from services.api.config import GradingSchemeUnknown, GradingSettings, PostgresConfig
 from services.api.grading import (
     BoardGradedItems,
+    Copies,
     GradedItems,
     GradingIncomplete,
     GradingPlan,
@@ -225,14 +226,36 @@ def registry_reader(pool: Any) -> Registered:
     return registered
 
 
+def copies_reader(pool: Any) -> Copies:
+    """Every committed drawn merge's written copies (ADR-143 Amendment 7): drawn items in no
+    board's registry, graded in the deployment's scheme all the same (decision 11). None where no
+    merge ever ran (no table: this read never makes one)."""
+    import asyncpg
+    from services.api.promotion_store import COMMITTED_COPIES_SQL
+
+    async def copies() -> list[tuple[str, str]]:
+        async with pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(COMMITTED_COPIES_SQL)
+            except asyncpg.UndefinedTableError:
+                return []
+        return [(row["kind"], row["written_id"]) for row in rows]
+
+    return copies
+
+
 def graded_items(
-    client: ArcadeDBClient, scheme: HandlingScheme, registered: Registered, reader: Principal
+    client: ArcadeDBClient,
+    scheme: HandlingScheme,
+    registered: Registered,
+    reader: Principal,
+    copies: Copies | None = None,
 ) -> BoardGradedItems:
     """The command's port: the bare graph adapter, with no ontology applied (it reads what is
-    stored and writes the grade alone), over the board registry."""
+    stored and writes the grade alone), over the board registry and the drawn merges' copies."""
     from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 
-    return BoardGradedItems(GraphArcadeDBAdapter(client, scheme), registered, reader)
+    return BoardGradedItems(GraphArcadeDBAdapter(client, scheme), registered, reader, copies)
 
 
 async def conduit_answers(url: str, transport: httpx.AsyncBaseTransport | None = None) -> bool:
@@ -320,6 +343,7 @@ async def _main(
             scheme,
             registry_reader(pool),
             operator_reader(scheme, org_unit=args.org_unit, by=args.changed_by),
+            copies_reader(pool),
         )
         return await run(
             target=target,

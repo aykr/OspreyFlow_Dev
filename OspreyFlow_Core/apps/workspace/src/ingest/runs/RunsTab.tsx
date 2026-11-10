@@ -17,6 +17,7 @@ import type { AccessLevel } from "../../investigation/cases";
 import { PublishScreen } from "../publish/PublishScreen";
 import { isDeployed } from "../studio/useStudioData";
 import { statusWords } from "../studio/vocabulary";
+import { DrawnMerge } from "./drawnMerge";
 import { AnalystPromotions } from "./promotions";
 import { type DayCell, type DayState, STATE_WORDS, lastDays, rowCells } from "./runsGrid";
 
@@ -258,6 +259,8 @@ export function RunsTab(props: RunsTabProps) {
           username={props.username}
         />
       )}
+      {/* ADR-143 Amendment 2 decision 6 (case's L3.9, by agreement): drawn only for a drawn dataset. */}
+      {props.datasetId && <DrawnMerge apiBaseUrl={props.apiBaseUrl} bearerToken={props.bearerToken} datasetId={props.datasetId} onChanged={props.onChanged} />}
 
       {deployed.length > 0 && (
         <section aria-label="Schedules and folder watches" style={{ display: "grid", gap: "var(--sp-8)" }}>

@@ -159,7 +159,7 @@ the same* is registered on its board (`board_items` kind `match`), so it goes wi
 ```
 GET    /v1/investigations/{id}/boards                         the case's boards the caller may see (`Board`: name, creator, shared, how many drawn nodes the caller may see; `start` is `selection` when the caller may see one of the nodes it started from, `blank` otherwise, a view's start reading as `selection` since the store keeps only the nodes)
 POST   /v1/investigations/{id}/boards                         a board (`BoardInput`: blank, from a view, or from a selection; only the loaded nodes the caller may see are kept, as live references)
-GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` the count of the board's own references whose drawn item has been withdrawn since, given to the board's creator alone and never counting what the caller was never allowed to see (rule 3; `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`), the case's node and link types, the markings up to the case's ceiling and the caller's clearance, the grading scheme, `may_draw`
+GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` the count of the board's own references whose drawn item has been withdrawn since, given to the board's creator alone and never counting what the caller was never allowed to see (rule 3; `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`), the case's node and link types, the markings up to the case's ceiling and the caller's clearance, the grading scheme, `may_promote` (one who may draw on it, at the case's Author level, holding `promote_to_dataset` and `investigate`, as the promotion routes ask: the board offers *Promote…* to them alone, and the routes still refuse anyone else; `test_an_opened_board_offers_promote_only_to_one_the_promotion_routes_admit`), `may_draw`
 POST   /v1/investigations/{id}/boards/{board}/share           share it with the case (its creator only)
 DELETE /v1/investigations/{id}/boards/{board}                 delete it; what was drawn on it stays in the layer, with its watches
 POST   /v1/investigations/{id}/boards/{board}/items           declare a node (`DrawnItemInput`), with its watch; audited as draw_item
@@ -271,6 +271,77 @@ stopped: the Conduit's address (`OSPREY_CONDUIT_URL`, default `http://api:8000`)
 the connection; an answer, a name that does not resolve or a timeout refuses
 (`test_the_revert_is_refused_unless_the_conduit_is_known_stopped`). Its resting links are read inside
 its own transaction. There is no online revert: the owner ruled (a) on ADR-143 open question 2.
+
+**Merging a drawn dataset** (ADR-143 Amendment 2 decisions 6 and 7; Amendment 3 decision 2; Amendment
+7; L3.9),
+from the Ingest Studio opened on the drawing (its Runs tab, *Merge into a dataset…*), behind the
+dataset's gate (the merger reads the drawing through its home case, shared with them) and
+merge_datasets on every route:
+
+```
+GET    /v1/datasets/{drawn}/merge-targets              the datasets this reader may merge the drawing into (`MergeTargets`): each a source dataset of the drawing's unit that they are an Author of (its home case's), never a composite, a gazetteer, a drawn dataset or a layer
+GET    /v1/datasets/{drawn}/merge-sheet                 map and match for `?target=`, under the mapping chosen so far in `?mapping=` (`DrawnMergeSheet`): each drawn type, the target type proposed for it (the same name when the target's model holds it, else none, saying why) and every type of the target's live model it may be mapped onto (`choices`, `target_types` with their properties); the *Looks like a loaded item* pairs read through the merger scoped to the target alone; the drawn items with every check each fails against the target (its highest marking, its model, a grading and source); audited as read_drawn_merge_sheet
+POST   /v1/datasets/{drawn}/merges/dry-run              the dry run (`DrawnMergeInput` → `DrawnMergeDryRun`): every check, what would be added and matched counting only what the merger may see, nothing written but its audit entry (dry_run_drawn_merge)
+POST   /v1/datasets/{drawn}/merges                      the merge (`DrawnMergeInput` → `Promotion`): one promotion (`promotion-<id>`, trigger drawn_merge) into the target under its policy, reviewed in the target's *Analyst promotions*; audited as merge_drawn_dataset
+```
+
+A target not offered to this reader (none of that id, another unit's, one they are no Author of, a
+composite, a gazetteer) answers 404 `not_a_target`, the same for each, so neither its existence nor
+its kind is told (`test_a_composite_a_gazetteer_and_another_units_dataset_are_answered_as_for_none`).
+**Map** (the owner's ruling, Amendment 7): each drawn type is mapped onto any type of the target's
+live model of its kind, as a Studio load's Map step maps onto the domain model, or onto none (left
+out), and `DrawnMergeInput.mapping` says so; a type not listed takes the sheet's proposal. A type
+mapped onto its own name goes as L3.4's promotion: the same element gains the target (rule 6). An
+item mapped onto another type is written by the load as a **new element** of that type in the
+target (an element keeps its type, the store's class, for good): its properties as each was placed
+(`PropertyMapping`; one not placed is not carried and stays on the drawing), its handling its
+original's (never lower), its drawn provenance, grading and source kept whole (read as written
+back, `sources_in_full`), and, for a node, an `inferred` `SAME_AS` back to its drawn original
+(`model_version` drawn_merge_retype) in no dataset (ADR-099 Amendment 2 decision 3: the copy and its
+original share none), so no case reads it and nothing is joined at query time (rules 5 and 6). A link
+that is retyped, or touches a retyped
+node, is written new with its ends resolved to the copies. Only what the merger reads is copied:
+every copy is built from an element read through them. A type outside the target's model, or a
+property outside the chosen type, refuses the merge (422 `not_a_type`, `not_a_property`, the same
+for two drawn properties placed in one; `mapping_repeated` for a type or property chosen twice); the
+dry run says each property a retyped type does not carry (`not_carried`); the sheet takes the mapping
+chosen so far (`?mapping=`, JSON, 422 `not_a_mapping` when unreadable) so that Match offers what the
+merge accepts; a copy that breaks its new type's rules (a required
+property missing, a link whose type does not join its ends' types) is a problem of its item (422
+`check_failed` when ticked); an item of a type mapped onto none is left out, saying so, never
+refused for it; a picture or a board's *Same* or *Not the same* on a retyped node is left out with
+its reason (made again on the copy). A retyped node's matches are looked for as its new type and
+written from its copy. A chosen match must be one the
+sheet offers now, of a drawn node that goes (422 `not_a_match`, the same for a node the merger may
+not see, another dataset's and none); it is written with the load, in the same transaction, as a
+`SAME_AS` that is `inferred` and scored (`model_version` drawn_merge), in the target alone, marked as
+the stricter of its ends and within the target's highest (rule 5: a person confirms it later; rule 6:
+both nodes stay). An item above the target's highest marking refuses the merge, 422 `check_failed`,
+nothing written. A drawing with a merge waiting is refused another (409 `merge_waiting`). A
+reviewer's *Details* list the merge's matches as they read them, and each retyped item (while it
+waits, its original with `goes_in_as`; once committed, its copy), and an approval checks each again:
+one changed since (an end withdrawn or raised, the target's highest lowered, an original's marking,
+properties or drawn assertion edited, a mapped type gone from the target's model, a copy the adapter
+refuses, a target no longer a source dataset of the drawing's unit) rejects the merge, never leaves
+it waiting. A link retyped between two items going in as themselves is refused (it could join a
+loaded link the revert would then revert). The sheet and the merge audit the mapping chosen; the
+merge, its approval and its revert audit the copies. The revert takes its reverted copies out of
+every case's working set; the grading change regrades the copies too. Before the graph commits, the matches' link ids are kept and the drawing's one merge
+claimed (`DatasetStore.merge_drawn`, moving the case onto the target in the same Postgres
+transaction): of two merges at once one commits and the other is refused 409 `already_merged` with
+nothing written; a graph commit that fails after it undoes the claim. Once committed (decision 7) the
+drawing's home case reads the target, and the drawn dataset read-only, so the Studio reaches the
+drawing no more and an unmerged item is edited or withdrawn by no one (409 `drawing_merged`); its
+boards become views (drawing off, layout and sharing kept, the drawn nodes added to the selection but
+never counted in `chosen` or `missing`, so nothing above a reader is told); drawing again is a new
+board from the view, into the case's layer;
+and opening such a view answers `annotations` beside its items (`ViewAnnotation`: the label, the
+marking and grading as drawn, the source note, and "Drawn by …, merged as load …" or "not merged"),
+read through the reader's own principal, so an item they may not see has none. The revert is the
+promotion's (`scripts.revert_promotion`), which also withdraws the merge's matches, and its copies
+with their links and `SAME_AS` back, in its transaction (refused while a link written since rests on
+a copy, as on a promoted node), and then puts the case back on the drawing and its views back to
+boards; without those stores it refuses a drawn merge (`no_merge`).
 
 A deleted view's conversation stays in the store, read by no route: the questions are listed only
 through a view the reader may open, so they go with the view. Its pending proposals stay pending

@@ -215,6 +215,9 @@ def operator_reader(
 
 
 Registered = Callable[[], Awaitable[Sequence[BoardItem]]]
+#: A committed drawn merge's retyped copies (ADR-143 Amendment 7), as (kind, element id): drawn
+#: items too, written new by the merge's load and in no board's registry.
+Copies = Callable[[], Awaitable[Sequence[tuple[str, str]]]]
 
 
 class ChangedUnderneath(Exception):
@@ -230,6 +233,9 @@ class BoardGradedItems:
     graph: GraphPort
     registered: Registered
     reader: Principal
+    #: A committed drawn merge's copies (ADR-143 decision 11 holds for them: every drawn item is
+    #: graded in the deployment's one scheme, so the change moves them too; L3.9).
+    copies: Copies | None = None
 
     async def inventory(self) -> Inventory:
         live = [
@@ -237,8 +243,11 @@ class BoardGradedItems:
             for i in await self.registered()
             if i.withdrawn_at is None and i.kind in ("node", "link")
         ]
+        held = sorted(set(await self.copies())) if self.copies is not None else []
         node_ids = [i.element_id for i in live if i.kind == "node"]
         edge_ids = [i.element_id for i in live if i.kind == "link"]
+        node_ids += [i for kind, i in held if kind == "node" and i not in node_ids]
+        edge_ids += [i for kind, i in held if kind != "node" and i not in edge_ids]
         found: dict[str, Node | Edge] = {}
         # The drawn assertion whole (ADR-130 Amendment 2), as stored, not as a reader is shown it.
         with sources_in_full():
@@ -253,6 +262,17 @@ class BoardGradedItems:
             drawn = element.provenance.drawn if element is not None else None
             if element is None or drawn is None:
                 unread.append(registered.item_id)
+                continue
+            items.append(GradedItem(element, drawn.grading, drawn.original_grading))
+        named = {i.element_id for i in live}
+        for kind, element_id in held:
+            if element_id in named:
+                continue
+            element = found.get(element_id)
+            drawn = element.provenance.drawn if element is not None else None
+            if element is None or drawn is None:
+                # Not read back: refused whole, as an unread registry item is (named by its id).
+                unread.append(f"copy {element_id}")
                 continue
             items.append(GradedItem(element, drawn.grading, drawn.original_grading))
         return Inventory(items=items, unread=unread)

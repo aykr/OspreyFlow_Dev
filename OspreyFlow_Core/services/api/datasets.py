@@ -60,6 +60,7 @@ built once no case names two.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol, cast
 
@@ -272,6 +273,11 @@ class DatasetStore(Protocol):
     async def set_promotion_policy(
         self, dataset_id: str, policy: PromotionPolicy
     ) -> tuple[PromotionPolicy, Dataset]: ...
+    #: ADR-143 Amendment 2 decision 7 (L3.9): a drawn dataset's merge, once, moving its home case
+    #: onto the target in the same transaction; and its undoing, by the merge's revert.
+    async def drawn_merged_of(self, dataset_id: str) -> DrawnMerged | None: ...
+    async def merge_drawn(self, merged: DrawnMerged) -> None: ...
+    async def unmerge_drawn(self, dataset_id: str) -> DrawnMerged | None: ...
 
 
 class DrawnNotCopied(Exception):
@@ -284,6 +290,24 @@ def refuse_copying_drawn(kinds: Iterable[str]) -> None:
     is written."""
     if DRAWN in kinds:
         raise DrawnNotCopied
+
+
+@dataclass(frozen=True)
+class DrawnMerged:
+    """A drawn dataset merged into another (ADR-143 Amendment 2 decision 7; L3.9): its home case
+    reads `into` from then on, and the drawn dataset itself read-only, kept for its audit (so what
+    did not become data stays readable to the same members, and no one else). A revert of the
+    merge's load undoes it."""
+
+    dataset_id: str
+    into: str
+    load_id: str
+    case_id: str
+    merged_at: datetime
+
+
+class DrawnAlreadyMerged(Exception):
+    """One merge per drawn dataset."""
 
 
 class HomeCaseHeld(Exception):
@@ -436,6 +460,8 @@ class InMemoryDatasetStore:
         #: Each dataset's home case (ADR-145 Amendment 4 decision 2).
         self.homes: dict[str, HomeCase] = {}
         self.owners_may_be: DatasetOwnersMayBe = "people_and_teams"
+        #: Each drawn dataset merged into another (L3.9).
+        self.merged: dict[str, DrawnMerged] = {}
 
     def add(self, dataset: Dataset) -> Dataset:
         self.datasets[dataset.id] = dataset
@@ -569,7 +595,28 @@ class InMemoryDatasetStore:
             for i in self.cases.get(investigation_id, [])
         ]
         layer = await self.layer_of_case(investigation_id)
-        return read_set(chosen, layer or self.layer_reads.get(investigation_id))
+        held = read_set(chosen, layer or self.layer_reads.get(investigation_id))
+        # A merged drawing's case reads its drawn dataset too, read-only (decision 7).
+        drawn = [m.dataset_id for m in self.merged.values() if m.case_id == investigation_id]
+        return list(dict.fromkeys([*held, *drawn])) if held else held
+
+    async def drawn_merged_of(self, dataset_id: str) -> DrawnMerged | None:
+        return self.merged.get(dataset_id)
+
+    async def merge_drawn(self, merged: DrawnMerged) -> None:
+        if merged.dataset_id in self.merged:
+            raise DrawnAlreadyMerged(merged.dataset_id)
+        held = self.cases.get(merged.case_id, [])
+        if held != [merged.dataset_id]:
+            raise DrawnAlreadyMerged(merged.dataset_id)
+        self.merged[merged.dataset_id] = merged
+        self.cases[merged.case_id] = [merged.into]
+
+    async def unmerge_drawn(self, dataset_id: str) -> DrawnMerged | None:
+        merged = self.merged.pop(dataset_id, None)
+        if merged is not None and self.cases.get(merged.case_id) == [merged.into]:
+            self.cases[merged.case_id] = [dataset_id]
+        return merged
 
     async def read_only_layer_of(self, investigation_id: str) -> str | None:
         return self.layer_reads.get(investigation_id)
@@ -762,6 +809,15 @@ CREATE TABLE IF NOT EXISTS home_cases (
     investigation_id TEXT NOT NULL UNIQUE,
     made_at TIMESTAMPTZ NOT NULL,
     made_by TEXT NOT NULL
+);
+-- ADR-143 Amendment 2 decision 7 (L3.9): a drawn dataset merged into another, once; its home case
+-- reads the target from then on, and the drawn dataset read-only.
+CREATE TABLE IF NOT EXISTS drawn_merged (
+    dataset_id TEXT PRIMARY KEY REFERENCES datasets (id),
+    into_dataset TEXT NOT NULL REFERENCES datasets (id),
+    load_id TEXT NOT NULL UNIQUE,
+    case_id TEXT NOT NULL,
+    merged_at TIMESTAMPTZ NOT NULL
 );
 -- ADR-145 decision 8: how a drawn item is promoted into the dataset.
 ALTER TABLE datasets ADD COLUMN IF NOT EXISTS promotion_policy TEXT NOT NULL
@@ -1019,7 +1075,60 @@ class PostgresDatasetStore:
             )
         layer = await self.layer_of_case(investigation_id)
         borrowed = None if layer else await self.read_only_layer_of(investigation_id)
-        return read_set([_row(r) for r in rows], layer or borrowed)
+        held = read_set([_row(r) for r in rows], layer or borrowed)
+        if not held:
+            return held
+        # A merged drawing's case reads its drawn dataset too, read-only (decision 7).
+        async with self._pool.acquire() as conn:
+            drawn = await conn.fetch(
+                "SELECT dataset_id FROM drawn_merged WHERE case_id = $1 ORDER BY dataset_id",
+                investigation_id,
+            )
+        return list(dict.fromkeys([*held, *(r["dataset_id"] for r in drawn)]))
+
+    async def drawn_merged_of(self, dataset_id: str) -> DrawnMerged | None:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT dataset_id, into_dataset AS into, load_id, case_id, merged_at "
+                "FROM drawn_merged WHERE dataset_id = $1",
+                dataset_id,
+            )
+        return DrawnMerged(**dict(row)) if row is not None else None
+
+    async def merge_drawn(self, merged: DrawnMerged) -> None:
+        async with self._pool.acquire() as conn, conn.transaction():
+            try:
+                await conn.execute(
+                    "INSERT INTO drawn_merged (dataset_id, into_dataset, load_id, case_id, "
+                    "merged_at) VALUES ($1, $2, $3, $4, $5)",
+                    merged.dataset_id, merged.into, merged.load_id, merged.case_id,
+                    merged.merged_at,
+                )  # fmt: skip
+            except asyncpg.UniqueViolationError as already:
+                raise DrawnAlreadyMerged(merged.dataset_id) from already
+            moved = await conn.execute(
+                "UPDATE investigation_datasets SET dataset_id = $3 "
+                "WHERE investigation_id = $1 AND dataset_id = $2",
+                merged.case_id, merged.dataset_id, merged.into,
+            )  # fmt: skip
+            if moved != "UPDATE 1":
+                raise DrawnAlreadyMerged(merged.dataset_id)
+
+    async def unmerge_drawn(self, dataset_id: str) -> DrawnMerged | None:
+        async with self._pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                "DELETE FROM drawn_merged WHERE dataset_id = $1 "
+                "RETURNING dataset_id, into_dataset AS into, load_id, case_id, merged_at",
+                dataset_id,
+            )
+            if row is None:
+                return None
+            await conn.execute(
+                "UPDATE investigation_datasets SET dataset_id = $2 "
+                "WHERE investigation_id = $1 AND dataset_id = $3",
+                row["case_id"], dataset_id, row["into"],
+            )  # fmt: skip
+        return DrawnMerged(**dict(row))
 
     async def read_only_layer_of(self, investigation_id: str) -> str | None:
         async with self._pool.acquire() as conn:

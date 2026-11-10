@@ -458,6 +458,14 @@ test("drawn items are promoted from the sheet by keyboard", async ({ page }) => 
   registerCovered("BOARD_ACTIONS", "promote-drawn-items-by-keyboard");
 });
 
+test("a drawer the promotion routes do not admit is offered no Promote…", async ({ page }) => {
+  // CARRIES (docs, D2a): an Editor draws on their own board but may not promote; the Conduit says so.
+  await open(page, "?board=b-wing&promote=no");
+  // A drawer still: the palette to declare an item is drawn.
+  await expect(page.getByRole("group", { name: "Type of item to declare" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Promote…" })).toHaveCount(0);
+});
+
 test("the promotion sheet closes on Escape, back to Promote…", async ({ page }) => {
   await open(page, "?board=b-wing&policy=second_person_reviews");
   await press(page, "Promote…");

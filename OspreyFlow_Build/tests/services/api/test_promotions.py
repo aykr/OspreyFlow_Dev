@@ -2099,3 +2099,39 @@ def test_the_proposed_type_branch_fails_with_the_model_check_applied_to_every_ty
     monkeypatch.setattr(Promotions, "model_check_applies", lambda self, name, refusals: True)
     refused = _promote(board, *ticked)
     assert refused.status_code == 422 and refused.json()["error"] == "check_failed"
+
+
+# --- CARRIES (docs, D2a): Promote… offered only to those the routes admit ----------------------
+
+
+@pytest.mark.parametrize(
+    ("who", "own", "may_promote"),
+    [
+        ("alice", True, True),  # an Author holding promote_to_dataset, on her own board
+        ("bob", True, False),  # an Editor: draws on his own board, may not promote
+        ("drew", True, False),  # an Author who draws but holds no promote_to_dataset
+        ("sam", False, False),  # an Author holding every right, on another's shared board
+        ("erin", False, False),  # a Data Engineer Author, on another's shared board
+    ],
+)
+def test_an_opened_board_offers_promote_only_to_one_the_promotion_routes_admit(
+    pw: SimpleNamespace, who: str, own: bool, may_promote: bool
+) -> None:
+    """Each of the routes' conditions on its own (the fourth review, minor 10): the creator, the
+    rights, the Author level."""
+    PEOPLE.setdefault("drew", Principal(id="drew", clearance="SECRET", org_unit=UNIT,
+                                        roles=["right:draw_on_boards", "right:investigate"]))  # fmt: skip
+    pw.cases.grants[K]["drew"] = AccessLevel.AUTHOR
+    pw.cases.grants[K]["erin"] = AccessLevel.AUTHOR
+    if own:
+        board = _board(who)
+    else:
+        board = _board("alice")
+        shared = _as("alice").post(f"/v1/investigations/{K}/views/{board}/share")
+        assert shared.status_code == 200, shared.text
+    opened = _as(who).get(f"/v1/investigations/{K}/boards/{board}")
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["may_promote"] is may_promote
+    # The flag says what the route answers: the sheet admits exactly those it offers it to.
+    sheet = _as(who).get(f"/v1/investigations/{K}/boards/{board}/promotion-sheet")
+    assert (sheet.status_code == 200) is may_promote, sheet.text

@@ -124,7 +124,10 @@ describe("Analyst promotions", () => {
   it("says who has Review promotions when the reader does not", async () => {
     serve({ "GET /v1/datasets/src/promotions": () => ({ status: 403, body: { detail: { error: "right_required" } } }) });
     show();
-    expect(await screen.findByText(/You need Review promotions/)).toBeTruthy();
+    // The rule, in words (CARRIES, docs D2a): the dataset's Authors holding the right, not a role.
+    expect(
+      await screen.findByText("You need Review promotions to see the analyst promotions into this dataset: they are reviewed by the dataset's Authors who hold it."),
+    ).toBeTruthy();
   });
 
   it("draws the removed cases' layers for an Author, and cancels a merge's grant when it is closed", async () => {
@@ -154,5 +157,35 @@ describe("Analyst promotions", () => {
     show();
     await screen.findByText(/No analyst promotion/);
     expect(screen.queryByText(/Removed cases/)).toBeNull();
+  });
+
+  it("shows a drawn merge's matches to its reviewer before they approve (L3.9)", async () => {
+    const p = P({ trigger: "drawn_merge", case_name: "Night visits" });
+    serve({
+      "GET /v1/datasets/src/promotions": () => ({ status: 200, body: { promotions: [p] } }),
+      "GET /v1/datasets/src/promotions/p1": () => ({
+        status: 200,
+        body: { ...DETAILS(p).body, matches: [{ drawn: "e1", drawn_label: "Mercer", loaded: "p-loaded", loaded_label: "Mercer", loaded_type: "Person", score: 1, why: "chosen at the merge" }] },
+      }),
+    });
+    show();
+    await screen.findByText("promotion-1");
+    fireEvent.click(screen.getByRole("button", { name: /Review/ }));
+    const list = await screen.findByRole("list", { name: "Proposed matches" });
+    expect(list.textContent).toBe("Mercer and Mercer (Person), 100%");
+  });
+
+  it("says which of a drawn merge's items go in as another type (Amendment 7)", async () => {
+    const p = P({ trigger: "drawn_merge", case_name: "Night visits" });
+    const fight = { element_id: "n2", kind: "node", type: "Incident", label: "Night fight", marking: "OFFICIAL", goes_in_as: "Organisation" };
+    serve({
+      "GET /v1/datasets/src/promotions": () => ({ status: 200, body: { promotions: [p] } }),
+      "GET /v1/datasets/src/promotions/p1": () => ({ status: 200, body: { ...DETAILS(p).body, items: [...DETAILS(p).body.items, fight] } }),
+    });
+    show();
+    await screen.findByText("promotion-1");
+    fireEvent.click(screen.getByRole("button", { name: /Review/ }));
+    expect(await screen.findByText(/Incident \(goes in as a new Organisation\), OFFICIAL/)).toBeTruthy();
+    expect(screen.getByText(/^Person, OFFICIAL/)).toBeTruthy();
   });
 });

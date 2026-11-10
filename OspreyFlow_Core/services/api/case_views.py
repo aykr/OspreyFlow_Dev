@@ -28,7 +28,7 @@ does for the case; it applies the view's `window` to the timeline itself.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -63,12 +63,20 @@ class StoredCaseView(BaseModel):
     threshold: float | None = None
     drawing: bool = False
     converted_from_case: str | None = None
+    #: A drawing merged into a dataset (ADR-143 Amendment 2 decision 7; L3.9): the merge's load,
+    #: and the drawn nodes the merge added to the selection (taken off again by its revert).
+    merged_load: str | None = None
+    merged_added: list[NodeId] = Field(default_factory=list)
 
     def wire(self) -> CaseView:
         """What a reader is sent: the selection counted, never named."""
         return CaseView(
-            **self.model_dump(exclude={"node_ids", "layout"}),
-            chosen=len(self.node_ids) if self.node_ids is not None else None,
+            **self.model_dump(exclude={"node_ids", "layout", "merged_added"}),
+            # A merged drawing's drawn nodes are not counted (L3.9): some may be above a reader,
+            # and the merge, not its creator, chose them (rule 7; the lane review, item 13).
+            chosen=len(set(self.node_ids) - set(self.merged_added))
+            if self.node_ids is not None
+            else None,
         )
 
 
@@ -110,6 +118,29 @@ class CaseViewStore(Protocol):
         add_node_ids: Sequence[NodeId] = (),
         layout: dict[NodeId, NodePosition] | None = None,
     ) -> StoredCaseView: ...
+    #: A drawing merged (L3.9): each board of the case becomes a view (drawing off), its drawn
+    #: nodes added to its selection, its layout kept and its sharing too; undone by the revert.
+    async def merge_boards(
+        self, case_id: str, load_id: str, drawn: Mapping[str, Sequence[NodeId]]
+    ) -> int: ...
+    async def unmerge_boards(self, case_id: str, load_id: str) -> int: ...
+
+
+def _merged(view: StoredCaseView, load_id: str, drawn: Sequence[NodeId]) -> StoredCaseView:
+    held = list(view.node_ids or [])
+    added = [n for n in dict.fromkeys(drawn) if n not in held]
+    return view.model_copy(
+        update={"drawing": False, "merged_load": load_id, "merged_added": added,
+                "node_ids": held + added}
+    )  # fmt: skip
+
+
+def _unmerged(view: StoredCaseView) -> StoredCaseView:
+    added = set(view.merged_added)
+    return view.model_copy(
+        update={"drawing": True, "merged_load": None, "merged_added": [],
+                "node_ids": [n for n in view.node_ids or [] if n not in added]}
+    )  # fmt: skip
 
 
 def _made(
@@ -242,6 +273,23 @@ class InMemoryCaseViewStore:
         await self._own(case_id, view_id, reader)
         del self.views[view_id]
 
+    async def merge_boards(
+        self, case_id: str, load_id: str, drawn: Mapping[str, Sequence[NodeId]]
+    ) -> int:
+        boards = [v for v in self.views.values() if v.case_id == case_id and v.drawing]
+        for board in boards:
+            self.views[board.id] = _merged(board, load_id, drawn.get(board.id, ()))
+        return len(boards)
+
+    async def unmerge_boards(self, case_id: str, load_id: str) -> int:
+        held = [
+            v for v in self.views.values()
+            if v.case_id == case_id and not v.drawing and v.merged_load == load_id
+        ]  # fmt: skip
+        for view in held:
+            self.views[view.id] = _unmerged(view)
+        return len(held)
+
 
 _BOOTSTRAP_SQL = """
 CREATE TABLE IF NOT EXISTS case_views (
@@ -259,7 +307,7 @@ CREATE INDEX IF NOT EXISTS case_views_by_case ON case_views (case_id);
 """
 
 #: The fields kept in `lens`: what the view shows and how, none of it data.
-_LENS = {"node_ids", "filter", "layout", "window", "threshold"}
+_LENS = {"node_ids", "filter", "layout", "window", "threshold", "merged_load", "merged_added"}
 
 _COLUMNS = "id, case_id, name, created_by, created_at, shared, lens, drawing, converted_from_case"
 
@@ -411,6 +459,37 @@ class PostgresCaseViewStore:
                 "DELETE FROM case_views WHERE id = $1 AND created_by = $2", view_id, reader
             )
 
+    async def _rewrite(self, conn: Any, view: StoredCaseView) -> None:
+        await conn.execute(
+            "UPDATE case_views SET lens = $2, drawing = $3 WHERE id = $1",
+            view.id, json.dumps(view.model_dump(mode="json", include=_LENS)), view.drawing,
+        )  # fmt: skip
+
+    async def merge_boards(
+        self, case_id: str, load_id: str, drawn: Mapping[str, Sequence[NodeId]]
+    ) -> int:
+        async with self._pool.acquire() as conn, conn.transaction():
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM case_views WHERE case_id = $1 AND drawing FOR UPDATE",
+                case_id,
+            )
+            for row in rows:
+                board = _row(row)
+                await self._rewrite(conn, _merged(board, load_id, drawn.get(board.id, ())))
+        return len(rows)
+
+    async def unmerge_boards(self, case_id: str, load_id: str) -> int:
+        async with self._pool.acquire() as conn, conn.transaction():
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM case_views WHERE case_id = $1 AND NOT drawing "
+                "AND lens->>'merged_load' = $2 FOR UPDATE",
+                case_id,
+                load_id,
+            )
+            for row in rows:
+                await self._rewrite(conn, _unmerged(_row(row)))
+        return len(rows)
+
 
 # --- opening a view -------------------------------------------------------------------------
 
@@ -474,7 +553,10 @@ async def open_view(
     """ADR-144 decision 2: the view's case re-read now, as `principal` may see it."""
     if view.node_ids is not None:
         nodes, edges = await _read_selection(graph, view.node_ids, principal)
-        missing = len(set(view.node_ids)) - len(nodes)
+        # A merged drawing's drawn nodes (`merged_added`) are shown when the reader may see them
+        # and never counted when not, as on the board they came from (rule 7).
+        added = set(view.merged_added)
+        missing = len(set(view.node_ids) - added) - sum(1 for n in nodes if n.id not in added)
     else:
         assert view.filter is not None  # one lens, exactly (`CaseViewInput`)
         nodes, edges = await working_set.filtered_view(view.case_id, principal, view.filter)

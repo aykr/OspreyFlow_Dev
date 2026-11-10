@@ -15,6 +15,7 @@ the reader's own principal, so it never widens what its reader may see (ADR-099)
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -97,6 +98,27 @@ class CaseView(BaseModel):
     #: The retired case this view was converted from by the upgrade (ADR-144 decision 6), whose
     #: audit stays readable from the view; `None` for a view a person saved.
     converted_from_case: str | None = None
+    #: A drawing merged into a dataset (ADR-143 Amendment 2 decision 7; L3.9): the load that merged
+    #: it. The view keeps its sharing and layout; what did not become data is on it as annotations.
+    merged_load: str | None = None
+
+
+class ViewAnnotation(BaseModel):
+    """What a merged drawing keeps of a drawn item on its view (Amendment 2 decision 7): what did
+    not become data, read through the reader's own handling, so an item they may not see has none
+    (rule 3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    element_id: str
+    kind: Literal["node", "link"]
+    label: str
+    marking: str
+    grading: str | None = None
+    source_note: str | None = None
+    #: "Drawn by A. Field, merged as load 8812", or "… not merged: why".
+    words: str
+    merged: bool
 
 
 class CaseViewOpened(BaseModel):
@@ -111,6 +133,7 @@ class CaseViewOpened(BaseModel):
     edges: list[Edge]
     layout: dict[NodeId, NodePosition] = Field(default_factory=dict)
     missing: int = Field(ge=0)
+    annotations: list[ViewAnnotation] = Field(default_factory=list)
 
 
 ALL_MODELS: tuple[type[BaseModel], ...] = (
@@ -118,5 +141,6 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     NodePosition,
     CaseViewInput,
     CaseView,
+    ViewAnnotation,
     CaseViewOpened,
 )

@@ -19,7 +19,7 @@ from services.api.case_views import NotTheViewsCreator, PostgresCaseViewStore, V
 from services.api.config import PostgresConfig
 
 from conduit_common.identity import new_id
-from schemas.case_views import CaseViewInput
+from schemas.case_views import CaseViewInput, NodePosition
 
 CASE = "case-k"
 
@@ -180,3 +180,31 @@ async def test_the_postgres_view_clause_check_fails_with_it_planted_out(
         assert [r.id for r in await store.list_for_document("doc-1", bob)] == [candidate]
     finally:
         await store.close()
+
+
+async def test_postgres_turns_a_drawings_boards_into_views_and_back(
+    store: PostgresCaseViewStore,
+) -> None:
+    """ADR-143 Amendment 2 decision 7 (L3.9): a merged drawing's boards become views, their drawn
+    nodes added to the selection, the layout kept; another case's board is untouched; the revert
+    takes back exactly what the merge added."""
+    board = await store.save_board("case-d", "Night", "alice", node_ids=["p1"])
+    await store.update_board("case-d", board.id, "alice",
+                             layout={"d1": NodePosition(x=0.1, y=0.2)})  # fmt: skip
+    elsewhere = await store.save_board("case-x", "Else", "alice", node_ids=[])
+    assert await store.merge_boards("case-d", "promotion-1", {board.id: ["d1", "d2", "p1"]}) == 1
+    held = await store.get("case-d", board.id, "alice")
+    assert (held.drawing, held.merged_load, held.node_ids, held.merged_added) == (
+        False, "promotion-1", ["p1", "d1", "d2"], ["d1", "d2"],
+    )  # fmt: skip
+    assert held.layout == {"d1": NodePosition(x=0.1, y=0.2)}
+    assert held.wire().merged_load == "promotion-1"
+    assert [v.id for v in await store.visible_in("case-d", "alice")] == [board.id]
+    assert await store.boards_in("case-d", "alice") == []
+    assert (await store.get("case-x", elsewhere.id, "alice")).drawing
+    assert await store.unmerge_boards("case-d", "promotion-other") == 0
+    assert await store.unmerge_boards("case-d", "promotion-1") == 1
+    back = await store.get("case-d", board.id, "alice")
+    assert (back.drawing, back.merged_load, back.node_ids, back.merged_added) == (
+        True, None, ["p1"], [],
+    )  # fmt: skip

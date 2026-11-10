@@ -854,6 +854,17 @@ The invariants, each with the test that fails if it is broken (rule 12):
 - **A drawing with no case** (Amendment 2 decision 5) makes a drawn dataset, its home case and its
   board in one step; what is drawn there is written to the drawn dataset and to no layer.
   - `test_a_drawing_with_no_case_makes_its_dataset_case_and_board`, red with the writer aimed at a layer.
+- **Merged into another dataset** (Amendment 2 decisions 6 and 7; Amendment 3 decision 2; Amendment 7;
+  L3.9) by an Author of the target holding `merge_datasets`, as one load (trigger `drawn_merge`): each
+  drawn type is mapped onto any type of the target's model (the owner's ruling), or left out; an item
+  of a type mapped onto itself gains the target, the same element; one mapped onto another type is
+  written as a new element of that type in the target, its properties as placed and its marking its
+  original's (never lower), with an `inferred` `SAME_AS` back to the drawn original in no dataset (ADR-099: they share none), so no case reads or collapses it (an element keeps
+  its type for good, and nothing is collapsed: rule 6); a chosen match is written as an `inferred`, scored `SAME_AS`, never collapsed; afterwards its case
+  reads the target and the drawing read-only, and its boards are views with annotations. Spec 03,
+  *Merging a drawn dataset*, has the routes.
+  - `tests/services/api/test_drawn_merge.py`, each check red by its plant (ADR-143 Amendment 7 names
+    the record).
 - **Watched** (Amendment 2 decision 8): drawing an item sets one watch (`DrawnWatch`, kind
   `drawn_watch`) on the case's dataset, owned by its author; withdrawing it ends the watch; a watch on
   an item the reader may not see is withheld whole. Its alerts' queue is L3.6's with L2.10.
@@ -1072,7 +1083,8 @@ conformance fixture, a manual `SAME_AS`, a Splink write.
 
 **`reverted`** is a universal axis, not principal-dependent: a reverted element is invisible to
 every read, any clearance, the same way a classification a principal cannot see is invisible to
-them — `services/ingest`'s `revert_load` is the only writer, via `GraphPort.revert_elements`. It
+them — `services/ingest`'s `revert_load` writes it, via `GraphPort.revert_elements`, as does a drawn
+merge's operator revert for its own copies and links (`scripts.revert_promotion`, ADR-143 Amendment 7). It
 is never deleted, only flagged, so the audit trail stays intact and the same element ID can be
 cited in an audit query after the fact.
 
@@ -1879,7 +1891,8 @@ are on the port too, each taking the principal like every other read.
   link for an analyst moves its notes to the new id in the same step; the old link and the change
   between them stay readable through the change history.
 - **`revert_elements(node_ids, edge_ids, tx) -> None`.** Sets `AuditStub.reverted` on existing
-  elements; `services/ingest`'s `revert_load` is the only caller. No `principal` argument, unlike
+  elements; `services/ingest`'s `revert_load` calls it, and so does a drawn merge's operator revert for
+  its own writes (`scripts.revert_promotion`, ADR-143 Amendment 7). No `principal` argument, unlike
   every read method — this is a backend write attributed by the caller's own audit trail (the
   load ledger), not a principal-scoped read. A reverted element is invisible to every read
   afterwards, any clearance, and is never actually deleted. It also clears `withdrawn_by_load`.

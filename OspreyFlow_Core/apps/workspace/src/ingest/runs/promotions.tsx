@@ -74,7 +74,7 @@ export function AnalystPromotions({ apiBaseUrl, bearerToken, datasetId, canRever
       setPromotions(null);
       setRefused(
         answer.code === "right_required" || answer.code === "forbidden"
-          ? "You need Review promotions to see the analyst promotions into this dataset; a data engineer of the dataset has it."
+          ? "You need Review promotions to see the analyst promotions into this dataset: they are reviewed by the dataset's Authors who hold it."
           : answer.message,
       );
     }
@@ -197,13 +197,28 @@ export function AnalystPromotions({ apiBaseUrl, bearerToken, datasetId, canRever
               <div key={i.element_id} className={govuk ? "govuk-summary-list__row" : "board__summary-row"}>
                 <dt className={govuk ? "govuk-summary-list__key" : "label"}>{i.label}</dt>
                 <dd className={govuk ? "govuk-summary-list__value" : undefined}>
-                  {i.type}, {i.marking}
+                  {i.type}
+                  {i.goes_in_as ? ` (goes in as a new ${i.goes_in_as})` : ""}, {i.marking}
                   {i.grading ? `, graded ${i.grading}` : ""}
                   {i.source_note ? ` — ${i.source_note}` : ""}
                 </dd>
               </div>
             ))}
           </dl>
+          {/* A drawn dataset's merge (L3.9): the matches it proposes are approved with it, so the
+              reviewer reads each, as the Conduit gives it to them. */}
+          {(open.matches ?? []).length > 0 && (
+            <>
+              <h5 className={govuk ? "govuk-heading-s" : "label"}>Proposed as the same, for a person to confirm later</h5>
+              <ul className={govuk ? "govuk-list" : undefined} aria-label="Proposed matches">
+                {(open.matches ?? []).map((m) => (
+                  <li key={`${m.drawn} ${m.loaded}`}>
+                    {m.drawn_label} and {m.loaded_label} ({m.loaded_type}), {Math.round(m.score * 100)}%
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <LeftOutList promotion={open.promotion} govuk={govuk} />
           {open.promotion.may_review && !rejecting && (
             <div className="board__row">

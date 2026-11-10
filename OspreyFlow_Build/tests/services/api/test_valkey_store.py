@@ -681,7 +681,7 @@ async def test_a_script_that_meets_a_missing_link_entry_refuses_and_the_write_re
 async def test_every_write_is_chunked_and_each_chunk_leaves_the_index_whole(
     indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
 ) -> None:
-    """Violation caught: a script that does the work of a branch or a restore (tens of thousands of
+    """Violation caught: a script that does the work of a restore (tens of thousands of
     elements) in one go, which holds Valkey for as long as it takes. Each script takes at most a
     thousand elements, and the bodies and the index agree after every one."""
     working_store, client, case = indexed_store
@@ -893,32 +893,6 @@ async def test_the_entries_carry_the_epoch_they_were_read_at(
     entries = await working_store.access_entries(case, ["a"], ["ab"])
 
     assert entries.epoch == counts.epoch != ""
-
-
-async def test_a_branch_that_fails_at_a_chunk_leaves_no_half_built_case(
-    indexed_store: tuple[ValkeyWorkingSetStore, Valkey, str],
-) -> None:
-    """Violation caught: a branch of several chunks that fails part-way and leaves the first
-    chunks as a new case that looks like a branch. The new case's working set is cleared before
-    the failure is raised."""
-    working_store, client, case = indexed_store
-    new_case = f"{case}-branch"
-    await working_store.add_nodes(case, [index_node(f"n{i}") for i in range(2_500)])
-    service = WorkingSetService(FakeGraphPort(Subgraph(nodes=[], edges=[])), working_store, SCHEME)
-    runs: list[str] = []
-
-    async def fail_at_the_second_chunk(name: str, size: int) -> None:
-        runs.append(name)
-        if runs.count("add_nodes") == 2 and name == "add_nodes":
-            raise RuntimeError("injected failure at chunk 2")
-
-    working_store._after_script = fail_at_the_second_chunk
-    with pytest.raises(RuntimeError, match="injected failure"):
-        await service.branch(case, new_case, SECRET_READER)
-
-    for part in ("nodes", "edges", "access_nodes", "node_counts", "access_meta", "seq", "deltas"):
-        assert not await client.exists(f"ws:{new_case}:{part}"), part
-    assert await working_store.node_ids(new_case) == set()
 
 
 async def test_a_restore_that_fails_part_way_has_lost_nothing_it_held(

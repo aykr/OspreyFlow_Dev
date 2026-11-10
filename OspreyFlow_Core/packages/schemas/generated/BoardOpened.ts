@@ -132,6 +132,7 @@ export type GradeHandlings =
   | [string, string, string, string, string, string, string, string, string, string, string]
   | [string, string, string, string, string, string, string, string, string, string, string, string];
 export type MayDraw = boolean;
+export type MayPromote = boolean;
 
 /**
  * A board opened now, as the reader may see it. `nodes` are its drawn items and its loaded
@@ -153,6 +154,7 @@ export interface BoardOpened {
   grading_scheme?: GradingScheme;
   grading_grades?: GradingSchemeAnswer | null;
   may_draw?: MayDraw;
+  may_promote?: MayPromote;
   [k: string]: unknown;
 }
 /**

@@ -44,6 +44,8 @@ const promotion = (over: Json): Json => ({
 
 const promotions: Json[] = [
   promotion({}),
+  // L3.9: a drawn dataset's merge waiting for review, with a match in its details.
+  promotion({ id: "p-3", load_id: "promotion-drawn-1", trigger: "drawn_merge", case_name: "Night visits", left_out: [] }),
   promotion({ id: "p-0", load_id: "promotion-night-1", case_name: "Night shift", status: "committed", reviewed_by: "dana",
     reviewed_by_name: "D. Engineer", nodes: 1, links: 0, may_review: false, why_not: null, revert_command: "x" }),
 ];  // prettier-ignore
@@ -84,10 +86,17 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     }
     return json(200, {
       promotion: p, withheld: false,
+      matches: p.trigger === "drawn_merge"
+        ? [{ drawn: "n-a", drawn_label: "Unknown male “Tall”", loaded: "p-loaded", loaded_label: "Tall, J.", loaded_type: "Person", score: 0.82, why: "chosen at the merge" }]
+        : [],
       items: [
         { element_id: "n-a", kind: "node", type: "Person", label: "Unknown male “Tall”", marking: "OFFICIAL", grading: "B21", source_note: "Wing officer report, 4 Nov" },
         { element_id: "n-b", kind: "node", type: "Vehicle", label: "Blue van", marking: "OFFICIAL", grading: "C32", source_note: "Gate log" },
         { element_id: "e-c", kind: "link", type: "ASSOCIATE_OF", label: "seen together", marking: "OFFICIAL", grading: "B21", source_note: "Visits log" },
+        // A drawn merge's item mapped onto another of the target's types (ADR-143 Amendment 7).
+        ...(p.trigger === "drawn_merge"
+          ? [{ element_id: "n-d", kind: "node", type: "Incident", label: "Night fight", marking: "OFFICIAL", grading: "B21", source_note: "Wing log", goes_in_as: "Organisation" }]
+          : []),
       ],
     });  // prettier-ignore
   }

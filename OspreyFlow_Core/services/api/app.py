@@ -57,7 +57,14 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from scripts.build_local_basemap import GEOFABRIK_REGIONS, load_gazetteer
 from scripts.verify_map import verify_map
 from services.extract.writer import (
@@ -388,9 +395,13 @@ from schemas.packs import (
 from schemas.person_ownership import PersonOwnership
 from schemas.profile import SourceProfile
 from schemas.promotions import (
+    DrawnMergeDryRun,
+    DrawnMergeInput,
+    DrawnMergeSheet,
     LayerDeleted,
     LayerMergeInput,
     LayerMergeSheet,
+    MergeTargets,
     Promotion,
     PromotionDecision,
     PromotionDetails,
@@ -398,6 +409,7 @@ from schemas.promotions import (
     PromotionSheet,
     RemovedCaseLayer,
     RemovedCaseLayers,
+    TypeChoice,
 )
 from schemas.promotions import Promotions as PromotionsList
 from schemas.rights import (
@@ -461,6 +473,7 @@ from . import audit_section as audit_section_module
 from . import compute_routes as compute_routes_module
 from . import connections as connections_module
 from . import dossier as dossier_module
+from . import drawn_merge as drawn_merge_module
 from . import kyc as kyc_module
 from . import map_admin as map_admin_module
 from . import model_admin as model_admin_module
@@ -4065,19 +4078,31 @@ async def save_case_view(
 
 @app.get("/v1/investigations/{investigation_id}/views/{view_id}")
 async def open_case_view(
+    request: Request,
     investigation: InvestigationViewerDep,
     view_id: str,
     principal: PrincipalDep,
     views: CaseViewsDep,
     graph: GraphDep,
     working_set: WorkingSetDep,
+    items: BoardItemsDep,
 ) -> CaseViewOpened:
     """ADR-144 decision 2: the view re-read now, as this reader may see the case; `missing` counts
     the chosen items it could not show and names none."""
     view = await views.get(investigation.id, view_id, principal.id)
-    return await open_view(
+    opened = await open_view(
         view, principal, graph=graph, working_set=working_set, cap_breach=_cap_breach
     )
+    if view.merged_load is None:
+        return opened
+    # A merged drawing (ADR-143 Amendment 2 decision 7): what did not become data, as this reader
+    # may see it, read through their own principal (rule 3).
+    directory = getattr(request.app.state, "principal_names", None)
+    noted = await drawn_merge_module.view_annotations(
+        view, principal, graph=graph, items=items,
+        names=directory.display_names if directory is not None else None,
+    )  # fmt: skip
+    return opened.model_copy(update={"annotations": noted})
 
 
 @app.post(
@@ -4216,14 +4241,22 @@ async def open_board(
     principal: PrincipalDep,
     boards: BoardsDep,
     grading: GradingSettingsDep,
+    investigations: InvestigationsDep,
 ) -> BoardOpened:
     """The board now, as this reader may see it; `missing` counts what it could not show. It
-    offers the deployment's grading scheme (`grading.scheme`, ADR-143 decision 11)."""
+    offers the deployment's grading scheme (`grading.scheme`, ADR-143 decision 11), and says
+    whether this reader may promote from it, asked as the promotion routes ask (CARRIES, docs
+    D2a: *Promote…* offered only to those the route admits; the route still refuses the rest)."""
     board = await boards.board(investigation.id, board_id, principal.id)
     opened = await boards.open(board, principal)
+    may_draw = opened.may_draw and _may_draw(principal)
     return opened.model_copy(
         update={
-            "may_draw": opened.may_draw and _may_draw(principal),
+            "may_draw": may_draw,
+            # Exactly the promotion routes' check (the orchestrator's review, minor 7): the board's
+            # own creator (`own_board`), `_PROMOTES`' rights and the case's Author level.
+            "may_promote": board.created_by == principal.id
+            and await _may_promote(investigation.id, principal, investigations),
             "grading_scheme": grading.scheme,
             "grading_grades": grading.grades,
         }
@@ -4245,6 +4278,21 @@ def _graded_in_the_deployments_scheme(given: Grading | None, grading: GradingSet
 
 def _may_draw(principal: Principal) -> bool:
     return Right.DRAW_ON_BOARDS in rights_for(principal.roles)
+
+
+async def _may_promote(
+    investigation_id: str, principal: Principal, investigations: InvestigationStore
+) -> bool:
+    """`_PROMOTES`' rights and the case's Author level (`InvestigationAuthorDep`), as asked of a
+    promotion route."""
+    held = rights_for(principal.roles)
+    if Right.PROMOTE_TO_DATASET not in held or Right.INVESTIGATE not in held:
+        return False
+    try:
+        await investigations.get_authorized(investigation_id, principal, need=AccessLevel.AUTHOR)
+    except (InvestigationNotFoundError, InsufficientAccessError):
+        return False
+    return True
 
 
 @app.post("/v1/investigations/{investigation_id}/boards/{board_id}/share", dependencies=_DRAWS)
@@ -4595,6 +4643,16 @@ def get_promotions(
         boards=boards,
         store=store,
         investigations=investigations,
+        # A drawn dataset's merge's own writes and decision 7 (L3.9), for every route that may
+        # commit one (the merge itself, and an approval in the target's Runs).
+        merges=drawn_merge_module.MergeCommit(
+            promotions_store=store,
+            graph=boards.graph,
+            datasets=boards.datasets,
+            views=boards.views,
+            items=boards.items,
+            scheme=boards.scheme,
+        ),
         author_level=AccessLevel.AUTHOR,
         # Case-b's `LinkTypeService` (ADR-143 Amendment 4 decision 3), as the app holds it: no
         # quiet fallback for a service without `promotion_refusals` (the independent review of
@@ -4620,6 +4678,18 @@ async def _promotion_not_found_handler(request: Request, exc: PromotionNotFound)
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND, content={"error": "promotion_not_found"}
     )
+
+
+async def _copies_audited(promotions: Any, record: PromotionRecord) -> list[dict[str, Any]]:
+    """A drawn merge's retyped items for its audit entry (ADR-143 Amendment 7): each original, the
+    type it goes in as, and what the load wrote for it (none while it waits or once refused)."""
+    if record.trigger != "drawn_merge":
+        return []
+    return [
+        {"original": c.original, "kind": c.kind, "type": c.type, "written": c.written_id,
+         "same_as": c.same_as_id}
+        for c in await promotions.store.copies_of(record.id)
+    ]  # fmt: skip
 
 
 async def _audit_promotion(
@@ -10191,12 +10261,130 @@ async def decide_promotion(
     """*Approve and commit* or *Reject with a reason* (C9, C11; ADR-133 Amendment 8)."""
     record = await _reviewable(promotions, dataset_id, promotion_id, principal)
     decided = await promotions.decide(record, principal, approve=body.approve, reason=body.reason)
+    copies = await _copies_audited(promotions, decided)
     await _audit_promotion(
         audit, principal, "approve_promotion" if body.approve else "reject_promotion",
-        record.case_id, len(record.node_ids) + len(record.edge_ids), promotion_id=record.id,
-        load_id=record.load_id, dataset_id=dataset_id, reason=body.reason,
+        record.case_id, len(record.node_ids) + len(record.edge_ids) + len(copies),
+        promotion_id=record.id, load_id=record.load_id, dataset_id=dataset_id,
+        reason=body.reason, **({"copies": copies} if copies else {}),
     )  # fmt: skip
     return await promotions.view(decided, principal, show_case=True)  # one of its Authors
+
+
+# --- a drawn dataset merged into another (ADR-143 Amendment 2 decision 6; Amendment 3) -------
+
+#: Amendment 3 decision 2 (L6 answered (a)): `merge_datasets` on every route, and an Author of the
+#: target asked by the service; an administrator does not merge one by being an administrator.
+_MERGES = [Depends(require_right(Right.MERGE_DATASETS))]
+
+
+def get_drawn_merges(
+    promotions: PromotionsDep, investigations: InvestigationsDep
+) -> drawn_merge_module.DrawnMerges:
+    return drawn_merge_module.DrawnMerges(promotions=promotions, cases=investigations)
+
+
+DrawnMergesDep = Annotated[drawn_merge_module.DrawnMerges, Depends(get_drawn_merges)]
+
+
+@app.get("/v1/datasets/{dataset_id}/merge-targets", dependencies=_MERGES)
+async def drawn_merge_targets(
+    dataset_id: StudioDatasetDep, principal: PrincipalDep, merges: DrawnMergesDep
+) -> MergeTargets:
+    """*Merge into a dataset…*: the datasets this reader may merge the drawing into (those they
+    are an Author of, of the drawing's unit), or why it is merged into none."""
+    drawn, _ = await merges.drawn(dataset_id)
+    return await merges.target_list(drawn, principal)
+
+
+_MERGE_MAPPING = TypeAdapter(Annotated[list[TypeChoice], Field(max_length=500)])
+
+
+def _merge_mapping(given: str | None) -> list[TypeChoice]:
+    if not given:
+        return []
+    try:
+        return _MERGE_MAPPING.validate_json(given)
+    except ValidationError:
+        raise PromotionRefused(
+            "not_a_mapping", "The mapping could not be read: choose from Map again.", status=422
+        ) from None
+
+
+@app.get("/v1/datasets/{dataset_id}/merge-sheet", dependencies=_MERGES)
+async def drawn_merge_sheet(
+    dataset_id: StudioDatasetDep,
+    target: str,
+    principal: PrincipalDep,
+    merges: DrawnMergesDep,
+    audit: AuditDep,
+    mapping: str | None = None,
+) -> DrawnMergeSheet:
+    """Map and match: the drawing's items as the merger may see them, against the target's model
+    and the target's loaded nodes alone; audited (it reads the drawing for a merge). `mapping`, a
+    JSON list of `TypeChoice`, is the mapping chosen so far (ADR-143 Amendment 7): the matches are
+    offered as each node goes in under it, as the merge will check them."""
+    chosen = _merge_mapping(mapping)
+    drawn, case_id = await merges.drawn(dataset_id)
+    into = await merges.target(drawn, target, principal)
+    sheet = await merges.sheet(drawn, case_id, into, principal, chosen)
+    await _audit_promotion(
+        audit, principal, "read_drawn_merge_sheet", case_id, len(sheet.items),
+        dataset_id=dataset_id, target_dataset_id=into.id,
+        # The mapping that chose which loaded nodes were offered (the fourth review, minor 7).
+        mapping=[c.model_dump() for c in chosen],
+    )  # fmt: skip
+    return sheet
+
+
+@app.post("/v1/datasets/{dataset_id}/merges/dry-run", dependencies=_MERGES)
+async def drawn_merge_dry_run(
+    dataset_id: StudioDatasetDep,
+    body: DrawnMergeInput,
+    principal: PrincipalDep,
+    merges: DrawnMergesDep,
+    audit: AuditDep,
+) -> DrawnMergeDryRun:
+    """The dry run: every check, nothing written but its audit entry (it reads the drawing for a
+    merge, as the sheet does)."""
+    drawn, case_id = await merges.drawn(dataset_id)
+    into = await merges.target(drawn, body.target_dataset_id, principal)
+    ran = await merges.dry_run(drawn, case_id, into, body, principal)
+    await _audit_promotion(
+        audit, principal, "dry_run_drawn_merge", case_id, ran.nodes + ran.links,
+        dataset_id=dataset_id, target_dataset_id=into.id,
+    )  # fmt: skip
+    return ran
+
+
+@app.post(
+    "/v1/datasets/{dataset_id}/merges",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=_MERGES,
+)
+async def merge_drawn_dataset(
+    dataset_id: StudioDatasetDep,
+    body: DrawnMergeInput,
+    principal: PrincipalDep,
+    merges: DrawnMergesDep,
+    promotions: PromotionsDep,
+    audit: AuditDep,
+) -> Promotion:
+    """*Merge*: one load into the target (trigger `drawn_merge`), committed at once or sent for
+    review under the target's policy."""
+    drawn, case_id = await merges.drawn(dataset_id)
+    into = await merges.target(drawn, body.target_dataset_id, principal)
+    record = await merges.merge(drawn, case_id, into, body, principal)
+    copies = await _copies_audited(promotions, record)
+    await _audit_promotion(
+        audit, principal, "merge_drawn_dataset", case_id,
+        len(record.node_ids) + len(record.edge_ids) + len(copies), promotion_id=record.id,
+        load_id=record.load_id, dataset_id=dataset_id, target_dataset_id=into.id,
+        status=record.status, matches=len(body.matches),
+        # Amendment 7: the mapping chosen, and each retyped item with the element written for it.
+        mapping=[c.model_dump() for c in body.mapping], copies=copies,
+    )  # fmt: skip
+    return await promotions.view(record, principal, show_case=True)  # one of the target's Authors
 
 
 # --- a removed case's layer (ADR-143 Amendment 2 decision 1) ---------------------------------

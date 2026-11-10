@@ -176,6 +176,10 @@ class BoardOpened(BaseModel):
     grading_grades: GradingSchemeAnswer | None = None
     #: Whether this reader may draw on it (its creator, holding `draw_on_boards`).
     may_draw: bool = False
+    #: Whether this reader may promote from it (CARRIES, docs D2a): one who may draw on it, at the
+    #: case's Author level, holding `promote_to_dataset` (the promotion routes' own conditions; they
+    #: still refuse whatever this says).
+    may_promote: bool = False
 
 
 class DrawnItemMade(BaseModel):

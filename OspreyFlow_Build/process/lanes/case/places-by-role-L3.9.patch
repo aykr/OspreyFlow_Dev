@@ -1,0 +1,18 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
+index a585883..b5926f0 100644
+--- a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
++++ b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
+@@ -398,7 +398,12 @@
+     "merge_datasets"
+    ],
+    "places": [],
+-   "answered_hidden": []
++   "answered_hidden": [
++    "drawn_merge_dry_run",
++    "drawn_merge_sheet",
++    "drawn_merge_targets",
++    "merge_drawn_dataset"
++   ]
+   },
+   "right:operate_schedules": {
+    "rights": [

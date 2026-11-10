@@ -76,6 +76,19 @@ test("Back to the case is reached from the banner over an opened view by keyboar
   registerCovered("VIEW_ACTIONS", "go-back-to-the-case-from-an-open-view-by-keyboard");
 });
 
+test("a merged drawing's notes are opened and closed from its view's banner by keyboard", async ({ page }) => {
+  await page.goto("/keyboard/views-harness.html?show=merged");
+  const toggle = page.getByRole("button", { name: "Notes from the drawing (2)" });
+  await toggle.focus();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("Drawn by A. Field, not merged: it stays in the drawing, read-only.")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Mercer")).toHaveCount(0);
+  registerCovered("VIEW_ACTIONS", "open-a-merged-drawings-notes-by-keyboard");
+});
+
 test("another member of the case is shown nothing of a private view, and no share or delete", async ({ page }) => {
   await open(page, "?as=bob");
   const panel = page.getByRole("list", { name: "Views in this case" });

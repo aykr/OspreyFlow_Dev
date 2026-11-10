@@ -2,12 +2,16 @@
 [--dry-run]` (`06_DECISIONS.md` ADR-143 decision 8; the logic is
 `revert_promotion` below, in this operator module alone).
 
-A promotion is a load (trigger `analyst_promotion` or `layer_merge`) that added a dataset to drawn
-elements of a case's analyst layer. Its revert takes that dataset back from exactly those elements,
-in one transaction, so each is in the case's layer only again, as it was before; records the
-promotion `reverted`; clears its board items' `promoted_at`; audits it under `--reverted-by`; and
-clears the Conduit's kept results (`cache:*` in the shared Valkey), since what was counted included
-the promoted elements. Nothing is deleted.
+A promotion is a load (trigger `analyst_promotion`, `layer_merge` or `drawn_merge`) that added a
+dataset to drawn elements of a case's analyst layer or of a drawn dataset. Its revert takes that
+dataset back from exactly those elements, in one transaction, so each is in the case's layer only
+again, as it was before; records the promotion `reverted`; clears its board items' `promoted_at`;
+audits it under `--reverted-by`; and clears the Conduit's kept results (`cache:*` in the shared
+Valkey), since what was counted included the promoted elements. Nothing is deleted. A drawn
+dataset's merge (L3.9) is undone whole: its matches' `SAME_AS`, and its retyped copies with their
+links and `SAME_AS` back (Amendment 7), withdrawn in the same transaction,
+then its case back on its drawing and the views it made boards again (ADR-143 Amendment 2 decision
+7, reverted).
 
 **Stop the Conduit**, as for any load's revert (ADR-127 Amendment 9): the command opens a bare
 connection to the Conduit's address (`OSPREY_CONDUIT_URL`, default `http://api:8000`; no route is
@@ -38,9 +42,16 @@ from typing import Any, Literal
 from services.api.audit import AuditWriter
 from services.api.board_store import PostgresBoardItemStore
 from services.api.cache import invalidate_every_cache
+from services.api.case_views import PostgresCaseViewStore
 from services.api.config import PostgresConfig, ValkeyConfig
+from services.api.datasets import PostgresDatasetStore
+from services.api.drawn_merge import MergeCommit
+from services.api.history import InvestigationHistoryStore
 from services.api.promotion_store import PostgresPromotionStore, PromotionRecord, PromotionStore
 from services.api.promotions import LAYER_DELETE_PREFIX, LAYER_DELETER, PromotionRefused
+from services.api.working_set.service import WorkingSetService
+from services.api.working_set.store import ValkeyWorkingSetStore
+from services.api.working_set_revert import WorkingSetReverter
 from valkey.asyncio import Valkey
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
@@ -64,7 +75,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def revert_promotion(
-    record: PromotionRecord, graph: Any, store: PromotionStore, items: Any
+    record: PromotionRecord,
+    graph: Any,
+    store: PromotionStore,
+    items: Any,
+    merge: Any | None = None,
 ) -> PromotionRecord:
     """The revert of a committed promotion: the dataset taken back from exactly its elements in
     one transaction, the promotion recorded `reverted`, its items' `promoted_at` cleared. The
@@ -80,6 +95,20 @@ async def revert_promotion(
             "not_committed",
             f"Promotion {record.load_id} is {record.status}: nothing to revert.",
         )
+    drawn_merge = record.trigger == "drawn_merge"
+    if drawn_merge and merge is None:
+        raise PromotionRefused("no_merge", "A drawn dataset's merge is reverted with its stores.")
+    # A drawn merge's own matches rest on its nodes, and go with it.
+    matched = await store.matches_of(record.id) if drawn_merge else []
+    own_matches = {r.edge_id for r in matched if r.edge_id}
+    # Its retyped copies (Amendment 7) go with it too: their links and `SAME_AS` are its own, and
+    # a link written since onto a copy refuses the revert as one onto a promoted node does.
+    copies = await store.copies_of(record.id) if drawn_merge else []
+    copy_nodes = [c.written_id for c in copies if c.kind == "node" and c.written_id]
+    own_matches |= {c.written_id for c in copies if c.kind == "link" and c.written_id}
+    own_matches |= {c.same_as_id for c in copies if c.same_as_id}
+    # A drawn link that went in as a copy stays drawn, resting where it was drawn.
+    own_matches |= {c.original for c in copies if c.kind == "link"}
     held = await items.in_case(record.case_id)
     own_drawing = {
         i.element_id for i in held
@@ -93,14 +122,16 @@ async def revert_promotion(
         # that names it (`test_unfiltered_node_lookup_confined.py`). Read inside the revert's own
         # transaction, so the check and the writes are one view of the graph (the independent
         # review of L3.4, item 4).
-        resting = await graph.live_edges_touching(list(record.node_ids), tx=tx)
-        others = set(resting) - set(record.edge_ids) - own_drawing
+        resting = await graph.live_edges_touching([*record.node_ids, *copy_nodes], tx=tx)
+        others = set(resting) - set(record.edge_ids) - own_drawing - own_matches
         if others:
             raise PromotionRefused(
                 "links_rest_on_it",
                 f"{len(others)} link(s) written since rest on its items: revert those first.",
             )
         await graph.revert_promotion(record.load_id, record.dataset_id, tx)
+        if drawn_merge and merge is not None:  # refused above without it
+            await merge.undo_writes(record, tx)
         if layer_deleted:
             await graph.withdraw_layer(
                 record.layer_id, f"{LAYER_DELETE_PREFIX}{record.case_id}", tx
@@ -115,6 +146,8 @@ async def revert_promotion(
         raise PromotionRefused("already_decided", "This promotion has changed since it was read.")
     await graph.commit_transaction(tx)
     await items.mark_promoted(record.case_id, list(record.item_ids), None)
+    if drawn_merge and merge is not None:
+        await merge.undo(record)
     if layer_deleted:
         await items.withdraw(
             record.case_id, list(record.item_ids), LAYER_DELETER, datetime.now(UTC)
@@ -183,14 +216,21 @@ async def run(
     audit: Any,
     invalidate: Any,
     conduit: Any = conduit_state,
+    merge: Any | None = None,
 ) -> int:
     record = await store.by_load(load_id)
     if record is None:
         print(f"No promotion has the load id {load_id}. Nothing was changed.")
         return 1
+    # A drawn merge's retyped copies (ADR-143 Amendment 7) are its own writes, withdrawn with it:
+    # said, and audited by what the load wrote.
+    copies = await store.copies_of(record.id) if record.trigger == "drawn_merge" else []
+    written = [{"original": c.original, "written": c.written_id, "same_as": c.same_as_id}
+               for c in copies]  # fmt: skip
     says = (
         f"promotion {load_id} into {record.dataset_id} from case {record.case_id}: "
         f"{len(record.node_ids)} items and {len(record.edge_ids)} links"
+        + (f", and {len(copies)} new item(s) of another type written for it" if copies else "")
     )
     if record.status != "committed":
         print(f"Refused: {says} is {record.status}, not committed. Nothing was changed.")
@@ -208,11 +248,12 @@ async def run(
         action="revert_promotion",
         investigation_id=record.case_id,
         resolved_query={"load_id": load_id, "dataset_id": record.dataset_id,
-                        "node_ids": list(record.node_ids), "edge_ids": list(record.edge_ids)},
-        result_cardinality=len(record.node_ids) + len(record.edge_ids),
+                        "node_ids": list(record.node_ids), "edge_ids": list(record.edge_ids),
+                        **({"copies": written} if written else {})},
+        result_cardinality=len(record.node_ids) + len(record.edge_ids) + len(copies),
     )  # fmt: skip
     try:
-        await revert_promotion(record, graph, store, items)
+        await revert_promotion(record, graph, store, items, merge)
     except PromotionRefused as refused:
         # Audited before it was tried, so its refusal is audited too: the trail says it did not
         # happen.
@@ -240,20 +281,37 @@ async def _main(args: argparse.Namespace) -> int:
     )
     store = await PostgresPromotionStore.connect(dsn)
     items = await PostgresBoardItemStore.connect(dsn)
+    datasets = await PostgresDatasetStore.connect(dsn)
+    views = await PostgresCaseViewStore.connect(dsn)
     audit = await AuditWriter.connect(dsn)
+    scheme = load_uk_le_scheme()
+    graph = GraphArcadeDBAdapter(client, scheme)
     valkey_config = ValkeyConfig.from_env()
     valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    history = await InvestigationHistoryStore.connect(dsn)
+    # A drawn merge's copies and links are reverted as a load's own writes, so they leave every
+    # case's working set as a load's do (`scripts.revert_load`'s same reverter).
+    working_sets = WorkingSetReverter(
+        WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme, valkey=valkey),
+        valkey,
+        history,
+    )
     try:
         return await run(
             args.load_id, reverted_by=args.reverted_by, dry_run=args.dry_run, store=store,
-            graph=GraphArcadeDBAdapter(client, load_uk_le_scheme()), items=items, audit=audit,
+            graph=graph, items=items, audit=audit,
             invalidate=lambda: invalidate_every_cache(valkey),
+            merge=MergeCommit(promotions_store=store, graph=graph, datasets=datasets, views=views,
+                              items=items, scheme=scheme, working_sets=working_sets),
         )  # fmt: skip
     finally:
         await client.aclose()
         await store.close()
         await items.close()
+        await datasets.close()
+        await views.close()
         await audit.close()
+        await history.close()
         await valkey.aclose()
 
 

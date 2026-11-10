@@ -19,6 +19,12 @@ Authors holding `review_promotions`, never its proposer.
 - **`RemovedCaseLayer`**, **`LayerMergeSheet`**, **`LayerMergeInput`**, **`LayerDeleted`**: a
   removed case's layer, merged by the dataset's Authors as a promotion (trigger `layer_merge`)
   under a read grant for that merge alone, or deleted (promoted items never touched).
+- **`MergeTargets`**, **`DrawnMergeSheet`**, **`DrawnMergeInput`**, **`DrawnMergeDryRun`**: a drawn
+  dataset merged into another (Amendment 2 decision 6; Amendment 3 decision 2; L3.9) by an Author of
+  the target holding `merge_datasets`, as one load (trigger `drawn_merge`): map, match, dry run,
+  merge. A match is proposed as a scored, `inferred` `SAME_AS` (rule 5), never collapsed in storage
+  (rule 6). A drawn type may be mapped onto any of the target's types (`TypeChoice`, Amendment 7):
+  an item retyped goes in as a new element of that type with an inferred `SAME_AS` back.
 """
 
 from __future__ import annotations
@@ -29,7 +35,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 PromotionStatus = Literal["awaiting_review", "committed", "rejected", "reverted"]
-PromotionTrigger = Literal["analyst_promotion", "layer_merge"]
+PromotionTrigger = Literal["analyst_promotion", "layer_merge", "drawn_merge"]
 SheetItemKind = Literal["node", "link", "picture", "match"]
 
 
@@ -170,6 +176,8 @@ class DetailItem(BaseModel):
     marking: str
     source_note: str | None = None
     grading: str | None = None
+    #: A drawn merge's retyped item while it waits (ADR-143 Amendment 7): the type it goes in as.
+    goes_in_as: str | None = None
 
 
 class PromotionDetails(BaseModel):
@@ -183,6 +191,9 @@ class PromotionDetails(BaseModel):
     promotion: Promotion
     items: list[DetailItem]
     withheld: bool = False
+    #: A drawn dataset's merge (L3.9): the matches it proposes, each as the reviewer reads its two
+    #: ends (one they may not see is not listed, and `withheld` is set).
+    matches: list[MergeMatch] = Field(default_factory=list)
 
 
 class RemovedCaseLayer(BaseModel):
@@ -241,6 +252,157 @@ class LayerDeleted(BaseModel):
     words: str
 
 
+class MergeTarget(BaseModel):
+    """A dataset a drawn dataset may be merged into by this reader: one they are an Author of."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_id: str
+    name: str
+    highest_marking: str
+    policy: Literal["author_promotes", "second_person_reviews"]
+
+
+class MergeTargets(BaseModel):
+    """*Merge into a dataset…*'s first question. A drawing merged already is reached by no one
+    here: its case reads the target from then on, so the Studio's gate answers 404."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    drawn_dataset_id: str
+    drawn_name: str
+    targets: list[MergeTarget]
+
+
+class PropertyMapping(BaseModel):
+    """One drawn property and the property (or identifier) of the chosen type it goes in as, or
+    `None`: not carried (it stays on the drawing, read-only, and is said)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    drawn_property: str
+    target_property: str | None
+
+
+class TypeMapping(BaseModel):
+    """Step 1, *Map the models* (ADR-143 Amendment 7, the owner's ruling): one drawn type and the
+    target's type its items go in as, proposed as the same name when the target's model holds it,
+    else `None` with why not. `choices` are every type of the target's live model of this kind,
+    any of which it may be mapped to, as a Studio load's Map step maps; `drawn_properties` the
+    properties its items carry. Counts only the items the reader may see."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["node", "link"]
+    drawn_type: str
+    target_type: str | None
+    items: int = Field(ge=0)
+    why_not: str | None = None
+    choices: list[str] = Field(default_factory=list)
+    drawn_properties: list[str] = Field(default_factory=list)
+
+
+class TargetType(BaseModel):
+    """A type of the target's live model, with what a drawn property may be mapped onto: its
+    properties and identifiers, and those it requires."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["node", "link"]
+    name: str
+    properties: list[str]
+    required: list[str] = Field(default_factory=list)
+
+
+class TypeChoice(BaseModel):
+    """The merger's choice for one drawn type: the target's type (`None`: left out) and, when it
+    is another type, each drawn property's place in it. A drawn type not listed takes the sheet's
+    proposal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["node", "link"]
+    drawn_type: str
+    target_type: str | None
+    properties: list[PropertyMapping] = Field(default_factory=list, max_length=200)
+
+
+class MergeMatch(BaseModel):
+    """Step 2, *Match*: a drawn node and a loaded node of the target the reader may see, offered
+    as alike. Chosen, it is written as a scored, `inferred` `SAME_AS` with the merge (rule 5): a
+    person confirms it later, and nothing is collapsed in storage (rule 6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    drawn: str
+    drawn_label: str
+    loaded: str
+    loaded_label: str
+    loaded_type: str
+    score: float = Field(ge=0.0, le=1.0)
+    why: str
+
+
+class DrawnMergeSheet(BaseModel):
+    """*Merge into a dataset…* for one target: the mapping, the matches, the drawn items with every
+    check each fails, and how it will be recorded. Only what the reader may see (rule 3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    drawn_dataset_id: str
+    drawn_name: str
+    target_dataset_id: str
+    target_name: str
+    highest_marking: str
+    policy: Literal["author_promotes", "second_person_reviews"]
+    mapping: list[TypeMapping]
+    #: The target's live model, for the mapping's choices.
+    target_types: list[TargetType] = Field(default_factory=list)
+    matches: list[MergeMatch]
+    #: Past the matches' limit: more looked alike than are listed, and only these may be chosen
+    #: (rule 2: said, never cut silently).
+    more_matches: bool = False
+    items: list[SheetItem]
+    checks: list[PromotionCheck]
+    recorded_as: str
+
+
+class MatchPick(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    drawn: str
+    loaded: str
+
+
+class DrawnMergeInput(BaseModel):
+    """The items ticked and the matches chosen; every check runs again at the route."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_dataset_id: str
+    item_ids: list[str] = Field(min_length=1, max_length=5000)
+    matches: list[MatchPick] = Field(default_factory=list, max_length=5000)
+    mapping: list[TypeChoice] = Field(default_factory=list, max_length=500)
+
+
+class DrawnMergeDryRun(BaseModel):
+    """Step 3: what the merge would add and match, counting only what the reader may see; nothing
+    written."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_dataset_id: str
+    nodes: int = Field(ge=0)
+    links: int = Field(ge=0)
+    matches: int = Field(ge=0)
+    #: Of `nodes` and `links`, those written as new elements of another type (Amendment 7).
+    retyped: int = Field(default=0, ge=0)
+    #: Each drawn property a retyped type does not carry, in words (it stays on the drawing).
+    not_carried: list[str] = Field(default_factory=list)
+    left_out: list[LeftOut] = Field(default_factory=list)
+    recorded_as: str
+
+
 ALL_MODELS: tuple[type[BaseModel], ...] = (
     SheetItem,
     PromotionCheck,
@@ -257,4 +419,15 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     LayerMergeSheet,
     LayerMergeInput,
     LayerDeleted,
+    MergeTarget,
+    MergeTargets,
+    PropertyMapping,
+    TypeMapping,
+    TargetType,
+    TypeChoice,
+    MergeMatch,
+    DrawnMergeSheet,
+    MatchPick,
+    DrawnMergeInput,
+    DrawnMergeDryRun,
 )

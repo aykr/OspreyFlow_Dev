@@ -1,0 +1,22 @@
+diff --git a/OspreyFlow_Core/services/api/audit_section.py b/OspreyFlow_Core/services/api/audit_section.py
+index fe98d6f..1fce159 100644
+--- a/OspreyFlow_Core/services/api/audit_section.py
++++ b/OspreyFlow_Core/services/api/audit_section.py
+@@ -122,6 +122,8 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
+         # and revert (the operator command's, refused or done), and a removed case's layer merged
+         # through its read grant (opened, merged, cancelled) or deleted.
+         "promote_drawn_items",
++        # Case's L3.9 (ADR-143 Amendment 2 decision 6): a drawn dataset merged into another.
++        "merge_drawn_dataset",
+         "approve_promotion",
+         "reject_promotion",
+         "promotion_rejected",
+@@ -191,6 +193,8 @@ _CLASSIFIED: tuple[str, ...] = tuple(a for actions in KIND_ACTIONS.values() for
+ READS_AND_OTHER: tuple[str, ...] = (
+     # Case's L3.4: a promotion's Details, the removed cases' list, a merge sheet read again.
+     "read_promotion", "list_removed_case_layers", "read_layer_merge",
++    # Case's L3.9: a drawn merge's sheet and its dry run, each reading the drawing for a merge.
++    "read_drawn_merge_sheet", "dry_run_drawn_merge",
+     # Written by scripts, not routes: a seed's case brief, a sweep closing synthetic instants.
+     "case_brief_seed", "close_paysim_instants",
+     # L3.7 (ADR-143 Amendment 6): the operator's whole-deployment change of grading scheme, run by
