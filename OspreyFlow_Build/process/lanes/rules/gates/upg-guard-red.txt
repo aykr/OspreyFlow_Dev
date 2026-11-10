@@ -1,0 +1,9 @@
+--- red: volume of another project
+rc=2
+--- red: compose file of another project
+REFUSED: volume osprey-small_postgres-data is not this run's
+rc=2
+--- red: compose file outside the home
+rc=2
+REFUSED: /root/osprey-runs/rules-upg/home/tmp.NFym5UFsEN/compose.yaml is another project
+REFUSED: compose file outside the throwaway home
