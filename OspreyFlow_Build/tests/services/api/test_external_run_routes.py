@@ -277,17 +277,84 @@ def test_the_schedule_route_refuses_a_schedule_while_owned_externally() -> None:
     assert "owned externally" in answer.text
 
 
-def test_the_quota_bar_reads_the_datasets_quota_and_todays_runs() -> None:
-    quotas = InMemoryQuotaStore()
+_QUOTA = "/v1/investigations/inv-1/ingest/recipes/rcp-1/quota"
+
+
+def _quota_bar(
+    principal: Principal, recipe: StudioRecipeDraft | None = None, runs: object = None
+) -> Any:
     import asyncio
 
+    quotas = InMemoryQuotaStore()
     asyncio.run(quotas.set(RunQuota(scope="dataset", key="pid", runs_per_day=4)))
     asyncio.run(quotas.set(RunQuota(scope="dataset", key="another", runs_per_day=9)))
-    client = _install(_Recipes(_deployed()))
+    client = _install(_Recipes(recipe or _deployed()))
     app.dependency_overrides[get_run_quotas] = lambda: quotas
-    body = client.get("/v1/investigations/inv-1/ingest/recipes/rcp-1/quota").json()
+    app.dependency_overrides[get_principal] = lambda: principal
+    if runs is not None:
+        app.dependency_overrides[get_recipe_runs] = lambda: runs
+    return client.get(_QUOTA)
+
+
+def test_the_quota_bar_gives_todays_count_to_a_system_administrator_alone() -> None:
+    """The count is every unit's runs into the dataset (rules 3 and 7, the strict reading of the
+    independent review of L1.7): `administer_system` reads the number; anyone else, whether the
+    quota is used."""
     quota = {"scope": "dataset", "key": "pid", "runs_per_day": 4, "alert_at_share": 0.8}
-    assert body == {"quota": quota, "runs_today": 2}
+    admin = APPROVER.model_copy(
+        update={"datasets": ["pid"], "roles": [*APPROVER.roles, "right:administer_system"]}
+    )
+    assert _quota_bar(admin).json() == {"quota": quota, "runs_today": 2, "used": False}
+    reader = APPROVER.model_copy(update={"datasets": ["pid"]})
+    assert _quota_bar(reader).json() == {"quota": quota, "runs_today": None, "used": False}
+
+
+def test_a_used_quota_is_told_without_its_count() -> None:
+    reader = APPROVER.model_copy(update={"datasets": ["pid"]})
+    body = _quota_bar(reader, runs=_RunsToday(4)).json()
+    assert body["runs_today"] is None and body["used"] is True
+
+
+class _RunsToday:
+    def __init__(self, today: int) -> None:
+        self.today = today
+
+    async def runs_since(self, **_: object) -> int:
+        return self.today
+
+
+@pytest.mark.parametrize(
+    ("principal", "recipe", "status"),
+    [
+        (APPROVER.model_copy(update={"datasets": ["another"]}), None, 422),
+        (APPROVER.model_copy(update={"datasets": []}), None, 422),
+        (APPROVER.model_copy(update={"datasets": ["pid"]}), _deployed(owning_unit="unit-2"), 404),
+    ],
+    ids=["a-case-reading-another-dataset", "outside-any-dataset", "another-units-recipe"],
+)
+def test_the_quota_bar_is_withheld_from_a_case_not_reading_the_dataset(
+    principal: Principal, recipe: StudioRecipeDraft | None, status: int
+) -> None:
+    """Rule 4: the bar reads the recipe's dataset, so only a case that reads it is told (as Test
+    and Preview are refused, in the drawer's words), and another unit's recipe is not found."""
+    answer = _quota_bar(principal, recipe)
+    assert answer.status_code == status, answer.text
+    assert "runs_today" not in answer.text and "runs_per_day" not in answer.text
+    if status == 422:
+        assert "only a case that reads the dataset" in answer.text
+
+
+@pytest.mark.parametrize(
+    "client", ["osprey-conduit", "osprey-glass", "osprey-dashboard-board", "Osprey-Admin"]
+)
+def test_a_client_the_deployment_registers_is_never_made_an_orchestrator(client: str) -> None:
+    """Rule 3: the deployment's own clients (`osprey-*`) have service accounts, and none may be
+    handed a pipeline to trigger."""
+    recipes = _Recipes(_deployed())
+    answer = _install(recipes).put(_OWNED, json={"client_id": client})
+    assert answer.status_code == 422, answer.text
+    assert "the deployment's own" in answer.text
+    assert recipes.owner is None
 
 
 #: The query parameters each route of L1.7 takes. A dependency annotated with a name defined below

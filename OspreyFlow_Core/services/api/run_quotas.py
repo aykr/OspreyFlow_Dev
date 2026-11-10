@@ -65,9 +65,11 @@ class QuotaLimit:
     since: datetime
 
 
-def quota_words(scope: str, limit: int, today: int) -> str:
+def quota_words(scope: str, limit: int) -> str:
+    """A quota refusal's words. They reach the owner, the service identity and Operations' readers
+    of one unit, and the day's count is every unit's runs, so they tell none (rules 3 and 7)."""
     return (
-        f"{_WHOSE[scope]} quota of {_runs(limit)} a day is used ({_runs(today)} today); "
+        f"{_WHOSE[scope]} quota of {_runs(limit)} a day is used; "
         "the next may start after midnight, or an administrator may raise the quota in "
         "Admin › Running › Operations"
     )
@@ -286,12 +288,13 @@ async def judge(
         )
         limit = quota.runs_per_day
         if today >= limit:
-            raise QuotaRefused(quota_words(scope, limit, today))
+            raise QuotaRefused(quota_words(scope, limit))
         limits.append(QuotaLimit(scope, key, limit, since))  # type: ignore[arg-type]
         if today + 1 >= math.ceil(limit * quota.alert_at_share):
+            # The share it was set to reach, never the day's count (every unit's runs: rule 7).
             words = (
-                f"{_WHOSE[scope].capitalize()} runs today reach {today + 1} of its quota of "
-                f"{_runs(limit)} a day"
+                f"{_WHOSE[scope].capitalize()} runs today reached "
+                f"{round(quota.alert_at_share * 100)}% of its quota of {_runs(limit)} a day"
             )
             await quotas.raise_once(QuotaAlert(scope, key, day, words), at=now)  # type: ignore[arg-type]
     return limits

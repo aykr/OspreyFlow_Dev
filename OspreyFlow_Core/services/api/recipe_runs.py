@@ -357,7 +357,7 @@ class RecipeRunStore:
                     limit.key,
                 )
                 if int(today or 0) >= limit.runs_per_day:
-                    raise QuotaRefused(quota_words(limit.scope, limit.runs_per_day, int(today)))
+                    raise QuotaRefused(quota_words(limit.scope, limit.runs_per_day))
             await self._insert(
                 run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
                 started_at=now, finished_at=None, outcome="running", failure=None,

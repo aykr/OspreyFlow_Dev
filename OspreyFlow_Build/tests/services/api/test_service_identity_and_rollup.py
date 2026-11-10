@@ -310,3 +310,131 @@ def test_the_run_api_tells_no_account_id_and_no_failures_own_text() -> None:
     failed = served_words("failed", "KeyError: 'SECRET-REF-31'", OWNER_ID)
     assert failed == FAILED_WORDS and "SECRET" not in failed
     assert served_words("succeeded", "x", OWNER_ID) is None
+
+
+# --- The independent review of L1.7 (rules 3, 7 and 12) ----------------------------------------
+
+
+@pytest.mark.parametrize("client", ["osprey-conduit", "osprey-glass", "osprey-dashboard-board"])
+def test_a_client_the_deployment_registers_is_never_a_service_identity(
+    jwks_url: str, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey], client: str
+) -> None:
+    """The deployment's own clients (`osprey-*`: the Conduit, the Glass, a report dashboard) have
+    service accounts too; none is an orchestrator, so none may trigger a pipeline (rule 3)."""
+    key, _ = keypair
+    claims = {"sub": "uuid-2", "azp": client, "preferred_username": f"service-account-{client}",
+              "exp": default_claims()["exp"]}  # fmt: skip
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        _verifier(jwks_url).client_of(sign_token(key, claims))
+    assert refused.value.status == 403
+
+
+def test_a_service_identitys_token_is_401_on_a_persons_route(
+    jwks_url: str, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+) -> None:
+    """ADR-141 Amendment 1 decision 3: a client-credentials token carries no clearance or unit, so
+    every route but the run API's refuses it 401, as the realm signs it (rule 12)."""
+    from services.api.auth import PrincipalResolver
+    from services.api.config import ApiConfig, PostgresConfig, ValkeyConfig
+
+    key, _ = keypair
+    token = sign_token(key, {"sub": "uuid-1", "azp": "airflow-prod",
+                             "preferred_username": "service-account-airflow-prod",
+                             "exp": default_claims()["exp"]})  # fmt: skip
+    config = ApiConfig(
+        valkey=ValkeyConfig(host="localhost", port=6379, db=0),
+        postgres=PostgresConfig(host="localhost", port=5432, user="x", password="x", database="x"),
+        oidc_jwks_url=jwks_url, oidc_audience=None, oidc_issuer=None, oidc_algorithms=("RS256",),
+        oidc_jwks_ttl_seconds=300.0, oidc_token_exchange_url=None,
+        oidc_token_exchange_client_id=None, oidc_token_exchange_client_secret=None,
+        supersede_job_degree_threshold=500, osprey_config_path="osprey.yaml",
+        analytics_db_path=":memory:", hotlist_alert_policy="strict",
+        export_manifest_policy="disclose",
+    )  # type: ignore[arg-type]  # fmt: skip
+    held = getattr(app.state, "principal_resolver", None)
+    app.state.principal_resolver = PrincipalResolver(config)
+    try:
+        for path in ("/v1/admin/operations/runs", "/v1/investigations/inv-1/ingest/recipes"):
+            answer = TestClient(app).get(path, headers={"Authorization": f"Bearer {token}"})
+            assert answer.status_code == 401, (path, answer.text)
+    finally:
+        if held is None:
+            del app.state.principal_resolver
+        else:
+            app.state.principal_resolver = held
+
+
+class _Counted:
+    """Every unit's runs into a dataset today, as the ledger counts them for a quota."""
+
+    def __init__(self, today: int) -> None:
+        self.today = today
+
+    async def runs_since(self, **_: object) -> int:
+        return self.today
+
+
+def test_a_quota_refusal_tells_no_count_of_other_units_runs() -> None:
+    """Rules 3 and 7, the strict reading: the refusal reaches the owner, the service identity and
+    Operations' readers of one unit; the count is every unit's runs, so its words say only that the
+    quota is used (only `administer_system` reads the number, on the quota bar)."""
+    import asyncio
+
+    from services.api.run_quotas import QuotaRefused, judge
+
+    quotas = InMemoryQuotaStore()
+    asyncio.run(quotas.set(RunQuota(scope="dataset", key="ds-1", runs_per_day=3)))
+    with pytest.raises(QuotaRefused) as refused:
+        asyncio.run(judge(quotas, _Counted(7), dataset_id="ds-1", owning_unit=None,
+                          now=datetime(2026, 11, 10, 12, tzinfo=UTC)))  # fmt: skip
+    words = str(refused.value)
+    assert "the dataset's quota of 3 runs a day is used" in words
+    assert "7" not in words and "today)" not in words
+
+
+def test_a_budget_alert_tells_no_count_of_other_units_runs() -> None:
+    import asyncio
+
+    from services.api.run_quotas import judge
+
+    quotas = InMemoryQuotaStore()
+    asyncio.run(quotas.set(RunQuota(scope="dataset", key="ds-1", runs_per_day=10,
+                                    alert_at_share=0.5)))  # fmt: skip
+    asyncio.run(judge(quotas, _Counted(6), dataset_id="ds-1", owning_unit=None,
+                      now=datetime(2026, 11, 10, 12, tzinfo=UTC)))  # fmt: skip
+    (alert,) = quotas.raised.values()
+    assert alert.words == ("The dataset's runs today reached 50% of its quota of 10 runs a day")
+    assert "7" not in alert.words and "6" not in alert.words
+
+
+@pytest.mark.parametrize(
+    ("roles", "status"),
+    [
+        (["right:administer_system", "right:operate_schedules"], 200),
+        (["right:administer_system"], 403),
+        (["right:operate_schedules"], 403),
+    ],
+    ids=["both-rights", "no-operate-schedules", "no-administer-system"],
+)
+def test_setting_a_quota_needs_both_rights(roles: list[str], status: int) -> None:
+    """`PUT …/operations/quotas/{scope}/{key}` (decision (f) of L1.7): a quota binds every unit's
+    runs, so it needs `administer_system`; and it is Operations' screen, so `operate_schedules`."""
+    from services.api.app import get_audit
+
+    from tests.services.api.test_app import _FakeAudit
+
+    quotas = InMemoryQuotaStore()
+    app.dependency_overrides.update({
+        get_principal: lambda: READER.model_copy(update={"roles": roles}),
+        get_run_quotas: lambda: quotas,
+        get_audit: lambda: _FakeAudit(),
+    })  # fmt: skip
+    try:
+        answer = TestClient(app).put(
+            "/v1/admin/operations/quotas/dataset/ds-1", json={"runs_per_day": 5}
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert answer.status_code == status, answer.text
+    expected = {("dataset", "ds-1"): 5} if status == 200 else {}
+    assert {k: q.runs_per_day for k, q in quotas.quotas.items()} == expected

@@ -23,6 +23,19 @@ from principal_auth import OidcSettings
 
 SERVICE_ACCOUNT_PREFIX = "service-account-"
 
+#: The deployment's own clients are named `osprey-*` (the Conduit, the Glass, the Admin console, a
+#: report dashboard `osprey-dashboard-*`, the verify probes: `harness/realm.py`, `identity.py`).
+#: Several have service accounts; none is an orchestrator, so none may trigger a pipeline (rule 3,
+#: the independent review of L1.7).
+DEPLOYMENT_CLIENT_PREFIX = "osprey-"
+DEPLOYMENT_CLIENT_WORDS = (
+    "that client is one of the deployment's own (osprey-…): name the orchestrator's own client"
+)
+
+
+def is_deployment_client(client: str) -> bool:
+    return client.lower().startswith(DEPLOYMENT_CLIENT_PREFIX)
+
 
 class ServiceIdentityRefused(Exception):
     """A token that is not a service identity's, said in words that name no claim's value.
@@ -72,4 +85,6 @@ class ServiceIdentityVerifier:
                 "grant of the client the pipeline is owned externally by",
                 status=403,
             )
+        if is_deployment_client(client):
+            raise ServiceIdentityRefused(DEPLOYMENT_CLIENT_WORDS, status=403)
         return client

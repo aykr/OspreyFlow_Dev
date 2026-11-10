@@ -237,7 +237,7 @@ async def test_a_quota_of_one_run_a_day_refuses_the_second_in_words(
     second = await _start(runs, valkey, edges, recipe, "dag:day-2", quotas=quotas)
     assert first.outcome == "running" and len(loaded) == 1
     assert second.outcome == "refused"
-    assert "the dataset's quota of 1 run a day is used (1 run today)" in (second.words or "")
+    assert "the dataset's quota of 1 run a day is used;" in (second.words or "")
     recorded = await runs.get(second.run_id)
     assert recorded is not None and recorded.outcome == "refused"
     assert quotas.raised, "the budget alert is raised at the quota's share"

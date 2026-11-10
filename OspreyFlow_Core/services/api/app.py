@@ -977,7 +977,12 @@ from .sentence_rules import (
     run_scheduled_rule,
     strength_context,
 )
-from .service_identity import ServiceIdentityRefused, ServiceIdentityVerifier
+from .service_identity import (
+    DEPLOYMENT_CLIENT_WORDS,
+    ServiceIdentityRefused,
+    ServiceIdentityVerifier,
+    is_deployment_client,
+)
 from .site_images import (
     object_key_for,
     read_site_image,
@@ -17419,6 +17424,9 @@ async def mark_pipeline_owned_externally(
             status_code=409,
             detail="the pipeline has a schedule of its own: clear it first, so nobody sets both",
         )
+    if is_deployment_client(body.client_id):
+        # Rule 3: the deployment's own clients have service accounts; none is an orchestrator.
+        raise HTTPException(status_code=422, detail=DEPLOYMENT_CLIENT_WORDS)
     await studio_recipes.set_external_owner(
         recipe.recipe_id,
         client_id=body.client_id,
@@ -17542,11 +17550,17 @@ async def read_external_run(
 async def read_pipeline_quota(
     investigation: InvestigationViewerDep,
     recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
     recipe_runs: RecipeRunsDep,
     run_quotas: RunQuotasDep,
 ) -> RunQuotaUse:
     """The Runs tab's quota bar (ADR-141 decision 6): the dataset's quota of runs a day and
-    today's runs into it. A count of runs, never of rows, so it says nothing of any marking."""
+    whether today's runs have used it. Only a case that reads the recipe's dataset is told, as
+    Test and Preview are refused (rule 4); and the day's count is every unit's runs into the
+    dataset, so only `administer_system` is given the number (rules 3 and 7, the strict reading;
+    ADR-141 Amendment 1)."""
+    if recipe.dataset_id and recipe.dataset_id not in (principal.datasets or []):
+        raise RecipeRuleError([QUOTA_WITHHELD])
     quota = (
         await run_quotas.get("dataset", recipe.dataset_id)
         if run_quotas is not None and recipe.dataset_id
@@ -17559,7 +17573,20 @@ async def read_pipeline_quota(
         if recipe.dataset_id
         else 0
     )
-    return RunQuotaUse(quota=quota, runs_today=today)
+    limit = quota.runs_per_day if quota is not None else None
+    every_unit = Right.ADMINISTER_SYSTEM in rights_for(principal.roles)
+    return RunQuotaUse(
+        quota=quota,
+        runs_today=today if every_unit else None,
+        used=limit is not None and today >= limit,
+    )
+
+
+#: What the quota bar says to a case that does not read the recipe's dataset (rule 4).
+QUOTA_WITHHELD = (
+    "The quota is withheld: it counts this dataset's runs, which only a case that reads the "
+    "dataset may read."
+)
 
 
 def _units_read(principal: Principal) -> list[str] | None:
