@@ -1,0 +1,23 @@
+# A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148): production's copies,
+# reporting on, a model engine enabled, so the gateway and its egress are rendered too.
+profile: cloud-platform
+components:
+  analytics_engine: clickhouse
+network:
+  public_origin: https://ospreyflow.apps.example.org
+reporting:
+  sync: true
+  superset: true
+models:
+  local_only: false
+  provider:
+    name: openai
+    roles: {extraction: gpt-4o-mini}
+cloud_platform:
+  platform: client
+  namespace: ospreyflow-prod
+  environment: production
+  registry: 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+  allow_from: ["192.0.2.0/24", "198.51.100.0/24"]
+  egress_nets:
+    api.openai.com: ["203.0.113.0/24"]

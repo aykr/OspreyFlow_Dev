@@ -1,0 +1,13 @@
+# A synthetic cloud-platform deployment for `make cp-policy-check` (ADR-148): the development
+# namespace, one of each store, nothing enabled that reaches out.
+profile: cloud-platform
+components:
+  analytics_engine: clickhouse
+network:
+  public_origin: https://ospreyflow-dev.apps.example.org
+cloud_platform:
+  platform: client
+  namespace: ospreyflow-dev
+  environment: development
+  registry: 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+  allow_from: ["192.0.2.0/24"]

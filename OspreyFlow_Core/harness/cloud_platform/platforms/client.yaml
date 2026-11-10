@@ -1,0 +1,48 @@
+# The UK public sector client's Cloud Platform (spec/06_DECISIONS.md ADR-148), from its user guide as
+# the owner's record of 9 November 2026 gives it. Everything here is the platform's, not a
+# deployment's: another shared platform is another file beside this one (ADR-148 decision 1).
+name: client
+# A shared EKS cluster in AWS London.
+aws_region: eu-west-2
+ingress:
+  # The platform's NGINX ingress controller (decision 2), ModSecurity on, and the annotation its IP
+  # allow-list is set by. TLS is the platform's own certificate unless a deployment names a secret.
+  class: default
+  annotations:
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+  allow_list_annotation: nginx.ingress.kubernetes.io/whitelist-source-range
+  # The pods the controller runs as, which the namespace's ingress policy admits.
+  controller_namespace: ingress-controllers
+storage:
+  # ReadWriteOnce only (decision 5); no shared (ReadWriteMany) class exists.
+  class: gp2-expand
+egress:
+  # Decision 7: the platform's Calico, its deny policy and an allow policy beside it. Calico's open
+  # source policy matches networks, not names, so every host an enabled feature reaches names its
+  # networks (cloud_platform.egress_nets in osprey.yaml).
+  kind: calico
+  # The VPC the managed stores (RDS, ElastiCache, OpenSearch) answer in, and S3's gateway endpoint.
+  managed_nets: ["172.20.0.0/16"]
+  # The cluster's DNS, which every pod needs.
+  dns_namespace: kube-system
+# Decision 4: where each managed store's connection details arrive. The namespace's Terraform
+# (rendered with the values) writes each secret, so these names are ours to keep in step.
+secrets:
+  postgres:
+    name: rds-postgresql-instance-output
+    keys: {host: rds_instance_address, port: rds_instance_port, user: database_username,
+           password: database_password, database: database_name}
+  redis:
+    name: elasticache-redis
+    keys: {host: primary_endpoint_address, port: port, password: auth_token}
+  opensearch:
+    name: opensearch-output
+    keys: {url: proxy_url}
+  s3:
+    name: s3-bucket-output
+    keys: {prefix: bucket_prefix}
+  irsa:
+    # The service account the Conduit, ingest and the workers run as, given S3 by its role.
+    service_account: ospreyflow
