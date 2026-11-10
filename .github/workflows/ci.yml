@@ -689,9 +689,6 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py
           ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py
           ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py
-          ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py
-          ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py
-          ../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py
           ../OspreyFlow_Build/tests/services/api/test_strength_influencer_routes.py
           ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py
           ../OspreyFlow_Build/tests/services/api/working_set/test_connection_strength_access_control.py
@@ -1070,9 +1067,6 @@ jobs:
           --ignore=../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py
-          --ignore=../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py
-          --ignore=../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py
-          --ignore=../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_strength_influencer_routes.py
           --ignore=../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py
           --ignore=../OspreyFlow_Build/tests/services/api/working_set/test_connection_strength_access_control.py
