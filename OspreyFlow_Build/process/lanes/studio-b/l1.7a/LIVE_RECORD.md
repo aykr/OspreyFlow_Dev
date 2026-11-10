@@ -36,7 +36,8 @@ seeded the whole dataset, committing each recipe through `commit_recipe_file`.
 **At the final head, as `-rA` names them:**
 - `tests/ingest/test_studio_publish_pipeline.py`, which publishes through `write_and_commit_recipe`: all 8 passed.
 - `test_pid_seed_live.py` inside `live_set.sh`: its 4 cases **skipped** (no `OSPREYFLOW_RUN_SLOW`). It ran in full
-  in `live_seed_slow.sh`, as above. The earlier runs' "not failed" for it meant skipped.
+  in `live_seed_slow.sh`, as above. In every run before `51600c6` its 4 cases were **skipped**, not passed:
+  where an earlier record said "not failed" of it, read "skipped".
 - `test_route_rights.py` and the rest: `live-51600c6.txt` lists every case.
 
 **After the rebases** (main `6379dd1`, then `ec28c67`), the live run at `51600c6` stands. Main changed neither

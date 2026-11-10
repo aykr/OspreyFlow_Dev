@@ -31433,7 +31433,9 @@ committed `recipes/<id>.yaml` at runtime with the `git` binary (GPL-2.0-only), w
    - The bytes go to a new file, fsynced, which `os.replace` puts in place. A temporary file a crash left behind
      is swept by the next publish.
 5. **`HEAD` moves by compare-and-swap.** A publish whose parent moved under it is refused (`GitCommitError`, "publish
-   again"), and the other writer's commit stands.
+   again"), and the other writer's commit stands. A publish refused after it wrote the file puts the file and its
+   index entry back as the current `HEAD` holds them, or removes a recipe `HEAD` does not hold. So nothing is
+   left ahead of `HEAD` for `load_published_recipe`, which reads the working tree.
 6. **One lock over write, index and commit.**
    - Within the process, a lock. Across processes (the Prison Intelligence seed beside a running Conduit), an
      exclusive `flock` on `osprey-publish.lock` in the git directory.
@@ -31443,8 +31445,9 @@ committed `recipes/<id>.yaml` at runtime with the `git` binary (GPL-2.0-only), w
      wait of its own.
    - First use makes the git directory aside, with `HEAD` already on `refs/heads/main`, and renames it into
      place. A rival's made at the same moment is joined, not refused. An aside directory a crashed first use
-     left (`tempfile.mkdtemp`'s own shape only) is swept by any later publish, under the lock, once it is ten
-     minutes old.
+     left (`tempfile.mkdtemp`'s own shape only, empty or holding one `.git` and nothing else) is swept once it
+     is ten minutes old: by the next first use, before any lock exists, or by any later publish, under the
+     lock.
    - A writer that takes neither lock, such as an operator's own `git commit`, can still race the index. It
      cannot lose its commit (point 5).
 
@@ -31467,8 +31470,9 @@ by name.
 - **Point 4:** `test_a_symlinked_recipes_directory_is_refused`, `test_a_symlinked_recipe_file_is_refused`,
   `test_a_linked_publish_lock_is_refused`, `test_a_git_directory_that_is_not_the_root_s_own_is_refused` and
   `test_a_temporary_file_a_crash_left_is_swept`.
-- **Point 5:** `test_a_real_writer_moving_head_mid_commit_is_refused` (a real `git commit` in the window) and
-  `test_a_failed_commit_is_an_error_not_a_quiet_success`.
+- **Point 5:** `test_a_real_writer_moving_head_mid_commit_is_refused` (a real `git commit` in the window),
+  `test_a_failed_commit_is_an_error_not_a_quiet_success`, `test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it`
+  and `test_a_new_recipe_refused_is_not_left_on_the_volume`.
 - **Point 6:**
   - `test_the_index_is_read_and_written_under_a_lock_another_process_honours`, probed from a second open at the
     file's write, the index's read and write, the commit and the swap. It is red with the lock narrowed to the
@@ -31478,7 +31482,8 @@ by name.
     and `test_publishes_queued_behind_a_held_lock_share_one_wait`.
   - `test_a_rival_making_the_repository_first_is_joined_not_refused` (the rival is the real `git`, run once in
     the window; not a second dulwich publish), `test_an_aside_directory_a_crashed_first_use_left_is_swept` and
-    `test_an_aside_directory_left_after_the_repository_exists_is_swept`.
+    `test_an_aside_directory_left_after_the_repository_exists_is_swept` and
+    `test_an_aside_holding_more_than_a_git_directory_is_kept`.
 
 **Cost and what is open.** A horizontally scaled deployment still has one checkout per instance (the stated gap in
 `write_and_commit_recipe`). An operator's own git on the volume is not serialised with a publish (point 6).
