@@ -57,7 +57,7 @@ platform	P12	M	todo	Laurium as a second extraction engine, licence check first (
 platform-b	P6	S	done	The case's gazetteer panel beside place search, by keyboard (merged fd171f7)
 docs	D1	M	done	The website: drawing boards and three places, marked coming
 docs	D2a	M	done	README, four guides (architecture new), welcome pages, website, GOV.UK wording (after L2.9, L2.10, P3 run deployed) (merged 99d927d)
-docs	D2b	M	todo	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)
+docs	D2b	M	building	Every deck (overview, architecture, PID demos and script, AML, pitch, AE) for rules, boards, alerts (after L2.11, L3.3)
 docs	D2c	M	todo	The Cloud Platform deployment guide (after P7–P10; ADR-148)
 platform-b	P5b	S	done	Backups in a folder the administrator names at setup (ADR-114 Am 37) (merged f8df603)
 studio-b	L1.7a	S	done	The dulwich swap, then the Studio's tips patches after L2.7 (merged 6fae515)
@@ -75,3 +75,4 @@ studio-b	L1.10b	S	building	The ceiling's carries: packs' declarations, staged ta
 platform-b	T2	S	building	Tooling: per-lane Playwright ports, docker-shelling tests skipped without local stacks, constant-named registries
 rules-b	T3	S	building	Dialogs' and invisible text's colour contrast actually gated in every-harness
 rules	UPG	S	building	Rehearse the v0.4.12 to v0.5.0 upgrade on the test server, before the publish
+platform-b	UPG-fix	S	building	Update from v0.4.12 writes the gateway's missing secrets (blocks the v0.5.0 publish)
