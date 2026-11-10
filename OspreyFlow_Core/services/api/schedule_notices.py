@@ -15,7 +15,7 @@ NOTICE_RULE_PREFIX = "schedule:"
 #: carry a host, a table or a source row's key (rule 7), and it stays in the ledger and the log.
 NoticeKind = Literal[
     "failed", "timed_out", "refused_reach", "refused_rights", "sign_in_unavailable",
-    "in_progress", "keyless_refresh",
+    "in_progress", "keyless_refresh", "refused_quota",
 ]  # fmt: skip
 
 _NOTICE_ENDINGS: dict[str, str] = {
@@ -31,6 +31,10 @@ _NOTICE_ENDINGS: dict[str, str] = {
     "keyless_refresh": (
         "was refused: its pipeline has no deduplication key, so a refresh would load its rows "
         "again."
+    ),
+    "refused_quota": (
+        "was refused: today's run quota is used. The next may start after midnight, or an "
+        "administrator may raise the quota in Admin › Running › Operations."
     ),
 }  # fmt: skip
 

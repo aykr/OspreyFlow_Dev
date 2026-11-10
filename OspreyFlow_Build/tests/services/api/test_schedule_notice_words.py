@@ -38,6 +38,10 @@ EXPECTED = {
     "refused_rights": "was refused: its owner may no longer run it.",
     "sign_in_unavailable": "could not run: the sign-in service did not answer.",
     "in_progress": "did not run: an earlier run into its case was still going.",
+    "refused_quota": (
+        "was refused: today's run quota is used. The next may start after midnight, or an "
+        "administrator may raise the quota in Admin › Running › Operations."
+    ),
     "keyless_refresh": (
         "was refused: its pipeline has no deduplication key, so a refresh would load its rows again."
     ),

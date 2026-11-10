@@ -392,8 +392,8 @@ class ScheduleExecutor:
             return
         try:
             await self.run(owner, recipe, case, latest)
-        except QuotaRefused as refused:  # ADR-141 decision 6: recorded refused, in words
-            await self._tell_owner(recipe, f"{self._due(recipe, latest)} was refused: {refused}")
+        except QuotaRefused:  # ADR-141 decision 6: its own words stay in the ledger
+            await self._tell_owner(recipe, notice_words(self._due(recipe, latest), "refused_quota"))
         except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
             log.exception("scheduled run of recipe %s failed", recipe.recipe_id)
             await self._tell_owner(
@@ -464,8 +464,8 @@ class ScheduleExecutor:
                     owner, recipe, case, None, file, trigger=trigger,
                     refresh=source.read if source is not None else None,
                 )  # fmt: skip
-            except QuotaRefused as refused:  # ADR-141 decision 6: recorded refused, in words
-                await self._tell_owner(recipe, f"{words} was refused: {refused}")
+            except QuotaRefused:  # ADR-141 decision 6: its own words stay in the ledger
+                await self._tell_owner(recipe, notice_words(words, "refused_quota"))
             except Exception as error:  # noqa: BLE001 - the ledger has it as failed, in words
                 log.exception("watched run of recipe %s failed", recipe.recipe_id)
                 await self._tell_owner(recipe, notice_words(words, failure_kind(error)))

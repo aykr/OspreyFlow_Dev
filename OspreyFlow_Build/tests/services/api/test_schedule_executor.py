@@ -639,6 +639,22 @@ async def test_a_paused_watch_takes_nothing(runs: RecipeRunStore, valkey: Valkey
     assert edges.files_run == [] and await _watch_rows(runs, recipe) == []
 
 
+async def test_a_quota_refusal_tells_its_owner_in_the_quota_sentence(
+    runs: RecipeRunStore, valkey: Valkey
+) -> None:
+    """ADR-110 Amendment 19 with ADR-141 decision 6: a run refused past a quota tells its owner the
+    fixed quota sentence, never the quota's own words, which name its scope and number."""
+    from services.api.run_quotas import QuotaRefused, quota_words
+
+    recipe, edges = _recipe(), _Edges(fail_run=QuotaRefused(quota_words("dataset", 3)))
+    await _executor(_Recipes([recipe]), edges, runs, valkey).tick(FIRST_SLOT)
+    ((_, _, words),) = edges.notices
+    lead = ScheduleExecutor._due(recipe, FIRST_SLOT)
+    assert words == (f"{lead} was refused: today's run quota is used. The next may start after "
+                     "midnight, or an administrator may raise the quota in Admin › Running › "
+                     "Operations.")  # fmt: skip
+
+
 async def test_a_refused_file_is_recorded_its_owner_told_and_it_is_not_retried(
     runs: RecipeRunStore, valkey: Valkey
 ) -> None:

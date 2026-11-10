@@ -28397,8 +28397,10 @@ own place (ADR-145 decision 11).
    its case or its dataset), *refused for rights* (its owner may no longer run it: a right, a clearance,
    a sign-in), *the sign-in service did not answer* (not the owner's doing, so it never pauses the
    schedule; the slot is not run again, so nothing is promised), and two the scheduler already said in
-   fixed words: *an earlier run into its case was still going* and *a refresh with no deduplication key*.
-   The kinds are the orchestrator's four and its fifth for the sign-in service, plus those two.
+   fixed words: *an earlier run into its case was still going* and *a refresh with no deduplication key*;
+   and *today's run quota is used* (ADR-141 decision 6's refusal, whose own words name its scope and number,
+   so they stay in the ledger). The kinds are the orchestrator's four and its fifth for the sign-in service,
+   plus those three.
    **And at read:** *Needs you* serves a notice's stored words only when they end in one of these
    sentences (`schedule_notices.served_words`); a notice written before this amendment, as
    `"<run> failed: <the error's text>"`, is served the fixed fallback ("A scheduled load of yours
