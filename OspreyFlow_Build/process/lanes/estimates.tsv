@@ -1,5 +1,4 @@
-# as of 2026-11-10T05:47Z
-admin	L2.7	merge gating now	~06:15	A
+# as of 2026-11-10T05:51Z
 studio	L1.5	clear; batch merge with P5 and D2a after L2.7	~07:15	A
 platform	P5	clear; batch merge with L1.5 and D2a	~07:15	A
 docs	D2a	in review; batch merge with L1.5 and P5	~07:15 (if the review is clear)	A
@@ -7,7 +6,7 @@ rules	L2.10	last plants, re-review, merge	~08:30	A
 studio-b	L1.7a	sent back: path escape, config plants, real CAS race	~10:30	A
 platform-b	P5b	after D2a: rows, PDF, gates, review	~09:30	A
 case	L3.9	type-mapping rework, gates, review	~13:00–15:00	A
-admin	L2.5b	full Disable transfer, after L2.7	~10:00–11:00	A
+admin	L2.5b	full Disable transfer, rebasing on L2.7	~10:00–11:00	A
 studio-b	tips	Studio's tips patches, after L1.7a	~11:30–12:30	A
 studio-b	L1.10	marking ceiling, after L1.7a	~13:00	B
 studio	L1.7	operations, releases, carries	~17:00–19:00	A
