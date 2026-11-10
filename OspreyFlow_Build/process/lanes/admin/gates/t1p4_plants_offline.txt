@@ -6,8 +6,8 @@ PLANT VALKEY_DB left at 0 (tests/worker_isolation.py): 4 failed: test_two_worker
 PLANT MINIO_BUCKET_PREFIX not set (tests/worker_isolation.py): 1 failed: test_two_workers_open_different_names_in_every_store
 PLANT ANALYTICS_DB_PATH not set (tests/worker_isolation.py): 1 failed: test_two_workers_open_different_names_in_every_store
 PLANT a per-test conformance_* name rewritten too (tests/worker_isolation.py): 1 failed: test_two_workers_open_different_names_in_every_store
-PLANT serial files not grouped (tests/worker_isolation.py): 2 failed: test_each_serial_file_exists_and_is_grouped, test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread
-PLANT the group added after xdist reads it (tests/worker_isolation.py): 1 failed: test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread
+PLANT serial files not grouped (tests/worker_isolation.py): 3 failed: test_each_serial_file_exists_and_is_grouped, test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread, test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not
+PLANT the group added after xdist reads it (tests/worker_isolation.py): 2 failed: test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread, test_the_container_files_run_on_one_worker_through_xdist
 PLANT a serial test kept on the worker's own graph (tests/worker_isolation.py): 1 failed: test_the_serial_files_run_on_one_worker_on_the_shared_graph_the_rest_spread
 PLANT a worker known by the inherited PYTEST_XDIST_WORKER (tests/worker_isolation.py): 1 failed: test_a_child_that_inherits_a_worker_s_environment_is_not_taken_for_a_worker
 PLANT -n without --dist loadgroup let through (tests/worker_isolation.py): 1 failed: test_n_without_loadgroup_is_refused
@@ -18,6 +18,8 @@ PLANT -n auto given every CPU (tests/worker_isolation.py): 1 failed: test_n_auto
 PLANT the sweep blind to a name's age (tests/worker_isolation.py): 1 failed: test_the_sweep_takes_only_this_plugin_s_names_from_a_killed_run
 PLANT a store that fails to clear stops the rest (tests/worker_isolation.py): 1 failed: test_a_store_that_fails_to_clear_does_not_leave_the_others_behind
 PLANT a start that fails part-way not cleared (tests/worker_isolation.py): 1 failed: test_a_start_that_fails_part_way_is_still_cleared
+PLANT container files not grouped (tests/worker_isolation.py): 2 failed: test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not, test_the_container_files_run_on_one_worker_through_xdist
+PLANT a container file's docker run -d not known (tests/worker_isolation.py): 2 failed: test_a_file_that_starts_containers_is_grouped_and_one_that_fakes_docker_is_not, test_the_container_files_run_on_one_worker_through_xdist
 PLANT the check: Valkey given no db not counted as db 0 (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
 PLANT the check: Valkey's db given by position missed (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial
 PLANT the check: a **{..., "db": 0} literal missed (tests/test_worker_isolation.py): 1 failed: test_the_serial_check_names_a_file_that_should_be_serial

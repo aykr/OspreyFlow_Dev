@@ -67,6 +67,9 @@ PLANTS: list[tuple[str, str, str, str, str]] = [
      ('    _STATE["worker"] = state  # before start(), so a start that fails part-way is still cleared\n'
      "    state.start()\n"),
      '    state.start()\n    _STATE["worker"] = state\n', PROOF),
+    ("container files not grouped", PLUGIN,
+     "        elif starts_containers(Path(str(item.path))):\n", "        elif False:\n", PROOF),
+    ("a container file's docker run -d not known", PLUGIN, """r'"run",\\s*"-d"|""", "r'", PROOF),
     ("the check: Valkey given no db not counted as db 0", PROOF,
      '        if db is None and name == "Valkey" or isinstance(db, ast.Constant)', "        if isinstance(db, ast.Constant)",
      PROOF),
