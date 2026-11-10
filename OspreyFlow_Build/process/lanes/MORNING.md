@@ -186,6 +186,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    After an upgrade, **nobody holds Rule author** (decision 13), so the converted rule drafts wait until an admin
    assigns it. The CHANGELOG says so.
 
+26. **A second merge session, the merger, is running (your word, ADR-142 Amendment 7), on the `sol` account.** It
+   prepares merges: the reviews, the trial merge, the records. I land each one on `main` fast-forward only, so only one
+   session ever writes `main`. Since about 20:30 it has rules-b's T3, case's L3.H2, studio-b's L1.10b and admin's T1
+   part 4. After the publish it takes every Track B step. I keep the release path, the reservations, the stacks and
+   the pushes.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
