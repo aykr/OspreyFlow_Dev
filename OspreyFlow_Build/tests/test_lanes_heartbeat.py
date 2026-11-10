@@ -394,3 +394,41 @@ def test_show_prints_no_estimates_section_without_the_file(hb, tmp_path) -> None
     table.write_text("studio\tL1.5\tL\tbuilding\tExpert steps\n")
     out = hb("show", OSPREY_LANES="", OSPREY_PROGRESS_FILE=str(table)).stdout
     assert "ESTIMATED TIME TO MERGE" not in out
+
+
+
+# --- The owner's short view (10 November 2026: "the dashboard is getting too busy to read") -------------------
+
+
+def _summary_fixture(tmp_path):
+    table = tmp_path / "progress.tsv"
+    table.write_text("studio\tL1.5\tL\tdone\tExpert steps\nplatform\tP7\tL\tbuilding\tThe profile\n")
+    (tmp_path / "estimates.tsv").write_text(
+        "# as of 2026-11-10T05:36:00Z\n"
+        "studio\tL1.7\toperations and releases\t~17:00\tA\n"
+        "platform\tP7\tcloud-platform profile\t~20:00\tB\n"
+        "docs\tD2a\tguides\t~07:15\n"
+    )
+    return table
+
+
+def test_summary_is_short_and_splits_the_remaining_steps_by_track(hb, tmp_path) -> None:
+    table = _summary_fixture(tmp_path)
+    out = hb("summary", OSPREY_LANES="studio platform", OSPREY_PROGRESS_FILE=str(table)).stdout
+    lines = out.splitlines()
+    assert lines[0].startswith("OSPREYFLOW · 1 of 2 steps done · stacks in use: 0")
+    assert "REMAINING (the orchestrator's estimates, as of 05:36 UTC):" in out
+    demo, client = out.index("Demo track:"), out.index("Client track:")
+    assert demo < out.index("operations and releases") < client < out.index("cloud-platform profile")
+    assert demo < out.index("guides") < client  # a row with no track is the demo track's
+    assert "LANES: studio - · platform -" in out
+    assert "Test stack" not in out and "FOR THE ORCHESTRATOR" not in out  # the detail stays in `show`
+    assert len(lines) <= 16, out
+
+
+def test_watch_shows_the_summary_unless_asked_for_the_full_view(hb, tmp_path) -> None:
+    table = _summary_fixture(tmp_path)
+    short = hb("watch", "1", OSPREY_WATCH_PASSES="1", OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout
+    full = hb("watch", "--full", OSPREY_WATCH_PASSES="1", OSPREY_LANES="studio", OSPREY_PROGRESS_FILE=str(table)).stdout
+    assert "OSPREYFLOW ·" in short and "Test stack" not in short
+    assert "Test stack" in full and "OSPREYFLOW ·" not in full

@@ -7,7 +7,10 @@
 #   lanes_heartbeat.sh nudge <lane> "<message>"     the orchestrator leaves a lane a message, shown
 #                                                     to it at its next beat (a session it cannot type into)
 #   lanes_heartbeat.sh show                           one table: every lane, the lease, what needs you
-#   lanes_heartbeat.sh watch [seconds]                show again every N seconds (default 300) and send a
+#   lanes_heartbeat.sh summary                        the owner's short view: one line of totals, what needs
+#                                                     you, and the remaining steps by track with their times
+#   lanes_heartbeat.sh watch [seconds] [--full]       show the summary (--full: every lane) every N seconds
+#                                                     (default 300) and send a
 #                                                     macOS notification when something newly needs you; a
 #                                                     lane blocked at its usage limit is switched to its
 #                                                     owner-written fallback account once, never otherwise
@@ -260,6 +263,35 @@ show() {
   mv "$needs" "$DIR/.needs"
 }
 
+# The owner's short view (10 November 2026: "the dashboard is getting too busy to read"): one line of totals, what
+# needs you, then the remaining steps as the orchestrator's estimates give them, by track (estimates.tsv's fifth
+# column, A demo or B client; none means A), then one line of lane states. `show` keeps every detail.
+summary() {
+  show >/dev/null   # works out what needs the owner, as watch's notifications rely on
+  local counts done=0 total=0 inuse=0 lock
+  counts="$(awk -F'\t' '!/^#/ && NF>=4 { n++; if ($4 == "done") d++ } END { printf "%d %d", d+0, n+0 }' "$PROGRESS" 2>/dev/null)"
+  [ -n "$counts" ] && read -r done total <<< "$counts"
+  for lock in "$LEASE_DIR"/stack.lease "$LEASE_DIR"/stack-*.lease; do [ -d "$lock" ] && inuse=$((inuse + 1)); done
+  echo "OSPREYFLOW · $done of $total steps done · stacks in use: $inuse · sessions: $(sessions)"
+  echo
+  if [ -s "$DIR/.needs" ]; then echo "NEEDS YOU:"; sed 's/^/  - /' "$DIR/.needs"; else echo "Nothing needs you."; fi
+  if [ -s "$ESTIMATES" ]; then
+    local asof; asof="$(sed -n 's/^# as of //p' "$ESTIMATES" | head -1)"
+    echo
+    echo "REMAINING (the orchestrator's estimates${asof:+, as of ${asof:11:5} UTC}):"
+    grep -v '^#' "$ESTIMATES" | awk -F'\t' 'NF >= 4 { t = ($5 == "B") ? "B" : "A"; rows[t] = rows[t] sprintf("    %-10s %-7s %-40s %s\n", $1, $2, substr($3, 1, 40), $4) }
+      END { if (rows["A"] != "") printf "  Demo track:\n%s", rows["A"]; if (rows["B"] != "") printf "  Client track:\n%s", rows["B"] }'
+  fi
+  echo
+  local line="" lane st
+  for lane in $LANES; do
+    st="$(field state "$DIR/$lane.beat" || true)"; [ -n "$st" ] || st="-"
+    line="$line$lane $st · "
+  done
+  echo "LANES: ${line% · }"
+  echo "Every detail: lanes_heartbeat.sh show"
+}
+
 notify() {
   local msg="$1"
   if command -v osascript >/dev/null 2>&1; then
@@ -269,12 +301,12 @@ notify() {
 
 # OSPREY_WATCH_PASSES stops after that many passes (the test's; unset, it runs until Ctrl-C).
 watch_loop() {
-  local every="${1:-300}" prev="$DIR/.needs.prev" pass=0
+  local every="${1:-300}" view="${2:-}" prev="$DIR/.needs.prev" pass=0
   : > "$prev"
   while true; do
     clear 2>/dev/null || true
     echo "OspreyFlow lanes · $(date '+%H:%M:%S') · every ${every}s · Ctrl-C to stop"; echo
-    show
+    if [ "$view" = "--full" ]; then show; else summary; fi
     # notify only for lines that are new since the last pass
     if [ -s "$DIR/.needs" ]; then
       while IFS= read -r line; do
@@ -298,6 +330,7 @@ case "${1:-show}" in
   beat) shift; beat "$@" ;;
   nudge) shift; nudge "$@" ;;
   show) shift; show "${1:-}" ;;
-  watch) shift; watch_loop "${1:-300}" ;;
-  *) echo "usage: lanes_heartbeat.sh beat <lane> <state> \"<note>\" | nudge <lane> \"<message>\" | show | watch [seconds]" >&2; exit 2 ;;
+  summary) summary ;;
+  watch) shift; case "${1:-}" in --full) watch_loop 300 --full ;; *) watch_loop "${1:-300}" "${2:-}" ;; esac ;;
+  *) echo "usage: lanes_heartbeat.sh beat <lane> <state> \"<note>\" | nudge <lane> \"<message>\" | show | summary | watch [seconds] [--full]" >&2; exit 2 ;;
 esac

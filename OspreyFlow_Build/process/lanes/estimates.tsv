@@ -1,22 +1,22 @@
 # as of 2026-11-10T05:36:14Z
-admin	L2.7	merge gating now	~06:15
-studio	L1.5	clear; batch merge with P5 and D2a after L2.7	~07:15
-platform	P5	clear; batch merge with L1.5 and D2a	~07:15
-docs	D2a	in review; batch merge with L1.5 and P5	~07:15 (if the review is clear)
-rules	L2.10	last plants, re-review, merge	~08:30
-studio-b	L1.7a	in review, then merge	~08:30
-platform-b	P5b	after D2a: rows, PDF, gates, review	~09:30
-case	L3.9	type-mapping rework, gates, review	~13:00–15:00
-admin	L2.5b	full Disable transfer, after L2.7	~10:00–11:00
-studio-b	tips	Studio's tips patches, after L2.7	~09:30–10:30
-studio-b	L1.10	marking ceiling, after L1.7a	~13:00
-studio	L1.7	operations, releases, carries	~17:00–19:00
-rules	L2.11	rule editor, after L2.10	~19:00–21:00
-case	L3.6	drawn-watch alerts, after L3.9	~17:00–18:00
-platform	P7	cloud-platform profile, after P5	~19:00–21:00
-platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening
-studio-b	L1.9	S3 and Athena, after P7	~11 Nov, morning
-platform-b	P6	gazetteer panel, after P5b (demo track)	~14:00
-docs	D2b	decks, after L2.11	~11 Nov, morning
-docs	D2c	Cloud Platform guide, after P10	~12 Nov
-platform	P11	held until the client asks for AI	—
+admin	L2.7	merge gating now	~06:15	A
+studio	L1.5	clear; batch merge with P5 and D2a after L2.7	~07:15	A
+platform	P5	clear; batch merge with L1.5 and D2a	~07:15	A
+docs	D2a	in review; batch merge with L1.5 and P5	~07:15 (if the review is clear)	A
+rules	L2.10	last plants, re-review, merge	~08:30	A
+studio-b	L1.7a	in review, then merge	~08:30	A
+platform-b	P5b	after D2a: rows, PDF, gates, review	~09:30	A
+case	L3.9	type-mapping rework, gates, review	~13:00–15:00	A
+admin	L2.5b	full Disable transfer, after L2.7	~10:00–11:00	A
+studio-b	tips	Studio's tips patches, after L2.7	~09:30–10:30	A
+studio-b	L1.10	marking ceiling, after L1.7a	~13:00	B
+studio	L1.7	operations, releases, carries	~17:00–19:00	A
+rules	L2.11	rule editor, after L2.10	~19:00–21:00	A
+case	L3.6	drawn-watch alerts, after L3.9	~17:00–18:00	A
+platform	P7	cloud-platform profile, after P5	~19:00–21:00	B
+platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening	B
+studio-b	L1.9	S3 and Athena, after P7	~11 Nov, morning	B
+platform-b	P6	gazetteer panel, after P5b (demo track)	~14:00	A
+docs	D2b	decks, after L2.11	~11 Nov, morning	A
+docs	D2c	Cloud Platform guide, after P10	~12 Nov	B
+platform	P11	held until the client asks for AI	—	B
