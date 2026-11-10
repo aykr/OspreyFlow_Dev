@@ -24,9 +24,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from services.api.change_stream import ChangeStreamEntry
 from services.api.drawn_watches import DrawnWatchMatch, DrawnWatchRun
+from services.api.recipe_run import _run_drawn_watches_best_effort
 
-from schemas.domain import Principal
+from schemas.domain import Alert, Principal
 
 from .test_boards import ONTOLOGY, PEOPLE, B, K, _as, _board, _item, _loaded, world  # noqa: F401
 
@@ -40,7 +42,7 @@ def run(world: SimpleNamespace) -> Iterator[SimpleNamespace]:  # noqa: F811
         return None if account in gone else PEOPLE.get(account)
 
     async def case_datasets(case_id: str) -> list[str]:
-        return await world.datasets.ids_of_case(case_id)
+        return list(await world.datasets.ids_of_case(case_id))
 
     async def raise_alert(match: DrawnWatchMatch) -> None:
         raised.append(match)
@@ -171,3 +173,90 @@ async def test_nothing_is_raised_once_the_case_reads_the_dataset_no_more(
     run.world.datasets.cases[K] = ["other"]
     assert await run.run.after_load("src", [alike]) == 0
     assert run.raised == []
+
+
+# --- after a recipe run (`recipe_run._run_drawn_watches_best_effort`) ----------------------------
+
+
+class _Alerts:
+    """`AlertStore.save` as the run calls it: the alert and the markings of what it cites."""
+
+    def __init__(self, fails: bool = False) -> None:
+        self.saved: list[tuple[Alert, list[Any]]] = []
+        self.fails = fails
+
+    async def save(self, alert: Alert, *, handlings: Any = ()) -> None:
+        if self.fails:
+            raise RuntimeError("the alert store is down")
+        self.saved.append((alert, list(handlings)))
+
+
+class _Owners:
+    """`PrincipalResolver.resolve_for_owner`: each owner resolved afresh, `None` for one gone."""
+
+    async def resolve_for_owner(self, owner_id: str) -> Principal | None:
+        return PEOPLE.get(owner_id)
+
+
+LOADER = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1")
+
+
+def _deps(run: SimpleNamespace, alerts: _Alerts, **over: Any) -> Any:
+    held = {"board_items": run.world.items, "datasets": run.world.datasets,
+            "graph": run.world.graph, "ontology": ONTOLOGY, "principal_resolver": _Owners(),
+            "alerts_store": alerts, "audit": run.world.audit}  # fmt: skip
+    return SimpleNamespace(**{**held, **over})
+
+
+def _entry(*node_ids: str) -> ChangeStreamEntry:
+    return ChangeStreamEntry(
+        entry_id="e-1", source="ingest", node_ids=list(node_ids), edge_ids=[],
+        investigation_id=K, recorded_at=datetime.now(UTC),
+    )  # fmt: skip
+
+
+async def _after_run(deps: Any, *node_ids: str, dataset: str | None = "src") -> None:
+    await _run_drawn_watches_best_effort(
+        deps, _entry(*node_ids), dataset_id=dataset, principal=LOADER, investigation_id=K,
+        load_id="load-9",
+    )  # fmt: skip
+
+
+async def test_a_recipe_run_raises_the_drawn_watch_alert_into_the_queue(
+    run: SimpleNamespace,
+) -> None:
+    """The loader is not the owner: Alice is resolved afresh and read as herself. The alert saved
+    is hers, in her case, citing both, with both markings."""
+    drawn = _tall()
+    alike = _load(run, "p-alike", family_name="Tall", pnc_id="PNC-1")
+    alerts = _Alerts()
+    await _after_run(_deps(run, alerts), alike)
+    ((alert, handlings),) = alerts.saved
+    assert alert.rule_id.startswith("drawn_watch:")
+    assert (alert.owner_id, alert.investigation_id, alert.dataset_id) == ("alice", K, "src")
+    assert alert.referent_node_ids == [drawn["element_id"], alike]
+    assert len(handlings) == 2
+
+
+async def test_a_run_without_the_drawn_watch_stores_or_a_dataset_raises_nothing(
+    run: SimpleNamespace,
+) -> None:
+    _tall()
+    alike = _load(run, "p-alike", family_name="Tall", pnc_id="PNC-1")
+    alerts = _Alerts()
+    await _after_run(_deps(run, alerts, board_items=None), alike)
+    await _after_run(_deps(run, alerts, datasets=None), alike)
+    await _after_run(_deps(run, alerts), alike, dataset=None)
+    assert alerts.saved == [] and run.world.items.matches == {}
+
+
+async def test_a_failing_drawn_watch_run_is_audited_never_the_loads_failure(
+    run: SimpleNamespace,
+) -> None:
+    _tall()
+    alike = _load(run, "p-alike", family_name="Tall", pnc_id="PNC-1")
+    await _after_run(_deps(run, _Alerts(fails=True)), alike)  # does not raise
+    (failed,) = [r for r in run.world.audit.records if r["action"] == "watch_evaluation_failed"]
+    assert failed["resolved_query"] == {"load_id": "load-9", "drawn_watches": True,
+                                        "error": "the alert store is down"}  # fmt: skip
+

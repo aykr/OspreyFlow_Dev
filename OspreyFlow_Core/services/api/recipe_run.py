@@ -41,8 +41,11 @@ from . import resolution_trigger as resolution_trigger_module
 from .alerts import AlertStore
 from .audit import AuditWriter
 from .auth import PrincipalResolver
+from .board_store import BoardItemStore
 from .change_stream import ChangeStreamEntry, ChangeStreamWriter, touched_node_ids
 from .config import ApiConfig
+from .datasets import DatasetStore
+from .drawn_watches import DrawnWatchRun, raise_into
 from .evaluation import DatasetReach, evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
@@ -108,6 +111,11 @@ class RecipeRunDeps:
     #: (`watch_reach.owner_reaches_dataset_in`). None: a watch with a dataset is not matched (fail
     #: closed). `from_state` always builds it from the state's own stores.
     watch_reach: DatasetReach | None = None
+    #: L3.6 (ADR-143 Amendment 2 decision 8): the drawn watches a load is run against, and the
+    #: case read sets their owners are read in. None: no drawn watch is run (fail closed: no
+    #: alert, nothing read). `from_state` reads both from the state (`board_items`, `datasets`).
+    board_items: BoardItemStore | None = None
+    datasets: DatasetStore | None = None
 
     @classmethod
     def from_state(cls, state: Any) -> RecipeRunDeps:
@@ -341,6 +349,10 @@ async def _execute_recipe_run(
             principal_resolver=deps.principal_resolver,
             watch_reach=deps.watch_reach,
         )
+        await _run_drawn_watches_best_effort(
+            deps, entry, dataset_id=recipe.dataset_id, principal=principal,
+            investigation_id=investigation_id, load_id=load_id,
+        )  # fmt: skip
     await deps.audit.record(
         principal=principal,
         action="run_studio_recipe",
@@ -435,6 +447,42 @@ def always_judges(rule: TypologyRule) -> bool:
     from .sentence_rules import is_deployment_wide, is_just_me
 
     return is_deployment_wide(rule) or is_just_me(rule)
+
+
+async def _run_drawn_watches_best_effort(
+    deps: RecipeRunDeps,
+    entry: ChangeStreamEntry,
+    *,
+    dataset_id: str | None,
+    principal: Principal,
+    investigation_id: str,
+    load_id: str,
+) -> None:
+    """L3.6 (ADR-143 Amendment 2 decision 8; ADR-146 decision 4): every live drawn watch on the
+    dataset the load wrote into, run against the nodes it wrote or matched (`DrawnWatchRun`), each
+    match raised into the one queue as the watch owner's alert. Each owner is resolved afresh, as
+    for every watch (`_owner_resolver`), and read in their watch's case through the adapter.
+    Best effort, as the other watches: a failure is audited, never the load's."""
+    if deps.board_items is None or deps.datasets is None or dataset_id is None:
+        return
+    run = DrawnWatchRun(
+        items=deps.board_items,
+        graph=deps.graph,
+        ontology=deps.ontology,
+        owner_of=_owner_resolver(principal, deps.principal_resolver),
+        case_datasets=deps.datasets.ids_of_case,
+        raise_alert=raise_into(deps.alerts_store),
+    )
+    try:
+        await run.after_load(dataset_id, entry.node_ids, load_id=load_id)
+    except Exception as exc:  # noqa: BLE001 - as `_evaluate_watches_best_effort`'s: audited
+        await deps.audit.record(
+            principal=principal,
+            action="watch_evaluation_failed",
+            investigation_id=investigation_id,
+            resolved_query={"load_id": load_id, "drawn_watches": True, "error": str(exc)},
+            result_cardinality=0,
+        )
 
 
 async def _evaluate_watches_best_effort(

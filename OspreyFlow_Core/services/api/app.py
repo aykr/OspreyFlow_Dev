@@ -12848,6 +12848,8 @@ async def run_studio_recipe(
     recipe_runs: RecipeRunsDep,
     studio_recipes: StudioRecipesDep,
     watch_reach: WatchReachDep,
+    board_items: BoardItemsDep,
+    datasets: DatasetsDep,
     influencers: OptionalStrengthInfluencersDep = None,
     models: TargetModelsDep = None,  # type: ignore[assignment]
     staging_storage: StagingStorageDep = None,  # type: ignore[assignment]
@@ -12940,6 +12942,8 @@ async def run_studio_recipe(
             staging_storage=staging_storage,
             list_store=list_store,
             watch_reach=watch_reach,
+            board_items=board_items,
+            datasets=datasets,
         ),
         principal=principal,
         recipe=recipe,
