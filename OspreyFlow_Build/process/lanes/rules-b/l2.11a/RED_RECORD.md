@@ -125,3 +125,23 @@ body itself an error.
   the same plant was red in all six open looks.
 - **Gap:** contrast inside the dialog is not measured by axe. A plant setting the text to its background
   colour stayed green with the dialog open. The dialog keeps to `ViewOverCapDialog`'s token pairs.
+
+## §9 No figure in an export (the orchestrator's condition for the `NON_JSON_ROUTES` row, rule 7)
+
+- **The census:** the server's `make test` at e72588c went red on
+  `test_no_corpus_counts_on_the_wire.py::test_every_route_with_no_field_to_walk_is_named_and_given_a_reason`.
+  The export answers XML, so it has no field to walk. The row is in 65fab6b.
+- **The proof:** `test_an_export_states_no_figure_of_anything_the_reader_cannot_see`. It runs offline, through the
+  real route. Two readers export the same rule: one reads only the rule's dataset, and the other also reads
+  `ds-hidden` at SECRET.
+  - Their bytes are equal.
+  - No attribute or element name states how many of anything there are.
+  - Every number outside ids, URLs and the drawing is one the rule holds (its name, params, budget and dataset).
+  - The drawing's layout equals a different rule's.
+- **Planted in the codec, in the shape it writes, each red on its own assertion and then restored:**
+  - P1, `members="4"` on `osprey:rule`: the name check.
+  - P2, a bare `n="4"` there: the number check alone (rule 15: P1 alone could have been caught by the name).
+  - P3, `of="9"` on the DMN's `osprey:subject`: the number check, for `.dmn`.
+  - P4, the task's width taken from the rule's condition count: the layout check.
+- **Not planted:** a reader-dependent export. `export_rule_file` takes only the rule and its stored files,
+  never the principal, so the equal-bytes assertion stands as the guard for a later change.

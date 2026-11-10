@@ -18,13 +18,18 @@ What a mistake would do, and the case that catches it:
 - the case's layer or a borrowed layer declared: `test_a_layer_the_case_reads_is_not_a_dataset_a_rule_declares`;
 - a drawn dataset declared: `test_a_drawn_dataset_its_home_case_chose_is_not_a_dataset_a_rule_declares`;
 - an import that writes, or names an element it refused vaguely: `test_an_unsupported_file_is_refused_by_name_and_nothing_is_written`.
+- an export stating a count, size or cardinality of the data (rule 7), the route being named in
+  the wire census's `NON_JSON_ROUTES`: `test_an_export_states_no_figure_of_anything_the_reader_cannot_see`.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
+from xml.etree import ElementTree
 
 import pytest
 from fastapi.testclient import TestClient
@@ -391,3 +396,90 @@ def test_export_serves_the_stored_files_not_a_fresh_render() -> None:
         SentenceRuleInput(name=rule.name, sentence=SENTENCE, budget_ms=6000, max_matches=120),
         dataset_id=DATASET,
     ).dmn
+
+
+#: An attribute or element whose name would state how many of something there are. The files carry
+#: the rule's own limits (`maxMatches`, `atLeast`) by those names; a figure of the data never has a
+#: name, so any of these is one the export has no business writing (rule 7).
+_COUNT_WORDS = re.compile(
+    r"count|size|total|cardinal|members|degree|nodes|rows|hits|matches(?!$)", re.I
+)
+#: Attributes that hold a reference, an id or a URL, never a figure: read for names, not numbers.
+_STRUCTURAL = {"id", "sourceRef", "targetRef", "bpmnElement", "decisionRef", "implementation",
+               "targetNamespace", "namespace", "exporterVersion"}  # fmt: skip
+_DI = ("{http://www.omg.org/spec/DD/20100524/DC}", "{http://www.omg.org/spec/DD/20100524/DI}")
+
+
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _numbers(value: Any) -> set[str]:
+    """Every number the rule holds: its figures as the codec writes them (FEEL literals), and any
+    digits in its own words (its name, a value, its dataset's id)."""
+    if isinstance(value, bool) or value is None:
+        return set()
+    if isinstance(value, int | float):
+        return set(_NUMBER.findall(format(Decimal(repr(value)), "f")))
+    if isinstance(value, str):
+        return set(_NUMBER.findall(value))
+    if isinstance(value, dict):
+        return set().union(*(_numbers(v) for v in value.values()))
+    if isinstance(value, list):
+        return set().union(*(_numbers(v) for v in value))
+    return set()
+
+
+def _what_the_file_states(xml: bytes) -> tuple[set[str], set[str], list[tuple[str, str]]]:
+    """Every attribute and element name, every number outside ids, URLs and the drawing's layout,
+    and the layout's own figures (`dc:Bounds`, `di:waypoint`) in order."""
+    names: set[str] = set()
+    numbers: set[str] = set()
+    layout: list[tuple[str, str]] = []
+    for el in ElementTree.fromstring(xml).iter():
+        local = el.tag.rsplit("}", 1)[-1]
+        names.add(local)
+        for key, value in el.attrib.items():
+            name = key.rsplit("}", 1)[-1]
+            names.add(name)
+            if el.tag.startswith(_DI):
+                layout.append((name, value))
+            elif name not in _STRUCTURAL:
+                numbers |= set(_NUMBER.findall(value))
+        if el.text and local not in ("incoming", "outgoing"):
+            numbers |= set(_NUMBER.findall(el.text))
+    return names, numbers, layout
+
+
+def test_an_export_states_no_figure_of_anything_the_reader_cannot_see(
+    world: dict[str, Any],
+) -> None:
+    """Violation caught: an export carrying a count, size or cardinality of the data, which the
+    reader may not see (rule 7), past the wire census that names this route as having no JSON field
+    to walk (`test_no_corpus_counts_on_the_wire.py`'s `NON_JSON_ROUTES`). The rule is over a
+    dataset whose members one reader sees more of than the other (another dataset read too, a
+    higher clearance); the files are the same bytes for both, no name in them states how many of
+    anything there are, and every number in them is one the rule itself holds. The drawing's
+    layout is the same for a different rule, so it states nothing of this one or its data."""
+    sentence = RuleSentence.model_validate({"subject": "Person", "conditions": [
+        {"op": "equals", "property": "family_name", "value": "Okafor"},
+        {"op": "above", "property": "amount", "value": 7350.25},
+    ]})  # fmt: skip
+    rule = _rule("r-figures").model_copy(update={"budget_ms": 6100, "params": SentenceRuleParams(
+        pattern_id="pat", sentence=sentence, max_matches=137)})  # fmt: skip
+    world["rules"].rules[rule.id] = rule
+    sees_more = VIEWER.model_copy(update={"id": "vw", "clearance": "SECRET",
+                                          "datasets": [DATASET, HIDDEN_DATASET]})  # fmt: skip
+    own = {"name", "params", "budget_ms", "dataset_id"}
+    held = _numbers(rule.model_dump(mode="json", include=own))
+    plain = _files()
+    for kind in ("bpmn", "dmn"):
+        mine = _as(VIEWER).get(f"{BASE}/{rule.id}/export.{kind}")
+        theirs = _as(sees_more).get(f"{BASE}/{rule.id}/export.{kind}")
+        assert mine.status_code == theirs.status_code == 200, mine.text
+        assert mine.content == theirs.content, kind
+        names, numbers, layout = _what_the_file_states(mine.content)
+        assert not {n for n in names if _COUNT_WORDS.search(n)}, names
+        assert numbers <= held, (kind, numbers - held)
+        other = (plain[0] if kind == "bpmn" else plain[1]).encode()
+        assert layout == _what_the_file_states(other)[2], kind
+    assert "7350.25" in held and "137" in held and "6100" in held
