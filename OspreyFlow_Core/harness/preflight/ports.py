@@ -18,6 +18,7 @@ import os
 import re
 import socket
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from harness.preflight.context import PreflightContext, RenderedOutputMissing
@@ -103,6 +104,40 @@ def _answers(port: int) -> bool:
         return probe.connect_ex(("127.0.0.1", port)) == 0
 
 
+def deployment_environ(context: PreflightContext) -> dict[str, str]:
+    """The environment the deployment's compose file is interpolated in: its own `deployment.env`,
+    which Compose reads with `--env-file`, under this process's environment, which Compose lets win
+    over the file. A deployment kept by name names its graph port there (ADR-138 decision 2), so a
+    check of the shell's environment alone checked 2480 and refused the install wherever another
+    deployment held it (found on P5b's live run, 10 November 2026)."""
+    env_file = context.out_dir / "deployment.env"
+    values = read_env_file(env_file) if env_file.is_file() else {}
+    return {**values, **os.environ}
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """An env file as Compose reads it, for what a published port's value can be: whole-line
+    comments and blank lines skipped, an `export ` prefix dropped, a value in one matching pair of
+    quotes taken whole, and an unquoted value's ` #` comment left off."""
+    values: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        name, sep, value = line.partition("=")
+        if not sep or not name.strip():
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        else:
+            value = re.split(r"\s#", value, maxsplit=1)[0].rstrip()
+        values[name.strip()] = value
+    return values
+
+
 def check(context: PreflightContext) -> CheckResult:
     try:
         compose = context.rendered_compose()
@@ -113,7 +148,7 @@ def check(context: PreflightContext) -> CheckResult:
             what_to_do="Run `python -m harness.render` for this profile, then re-check.",
         )
 
-    ports = declared_ports(compose)
+    ports = declared_ports(compose, deployment_environ(context))
     if not ports:
         return passed(NAME, detail=("the rendered compose file publishes no host ports",))
 
