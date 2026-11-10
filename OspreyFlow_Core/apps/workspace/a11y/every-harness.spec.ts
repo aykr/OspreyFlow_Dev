@@ -44,7 +44,20 @@ const EXTRA_STATES: Record<string, string[]> = {
   "maps-harness.html": ["open=add", "open=key", "open=area", "built=1"],
   // P4: the analyst's map with the place search's answer drawn, its "more match" words and its
   // refusal (its switch and search on every state).
-  "map-view-harness.html": ["searched=1", "searched=more", "searched=fail"],
+  "map-view-harness.html": [
+    "searched=1",
+    "searched=more",
+    "searched=fail",
+    // P6: the case's gazetteers, each state of the panel (ADR-147 Amendment 2).
+    "gazetteers=added",
+    "gazetteers=reader",
+    "gazetteers=nothing",
+    "gazetteers=composite",
+    "gazetteers=drawn",
+    "gazetteers=unbuilt",
+    "gazetteers=failed",
+    "gazetteers=refused",
+  ],
   // ADR-145 decision 2: the banner in the Studio, with its way back, and in Admin.
   // ADR-145 Amendment 2: Monitoring's badge (inside the GOV.UK notification banner under that
   // brand), and the rail's ⋯ More and the top bar's More views drawn open.
