@@ -143,6 +143,7 @@ class World:
         state.sources = object()
         state.valkey = object()
         state.handling_scheme = SCHEME
+        state.run_quotas = None  # no quota set (ADR-141 decision 6)
         state.principal_resolver = SimpleNamespace(resolve_for_owner_detailed=None)
         return app_module._schedule_executor(SimpleNamespace(state=state))  # type: ignore[arg-type]
 

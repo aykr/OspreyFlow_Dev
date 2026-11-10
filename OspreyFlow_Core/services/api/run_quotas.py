@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
@@ -219,7 +219,8 @@ class PostgresQuotaStore:
                 "VALUES ($1, $2, $3::date, $4, $5) ON CONFLICT DO NOTHING",
                 alert.scope,
                 alert.key,
-                alert.day,
+                # asyncpg takes a `date` for a date parameter, never its ISO text.
+                date.fromisoformat(alert.day),
                 at,
                 alert.words,
             )
@@ -238,7 +239,7 @@ class PostgresQuotaStore:
                 "WHERE a.day >= $1::date AND ($2::text[] IS NULL OR (a.scope, a.key) IN "
                 "(SELECT * FROM unnest($2::text[], $3::text[]))) "
                 "ORDER BY a.day DESC, a.scope, a.key",
-                since_day,
+                date.fromisoformat(since_day),
                 scopes,
                 keys,
             )

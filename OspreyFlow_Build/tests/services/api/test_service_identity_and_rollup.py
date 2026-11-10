@@ -72,11 +72,18 @@ def test_a_service_identitys_token_names_its_client(
     assert _verifier(jwks_url).client_of(token) == "Airflow-Prod"
 
 
+@pytest.mark.parametrize(
+    "claims",
+    [{"azp": "airflow-prod", "preferred_username": "analyst-1"}, {}],
+    # A person's token as the realm issues it may carry no `azp` at all: it is verified, so 403,
+    # never 401 (found live at 667772b by `test_route_rights.py`'s no-role sweep).
+    ids=["another-azp", "no-azp"],
+)
 def test_a_persons_token_is_never_taken_for_a_service_identitys(
-    jwks_url: str, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    jwks_url: str, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey], claims: dict[str, str]
 ) -> None:
     key, _ = keypair
-    token = sign_token(key, default_claims(azp="airflow-prod", preferred_username="analyst-1"))
+    token = sign_token(key, default_claims(**claims))
     with pytest.raises(ServiceIdentityRefused) as refused:
         _verifier(jwks_url).client_of(token)
     assert refused.value.status == 403

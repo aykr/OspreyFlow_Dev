@@ -52,7 +52,8 @@ class ServiceIdentityVerifier:
                 audience=self._config.oidc_audience,
                 issuer=self._config.oidc_issuer,
                 options={
-                    "require": ["sub", "azp"],
+                    # `azp` is judged below: a person's verified token without one is 403, not 401.
+                    "require": ["sub"],
                     "verify_aud": self._config.oidc_audience is not None,
                     "verify_iss": self._config.oidc_issuer is not None,
                 },
