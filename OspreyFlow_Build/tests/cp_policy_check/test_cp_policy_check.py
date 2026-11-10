@@ -162,7 +162,7 @@ def test_a_deny_policy_that_does_not_cover_every_pod_is_refused(
 ) -> None:
     values, registry = development
     docs = helm_template(yaml.safe_dump(values))
-    deny = next(d for d in docs if d["metadata"]["name"] == "ospreyflow-deny-egress")
+    deny = next(d for d in docs if d["metadata"]["name"] == "default.ospreyflow-deny-egress")
     deny["spec"]["selector"] = "app.kubernetes.io/name == 'api'"
     assert {v.rule for v in check_manifests(docs, registry)} == {"no-deny-egress"}
 

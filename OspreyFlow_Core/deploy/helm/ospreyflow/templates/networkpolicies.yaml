@@ -73,10 +73,12 @@ spec:
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
-  name: ospreyflow-allow-egress
+  # Named with its tier, as Calico (3.28 and later, with tiers) stores it, so an upgrade can patch it.
+  name: default.ospreyflow-allow-egress
   labels:
     {{- include "ospreyflow.labels" (dict "name" "allow-egress" "root" $) | nindent 4 }}
 spec:
+  tier: default
   order: 100
   selector: all()
   types: ["Egress"]
@@ -108,10 +110,12 @@ spec:
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
-  name: ospreyflow-deny-egress
+  # Named with its tier, as Calico (3.28 and later, with tiers) stores it, so an upgrade can patch it.
+  name: default.ospreyflow-deny-egress
   labels:
     {{- include "ospreyflow.labels" (dict "name" "deny-egress" "root" $) | nindent 4 }}
 spec:
+  tier: default
   order: 200
   selector: all()
   types: ["Egress"]
