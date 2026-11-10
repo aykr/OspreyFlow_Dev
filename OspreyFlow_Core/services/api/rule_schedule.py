@@ -153,6 +153,7 @@ def runs_for_reader(
 
 class ScheduledRules(Protocol):
     async def scheduled_rules(self) -> list[TypologyRule]: ...
+    async def list_refresh_rules(self, list_id: str) -> list[TypologyRule]: ...
     async def rule_runs(self, rule_id: str, *, limit: int = 20) -> list[RuleRun]: ...
     async def last_rule_slot(self, rule_id: str) -> datetime | None: ...
     async def record_rule_run(self, run: RuleRun) -> None: ...
@@ -176,6 +177,50 @@ class RuleScheduleExecutor:
     check_case: Callable[[Principal, str, AccessLevel], Awaitable[Principal]]
     #: Judges the slot as the author and raises what it finds; returns how many alerts it raised.
     judge: Callable[[TypologyRule, Principal, datetime], Awaitable[int]]
+    #: ADR-146 decision 3: judges a rule as its screening list refreshes, as the author.
+    judge_on_refresh: Callable[[TypologyRule, Principal, datetime], Awaitable[int]] | None = None
+
+    async def on_list_refreshed(self, list_id: str, now: datetime) -> int:
+        """ADR-146 decision 3, *When* a screening list refreshes: each running rule that names the
+        list is judged once, as its author resolved afresh, and the run recorded with the rule's
+        runs in words, whatever became of it. One rule's trouble never stops the others. Returns
+        how many rules ran."""
+        if self.judge_on_refresh is None:
+            return 0
+        ran = 0
+        for rule in await self.rules.list_refresh_rules(list_id):
+            claim = f"rule-refresh:claim:{rule.id}:{list_id}:{now.isoformat()}"
+            if not await reply(self.valkey.set(claim, "1", nx=True, ex=_CLAIM_SECONDS)):
+                continue
+            try:
+                author = await self._author(rule)
+            except _Refused as refused:
+                prefix = "Refused" if refused.outcome == "refused" else "Not run"
+                await self._record(
+                    rule, now, rule.owner_id, refused.outcome, f"{prefix}: {refused}."
+                )
+                continue
+            try:
+                raised = await self.judge_on_refresh(rule, author, now)
+            except PartlyRaised as partly:
+                log.exception("rule %s failed part-way as its list refreshed", rule.id)
+                await self._record(
+                    rule, now, author.id, "failed",
+                    f"Failed after {partly.raised:,} alert(s) raised: {partly.cause}.",
+                    alerts=partly.raised,
+                )  # fmt: skip
+                continue
+            except Exception as error:  # noqa: BLE001 - recorded as failed, in words
+                log.exception("rule %s failed as its list refreshed", rule.id)
+                await self._record(rule, now, author.id, "failed", f"Failed: {error}.")
+                continue
+            ran += 1
+            await self._record(
+                rule, now, author.id, "ran",
+                f"Ran as {author.id} as its screening list refreshed: {raised:,} alert(s) raised.",
+                alerts=raised,
+            )  # fmt: skip
+        return ran
 
     async def tick(self, now: datetime) -> None:
         for rule in await self.rules.scheduled_rules():

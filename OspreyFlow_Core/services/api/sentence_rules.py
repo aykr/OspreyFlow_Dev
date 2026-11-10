@@ -250,6 +250,27 @@ SCHEDULE_PERIOD = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
 async def run_scheduled_rule(
     rule: TypologyRule, deployer: Principal, gate: RuleGate, *, now: datetime
 ) -> int:
+    """One scheduled slot (below); see `_judge_stored`."""
+    return await _judge_stored(rule, deployer, gate, now=now, on_refresh=False)
+
+
+#: ADR-146 decision 3 (L2.11): a rule that runs when its screening list refreshes judges what was
+#: stored over the last day, as a daily schedule does, against the list as it now stands.
+LIST_REFRESH_PERIOD = timedelta(days=1)
+
+
+async def run_on_list_refresh(
+    rule: TypologyRule, deployer: Principal, gate: RuleGate, *, now: datetime
+) -> int:
+    """ADR-146 decision 3, *When* a screening list refreshes: the rule judged once, as its author,
+    over the last day of what is stored, against the list's new version; each new finding raised
+    once, as at a load. Returns how many alerts it raised."""
+    return await _judge_stored(rule, deployer, gate, now=now, on_refresh=True)
+
+
+async def _judge_stored(
+    rule: TypologyRule, deployer: Principal, gate: RuleGate, *, now: datetime, on_refresh: bool
+) -> int:
     """ADR-133 decision 1, stage (d): one scheduled slot of a sentence rule, as its author over what
     is stored — the subjects its drawn pattern matches as the author may see them (rule 3), judged
     over the last day or week (a frequency over its own span before that) — each new finding raised
@@ -259,7 +280,7 @@ async def run_scheduled_rule(
     sentence = params.sentence
     if gate.ontology is not None:
         sentence = sentence_of(pattern, sentence, gate.ontology)
-    if sentence.schedule is None:
+    if not on_refresh and sentence.schedule is None:
         raise RuntimeError("the rule has no schedule to run on")
     counted = await gate.graph.match_count(pattern, deployer, ceiling=params.max_matches + 1)
     if counted > params.max_matches:
@@ -267,7 +288,11 @@ async def run_scheduled_rule(
             f"its drawn pattern matches more than {params.max_matches:,} subjects, the rule's "
             "limit; none was judged"
         )
-    period = SCHEDULE_PERIOD[sentence.schedule.every]
+    period = (
+        LIST_REFRESH_PERIOD
+        if on_refresh or sentence.schedule is None
+        else SCHEDULE_PERIOD[sentence.schedule.every]
+    )
     span = timedelta(days=getattr(sentence.frequency, "within_days", 0))
     window = Interval(valid_from=now - period - span, valid_to=now)
     firsts = Interval(valid_from=now - period, valid_to=now)
@@ -305,6 +330,7 @@ __all__ = [
     "is_just_me",
     "judge_sentence_rule",
     "rows_of_finding",
+    "run_on_list_refresh",
     "run_scheduled_rule",
     "routed_team_of",
     "sentence_alert_fields",

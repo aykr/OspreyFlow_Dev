@@ -32862,12 +32862,20 @@ unchanged except where this says so.
 8. **The rule files** are saved beside each version through rules-b's `rule_standards.rule_files`, and *Export*
    returns what was stored (Amendment 5).
 
-**Still open within L2.11** (the step's own report says when each is built):
-- *When a screening list refreshes*: `runs: list_refresh`, a rule that reads a screening list, is saved and offered.
-  Running it on a list's refresh, and naming the list it reads (the list picker over `…/reference-lists/offered`), is
-  L2.11's next step.
-- The older sentence builder stays below the editor, for a rule just for its author and for rules saved before the
-  editor, until its keyboard cases move to the editor. Its whole-deployment choice, and the older route's, go then.
+9. **The list a rule reads, and *When* it refreshes** (carry 11).
+   - A sentence on a screening list names one Studio list (`list_id`), chosen in the editor from those its dataset
+     may read: its own, or a deployment-wide list it subscribes to, as the save gate reads them. Any other is
+     refused exactly as a missing list (404 `list_not_found`); the editor requires one (422 `list_required`).
+   - Every run reads it within the rule's own dataset, through one reader on the gate: at a load, a release, a
+     schedule, a refresh and *Test*. A rule saved before the picker screens against the older lists, as before.
+   - `runs: list_refresh` runs the rule each time its list keeps a new version, from *Refresh now*, the list's
+     schedule or a dataset's own import. It runs as its author resolved afresh, over the last day of what is
+     stored, against the new version, and is recorded with the rule's runs in words. A refresh that kept nothing
+     new starts none.
+
+**Still open:** the older sentence builder stays below the editor, for a rule just for its author and for rules saved
+before the editor, until its keyboard cases move to the editor. Its whole-deployment choice, and the older route's,
+go then.
 
 ### Tests that would fail (rule 12)
 
@@ -32889,6 +32897,10 @@ unchanged except where this says so.
   `test_the_dry_run_at_its_real_call_site_changes_no_table_column_index_or_row`;
   `test_the_real_run_leaves_no_whole_deployment_rule_and_one_per_dataset`;
   `test_a_dataset_with_no_home_case_leaves_the_rule_whole_and_running`.
+- A rule naming a list its dataset may not read: `test_a_rule_reads_only_a_list_its_dataset_may_and_its_subjects_rows`.
+- A rule saved to run on its list's refresh that never runs, or one run by a refresh that kept nothing new:
+  `test_a_new_version_of_a_list_runs_each_rule_that_names_it`; `test_a_refresh_that_kept_nothing_new_starts_no_rule`;
+  `test_a_list_refresh_reads_only_the_running_rules_that_name_that_list`.
 - Keyboard: `keyboard/alerts.spec.ts`'s "a rule is written on a dataset, saved as a draft, tested and made live".
 
 The records are in `process/lanes/rules/l2.11/RED_RECORD.md`.

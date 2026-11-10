@@ -938,7 +938,12 @@ from .screening_refresh import (
 )
 from .screening_refresh import refresh as refresh_screening_list
 from .search import SearchRequest, SearchResponse, SuggestRequest, SuggestResponse
-from .sentence_rules import is_deployment_wide, run_scheduled_rule, strength_context
+from .sentence_rules import (
+    is_deployment_wide,
+    run_on_list_refresh,
+    run_scheduled_rule,
+    strength_context,
+)
 from .site_images import (
     object_key_for,
     read_site_image,
@@ -1718,6 +1723,22 @@ def get_target_models(request: Request) -> TargetModelStore:
 
 
 TargetModelsDep = Annotated[TargetModelStore, Depends(get_target_models)]
+
+
+async def _rules_on_list_refresh(state: Any, done: ListImport) -> None:
+    """ADR-146 decision 3, *When* a screening list refreshes: a new version kept starts every
+    running rule that names the list, each as its author, recorded with its runs. A refresh that
+    kept nothing new starts none."""
+    if done.outcome != "updated":
+        return
+    schedules = getattr(state, "monitoring_schedules", None)
+    executor = getattr(schedules, "rules", None)
+    if executor is None:
+        return
+    try:
+        await executor.on_list_refreshed(done.list_id, datetime.now(UTC))
+    except Exception:  # noqa: BLE001 - the refresh stands; each rule's run says what became of it
+        logger.exception("the rules naming list %s could not be started", done.list_id)
 
 
 def _rule_lists_of(state: Any) -> rule_editor.RuleListReader:
@@ -9875,6 +9896,7 @@ async def add_deployment_list(
 )
 async def refresh_deployment_list(
     list_id: str,
+    request: Request,
     principal: PrincipalDep,
     lists: ListStoreDep,
     rows_kept: ListRowsDep,
@@ -9886,6 +9908,7 @@ async def refresh_deployment_list(
         done = await import_list(list_id, store=lists, rows_kept=rows_kept)
     except ListNotFound as missing:
         raise _list_not_found() from missing
+    await _rules_on_list_refresh(request.app.state, done)
     await audit.record(principal=principal, action="deployment_list_refreshed",
                        investigation_id=None,
                        resolved_query={"list_id": list_id, "outcome": done.outcome,
@@ -10050,6 +10073,7 @@ async def import_dataset_own_list(
     dataset_id: StudioDatasetDep,
     list_id: str,
     body: DatasetOwnListImportInput,
+    request: Request,
     principal: SourceAuthorDep,
     rows_kept: ListRowsDep,
     models: TargetModelsDep,
@@ -10096,7 +10120,10 @@ async def import_dataset_own_list(
                        resolved_query={"dataset_id": dataset_id, "list_id": list_id,
                                        "outcome": outcome, "version": reference.version},
                        result_cardinality=1)  # fmt: skip
-    return ListImport(list_id=list_id, outcome=outcome, version=reference.version, words=words)
+    done = ListImport(list_id=list_id, outcome=outcome, version=reference.version, words=words)
+    # ADR-146 decision 3: a rule that runs when this list refreshes runs now.
+    await _rules_on_list_refresh(request.app.state, done)
+    return done
 
 
 # --- a drawn dataset (ADR-143 Amendment 2 decision 5; ADR-140 Amendment 9 decision 2; L3.1b) -----
@@ -13132,6 +13159,21 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
         )  # fmt: skip
         return await run_scheduled_rule(rule, author, gate, now=slot)
 
+    async def judge_on_refresh(rule: TypologyRule, author: Principal, now: datetime) -> int:
+        # ADR-146 decision 3: the same gate as a slot's, the rule judged as its list refreshes.
+        async def as_author(owner_id: str) -> Principal | None:
+            return author if owner_id == author.id else None
+
+        gate = RuleGate(
+            rules=[rule], investigation_id=rule.investigation_id, graph=state.graph,
+            analytics=state.analytics, scheme=state.handling_scheme, alert_store=state.alerts_store,
+            audit=state.audit, valkey=state.valkey, principal_for_owner=as_author, loader=author,
+            screening=state.screening_lists, compute=state.compute, patterns=state.patterns_store,
+            hotlists=state.hotlists_store, ontology=state.ontology,
+            influencers=state.strength_influencers, rule_lists=_rule_lists_of(state),
+        )  # fmt: skip
+        return await run_on_list_refresh(rule, author, gate, now=now)
+
     return RuleScheduleExecutor(
         rules=state.typology_rules,
         valkey=state.valkey,
@@ -13140,6 +13182,7 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
         ),
         check_case=check_case,
         judge=judge,
+        judge_on_refresh=judge_on_refresh,
     )
 
 
@@ -13203,6 +13246,7 @@ def _deployment_list_scheduler(application: FastAPI) -> DeploymentListScheduler:
         done = await import_list(
             list_id, store=state.list_store, rows_kept=state.list_rows, trigger="schedule"
         )
+        await _rules_on_list_refresh(state, done)
         # Audited as the person the schedule runs as, as ADR-133's scheduled refresh is.
         owner = await resolve(owner_id)
         await state.audit.record(

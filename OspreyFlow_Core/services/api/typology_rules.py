@@ -808,6 +808,19 @@ class TypologyRuleStore:
             )
         return [_row_to_rule(r) for r in rows]
 
+    async def list_refresh_rules(self, list_id: str) -> list[TypologyRule]:
+        """ADR-146 decision 3: every running rule that runs when the screening list `list_id`
+        refreshes, in every case. The refresh's read, never a route: each then runs as its
+        author."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT {_READ} FROM typology_rules WHERE trigger = 'list_refresh' "
+                "AND status = 'active' "
+                "AND params->'sentence'->'relationship'->>'list_id' = $1 ORDER BY created_at, id",
+                list_id,
+            )
+        return [_row_to_rule(r) for r in rows]
+
     async def record_rule_run(self, run: RuleRun) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(

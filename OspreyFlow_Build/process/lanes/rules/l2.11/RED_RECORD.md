@@ -102,3 +102,14 @@ passed). StageD's case for the retired schedule form is removed with the form.
   with the store, route and migration cases and the rule tests they touch: 53 passed (`gates/6c80b31.live.txt`).
   Red with the draft's files not rewritten on a second save: that case and the store's
   `test_saving_again_replaces_the_one_draft`, nothing else. Released and down.
+
+## §9 *When* a screening list refreshes, offline (the orchestrator's condition: no rule saved to run on a refresh that never runs)
+
+`tests/services/api/test_rule_list_refresh.py`: 3 passed, then one plant at a time.
+1. **A refresh starts no rule** (`on_list_refreshed` returns at once): red, the runs-each-rule case, and the
+   refused-author case, which records nothing either.
+2. **Every outcome starts the rules** (the hook's `updated` check removed): red, only "a refresh that kept nothing
+   new starts no rule".
+3. **A refused author run anyway:** red, only "a rule whose author cannot act is recorded refused, never run".
+
+The store's `test_a_list_refresh_reads_only_the_running_rules_that_name_that_list` runs at the next leased run.

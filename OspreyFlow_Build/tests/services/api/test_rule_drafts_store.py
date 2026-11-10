@@ -13,7 +13,8 @@ What a mistake would do, and the case that catches it:
 - a live rule changed before its draft goes live: `test_a_draft_of_a_live_rule_leaves_it_running_as_it_stood`;
 - a sent-back rule thrown away: `test_a_make_live_sent_back_returns_to_its_draft`;
 - two drafts of one rule: `test_saving_again_replaces_the_one_draft`;
-- a test kept on a draft saved again while it ran: `test_a_test_of_a_draft_saved_again_meanwhile_is_refused`.
+- a test kept on a draft saved again while it ran: `test_a_test_of_a_draft_saved_again_meanwhile_is_refused`;
+- a refresh starting a draft or another list's rule: `test_a_list_refresh_reads_only_the_running_rules_that_name_that_list`.
 """
 
 from __future__ import annotations
@@ -206,3 +207,33 @@ async def test_a_test_of_a_draft_saved_again_meanwhile_is_refused(store: Typolog
             rule.id, case, AUTHOR, version=tested.version, saved_at=tested.proposed_at, days=30,
             would_raise=2,
         )  # fmt: skip
+
+
+async def test_a_list_refresh_reads_only_the_running_rules_that_name_that_list(
+    store: TypologyRuleStore,
+) -> None:
+    """ADR-146 decision 3: `list_refresh_rules` is what a refresh starts. A draft never runs, and a
+    rule naming another list is not this one's."""
+    case, list_id = new_id(), f"l-{new_id()}"
+
+    def on_list(name: str, listed: str) -> TypologyRuleInput:
+        sentence = RuleSentence.model_validate({
+            "subject": "Person", "runs": "list_refresh",
+            "relationship": {"kind": "on_screening_list", "list_id": listed}})  # fmt: skip
+        return TypologyRuleInput(name=name, params=SentenceRuleParams(pattern_id="p", sentence=sentence),
+                                 trigger="list_refresh")  # fmt: skip
+
+    async def live(spec: TypologyRuleInput) -> str:
+        rule = await store.save_draft(AUTHOR, case, spec, dataset_id="ds-a", files=FILES)
+        draft = await store.draft(rule.id, case, AUTHOR)
+        assert draft is not None
+        await store.record_test(rule.id, case, AUTHOR, version=draft.version, saved_at=draft.proposed_at,
+                                days=30, would_raise=0)  # fmt: skip
+        await store.make_live(rule.id, case, AUTHOR, second_person=False)
+        return rule.id
+
+    running = await live(on_list("Listed visitors", list_id))
+    other = await live(on_list("Another list's", f"l-{new_id()}"))
+    draft = await store.save_draft(AUTHOR, case, on_list("Not yet live", list_id), dataset_id="ds-a", files=FILES)
+    found = {r.id for r in await store.list_refresh_rules(list_id)}
+    assert running in found and other not in found and draft.id not in found
