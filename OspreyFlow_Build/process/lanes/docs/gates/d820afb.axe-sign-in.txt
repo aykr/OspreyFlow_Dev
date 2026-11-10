@@ -1,0 +1,19 @@
+# Scanned commit: d820afb (lane/docs, on main 3e349bb); npx playwright test -c a11y/playwright.config.ts -g "sign-in"
+
+
+Running 12 tests using 3 workers
+
+  ✓   2 a11y/a11y.spec.ts:20:3 › dark theme sign-in screen has no automated wcag2aa violations (596ms)
+  ✓   1 a11y/reflow.spec.ts:22:3 › the sign-in page reflows at 320px with no sideways scroll (853ms)
+  ✓   4 a11y/a11y.spec.ts:32:3 › dark theme sign-in screen with organisation sign-in has no automated wcag2aa violations (514ms)
+  ✓   3 a11y/every-harness.spec.ts:286:7 › sign-in-harness.html (dark) has no automated WCAG 2.2 A or AA violations (1.2s)
+  ✓   5 a11y/reflow.spec.ts:22:3 › the sign-in page (GOV.UK) reflows at 320px with no sideways scroll (665ms)
+  ✓   6 a11y/a11y.spec.ts:20:3 › light theme sign-in screen has no automated wcag2aa violations (471ms)
+  ✓   8 a11y/a11y.spec.ts:32:3 › light theme sign-in screen with organisation sign-in has no automated wcag2aa violations (480ms)
+  ✓   7 a11y/every-harness.spec.ts:286:7 › sign-in-harness.html (light) has no automated WCAG 2.2 A or AA violations (1.0s)
+  ✓   9 a11y/a11y.spec.ts:91:3 › govuk brand sign-in screen has no automated wcag2aa violations (1.0s)
+  ✓  10 a11y/every-harness.spec.ts:286:7 › sign-in-harness.html (govuk) has no automated WCAG 2.2 A or AA violations (1.0s)
+  ✓  12 a11y/every-harness.spec.ts:304:5 › sign-in-harness.html: every labelled field's name contains its visible label (2.5.3) (638ms)
+  ✓  11 a11y/a11y.spec.ts:91:3 › govuk brand sign-in screen with organisation sign-in has no automated wcag2aa violations (1.0s)
+
+  12 passed (5.7s)
