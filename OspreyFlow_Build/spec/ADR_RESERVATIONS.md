@@ -100,7 +100,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-141 Amendment 1 | Phase 10 as built (L1.7): open question 1 (the grant per pipeline, by Owned externally), open question 2 (a quota refusal not counted toward a pause), the run API, Operations' runs and quotas, and what is left | studio | 2026-11-10 | reserved |
 | ADR-146 Amendment 5 | The rule's standards as built (L2.11a): the BPMN 2.0 and DMN files' shapes, namespace, caps and rights; the files stored beside each rule version by rules' L2.11 save, so Export returns what was stored (decision 3 as accepted, R2) | rules-b | 2026-11-10 | reserved |
 | ADR-147 Amendment 4 | The case's gazetteer panel as built (P6): add and remove a gazetteer in the Glass by keyboard, the four empty cases in words, the buttons not drawn without run_pipelines; Amendment 2's "Left" closed | platform-b | 2026-11-10 | written |
-| ADR-140 Amendment 18 | L1.7a's carries: a refused publish puts the file back as HEAD holds it; the aside sweep removes only an empty or .git-only aside; Amendment 17 point 6's sweep at first use corrected (under the in-process lock, before the flock exists) | studio-b | 2026-11-10 | reserved |
+| ADR-140 Amendment 18 | L1.7a's carries: a refused publish puts the file back as HEAD holds it; the aside sweep removes only an empty or .git-only aside; Amendment 17 point 6's sweep at first use corrected (under the in-process lock, before the flock exists) | studio-b | 2026-11-10 | written |
 
 ## Baseline
 
