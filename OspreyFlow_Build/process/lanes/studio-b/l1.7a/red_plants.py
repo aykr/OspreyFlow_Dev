@@ -40,7 +40,8 @@ LOCKED = (
     "        with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):\n"
     "            _sweep_asides(repo_root)\n"
     "            written = _write_recipe_file(repo_root, relative_path, data)\n"
-    "            _stage_and_commit(repo, path, written, data, message)\n"
+    "            try:\n"
+    "                _stage_and_commit(repo, path, written, data, message)\n"
 )
 ACQUIRE = (
     "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS\n"
@@ -77,7 +78,9 @@ PLANTS = [
      [("    except Exception as exc:  # dulwich", "    except ZeroDivisionError as exc:  # dulwich")],
      [REPO_TESTS], ["test_a_failed_write_is_a_typed_error_not_a_bare_500"]),
     ("index-not-written", "the index never written: `index.write()` -> `pass`",
-     [("    index.write()\n", "    pass  # PLANT\n")], [REPO_TESTS, COMMIT_TESTS],
+     [("    index[path] = index_entry_from_stat(written, blob.id)\n    index.write()\n",
+       "    index[path] = index_entry_from_stat(written, blob.id)\n    pass  # PLANT\n")],
+     [REPO_TESTS, COMMIT_TESTS],
      ["test_publish_writes_a_commit_real_git_reads",
       "test_the_file_is_committed_at_the_path_the_registry_row_will_name"]),
     ("index-after-head", "the index written after HEAD moves (the order the review flagged)",
@@ -136,8 +139,9 @@ PLANTS = [
      [REPO_TESTS], [ID_CASES[3], ID_CASES[4], ID_CASES[5], ID_CASES[6]]),
     ("directory-link-followed", "a symbolic link followed at `recipes/`: `O_NOFOLLOW` dropped from "
      "the directory's open",
-     [("os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)",
-       "os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)  # PLANT")], [REPO_TESTS],
+     [("                inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)",
+       "                inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)  # PLANT")],
+     [REPO_TESTS],
      ["test_a_symlinked_recipes_directory_is_refused"]),
     ("file-link-replaced", "a symbolic link where the file goes not refused: "
      "`if not stat.S_ISREG(...)` -> `if False`",
@@ -154,8 +158,8 @@ PLANTS = [
     ("lock-after-the-write", "the publish flock taken after the recipe file is written: over the "
      "index and the commit only",
      [(LOCKED, LOCKED.replace(", _publish_lock(repo, deadline):", ":  # PLANT").replace(
-         "            _stage_and_commit(",
-         "            with _publish_lock(repo, deadline):\n                _stage_and_commit("))],
+         "                _stage_and_commit(",
+         "                with _publish_lock(repo, deadline):\n                    _stage_and_commit("))],
      [REPO_TESTS], [LOCK_PROBE]),
     ("lock-file-link-followed", "the lock file opened following a link: `O_NOFOLLOW` dropped",
      [("os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC", "os.O_RDWR | os.O_CREAT | os.O_CLOEXEC")],
