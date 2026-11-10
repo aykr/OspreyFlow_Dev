@@ -70,6 +70,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    both, strict first** — (a) in L2.5b now, so nothing leaks today, and (b) carried to case, after which (a) can be
    relaxed by a later amendment. Recorded as ADR-145 Amendment 9 (reserved). **To overrule:** say "views at the
    case's unit alone", as Amendment 8 reads, accepting the count until case's fix lands.
+9. **The install checks the backups folder before writing anything (P5b's review).** The install did not run the
+   doctor's backups checks, so a folder inside the checkout (where every backup would later be refused) or a synced one
+   was accepted silently. **Chosen:** the install runs them: the checkout refused, a synced folder warned. **To
+   overrule:** say "doctor only".
+10. **A throwaway named deployment on the test server for P5b's update path.** A named deployment's `ospreyflow
+   update` now really backs up and, on failure, rolls back with `down -v` and a restore; only a fake had seen it.
+   **Chosen:** one throwaway deployment, `p5b-test`, synthetic data, on ospreyflow-test, torn down after, never near
+   `osprey-small`. **To overrule:** say "fake only", and it is recorded as an open risk instead.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
