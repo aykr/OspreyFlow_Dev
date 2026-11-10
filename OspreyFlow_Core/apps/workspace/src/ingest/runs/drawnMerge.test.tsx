@@ -15,15 +15,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-type Routes = Record<string, (init?: RequestInit) => { status: number; body: unknown }>;
+type Routes = Record<string, (init?: RequestInit, url?: URL) => { status: number; body: unknown }>;
 
 function serve(routes: Routes) {
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
-    const key = `${init?.method ?? "GET"} ${url.replace("http://api", "")}`;
+    // The sheet's chosen mapping (`&mapping=`) is given to its handler, not keyed.
+    const parsed = new URL(url);
+    parsed.searchParams.delete("mapping");
+    const key = `${init?.method ?? "GET"} ${parsed.pathname}${parsed.search}`;
     const hit = routes[key] ?? (() => ({ status: 404, body: { error: "not_found" } }));
-    const { status, body } = hit(init);
+    const { status, body } = hit(init, new URL(url));
     return new Response(JSON.stringify(body), { status });
   });
   return calls;
@@ -127,9 +130,15 @@ describe("Merge into a dataset…", () => {
   });
 
   it("maps a drawn type onto another of the target's types, each property placed, and sends it as chosen", async () => {
+    // As the Conduit: under a mapping of Vessel onto Organisation, the boat is looked for as one.
+    const BOAT = { drawn: "e-i3", drawn_label: "Boat", loaded: "o-boat", loaded_label: "Boat Ltd", loaded_type: "Organisation", score: 0.9, why: "a name alike" };
     const calls = serve({
       "GET /v1/datasets/d1/merge-targets": () => ({ status: 200, body: TARGETS }),
-      "GET /v1/datasets/d1/merge-sheet?target=src": () => ({ status: 200, body: SHEET }),
+      "GET /v1/datasets/d1/merge-sheet?target=src": (_init, url) => {
+        const mapping = JSON.parse(url?.searchParams.get("mapping") ?? "[]") as { drawn_type: string; target_type: string | null }[];
+        const vessel = mapping.find((m) => m.drawn_type === "Vessel")?.target_type ?? null;
+        return { status: 200, body: vessel === "Organisation" ? { ...SHEET, matches: [...SHEET.matches, BOAT] } : SHEET };
+      },
       "POST /v1/datasets/d1/merges/dry-run": () => ({ status: 200, body: { ...DRY, nodes: 3, retyped: 1, left_out: [] } }),
       "POST /v1/datasets/d1/merges": () => ({ status: 201, body: SENT }),
     });
@@ -144,17 +153,31 @@ describe("Merge into a dataset…", () => {
     // A change of mapping after the dry run asks for it again.
     fireEvent.change(vessel, { target: { value: "Organisation" } });
     expect(merge.disabled).toBe(true);
-    expect(screen.getByText(/Each goes in as a new Organisation, linked to its drawn item by a proposed match/)).toBeTruthy();
+    expect(screen.getByText(/Each goes in as a new Organisation, a new item beside its drawn one/)).toBeTruthy();
+    // Match is read again under the mapping: the boat now looks like an Organisation loaded there.
+    const boat = (await screen.findByLabelText(/Boat looks like Boat Ltd \(Organisation\)/)) as HTMLInputElement;
+    const sheets = calls.filter((c) => c.url.includes("/merge-sheet"));
+    expect(JSON.parse(new URL(sheets.at(-1)?.url ?? "http://api").searchParams.get("mapping") ?? "[]")[1]).toEqual({
+      kind: "node",
+      drawn_type: "Vessel",
+      target_type: "Organisation",
+      properties: [
+        { drawn_property: "flag", target_property: null },
+        { drawn_property: "name", target_property: "name" },
+      ],
+    });
     // Each drawn property: the same name when the type has it, else not carried, until chosen.
     const name = screen.getByLabelText("name goes into") as HTMLSelectElement;
     const flag = screen.getByLabelText("flag goes into") as HTMLSelectElement;
     expect([name.value, flag.value]).toEqual(["name", ""]);
     fireEvent.change(flag, { target: { value: "country" } });
+    fireEvent.click(boat);
     fireEvent.click(screen.getByRole("button", { name: "Dry run" }));
     expect(await screen.findByText(/It would add 3 items and 0 links to Prison intel, 1 of them as new items of another type, and propose 1 match\./)).toBeTruthy();
     fireEvent.click(merge);
     expect(await screen.findByText("Merge sent")).toBeTruthy();
     const sent = calls.filter((c) => c.url.endsWith("/merges")).map((c) => JSON.parse(String(c.init?.body)));
+    expect(sent[0].matches).toEqual([{ drawn: "e-i3", loaded: "o-boat" }]);
     expect(sent[0].mapping).toEqual([
       { kind: "node", drawn_type: "Person", target_type: "Person", properties: [] },
       {
@@ -167,6 +190,29 @@ describe("Merge into a dataset…", () => {
         ],
       },
     ]);
+  });
+
+  it("lets a chosen match go when the mapping no longer offers it", async () => {
+    const calls = serve({
+      "GET /v1/datasets/d1/merge-targets": () => ({ status: 200, body: TARGETS }),
+      // As the Conduit: a Person left out has no matches.
+      "GET /v1/datasets/d1/merge-sheet?target=src": (_init, url) => {
+        const mapping = JSON.parse(url?.searchParams.get("mapping") ?? "[]") as { drawn_type: string; target_type: string | null }[];
+        const out = mapping.find((m) => m.drawn_type === "Person")?.target_type === null;
+        return { status: 200, body: out ? { ...SHEET, matches: [] } : SHEET };
+      },
+      "POST /v1/datasets/d1/merges/dry-run": () => ({ status: 200, body: { ...DRY, nodes: 0, matches: 0 } }),
+    });
+    show();
+    fireEvent.change(await screen.findByLabelText("Merge into"), { target: { value: "src" } });
+    fireEvent.click(screen.getByRole("button", { name: "Map and match" }));
+    fireEvent.click(await screen.findByLabelText(/Mercer looks like Mercer/));
+    fireEvent.change(screen.getByLabelText("Person goes in as"), { target: { value: "" } });
+    await waitFor(() => expect(screen.queryByLabelText(/Mercer looks like Mercer/)).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Dry run" }));
+    await screen.findByRole("status");
+    const dry = calls.filter((c) => c.url.endsWith("/dry-run")).map((c) => JSON.parse(String(c.init?.body)));
+    expect(dry[0].matches).toEqual([]);
   });
 
   it("shows a refusal in the Conduit's words", async () => {

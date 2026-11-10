@@ -3,8 +3,8 @@
 // steps.
 //   1 Map the models: each drawn type onto any type of the target's model, or left out, and for one
 //     mapped onto another type, each drawn property's place in it (the owner's ruling: as a Studio
-//     load's Map step maps). An item of another type goes in as a new item, linked back to its drawn
-//     one by a proposed match.
+//     load's Map step maps). An item of another type goes in as a new item; the matches are read again
+//     whenever the mapping changes, so Match offers what the merge will accept.
 //   2 Match: the *Looks like a loaded item* pairs; each chosen one goes in as a proposed match
 //     (inferred, scored) that a person confirms later; nothing is collapsed.
 //   3 Dry run: what would be added and matched; nothing written.
@@ -57,6 +57,23 @@ export function dryRunWords(dry: DrawnMergeDryRun, target: string): string {
     `It would add ${n(dry.nodes, "item", "items")} and ${n(dry.links, "link", "links")} to ${target}${retyped}, ` +
     `and propose ${n(dry.matches, "match", "matches")}. Nothing has been written.`
   );
+}
+
+/** The mapping as chosen, as the Conduit takes it (`TypeChoice`): every drawn type the sheet lists. */
+function mappingFor(sheet: DrawnMergeSheet | null, choices: Record<string, Choice>): TypeChoice[] {
+  return (sheet?.mapping ?? []).map((m): TypeChoice => {
+    const chosen = choices[typeKey(m.kind, m.drawn_type)];
+    const to = chosen ? chosen.to : (m.target_type ?? null);
+    return {
+      kind: m.kind,
+      drawn_type: m.drawn_type,
+      target_type: to,
+      properties:
+        to !== null && to !== m.drawn_type
+          ? Object.entries(chosen?.places ?? {}).map(([drawn_property, target_property]) => ({ drawn_property, target_property }))
+          : [],
+    };
+  });
 }
 
 /** A drawn property's place in `to` until one is chosen: the same name if `to` has it, else none. */
@@ -123,20 +140,23 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
       const [drawn, loaded] = JSON.parse(p) as [string, string];
       return { drawn, loaded };
     }),
-    mapping: (sheet?.mapping ?? []).map((m): TypeChoice => {
-      const chosen = choices[typeKey(m.kind, m.drawn_type)];
-      const to = chosen ? chosen.to : (m.target_type ?? null);
-      return {
-        kind: m.kind,
-        drawn_type: m.drawn_type,
-        target_type: to,
-        properties:
-          to !== null && to !== m.drawn_type
-            ? Object.entries(chosen?.places ?? {}).map(([drawn_property, target_property]) => ({ drawn_property, target_property }))
-            : [],
-      };
-    }),
+    mapping: mappingFor(sheet, choices),
   });
+
+  /** The matches read again under the mapping as now chosen (a node retyped is looked for as its new
+   * type, one left out has none); a chosen pair no longer offered is let go. */
+  async function rematch(next: Record<string, Choice>): Promise<void> {
+    if (!sheet) return;
+    const answer = await drawnMergeSheet(apiBaseUrl, bearerToken, datasetId, target, mappingFor(sheet, next));
+    if (!answer.ok) {
+      setProblem(answer.message);
+      return;
+    }
+    setProblem(null);
+    const offered = new Set((answer.value.matches ?? []).map((m) => pairKey(m.drawn, m.loaded)));
+    setSheet(answer.value);
+    setPairs((held) => new Set([...held].filter((k) => offered.has(k))));
+  }
 
   async function dryRun(): Promise<void> {
     setProblem(null);
@@ -181,15 +201,17 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
   const choose = (row: Mapping, to: string | null) => {
     changed();
     if (!sheet) return;
-    setChoices((held) => ({ ...held, [typeKey(row.kind, row.drawn_type)]: { to, places: startingPlaces(row, to, sheet) } }));
+    const next = { ...choices, [typeKey(row.kind, row.drawn_type)]: { to, places: startingPlaces(row, to, sheet) } };
+    setChoices(next);
+    void rematch(next);
   };
   const place = (row: Mapping, prop: string, into: string | null) => {
     changed();
-    setChoices((held) => {
-      const key = typeKey(row.kind, row.drawn_type);
-      const was = held[key] ?? { to: row.target_type ?? null, places: {} };
-      return { ...held, [key]: { ...was, places: { ...was.places, [prop]: into } } };
-    });
+    const key = typeKey(row.kind, row.drawn_type);
+    const was = choices[key] ?? { to: row.target_type ?? null, places: {} };
+    const next = { ...choices, [key]: { ...was, places: { ...was.places, [prop]: into } } };
+    setChoices(next);
+    void rematch(next);
   };
   const togglePair = (key: string) => {
     changed();
@@ -312,7 +334,9 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
                           {retyped && (
                             <>
                               <p className="caption">
-                                Each goes in as a new {chosen.to}, linked to its drawn {word} by a proposed match for a person to confirm.
+                                {m.kind === "node"
+                                  ? `Each goes in as a new ${chosen.to}, a new item beside its drawn one, which stays on the drawing.`
+                                  : `Each goes in as a new ${chosen.to} link, beside its drawn one, which stays on the drawing.`}
                               </p>
                               {(m.drawn_properties ?? []).map((prop) => {
                                 const pid = `${id}-${prop}`;
@@ -387,6 +411,13 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
                         <li key={l.item_id}>
                           {l.label}: {l.why}
                         </li>
+                      ))}
+                    </ul>
+                  )}
+                  {(dry.not_carried ?? []).length > 0 && (
+                    <ul className={govuk ? "govuk-list" : undefined} aria-label="Not carried">
+                      {(dry.not_carried ?? []).map((words) => (
+                        <li key={words}>{words}</li>
                       ))}
                     </ul>
                   )}

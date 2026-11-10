@@ -23,9 +23,18 @@ const drawn = (api: string, datasetId: string, tail: string) => `${api}/v1/datas
 export const mergeTargets = (api: string, token: string, datasetId: string) =>
   answered<MergeTargets>(send(drawn(api, datasetId, "merge-targets"), token), "The datasets it may go into could not be read");
 
-export const drawnMergeSheet = (api: string, token: string, datasetId: string, target: string) =>
+/** Map and match, under `mapping` when one is chosen (ADR-143 Amendment 7): the matches are offered
+ * as each node will go in. */
+export const drawnMergeSheet = (api: string, token: string, datasetId: string, target: string, mapping?: TypeChoice[]) =>
   answered<DrawnMergeSheet>(
-    send(drawn(api, datasetId, `merge-sheet?target=${encodeURIComponent(target)}`), token),
+    send(
+      drawn(
+        api,
+        datasetId,
+        `merge-sheet?target=${encodeURIComponent(target)}${mapping && mapping.length > 0 ? `&mapping=${encodeURIComponent(JSON.stringify(mapping))}` : ""}`,
+      ),
+      token,
+    ),
     "The merge could not be read",
   );
 

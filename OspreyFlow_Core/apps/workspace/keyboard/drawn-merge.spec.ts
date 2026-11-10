@@ -83,7 +83,7 @@ test("a drawn type is mapped onto another of the target's types, its properties 
   await expect(vessel).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(vessel).toHaveValue("Organisation");
-  await expect(page.getByText(/Each goes in as a new Organisation, linked to its drawn item by a proposed match/)).toBeVisible();
+  await expect(page.getByText(/Each goes in as a new Organisation, a new item beside its drawn one/)).toBeVisible();
   // `name` goes into the Organisation's name; `flag`, not carried until placed, into its country.
   await expect(page.getByLabel("name goes into")).toHaveValue("name");
   const flag = page.getByLabel("flag goes into");
