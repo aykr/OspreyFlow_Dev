@@ -66,10 +66,13 @@ document.addEventListener("keydown", (e) => {
 });
 
 createRoot(document.getElementById("root")!).render(<Harness />);
-if (params.get("open") === "1") {
-  requestAnimationFrame(() =>
-    document
-      .querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')
-      ?.click(),
-  );
+// `open=1`: the drawing open before the axe scan reads the page. React renders after this script
+// returns, so the button is waited for frame by frame; one frame was not always enough, and the
+// scan then read the page with the drawing shut (found by planting a nameless Close: only one look
+// of three went red).
+function openWhenDrawn(): void {
+  const button = document.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+  if (button) button.click();
+  else requestAnimationFrame(openWhenDrawn);
 }
+if (params.get("open") === "1") openWhenDrawn();

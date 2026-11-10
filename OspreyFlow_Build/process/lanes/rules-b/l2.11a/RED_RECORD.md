@@ -114,3 +114,14 @@ body itself an error.
   - The layer cases are proved by the live run, through the real store.
   - The drawn case is offline only. A live drawn dataset needs `create_drawn` plus a teardown of its rows;
     it is left, and the report says so.
+
+## §8 Keyboard and axe (`gates/ed3e1d1.keyboard-axe.txt`; the orchestrator's local slot, closed ports)
+
+- **`keyboard/rule-standards.spec.ts`:** 4 passed, with the registry patch applied. Each handler removed
+  went red: open (3 cases), Escape, focus return, *Close*, and Escape kept from the editor.
+- **Axe:** 12 passed (three states, each in dark, light and GOV.UK, plus 2.5.3). The first run's `open=1`
+  states did not scan the open dialog: a nameless *Close* went red only under GOV.UK, because the
+  harness's one-frame click raced React's first render. The harness now waits for the button. After that,
+  the same plant was red in all six open looks.
+- **Gap:** contrast inside the dialog is not measured by axe. A plant setting the text to its background
+  colour stayed green with the dialog open. The dialog keeps to `ViewOverCapDialog`'s token pairs.
