@@ -1,0 +1,40 @@
+### at b4a5063 as committed
+Running on ospreyflow-test (stack e, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261110T152603Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py 2>&1 | tail -4
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+1 failed, 1 passed, 1 warning in 7.35s
+Wall time: 9 s, exit 0 (stack e, the lease case took at 2026-11-10T15:25:51Z; set-up before it 10 s)
+### with main's dataset_scope.py and drawn_watches.py
+Running on ospreyflow-test (stack e, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261110T152622Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py 2>&1 | tail -4
+=========================== short test summary info ============================
+ERROR ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 warning, 1 error in 1.98s
+Wall time: 2 s, exit 0 (stack e, the lease case took at 2026-11-10T15:25:51Z; set-up before it 10 s)
+error: pathspec 'OspreyFlow_Core/apps/workspace/src/boards/drawnWatchWords.ts
+OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.drawnWatch.test.tsx
+OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx
+OspreyFlow_Core/apps/workspace/src/investigation/cases.test.ts
+OspreyFlow_Core/apps/workspace/src/investigation/cases.ts
+OspreyFlow_Core/packages/schemas/generated/BranchRunReport.ts
+OspreyFlow_Core/packages/schemas/generated/BranchRunReportView.ts
+OspreyFlow_Core/packages/schemas/generated/LoadReport.ts
+OspreyFlow_Core/packages/schemas/generated/LoadReportView.ts
+OspreyFlow_Core/packages/schemas/generated/PipelineRunReport.ts
+OspreyFlow_Core/packages/schemas/generated/PipelineRunReportView.ts
+OspreyFlow_Core/packages/schemas/ingest.py
+OspreyFlow_Core/services/api/app.py
+OspreyFlow_Core/services/api/dataset_scope.py
+OspreyFlow_Core/services/api/drawn_watches.py
+OspreyFlow_Core/services/api/recipe_run.py' did not match any file(s) known to git
+error: pathspec ' OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx OspreyFlow_Core/apps/workspace/src/investigation/cases.test.ts OspreyFlow_Core/apps/workspace/src/investigation/cases.ts OspreyFlow_Core/packages/schemas/generated/BranchRunReport.ts OspreyFlow_Core/packages/schemas/generated/BranchRunReportView.ts OspreyFlow_Core/packages/schemas/generated/LoadReport.ts OspreyFlow_Core/packages/schemas/generated/LoadReportView.ts OspreyFlow_Core/packages/schemas/generated/PipelineRunReport.ts OspreyFlow_Core/packages/schemas/generated/PipelineRunReportView.ts OspreyFlow_Core/packages/schemas/ingest.py OspreyFlow_Core/services/api/app.py OspreyFlow_Core/services/api/dataset_scope.py OspreyFlow_Core/services/api/drawn_watches.py OspreyFlow_Core/services/api/recipe_run.py' did not match any file(s) known to git
+error: pathspec ' OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.tsx OspreyFlow_Core/apps/workspace/src/investigation/cases.test.ts OspreyFlow_Core/apps/workspace/src/investigation/cases.ts OspreyFlow_Core/packages/schemas/generated/BranchRunReport.ts OspreyFlow_Core/packages/schemas/generated/BranchRunReportView.ts OspreyFlow_Core/packages/schemas/generated/LoadReport.ts OspreyFlow_Core/packages/schemas/generated/LoadReportView.ts OspreyFlow_Core/packages/schemas/generated/PipelineRunReport.ts OspreyFlow_Core/packages/schemas/generated/PipelineRunReportView.ts OspreyFlow_Core/packages/schemas/ingest.py OspreyFlow_Core/services/api/app.py OspreyFlow_Core/services/api/dataset_scope.py OspreyFlow_Core/services/api/drawn_watches.py OspreyFlow_Core/services/api/recipe_run.py' did not match any file(s) known to git
+error: pathspec ' OspreyFlow_Core/apps/workspace/src/boards/drawnWatchWords.ts OspreyFlow_Core/apps/workspace/src/ingest/publish/PublishScreen.drawnWatch.test.tsx' did not match any file(s) known to git
+### with main's OspreyFlow_Core (14 changed files put back, 2 new removed)
+Running on ospreyflow-test (stack e, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261110T152831Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py 2>&1 | tail -4
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+1 failed, 1 passed, 1 warning in 9.72s
+Wall time: 11 s, exit 0 (stack e, the lease case took at 2026-11-10T15:28:17Z; set-up before it 12 s)

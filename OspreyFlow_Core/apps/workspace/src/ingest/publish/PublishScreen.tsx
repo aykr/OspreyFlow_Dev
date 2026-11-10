@@ -37,6 +37,7 @@ import {
 import { DEFAULT_TIMEZONE, ScheduleEditor } from "./ScheduleEditor";
 import { choiceOf, cronOf, type ScheduleChoice } from "./scheduleChoice";
 import { RightButton } from "../studio/rightsGate";
+import { drawnWatchWords } from "../../boards/drawnWatchWords";
 
 /** A deployed pipeline's schedule: its routes check `schedule_pipelines` and the source approver's studio
  * role, which `publish_pipelines` gives (`require_studio_role`), so both are asked (the lane review of L1.8). */
@@ -549,6 +550,8 @@ export function PublishScreen({
             <li>Nodes referenced: {loadReport.nodes_referenced}</li>
             <li>Edges created: {loadReport.edges_created}</li>
             <li>Rows rejected: {(loadReport.rejections ?? []).length}</li>
+            {/* L3.H1 (ADR-146 decision 4): the drawn-watch alerts this load raised for the one who ran it. */}
+            {(loadReport.drawn_watch_alerts ?? 0) > 0 && <li>{drawnWatchWords(loadReport.drawn_watch_alerts ?? 0)}</li>}
             {(loadReport.rows_held ?? 0) > 0 && (
               <li>
                 Rows held for review: {loadReport.rows_held} — a reviewer releases or rejects them on the Runs tab or in Monitoring › Held rows

@@ -27,6 +27,7 @@ import pytest
 from services.api.change_stream import ChangeStreamEntry
 from services.api.datasets import COMPOSITE, Dataset
 from services.api.drawn_watches import (
+    DrawnWatchesFailed,
     DrawnWatchMatch,
     DrawnWatchRun,
     case_read_set,
@@ -220,9 +221,11 @@ def _entry(*node_ids: str) -> ChangeStreamEntry:
     )  # fmt: skip
 
 
-async def _after_run(deps: Any, *node_ids: str, dataset: str | None = "src") -> None:
-    await _run_drawn_watches_best_effort(
-        deps, _entry(*node_ids), dataset_id=dataset, principal=LOADER, investigation_id=K,
+async def _after_run(
+    deps: Any, *node_ids: str, dataset: str | None = "src", loader: Principal = LOADER
+) -> int:
+    return await _run_drawn_watches_best_effort(
+        deps, _entry(*node_ids), dataset_id=dataset, principal=loader, investigation_id=K,
         load_id="load-9",
     )  # fmt: skip
 
@@ -293,8 +296,9 @@ async def test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into
     async def published(*args: Any, **kwargs: Any) -> ChangeStreamEntry:
         return _entry("p-new")
 
-    async def drawn_run(deps: Any, entry: ChangeStreamEntry, **kwargs: Any) -> None:
+    async def drawn_run(deps: Any, entry: ChangeStreamEntry, **kwargs: Any) -> int:
         seen.append({"node_ids": entry.node_ids, **kwargs})
+        return 2
 
     async def started(**kwargs: Any) -> str:
         return "run-1"
@@ -320,11 +324,13 @@ async def test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into
     deps = run_module.RecipeRunDeps(**{n: stand_ins.get(n, object()) for n in names})
     recipe = SimpleNamespace(recipe_id="r", version=1, pipeline=None, row_template=None,
                              dataset_id="src")  # fmt: skip
-    await run_module.run_recipe_as(
+    report = await run_module.run_recipe_as(
         deps, principal=LOADER, recipe=recipe,  # type: ignore[arg-type]
         investigation_id=K, source_location="x.csv", trigger="manual",
     )  # fmt: skip
     assert len(seen) == 1, "the drawn watches were not run after the load"
+    # L3.H1: the count the run gave back is the report's.
+    assert report.drawn_watch_alerts == 2
     call = seen[0]
     assert (call["node_ids"], call["dataset_id"], call["investigation_id"]) == (["p-new"], "src", K)
     assert call["principal"] is LOADER and call["load_id"]
@@ -426,8 +432,9 @@ async def test_one_watchs_failure_never_skips_the_others(run: SimpleNamespace) -
         saved.append(match.watch.case_id)
 
     run.run.raise_alert = raise_alert
-    with pytest.raises(RuntimeError, match="the alert store is down"):
+    with pytest.raises(DrawnWatchesFailed, match="the alert store is down") as failed:
         await run.run.after_load("src", [alike])
+    assert isinstance(failed.value.cause, RuntimeError)
     assert saved[0] == "failed" and len(saved) == 2 and saved[1] in (K, B)
 
 
@@ -445,5 +452,69 @@ async def test_a_claim_not_given_back_keeps_the_saves_own_failure(
 
     run.run.raise_alert = failing_save
     monkeypatch.setattr(run.world.items, "release_match", failing_release)
-    with pytest.raises(RuntimeError, match="the alert store is down"):
+    with pytest.raises(DrawnWatchesFailed, match="the alert store is down") as failed:
         await run.run.after_load("src", [alike])
+    assert isinstance(failed.value.cause, RuntimeError)
+
+
+async def test_a_runs_report_counts_only_the_drawn_watch_alerts_raised_for_its_own_principal(
+    run: SimpleNamespace,
+) -> None:
+    """L3.H1 (ADR-146 decision 4): Alice's watch in K and Carol's in B both match. Alice's own run
+    is told of hers alone; a loader who owns neither is told of none, though both are raised (a
+    drawn watch's alert is its owner's alone: rules 3 and 7)."""
+    _tall()
+    _item(_board("carol", B), who="carol", case=B, label="Tall", properties={"family_name": "Tall"})
+    alike = _load(run, "p-alike", family_name="Tall")
+    alerts = _Alerts()
+    assert await _after_run(_deps(run, alerts), alike, loader=PEOPLE["alice"]) == 1
+    assert len(alerts.saved) == 2
+    newer = _load(run, "p-newer", family_name="Tall")
+    assert await _after_run(_deps(run, alerts), newer) == 0  # LOADER owns no watch
+    assert len(alerts.saved) == 4
+    failing = _Alerts(fails=True)
+    assert await _after_run(_deps(run, failing), _load(run, "p-x", family_name="Tall")) == 0
+
+
+def test_the_routes_view_says_the_count_and_a_withheld_one_says_none() -> None:
+    """The route answers the report as a view (`report_view`): the count is carried; where the
+    loader may not view every marking the load wrote, every count is withheld, this one too."""
+    from services.api.load_records import report_view
+
+    from ontology.handling import load_uk_le_scheme
+    from schemas.ingest import LoadReport
+
+    scheme = load_uk_le_scheme()
+    report = LoadReport(load_id="l", recipe_id="r", recipe_version=1, drawn_watch_alerts=3)
+    assert report_view(report, PEOPLE["alice"], scheme).drawn_watch_alerts == 3
+    marking = {"classification": "SECRET", "handling_code": "P", "originator": "u",
+               "owning_unit": "u"}  # fmt: skip
+    secret = LoadReport.model_validate({**report.model_dump(), "markings": [marking]})
+    held = report_view(secret, PEOPLE["bob"], scheme)
+    assert held.withheld and held.drawn_watch_alerts == 0
+    # A pipeline's run carries it too (one count for the whole run, on the run's own report).
+    from schemas.ingest import PipelineRunReport
+
+    piped = PipelineRunReport(load_id="l", recipe_id="r", recipe_version=1, drawn_watch_alerts=2)
+    assert report_view(piped, PEOPLE["alice"], scheme).drawn_watch_alerts == 2
+
+
+async def test_another_owners_failing_watch_never_changes_the_loaders_count(
+    run: SimpleNamespace,
+) -> None:
+    """Rule 7: Alice loads; Carol's watch in B matches too, and its save fails. Alice is told of
+    her own alert all the same, whichever watch runs first, and the failure is audited."""
+    _tall()
+    _item(_board("carol", B), who="carol", case=B, label="Tall", properties={"family_name": "Tall"})
+    alike = _load(run, "p-alike", family_name="Tall")
+
+    class _CarolsFails(_Alerts):
+        async def save(self, alert: Alert, *, handlings: Any = ()) -> None:
+            if alert.owner_id == "carol":
+                raise RuntimeError("the alert store is down")
+            await super().save(alert, handlings=handlings)
+
+    alerts = _CarolsFails()
+    assert await _after_run(_deps(run, alerts), alike, loader=PEOPLE["alice"]) == 1
+    assert [a.owner_id for a, _ in alerts.saved] == ["alice"]
+    assert [r for r in run.world.audit.records if r["action"] == "watch_evaluation_failed"]

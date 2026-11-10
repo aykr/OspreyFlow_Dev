@@ -1176,6 +1176,10 @@ class LoadReport(BaseModel):
     #: and what the case's pre-commit rules did, in words — never a silent part-load (rule 2).
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: L3.6's carry (ADR-146 decision 4): how many drawn-watch alerts this load raised for the
+    #: run's own principal, the only ones they may read (a drawn watch's alert is its owner's alone,
+    #: so another owner's match is neither counted nor said: rules 3 and 7).
+    drawn_watch_alerts: int = 0
     #: Rule 3, ADR-127 Amendment 23: every distinct marking this load's rows were written at (each
     #: element the engine resolved for a row, once), in the order first met. A count of what the
     #: load wrote includes rows at each of them, so a reader who may not view one of them is shown
@@ -1283,6 +1287,10 @@ class LoadReportView(BaseModel):
     rejections: list[RejectionRecord] = Field(default_factory=list)
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: L3.6's carry (ADR-146 decision 4): how many drawn-watch alerts this load raised for the
+    #: run's own principal, the only ones they may read (a drawn watch's alert is its owner's alone,
+    #: so another owner's match is neither counted nor said: rules 3 and 7).
+    drawn_watch_alerts: int = 0
     #: ADR-110 Amendment 8: what a full snapshot's refresh withdrew, as counts and words.
     rows_withdrawn: int = 0
     links_kept_an_occurrence: int = 0
@@ -1374,6 +1382,10 @@ class PipelineRunReport(BaseModel):
     #: The branches' held rows and rule notes, summed (ADR-109 ruling 1).
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: L3.6's carry (ADR-146 decision 4): how many drawn-watch alerts this load raised for the
+    #: run's own principal, the only ones they may read (a drawn watch's alert is its owner's alone,
+    #: so another owner's match is neither counted nor said: rules 3 and 7).
+    drawn_watch_alerts: int = 0
     #: The union of the branches' `markings`, each once (rule 3, ADR-127 Amendment 23).
     markings: list[Handling] = Field(default_factory=list)
     #: Metering, part 1, for the whole run (`run_recipe_as`).
@@ -1408,6 +1420,10 @@ class PipelineRunReportView(BaseModel):
     rejections: list[RejectionRecord] = Field(default_factory=list)
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
+    #: L3.6's carry (ADR-146 decision 4): how many drawn-watch alerts this load raised for the
+    #: run's own principal, the only ones they may read (a drawn watch's alert is its owner's alone,
+    #: so another owner's match is neither counted nor said: rules 3 and 7).
+    drawn_watch_alerts: int = 0
     metering: RunMetering | None = None
     #: ADR-140 decision 16: the expert steps the run's branches ran, in words, whether or not the
     #: counts are withheld: the pipeline's own settings, never a row's value.

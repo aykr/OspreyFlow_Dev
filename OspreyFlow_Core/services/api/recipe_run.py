@@ -45,7 +45,7 @@ from .board_store import BoardItemStore
 from .change_stream import ChangeStreamEntry, ChangeStreamWriter, touched_node_ids
 from .config import ApiConfig
 from .datasets import DatasetStore
-from .drawn_watches import DrawnWatchRun, holds_a_level_in, raise_into
+from .drawn_watches import DrawnWatchesFailed, DrawnWatchRun, holds_a_level_in, raise_into
 from .evaluation import DatasetReach, evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
@@ -351,7 +351,8 @@ async def _execute_recipe_run(
             principal_resolver=deps.principal_resolver,
             watch_reach=deps.watch_reach,
         )
-        await _run_drawn_watches_best_effort(
+        # L3.H1: the run's report says how many drawn-watch alerts it raised for its own principal.
+        report.drawn_watch_alerts = await _run_drawn_watches_best_effort(
             deps, entry, dataset_id=recipe.dataset_id, principal=principal,
             investigation_id=investigation_id, load_id=load_id,
         )  # fmt: skip
@@ -459,7 +460,7 @@ async def _run_drawn_watches_best_effort(
     principal: Principal,
     investigation_id: str,
     load_id: str,
-) -> None:
+) -> int:
     """L3.6 (ADR-143 Amendment 2 decision 8; ADR-146 decision 4): every live drawn watch on the
     dataset the load wrote into, run against the nodes it wrote or matched (`DrawnWatchRun`), each
     match raised into the one queue as the watch owner's alert. Each owner is resolved afresh, as
@@ -471,7 +472,7 @@ async def _run_drawn_watches_best_effort(
         or deps.investigations is None
         or dataset_id is None
     ):
-        return
+        return 0
     run = DrawnWatchRun(
         items=deps.board_items,
         graph=deps.graph,
@@ -481,9 +482,14 @@ async def _run_drawn_watches_best_effort(
         holds_a_level=holds_a_level_in(deps.investigations),
         raise_alert=raise_into(deps.alerts_store),
     )
+    counted = 0
     try:
-        await run.after_load(dataset_id, entry.node_ids, load_id=load_id)
+        return await run.after_load(
+            dataset_id, entry.node_ids, load_id=load_id, counted_for=principal.id
+        )
     except Exception as exc:  # noqa: BLE001 - as `_evaluate_watches_best_effort`'s: audited
+        # Another owner's watch failing never changes what the loader is told (rule 7).
+        counted = exc.counted if isinstance(exc, DrawnWatchesFailed) else 0
         await deps.audit.record(
             principal=principal,
             action="watch_evaluation_failed",
@@ -491,6 +497,7 @@ async def _run_drawn_watches_best_effort(
             resolved_query={"load_id": load_id, "drawn_watches": True, "error": str(exc)},
             result_cardinality=0,
         )
+        return counted
 
 
 async def _evaluate_watches_best_effort(
