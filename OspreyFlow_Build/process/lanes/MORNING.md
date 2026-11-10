@@ -144,6 +144,10 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 21. **About 30% of the lane work on the Sol account from 20:50 (your word, 10 November).** Platform and the fresh rules
    session (the upgrade rehearsal) already run on sol; case switches at 20:50, at a safe point, so 3 of about 9
    sessions are on sol. Studio, docs and the rest stay on ayan through tonight's release.
+   *Updated:* tonight's publish is **v0.5.0** (the last release, v0.4.12, was 5 November; today adds major features,
+   so a minor bump): docs writes its CHANGELOG section (release notes and upgrade steps) and moves every guide to "For
+   OspreyFlow v0.5.0" before the publish, and the user repository gets the tag `v0.5.0` with the release. **To
+   overrule:** name another version.
 
 22. **The decks (D2b): six questions decided on the recommendation.** The drafts are in `OspreyFlow_presentations/`
    (not committed; no earlier draft changed). (1) A full recapture of screenshots, from the server demo deployment
@@ -154,10 +158,6 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    [10] is checked tonight or dropped. Also: four lines in the guides still call built features "coming" (team
    routing, the drawn-item alert, adding a gazetteer); docs fixes those four before the publish. **To overrule:**
    name the number.
-   *Updated:* tonight's publish is **v0.5.0** (the last release, v0.4.12, was 5 November; today adds major features,
-   so a minor bump): docs writes its CHANGELOG section (release notes and upgrade steps) and moves every guide to "For
-   OspreyFlow v0.5.0" before the publish, and the user repository gets the tag `v0.5.0` with the release. **To
-   overrule:** name another version.
 
 23. **The v0.5.0 publish waits for a rehearsed upgrade (docs found it).** `ospreyflow update` does not run the six
    one-off migrations a v0.4.12 deployment needs; the release notes now list them in order, each dry run first. Before
