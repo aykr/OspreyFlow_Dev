@@ -34,6 +34,10 @@ from jwt.algorithms import RSAAlgorithm
 # (ports 2480, 5432, 80, 8080, 8081), refused at start-up and at every connection.
 from tests.port_guard import pytest_configure, pytest_report_header  # noqa: F401
 
+# `pytest.mark.store`, enforced at the connection (admin's T1 part 2): an unmarked test that reaches a store's port is
+# reported, or failed with OSPREY_STORE_MARK=fail (tests/store_mark.py).
+pytest_plugins = ["tests.store_mark"]
+
 
 @pytest.fixture(autouse=True)
 def _no_test_gives_a_real_folder_to_the_conduit(monkeypatch: pytest.MonkeyPatch) -> None:

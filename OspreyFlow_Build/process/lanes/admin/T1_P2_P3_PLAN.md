@@ -58,3 +58,28 @@ Measured over main's last 18 lane merges, each merge's diff selects 184.5 of the
 Part 3's selector and its tests come first: they are in scripts only, with no file outside admin's map. Then part 2's
 guard, its marker and its red. The one-line marks across the live files follow as their own commit. Finally the
 Makefile and `ci.yml` diffs, applied at merge.
+
+## Carries for the mark commit (part 2, tomorrow), from my lane-reviewer's second pass
+
+- **Mark what needs a store, not all that is live.** The `--ignore` list also holds files needing a model, Keycloak or
+  Docker: `conformance/model_port`, `recognise_port`, `golden`, `test_revoked_principal_precheck.py`, and the harness
+  image and bundle tests. Mark those with their own marker (`live`), or leave them out of `store`, using the guard's
+  report from a full live run (`OSPREY_STORE_MARK_REPORT`). This decides what `-m store` and `-m "not store"` mean.
+- **One commit, in this order:**
+  1. the script;
+  2. `tools/live_select.py` reading the marks, not the Makefile;
+  3. `test-file-coverage-check` reading the marks, so the name heuristic goes;
+  4. the Makefile and `ci.yml` diffs;
+  5. `OSPREY_STORE_MARK=fail`.
+
+  Each of the first three reads the `--ignore` list today, which the Makefile diff removes.
+- **Before fail mode,** run report mode once over `make test` and record how many unmarked tests reach the closed
+  ports. Then decide the exemption for a test that exercises the "store unavailable" path on purpose.
+- **The guard's blind spots**, each named in its docstring:
+  - child processes: follow them as `port_guard_site` does;
+  - uvloop in CI;
+  - pooled connections;
+  - attribution between tests;
+  - xdist (part 4): one report per worker, and the controller prints nothing.
+- **Rule 11:** an ADR-142 amendment and a `SESSIONS_RUNBOOK.md` §4 entry for the marker and the duty to mark a new store
+  test, with the `ci.yml` gate comment updated. The marker is registered in `tests/store_mark.py`, not `pytest.ini`.
