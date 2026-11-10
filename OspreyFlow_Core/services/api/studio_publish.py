@@ -35,7 +35,7 @@ from typing import Any, Protocol
 
 import yaml
 from dulwich.config import ConfigFile, StackedConfig
-from dulwich.errors import NotGitRepository
+from dulwich.errors import NotGitRepository, NotTreeError
 from dulwich.index import index_entry_from_stat, validate_path
 from dulwich.object_store import commit_tree_changes, tree_lookup_path
 from dulwich.objects import ZERO_SHA, Blob, Commit, ObjectID, Tree
@@ -409,23 +409,9 @@ def _write_recipe_file(repo_root: Path, relative_path: str, data: bytes) -> os.s
     component below the root (item 1): each directory is opened with `O_NOFOLLOW` relative to the
     one above it, a link where the file goes is refused, and the bytes go to a new file beside it
     that `os.replace` then puts in its place. Returns the written file's own `lstat`."""
-    *directories, name = relative_path.split("/")
-    fd = os.open(repo_root, os.O_RDONLY | os.O_DIRECTORY)
+    name = relative_path.rsplit("/", 1)[-1]
+    fd = _open_recipe_directory(repo_root, relative_path, make=True)
     try:
-        for directory in directories:
-            try:
-                os.mkdir(directory, dir_fd=fd)
-            except FileExistsError:
-                pass
-            try:
-                inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
-            except OSError as exc:
-                raise GitCommitError(
-                    f"{directory!r} in the recipe repository is a symbolic link or not a "
-                    f"directory, so {relative_path!r} is not written"
-                ) from exc
-            os.close(fd)
-            fd = inner
         try:
             existing = os.lstat(name, dir_fd=fd)
         except FileNotFoundError:
@@ -451,14 +437,47 @@ def _write_recipe_file(repo_root: Path, relative_path: str, data: bytes) -> os.s
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, name, src_dir_fd=fd, dst_dir_fd=fd)
-            os.fsync(fd)
         except BaseException:
             with suppress(FileNotFoundError):
                 os.unlink(temporary, dir_fd=fd)
             raise
-        return os.lstat(name, dir_fd=fd)
+        try:
+            os.fsync(fd)
+            return os.lstat(name, dir_fd=fd)
+        except OSError as exc:  # the new bytes are in place: the caller puts them back
+            raise _FailedAfterTheWrite from exc
     finally:
         os.close(fd)
+
+
+class _FailedAfterTheWrite(Exception):
+    """`_write_recipe_file` failed after `os.replace` put the new bytes in place; its cause is the
+    failure itself."""
+
+
+def _open_recipe_directory(repo_root: Path, relative_path: str, *, make: bool) -> int:
+    """A descriptor on the directory that holds `relative_path`'s file, reached from `repo_root`
+    without following a symbolic link at any component below it (each opened with `O_NOFOLLOW`
+    relative to the one above), each made first when `make`. The caller closes it."""
+    fd = os.open(repo_root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for directory in relative_path.split("/")[:-1]:
+            if make:
+                with suppress(FileExistsError):
+                    os.mkdir(directory, dir_fd=fd)
+            try:
+                inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            except OSError as exc:
+                raise GitCommitError(
+                    f"{directory!r} in the recipe repository is a symbolic link or not a "
+                    f"directory, so {relative_path!r} is not written"
+                ) from exc
+            os.close(fd)
+            fd = inner
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
 
 
 def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str) -> None:
@@ -491,12 +510,17 @@ def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str)
     try:
         with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):
             _sweep_asides(repo_root)
-            written = _write_recipe_file(repo_root, relative_path, data)
+            # A refused publish leaves nothing ahead of `HEAD`: `load_published_recipe` reads the
+            # working tree, so once the new bytes are in place, any failure puts the file and its
+            # index entry back as `HEAD` holds them. A refusal before that wrote nothing.
+            try:
+                written = _write_recipe_file(repo_root, relative_path, data)
+            except _FailedAfterTheWrite as failed:
+                _put_back_as_head_holds(repo, repo_root, relative_path)
+                raise (failed.__cause__ or failed) from None
             try:
                 _stage_and_commit(repo, path, written, data, message)
-            except BaseException:
-                # A refused publish leaves nothing ahead of `HEAD`: `load_published_recipe` reads
-                # the working tree, so the file and its index entry go back to what `HEAD` holds.
+            except Exception:
                 _put_back_as_head_holds(repo, repo_root, relative_path)
                 raise
     finally:
@@ -511,14 +535,26 @@ def _put_back_as_head_holds(repo: Repo, repo_root: Path, relative_path: str) -> 
     try:
         committed: bytes | None = None
         try:
-            head = repo[repo.refs[HEADREF]]
-            if isinstance(head, Commit):
-                _, blob_id = tree_lookup_path(repo.object_store.__getitem__, head.tree, path)
-                blob = repo[blob_id]
-                if isinstance(blob, Blob):
-                    committed = blob.as_raw_string()
+            head_id: ObjectID | None = repo.refs[HEADREF]
         except KeyError:
-            committed = None
+            head_id = None  # no commit yet: `HEAD` holds no file
+        if head_id is not None:
+            head = repo[head_id]
+            if not isinstance(head, Commit):
+                # Not a commit (an annotated tag, say): what `HEAD` holds cannot be read, so the
+                # file is left as it is rather than removing a recipe that may be published.
+                _log.error("%s left as written: the recipe repository's HEAD is not a commit", path)
+                return
+            try:
+                _, blob_id = tree_lookup_path(repo.object_store.__getitem__, head.tree, path)
+            except (KeyError, NotTreeError):  # no such file, or `recipes` is a file in `HEAD`
+                blob_id = None
+            if blob_id is not None:
+                blob = repo[blob_id]
+                if not isinstance(blob, Blob):
+                    _log.error("%s left as written: HEAD holds no file there", path)
+                    return
+                committed = blob.as_raw_string()
         index = repo.open_index(config=ConfigFile())
         if committed is None:
             _remove_recipe_file(repo_root, relative_path)
@@ -534,15 +570,10 @@ def _put_back_as_head_holds(repo: Repo, repo_root: Path, relative_path: str) -> 
 
 def _remove_recipe_file(repo_root: Path, relative_path: str) -> None:
     """Remove the recipe's file without following a link at any component below the root."""
-    *directories, name = relative_path.split("/")
-    fd = os.open(repo_root, os.O_RDONLY | os.O_DIRECTORY)
+    fd = _open_recipe_directory(repo_root, relative_path, make=False)
     try:
-        for directory in directories:
-            inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
-            os.close(fd)
-            fd = inner
         with suppress(FileNotFoundError):
-            os.unlink(name, dir_fd=fd)
+            os.unlink(relative_path.rsplit("/", 1)[-1], dir_fd=fd)
     finally:
         os.close(fd)
 
