@@ -60,6 +60,35 @@ def image_tags() -> set[str]:
     return {t for t in out if not t.endswith(":<none>")}
 
 
+class OwnTags:
+    """The image tags this run creates, recorded by name at the moment each is made, and removed
+    by those names alone. Never a before-and-after difference of the machine's tags: on a shared
+    server another lane builds while this runs (10 November 2026, such a difference deleted three
+    of its images)."""
+
+    def __init__(self, docker: list[str] | None = None, runner=subprocess.run) -> None:  # noqa: ANN001
+        self.docker = docker or ["docker"]
+        self.runner = runner
+        self.made: list[str] = []
+
+    def tag(self, source: str, target: str, *, existed: bool) -> None:
+        """`docker tag source target`; recorded only if `target` named nothing before."""
+        self.runner([*self.docker, "tag", source, target], check=True)
+        if not existed:
+            self.made.append(target)
+
+    def built(self, image: str, *, existed: bool) -> None:
+        """An image the run's own `compose build` tagged; recorded only if new."""
+        if not existed:
+            self.made.append(image)
+
+    def remove(self) -> list[str]:
+        names = list(dict.fromkeys(self.made))
+        if names:
+            self.runner([*self.docker, "rmi", *names], check=False)
+        return names
+
+
 def ours(name: str) -> bool:
     return name.startswith("osprey-p5b-")
 
@@ -109,7 +138,7 @@ def main() -> int:
     # The image tags this run itself creates, by name. Teardown removes these and nothing else:
     # 10 November, a cleanup by "every tag new since the start" deleted three images another lane
     # built on this server while the run was going.
-    tagged_by_us: list[str] = []
+    own_tags = OwnTags()
     try:
         # A defect older than P5b, routed to the orchestrator: the preflight resolves the published
         # `${OSPREY_ARCADEDB_PORT:-2480}` against the process environment, not the deployment's
@@ -156,11 +185,15 @@ def main() -> int:
                 ["docker", "inspect", "--format", "{{.Image}}", "osprey-small-workspace-1"],
                 capture_output=True, text=True, check=True,
             ).stdout.strip()
-            images = [rendered["services"][n]["image"] for n in built]
-            tagged_by_us.extend(i for i in images if i not in tags_before)
-            run(["docker", "tag", workspace, rendered["services"]["workspace"]["image"]], env)
-            run([*compose, "--env-file", str(directory / "deployment.env"), "build",
-                 *[n for n in built if n != "workspace"]], env)  # fmt: skip
+            target = rendered["services"]["workspace"]["image"]
+            say(f"$ docker tag {workspace} {target}")
+            own_tags.tag(workspace, target, existed=target in image_tags())
+            others = [n for n in built if n != "workspace"]
+            existed = image_tags()
+            news = [rendered["services"][n]["image"] for n in others]
+            run([*compose, "--env-file", str(directory / "deployment.env"), "build", *others], env)
+            for image in news:
+                own_tags.built(image, existed=image in existed)
             seed_argv.append("--no-build")
         stored = yaml.safe_load(config.read_text())["components"]["storage"]["backups"]
         assert stored == str(backups), stored
@@ -218,10 +251,8 @@ def main() -> int:
         if left:
             subprocess.run(["docker", "volume", "rm", *left], check=False)
         shutil.rmtree(scratch, ignore_errors=True)
-        made_tags = sorted(t for t in set(tagged_by_us) if t not in tags_before)
-        if made_tags:
-            subprocess.run(["docker", "rmi", *made_tags], check=False)
-        say(f"image tags this run made, removed by name: {made_tags or 'none'}")
+        removed = own_tags.remove()
+        say(f"image tags this run made, removed by name: {removed or 'none'}")
         still = subprocess.run(["docker", "ps", "-aq", "--filter", f"name={NAME}"],
                                capture_output=True, text=True, check=False).stdout.split()  # fmt: skip
         say(f"teardown done: containers left {len(still)}, volumes left {len(left)} (removed)")
