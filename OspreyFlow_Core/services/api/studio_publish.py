@@ -488,9 +488,59 @@ def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str)
         with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):
             _sweep_asides(repo_root)
             written = _write_recipe_file(repo_root, relative_path, data)
-            _stage_and_commit(repo, path, written, data, message)
+            try:
+                _stage_and_commit(repo, path, written, data, message)
+            except BaseException:
+                # A refused publish leaves nothing ahead of `HEAD`: `load_published_recipe` reads
+                # the working tree, so the file and its index entry go back to what `HEAD` holds.
+                _put_back_as_head_holds(repo, repo_root, relative_path)
+                raise
     finally:
         _REPOSITORY_LOCK.release()
+
+
+def _put_back_as_head_holds(repo: Repo, repo_root: Path, relative_path: str) -> None:
+    """After a refused publish, the recipe's file and index entry as the current `HEAD` holds
+    them (a rival's commit included), or neither if `HEAD` has no such file. Best effort: a
+    failure here is logged and the publish's own error is the one raised."""
+    path = relative_path.encode("utf-8")
+    try:
+        committed: bytes | None = None
+        try:
+            head = repo[repo.refs[HEADREF]]
+            if isinstance(head, Commit):
+                _, blob_id = tree_lookup_path(repo.object_store.__getitem__, head.tree, path)
+                blob = repo[blob_id]
+                if isinstance(blob, Blob):
+                    committed = blob.as_raw_string()
+        except KeyError:
+            committed = None
+        index = repo.open_index(config=ConfigFile())
+        if committed is None:
+            _remove_recipe_file(repo_root, relative_path)
+            if path in index:
+                del index[path]
+        else:
+            written = _write_recipe_file(repo_root, relative_path, committed)
+            index[path] = index_entry_from_stat(written, Blob.from_string(committed).id)
+        index.write()
+    except Exception:
+        _log.exception("putting %s back as HEAD holds it in %s failed", relative_path, repo_root)
+
+
+def _remove_recipe_file(repo_root: Path, relative_path: str) -> None:
+    """Remove the recipe's file without following a link at any component below the root."""
+    *directories, name = relative_path.split("/")
+    fd = os.open(repo_root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for directory in directories:
+            inner = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = inner
+        with suppress(FileNotFoundError):
+            os.unlink(name, dir_fd=fd)
+    finally:
+        os.close(fd)
 
 
 def _stage_and_commit(
