@@ -252,6 +252,8 @@ async def test_a_failure_after_staging_leaves_nothing_committed(
     with pytest.raises(GitCommitError):
         await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
     assert _git(repo, "rev-parse", "HEAD") == before
+    # Nor is the file left ahead of `HEAD` (L1.7a's carry).
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: 1\n", "the file is ahead"
 
 
 @needs_git
@@ -784,3 +786,50 @@ async def test_an_aside_directory_left_after_the_repository_exists_is_swept(tmp_
 
     assert not stale.exists(), "the aside directory left beside the repository is still there"
     assert young.exists()
+
+
+@needs_git
+async def test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The carry from L1.7a's final review: a publish refused after it wrote the file must not
+    leave `recipes/<id>.yaml` ahead of `HEAD`, since `load_published_recipe` reads the working
+    tree. The file and its index entry go back to what `HEAD` holds, so `git status` is clean."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    real = studio_publish.commit_tree_changes
+
+    def with_a_rival(*args: object, **kwargs: object) -> object:
+        (repo / "theirs").write_text("theirs\n")
+        _git(repo, "add", "theirs")
+        _git(repo, "-c", "user.name=Op", "-c", "user.email=op@localhost",
+             "commit", "-q", "-m", "theirs", "--", "theirs")  # fmt: skip
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(studio_publish, "commit_tree_changes", with_a_rival)
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: 1\n", "the file is ahead"
+    assert _git(repo, "status", "--porcelain") == ""
+
+
+@needs_git
+async def test_a_new_recipe_refused_is_not_left_on_the_volume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recipe `HEAD` does not hold yet, refused after its file was written, leaves no file and
+    no index entry behind."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+
+    def broken(*args: object, **kwargs: object) -> object:
+        raise OSError("[Errno 28] No space left on device")
+
+    monkeypatch.setattr(studio_publish, "commit_tree_changes", broken)
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("beta", b"id: beta\n", version=1, repo_root=repo)
+
+    assert not (repo / "recipes" / "beta.yaml").exists(), "the refused recipe's file is left"
+    assert _git(repo, "status", "--porcelain") == ""
+    assert _git(repo, "ls-files").split() == ["recipes/alpha.yaml"]

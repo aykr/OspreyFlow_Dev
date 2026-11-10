@@ -1,0 +1,4 @@
+# head 0553678, before the carry's fix: a refused publish leaves its file ahead of HEAD; red first
+FAILED tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - AssertionError: the file is ahead
+FAILED tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it - AssertionError: the file is ahead
+FAILED tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume - AssertionError: the refused recipe's file is left
