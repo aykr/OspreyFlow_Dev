@@ -23,6 +23,7 @@ import type {
   DatasetOwnerSetting,
   DemoPackStatus,
   InviteInput,
+  LayerDeleted,
   LayerDryRun,
   OrganisationArrival,
   PersonAccount,
@@ -73,8 +74,12 @@ async function failure(response: Response): Promise<Error> {
   if (
     typeof detail === "string" &&
     ["not_an_author", "case_open", "case_not_linked", "composite_read_only", "owner_needed"].includes(body.error ?? "")
-  )
-    return new Error(detail);
+  ) {
+    // ADR-145 Amendment 4 decision 12 (L2.5c): a refusal carrying a right says the roles that
+    // hold it, never the people.
+    const right = (body as { right?: unknown }).right;
+    return new Error(typeof right === "string" ? `${detail} ${whyNotByRole(right as Right)}` : detail);
+  }
   if (response.status === 409 && typeof body.error === "string" && typeof detail === "string") return new Error(detail);
   // ADR-145 Amendment 5: roles, teams, case levels and Disable…, refused in the Conduit's words.
   if (typeof detail === "object" && detail !== null && typeof (detail as { message?: unknown }).message === "string")
@@ -155,6 +160,12 @@ export const datasetCases = (api: AdminApi, datasetId: string) =>
   call<AdminDatasetCases>(api, dataset(datasetId, "cases"));
 export const layerDryRun = (api: AdminApi, datasetId: string, caseId: string, action: LayerDryRun["action"]) =>
   call<LayerDryRun>(api, `datasets/${encodeURIComponent(datasetId)}/cases/${encodeURIComponent(caseId)}/${action}/dry-run`, {
+    method: "POST",
+  });
+// ADR-143 Amendment 5 (L2.5c): Admin's own Delete of a removed case's layer, after its dry run; for
+// a dataset of the administrator's own unit, any other answered as no dataset.
+export const deleteRemovedLayer = (api: AdminApi, datasetId: string, caseId: string) =>
+  call<LayerDeleted>(api, `datasets/${encodeURIComponent(datasetId)}/cases/${encodeURIComponent(caseId)}/delete`, {
     method: "POST",
   });
 export const datasetOwnerSetting = (api: AdminApi) => call<DatasetOwnerSetting>(api, "settings/dataset-owners");

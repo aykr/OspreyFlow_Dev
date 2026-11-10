@@ -1,0 +1,13 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 4ee5e13..4264a1a 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -904,6 +904,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
+   "set-a-datasets-promotion-policy-by-keyboard",
+   "dry-run-a-removed-cases-merge-by-keyboard",
+   "dry-run-a-removed-cases-delete-by-keyboard",
++  // L2.5c (ADR-143 Amendment 5 decision 7): Admin's own Delete of a removed case's layer.
++  "delete-a-removed-cases-layer-by-keyboard",
+   "set-who-may-own-a-dataset-by-keyboard",
+   // ADR-140 Amendment 4: a connection named by an administrator.
+   "name-a-connection-by-keyboard",

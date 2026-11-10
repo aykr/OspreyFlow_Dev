@@ -50,6 +50,10 @@ if (serving === "datasets") {
       { investigation_id: "gone-1", name: "Op Heron", state: "removed", home_case: false, through: null, items: 5, links: 4, size_bytes: 50000 },
       { investigation_id: "via-1", name: "Op Merlin", state: "removed", home_case: false, through: "Both", items: 1, links: 0, size_bytes: 90 },
     ] },
+    // L2.5c: `show=delete`, the delete's dry run shown with Admin's own Delete after it.
+    "/v1/admin/datasets/ds-a/cases/gone-1/delete/dry-run": { investigation_id: "gone-1", action: "delete", items: 5,
+      links: 4, size_bytes: 50000,
+      would: "Would delete 5 items and 4 links (48.8 kB) from Op Heron's layer. Promoted items are never touched. Nothing has been written." },
     "/v1/admin/datasets/ds-a/cases/gone-1/merge/dry-run": { investigation_id: "gone-1", action: "merge", items: 5, links: 4,
       size_bytes: 50000, would: "Would merge 5 items and 4 links (48.8 kB) from Op Heron's layer into Prison records. Nothing has been written." },
     "/v1/admin/settings/dataset-owners": { owners_may_be: "people_and_teams" },
@@ -200,6 +204,7 @@ if (serving === "datasets" && show) {
   await pressWhenDrawn("Details for Prison records");
   if (show === "owner") await pressWhenDrawn("Change owner of Prison records");
   if (show === "dry-run") await pressWhenDrawn("Merge Op Heron into the dataset (dry run)");
+  if (show === "delete") await pressWhenDrawn("Delete Op Heron's layer (dry run)");
 }
 if (serving === "people" && show) {
   if (show === "disable" || show === "refused" || show === "withheld") await pressWhenDrawn("Disable ana");

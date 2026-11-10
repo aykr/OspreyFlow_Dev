@@ -466,10 +466,17 @@ def test_a_dry_run_refuses_a_case_not_linked_directly(world: SimpleNamespace, ca
     assert answer.status_code == 404 and answer.json()["error"] == "case_not_linked"
 
 
-def test_a_dry_run_merge_is_an_authors_and_says_who_they_are(world: SimpleNamespace) -> None:
+def test_a_dry_run_merge_is_an_authors_and_names_no_one(world: SimpleNamespace) -> None:
+    """ADR-145 Amendment 4 decision 12, as the owner ruled it ((c), Amendment 7): a refusal says
+    which level and right may act, and the Glass the roles holding it, never the people, so no one
+    learns from a refusal who holds a dataset (L2.5c)."""
     answer = _dry(world, "admin", "gone-1", "merge")
-    assert answer.status_code == 403 and answer.json()["error"] == "not_an_author"
-    assert "Name of adm-2, Name of eng-1" in answer.json()["detail"]
+    body = answer.json()
+    assert answer.status_code == 403 and body["error"] == "not_an_author"
+    assert body["right"] == "investigate"
+    assert "Only one of the dataset's Authors may merge" in body["detail"]
+    for person in ("adm-2", "eng-1", "Name of"):
+        assert person not in answer.text, person
     assert not [e for e in world.audit.entries if e["action"].startswith("dry_run")]
 
 

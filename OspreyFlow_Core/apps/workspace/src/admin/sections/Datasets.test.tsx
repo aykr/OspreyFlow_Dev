@@ -41,6 +41,16 @@ function serve(posts: string[], dataset: object = DATASET) {
       if (path === "datasets") return ok([dataset]);
       if (path === "datasets/ds-a/authors") return ok(AUTHORS);
       if (path === "datasets/ds-a/cases") return ok(CASES);
+      if (path === "datasets/ds-a/cases/gone-1/delete/dry-run")
+        return ok({ investigation_id: "gone-1", action: "delete", items: 5, links: 4, size_bytes: 50_000,
+                    would: "Would delete 5 items and 4 links (48.8 kB) from Op Heron's layer. Promoted items are never touched. Nothing has been written." });  // prettier-ignore
+      if (path === "datasets/ds-a/cases/gone-1/delete")
+        return ok({ investigation_id: "gone-1", words: "Op Heron's layer is deleted; promoted items were not touched." });
+      if (path === "datasets/ds-a/cases/gone-2/delete")
+        return { ok: false, status: 404, json: async () => ({ detail: { error: "dataset_not_found" } }) } as Response;
+      if (path === "datasets/ds-a/cases/gone-1/merge/dry-run" && posts.includes("refuse"))
+        return { ok: false, status: 403, json: async () => ({ error: "not_an_author", right: "investigate",
+          detail: "Only one of the dataset's Authors may merge a removed case's layer into it, in the Ingest Studio's 4 Runs: an Author of its home case who holds Investigate." }) } as Response;  // prettier-ignore
       if (path === "datasets/ds-a/cases/gone-1/merge/dry-run")
         return ok({ investigation_id: "gone-1", action: "merge", items: 5, links: 4, size_bytes: 50_000,
                     would: "Would merge 5 items and 4 links (48.8 kB). Nothing has been written." });  // prettier-ignore
@@ -52,7 +62,7 @@ function serve(posts: string[], dataset: object = DATASET) {
 describe("where a removed case's merge or delete is done", () => {
   it("names the Studio's 4 Runs for each action", () => {
     expect(doneWhere("delete")).toBe(
-      "One of the dataset's Authors deletes it in the Ingest Studio, under 4 Runs, after their own dry run.",
+      "Delete it below if these are the right counts; one of the dataset's Authors may also delete it in the Ingest Studio, under 4 Runs.",
     );
   });
 });
@@ -82,6 +92,39 @@ describe("Datasets", () => {
     expect(said).toContain("One of the dataset's Authors merges it in the Ingest Studio, under 4 Runs");
     expect(said).not.toContain("arrive with promotion");
     expect(document.body.textContent).not.toMatch(/20\d\d/);
+  });
+
+  it("deletes a removed case's layer after its dry run, in the Conduit's words, and reads the cases again", async () => {
+    const posts: string[] = [];
+    serve(posts);
+    render(<Datasets api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Details for Prison records" }));
+    await screen.findByRole("table", { name: "Cases linked to Prison records" });
+    expect(screen.queryByRole("button", { name: "Delete Op Heron's layer now" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Merge Op Heron into the dataset (dry run)" }));
+    await screen.findByRole("status");
+    expect(screen.queryByRole("button", { name: "Delete Op Heron's layer now" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Op Heron's layer (dry run)" }));
+    expect((await screen.findByRole("status")).textContent).toContain("Delete it below if these are the right counts");
+    fireEvent.click(await screen.findByRole("button", { name: "Delete Op Heron's layer now" }));
+    expect(await screen.findByText("Op Heron's layer is deleted; promoted items were not touched.")).toBeTruthy();
+    expect(posts).toEqual([
+      "datasets/ds-a/cases/gone-1/merge/dry-run", "datasets/ds-a/cases/gone-1/delete/dry-run", "datasets/ds-a/cases/gone-1/delete",
+    ]);  // prettier-ignore
+    expect(screen.queryByRole("button", { name: "Delete Op Heron's layer now" })).toBeNull();
+  });
+
+  it("says a refused merge by the roles that may act, never by a person", async () => {
+    const posts: string[] = ["refuse"];
+    serve(posts);
+    render(<Datasets api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Details for Prison records" }));
+    await screen.findByRole("table", { name: "Cases linked to Prison records" });
+    fireEvent.click(screen.getByRole("button", { name: "Merge Op Heron into the dataset (dry run)" }));
+    const said = (await screen.findByRole("alert")).textContent ?? "";
+    expect(said).toContain("Only one of the dataset's Authors may merge");
+    expect(said).toMatch(/You need Investigate; the .* roles have it/);
+    for (const person of ["D. Engineer", "S. Lead", "eng-1", "adm-2"]) expect(said).not.toContain(person);
   });
 
   it("offers a composite neither a promotion policy nor a merge", async () => {

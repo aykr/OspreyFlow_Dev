@@ -148,8 +148,10 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
       return json(200, { investigation_id: "gone-1", action: "delete", items: 5, links: 4, size_bytes: 50000,
                          would: "Would delete 5 items and 4 links (48.8 kB) from Op Heron's layer. Promoted items are never touched. Nothing has been written." });  // prettier-ignore
     if (path === "datasets/enron/cases/gone-2/merge/dry-run" && request.method() === "POST")
-      return json(403, { error: "not_an_author",
-                         detail: "Only one of the dataset's Authors may merge a removed case's layer into it. Its Authors: eng-1." });  // prettier-ignore
+      return json(403, { error: "not_an_author", right: "investigate",
+                         detail: "Only one of the dataset's Authors may merge a removed case's layer into it, in the Ingest Studio's 4 Runs: an Author of its home case who holds Investigate." });  // prettier-ignore
+    if (path === "datasets/enron/cases/gone-1/delete" && request.method() === "POST")
+      return json(200, { investigation_id: "gone-1", words: "Op Heron's layer is deleted; promoted items were not touched." });
     if (path === "settings/dataset-owners" && request.method() === "PUT") return json(200, request.postDataJSON());
     if (path === "settings/dataset-owners") return json(200, { owners_may_be: "people_and_teams" });
     // L2.7: Policies' Grading scheme, read-only.
@@ -309,6 +311,7 @@ test("a removed case's layer is merged, as a dry run, by keyboard", async ({ pag
   expect(asked).toContain("POST datasets/enron/cases/gone-1/merge/dry-run");
   await press(page, "Merge Op Wren into the dataset (dry run)");
   await expect(page.getByRole("alert")).toContainText("Only one of the dataset's Authors may merge");
+  await expect(page.getByRole("alert")).toContainText("roles have it");
   registerCovered(REGISTRY, "dry-run-a-removed-cases-merge-by-keyboard");
 });
 
@@ -321,6 +324,21 @@ test("a removed case's layer is deleted, as a dry run, by keyboard", async ({ pa
   await expect(page.getByRole("status")).toContainText("Promoted items are never touched.");
   expect(asked).toContain("POST datasets/enron/cases/gone-1/delete/dry-run");
   registerCovered(REGISTRY, "dry-run-a-removed-cases-delete-by-keyboard");
+});
+
+// L2.5c (ADR-143 Amendment 5 decision 7; rule 13): Admin's own Delete, only after its dry run, by
+// keyboard end to end; the Conduit's words said.
+test("a removed case's layer is deleted by keyboard after its dry run", async ({ page }) => {
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await details(page);
+  await expect(page.getByRole("button", { name: "Delete Op Heron's layer now" })).toHaveCount(0);
+  await press(page, "Delete Op Heron's layer (dry run)");
+  await expect(page.getByRole("status")).toContainText("Delete it below if these are the right counts");
+  await press(page, "Delete Op Heron's layer now");
+  await expect(page.getByText("Op Heron's layer is deleted; promoted items were not touched.")).toBeVisible();
+  expect(asked).toContain("POST datasets/enron/cases/gone-1/delete");
+  registerCovered("ADMIN_ACTIONS", "delete-a-removed-cases-layer-by-keyboard");
 });
 
 // ADR-145 Amendment 4 decision 7: Admin › System's Dataset owners may be, chosen and saved by keyboard.
