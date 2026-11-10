@@ -275,6 +275,12 @@ RULE_AUDIT_ACTIONS: tuple[str, ...] = (
     "load_checks_set",
     # L2.10's carry: the daily sweep's failure for a rule, said where a person sees it (*Changes*).
     "rule_evaluation_failed",
+    # ADR-146 decision 3 (L2.11): "every change is audited and listed in *Changes*" — a draft
+    # saved, tested (never its count, rule 7), made live, or asked to go live.
+    "rule_draft_saved",
+    "rule_tested",
+    "rule_made_live",
+    "rule_make_live_proposed",
 )
 
 

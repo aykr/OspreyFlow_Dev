@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import functools
+import importlib
 import io
 import json
 import logging
@@ -426,6 +427,7 @@ from schemas.rights import (
     rights_for,
 )
 from schemas.rule_standards import ImportedRule
+from schemas.rule_editor import RuleDatasetOffer, RuleTestResult
 from schemas.screening import (
     ScreeningLists,
     ScreeningListsOverview,
@@ -434,6 +436,7 @@ from schemas.screening import (
     ScreeningSubscriptionInput,
 )
 from schemas.sentences import (
+    RULE_TEST_DAYS,
     RulePreview,
     RulePreviewRequest,
     RuleSentence,
@@ -474,7 +477,15 @@ from schemas.trends import (
     TrendOptions,
 )
 
-from . import alert_queue, alert_sources, case_gazetteers, map_places, raised_alerts, sentence_rules
+from . import (
+    alert_queue,
+    alert_sources,
+    case_gazetteers,
+    map_places,
+    raised_alerts,
+    rule_editor,
+    sentence_rules,
+)
 from . import audit_section as audit_section_module
 from . import compute_routes as compute_routes_module
 from . import connections as connections_module
@@ -1044,6 +1055,9 @@ from .trends import (
 from .typology_rules import (
     OwnChangeRefused,
     RuleChangeRefused,
+    RuleDatasetFixed,
+    RuleFiles,
+    RuleUntested,
     TypologyRuleNotFoundError,
     TypologyRuleStore,
 )
@@ -2732,11 +2746,28 @@ async def _influencer_refused_handler(request: Request, exc: InfluencerRefused) 
 
 @app.exception_handler(RuleChangeRefused)
 async def _rule_change_refused_handler(request: Request, exc: RuleChangeRefused) -> JSONResponse:
-    """ADR-133 decision 7: a change, approval or rejection that cannot be made, in words."""
+    """ADR-133 decision 7: a change, approval or rejection that cannot be made, in words. ADR-146
+    decision 3: a rule's dataset changed, or a rule made live untested, each with its own code."""
     said = str(exc)
+    error = (
+        "rule_dataset_fixed" if isinstance(exc, RuleDatasetFixed)
+        else "rule_untested" if isinstance(exc, RuleUntested)
+        else "rule_change_refused"
+    )  # fmt: skip
     return JSONResponse(
-        status_code=409,
-        content={"error": "rule_change_refused", "message": f"{said[0].upper()}{said[1:]}."},
+        status_code=409, content={"error": error, "message": f"{said[0].upper()}{said[1:]}."}
+    )
+
+
+@app.exception_handler(rule_editor.DatasetNotOffered)
+async def _rule_dataset_not_offered_handler(
+    request: Request, exc: rule_editor.DatasetNotOffered
+) -> JSONResponse:
+    """ADR-146 decision 3: a rule declared on anything but the case's own source or composite is
+    refused exactly as a dataset that does not exist (rule 3)."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"error": "dataset_not_found", "detail": "There is no such dataset."},
     )
 
 
@@ -9954,10 +9985,8 @@ async def _own_lists(
     dataset_id: str, models: TargetModelStore, rows_kept: ListRows
 ) -> list[ReferenceList]:
     """The dataset's own lists with rows kept, whose ids its live domain model names (Amendment
-    12): each at the highest version kept."""
-    live = await models.live(dataset_id)
-    named = set(live.reference_lists) if live is not None else set()
-    return [r for r in rows_kept.kept(dataset_id) if r.id in named]
+    12): each at the highest version kept. One reading, shared with the rule editor's."""
+    return await rule_editor.own_lists(dataset_id, models, rows_kept)
 
 
 @app.get(
@@ -14612,8 +14641,12 @@ async def approve_rule_change(
 ) -> TypologyRule:
     """ADR-133 decision 7, stage (d): a second person with the right approves the change waiting
     on a whole-deployment rule — its deployment, a new version, or its retirement. The person who
-    proposed it cannot."""
-    _require_administrator(principal)
+    proposed it cannot. ADR-146 decision 3: a tested draft waiting to go live under its dataset's
+    second-person policy is approved by a holder of `deploy_rules` at the case's Author level,
+    never by its author or whoever asked; only a whole-deployment rule's change needs the
+    administrator."""
+    if not await typology_rules.waits_to_go_live(rule_id, investigation.id, principal):
+        _require_administrator(principal)
     try:
         rule = await typology_rules.approve(rule_id, investigation.id, principal)
     except OwnChangeRefused as refused:
@@ -14650,8 +14683,11 @@ async def reject_rule_change(
     audit: AuditDep,
 ) -> TypologyRule:
     """The change waiting on a whole-deployment rule turned down, with the reason — or withdrawn
-    by the person who proposed it. The rule stays as it was; a rejected deployment never runs."""
-    _require_administrator(principal)
+    by the person who proposed it. The rule stays as it was; a rejected deployment never runs. A
+    tested draft waiting to go live (ADR-146 decision 3) is sent back to its draft by the same
+    people who may approve it."""
+    if not await typology_rules.waits_to_go_live(rule_id, investigation.id, principal):
+        _require_administrator(principal)
     rule = await typology_rules.reject(rule_id, investigation.id, principal, body.reason)
     await audit.record(
         principal=principal,
@@ -14886,37 +14922,14 @@ async def preview_rule_sentence(
     limit it is refused with `limit_exceeded` (rule 2)."""
     sentence = body.sentence
     check_sentence(sentence, ontology)
-    relationship = sentence.relationship
-    hotlisted = None
-    if relationship is not None and relationship.kind == "on_hotlist":
-        hotlisted = frozenset(
-            h.identifier
-            for h in await hotlists_store.list_authorized(principal)
-            if h.status == "active"
-        )
-    entries: dict[str, list[Any]] = {}
-    if relationship is not None and relationship.kind == "on_screening_list":
-        entries[sentence.subject] = list(await screening_lists.entries(sentence.subject))
-    # ADR-139 decision 8: a strength condition previews with the case's influencers in force.
-    influencers, rarity_exclude, strength_settings = await strength_context(
-        influencers_store, investigation.id
-    )
     preview = await preview_sentence(
-        sentence,
-        principal,
-        SentenceContext(
-            graph=graph,
-            analytics=analytics,
-            investigation_scope=investigation.id,
-            ontology=ontology,
-            hotlisted=hotlisted,
-            screening_entries=entries,
-            influencers=influencers,
-            rarity_exclude_types=rarity_exclude,
-            composition=strength_settings.composition,
-            rarity_measure=strength_settings.rarity_measure,
+        sentence, principal,
+        await _sentence_context(
+            sentence, principal, investigation.id, graph=graph, analytics=analytics,
+            ontology=ontology, hotlists_store=hotlists_store, screening_lists=screening_lists,
+            influencers_store=influencers_store,
         ),
-    )
+    )  # fmt: skip
     await audit.record(
         principal=principal,
         action="rule_previewed",
@@ -14968,6 +14981,327 @@ async def deploy_rule_sentence(
         result_cardinality=1,
     )
     return rule
+
+
+# --- the rule editor: a declared dataset, draft, Test and Make live (ADR-146 decision 3, L2.11) ---
+
+
+def _rule_files_renderer(request: Request) -> Callable[[SentenceRuleInput], RuleFiles]:
+    """The rule's `.bpmn` and `.dmn` as rules-b's codec writes them (ADR-146 Amendment 5,
+    `rule_standards.rule_files`), saved beside every version. A test app may set its own on
+    `app.state.rule_files`."""
+    set_on_app = getattr(request.app.state, "rule_files", None)
+    if set_on_app is not None:
+        return cast(Callable[[SentenceRuleInput], RuleFiles], set_on_app)
+    codec = importlib.import_module("rule_standards")
+
+    def render(body: SentenceRuleInput) -> RuleFiles:
+        files = codec.rule_files(body, dataset_id=body.dataset_id)
+        return RuleFiles(bpmn=files.bpmn, dmn=files.dmn)
+
+    return render
+
+
+async def _sentence_context(
+    sentence: RuleSentence,
+    principal: Principal,
+    investigation_id: str,
+    *,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    ontology: OntologySchema,
+    hotlists_store: HotlistStore,
+    screening_lists: ScreeningListStore,
+    influencers_store: InfluencerStore | None,
+) -> SentenceContext:
+    """What a sentence is judged with when it is previewed or tested, as `principal`."""
+    relationship = sentence.relationship
+    hotlisted = None
+    if relationship is not None and relationship.kind == "on_hotlist":
+        hotlisted = frozenset(
+            h.identifier
+            for h in await hotlists_store.list_authorized(principal)
+            if h.status == "active"
+        )
+    entries: dict[str, list[Any]] = {}
+    if relationship is not None and relationship.kind == "on_screening_list":
+        entries[sentence.subject] = list(await screening_lists.entries(sentence.subject))
+    # ADR-139 decision 8: a strength condition previews with the case's influencers in force.
+    influencers, rarity_exclude, strength_settings = await strength_context(
+        influencers_store, investigation_id
+    )
+    return SentenceContext(
+        graph=graph,
+        analytics=analytics,
+        investigation_scope=investigation_id,
+        ontology=ontology,
+        hotlisted=hotlisted,
+        screening_entries=entries,
+        influencers=influencers,
+        rarity_exclude_types=rarity_exclude,
+        composition=strength_settings.composition,
+        rarity_measure=strength_settings.rarity_measure,
+    )
+
+
+def _only_the_testers_count(version: RuleVersion, reader: Principal) -> RuleVersion:
+    """Rule 7: *Test*'s count is taken as the person who tested, so only they are told it; anyone
+    else reads that the version was tested, and when."""
+    if version.would_raise is None or version.tested_by == reader.id:
+        return version
+    return version.model_copy(update={"would_raise": None})
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/rules/datasets",
+    dependencies=[Depends(require_right(Right.AUTHOR_RULES)), Depends(require_rules_place)],
+)
+async def list_rule_datasets(
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    models: TargetModelsDep,
+    lists: ListStoreDep,
+    rows_kept: ListRowsDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+) -> list[RuleDatasetOffer]:
+    """ADR-146 decision 3: the datasets a new rule may be declared on, chosen first: the case's own
+    sources and composites, each with its live model's types and links and the lists it may read,
+    and whether *Make live* waits for a second person."""
+    offers = await rule_editor.offered_datasets(
+        investigation.id, ontology, datasets=datasets, models=models, lists=lists,
+        rows_kept=rows_kept,
+    )  # fmt: skip
+    await audit.record(principal=principal, action="read_rule_datasets",
+                       investigation_id=investigation.id, resolved_query={},
+                       result_cardinality=len(offers))  # fmt: skip
+    return offers
+
+
+async def _save_rule_draft(
+    request: Request,
+    investigation_id: str,
+    principal: Principal,
+    body: SentenceRuleInput,
+    *,
+    rule_id: str | None,
+    typology_rules: TypologyRuleStore,
+    patterns_store: PatternStore,
+    datasets: DatasetStore,
+    models: TargetModelStore,
+    ontology: OntologySchema,
+    audit: AuditWriter,
+) -> TypologyRule:
+    if body.dataset_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "dataset_required",
+                    "message": "Choose the dataset this rule watches first."},
+        )  # fmt: skip
+    dataset = await rule_editor.declared_dataset(investigation_id, body.dataset_id, datasets)
+    sentence = normalised(body.sentence)
+    if sentence.scope == "deployment":
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "sentence_refused", "message": (
+                "A rule watches one dataset: a rule for the whole deployment is converted per "
+                "dataset.")},
+        )  # fmt: skip
+    await _refuse_an_unknown_team(sentence, request)
+    model = await rule_editor.dataset_ontology(dataset, ontology, datasets=datasets, models=models)
+    spec = await _compiled_rule(body, sentence, principal, patterns_store, model)
+    try:
+        files = _rule_files_renderer(request)(body.model_copy(update={"sentence": sentence}))
+    except ValueError as refused:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "rule_files_refused", "message": str(refused)},
+        ) from refused
+    rule = await typology_rules.save_draft(
+        principal, investigation_id, spec, dataset_id=dataset.id, files=files, rule_id=rule_id
+    )
+    await audit.record(
+        principal=principal, action="rule_draft_saved", investigation_id=investigation_id,
+        resolved_query={"rule_id": rule.id, "dataset_id": dataset.id,
+                        "rule": body.model_dump(mode="json")},
+        result_cardinality=1,
+    )  # fmt: skip
+    return rule
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/drafts",
+    status_code=201,
+    dependencies=[
+        Depends(require_right(Right.AUTHOR_RULES)),
+        Depends(require_rules_place),
+        Depends(refuse_rules_in_a_drawn_case_as_author),
+    ],
+)
+async def save_new_rule_draft(
+    request: Request,
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    patterns_store: PatternsStoreDep,
+    datasets: DatasetsDep,
+    models: TargetModelsDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+    body: SentenceRuleInput,
+) -> TypologyRule:
+    """ADR-146 decision 3: a new rule saved as a draft on its declared dataset, checked against that
+    dataset's live model, its `.bpmn` and `.dmn` saved beside it. A draft never runs."""
+    return await _save_rule_draft(
+        request, investigation.id, principal, body, rule_id=None, typology_rules=typology_rules,
+        patterns_store=patterns_store, datasets=datasets, models=models, ontology=ontology,
+        audit=audit,
+    )  # fmt: skip
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/draft",
+    dependencies=[
+        Depends(require_right(Right.AUTHOR_RULES)),
+        Depends(require_rules_place),
+        Depends(refuse_rules_in_a_drawn_case_as_author),
+    ],
+)
+async def save_rule_draft(
+    rule_id: str,
+    request: Request,
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    patterns_store: PatternsStoreDep,
+    datasets: DatasetsDep,
+    models: TargetModelsDep,
+    ontology: OntologyDep,
+    audit: AuditDep,
+    body: SentenceRuleInput,
+) -> TypologyRule:
+    """The rule's one draft saved again; a live rule keeps running as it stands. Its dataset is
+    never changed (409 `rule_dataset_fixed`)."""
+    return await _save_rule_draft(
+        request, investigation.id, principal, body, rule_id=rule_id,
+        typology_rules=typology_rules, patterns_store=patterns_store, datasets=datasets,
+        models=models, ontology=ontology, audit=audit,
+    )  # fmt: skip
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/draft",
+    dependencies=[Depends(require_right(Right.READ_ALERT_QUEUE)), Depends(require_rules_place)],
+)
+async def read_rule_draft(
+    rule_id: str,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+) -> RuleVersion | None:
+    """The rule's draft, if it has one; *Test*'s count only to the person who tested it."""
+    draft = await typology_rules.draft(rule_id, investigation.id, principal)
+    return None if draft is None else _only_the_testers_count(draft, principal)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/test",
+    dependencies=[
+        Depends(require_right(Right.AUTHOR_RULES)),
+        Depends(require_rules_place),
+        Depends(refuse_rules_in_a_drawn_case_as_author),
+    ],
+)
+async def test_rule_draft(
+    rule_id: str,
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    datasets: DatasetsDep,
+    models: TargetModelsDep,
+    graph: GraphDep,
+    analytics: AnalyticsDep,
+    ontology: OntologyDep,
+    hotlists_store: HotlistsStoreDep,
+    screening_lists: ScreeningListsDep,
+    audit: AuditDep,
+    influencers_store: OptionalStrengthInfluencersDep = None,
+) -> RuleTestResult:
+    """ADR-146 decision 3: *Test* runs the draft over its dataset's last 30 days, as the person
+    testing, within that dataset alone, and says how many alerts it would have raised (rule 7: a
+    count of what they may see). The result is kept on the draft it ran on. It raises no alert and
+    writes no rule, pattern or graph element."""
+    rule = await typology_rules.get_listed(rule_id, investigation.id, principal)
+    draft = await typology_rules.draft(rule_id, investigation.id, principal)
+    if draft is None or not isinstance(draft.params, SentenceRuleParams) or rule.dataset_id is None:
+        raise RuleChangeRefused("this rule has no draft written as a sentence to test")
+    dataset = await rule_editor.declared_dataset(investigation.id, rule.dataset_id, datasets)
+    tester = principal.model_copy(update={"datasets": [dataset.id]})
+    model = await rule_editor.dataset_ontology(dataset, ontology, datasets=datasets, models=models)
+    sentence = draft.params.sentence
+    check_sentence(sentence, model)
+    preview = await preview_sentence(
+        sentence, tester,
+        await _sentence_context(
+            sentence, tester, investigation.id, graph=graph, analytics=analytics, ontology=model,
+            hotlists_store=hotlists_store, screening_lists=screening_lists,
+            influencers_store=influencers_store,
+        ),
+        days=RULE_TEST_DAYS,
+    )  # fmt: skip
+    await typology_rules.record_test(
+        rule_id, investigation.id, principal, version=draft.version, saved_at=draft.proposed_at,
+        days=RULE_TEST_DAYS, would_raise=preview.would_raise,
+    )  # fmt: skip
+    # Rule 7: *Changes* says the draft was tested, never how many it found as the tester.
+    await audit.record(
+        principal=principal, action="rule_tested", investigation_id=investigation.id,
+        resolved_query={"rule_id": rule_id, "version": draft.version, "days": RULE_TEST_DAYS},
+        result_cardinality=0,
+    )  # fmt: skip
+    return RuleTestResult(
+        rule_id=rule_id, version=draft.version, days=RULE_TEST_DAYS,
+        would_raise=preview.would_raise, words=preview.words,
+    )  # fmt: skip
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/rules/{rule_id}/make-live",
+    dependencies=[
+        Depends(require_right(Right.DEPLOY_RULES)),
+        Depends(require_rules_place),
+        Depends(refuse_rules_in_a_drawn_case_as_author),
+    ],
+)
+async def make_rule_live(
+    rule_id: str,
+    investigation: InvestigationAuthorDep,
+    principal: PrincipalDep,
+    typology_rules: TypologyRulesDep,
+    datasets: DatasetsDep,
+    audit: AuditDep,
+) -> TypologyRule:
+    """ADR-146 decision 3: the tested draft goes live (409 `rule_untested` before its test), at
+    once, or where the dataset's policy asks for a second person (ADR-145 A3, Amendment 6), on the
+    approval of someone who neither wrote it nor asked."""
+    rule = await typology_rules.get_listed(rule_id, investigation.id, principal)
+    if rule.dataset_id is None:
+        raise RuleChangeRefused("this rule names no dataset; it is converted before it changes")
+    dataset = await rule_editor.declared_dataset(investigation.id, rule.dataset_id, datasets)
+    second = await rule_editor.needs_second_person(dataset, datasets)
+    made = await typology_rules.make_live(
+        rule_id, investigation.id, principal, second_person=second
+    )
+    await audit.record(
+        principal=principal,
+        action="rule_make_live_proposed" if second else "rule_made_live",
+        investigation_id=investigation.id,
+        resolved_query={"rule_id": rule_id, "version": made.pending_version or made.version,
+                        "dataset_id": dataset.id},
+        result_cardinality=1,
+    )  # fmt: skip
+    return made
 
 
 class UnknownTeamError(Exception):

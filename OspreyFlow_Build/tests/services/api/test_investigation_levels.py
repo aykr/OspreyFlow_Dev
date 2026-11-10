@@ -236,6 +236,13 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # me") and Author otherwise, in the route as deploying one; its versions and schedule read at
     # Viewer, as the rules are.
     ("POST", P + "/rules/{rule_id}/approve"): A,
+    # ADR-146 decision 3 (L2.11): the rule editor's datasets, draft, Test and Make live.
+    ("GET", P + "/rules/datasets"): A,
+    ("POST", P + "/rules/drafts"): A,
+    ("PUT", P + "/rules/{rule_id}/draft"): A,
+    ("GET", P + "/rules/{rule_id}/draft"): V,
+    ("POST", P + "/rules/{rule_id}/test"): A,
+    ("POST", P + "/rules/{rule_id}/make-live"): A,
     ("POST", P + "/rules/{rule_id}/reject"): A,
     ("POST", P + "/rules/{rule_id}/change"): E,
     ("GET", P + "/rules/{rule_id}/versions"): V,

@@ -716,6 +716,20 @@ class TypologyRuleStore:
                 )
         return await self._read(rule.id)
 
+    async def waits_to_go_live(
+        self, rule_id: str, investigation_id: str, principal: Principal
+    ) -> bool:
+        """Whether the change waiting on the rule is a tested draft asked to go live (ADR-146
+        decision 3), not a whole-deployment rule's change (ADR-133 decision 7)."""
+        rule = await self.get_listed(rule_id, investigation_id, principal)
+        async with self._pool.acquire() as conn:
+            found = await conn.fetchval(
+                "SELECT 1 FROM typology_rule_versions "
+                "WHERE rule_id = $1 AND status = 'pending' AND tested_at IS NOT NULL",
+                rule.id,
+            )
+        return found is not None
+
     async def rule_files(self, rule_id: str, version: int) -> RuleFiles | None:
         """The files saved beside one version, for *Export*. The caller has read the rule within
         the reader's reach (`get_listed`) first; a version saved before the editor has none."""
