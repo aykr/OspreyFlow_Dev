@@ -34,3 +34,64 @@ one refuses.
 
 **Exit.** Amendment 37's table green; `make ci` and `make test` green offline (the server); a friction fragment
 (one row); the §13 text as a carry. Report in Prompt L's format, then stop.
+
+---
+
+# Platform-b · brief P6 · the case's gazetteer panel beside place search
+
+Folded in from `P6_PLAN.md` (prepared on `prep/platform-b-p6`, accepted by the orchestrator on 10 November 2026; no separate brief). Started from main ec28c67. The orchestrator's additions at the start: the keyboard ids as literals, and axe in three themes.
+
+
+Step: the case's gazetteer panel beside place search; add and remove a gazetteer (ruling 6), by keyboard.
+Exit (build plan row P6): a keyboard case and registry id, red first; axe in three themes.
+Spec: ADR-147 Amendments 1 and 2 (on lane/platform until P5 merges; decision 2 there is the API, and its "Left,
+and why" names this panel). Start only after P5b merges, rebased onto main with P5 in, from the orchestrator's brief.
+
+## What the Conduit gives (platform's P5)
+- GET `/v1/investigations/{id}/map/gazetteers`: Viewer plus `investigate`. `CaseGazetteers{gazetteers:[{dataset_id,
+  name, added}], said}` lists the case's own unit's gazetteers. It is empty unless the case reads exactly one source dataset.
+- PUT and DELETE `/v1/datasets/{dataset}/gazetteers/{gazetteer}`: `run_pipelines` plus the dataset gate. They are
+  synchronous and return `CaseGazetteers`. A gazetteer that isn't there, or is another unit's, gets one 404 with fixed
+  words. A composite or drawn dataset is refused. DELETE's `said` is `REMOVED_WORDS`.
+- The GET doesn't return the case's dataset id. Use `caseDatasets` (`src/investigation/cases.ts:80`), the one source dataset.
+
+## The Glass (all in apps/workspace/src/map/** and its keyboard/a11y files)
+1. `src/map/gazetteers.ts`: `caseGazetteers`, `addGazetteer` and `removeGazetteer`, plain fetch as in `places.ts`. A
+   `GazetteersFailed` error says the Conduit's own words for 403, 404 and 409 and never invents a count (rule 2/7).
+2. `MapControls.tsx`: a `CaseGazetteerPanel` beside `PlaceSearch`, in its own form and group with the label
+   "Gazetteers in this case". Each gazetteer is a row with an "Add"/"Remove <name>" button. The Conduit's
+   `said` goes in a `role=status` line. The rows show names only and no counts. It is hidden when the list is
+   empty, and the buttons are disabled with a reason when the person lacks `run_pipelines` (`placesByRole.json`).
+   The Conduit still refuses, so this loosens nothing (rule 3/4 untouched).
+3. `MapView.tsx` gets the props `gazetteers?`. `App.tsx` binds them as it binds `searchPlaces`. After an add or a
+   remove, place search runs again.
+4. `src/shell/placesByRole.json`: move `add_/remove_dataset_gazetteer_route` from `answered_hidden` to the panel's place.
+
+## Tests, written first and each shown red at its call site (rule 15)
+- `keyboard/actionRegistry.ts` gets `MAP_VIEW_ACTIONS` with `add-a-gazetteer-by-keyboard` and
+  `remove-a-gazetteer-by-keyboard`. These are red ("registered with no proving test case") until the cases exist.
+- `keyboard/map-view.spec.ts`: Tab to the panel and add one with Enter. The harness records the PUT
+  (`window.__GAZETTEER_CALLS__`), the row says "added", and place search is offered its places. Then remove it.
+  The removal's fixed words are spoken, and the row is back to "Add". Keyboard only, never a click.
+- `keyboard/map-view-harness.tsx` gets stubs and the states `?gazetteers=none|one|added|refused`.
+  `a11y/every-harness.spec.ts`'s `EXTRA_STATES` gets the same states, so axe runs them in dark, light and GOV.UK.
+- vitest: `gazetteers.test.ts` (paths, methods, the Conduit's words on 403/404/409) and
+  `MapControls.test.tsx` (the panel lists names only, a status line, disabled without the right).
+- The Conduit's access-control tests are P5's (rule 4). P6 adds no route, so `test_route_rights.py` doesn't change.
+
+## Answered by the orchestrator (10 November 2026)
+1. The dataset id comes from `caseDatasets`, and the GET gets no new field.
+2. A case reading more than one source dataset still shows the panel, which says why in words that name no dataset.
+Order: P5b first (after D2a), then P6. P6's code starts after P5 and P5b merge. When P6 starts, this plan is
+folded into `lane/platform-b`'s BRIEF; no new brief is coming.
+
+## Checked against P5 as merged (main 984194c, P5 at 1ddbc9a)
+- The routes, rights and models are as planned. GET is at `app.py:8180`, PUT at `:9388`, DELETE at `:9433`.
+  `_own_dataset` is at `:8141` and `REMOVED_WORDS` at `:8152`. `CaseGazetteer` and `CaseGazetteers` are exported
+  from `generated/index.ts:239-240`. `placesByRole.json:95,97,570,572` still lists both routes as answered and hidden.
+- The GET's `[]` covers three cases: the case reads nothing; it reads a composite or more than one dataset
+  (`chosen_of_case`); or the unit has no gazetteer built. The panel tells them apart with `caseDatasets`. For
+  the first two it says why in words that name no dataset. For the third it says none is built for this
+  case's dataset yet (Admin › Maps).
+- The record is the dataset's (ADR-147 Amendment 2), so an add shows as added in every case reading that dataset.
+  The panel's words say "this case's dataset", not "this case".
