@@ -23,6 +23,8 @@ VERIFY = CORE / "services/api/studio_verify.py"
 ENGINE = CORE / "services/ingest/engine.py"
 SEEDS = CORE / "scripts/seed_internal.py"
 PID_PLAN = CORE / "packages/demo_fixtures/pid_plan.py"
+LIVE = "../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py"
+LIVE_FILE = CORE.parent / "OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py"
 LEDGER = CORE / "packages/demo_fixtures/ledger.py"
 HMP = CORE / "packages/demo_fixtures/hmp_network.py"
 HMP_EVENTS = CORE / "packages/demo_fixtures/hmp.py"
@@ -143,12 +145,12 @@ PLANTS = [
        "lambda: True  # PLANT")],
      [VERIFYING], ["test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it"],
      "above_the_deployments_highest_marking"),
-    ("removal-error-escapes", "a table the store will not remove turns the refusal into its error",
-     [(STAGED, "        try:\n            fs.delete_file(path)\n        except OSError as error:\n"
-       "            _log.warning(\"a refused load's step table %s was not removed: %s\", path, error)\n",
+    ("removal-error-escapes", "an error removing a table turns the refusal into that error",
+     [(STAGED, "        try:\n            fs.delete_file(path)\n        except Exception:  # any error here is logged, never told in place of the refusal\n"
+       "            _log.warning(\"a refused load's step table %s was not removed\", path, exc_info=True)\n",
        "        fs.delete_file(path)  # PLANT\n")],
      [TABLES], ["test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was"],
-     "OSError: the store would not remove it"),
+     "RuntimeError: the store would not remove it"),
     ("write-refusal-removes", "the backstop's later refusal removes the step tables too",
      [(STAGED, "    if refused.kind in ROW_REFUSALS:\n", "    if True:  # PLANT\n")],
      [TABLES], ["test_only_the_row_check_s_refusals_remove_the_step_tables"], None),
@@ -158,6 +160,18 @@ PLANTS = [
        '    "hmp": Dataset(\n')],
      [PACKS], ["test_every_pack_declares_its_highest_marking"],
      "a pack whose declaration no test below proves"),
+    ("public-unreadable-passes", "a staged public dataset that cannot be read seeded under a ceiling",
+     [(SEEDS, "    except Exception as error:  # any cause: refused in words, never a traceback (fails closed)\n        raise SeedRefused(",
+       "    except Exception as error:  # any cause: refused in words, never a traceback (fails closed)\n        return  # PLANT\n        raise SeedRefused(")],
+     [PACKS], ["test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling"],
+     "DID NOT RAISE"),
+    # Run offline, as every plant is: the fixture's guard is what keeps an unleased run out of a
+    # stack's object store (pyarrow's S3 client is past the port guard), so without it the file runs.
+    ("live-unguarded", "the live file runs without a lease, against whatever store the default names",
+     [(LIVE_FILE, '    if not endpoint or not os.environ.get("OSPREY_LANE") or not _answers(endpoint):\n',
+       '    if False:  # PLANT\n')],
+     [LIVE], ["test_a_refused_staged_load_leaves_no_step_table_in_the_object_store",
+              "test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store"], None),
 ]
 
 
