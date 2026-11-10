@@ -18,3 +18,14 @@ run by hand, one at a time. Offline: closed ports, no lane.
   received, from a `HOME` folder here, as the host runs it.
 - That test's first pid check compared the pid file with pytest's own pid, so the `$$` plant stayed green. It now
   compares the file with the parent of the shell that ran `cmd.sh`.
+
+**On the server, after the merge (10 November 2026).** `…start_line_the_host_receives…` compared the pid line exactly.
+Linux's `ps -o ppid=` right-aligns the pid ("runner  192907"); macOS does not. So platform-b's `make test` on the
+server failed while this Mac passed. The case now runs twice:
+- as `ps` prints it here;
+- padded as the server prints it (`printf "runner %10s"`).
+
+| Plant | File | Test | Red |
+| --- | --- | --- | --- |
+| The padded case against the old exact comparison | `OspreyFlow_Build/tests/test_stack_lease.py` | `…[padded, as on the server]` | 1 failed (`'runner      37234' == 'runner 37234'`) |
+| `echo \$\$` written `echo $$`, under the comparison by field | `OspreyFlow_Build/scripts/stack_lease.sh` | both cases | 2 failed |
