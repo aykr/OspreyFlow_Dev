@@ -30,6 +30,7 @@ import {
   setSubscribed,
   type SourcesApi,
 } from "./api";
+import { RightButton, useWhyNot } from "../studio/rightsGate";
 
 type ListTemplate = DeploymentListInput["template"];
 
@@ -72,6 +73,7 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
   const [subs, setSubs] = useState<DatasetSubscriptions | null>(null);
   const [managed, setManaged] = useState<DeploymentList[] | null>(null);
   const canManage = managed !== null;
+  const whyNotManage = useWhyNot("load_screening_lists");
   const [offered, setOffered] = useState<OfferedList[] | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -106,7 +108,10 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
     <section aria-label="Screening lists" style={{ display: "grid", gap: "var(--sp-8)" }}>
       <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
         <h2 style={{ margin: 0, fontSize: "var(--fs-16)", flex: 1 }}>Screening lists</h2>
-        {canManage && !adding && <Button onClick={() => setAdding(true)}>Import a list</Button>}
+        {/* Shown to whoever may load lists; to anyone else whose rights are known, with why not (L1.8). */}
+        {(canManage || whyNotManage !== null) && !adding && (
+          <RightButton right="load_screening_lists" onClick={() => setAdding(true)}>Import a list</RightButton>
+        )}
       </div>
       <p className="label" style={{ margin: 0 }}>
         Each list is imported once for the deployment. This dataset&apos;s rules and lookups read only the lists it
@@ -229,7 +234,10 @@ export function ScreeningLists({ api, datasetId }: ScreeningListsProps) {
         />
       ) : (
         <div>
-          <Button onClick={() => setImportingOwn(true)}>Import rows for one of this dataset&apos;s lists</Button>
+          {/* Its form reads the lists the dataset reads (edit_pipelines); the import adds the rows (add_ingest_files). */}
+          <RightButton right={["add_ingest_files", "edit_pipelines"]} onClick={() => setImportingOwn(true)}>
+            Import rows for one of this dataset&apos;s lists
+          </RightButton>
         </div>
       )}
     </section>

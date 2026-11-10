@@ -36,6 +36,11 @@ import {
 } from "../api";
 import { DEFAULT_TIMEZONE, ScheduleEditor } from "./ScheduleEditor";
 import { choiceOf, cronOf, type ScheduleChoice } from "./scheduleChoice";
+import { RightButton } from "../studio/rightsGate";
+
+/** A deployed pipeline's schedule: its routes check `schedule_pipelines` and the source approver's studio
+ * role, which `publish_pipelines` gives (`require_studio_role`), so both are asked (the lane review of L1.8). */
+const SCHEDULE_RIGHTS = ["schedule_pipelines", "publish_pipelines"] as const;
 
 /** The run route answers one of two shapes; both carry index signatures in the generated types,
  * so `in` cannot discriminate them — a pipeline run is the one whose `branches` is a real list. */
@@ -472,38 +477,38 @@ export function PublishScreen({
 
       <div style={{ display: "flex", gap: "var(--sp-8)", flexWrap: "wrap" }}>
         {mode === "deploy" && status === "draft" && draft && (
-          <Button onClick={() => void handlePublish(false)} variant="primary" disabled={busy}>
+          <RightButton right="publish_pipelines" onClick={() => void handlePublish(false)} variant="primary" disabled={busy}>
             {busy ? "Deploying…" : `Deploy as v${draft.version}`}
-          </Button>
+          </RightButton>
         )}
         {mode === "deploy" && status === "draft" && (
-          <Button onClick={() => void handlePublish(true)} disabled={busy || !investigationId}>
+          <RightButton right={["publish_pipelines", "run_pipelines"]} onClick={() => void handlePublish(true)} disabled={busy || !investigationId}>
             Deploy and run now
-          </Button>
+          </RightButton>
         )}
         {mode === "operate" && canEditSchedule && (
-          <Button onClick={() => void handleUpdateSchedule()} disabled={busy}>
+          <RightButton right={SCHEDULE_RIGHTS} onClick={() => void handleUpdateSchedule()} disabled={busy}>
             {busy ? "Saving…" : "Update schedule"}
-          </Button>
+          </RightButton>
         )}
         {mode === "operate" && canEditSchedule && (draft?.schedule_cron || draft?.schedule_watch) && (
-          <Button onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
+          <RightButton right={SCHEDULE_RIGHTS} onClick={() => void handlePause(!draft.schedule_paused)} disabled={busy}>
             {draft.schedule_paused ? "Resume schedule" : "Pause schedule"}
-          </Button>
+          </RightButton>
         )}
         {mode === "deploy" && (status === "published" || status === "flagged") && (
-          <Button onClick={() => void handleReopen()} disabled={busy}>
+          <RightButton right="edit_pipelines" onClick={() => void handleReopen()} disabled={busy}>
             {busy ? "Reopening…" : "Reopen for editing"}
-          </Button>
+          </RightButton>
         )}
         {mode === "operate" && status === "published" && (
-          <Button
+          <RightButton right="run_pipelines"
             onClick={() => void handleRun()}
             disabled={busy || !investigationId}
             title={investigationId ? undefined : "No investigation to attribute this load to yet"}
           >
             {busy ? "Running…" : "Run now"}
-          </Button>
+          </RightButton>
         )}
       </div>
 

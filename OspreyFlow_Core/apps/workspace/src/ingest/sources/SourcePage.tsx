@@ -19,6 +19,7 @@ import {
   type SourcesApi,
 } from "./api";
 import { type Governance, GovernanceFields, governanceOf, handlingOf, missing, refreshInWords } from "./GovernanceFields";
+import { RightButton } from "../studio/rightsGate";
 
 export interface SourcePageProps {
   api: SourcesApi;
@@ -168,9 +169,9 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
             {refresh?.trigger === "watch" &&
               (refresh.paused ? (
                 <div>
-                  <Button disabled={busy} onClick={() => void setPaused(false)}>
+                  <RightButton right="schedule_pipelines" disabled={busy} onClick={() => void setPaused(false)}>
                     Resume the refresh
-                  </Button>
+                  </RightButton>
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "end", flexWrap: "wrap" }}>
@@ -178,20 +179,20 @@ export function SourcePage({ api, datasetId, source, scheme, onBack, onChanged, 
                     <span className="label">Why pause it (optional)</span>
                     <Input value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} />
                   </label>
-                  <Button disabled={busy} onClick={() => void setPaused(true)}>
+                  <RightButton right="schedule_pipelines" disabled={busy} onClick={() => void setPaused(true)}>
                     Pause the refresh
-                  </Button>
+                  </RightButton>
                 </div>
               ))}
             <div style={{ display: "flex", gap: "var(--sp-8)" }}>
               {source.read && (
-                <Button disabled={busy} onClick={() => void readNow()}>
+                <RightButton right="add_ingest_files" disabled={busy} onClick={() => void readNow()}>
                   Refresh now
-                </Button>
+                </RightButton>
               )}
-              <Button onClick={() => setEditing(governanceOf(source.handling ?? {}, source.legal_basis, source.refresh))}>
+              <RightButton right="edit_pipelines" onClick={() => setEditing(governanceOf(source.handling ?? {}, source.legal_basis, source.refresh))}>
                 Edit governance
-              </Button>
+              </RightButton>
             </div>
           </>
         )}

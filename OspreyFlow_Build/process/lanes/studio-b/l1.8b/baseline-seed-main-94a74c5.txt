@@ -1,0 +1,75 @@
+# the slow seed (test_pid_seed_live.py, OSPREYFLOW_RUN_SLOW=1) at main 94a74c5, from a throwaway worktree in studio-b's scratch folder, under studio-b's lease on stack d
+Lease on stack d taken by studio-b. Start it with: OspreyFlow_Build/scripts/stack_lease.sh up studio-b (the throwaway stack, not dev.yaml's, which binds the owner's 2480)
+Pin its ports for every live run: export ARCADEDB_HTTP_PORT=2494 POSTGRES_PORT=55436 VALKEY_PORT=6382 MINIO_ENDPOINT=localhost:9006 CLICKHOUSE_HTTP_PORT=18126 POSTGRES_PASSWORD=throwaway OSPREY_LANE=studio-b CLICKHOUSE_USER=osprey CLICKHOUSE_PASSWORD=throwaway
+Test stack d up for studio-b: osprey-test-d-arcadedb osprey-test-d-pg osprey-test-d-valkey osprey-test-d-objectstore osprey-test-d-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Running on ospreyflow-test (stack d, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b.meta/runs/20261110T130505Z/log: sh process/lanes/studio-b/l1.7a/live_seed_slow.sh
+.FF.                                                                     [100%]
+=================================== FAILURES ===================================
+_____________ test_the_rehearsal_reset_restores_the_starting_state _____________
+
+seeded = "Loading as osprey-demo-engineer, the demo engineer's username: no --run-as was given, so this is a local stack withou...nIf a rehearsal reset ever refuses, restore it with: ospreyflow restore <the folder ospreyflow backup printed> --yes\n"
+
+    async def test_the_rehearsal_reset_restores_the_starting_state(seeded: str) -> None:
+        ontology, scheme = load_deployment_ontology(), load_uk_le_scheme()
+        reports_id = seed_pid.reports_recipe_id()
+        plan = pid_plan.build_plan("demo")
+        async with opened() as live:
+            # The starting state (ADR-127 Amendment 45): the reports recipe a draft, mapped from the
+            # committed file, neither verified nor published, listed once, not live.
+>           assert reports_id not in [r.recipe_id for r in await live.store.feeding([PID.id])], (
+                "the reports recipe is not published at the start"
+            )
+E           AssertionError: the reports recipe is not published at the start
+E           assert 'pid-intel-reports' not in ['pid-codefendants', 'pid-nomis-conflicts', 'pid-establishment-plan', 'pid-family-and-associates', 'pid-intel-reports', 'pid-number-owners', ...]
+
+../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:301: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job _____
+
+seeded = "Loading as osprey-demo-engineer, the demo engineer's username: no --run-as was given, so this is a local stack withou...nIf a rehearsal reset ever refuses, restore it with: ospreyflow restore <the folder ospreyflow backup printed> --yes\n"
+
+    async def test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job(seeded: str) -> None:
+        ontology, scheme = load_deployment_ontology(), load_uk_le_scheme()
+        async with opened(resolution=True) as live:
+            deps = live.resources.run_deps()
+            assert deps.config.post_ingest_resolution is True
+            queue = live.resources.jobs.stream_key(JOB_TYPE_RESOLVE_ENTITY_TYPE)
+            before = await live.resources.valkey.xlen(queue)
+>           published = await seed_pid.publish_reports_fallback(
+                live.store,
+                live.persona.model_copy(update={"datasets": [PID.id]}),
+                ontology=ontology, scheme=scheme, repo_root=RECIPES, commit=commit_recipe_file,
+                audit=live.resources.audit, now=datetime.now(UTC),
+            )  # fmt: skip
+E           TypeError: publish_reports_fallback() missing 1 required keyword-only argument: 'source_location'
+
+../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py:403: TypeError
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+==================================== PASSES ====================================
+_______________________ test_a_second_seed_adds_nothing ________________________
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_____ test_the_demo_analyst_fetches_one_picture_through_the_picture_route ______
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+============================= slowest 30 durations =============================
+107.47s setup    tests/ingest/test_pid_seed_live.py::test_a_second_seed_adds_nothing
+86.65s call     tests/ingest/test_pid_seed_live.py::test_a_second_seed_adds_nothing
+4.52s call     tests/ingest/test_pid_seed_live.py::test_the_demo_analyst_fetches_one_picture_through_the_picture_route
+0.96s call     tests/ingest/test_pid_seed_live.py::test_the_rehearsal_reset_restores_the_starting_state
+0.63s call     tests/ingest/test_pid_seed_live.py::test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job
+
+(7 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_a_second_seed_adds_nothing
+PASSED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_the_demo_analyst_fetches_one_picture_through_the_picture_route
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_the_rehearsal_reset_restores_the_starting_state
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_seed_live.py::test_a_live_reports_run_with_resolution_on_enqueues_a_resolution_job
+2 failed, 2 passed in 202.23s (0:03:22)
+Wall time: 204 s, exit 1 (stack d, the lease studio-b took at 2026-11-10T13:04:20Z; set-up before it 40 s)
+# remote exit 1
+Test stack d down for studio-b: osprey-test-d-arcadedb osprey-test-d-pg osprey-test-d-valkey osprey-test-d-objectstore osprey-test-d-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack d released by studio-b.

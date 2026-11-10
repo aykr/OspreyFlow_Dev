@@ -1,4 +1,4 @@
-# head 22ff1e3; plant: the commit made by dulwich's worktree commit, which reads the config and runs the hooks in .git/hooks (the independent review, item 2)
+# head b345ce6; plant: the commit made by dulwich's worktree commit, which reads the config and runs the hooks in .git/hooks (the independent review, item 2)
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_publish_never_execs_a_binary; for the reason "'.git/hooks/pre-commit'"; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -34,10 +34,20 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_pu
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_holding_more_than_a_git_directory_is_kept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_is_refused_before_the_write
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipes_file_in_head_counts_as_holding_no_recipe
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_commits_on_top_of_a_repository_real_git_made - AssertionError: assert ['README', 'o...s/alpha.yaml'] == ['README', 'r...s/alpha.yaml']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_never_execs_a_binary - AssertionError: the publish spawned: ["['.git/hooks/pre-commit']"]
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500 - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: assert ['index', 'in...wap', 'write'] == ['commit', 'i...wap', 'write']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says - AssertionError: the publish read the user's or the system's git config
-6 failed, 33 passed in 9.60s
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written - Failed: DID NOT RAISE GitCommitError
+10 failed, 39 passed in 10.08s

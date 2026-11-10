@@ -20,6 +20,7 @@ import { statusWords } from "../studio/vocabulary";
 import { DrawnMerge } from "./drawnMerge";
 import { AnalystPromotions } from "./promotions";
 import { type DayCell, type DayState, STATE_WORDS, lastDays, rowCells } from "./runsGrid";
+import { RightButton, WhyNotLine } from "../studio/rightsGate";
 
 /** How many days the grid shows, today last (the prototype's nine). */
 export const GRID_DAYS = 9;
@@ -111,6 +112,8 @@ export function RunsTab(props: RunsTabProps) {
             ))}
           </Select>
         </label>
+        {/* Opens the controls, where Run now and the schedule each say why not on their own: a holder of
+            either right needs this way in (the lane review of L1.8). */}
         <Button disabled={!chosen} onClick={() => setOperating(chosen)}>
           Run now or schedule
         </Button>
@@ -217,9 +220,11 @@ export function RunsTab(props: RunsTabProps) {
               it takes back is put back while it works.
             </p>
           )}
+          {/* A load's revert command is shown only to whoever may revert one; anyone else is told who can (L1.8). */}
+          {!props.canRevert && selectedCell.runs.some((r) => r.load_id) && <WhyNotLine right="revert_loads" />}
           {selectedCell.runs.some((r) => (r.rows_held ?? 0) > 0) && (
             <div>
-              <Button onClick={() => setShowHeld((shown) => !shown)}>{showHeld ? "Hide held rows" : "Open held rows"}</Button>
+              <RightButton right="read_held_rows" onClick={() => setShowHeld((shown) => !shown)}>{showHeld ? "Hide held rows" : "Open held rows"}</RightButton>
             </div>
           )}
           {showHeld && (

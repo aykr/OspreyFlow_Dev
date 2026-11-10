@@ -1,0 +1,30 @@
+# axe at 0553678, port 5292 (an untracked copy of a11y/playwright.config.ts): every-harness rights=none, all themes
+
+Running 24 tests using 1 worker
+
+[1/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none (dark) has no automated WCAG 2.2 A or AA violations
+[2/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none (light) has no automated WCAG 2.2 A or AA violations
+[3/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none (govuk) has no automated WCAG 2.2 A or AA violations
+[4/24] a11y/every-harness.spec.ts:326:5 › ingest-studio-harness.html rights=none: every labelled field's name contains its visible label (2.5.3)
+[5/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=model (dark) has no automated WCAG 2.2 A or AA violations
+[6/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=model (light) has no automated WCAG 2.2 A or AA violations
+[7/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=model (govuk) has no automated WCAG 2.2 A or AA violations
+[8/24] a11y/every-harness.spec.ts:326:5 › ingest-studio-harness.html rights=none&tab=model: every labelled field's name contains its visible label (2.5.3)
+[9/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=sources (dark) has no automated WCAG 2.2 A or AA violations
+[10/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=sources (light) has no automated WCAG 2.2 A or AA violations
+[11/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=sources (govuk) has no automated WCAG 2.2 A or AA violations
+[12/24] a11y/every-harness.spec.ts:326:5 › ingest-studio-harness.html rights=none&tab=sources: every labelled field's name contains its visible label (2.5.3)
+[13/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=runs&cell=1 (dark) has no automated WCAG 2.2 A or AA violations
+[14/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=runs&cell=1 (light) has no automated WCAG 2.2 A or AA violations
+[15/24] a11y/every-harness.spec.ts:308:7 › ingest-studio-harness.html rights=none&tab=runs&cell=1 (govuk) has no automated WCAG 2.2 A or AA violations
+[16/24] a11y/every-harness.spec.ts:326:5 › ingest-studio-harness.html rights=none&tab=runs&cell=1: every labelled field's name contains its visible label (2.5.3)
+[17/24] a11y/every-harness.spec.ts:308:7 › sources-connectors-harness.html serve=1&rights=none (dark) has no automated WCAG 2.2 A or AA violations
+[18/24] a11y/every-harness.spec.ts:308:7 › sources-connectors-harness.html serve=1&rights=none (light) has no automated WCAG 2.2 A or AA violations
+[19/24] a11y/every-harness.spec.ts:308:7 › sources-connectors-harness.html serve=1&rights=none (govuk) has no automated WCAG 2.2 A or AA violations
+[20/24] a11y/every-harness.spec.ts:326:5 › sources-connectors-harness.html serve=1&rights=none: every labelled field's name contains its visible label (2.5.3)
+[21/24] a11y/every-harness.spec.ts:308:7 › sources-connectors-harness.html view=source&serve=1&rights=none (dark) has no automated WCAG 2.2 A or AA violations
+[22/24] a11y/every-harness.spec.ts:308:7 › sources-connectors-harness.html view=source&serve=1&rights=none (light) has no automated WCAG 2.2 A or AA violations
+[23/24] a11y/every-harness.spec.ts:308:7 › sources-connectors-harness.html view=source&serve=1&rights=none (govuk) has no automated WCAG 2.2 A or AA violations
+[24/24] a11y/every-harness.spec.ts:326:5 › sources-connectors-harness.html view=source&serve=1&rights=none: every labelled field's name contains its visible label (2.5.3)
+  24 passed (21.6s)
+# exit 0

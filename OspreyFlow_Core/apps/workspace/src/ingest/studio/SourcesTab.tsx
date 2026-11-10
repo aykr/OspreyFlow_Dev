@@ -12,6 +12,7 @@ import { listSources } from "../sources/api";
 import { RegisterSourceWizard } from "../sources/RegisterSourceWizard";
 import { ScreeningLists } from "../sources/ScreeningLists";
 import { SourcePage } from "../sources/SourcePage";
+import { RightButton, WhyNotLine } from "./rightsGate";
 
 export interface SourcesTabProps {
   apiBaseUrl: string;
@@ -88,14 +89,16 @@ export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId
         <section aria-label="Sources" style={{ display: "grid", gap: "var(--sp-8)" }}>
           <div style={{ display: "flex", gap: "var(--sp-8)", alignItems: "center" }}>
             <h2 style={{ margin: 0, fontSize: "var(--fs-16)", flex: 1 }}>Source tables</h2>
-            <Button variant="primary" onClick={() => setRegistering(true)}>
+            <RightButton right="add_ingest_files" variant="primary" onClick={() => setRegistering(true)}>
               Register a source
-            </Button>
+            </RightButton>
           </div>
           <p className="label" style={{ margin: 0 }}>
             Each source is registered once, with its marking, legal basis and refresh; every pipeline that reads it
             inherits them.
           </p>
+          {/* Listing a dataset's sources needs the same right as registering one (L1.8). */}
+          <WhyNotLine right="add_ingest_files" />
           {problem && <p role="alert">{problem}</p>}
           {sources === null && !problem && <p className="label">Reading the sources…</p>}
           {sources?.length === 0 && <p className="label">No source is registered for this dataset yet.</p>}
@@ -146,7 +149,7 @@ export function SourcesTab({ apiBaseUrl, bearerToken, investigationId, datasetId
           />
         ) : (
           <div>
-            <Button onClick={() => setAdding(true)}>Add files</Button>
+            <RightButton right="add_ingest_files" onClick={() => setAdding(true)}>Add files</RightButton>
           </div>
         )}
       </section>

@@ -45,6 +45,7 @@ import {
   type HandlingScheme,
   type IngestSourceListing,
 } from "./api";
+import { RightButton } from "./studio/rightsGate";
 
 export interface ConnectScreenProps {
   apiBaseUrl: string;
@@ -536,13 +537,14 @@ export function ConnectScreen({
                   if (file) void handleChosenFile(file);
                 }}
               />
-              <Button
+              <RightButton
+                right="add_ingest_files"
                 variant="primary"
                 disabled={uploading}
                 onClick={() => fileInput.current?.click()}
               >
                 {uploading ? "Uploading…" : "Choose file…"}
-              </Button>
+              </RightButton>
               <span style={{ color: "var(--text-tertiary)" }}>From your computer</span>
             </div>
             {uploadError ? (
