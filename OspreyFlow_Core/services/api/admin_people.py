@@ -117,6 +117,31 @@ async def l38_owned_items(
     ]
 
 
+#: Every marking a case reads, for its highest (ADR-145 Amendment 9: a view's or a board's
+#: recipient must clear it, since a view's count is not filtered per reader): each dataset it reads
+#: but its own layer (capped at the ceiling already), a composite's members and its own marking
+#: where set; an unmarked one reads as the scheme's highest (`$2`).
+_CASE_MARKINGS_SQL = """
+SELECT COALESCE(d.highest_marking, $2) AS marking FROM investigation_datasets c
+JOIN datasets d ON d.id = c.dataset_id
+WHERE c.investigation_id = $1 AND d.kind <> 'analyst_layer'
+  AND NOT (d.kind = 'composite' AND d.highest_marking IS NULL)
+UNION ALL
+SELECT COALESCE(m.highest_marking, $2) FROM investigation_datasets c
+JOIN composite_members cm ON cm.composite_id = c.dataset_id
+JOIN datasets m ON m.id = cm.member_id
+WHERE c.investigation_id = $1
+"""
+
+
+def case_highest(markings: Sequence[str], classification: Sequence[str]) -> str:
+    """The highest of a case's markings; the scheme's highest for none, or one it does not know."""
+    top = classification[-1]
+    if not markings or any(m not in classification for m in markings):
+        return top
+    return max(markings, key=list(classification).index)
+
+
 #: The marking a proposal's or a watch's recipient must clear: its dataset's highest, or the
 #: scheme's highest where none is set or there is none (`$2`), as L3.8 reads it.
 _MARKING_SQL: Mapping[str, str] = {
@@ -206,6 +231,7 @@ async def _plan_items(
     *,
     cleared: list[str],
     top: str,
+    classification: Sequence[str] = (),
 ) -> _Plan:
     """Everything the person owns in the administrator's unit, each read with the unit in its own
     statement (rule 3); hotlists, watches, saved patterns, team leads and list schedules have no
@@ -301,9 +327,22 @@ async def _plan_items(
         ids = [i.id for i in l38 if i.kind == kind]
         for row in await conn.fetch(sql, ids, top) if ids else []:
             marking_of[(kind, row["id"])] = row["marking"]
+    highest: dict[str, str] = {}
+    for item in l38:
+        if item.kind in ("view", "board") and item.investigation_id is not None:
+            case_id = item.investigation_id
+            if case_id not in highest:
+                rows = await conn.fetch(_CASE_MARKINGS_SQL, case_id, top)
+                highest[case_id] = case_highest(
+                    [r["marking"] for r in rows], classification or [top]
+                )
+            marking_of[(item.kind, item.id)] = highest[case_id]
     for item in l38:
         if item.investigation_id is not None:
             case_of[(item.kind, item.id)] = item.investigation_id
+    l38 = [
+        i.model_copy(update={"needs_clearance": marking_of.get((i.kind, i.id))}) for i in l38
+    ]
     items.extend(l38)
     elsewhere = int(await conn.fetchval(_ELSEWHERE_SQL, person, admin_unit) or 0)
     return _Plan(items=items, case_of=case_of, elsewhere=elsewhere, marking_of=marking_of)
@@ -439,9 +478,9 @@ def markings_hold(
     scheme: HandlingScheme,
 ) -> None:
     """A proposal or a watch goes only to someone cleared to its dataset's marking (rule 3: a watch
-    tells its owner of changes to an item they could not otherwise read). The words name the
-    recipient's clearance, never the item's marking, which the administrator may know but the
-    label never says."""
+    tells its owner of changes to an item they could not otherwise read), and a view or a board to
+    someone cleared to its case's highest (ADR-145 Amendment 9: a view's count is not filtered per
+    reader). The words name neither the marking nor the item's contents."""
     for item in items:
         key = _key(item.kind, item.id)
         marking = plan_markings.get(key)
@@ -457,7 +496,7 @@ def markings_hold(
         ):
             raise DisableRefused(
                 "recipient_refused",
-                f"{item.label}: {to} is not cleared to its dataset's marking; "
+                f"{item.label}: {to} is not cleared to the marking it needs; "
                 "choose someone who is",
                 [item],
             )
@@ -645,14 +684,16 @@ class AdminPeopleStore:
                 None if people is None else answering(people, person, unit),
                 cleared=cleared,
                 top=top,
+                classification=scheme.classification,
             )
         return DisablePlan(person=person, items=plan.items, not_yet_listed=list(L38_OWNED_KINDS))
 
     async def converted_views(self, unit: str | None) -> ConvertedViews:
         """*Admin › System*'s line for ADR-144 decision 6: how many views the migration made from
-        cases made from another, in how many cases, and how many such cases are still waiting
-        (the migration's dry run says why each was not placed). Counted in SQL within the
-        administrator's own unit, open cases only (rule 7: never another unit's count)."""
+        cases made from another, and in how many cases. Counted in SQL within the administrator's
+        own unit, open cases only (rule 7: never another unit's count). The cases it did not
+        place are named by its dry-run report, not here: their marker is the migration's own
+        column, which ADR-144 Amendment 1 keeps out of the Conduit."""
         async with self._pool.acquire() as conn:
             made = await conn.fetchrow(
                 "SELECT count(*) AS views, count(DISTINCT v.case_id) AS cases FROM case_views v "
@@ -660,21 +701,7 @@ class AdminPeopleStore:
                 "AND i.owning_unit = $1 WHERE v.converted_from_case IS NOT NULL",
                 unit,
             )
-            branched = await conn.fetchval(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = "
-                "current_schema() AND table_name = 'investigations' AND column_name = "
-                "'branched_from')"
-            )
-            waiting = (
-                await conn.fetchval(
-                    "SELECT count(*) FROM investigations WHERE branched_from IS NOT NULL "
-                    "AND removed_at IS NULL AND owning_unit = $1",
-                    unit,
-                )
-                if branched
-                else 0
-            )
-        return ConvertedViews(views=made["views"], cases=made["cases"], waiting=int(waiting or 0))
+        return ConvertedViews(views=made["views"], cases=made["cases"])
 
     async def refuse_if_withheld(
         self, person: str, *, admin: Principal, scheme: HandlingScheme
@@ -704,9 +731,9 @@ class AdminPeopleStore:
         still owns in another unit, which the disable is then refused for. The covers are not
         ended here: the route asks `refuse_if_withheld` once this has committed, and only then
         `end_covers`, just before the identity provider."""
-        from .person_ownership import cleared_markings
+        from .person_ownership import reach
 
-        cleared, top = cleared_markings(by, scheme), scheme.classification[-1]
+        _, cleared, top = reach(by, scheme)
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("LOCK TABLE investigation_grants IN SHARE ROW EXCLUSIVE MODE")
             plan = await _plan_items(
@@ -716,6 +743,7 @@ class AdminPeopleStore:
                 answering(list(who.people.values()), person, admin_unit),
                 cleared=cleared,
                 top=top,
+                classification=scheme.classification,
             )
             items = plan.items
             chosen = check_transfers(person, items, transfers, who, admin_unit)
@@ -757,8 +785,9 @@ class AdminPeopleStore:
 
     async def end_covers(self, person: str, *, by: Principal, audit: AuditWriter) -> None:
         """A cover is no ownership: the person's covers end, each audited, and the lead acts.
-        Called by the disable route only once nothing is left elsewhere or withheld, just before
-        the identity provider is asked, so a refused disable never ends a cover, and a cover never
+        Called by the disable route only once nothing is left elsewhere or withheld and the
+        identity provider has disabled the account, so a refused disable never ends a cover, and
+        a cover never
         outlives a disable that went ahead (the L2.5b review's finding 3: asked inside the
         transfer, a withheld item transferred meanwhile left a disabled person covering)."""
         async with self._pool.acquire() as conn, conn.transaction():
@@ -808,6 +837,7 @@ __all__ = [
     "check_transfers",
     "people_rows",
     "l38_owned_items",
+    "case_highest",
     "markings_hold",
     "recipients",
 ]

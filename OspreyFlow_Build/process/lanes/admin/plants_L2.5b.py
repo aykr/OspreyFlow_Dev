@@ -30,6 +30,13 @@ P = "services/api/admin_people.py"
 
 Plant = tuple[str, str, list[tuple[str, str]], list[str]]
 
+#: Where the route ends the covers: after the identity provider has disabled the account.
+_COVERS = (
+    "    # Only now, the account disabled with nothing left elsewhere or withheld, do the person's covers\n"
+    "    # end; on the 502 above they stay, with the account still enabled.\n"
+    "    await admin_people.end_covers(user_id, by=principal, audit=audit)\n"
+)
+
 OFFLINE: list[Plant] = [
     ("refuse_if_withheld never asked after the transfers", APP,
      [("            await admin_people.refuse_if_withheld(user_id, admin=principal, scheme=scheme)\n",
@@ -60,15 +67,27 @@ OFFLINE: list[Plant] = [
        "    row = next(")],
      [f"{DRY}::test_a_dry_run_is_for_an_administrator_of_the_datasets_own_unit"]),
     ("a cover ended before withheld is asked (so ended for a refused disable)", APP,
-     [("        # Only now, with nothing left elsewhere or withheld, do the person's covers end.\n"
-       "        await admin_people.end_covers(user_id, by=principal, audit=audit)\n", ""),
+     [(_COVERS, ""),
       ("            await admin_people.refuse_if_withheld(user_id, admin=principal, scheme=scheme)\n",
        "            await admin_people.end_covers(user_id, by=principal, audit=audit)\n"
        "            await admin_people.refuse_if_withheld(user_id, admin=principal, scheme=scheme)\n")],
      [f"{ROUTES}::test_disable_is_refused_while_an_item_is_withheld_and_the_visible_transfers_stand"]),
+    ("a cover ended before the identity provider answers (so ended on the 502)", APP,
+     [(_COVERS, ""),
+      ("        try:\n            person = await identity_admin.set_enabled(user_id, False)\n",
+       "        await admin_people.end_covers(user_id, by=principal, audit=audit)\n"
+       "        try:\n            person = await identity_admin.set_enabled(user_id, False)\n")],
+     [f"{ROUTES}::test_a_disable_the_identity_provider_refuses_after_the_transfers_says_they_stand"]),
+    ("System's unread count answered as nothing to draw", APP,
+     [("        converted = ConvertedViews(\n", "        converted = None and ConvertedViews(\n")],
+     [f"{SYS}::test_the_system_screen_counts_the_cases_made_views_in_the_administrators_unit"]),
+    ("a case's highest read as its lowest", P,
+     [("    return max(markings, key=list(classification).index)\n",
+       "    return min(markings, key=list(classification).index)\n")],
+     [f"{ROUTES}::test_a_cases_highest_is_the_highest_it_reads_or_the_schemes_for_none_or_unknown"]),
     ("System's count asked for another unit than the administrator's", APP,
-     [("            converted = await people_store.converted_views(principal.org_unit)\n",
-       "            converted = await people_store.converted_views(\"unit-other\")\n")],
+     [("        converted = await people_store.converted_views(principal.org_unit)\n",
+       "        converted = await people_store.converted_views(\"unit-other\")\n")],
      [f"{SYS}::test_the_system_screen_counts_the_cases_made_views_in_the_administrators_unit"]),
 ]
 
@@ -108,6 +127,13 @@ LIVE: list[Plant] = [
        '"SELECT w.id, d.highest_marking || CASE WHEN $2::text IS NULL THEN \'\' ELSE \'\' END '
        'AS marking FROM drawn_watches w "')],
      [f"{LIVE_T}::test_an_unmarked_dataset_or_none_is_read_at_the_schemes_highest_for_the_recipient"]),
+    ("a view or board given to someone below its case's highest (Amendment 9)", P,
+     [('        if item.kind in ("view", "board") and item.investigation_id is not None:\n',
+       '        if False and item.investigation_id is not None:\n')],
+     [f"{LIVE_T}::test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest"]),
+    ("a case's composite members left out of its highest", P,
+     [('WHERE c.investigation_id = $1\n"""\n', 'WHERE c.investigation_id = $1 AND FALSE\n"""\n')],
+     [f"{LIVE_T}::test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest"]),
     ("the case's unit-wide level not counted", P,
      [('            "AND i.owning_unit = $3",\n', '            "AND i.owning_unit = $3 AND FALSE",\n')],
      [f"{LIVE_T}::test_a_recipient_holding_the_cases_unit_wide_level_may_take_a_view"]),
@@ -122,10 +148,6 @@ LIVE: list[Plant] = [
     ("System's count across every unit", P,
      [('                "AND i.owning_unit = $1 WHERE v.converted_from_case IS NOT NULL",\n',
        '                "AND $1::text IS NOT NULL WHERE v.converted_from_case IS NOT NULL",\n')],
-     [f"{CV}::test_the_count_is_of_the_administrators_unit_and_open_cases_only"]),
-    ("System's waiting count across every unit", P,
-     [('                    "AND removed_at IS NULL AND owning_unit = $1",\n',
-       '                    "AND removed_at IS NULL AND $1::text IS NOT NULL",\n')],
      [f"{CV}::test_the_count_is_of_the_administrators_unit_and_open_cases_only"]),
     ("System's count of a removed case's views", P,
      [('                "JOIN investigations i ON i.id = v.case_id AND i.removed_at IS NULL "\n',

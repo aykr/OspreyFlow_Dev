@@ -229,16 +229,14 @@ const many = (n: number, one: string, more: string) => `${n} ${n === 1 ? one : m
 /** ADR-144 decision 6: what the conversion to views made of the cases made from another, counted
  * by the Conduit in this administrator's own unit only. */
 export function convertedWords(c: ConvertedViews): string[] {
+  if (c.problem) return [c.problem, "The conversion's dry-run report, which the operator runs, names each case it did not place."];
   const views = c.views ?? 0;
   const cases = c.cases ?? 0;
-  const waiting = c.waiting ?? 0;
   return [
     views
       ? `${many(views, "case made from another", "cases made from another")} became ${views === 1 ? "a view" : "views"}, in ${many(cases, "case", "cases")} of your unit.`
       : "No case made from another has become a view in your unit.",
-    waiting
-      ? `${many(waiting, "case is", "cases are")} still made from another: the conversion's dry-run report, which the operator runs, says why each was not placed.`
-      : "None is waiting to be converted.",
+    "Any the conversion could not place stays as it was: its dry-run report, which the operator runs, names each and why.",
   ];
 }
 

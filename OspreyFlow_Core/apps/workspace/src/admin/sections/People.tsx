@@ -254,16 +254,25 @@ function RemoveConfirmation({
 
 /** *Disable…* (ADR-145 decision 6, A4): everything the person owns, each with *Transfer to…*;
  * *Transfer and disable* is the Conduit's to refuse, in its words, while any item has no recipient. */
+/** Whether a clearance clears a marking, by the scheme's order; an unknown one clears nothing. */
+export function clearsMarking(levels: string[], clearance: string | null | undefined, marking: string): boolean {
+  const held = clearance ? levels.indexOf(clearance) : -1;
+  const needed = levels.indexOf(marking);
+  return held >= 0 && needed >= 0 && held >= needed;
+}
+
 function DisablePanel({
   api,
   person,
   people,
+  levels,
   onDone,
   onCancel,
 }: {
   api: AdminApi;
   person: PersonAccount;
   people: PersonAccount[];
+  levels: string[];
   onDone: (p: PersonAccount) => void;
   onCancel: () => void;
 }) {
@@ -315,7 +324,11 @@ function DisablePanel({
                 onChange={(e) => setTo({ ...to, [key(item.kind, item.id)]: e.target.value })}
               >
                 <option value="">Transfer to…</option>
-                {others.map((p) => (
+                {/* ADR-145 Amendment 9: only someone cleared to what the item needs is offered;
+                    the Conduit refuses anyone else in the same words, naming nothing. */}
+                {others
+                  .filter((p) => !item.needs_clearance || clearsMarking(levels, p.clearance, item.needs_clearance))
+                  .map((p) => (
                   <option key={p.id} value={p.id}>
                     {`${p.name} (${p.username})`}
                   </option>
@@ -540,6 +553,7 @@ function PersonRow({
               api={api}
               person={person}
               people={people}
+              levels={scheme.levels}
               onCancel={() => setConfirming(false)}
               onDone={(saved) => {
                 setConfirming(false);

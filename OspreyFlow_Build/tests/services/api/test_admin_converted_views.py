@@ -50,12 +50,11 @@ async def world() -> AsyncIterator[tuple[asyncpg.Connection, AdminPeopleStore]]:
         await conn.close()
 
 
-async def _case(raw: asyncpg.Connection, case_id: str, unit: str, *, removed: bool = False,
-                branched_from: str | None = None) -> None:  # fmt: skip
+async def _case(raw: asyncpg.Connection, case_id: str, unit: str, *, removed: bool = False) -> None:
     await raw.execute(
-        "INSERT INTO investigations (id, created_at, created_by, owning_unit, name, removed_at, "
-        "branched_from) VALUES ($1, $2, 'seed', $3, $1, $4, $5)",
-        case_id, T0, unit, T0 if removed else None, branched_from,
+        "INSERT INTO investigations (id, created_at, created_by, owning_unit, name, removed_at) "
+        "VALUES ($1, $2, 'seed', $3, $1, $4)",
+        case_id, T0, unit, T0 if removed else None,
     )  # fmt: skip
 
 
@@ -71,26 +70,16 @@ async def test_the_count_is_of_the_administrators_unit_and_open_cases_only(
     world: tuple[asyncpg.Connection, AdminPeopleStore],
 ) -> None:
     raw, people = world
-    await raw.execute("ALTER TABLE investigations ADD COLUMN IF NOT EXISTS branched_from TEXT")
     await _case(raw, "c-1", "unit-1")
     await _case(raw, "c-2", "unit-1")
     await _case(raw, "c-gone", "unit-1", removed=True)
     await _case(raw, "c-far", "unit-2")
-    await _case(raw, "c-wait", "unit-1", branched_from="c-1")
-    await _case(raw, "c-wait-far", "unit-2", branched_from="c-far")
     for case_id in ("c-1", "c-1", "c-2", "c-gone", "c-far", "c-far"):
         await _converted(raw, case_id, "old-branch")
     await _converted(raw, "c-1", None)  # saved by hand, not converted
 
     counted = await people.converted_views("unit-1")
-    assert (counted.views, counted.cases, counted.waiting) == (3, 2, 1)
+    assert (counted.views, counted.cases) == (3, 2)
     other = await people.converted_views("unit-2")
-    assert (other.views, other.cases, other.waiting) == (2, 1, 1)
+    assert (other.views, other.cases) == (2, 1)
 
-
-async def test_with_no_branch_column_nothing_waits(
-    world: tuple[asyncpg.Connection, AdminPeopleStore],
-) -> None:
-    raw, people = world
-    await raw.execute("ALTER TABLE investigations DROP COLUMN IF EXISTS branched_from")
-    assert (await people.converted_views("unit-1")).waiting == 0

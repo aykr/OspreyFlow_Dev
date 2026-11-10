@@ -54,7 +54,7 @@ if (serving === "datasets") {
       size_bytes: 50000, would: "Would merge 5 items and 4 links (48.8 kB) from Op Heron's layer into Prison records. Nothing has been written." },
     "/v1/admin/settings/dataset-owners": { owners_may_be: "people_and_teams" },
     "/v1/admin/system": { components: [{ name: "Graph store", ok: true, millis: 12 }],
-      converted_views: { views: 3, cases: 2, waiting: 1 } },
+      converted_views: { views: 3, cases: 2 } },
   };  // prettier-ignore
   window.fetch = async (input: RequestInfo | URL) => {
     const path = new URL(String(input)).pathname;

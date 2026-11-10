@@ -1525,8 +1525,8 @@ case's Author grants Viewer to), *System* (each component asked as the section o
 each model engine with its privacy-contract mark, ADR-136; and, ADR-145 Amendment 4 decision 7,
 *Dataset owners may be*: people and teams, the default, people only or teams only, saved on its own
 and audited, governing *Make live*'s owner step and *Change owner…*; and, ADR-144 decision 6, how
-many cases made from another became views, in how many cases of the administrator's unit, and how
-many still wait, whose reasons the operator's dry-run report gives), *Datasets* (ADR-136 decision 2:
+many cases made from another became views, in how many cases of the administrator's unit, and that
+the operator's dry-run report names any not placed), *Datasets* (ADR-136 decision 2:
 every dataset, its unit and its egress — none, contracted or any — each changed and saved on its own
 row, audited by the Conduit; and, L2.4 part 2, its kind — *Source*, *Composite* or *Drawn*, never a
 layer — and highest marking, with *Details for …* opening three parts. **Promotion of drawn items**

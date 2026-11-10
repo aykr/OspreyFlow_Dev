@@ -18,6 +18,9 @@ What a mistake would do, and the case that catches it (each shown red by a plant
   it anyway: `test_a_recipient_without_the_case_level_or_the_marking_is_refused_and_nothing_moves`;
   a dataset with no marking, or a watch with none, read as cleared:
   `test_an_unmarked_dataset_or_none_is_read_at_the_schemes_highest_for_the_recipient`;
+- a view or a board given to someone not cleared to its case's highest marking (ADR-145
+  Amendment 9: a view's count is unfiltered), or the highest read as the lowest, or a composite's
+  members missed: `test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest`;
 - the case's unit-wide level not counted (a unit member refused a view they hold Viewer on):
   `test_a_recipient_holding_the_cases_unit_wide_level_may_take_a_view`.
 """
@@ -371,3 +374,64 @@ async def test_a_recipient_holding_the_cases_unit_wide_level_may_take_a_view(
     await world.people.transfer("ana", [OwnedTransfer(kind="view", id=view, to="bea")], who,
                                 by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert (await _owners(raw))[view] == "bea"
+
+
+async def _reads(raw: asyncpg.Connection, case_id: str, *datasets: str) -> None:
+    for position, dataset in enumerate(datasets):
+        await raw.execute(
+            "INSERT INTO investigation_datasets (investigation_id, dataset_id, position) "
+            "VALUES ($1, $2, $3)",
+            case_id, dataset, position,
+        )  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("reads", "highest"),
+    [(("ds-off", "ds-secret"), "SECRET"), (("ds-off",), "OFFICIAL"), ((), "SECRET"),
+     (("cmp",), "SECRET")],
+)  # fmt: skip
+async def test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest(
+    world: SimpleNamespace, reads: tuple[str, ...], highest: str
+) -> None:
+    """ADR-145 Amendment 9 (the strict reading, MORNING item 8): a view sends its node count
+    unfiltered, so its recipient must clear the highest marking its case reads: the highest of its
+    datasets, a composite's members included; a case reading none, at the scheme's highest. Each
+    item says the marking its *Transfer to…* is offered by; a recipient below it is refused,
+    naming nothing."""
+    raw = world.raw
+    await _case(raw, "c-k", "Kestrel", {"ana": "editor", "bea": "editor", "cal": "editor"})
+    await _dataset(raw, "ds-off", "OFFICIAL")
+    await _dataset(raw, "ds-secret", "SECRET")
+    await _dataset(raw, "cmp", None)
+    await raw.execute("UPDATE datasets SET kind = 'composite' WHERE id = 'cmp'")
+    await raw.execute(
+        "INSERT INTO composite_members (composite_id, member_id, position) VALUES "
+        "('cmp', 'ds-off', 0), ('cmp', 'ds-secret', 1)"
+    )
+    await _reads(raw, "c-k", *reads)
+    view = await _view(raw, "c-k", "ana")
+    board = await _view(raw, "c-k", "ana", board=True)
+    plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
+    assert {(i.id, i.needs_clearance) for i in plan.items} == {(view, highest), (board, highest)}
+    below = "OFFICIAL" if highest != "OFFICIAL" else None
+    cleared = _person("cal", EVERY, clearance=highest)
+    people = [_person("ana", EVERY), cleared]
+    if below is not None:
+        people.append(_person("bea", EVERY, clearance=below))
+        who = recipients(people, {}, {})
+        for kind, item in (("view", view), ("board", board)):
+            others = [OwnedTransfer(kind=i.kind, id=i.id, to="cal") for i in plan.items if i.id != item]
+            with pytest.raises(DisableRefused) as refused:
+                await world.people.transfer(
+                    "ana", [*others, OwnedTransfer(kind=kind, id=item, to="bea")], who,
+                    by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME,
+                )  # fmt: skip
+            assert "not cleared to the marking it needs" in refused.value.words
+            assert highest not in refused.value.words and SECRET_WORDS not in refused.value.words
+        assert await _owners(raw) == {view: "ana", board: "ana"}
+    who = recipients(people, {}, {})
+    await world.people.transfer(
+        "ana", [OwnedTransfer(kind=i.kind, id=i.id, to="cal") for i in plan.items], who,
+        by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME,
+    )  # fmt: skip
+    assert await _owners(raw) == {view: "cal", board: "cal"}

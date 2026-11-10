@@ -367,9 +367,9 @@ def test_the_system_screen_counts_the_cases_made_views_in_the_administrators_uni
     client: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ADR-144 decision 6: *Admin › System* says how many cases made from another became views, in
-    how many cases, and how many wait, asked of the store with the administrator's own unit
-    (`test_admin_converted_views.py` runs its SQL); and the screen still answers when the store
-    does not."""
+    how many cases, asked of the store with the administrator's own unit
+    (`test_admin_converted_views.py` runs its SQL); and when the store does not answer, the count
+    says so in words rather than being left undrawn."""
     from schemas.admin import ConvertedViews
 
     asked: list[str | None] = []
@@ -377,11 +377,11 @@ def test_the_system_screen_counts_the_cases_made_views_in_the_administrators_uni
     class _Store:
         async def converted_views(self, unit: str | None) -> ConvertedViews:
             asked.append(unit)
-            return ConvertedViews(views=3, cases=2, waiting=1)
+            return ConvertedViews(views=3, cases=2)
 
     monkeypatch.setattr(app.state, "admin_people", _Store(), raising=False)
     body = _system(client, monkeypatch).json()
-    assert body["converted_views"] == {"views": 3, "cases": 2, "waiting": 1}
+    assert body["converted_views"] == {"views": 3, "cases": 2, "problem": None}
     assert asked == [ADMIN.org_unit]
 
     class _Down:
@@ -389,7 +389,11 @@ def test_the_system_screen_counts_the_cases_made_views_in_the_administrators_uni
             raise OSError("Postgres unreachable")
 
     monkeypatch.setattr(app.state, "admin_people", _Down(), raising=False)
-    assert _system(client, monkeypatch).json()["converted_views"] is None
+    down = _system(client, monkeypatch).json()["converted_views"]
+    assert down["problem"] == "Not known: the count could not be read (OSError)"
+    assert "Postgres" not in down["problem"], "the exception's own words are not sent"
+    monkeypatch.setattr(app.state, "admin_people", None, raising=False)
+    assert _system(client, monkeypatch).json()["converted_views"]["problem"].startswith("Not known")
 
 
 def test_the_system_screen_shows_each_roles_model_and_where_it_runs(

@@ -301,31 +301,34 @@ describe("the Demo packs tab", () => {
 });
 
 // ADR-144 decision 6 (L2.5b): the System tab says how many cases made from another became views,
-// in how many cases, and how many wait, as the Conduit counted them in the administrator's unit.
+// in how many cases, as the Conduit counted them in the administrator's unit.
 describe("the System tab's cases converted to views", () => {
-  it("says the counts, and that the dry-run report says why each waiting case was not placed", async () => {
-    serve((path) =>
-      path === "system" ? json(200, { components: [], converted_views: { views: 3, cases: 2, waiting: 1 } }) : null,
-    );
+  it("says the counts, and that the dry-run report names any case not placed", async () => {
+    serve((path) => (path === "system" ? json(200, { components: [], converted_views: { views: 3, cases: 2 } }) : null));
     place(["administer_system"], "System");
     const section = await screen.findByRole("region", { name: "Cases converted to views" });
     expect(section.textContent).toContain("3 cases made from another became views, in 2 cases of your unit.");
-    expect(section.textContent).toContain("1 case is still made from another: the conversion's dry-run report");
-    expect(section.textContent?.toLowerCase()).not.toContain("branch");
+    expect(section.textContent).toContain("its dry-run report, which the operator runs, names each and why.");
   });
 
-  it("says when nothing became a view and nothing waits, and nothing when the count is not known", async () => {
-    expect(convertedWords({ views: 0, cases: 0, waiting: 0 })).toEqual([
-      "No case made from another has become a view in your unit.",
-      "None is waiting to be converted.",
-    ]);
-    expect(convertedWords({ views: 1, cases: 1, waiting: 2 })[0]).toBe(
+  it("says when nothing became a view, and says so in words when the count is not known", async () => {
+    expect(convertedWords({ views: 0, cases: 0 })[0]).toBe("No case made from another has become a view in your unit.");
+    expect(convertedWords({ views: 1, cases: 1 })[0]).toBe(
       "1 case made from another became a view, in 1 case of your unit.",
     );
-    serve((path) => (path === "system" ? json(200, { version: "1.2", components: [] }) : null));
+    // The orchestrator's review of L2.5b: a count that could not be read is said, in words.
+    expect(convertedWords({ problem: "Not known: the count could not be read (OSError)" })[0]).toBe(
+      "Not known: the count could not be read (OSError)",
+    );
+    serve((path) =>
+      path === "system"
+        ? json(200, { components: [], converted_views: { views: 0, cases: 0, problem: "Not known: the count could not be read (OSError)" } })
+        : null,
+    );
     place(["administer_system"], "System");
-    await screen.findByRole("region", { name: "Version" });
-    expect(screen.queryByRole("region", { name: "Cases converted to views" })).toBeNull();
+    const section = await screen.findByRole("region", { name: "Cases converted to views" });
+    expect(section.textContent).toContain("Not known: the count could not be read");
+    expect(section.textContent).not.toContain("No case made from another");
   });
 });
 

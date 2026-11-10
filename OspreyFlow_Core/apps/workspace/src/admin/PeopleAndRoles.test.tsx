@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace } from "./AdminPlace";
 import { groupsFor, RIGHT_GROUPS } from "./sections/Roles";
-import { levelWords } from "./sections/People";
+import { clearsMarking, levelWords } from "./sections/People";
 
 afterEach(() => {
   cleanup();
@@ -197,6 +197,30 @@ describe("Admin › People's Disable… with L3.8's items (L2.5b, ADR-145 Amendm
     const panel = await screen.findByRole("group", { name: "Disable ana" });
     const note = await within(panel).findByRole("note", { name: "Items of ana you may not see" });
     expect(note.textContent).toContain("Could not check whether ana owns items you may not see.");
+  });
+});
+
+describe("Admin › People's Disable… offers only cleared recipients (ADR-145 Amendment 9)", () => {
+  it("leaves out of a view's Transfer to… anyone not cleared to its case's highest marking", async () => {
+    const plan = { person: "u1", not_yet_listed: [], items: [
+      { kind: "view", id: "v1", investigation_id: "c1", needs_clearance: "SECRET", label: "A private view of the case Kestrel" }] };  // prettier-ignore
+    const CAL = { ...ANA, id: "u3", username: "cal", name: "Cal Cleared", clearance: "SECRET" };
+    serve((path) => {
+      if (path === "people/u1/disable-plan") return json(200, plan);
+      if (path === "people") return json(200, [ANA, BEA, CAL]);
+      if (path === "/v1/handling-scheme") return json(200, { classification: ["OFFICIAL", "SECRET"], handling_codes: {} });
+      return null;
+    });
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Disable ana" }));
+    const panel = await screen.findByRole("group", { name: "Disable ana" });
+    const choice = await within(panel).findByRole("combobox", { name: "Transfer to, for A private view of the case Kestrel" });
+    await waitFor(() => expect(within(choice).queryByRole("option", { name: "Cal Cleared (cal)" })).toBeTruthy());
+    expect(within(choice).queryByRole("option", { name: "Bea Engineer (bea)" })).toBeNull();
+    expect(clearsMarking(["OFFICIAL", "SECRET"], "SECRET", "SECRET")).toBe(true);
+    expect(clearsMarking(["OFFICIAL", "SECRET"], "OFFICIAL", "SECRET")).toBe(false);
+    expect(clearsMarking(["OFFICIAL", "SECRET"], null, "OFFICIAL")).toBe(false);
+    expect(clearsMarking([], "SECRET", "SECRET")).toBe(false);
   });
 });
 

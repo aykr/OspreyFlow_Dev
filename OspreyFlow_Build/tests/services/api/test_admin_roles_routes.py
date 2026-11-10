@@ -883,6 +883,8 @@ def test_a_disable_the_identity_provider_refuses_after_the_transfers_says_they_s
     world.directory.refuse = True
     answer = _disable(world, [{"kind": "case_author", "id": "c1", "to": "ana-2"}])
     assert answer.status_code == 502
+    # The account is still enabled, so its covers stay (the orchestrator's review of L2.5b).
+    assert "end_covers" not in world.admin_people.order
     detail = answer.json()["detail"]
     assert detail["error"] == "disable_incomplete" and "and those stand" in detail["message"]
     assert [e["action"] for e in world.audit.entries][-1] == "disable_person_incomplete"
@@ -1076,3 +1078,12 @@ def test_a_team_name_another_team_holds_is_refused(world: SimpleNamespace) -> No
     world.roles.teams_of["r2"] = Team(role_id="r2", display_name="Intel", mailbox="x@example.org")
     answer = _team(world)
     assert answer.status_code == 409 and answer.json()["detail"]["error"] == "team_name_taken"
+
+
+def test_a_cases_highest_is_the_highest_it_reads_or_the_schemes_for_none_or_unknown() -> None:
+    from services.api.admin_people import case_highest
+
+    order = ["OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET"]
+    assert case_highest(["OFFICIAL", "OFFICIAL-SENSITIVE", "OFFICIAL"], order) == "OFFICIAL-SENSITIVE"
+    assert case_highest([], order) == "SECRET"
+    assert case_highest(["OFFICIAL", "TOP SECRET"], order) == "SECRET"
