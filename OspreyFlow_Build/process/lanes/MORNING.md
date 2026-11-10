@@ -130,6 +130,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    the budget alert. **Chosen, on the strict reading:** only a holder of `administer_system` sees the number;
    everyone else is told the quota is used, without a count. Recorded in ADR-141 Amendment 1. **To overrule:** say
    "show the count".
+19. **Your laptop's rebuild moves to after the whole build; heavy runs move to the server (your word, 10 November
+   evening).** Item 7's step 2 (your local deployment) waits until the build is finished; the product repo is still
+   published from `main` at demo-ready. Lanes now run `make -k ci` on the test server through `stack_lease.sh
+   offline <lane>` (Docker and trivy there, so the image scans really run), freeing this Mac; Playwright stays here
+   until the server has Chromium's system libraries (an apt install, asked of you).
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
