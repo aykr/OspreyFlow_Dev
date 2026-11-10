@@ -1548,8 +1548,10 @@ item, label or property:
 `test_admin_dataset_cases.py` holds every Datasets route to it, red with one label planted. A
 removed case read directly (not through a composite) offers *Merge … into the dataset (dry run)* and
 *Delete …'s layer (dry run)*: each says what it would touch and writes nothing but its audit entry;
-the merge is refused, in words naming them, to anyone not one of the dataset's Authors, and into a
-composite, which is offered no *Merge* and no promotion policy. **A composite case's layer is never
+after a delete's dry run, *Delete …'s layer now* deletes it for an administrator of the dataset's own
+unit, in the Conduit's words, and the cases are read again (L2.5c); the merge is refused to anyone not
+one of the dataset's Authors, in words naming the roles that may act, never a person (ADR-145
+Amendment 4 decision 12), and into a composite, which is offered no *Merge* and no promotion policy. **A composite case's layer is never
 merged** (Q5 (a), the orchestrator's settlement of 8 November 2026, on the owner's review list): it
 is deleted or left, from the composite's row, and a member's row says it is read through the
 composite, deleted there and never merged; an open point for L3.4, "composite layers: delete only,
