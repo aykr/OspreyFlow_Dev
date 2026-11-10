@@ -89,3 +89,13 @@ stay for the operator's command until the tab is retired.
 
 Glass: `RuleEditor.test.tsx`'s "offers the screening lists the dataset may read, and saves the one chosen" (7
 passed). StageD's case for the retired schedule form is removed with the form.
+
+## §8 On L2.11a (rebased onto main at cf48b21): the real codec, the stored files served, Show as BPMN
+
+- **Export at the route** (`test_the_export_route_serves_the_files_stored_beside_the_rules_version`, offline):
+  18 passed in `test_rule_standards_routes.py`. Red with the route rendering afresh instead of serving what was
+  stored: only that case.
+- ***Show as BPMN* mounted on the draft** (`RuleEditor.test.tsx`): 8 passed. Red with the dialog not mounted:
+  only "shows the saved draft as BPMN, drawn from the files saved beside it".
+- **The stored files are the real codec's at every saved version**
+  (`test_the_stored_files_are_the_codecs_at_every_saved_version`): live, at the next leased run.
