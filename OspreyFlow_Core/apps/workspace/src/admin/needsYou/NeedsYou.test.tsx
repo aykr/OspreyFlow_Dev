@@ -155,7 +155,16 @@ describe("Needs you", () => {
     expect(needsYouCount(many)).toBe(23);
     await open(many);
     fireEvent.click(await screen.findByRole("button", { name: /Needs you · 23/ }));
-    expect(screen.getByText(NEEDS_YOU_WORDS.moreNotices(22))).toBeTruthy();
+    // The words themselves, so the line can never claim more than is listed.
+    expect(screen.getByText("22 more notices of your scheduled loads, not listed here")).toBeTruthy();
+  });
+
+  it("says an answer whose notice total is not a number as a failed read, never as nothing waiting", async () => {
+    const fetcher = vi.fn(
+      async () => new Response(JSON.stringify({ promotions_overdue: [], proposals: [], schedule_notices: [], schedule_notices_total: "3" })),
+    );
+    const { readNeedsYou } = await import("./needsYouApi");
+    await expect(readNeedsYou("http://x", "t", fetcher as unknown as typeof fetch)).rejects.toThrow(/not the reader's Needs you/);
   });
 
   it("reads a Conduit from before the amendment as no notices, not a failed read", async () => {

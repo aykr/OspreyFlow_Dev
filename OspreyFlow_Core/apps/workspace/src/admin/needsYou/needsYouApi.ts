@@ -20,7 +20,8 @@ export async function readNeedsYou(
     !body ||
     !Array.isArray(body.promotions_overdue) ||
     !Array.isArray(body.proposals) ||
-    (body.schedule_notices !== undefined && !Array.isArray(body.schedule_notices))
+    (body.schedule_notices !== undefined && !Array.isArray(body.schedule_notices)) ||
+    (body.schedule_notices_total !== undefined && typeof body.schedule_notices_total !== "number")
   ) {
     throw new Error("needs-you: the answer was not the reader's Needs you");
   }
@@ -72,9 +73,9 @@ export const NEEDS_YOU_WORDS = {
   reminderTip:
     "Analysts proposed new link types for this dataset. Decide them on 1 Model: added to the draft model, a type is made live with the next model version.",
   noticeTip:
-    "A scheduled load of yours did not finish. Its pipeline's Runs, in the Ingest Studio, say what happened. This stays here for seven days.",
+    "A scheduled load of yours did not run as planned. Its pipeline's Runs, in the Ingest Studio, say what happened. This stays here for seven days.",
   moreNotices: (n: number) =>
-    `${plural(n, "more notice", "more notices")} of your scheduled loads, the newest twenty shown`,
+    `${plural(n, "more notice", "more notices")} of your scheduled loads, not listed here`,
   moreNoticesTip:
     "Each pipeline's Runs, in the Ingest Studio, list every run of its schedule, the ones not shown here included.",
   unread: "Needs you could not be read",

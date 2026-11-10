@@ -51,10 +51,11 @@ test("the reader's scheduled loads' notices are reached by Tab, each read with i
   await page.keyboard.press("Tab");
   await expect(page.getByText(/failed: the database did not answer/)).toBeFocused();
   await page.keyboard.press("Tab");
-  const more = page.getByText(/21 more notices of your scheduled loads/);
+  const more = page.getByText(/21 more notices of your scheduled loads, not listed here/);
   await expect(more).toBeFocused();
   await expect(more).toHaveAccessibleDescription(/list every run of its schedule/);
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("group", { name: "Needs you" })).toHaveCount(0);
   await expect(button).toBeFocused();
 });
 
