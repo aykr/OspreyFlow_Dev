@@ -62,6 +62,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    draft sat under `OspreyFlow_Core`, which the publish copies whole; docs is moving it to
    `OspreyFlow_Build/process/lanes/docs/README_DRAFT.md`, and I check the published tree for it before pushing.)
    **To overrule:** say what to change.
+8. **Disable moves a private view to someone who may not be cleared for its count (admin's L2.5b review).** A view
+   sends its node count unfiltered (`case_views.py`'s `chosen`), so a private view transferred at Disable would show
+   its new owner how many nodes the creator chose, some perhaps above their clearance (rule 3). Options: (a) hold the
+   recipient of a view or board to the case's ceiling (they must clear the case's highest marking), now, in admin;
+   (b) count `chosen` per reader, in case's code, which also fixes the same count on every shared view. **Chosen:
+   both, strict first** — (a) in L2.5b now, so nothing leaks today, and (b) carried to case, after which (a) can be
+   relaxed by a later amendment. Recorded as ADR-145 Amendment 9 (reserved). **To overrule:** say "views at the
+   case's unit alone", as Amendment 8 reads, accepting the count until case's fix lands.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

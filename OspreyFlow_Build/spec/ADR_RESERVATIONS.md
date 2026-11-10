@@ -94,6 +94,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-143 Amendment 6 | The grading change as built (L3.7): the verb over the scripts module, the dry run enforced (ruling C13), the Conduit stopped, the scheme file, what the change leaves alone | case-b | 2026-11-09 | written |
 | ADR-145 Amendment 7 | The Studio's tips and who-can refusals as decided (built with L2.12's patches, L1.8): the roles that hold a right named, never people (the owner's ruling, 9 November); 'domain model' held by a gate | studio-b | 2026-11-09 | written |
 | ADR-140 Amendment 17 | The recipes repository written in-process by dulwich, the git binary removed from the Conduit image (the owner's ruling of 9 November, "Replace with dulwich"), and the publish's refusals: an id one plain file name, no link followed, a compare-and-swap on HEAD, one lock over write, index and commit (L1.7a) | studio-b | 2026-11-10 | reserved |
+| ADR-145 Amendment 9 | Disable's full transfer list as built (L2.5b): a view's or board's recipient held to the case's ceiling until a view's count is per reader (rule 3, decided on the strict reading); Admin › System's count said when it cannot be read, and the dry-run report's place | admin | 2026-11-10 | reserved |
 
 ## Baseline
 
