@@ -79,3 +79,13 @@ of each team hold the case (2 and 1), with no one named. Red with the count take
 is replaced by the read-only one. The registry patch drops `refresh-a-screening-list-by-keyboard`,
 `subscribe-to-a-screening-list-by-keyboard` and `set-a-list-refresh-schedule-by-keyboard`. The Conduit's routes
 stay for the operator's command until the tab is retired.
+
+## §7 The list picker (carry 11): a rule names one Studio list its dataset may read, offline
+
+`test_a_rule_reads_only_a_list_its_dataset_may_and_its_subjects_rows` (`rule_editor.list_entries`): 5 passed in
+`test_rule_editor.py`, then one plant at a time.
+1. **Every dataset's lists searched,** not the rule's own (another dataset's list read, rule 3): red, only that case.
+2. **Rows of every type read** (the subject's type filter removed): red, only that case.
+
+Glass: `RuleEditor.test.tsx`'s "offers the screening lists the dataset may read, and saves the one chosen" (7
+passed). StageD's case for the retired schedule form is removed with the form.

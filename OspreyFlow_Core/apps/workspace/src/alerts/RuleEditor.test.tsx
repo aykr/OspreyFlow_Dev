@@ -19,7 +19,11 @@ const person = (name: string) => ({ name, pole_class: "person", channel: "indigo
   { name: "family_name", type: "string" }] }); // prettier-ignore
 const ontology = (...types: string[]) => ({ version: 1, entity_types: types.map(person), edge_types: [] }) as unknown as OntologySchema;
 
-const PRISON = { id: "ds-prison", name: "Prison records", kind: "source", second_person: false, ontology: ontology("Person", "Prisoner"), lists: [] };
+const PRISON = { id: "ds-prison", name: "Prison records", kind: "source", second_person: false, ontology: ontology("Person", "Prisoner"), lists: [
+  { id: "l-prison", name: "Prison watch", kind: "screening", version: 1, deployment_wide: false },
+  { id: "l-uk", name: "UK sanctions", kind: "screening", version: 3, deployment_wide: true },
+  { id: "l-codes", name: "Wing codes", kind: "reference", version: 1, deployment_wide: false },
+] }; // prettier-ignore
 const FINANCE = { id: "ds-finance", name: "Ledger", kind: "source", second_person: true, ontology: ontology("Account"), lists: [] };
 const DRAFT = { id: "r1", investigation_id: "c1", owner_id: "me", name: "Okafor", created_at: "2026-11-10T09:00:00Z", trigger: "post_commit",
   budget_ms: 5000, status: "draft", version: 1, dataset_id: "ds-prison",
@@ -108,6 +112,21 @@ describe("the rule editor (ADR-146 decision 3)", () => {
     await waitFor(() => expect((live as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(live);
     await waitFor(() => expect(calls.some((c) => c.path === "rules/r1/make-live")).toBe(true));
+  });
+
+  it("offers the screening lists the dataset may read, and saves the one chosen", async () => {
+    const calls = world();
+    editor();
+    await choose("ds-prison");
+    fireEvent.change(await screen.findByLabelText("Relationship"), { target: { value: "on_screening_list" } });
+    const picker = await screen.findByLabelText("Screening list");
+    expect(within(picker).getAllByRole("option").map((o) => o.textContent)).toEqual(["Choose a list…", "Prison watch", "UK sanctions (subscribed)"]);
+    fireEvent.change(picker, { target: { value: "l-uk" } });
+    fireEvent.change(screen.getByLabelText("Name of the rule"), { target: { value: "Listed visitors" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the draft" }));
+    await waitFor(() => expect(calls.some((c) => c.path === "rules/drafts")).toBe(true));
+    const sent = calls.find((c) => c.path === "rules/drafts")?.body as { sentence: { relationship: { list_id?: string } } };
+    expect(sent.sentence.relationship.list_id).toBe("l-uk");
   });
 
   it("says a dataset asks for a second person before it is made live", async () => {

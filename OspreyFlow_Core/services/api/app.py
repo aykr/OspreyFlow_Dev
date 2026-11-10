@@ -1720,6 +1720,25 @@ def get_target_models(request: Request) -> TargetModelStore:
 TargetModelsDep = Annotated[TargetModelStore, Depends(get_target_models)]
 
 
+def _rule_lists_of(state: Any) -> rule_editor.RuleListReader:
+    """ADR-146 decision 3 (L2.11): how a run reads the Studio list a sentence names, within the
+    rule's own dataset, over the running Conduit's stores (each `None` where it has none)."""
+    return rule_editor.rule_list_reader(
+        datasets=state.datasets if getattr(state, "datasets", None) is not None
+        else InMemoryDatasetStore(),
+        models=getattr(state, "target_models", None),
+        lists=getattr(state, "list_store", None),
+        rows_kept=getattr(state, "list_rows", None),
+    )  # fmt: skip
+
+
+def get_rule_lists(request: Request) -> rule_editor.RuleListReader:
+    return _rule_lists_of(request.app.state)
+
+
+RuleListsDep = Annotated[rule_editor.RuleListReader, Depends(get_rule_lists)]
+
+
 def get_case_views(request: Request) -> CaseViewStore:
     """ADR-144. The lifespan sets the Postgres store; a test app with no lifespan gets an in-memory
     one."""
@@ -2756,6 +2775,18 @@ async def _rule_change_refused_handler(request: Request, exc: RuleChangeRefused)
     )  # fmt: skip
     return JSONResponse(
         status_code=409, content={"error": error, "message": f"{said[0].upper()}{said[1:]}."}
+    )
+
+
+@app.exception_handler(rule_editor.ListNotOffered)
+async def _rule_list_not_offered_handler(
+    request: Request, exc: rule_editor.ListNotOffered
+) -> JSONResponse:
+    """ADR-146 decision 3: a rule names only a list its dataset may read; any other is refused
+    exactly as a list that does not exist (rule 3)."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"error": "list_not_found", "detail": "There is no such list."},
     )
 
 
@@ -12883,6 +12914,7 @@ async def run_studio_recipe(
     models: TargetModelsDep = None,  # type: ignore[assignment]
     staging_storage: StagingStorageDep = None,  # type: ignore[assignment]
     list_store: ListStoreDep = None,  # type: ignore[assignment]
+    rule_lists: RuleListsDep = None,  # type: ignore[assignment]
 ) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -12970,6 +13002,7 @@ async def run_studio_recipe(
             target_models=models,
             staging_storage=staging_storage,
             list_store=list_store,
+            rule_lists=rule_lists,
             watch_reach=watch_reach,
         ),
         principal=principal,
@@ -13095,7 +13128,7 @@ def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
             audit=state.audit, valkey=state.valkey, principal_for_owner=as_author, loader=author,
             screening=state.screening_lists, compute=state.compute, patterns=state.patterns_store,
             hotlists=state.hotlists_store, ontology=state.ontology,
-            influencers=state.strength_influencers,
+            influencers=state.strength_influencers, rule_lists=_rule_lists_of(state),
         )  # fmt: skip
         return await run_scheduled_rule(rule, author, gate, now=slot)
 
@@ -15015,8 +15048,10 @@ async def _sentence_context(
     hotlists_store: HotlistStore,
     screening_lists: ScreeningListStore,
     influencers_store: InfluencerStore | None,
+    named_list: Callable[[str, str], Awaitable[list[Any]]] | None = None,
 ) -> SentenceContext:
-    """What a sentence is judged with when it is previewed or tested, as `principal`."""
+    """What a sentence is judged with when it is previewed or tested, as `principal`; a list the
+    sentence names is read through `named_list` (the rule's dataset's, ADR-146 decision 3)."""
     relationship = sentence.relationship
     hotlisted = None
     if relationship is not None and relationship.kind == "on_hotlist":
@@ -15027,7 +15062,12 @@ async def _sentence_context(
         )
     entries: dict[str, list[Any]] = {}
     if relationship is not None and relationship.kind == "on_screening_list":
-        entries[sentence.subject] = list(await screening_lists.entries(sentence.subject))
+        if relationship.list_id is not None:
+            if named_list is None:
+                raise rule_editor.ListNotOffered(relationship.list_id)
+            entries[sentence.subject] = await named_list(relationship.list_id, sentence.subject)
+        else:
+            entries[sentence.subject] = list(await screening_lists.entries(sentence.subject))
     # ADR-139 decision 8: a strength condition previews with the case's influencers in force.
     influencers, rarity_exclude, strength_settings = await strength_context(
         influencers_store, investigation_id
@@ -15111,6 +15151,22 @@ async def _save_rule_draft(
                 "dataset.")},
         )  # fmt: skip
     await _refuse_an_unknown_team(sentence, request)
+    relationship = sentence.relationship
+    if relationship is not None and relationship.kind == "on_screening_list":
+        # ADR-146 decision 3: the one list it reads, chosen from those its dataset may read.
+        if relationship.list_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail={"error": "list_required",
+                        "message": "Choose the screening list the rule screens against."},
+            )  # fmt: skip
+        offered = await rule_editor.lists_of(
+            dataset, datasets=datasets, models=models,
+            lists=getattr(request.app.state, "list_store", None),
+            rows_kept=getattr(request.app.state, "list_rows", None),
+        )  # fmt: skip
+        if relationship.list_id not in {o.id for o in offered if o.kind == "screening"}:
+            raise rule_editor.ListNotOffered(relationship.list_id)
     model = await rule_editor.dataset_ontology(dataset, ontology, datasets=datasets, models=models)
     spec = await _compiled_rule(body, sentence, principal, patterns_store, model)
     try:
@@ -15229,6 +15285,7 @@ async def test_rule_draft(
     screening_lists: ScreeningListsDep,
     audit: AuditDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
+    rule_lists: RuleListsDep = None,  # type: ignore[assignment]
 ) -> RuleTestResult:
     """ADR-146 decision 3: *Test* runs the draft over its dataset's last 30 days, as the person
     testing, within that dataset alone, and says how many alerts it would have raised (rule 7: a
@@ -15249,6 +15306,7 @@ async def test_rule_draft(
             sentence, tester, investigation.id, graph=graph, analytics=analytics, ontology=model,
             hotlists_store=hotlists_store, screening_lists=screening_lists,
             influencers_store=influencers_store,
+            named_list=lambda list_id, subject: rule_lists(rule, list_id, subject),
         ),
         days=RULE_TEST_DAYS,
     )  # fmt: skip
@@ -15468,6 +15526,7 @@ async def release_held_rows_route(
     patterns_store: PatternsStoreDep,
     recipe_runs: RecipeRunsDep,
     influencers_store: OptionalStrengthInfluencersDep = None,
+    rule_lists: RuleListsDep = None,  # type: ignore[assignment]
 ) -> LoadReportView:
     """A reviewer releases named held rows of one load: they are loaded now, under a new load
     id, with their provenance as it would have been. The case's rules judge them again, but a
@@ -15497,6 +15556,7 @@ async def release_held_rows_route(
         patterns=patterns_store,
         recipe_id=recipe.recipe_id,
         influencers=influencers_store,
+        rule_lists=rule_lists,
     ) or RuleGate(
         rules=[],
         investigation_id=investigation.id,

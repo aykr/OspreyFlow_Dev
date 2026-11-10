@@ -152,6 +152,10 @@ class OnScreeningListRelationship(BaseModel):
 
     kind: Literal["on_screening_list"] = "on_screening_list"
     min_score: float = Field(default=0.9, ge=0.5, le=1)
+    #: ADR-146 decision 3 (L2.11's list picker): the one list it screens against, a Studio list the
+    #: rule's dataset may read (its own, or a deployment-wide one it subscribes to). None for a rule
+    #: saved before the picker, which screens against the deployment's older lists.
+    list_id: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 SentenceRelationship = Annotated[

@@ -182,9 +182,16 @@ async def _context(
         )
     entries: dict[str, list[Any]] = {}
     if relationship is not None and relationship.kind == "on_screening_list":
-        if gate.screening is None:
-            raise RuntimeError("this run has no screening lists to screen against")
-        entries[params.sentence.subject] = await gate.screening.entries(params.sentence.subject)
+        subject = params.sentence.subject
+        if relationship.list_id is not None:
+            # ADR-146 decision 3: the one Studio list the rule names, read within its dataset.
+            if gate.rule_lists is None:
+                raise RuntimeError("this run cannot read the screening list the rule names")
+            entries[subject] = await gate.rule_lists(rule, relationship.list_id, subject)
+        else:
+            if gate.screening is None:
+                raise RuntimeError("this run has no screening lists to screen against")
+            entries[subject] = await gate.screening.entries(subject)
     influencers, exclude, settings = await strength_context(
         gate.influencers, gate.investigation_id
     )

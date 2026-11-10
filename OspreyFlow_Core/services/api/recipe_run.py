@@ -104,6 +104,10 @@ class RecipeRunDeps:
     #: ADR-140 Amendment 13: the deployment-wide lists and each dataset's subscriptions. None: a
     #: staged run reads the dataset's own lists alone.
     list_store: ListStore | None = None
+    #: ADR-146 decision 3 (L2.11): how a sentence's named Studio list is read, within the rule's own
+    #: dataset (`rule_editor.rule_list_reader`). None: a rule naming a list cannot run here, and
+    #: says so as any run that cannot read what it needs.
+    rule_lists: Callable[[TypologyRule, str, str], Awaitable[list[Any]]] | None = None
     #: L2.10 review item 4: whether a watch's owner still reaches its dataset
     #: (`watch_reach.owner_reaches_dataset_in`). None: a watch with a dataset is not matched (fail
     #: closed). `from_state` always builds it from the state's own stores.
@@ -253,6 +257,7 @@ async def _execute_recipe_run(
         ontology=deps.ontology,
         recipe_id=recipe.recipe_id,
         influencers=deps.influencers,
+        rule_lists=deps.rule_lists,
     )
     report: LoadReport | PipelineRunReport
     if recipe.pipeline is not None:
@@ -387,6 +392,7 @@ async def _rule_gate(
     fail_closed: bool = True,
     recipe_id: str | None = None,
     influencers: InfluencerStore | None = None,
+    rule_lists: Callable[[TypologyRule, str, str], Awaitable[list[Any]]] | None = None,
 ) -> RuleGate | None:
     """The case's active typology rules for one load (ADR-109), or `None` when it has none.
     What the KYC and pattern typologies read is required, never defaulted: a route that left it
@@ -426,6 +432,7 @@ async def _rule_gate(
         ontology=ontology,
         on_hit=on_hit,
         influencers=influencers,
+        rule_lists=rule_lists,
     )
 
 

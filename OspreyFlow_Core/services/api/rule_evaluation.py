@@ -33,7 +33,7 @@ import hashlib
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from services.ingest.typologies import (
     MoneyFlow,
@@ -796,6 +796,9 @@ class RuleGate:
     #: ontology a sentence's drawn pattern is read back against.
     hotlists: HotlistStore | None = None
     ontology: OntologySchema | None = None
+    #: ADR-146 decision 3 (L2.11's list picker): a sentence's named Studio list, read within the
+    #: rule's own dataset (`rule_editor.rule_list_reader`). None where no run reads one.
+    rule_lists: Callable[[TypologyRule, str, str], Awaitable[list[Any]]] | None = None
     #: ADR-133 decision 6, stage (d): what a hit of a rule does at this pipeline, as its "Checks on
     #: load" step chose ("alert" or "hold"), by rule id. A rule not named keeps its author's choice.
     on_hit: dict[str, str] = field(default_factory=dict)

@@ -210,6 +210,7 @@ export type LinkType1 = string;
 export type Kind3 = "on_hotlist";
 export type Kind4 = "on_screening_list";
 export type MinScore = number;
+export type ListId = string | null;
 export type Frequency = (CountFrequency | AmountFrequency | FirstTimeFrequency) | null;
 export type Kind5 = "count";
 export type LinkType2 = string;
@@ -375,6 +376,7 @@ export interface OnHotlistRelationship {
 export interface OnScreeningListRelationship {
   kind?: Kind4;
   min_score?: MinScore;
+  list_id?: ListId;
   [k: string]: unknown;
 }
 /**

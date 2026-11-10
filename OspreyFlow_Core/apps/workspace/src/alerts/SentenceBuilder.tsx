@@ -442,6 +442,23 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               </label>
             </>
           )}
+          {editor && draft.relationship === "on_screening_list" && (
+            <label className="label" style={BLANK}>
+              {/* ADR-146 decision 3: the lists this rule's dataset may read, its own and those it
+                  subscribes to; never another dataset's. */}
+              Screening list
+              <Select aria-label="Screening list" value={draft.listId ?? ""} onChange={(e) => change({ listId: e.target.value || undefined })}>
+                <option value="">Choose a list…</option>
+                {(editor.dataset.lists ?? [])
+                  .filter((l) => l.kind === "screening")
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.deployment_wide ? `${l.name} (subscribed)` : l.name}
+                    </option>
+                  ))}
+              </Select>
+            </label>
+          )}
           {draft.relationship === "on_screening_list" && (
             <label className="label" style={BLANK}>
               Name match at least

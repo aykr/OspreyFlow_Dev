@@ -22,20 +22,29 @@ second person when any member does.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
+from datetime import date
+
+from services.ingest.staging_catalogue import readable_lists
 
 from schemas.dataset_model import ReferenceList
-from schemas.domain import OntologySchema
+from schemas.domain import OntologySchema, TypologyRule
 from schemas.list_connector import OfferedList
 from schemas.rule_editor import RuleDatasetOffer
 
 from .datasets import COMPOSITE, SOURCE, Dataset, DatasetStore
 from .link_types import public_ontology
-from .list_connector import ListRows, ListStore, offered_lists
+from .list_connector import ListRows, ListStore, deployment_references, offered_lists
+from .screening import ScreeningEntry
 from .target_models import TargetModelStore
 
 #: The kinds a rule may be declared on.
 RULE_DATASET_KINDS = (SOURCE, COMPOSITE)
+
+
+class ListNotOffered(Exception):
+    """The list named is not one the rule's dataset may read: refused exactly as a list that does
+    not exist (rule 3)."""
 
 
 class DatasetNotOffered(Exception):
@@ -174,3 +183,94 @@ async def offered_datasets(
             )
         )
     return offers
+
+
+def _day(value: object) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10]) if value else None
+    except ValueError:
+        return None
+
+
+def entries_of_rows(
+    reference: ReferenceList, rows: Sequence[dict[str, object]], entity_type: str
+) -> list[ScreeningEntry]:
+    """A Studio screening list's rows (`staging_catalogue.SCREENING_COLUMNS`) as the entries
+    `screen` reads: those of the subject's type alone, each name and alias screened."""
+    found: list[ScreeningEntry] = []
+    for row in rows:
+        if str(row.get("entity_type") or "") != entity_type:
+            continue
+        name = str(row.get("primary_name") or "").strip()
+        if not name:
+            continue
+        listing = str(row.get("listing") or "sanction")
+        found.append(
+            ScreeningEntry(
+                id=str(row.get("ref") or name),
+                list_name=reference.name,
+                listing=listing if listing in ("sanction", "pep", "adverse_media") else "sanction",  # type: ignore[arg-type]
+                entity_type=entity_type,  # type: ignore[arg-type]
+                name=name,
+                date_of_birth=_day(row.get("date_of_birth")),
+                country=str(row.get("nationality") or "") or None,
+                aliases=tuple(a for a in str(row.get("aliases") or "").split("|") if a),
+            )
+        )
+    return found
+
+
+async def list_entries(
+    dataset: Dataset,
+    list_id: str,
+    entity_type: str,
+    *,
+    datasets: DatasetStore,
+    models: TargetModelStore | None,
+    lists: ListStore | None,
+    rows_kept: ListRows | None,
+) -> list[ScreeningEntry]:
+    """The entries of the list a rule on `dataset` names, read only where the save gate lets the
+    dataset read it (`readable_lists`: its own, or a deployment-wide list it subscribes to by id).
+    Any other list, another dataset's above all, is `ListNotOffered`, never read (rule 3)."""
+    if models is None or lists is None or rows_kept is None:
+        raise ListNotOffered(list_id)
+    wide = await deployment_references(lists)
+    for member in await _members(dataset, datasets):
+        own = await own_lists(member.id, models, rows_kept)
+        readable, clashes = readable_lists(
+            [*own, *wide], dataset_id=member.id, subscribed=await lists.subscribed(member.id)
+        )
+        for ref in readable.values():
+            if ref.id == list_id and ref.name not in clashes:
+                return entries_of_rows(ref, rows_kept.read(ref) or [], entity_type)
+    raise ListNotOffered(list_id)
+
+
+#: What a rule's run reads a named Studio list through: (the rule, the list's id, the subject's
+#: type) -> its entries, within the rule's own dataset (`list_entries`).
+RuleListReader = Callable[[TypologyRule, str, str], Awaitable[list[ScreeningEntry]]]
+
+
+def rule_list_reader(
+    *,
+    datasets: DatasetStore,
+    models: TargetModelStore | None,
+    lists: ListStore | None,
+    rows_kept: ListRows | None,
+) -> RuleListReader:
+    """The reader every run of a rule with a named list uses: the list read within the rule's
+    declared dataset alone, so a rule never reads a list its dataset may not."""
+
+    async def read(rule: TypologyRule, list_id: str, entity_type: str) -> list[ScreeningEntry]:
+        if rule.dataset_id is None:
+            raise ListNotOffered(list_id)
+        dataset = (await datasets.egress_of([rule.dataset_id])).get(rule.dataset_id)
+        if dataset is None or dataset.kind not in RULE_DATASET_KINDS:
+            raise ListNotOffered(list_id)
+        return await list_entries(
+            dataset, list_id, entity_type, datasets=datasets, models=models, lists=lists,
+            rows_kept=rows_kept,
+        )  # fmt: skip
+
+    return read
