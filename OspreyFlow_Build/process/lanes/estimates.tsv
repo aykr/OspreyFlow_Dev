@@ -1,7 +1,6 @@
-# as of 2026-11-10T08:28Z
+# as of 2026-11-10T08:30Z
 rules	L2.10	done; rebase onto main (5 conflicts), re-gate, last look	~12:00	A
 studio-b	L1.7a	fixes reviewed; Am 17, gates at one head, the lock probe	~11:00	A
-platform-b	P5b	review: ~ path into the checkout; a live update run; rebase, gates	~11:00	A
 platform-b	preflight ports	a named install refused where 2480 is held; after P5b	~12:00	A
 case	L3.9	review: fake, live copies, grading, target recheck; then gates	~12:30	A
 studio-b	tips	Studio's tips patches, after L1.7a	~11:30–12:30	A
