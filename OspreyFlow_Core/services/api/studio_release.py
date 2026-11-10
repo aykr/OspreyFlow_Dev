@@ -26,10 +26,12 @@ import json
 import os
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 
 from services.ingest.pipeline import expert_steps_changed, pipeline_rule_violations
+from services.ingest.recipe_rules import RecipeRuleError, check_recipe_rules, deduplicate_problems
 from services.ingest.release import (
     Bundle,
     ListToRelease,
@@ -42,13 +44,14 @@ from services.ingest.staging import ObjectStorageConfig
 
 from ontology.handling import HandlingScheme, principal_may_view
 from schemas.dataset_model import ReferenceList, TargetModelDraftInput
-from schemas.domain import Principal
+from schemas.domain import OntologySchema, Principal
 from schemas.ingest import (
     DeduplicateConfig,
     PipelineGraph,
     RowTemplate,
     StudioRecipeDraft,
     StudioRecipeStatus,
+    check_source_declarations,
 )
 from schemas.release import (
     ReleasedPipeline,
@@ -61,7 +64,13 @@ from schemas.rights import Right, rights_for
 from .ingest_sources import UPLOAD_SUBDIR, ingest_root
 from .list_connector import ListRows, ListStore
 from .sources import SourceStore
-from .studio_map import resolve_source_handling
+from .studio_map import (
+    draft_handling_columns,
+    draft_units,
+    resolve_source_handling,
+    source_column_names,
+    validate_handling_tightens,
+)
 from .studio_profile import offered_to
 from .studio_recipes import StudioRecipeStore
 from .studio_staging import (
@@ -73,8 +82,12 @@ from .studio_staging import (
 from .target_models import TargetModelStore
 
 #: An environment variable whose value is a secret: the values `deployment.env` fills that an
-#: export must never carry (ADR-140 Amendment 9's planted secret).
-_SECRET_NAME = re.compile(r"(?i)(password|secret|token|api_?key|private_?key|credential)")
+#: export must never carry (ADR-140 Amendment 9's planted secret). A `…_KEY` is one too: a model
+#: provider's key (`OSPREY_MODEL_PROVIDER_KEY`, `OSPREY_MODEL_KEY_<NAME>`), an object store's
+#: (`MINIO_ACCESS_KEY`, `AZURE_STORAGE_KEY`); the lane review of L1.7, item 4.
+_SECRET_NAME = re.compile(
+    r"(?i)(password|passwd|secret|token|credential|private_?key|api_?key|(^|_)key(_|$))"
+)
 
 EXPERT_IMPORT_WORDS = (
     "holds an expert step (SQL or fuzzy match), which only a holder of write_sql_transforms may add"
@@ -123,6 +136,72 @@ def located(released: ReleasedPipeline, dataset_id: str) -> tuple[ReleasedPipeli
     )
 
 
+def with_default_classification(handling: dict[str, Any], scheme: HandlingScheme) -> dict[str, Any]:
+    """**ADR-068**, as Connect's save applies it: a blank classification is recorded as the scheme's
+    lowest level, so a draft never carries an empty marking whichever client wrote it."""
+    chosen = handling.get("classification")
+    if isinstance(chosen, str) and chosen.strip():
+        return handling
+    lowest = "PUBLIC" if "PUBLIC" in scheme.classification else scheme.classification[0]
+    return {**handling, "classification": lowest}
+
+
+def draft_problems(
+    released: ReleasedPipeline,
+    *,
+    dataset_id: str,
+    principal: Principal,
+    scheme: HandlingScheme,
+    ontology: OntologySchema,
+) -> tuple[ReleasedPipeline, list[str]]:
+    """The released pipeline judged as the Studio's own saves judge a draft (the lane review of
+    L1.7, item 3): Connect's declarations (`check_source_declarations`) and default marking
+    (ADR-068), the deduplicate key against the source's columns, and Map's rules (an override only
+    tightens the source's marking; ADR-081, ADR-127 decision 3). Returns the pipeline as it would
+    be written, its handling settled, and every refusal in words."""
+    problems: list[str] = []
+    try:
+        handling = with_default_classification(
+            check_source_declarations(dict(released.handling)), scheme
+        )
+    except ValueError as error:
+        return released, [f"its source's handling: {error}"]
+    settled = released.model_copy(update={"handling": handling})
+    template = (
+        None if released.row_template is None else RowTemplate.model_validate(released.row_template)
+    )
+    stand_in = _gate_draft(handling, dataset_id, principal, template).model_copy(
+        update={"source_location": released.source_location, "legal_basis": released.legal_basis}
+    )
+    if released.deduplicate is not None:
+        config = DeduplicateConfig.model_validate(released.deduplicate)
+        if config.key:
+            problems.extend(deduplicate_problems(config, source_column_names(stand_in)))
+    if template is not None:
+        try:
+            baseline = resolve_source_handling(stand_in)
+            for entity in template.entities:
+                validate_handling_tightens(baseline, entity.handling, scheme)
+            for edge in template.edges:
+                validate_handling_tightens(baseline, edge.handling, scheme)
+            check_recipe_rules(
+                template,
+                ontology,
+                source_columns=source_column_names(stand_in),
+                units=draft_units(stand_in),
+                defaults_handling=baseline.model_dump(exclude_none=True),
+                scheme=scheme,
+                handling_columns=draft_handling_columns(stand_in),
+                declared_columns=draft_handling_columns(stand_in),
+                complete=False,
+            )
+        except RecipeRuleError as error:
+            problems.extend(error.problems)
+        except Exception as error:  # noqa: BLE001 - every refusal of Map's save, in its words
+            problems.append(str(error) or type(error).__name__)
+    return settled, problems
+
+
 def deployment_secrets(environ: Mapping[str, str] | None = None) -> list[str]:
     """Every secret value in the Conduit's environment, the one `deployment.env` fills."""
     env = os.environ if environ is None else environ
@@ -134,6 +213,16 @@ class ExportResult:
     files: dict[str, bytes]
     #: Published pipelines left out because their source is marked above the exporter's view.
     left_out: int
+
+
+@dataclass(frozen=True)
+class ImportPlan:
+    """The plan as answered, the dataset's own lists the import would add, and each pipeline as it
+    would be written: found in the receiving folder, its handling settled (`draft_problems`)."""
+
+    plan: ReleaseImportPlan
+    own_lists: list[ReferenceList] = field(default_factory=list)
+    pipelines: list[ReleasedPipeline] = field(default_factory=list)
 
 
 def _locations(draft: StudioRecipeDraft) -> set[str]:
@@ -234,7 +323,9 @@ async def plan_import(
     staging_storage: ObjectStorageConfig,
     list_store: ListStore | None,
     sources: SourceStore,
-) -> tuple[ReleaseImportPlan, list[ReferenceList]]:
+    scheme: HandlingScheme,
+    ontology: OntologySchema,
+) -> ImportPlan:
     """What the import writes and every refusal, judged before anything is written. Returns the
     plan and the dataset's own lists the import would add (definitions at the receiving id)."""
     refused: list[str] = []
@@ -286,8 +377,14 @@ async def plan_import(
         *own_lists,
     ]
     may_write_sql = Right.WRITE_SQL_TRANSFORMS in rights_for(principal.roles)
+    settled: list[ReleasedPipeline] = []
     for exported in bundle.pipelines:
         released, missing = located(exported, dataset_id)
+        released, judged = draft_problems(
+            released, dataset_id=dataset_id, principal=principal, scheme=scheme, ontology=ontology
+        )
+        settled.append(released)
+        refused.extend(f"the pipeline {released.label!r}: {p}" for p in judged)
         graph = pipeline_for(released, dataset_id) or PipelineGraph()
         name = released.label
         if expert_steps_changed(PipelineGraph(), graph) and not may_write_sql:
@@ -321,8 +418,8 @@ async def plan_import(
 
     here = {c.name for c in await sources.connections()}
     missing = sorted(set(bundle.manifest.spec.connections) - here)
-    return (
-        ReleaseImportPlan(
+    return ImportPlan(
+        plan=ReleaseImportPlan(
             dry_run=dry_run,
             release=bundle.manifest.metadata,
             items=items if not refused else [],
@@ -330,14 +427,14 @@ async def plan_import(
             missing_connections=missing,
             notes=notes,
         ),
-        own_lists,
+        own_lists=own_lists,
+        pipelines=settled,
     )
 
 
 async def apply_import(
     bundle: Bundle,
-    plan: ReleaseImportPlan,
-    own_lists: Sequence[ReferenceList],
+    planned: ImportPlan,
     *,
     dataset_id: str,
     principal: Principal,
@@ -347,10 +444,7 @@ async def apply_import(
 ) -> list[str]:
     """Writes the plan's drafts; returns the new pipeline drafts' ids. Never called for a dry run
     or a plan with a refusal."""
-    assert not plan.dry_run and not plan.refused
-    for reference in own_lists:
-        rows: list[dict[str, object]] = [dict(r) for r in bundle.list_rows[reference.name]]
-        await asyncio.to_thread(rows_kept.write, reference, rows)
+    assert not planned.plan.dry_run and not planned.plan.refused
     if await models.draft(dataset_id) is None:
         await models.open_draft(dataset_id, principal)
     await models.save_draft(
@@ -363,8 +457,7 @@ async def apply_import(
         principal,
     )
     made: list[str] = []
-    for exported in bundle.pipelines:
-        released, _ = located(exported, dataset_id)
+    for released in planned.pipelines:
         draft = await recipes.create_draft(
             principal,
             label=released.label,
@@ -387,6 +480,11 @@ async def apply_import(
                 unmapped_fields=[],
             )
         made.append(draft.recipe_id)
+    # Last, since a version's rows are never replaced: a failure above leaves drafts to discard,
+    # never list rows kept under a version nothing imported names (the lane review, item 22).
+    for reference in planned.own_lists:
+        rows: list[dict[str, object]] = [dict(r) for r in bundle.list_rows[reference.name]]
+        await asyncio.to_thread(rows_kept.write, reference, rows)
     return made
 
 

@@ -31,12 +31,14 @@ from services.api.app import (
 )
 from services.api.operations_rollup import external_triggers, rollup_rows, scheduler_health
 from services.api.recipe_runs import RecipeRun
+from services.api.run_quotas import InMemoryQuotaStore, QuotaAlert
 from services.api.service_identity import ServiceIdentityRefused, ServiceIdentityVerifier
 
 from ontology.handling import load_uk_le_scheme
 from principal_auth import OidcResolverSettings
 from schemas.domain import Handling, Principal
 from schemas.ingest import RunMetering
+from schemas.operations import RunQuota
 from tests.conftest import default_claims, sign_token
 
 SCHEME = load_uk_le_scheme()
@@ -139,7 +141,12 @@ class _Ledger:
         self.asked: list[list[str] | None] = []
         self.held = [
             _run(),
-            _run(run_id="run-u2", recipe_id="rcp-unit-2-only", owning_unit="unit-2"),
+            _run(
+                run_id="run-u2",
+                recipe_id="rcp-unit-2-only",
+                owning_unit="unit-2",
+                dataset_id="ds-2",
+            ),
         ]
 
     async def window(self, *, since: datetime, units: list[str] | None) -> list[RecipeRun]:
@@ -154,8 +161,13 @@ class _Recipes:
     async def get(self, recipe_id: str) -> object:
         return type("R", (), {"label": "Visits"})()
 
-    async def scheduled(self) -> list[object]:
-        return []
+    async def paused_of(self, units: list[str] | None) -> list[object]:
+        """As the store's `WHERE`: unit-1's paused pipeline only to a reader of unit-1."""
+        paused = type(
+            "R", (), {"recipe_id": "rcp-1", "label": "Visits", "schedule_paused_reason": "by hand",
+                      "owning_unit": "unit-1"},
+        )()  # fmt: skip
+        return [paused] if units is None or "unit-1" in units else []
 
 
 class _Names:
@@ -163,8 +175,21 @@ class _Names:
         return {OWNER_ID: "Sam Rowe"}
 
 
+QUOTAS = InMemoryQuotaStore()
+
+
 @pytest.fixture
 def ledger() -> Iterator[_Ledger]:
+    import asyncio
+
+    QUOTAS.quotas.clear()
+    QUOTAS.raised.clear()
+    asyncio.run(QUOTAS.set(RunQuota(scope="unit", key="unit-1", runs_per_day=2)))
+    asyncio.run(QUOTAS.set(RunQuota(scope="dataset", key="ds-1", runs_per_day=1)))
+    asyncio.run(QUOTAS.raise_once(
+        QuotaAlert("dataset", "ds-1", "2026-11-10", "unit-1's dataset reached its quota"),
+        at=datetime(2026, 11, 10, tzinfo=UTC),
+    ))  # fmt: skip
     found = _Ledger()
     app.dependency_overrides.update(
         {
@@ -172,7 +197,7 @@ def ledger() -> Iterator[_Ledger]:
             get_studio_recipes: lambda: _Recipes(),
             get_principal_names: lambda: _Names(),
             get_handling_scheme: lambda: SCHEME,
-            get_run_quotas: lambda: None,
+            get_run_quotas: lambda: QUOTAS,
         }
     )
     yield found
@@ -207,6 +232,20 @@ def test_a_reader_of_another_unit_sees_nothing_of_this_ones_runs(ledger: _Ledger
     assert answer.status_code == 200, answer.text
     assert "rcp-1" not in answer.text and "unit-1" not in answer.text
     assert [r["pipeline_id"] for r in answer.json()["rows"]] == ["rcp-unit-2-only"]
+    body = answer.json()
+    assert body["scheduler"]["paused"] == [] and body["quotas"] == [] and body["alerts"] == []
+    assert "ds-1" not in answer.text
+
+
+def test_a_reader_of_the_unit_sees_its_paused_pipeline_quotas_and_alert(ledger: _Ledger) -> None:
+    app.dependency_overrides[get_principal] = lambda: READER
+    body = TestClient(app).get("/v1/admin/operations/runs", params={"days": 7}).json()
+    assert [p["pipeline_id"] for p in body["scheduler"]["paused"]] == ["rcp-1"]
+    assert {(q["scope"], q["key"]) for q in body["quotas"]} == {
+        ("unit", "unit-1"),
+        ("dataset", "ds-1"),
+    }
+    assert [a["words"] for a in body["alerts"]] == ["unit-1's dataset reached its quota"]
 
 
 class _Verifier:
@@ -252,3 +291,15 @@ def test_a_run_is_read_back_only_by_the_client_that_triggered_it(
         assert answer.json()["rows_read"] == 10 and answer.json()["external_run_id"] == "d:1"
     else:
         assert "rows_read" not in answer.text
+
+
+def test_the_run_api_tells_no_account_id_and_no_failures_own_text() -> None:
+    from services.api.external_runs import FAILED_WORDS, served_words
+
+    refused = served_words(
+        "refused", f"the schedule's owner, {OWNER_ID}, can no longer sign in", OWNER_ID
+    )
+    assert refused == "the schedule's owner, the pipeline's owner, can no longer sign in"
+    failed = served_words("failed", "KeyError: 'SECRET-REF-31'", OWNER_ID)
+    assert failed == FAILED_WORDS and "SECRET" not in failed
+    assert served_words("succeeded", "x", OWNER_ID) is None

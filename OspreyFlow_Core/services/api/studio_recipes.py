@@ -872,6 +872,20 @@ class StudioRecipeStore:
             )
         return None if row is None else _row_to_draft(row)
 
+    async def paused_of(self, units: Sequence[str] | None) -> list[StudioRecipeDraft]:
+        """The paused schedules of `units` (`None`: every unit), for Operations' health, filtered
+        in the `WHERE` (rule 3; the lane review of L1.7, item 5): another unit's pipeline is never
+        read to be dropped."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM studio_recipes WHERE status = ANY($1::text[]) "
+                "AND schedule_paused AND (schedule_cron IS NOT NULL OR schedule_watch IS NOT NULL) "
+                "AND ($2::text[] IS NULL OR owning_unit = ANY($2::text[])) ORDER BY label",
+                [StudioRecipeStatus.PUBLISHED.value, StudioRecipeStatus.FLAGGED.value],
+                None if units is None else list(units),
+            )
+        return [_row_to_draft(r) for r in rows]
+
     async def scheduled(self) -> list[StudioRecipeDraft]:
         """Every recipe with a schedule, at its current version (published or flagged), paused or
         not — read by the scheduler (ADR-110 decision 2), a backend pass like the KYC sweep, so it

@@ -7,7 +7,8 @@ the reader reaches through no case is 404 (rule 4: every read path).
 The lists' rows are kept by the real Parquet keeper over a local store (not a fake); the recipe
 store and the model store are this file's doubles, the model one refusing what the real one
 refuses for these calls (a second draft is refused; `save_draft` needs an open draft). The live
-round trip through the real Postgres stores is `test_studio_release_live.py`.
+round trip through a second store (`test_a_round_trip_lands_the_same_pipeline_model_and_list`) is
+here; the real Postgres stores are run by the leased live set over the same routes.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from services.api.app import (
     get_handling_scheme,
     get_list_rows,
     get_list_store,
+    get_ontology,
     get_principal,
     get_sources,
     get_staging_storage,
@@ -36,6 +38,7 @@ from services.api.sources import InMemorySourceStore
 from services.ingest.release import MANIFEST
 
 from ontology.handling import load_uk_le_scheme
+from ontology.loader import load_default_ontology
 from schemas.dataset_model import ReferenceList, TargetModel, TargetModelDraftInput
 from schemas.domain import Principal
 from schemas.ingest import (
@@ -181,6 +184,7 @@ class _World:
                 get_staging_storage: lambda: STORAGE,
                 get_audit: lambda: self.audit,
                 get_handling_scheme: lambda: load_uk_le_scheme(),
+                get_ontology: lambda: load_default_ontology(),
             }
         )
         return TestClient(app)
@@ -319,3 +323,115 @@ def test_a_dataset_reached_through_no_case_is_not_found(store: Path, ingest: Pat
         == 404
     )
     assert client.post("/v1/datasets/pid/release/import", json={"files": {}}).status_code == 404
+
+
+def _rewrite(files: dict[str, str], path: str, text: str) -> None:
+    """A hand-edited bundle with its checksum kept true."""
+    import hashlib
+
+    files[path] = text
+    manifest = yaml.safe_load(files[MANIFEST])
+    for entry in manifest["spec"]["files"]:
+        if entry["path"] == path:
+            entry["sha256"] = hashlib.sha256(text.encode()).hexdigest()
+    files[MANIFEST] = yaml.safe_dump(manifest, sort_keys=False)
+
+
+def _pipeline_path(files: dict[str, str]) -> str:
+    return next(p for p in files if p.startswith("pipelines/"))
+
+
+def test_an_imported_handling_is_judged_as_connect_judges_it(store: Path, ingest: Path) -> None:
+    """The lane review of L1.7, item 3: Connect's declarations and ADR-068's default marking."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    path = _pipeline_path(files)
+    bad = yaml.safe_load(files[path])
+    bad["handling"]["units"] = ["", "unit-1"]
+    edited = dict(files)
+    _rewrite(edited, path, yaml.safe_dump(bad, sort_keys=False))
+    world.recipes.create_calls.clear()
+    answer = client.post("/v1/datasets/pid/release/import", json={"files": edited})
+    assert answer.status_code == 422, answer.text
+    assert any("its source's handling" in p for p in answer.json()["refused"])
+    assert world.recipes.create_calls == []
+    blank = yaml.safe_load(files[path])
+    blank["handling"]["classification"] = ""
+    _rewrite(files, path, yaml.safe_dump(blank, sort_keys=False))
+    answer = client.post("/v1/datasets/pid/release/import", json={"files": files})
+    assert answer.status_code == 200, answer.text
+    (created,) = world.recipes.create_calls
+    assert created["handling"]["classification"] == "PUBLIC"  # type: ignore[index]
+
+
+def test_a_round_trip_lands_the_same_pipeline_model_and_list(
+    store: Path, ingest: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Export from one store, import into another that keeps no list yet, then export what was
+    imported: the pipeline's and the model's files are the same, but for the version numbers each
+    environment gives its own (ADR-141's round trip; the lane review of L1.7, item 10)."""
+    first = _World(ingest)
+    files = _export(first.install(ENGINEER))
+    app.dependency_overrides.clear()
+
+    from services.ingest import staging
+
+    from tests.services.api.test_studio_staging_routes import LocalStore
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setattr(staging, "filesystem", lambda config: LocalStore(elsewhere))
+    second = _World.__new__(_World)
+    second.recipes = _FakeStudioRecipes(None)
+    second.models = _Models()
+    second.models.live_model = None
+    second.rows = ParquetListRows(STORAGE)
+    second.audit = _FakeAudit()
+    client = second.install(ENGINEER)
+    answer = client.post("/v1/datasets/pid/release/import", json={"files": files})
+    assert answer.status_code == 200, answer.text
+    assert ("reference_list", "new_draft") in {(i["role"], i["action"]) for i in answer.json()["items"]}
+    wings = ReferenceList(id="lst-wings", dataset_id="pid", name="wings", kind="reference",
+                          key_column="code", version=1)  # fmt: skip
+    assert second.rows.read(wings) == [{"code": "A", "name": "A wing"}]
+    # The imported draft deployed and the model made live there, as a person would, then exported.
+    assert second.recipes.draft is not None and second.models.draft_model is not None
+    second.recipes.draft = second.recipes.draft.model_copy(
+        update={"status": StudioRecipeStatus.PUBLISHED, "dataset_id": "pid", "version": 3,
+                "recipe_id": "rcp-1"}
+    )  # fmt: skip
+    second.models.live_model = second.models.draft_model.model_copy(update={"state": "live", "version": 2})
+    again = _export(client)
+
+    def comparable(text: str) -> dict[str, object]:
+        data = yaml.safe_load(text)
+        data.pop("exported_version", None)
+        return data
+
+    assert comparable(again["model.yaml"]) == comparable(files["model.yaml"])
+    assert comparable(again[_pipeline_path(again)]) == comparable(files[_pipeline_path(files)])
+    assert again["lists/wings.yaml"] == files["lists/wings.yaml"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["POSTGRES_PASSWORD", "OSPREY_MODEL_PROVIDER_KEY", "OSPREY_MODEL_KEY_ANTHROPIC", "MINIO_ACCESS_KEY",
+     "AZURE_STORAGE_KEY", "OIDC_TOKEN_EXCHANGE_CLIENT_SECRET"],
+)  # fmt: skip
+def test_a_secret_planted_in_the_deployments_environment_is_never_exported(
+    store: Path, ingest: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """ADR-140 Amendment 9's test at the route's own call site: the value `deployment.env` puts in
+    the Conduit's environment, planted in a pipeline's words, refuses the export, which names the
+    file and never the value (`deployment_secrets()`, read by the route)."""
+    planted = f"planted-{name.lower()}-0x51"
+    monkeypatch.setenv(name, planted)
+    world = _World(ingest)
+    world.recipes.draft = world.recipes.draft.model_copy(update={"legal_basis": f"see {planted}"})  # type: ignore[union-attr]
+    answer = world.install(ENGINEER).get(
+        "/v1/datasets/pid/release", params={"name": "pid-release", "version": "1"}
+    )
+    assert answer.status_code == 422, answer.text
+    assert "one of this deployment's secrets" in answer.text
+    assert planted not in answer.text

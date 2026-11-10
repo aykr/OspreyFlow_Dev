@@ -22,7 +22,8 @@ test("a unit's run quota is saved by keyboard, and the figures read again", asyn
   await page.goto(HARNESS);
   await expect(page.getByRole("table", { name: "Runs by day, pipeline and trigger" })).toBeVisible();
   await page.getByLabel("Quota for").focus();
-  await page.getByLabel("Quota for").selectOption("unit");
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByLabel("Quota for")).toHaveValue("unit");
   await fill(page, "Unit", "unit-1");
   await fill(page, "Runs a day", "5");
   await page.getByRole("button", { name: "Save the run quota" }).focus();

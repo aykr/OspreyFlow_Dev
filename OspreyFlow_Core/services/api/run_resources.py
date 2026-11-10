@@ -67,8 +67,8 @@ from .pipeline_run import (
 )
 from .recipe_run import RecipeRunDeps
 from .recipe_runs import RecipeRunStore
-from .run_quotas import PostgresQuotaStore
 from .review import ExtractionCandidateStore
+from .run_quotas import PostgresQuotaStore
 from .screening import ScreeningListStore
 from .strength_influencers import InfluencerStore
 from .studio_publish import _REPO_ROOT as RECIPES_REPO_ROOT

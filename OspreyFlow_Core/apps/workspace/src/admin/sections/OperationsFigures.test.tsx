@@ -34,6 +34,7 @@ const ROLLUP: OperationsRollup = {
   external: [{ run_id: "r1", pipeline_label: "Visits", service_identity: "airflow-prod", ran_as_name: "Sam Rowe",
     started_at: "2026-11-10T09:00:00Z", outcome: "succeeded", wall_ms: 2100, withheld: false }],
   quotas: [{ scope: "dataset", key: "pid", runs_per_day: 1, alert_at_share: 0.8 }],
+  alerts: [{ scope: "dataset", key: "pid", day: "2026-11-10", words: "The dataset's runs today reach 1 of its quota of 1 run a day" }],
 }; // prettier-ignore
 
 function serve(...answers: { status: number; body: unknown }[]) {
@@ -80,6 +81,7 @@ describe("OperationsFigures", () => {
         "1 refused: the dataset's quota of 1 run a day is used (1 run today)",
       ),
     ).toBeTruthy();
+    expect(screen.getByText("2026-11-10: The dataset's runs today reach 1 of its quota of 1 run a day.")).toBeTruthy();
   });
 
   it("saves a quota for the scope chosen, and reads the figures again", async () => {

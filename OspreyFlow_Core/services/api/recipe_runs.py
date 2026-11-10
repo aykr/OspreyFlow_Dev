@@ -19,7 +19,7 @@ from collections.abc import AsyncIterator, Collection, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 import asyncpg
 from pydantic import BaseModel, Field, model_validator
@@ -35,6 +35,8 @@ from schemas.ingest import (
     RunMetering,
     SourceWatermark,
 )
+
+from .run_quotas import QuotaLimit, QuotaRefused, quota_words
 
 #: `source_refresh` (ADR-110 Amendment 6 point 5): a run started by its source's refresh policy.
 RunTrigger = Literal["manual", "schedule", "watch", "release", "source_refresh", "external"]
@@ -333,16 +335,34 @@ class RecipeRunStore:
         source_file: str | None = None,
         counted: Counted | None = None,
         external: External | None = None,
+        within: Sequence[QuotaLimit] = (),
     ) -> str:
         """Records the run as started. `external`: an orchestrator's trigger, whose run id is
         claimed here, once (decision 12): a second start with it raises `ExternalRunRecorded`
-        naming the run that holds it, and inserts nothing."""
+        naming the run that holds it, and inserts nothing. `within` (ADR-141 decision 6): the
+        quotas the start is held to, each counted again under a transaction lock of its own, so
+        the count and the row are one step and two starts cannot both take a quota's last run
+        (`QuotaRefused`, nothing inserted; the lane review of L1.7, item 11)."""
         run_id = new_id()
-        await self._insert(
-            run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
-            started_at=now, finished_at=None, outcome="running", failure=None,
-            source_file=source_file, counted=counted, external=external,
-        )  # fmt: skip
+        async with self._pool.acquire() as conn, conn.transaction():
+            for limit in sorted(within, key=lambda q: (q.scope, q.key)):
+                await conn.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext($1))", f"quota:{limit.scope}:{limit.key}"
+                )
+                column = "dataset_id" if limit.scope == "dataset" else "owning_unit"
+                today = await conn.fetchval(
+                    f"SELECT count(*) FROM recipe_runs WHERE started_at >= $1 AND {column} = $2 "
+                    "AND outcome IN ('running', 'succeeded', 'failed')",
+                    limit.since,
+                    limit.key,
+                )
+                if int(today or 0) >= limit.runs_per_day:
+                    raise QuotaRefused(quota_words(limit.scope, limit.runs_per_day, int(today)))
+            await self._insert(
+                run_id, recipe_id, recipe_version, investigation_id, trigger, slot, run_as, source,
+                started_at=now, finished_at=None, outcome="running", failure=None,
+                source_file=source_file, counted=counted, external=external, conn=conn,
+            )  # fmt: skip
         return run_id
 
     async def finish(
@@ -975,38 +995,71 @@ class RecipeRunStore:
         source_file: str | None = None,
         counted: Counted | None = None,
         external: External | None = None,
+        conn: Any = None,
     ) -> None:
         try:
-            async with self._pool.acquire() as conn:
-                await conn.execute(
-                    "INSERT INTO recipe_runs (run_id, recipe_id, recipe_version, "
-                    "investigation_id, trigger, slot, run_as, source_handling, started_at, "
-                    "finished_at, outcome, failure, source_file, dataset_id, owning_unit, "
-                    "external_run_id, triggered_by) VALUES ($1, $2, $3, $4, $5, $6, $7, "
-                    "$8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
-                    run_id,
-                    recipe_id,
-                    recipe_version,
-                    investigation_id,
-                    trigger,
-                    slot,
-                    run_as,
-                    source.model_dump_json(),
-                    started_at,
-                    finished_at,
-                    outcome,
-                    failure,
-                    source_file,
-                    counted.dataset_id if counted else None,
-                    counted.owning_unit if counted else None,
-                    external.run_id if external else None,
-                    external.triggered_by if external else None,
-                )
+            if conn is not None:
+                await self._insert_row(
+                    conn, run_id, recipe_id, recipe_version, investigation_id, trigger, slot,
+                    run_as, source, started_at, finished_at, outcome, failure, source_file,
+                    counted, external,
+                )  # fmt: skip
+                return
+            async with self._pool.acquire() as held:
+                await self._insert_row(
+                    held, run_id, recipe_id, recipe_version, investigation_id, trigger, slot,
+                    run_as, source, started_at, finished_at, outcome, failure, source_file,
+                    counted, external,
+                )  # fmt: skip
         except asyncpg.UniqueViolationError as error:
             if external is None:
                 raise
-            held = await self.by_external(recipe_id, external.run_id)
-            raise ExternalRunRecorded(held.run_id if held else "") from error
+            held_run = await self.by_external(recipe_id, external.run_id)
+            raise ExternalRunRecorded(held_run.run_id if held_run else "") from error
+
+    @staticmethod
+    async def _insert_row(
+        conn: Any,
+        run_id: str,
+        recipe_id: str,
+        recipe_version: int,
+        investigation_id: str,
+        trigger: RunTrigger,
+        slot: datetime | None,
+        run_as: str,
+        source: Handling,
+        started_at: datetime,
+        finished_at: datetime | None,
+        outcome: RunOutcome,
+        failure: str | None,
+        source_file: str | None,
+        counted: Counted | None,
+        external: External | None,
+    ) -> None:
+        await conn.execute(
+            "INSERT INTO recipe_runs (run_id, recipe_id, recipe_version, "
+            "investigation_id, trigger, slot, run_as, source_handling, started_at, "
+            "finished_at, outcome, failure, source_file, dataset_id, owning_unit, "
+            "external_run_id, triggered_by) VALUES ($1, $2, $3, $4, $5, $6, $7, "
+            "$8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+            run_id,
+            recipe_id,
+            recipe_version,
+            investigation_id,
+            trigger,
+            slot,
+            run_as,
+            source.model_dump_json(),
+            started_at,
+            finished_at,
+            outcome,
+            failure,
+            source_file,
+            counted.dataset_id if counted else None,
+            counted.owning_unit if counted else None,
+            external.run_id if external else None,
+            external.triggered_by if external else None,
+        )
 
     async def get(self, run_id: str) -> RecipeRun | None:
         async with self._pool.acquire() as conn:

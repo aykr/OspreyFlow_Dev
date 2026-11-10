@@ -9,7 +9,8 @@ not count toward the three refusals that pause a schedule, since it says nothing
 
 **The budget alert.** When a run brings the day's count to `alert_at_share` of a quota (80% unless
 set), one alert is recorded for that quota and day (`quota_alerts`), shown on Admin › Running ›
-Operations. Its delivery to each administrator's own inbox is admin's (*Needs you*), left named.
+Operations (`OperationsRollup.alerts`). Its delivery to each administrator's own inbox is admin's
+(*Needs you*), left named.
 
 Rows per run and staged bytes per run (the decision's other two quotas) are not built here: they
 are judged mid-run, and are named as left in REPORT.md.
@@ -18,6 +19,7 @@ are judged mid-run, and are named as left in REPORT.md.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import Protocol
@@ -53,6 +55,25 @@ class QuotaRefused(Exception):
 
 
 @dataclass(frozen=True)
+class QuotaLimit:
+    """A quota a run's start is held to, judged again under its lock as the run is recorded
+    (`RecipeRunStore.start`), so two runs into one dataset cannot both take its last run."""
+
+    scope: QuotaScope
+    key: str
+    runs_per_day: int
+    since: datetime
+
+
+def quota_words(scope: str, limit: int, today: int) -> str:
+    return (
+        f"{_WHOSE[scope]} quota of {_runs(limit)} a day is used ({_runs(today)} today); "
+        "the next may start after midnight, or an administrator may raise the quota in "
+        "Admin › Running › Operations"
+    )
+
+
+@dataclass(frozen=True)
 class QuotaAlert:
     scope: QuotaScope
     key: str
@@ -71,8 +92,13 @@ class QuotaStore(Protocol):
     async def set(self, quota: RunQuota) -> None: ...
     async def remove(self, scope: QuotaScope, key: str) -> None: ...
     async def all(self) -> list[RunQuota]: ...
+    async def reached_by(
+        self, *, units: Sequence[str] | None, datasets: Sequence[str]
+    ) -> list[RunQuota]: ...
     async def raise_once(self, alert: QuotaAlert, *, at: datetime) -> bool: ...
-    async def alerts(self, *, since_day: str) -> list[QuotaAlert]: ...
+    async def alerts(
+        self, *, since_day: str, of: Sequence[tuple[str, str]] | None
+    ) -> list[QuotaAlert]: ...
 
 
 @dataclass
@@ -94,6 +120,17 @@ class InMemoryQuotaStore:
     async def all(self) -> list[RunQuota]:
         return sorted(self.quotas.values(), key=lambda q: (q.scope, q.key))
 
+    async def reached_by(
+        self, *, units: Sequence[str] | None, datasets: Sequence[str]
+    ) -> list[RunQuota]:
+        return [
+            q
+            for q in await self.all()
+            if units is None
+            or (q.scope == "unit" and q.key in units)
+            or (q.scope == "dataset" and q.key in datasets)
+        ]
+
     async def raise_once(self, alert: QuotaAlert, *, at: datetime) -> bool:
         key = (alert.scope, alert.key, alert.day)
         if key in self.raised:
@@ -101,8 +138,15 @@ class InMemoryQuotaStore:
         self.raised[key] = alert
         return True
 
-    async def alerts(self, *, since_day: str) -> list[QuotaAlert]:
-        return [a for a in self.raised.values() if a.day >= since_day]
+    async def alerts(
+        self, *, since_day: str, of: Sequence[tuple[str, str]] | None
+    ) -> list[QuotaAlert]:
+        wanted = None if of is None else set(of)
+        return [
+            a
+            for a in self.raised.values()
+            if a.day >= since_day and (wanted is None or (a.scope, a.key) in wanted)
+        ]
 
 
 class PostgresQuotaStore:
@@ -153,6 +197,21 @@ class PostgresQuotaStore:
             )
         return [RunQuota.model_validate(dict(r)) for r in rows]
 
+    async def reached_by(
+        self, *, units: Sequence[str] | None, datasets: Sequence[str]
+    ) -> list[RunQuota]:
+        """The quotas a reader of `units` (`None`: every unit) sees: their units' own and those of
+        the datasets their units' runs went into, filtered in the `WHERE` (rule 3)."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT scope, key, runs_per_day, alert_at_share FROM run_quotas WHERE "
+                "$1::text[] IS NULL OR (scope = 'unit' AND key = ANY($1::text[])) "
+                "OR (scope = 'dataset' AND key = ANY($2::text[])) ORDER BY scope, key",
+                None if units is None else list(units),
+                list(datasets),
+            )
+        return [RunQuota.model_validate(dict(r)) for r in rows]
+
     async def raise_once(self, alert: QuotaAlert, *, at: datetime) -> bool:
         async with self._pool.acquire() as conn:
             status = await conn.execute(
@@ -166,12 +225,22 @@ class PostgresQuotaStore:
             )
         return str(status).endswith(" 1")
 
-    async def alerts(self, *, since_day: str) -> list[QuotaAlert]:
+    async def alerts(
+        self, *, since_day: str, of: Sequence[tuple[str, str]] | None
+    ) -> list[QuotaAlert]:
+        """The budget alerts since `since_day` of the quotas `of` (`None`: every quota), filtered
+        in the `WHERE` (rule 3)."""
+        scopes = None if of is None else [s for s, _ in of]
+        keys = None if of is None else [k for _, k in of]
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT scope, key, day::text AS day, words FROM quota_alerts "
-                "WHERE day >= $1::date ORDER BY day DESC, scope, key",
+                "SELECT a.scope, a.key, a.day::text AS day, a.words FROM quota_alerts a "
+                "WHERE a.day >= $1::date AND ($2::text[] IS NULL OR (a.scope, a.key) IN "
+                "(SELECT * FROM unnest($2::text[], $3::text[]))) "
+                "ORDER BY a.day DESC, a.scope, a.key",
                 since_day,
+                scopes,
+                keys,
             )
         return [QuotaAlert(r["scope"], r["key"], r["day"], r["words"]) for r in rows]
 
@@ -196,10 +265,12 @@ async def judge(
     dataset_id: str | None,
     owning_unit: str | None,
     now: datetime,
-) -> None:
+) -> list[QuotaLimit]:
     """Refuses (`QuotaRefused`) a run past its dataset's or its unit's quota of runs a day, and
-    records the budget alert once a day when this run reaches a quota's alert share."""
+    records the budget alert once a day when this run reaches a quota's alert share. Returns the
+    limits the run's start is held to again, under their locks, as it is recorded."""
     since = day_start(now)
+    limits: list[QuotaLimit] = []
     day = since.date().isoformat()
     for scope, key in (("dataset", dataset_id), ("unit", owning_unit)):
         if not key:
@@ -214,14 +285,12 @@ async def judge(
         )
         limit = quota.runs_per_day
         if today >= limit:
-            raise QuotaRefused(
-                f"{_WHOSE[scope]} quota of {_runs(limit)} a day is used ({_runs(today)} today); "
-                "the next may start after midnight, or an administrator may raise the quota in "
-                "Admin › Running › Operations"
-            )
+            raise QuotaRefused(quota_words(scope, limit, today))
+        limits.append(QuotaLimit(scope, key, limit, since))  # type: ignore[arg-type]
         if today + 1 >= math.ceil(limit * quota.alert_at_share):
             words = (
                 f"{_WHOSE[scope].capitalize()} runs today reach {today + 1} of its quota of "
                 f"{_runs(limit)} a day"
             )
             await quotas.raise_once(QuotaAlert(scope, key, day, words), at=now)  # type: ignore[arg-type]
+    return limits

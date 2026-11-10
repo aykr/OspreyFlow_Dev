@@ -341,6 +341,21 @@ export function OperationsFigures({ api }: { api: AdminApi }) {
           )}
         </section>
       )}
+      {rollup && (rollup.alerts ?? []).length > 0 && (
+        <section
+          aria-label="Budget alerts"
+          style={{ display: "grid", gap: "var(--sp-4)" }}
+        >
+          <h4 style={{ margin: 0 }}>Budget alerts</h4>
+          <ul style={{ margin: 0 }}>
+            {(rollup.alerts ?? []).map((a) => (
+              <li
+                key={`${a.day}:${a.scope}:${a.key}`}
+              >{`${a.day}: ${a.words}.`}</li>
+            ))}
+          </ul>
+        </section>
+      )}
       {rollup && (
         <Quotas api={api} quotas={rollup.quotas ?? []} onSaved={read} />
       )}

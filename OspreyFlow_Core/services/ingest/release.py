@@ -279,11 +279,29 @@ def build_bundle(
     return files
 
 
+class _NoAliases(yaml.SafeLoader):
+    """`yaml.safe_load` with no anchors or aliases: a bundle's files never need one, and a few
+    nested aliases expand to more than any byte bound allows (the lane review of L1.7, item 13)."""
+
+    def compose_node(self, parent: Any, index: Any) -> Any:
+        if self.check_event(yaml.AliasEvent):
+            event = self.peek_event()  # type: ignore[no-untyped-call]
+            raise yaml.composer.ComposerError(
+                None, None, "a bundle's file holds no YAML alias", event.start_mark
+            )
+        return super().compose_node(parent, index)
+
+
+def load_bundle_yaml(data: bytes) -> Any:
+    """A bundle's YAML file read safely: UTF-8, no tags, no objects, no aliases."""
+    return yaml.load(data.decode("utf-8"), Loader=_NoAliases)  # noqa: S506 - a SafeLoader
+
+
 def _load_yaml(path: str, data: bytes, problems: list[str]) -> Any:
     try:
-        return yaml.safe_load(data.decode("utf-8"))
+        return load_bundle_yaml(data)
     except (yaml.YAMLError, UnicodeDecodeError):
-        problems.append(f"{path} is not YAML that can be read")
+        problems.append(f"{path} is not YAML that can be read (UTF-8, with no alias)")
         return None
 
 
@@ -337,7 +355,7 @@ def read_bundle(files: Mapping[str, bytes]) -> Bundle:
 
     for path, data in files.items():
         if path.endswith(".yaml"):
-            for key in credential_keys(yaml.safe_load(data.decode("utf-8"))):
+            for key in credential_keys(_load_yaml(path, data, problems)):
                 problems.append(f"{path} has a field a credential is kept in ({key})")
     if problems:
         raise ReleaseRefused(problems)
@@ -371,7 +389,11 @@ def read_bundle(files: Mapping[str, bytes]) -> Bundle:
         if item.rows != f"lists/rows/{_sha(files[item.rows])}.csv":
             problems.append(f"the list {item.name!r}'s rows are not named by their checksum")
             continue
-        rows = list(csv.DictReader(io.StringIO(files[item.rows].decode("utf-8"))))
+        try:
+            rows = list(csv.DictReader(io.StringIO(files[item.rows].decode("utf-8"))))
+        except (UnicodeDecodeError, csv.Error):
+            problems.append(f"the list {item.name!r}'s rows are not a CSV that can be read")
+            continue
         if len(rows) > MAX_LIST_ROWS:
             problems.append(f"the list {item.name!r} carries more than {MAX_LIST_ROWS} rows")
             continue

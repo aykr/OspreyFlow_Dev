@@ -46,6 +46,7 @@ from dataclasses import replace as dataclass_replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, cast, get_args
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import (
@@ -399,6 +400,7 @@ from schemas.operations import (
     ExternalRunStatus,
     OperationsRollup,
     PausedPipeline,
+    QuotaAlertView,
     QuotaScope,
     RunQuota,
     RunQuotaInput,
@@ -1045,6 +1047,7 @@ from .studio_release import (
     deployment_secrets,
     export_release,
     plan_import,
+    with_default_classification,
 )
 from .studio_staging import (
     StagedTestInputs,
@@ -11422,6 +11425,8 @@ async def import_dataset_release(
     list_store: ListStoreDep,
     sources: SourcesDep,
     audit: AuditDep,
+    handling_scheme: HandlingSchemeDep,
+    ontology: OntologyDep,
     dry_run: bool = False,
 ) -> ReleaseImportPlan:
     """*Import* and `ospreyflow release import [--dry-run]`: the bundle read and checked, every
@@ -11437,7 +11442,7 @@ async def import_dataset_release(
                 mode="json"
             ),
         )
-    plan, own_lists = await plan_import(
+    planned = await plan_import(
         bundle,
         dataset_id=dataset_id,
         principal=principal,
@@ -11447,7 +11452,10 @@ async def import_dataset_release(
         staging_storage=staging_storage,
         list_store=list_store,
         sources=sources,
+        scheme=handling_scheme,
+        ontology=ontology,
     )
+    plan = planned.plan
     if plan.refused:
         return JSONResponse(  # type: ignore[return-value]
             status_code=422, content=plan.model_dump(mode="json")
@@ -11462,8 +11470,7 @@ async def import_dataset_release(
         return plan
     made = await apply_import(
         bundle,
-        plan,
-        own_lists,
+        planned,
         dataset_id=dataset_id,
         principal=principal,
         models=models,
@@ -12070,11 +12077,7 @@ def _with_default_classification(
     lowest level, which for the UK scheme is `PUBLIC`. Done here, not in the Glass, so a draft never
     carries an empty marking whichever client wrote it; an analyst's own choice is never
     replaced."""
-    chosen = handling.get("classification")
-    if isinstance(chosen, str) and chosen.strip():
-        return handling
-    lowest = "PUBLIC" if "PUBLIC" in scheme.classification else scheme.classification[0]
-    return {**handling, "classification": lowest}
+    return with_default_classification(handling, scheme)
 
 
 @app.post(
@@ -17359,6 +17362,13 @@ async def refresh_screening_list_route(
     return own
 
 
+def get_schedule_executor(request: Request) -> ScheduleExecutor:
+    return request.app.state.schedule_executor  # type: ignore[no-any-return]
+
+
+ScheduleExecutorDep = Annotated[ScheduleExecutor, Depends(get_schedule_executor)]
+
+
 # --- External orchestration and Operations (ADR-141; the redesign's phase 10) --------------------
 
 #: Who may hand a pipeline's schedule to an orchestrator: who may schedule it (ADR-110 decision 3).
@@ -17589,14 +17599,22 @@ async def operations_runs(
         PausedPipeline(
             pipeline_id=r.recipe_id, pipeline_label=r.label, reason=r.schedule_paused_reason
         )
-        for r in await studio_recipes.scheduled()
-        if r.schedule_paused and (units is None or r.owning_unit in units)
+        for r in await studio_recipes.paused_of(units)
     ]
     named = await names.full_names({r.run_as for r in runs if r.run_as})
-    quotas = [] if run_quotas is None else await run_quotas.all()
-    if units is not None:
-        datasets = {r.dataset_id for r in runs}
-        quotas = [q for q in quotas if (q.scope == "unit" and q.key in units) or q.key in datasets]
+    datasets = sorted({r.dataset_id for r in runs if r.dataset_id})
+    quotas = (
+        [] if run_quotas is None else await run_quotas.reached_by(units=units, datasets=datasets)
+    )
+    since_day = since.astimezone(ZoneInfo("Europe/London")).date().isoformat()
+    alerts = (
+        []
+        if run_quotas is None
+        else await run_quotas.alerts(
+            since_day=since_day,
+            of=None if units is None else [(q.scope, q.key) for q in quotas],
+        )
+    )
     return OperationsRollup(
         days=days,
         rows=rollup_rows(runs, reader=principal, scheme=handling_scheme, labels=labels),
@@ -17605,6 +17623,10 @@ async def operations_runs(
             runs, reader=principal, scheme=handling_scheme, labels=labels, names=named
         ),
         quotas=quotas,
+        alerts=[
+            QuotaAlertView(scope=a.scope, key=a.key, day=date.fromisoformat(a.day), words=a.words)
+            for a in alerts
+        ],
         units=units
         if units is not None
         else sorted({r.owning_unit for r in runs if r.owning_unit}),
@@ -17702,13 +17724,6 @@ async def pause_schedule_route(
                        result_cardinality=1)  # fmt: skip
     recipe = await _scheduled_recipe(studio_recipes, recipe_id)
     return await _admin_schedule(recipe, recipe_runs, principal, handling_scheme)
-
-
-def get_schedule_executor(request: Request) -> ScheduleExecutor:
-    return request.app.state.schedule_executor  # type: ignore[no-any-return]
-
-
-ScheduleExecutorDep = Annotated[ScheduleExecutor, Depends(get_schedule_executor)]
 
 
 @app.exception_handler(ScheduleRunRefused)

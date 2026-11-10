@@ -52,6 +52,22 @@ _STILL_GOING = "the previous run of this pipeline is still going"
 Spawn = Callable[[Coroutine[Any, Any, None]], object]
 
 
+FAILED_WORDS = "the run failed; the pipeline's owner can read why on the Studio's Runs tab"
+
+
+def served_words(outcome: str, words: str | None, owner_id: str) -> str | None:
+    """What the service identity is told of a run that did not succeed (rule 7; the lane review of
+    L1.7, item 12): a refusal's own words with the owner's account id put as "the pipeline's
+    owner", since the ledger writes it into them; a failure only as fixed words, since its text is
+    the Conduit's own and may name what the identity may not read."""
+    if outcome == "succeeded" or outcome == "running":
+        return None
+    if outcome == "failed":
+        return FAILED_WORDS
+    text = words or "no reason was recorded"
+    return text.replace(owner_id, "the pipeline's owner") if owner_id else text
+
+
 def _outcome(run: RecipeRun) -> str:
     if run.outcome in ("running", "succeeded", "failed", "refused"):
         return run.outcome
@@ -77,7 +93,7 @@ async def status_for(
         outcome=_outcome(run),  # type: ignore[arg-type]
         started_at=run.started_at,
         finished_at=run.finished_at,
-        words=run.failure if run.outcome != "succeeded" else None,
+        words=served_words(_outcome(run), run.failure, run.run_as),
         already_recorded=already_recorded,
         rows_read=run.rows_read if may else None,
         rows_rejected=run.rows_rejected if may else None,
@@ -120,7 +136,7 @@ async def _refuse(
         outcome="refused",
         started_at=now,
         finished_at=now,
-        words=words,
+        words=served_words("refused", words, owner_id),
     )
 
 

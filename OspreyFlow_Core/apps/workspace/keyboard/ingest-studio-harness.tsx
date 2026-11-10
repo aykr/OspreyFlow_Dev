@@ -259,6 +259,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     return reply({ quota: { scope: "dataset", key: "harbour-extract", runs_per_day: 4, alert_at_share: 0.8 }, runs_today: 1 });
   if (path.endsWith("/owned-externally") && method === "GET") return reply(null);
   if (path.endsWith("/owned-externally") && method === "PUT") return reply(JSON.parse(String(init?.body)));
+  if (path.endsWith("/owned-externally") && method === "DELETE") return new Response(null, { status: 204 });
   if (path === "/v1/datasets/harbour-extract/release" && method === "GET")
     return reply({ files: { "release.yaml": "apiVersion: ospreyflow.io/v1\n", "model.yaml": "packs: {}\n" }, left_out: 0 });
   if (path === "/v1/datasets/harbour-extract/release/import" && method === "POST") {

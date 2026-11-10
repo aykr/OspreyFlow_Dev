@@ -1047,7 +1047,9 @@ test("a release is exported by keyboard, and its files listed", async ({ page })
   await expect(page.getByText("The release has 2 files.")).toBeVisible();
   const sent = (await asked(page)).find((a) => a.path === "/v1/datasets/harbour-extract/release");
   expect(sent).toBeTruthy();
-  await expect(page.getByRole("button", { name: "Download model.yaml" })).toBeVisible();
+  const download = page.waitForEvent("download");
+  await press(page, "Download model.yaml");
+  expect((await download).suggestedFilename()).toBe("model.yaml");
   registerCovered(REGISTRY, "export-a-release-by-keyboard");
 });
 
@@ -1089,10 +1091,20 @@ test("a pipeline is handed to an orchestrator by keyboard, its quota and DAG rea
   registerCovered(REGISTRY, "hand-a-pipeline-to-an-orchestrator-by-keyboard");
   const pin = region.getByLabel("The DAG runs");
   await pin.focus();
-  await pin.selectOption("this");
+  await page.keyboard.press("ArrowDown");
+  await expect(pin).toHaveValue("this");
   await expect(region.getByLabel("The Airflow DAG")).toContainText(`ospreyflow run harbour-extract ${first} --version `);
   await expect(region.getByLabel("The Airflow DAG")).not.toContainText("--version latest");
+  const dag = page.waitForEvent("download");
+  await region.getByRole("button", { name: "Download the Airflow DAG" }).focus();
+  await page.keyboard.press("Enter");
+  expect((await dag).suggestedFilename()).toBe(`ospreyflow_${first}.py`);
   registerCovered(REGISTRY, "read-a-pipelines-airflow-dag-by-keyboard");
+  await region.getByRole("button", { name: "Take it back" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(region.getByRole("status")).toContainText("is no longer owned externally");
+  expect((await asked(page)).some((a) => a.method === "DELETE" && a.path.endsWith(`/${first}/owned-externally`))).toBe(true);
+  registerCovered(REGISTRY, "take-a-pipeline-back-from-its-orchestrator-by-keyboard");
 });
 
 test("every registered Ingest Studio action has its own proving test case above", () => {

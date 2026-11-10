@@ -317,3 +317,44 @@ def test_a_credential_field_in_a_received_pipeline_is_refused() -> None:
     assert "a field a credential is kept in (pipeline.nodes[1].config.client_secret)" in str(
         refused.value
     )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        b"a: [unclosed\n",
+        b"\xff\xfe not utf-8",
+        b"a: &x [1, 2]\nb: *x\n",
+        b"a: &a [1]\nb: &b [*a, *a]\nc: &c [*b, *b]\nd: [*c, *c, *c]\n",
+    ],
+    ids=["broken", "not-utf8", "an-alias", "nested-aliases"],
+)
+def test_a_file_that_is_not_plain_yaml_is_refused_in_words_never_a_500(text: bytes) -> None:
+    """The lane review of L1.7, item 13: a hand-made file with its checksum kept true."""
+    files = _bundle()
+    path = next(p for p in files if p.startswith("pipelines/"))
+    _rewrite(files, path, text)
+    with pytest.raises(ReleaseRefused) as refused:
+        read_bundle(files)
+    assert f"{path} is not YAML that can be read" in str(refused.value)
+
+
+def test_a_lists_rows_that_are_not_utf8_are_refused_in_words() -> None:
+    import hashlib
+
+    files = _bundle()
+    old = next(p for p in files if p.startswith("lists/rows/"))
+    data = b"code,name\n\xff,x\n"
+    new = f"lists/rows/{hashlib.sha256(data).hexdigest()}.csv"
+    files[new] = data
+    del files[old]
+    listing = yaml.safe_load(files["lists/wings.yaml"])
+    listing["rows"] = new
+    _rewrite(files, "lists/wings.yaml", yaml.safe_dump(listing, sort_keys=False).encode())
+    manifest = yaml.safe_load(files[MANIFEST])
+    manifest["spec"]["files"] = [f for f in manifest["spec"]["files"] if f["path"] != old] + [
+        {"path": new, "role": "list_rows", "sha256": hashlib.sha256(data).hexdigest()}
+    ]
+    files[MANIFEST] = yaml.safe_dump(manifest, sort_keys=False).encode()
+    with pytest.raises(ReleaseRefused, match="not a CSV that can be read"):
+        read_bundle(files)

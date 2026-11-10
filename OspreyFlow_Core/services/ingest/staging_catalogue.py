@@ -467,6 +467,19 @@ def marked_column_problems(step: StagingStep, marked: Collection[str]) -> list[s
             for c in step.columns
             if c in marked
         )
+    if isinstance(step, DeriveStep) and step.column in marked:
+        problems.append(
+            f"step {step.id!r} makes {step.column!r}, {bound}: a row's marking is its own, never "
+            "one a step computes"
+        )
+    if isinstance(step, FuzzyMatchStep):
+        compared = [*(c.left for c in step.compare), *(c.right for c in step.compare)]
+        compared += [*(b.left for b in step.block_on), *(b.right for b in step.block_on)]
+        problems.extend(
+            f"step {step.id!r} compares {c!r}, {bound}"
+            for c in dict.fromkeys(compared)
+            if c in marked
+        )
     if isinstance(step, LookupStep) and step.on in marked:
         problems.append(f"step {step.id!r} looks up on {step.on!r}, {bound}")
     if isinstance(step, JoinStep):

@@ -59,7 +59,7 @@ from .pipeline_run import OnlineGeocode, RecogniserFor, run_published_pipeline
 from .recipe_runs import Counted, External, RecipeRunStore, RunTrigger
 from .review import ExtractionCandidateStore
 from .rule_evaluation import RuleGate
-from .run_quotas import QuotaRefused, QuotaStore
+from .run_quotas import QuotaLimit, QuotaRefused, QuotaStore
 from .run_quotas import judge as judge_quota
 from .screening import ScreeningListStore
 from .strength_influencers import InfluencerStore
@@ -234,9 +234,10 @@ async def begin_run(
     (`ExternalRunRecorded` when it is held already, decision 12)."""
     started_at = datetime.now(UTC)
     counted = Counted(dataset_id=recipe.dataset_id, owning_unit=recipe.owning_unit)
+    limits: list[QuotaLimit] = []
     if deps.run_quotas is not None:
         try:
-            await judge_quota(
+            limits = await judge_quota(
                 deps.run_quotas,
                 deps.recipe_runs,
                 dataset_id=recipe.dataset_id,
@@ -261,19 +262,40 @@ async def begin_run(
                 external=external,
             )
             raise
-    run_id = await deps.recipe_runs.start(
-        recipe_id=recipe.recipe_id,
-        recipe_version=recipe.version,
-        investigation_id=investigation_id,
-        trigger=trigger,
-        slot=slot,
-        run_as=principal.id,
-        source=resolve_source_handling(recipe),
-        now=started_at,
-        source_file=source_file,
-        counted=counted,
-        external=external,
-    )
+    try:
+        run_id = await deps.recipe_runs.start(
+            recipe_id=recipe.recipe_id,
+            recipe_version=recipe.version,
+            investigation_id=investigation_id,
+            trigger=trigger,
+            slot=slot,
+            run_as=principal.id,
+            source=resolve_source_handling(recipe),
+            now=started_at,
+            source_file=source_file,
+            counted=counted,
+            external=external,
+            within=limits,
+        )
+    except QuotaRefused as refused:
+        # Another run took the quota's last place between the count and the row (item 11).
+        await deps.recipe_runs.record_not_run(
+            recipe_id=recipe.recipe_id,
+            recipe_version=recipe.version,
+            investigation_id=investigation_id,
+            trigger=trigger,
+            slot=slot,
+            run_as=principal.id,
+            source=resolve_source_handling(recipe),
+            outcome="refused",
+            failure=str(refused),
+            now=started_at,
+            counts_toward_pause=False,
+            source_file=source_file,
+            counted=counted,
+            external=external,
+        )
+        raise
     return run_id, started_at
 
 

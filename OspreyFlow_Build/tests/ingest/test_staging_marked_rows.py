@@ -162,3 +162,20 @@ def test_a_fuzzy_match_onto_a_row_marked_differently_is_refused() -> None:
     alike = _tables("OFFICIAL")
     table, _ = run_fuzzy_step(step, alike["visits"], alike["people"], marked=MARKED)  # type: ignore[arg-type]
     assert table.rows[0].cells["name"] == "Ann Example"
+
+
+def test_a_derive_making_a_marking_column_is_refused() -> None:
+    """The lane review of L1.7, item 16: a marking Map binds after staging, made by a Derive from
+    unmarked values, would be a marking no source declared."""
+    step = {**_derive(["name", "note"]), "column": "classification"}
+    assert any("makes 'classification', a column a marking is bound to" in p for p in _gate([step]))
+
+
+def test_a_fuzzy_match_comparing_a_marking_column_is_refused() -> None:
+    fuzzy = {"id": "f", "kind": "fuzzy_match", "left": "visits", "right": "people",
+             "compare": [{"left": "classification", "right": "name", "method": "exact"}],
+             "threshold": 0.5, "add": [{"column": "name"}],
+             "same_as": {"left": "visitor", "right": "person"}}  # fmt: skip
+    assert any(
+        "compares 'classification', a column a marking is bound to" in p for p in _gate([fuzzy])
+    )
