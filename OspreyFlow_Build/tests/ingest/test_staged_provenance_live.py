@@ -77,7 +77,7 @@ async def _load(
         investigation_scope="case-live-1",
         storage=ObjectStorageConfig(bucket="staging"),
         scheme=SCHEME,
-        written=written,
+        written=written, subscribed=(),
     )
     await stamping.commit_transaction(tx)
     return done

@@ -344,7 +344,7 @@ def readable_lists(
     lists: Collection[ReferenceList],
     *,
     dataset_id: str,
-    subscribed: Collection[str] = (),
+    subscribed: Collection[str],
 ) -> tuple[dict[str, ReferenceList], list[str]]:
     """The lists a dataset's Lookup may read, by name, and any name two of them share (ADR-140
     Amendment 9 decision 3): the dataset's own lists, and a **deployment-wide** screening list (its
@@ -374,7 +374,7 @@ def staging_rule_violations(
     lists: Collection[ReferenceList],
     dataset_id: str,
     marked: Collection[str],
-    subscribed: Collection[str] = (),
+    subscribed: Collection[str],
 ) -> list[str]:
     """What the save gate refuses in a `staging:` list, in words (the redesign's phase 7: "a join
     must name a key; a step must be fed"). `sources`: the pipeline's source tables. `lists`: the
@@ -699,7 +699,7 @@ def run_staging(
     lists: Mapping[str, StagedTable],
     dataset_id: str,
     marked: Collection[str],
-    subscribed: Collection[str] = (),
+    subscribed: Collection[str],
     may_read: Callable[[StagedRef], bool] | None = None,
 ) -> StagingResult:
     """Run the steps in order over the source tables and the reference lists (each a

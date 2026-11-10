@@ -106,7 +106,7 @@ async def load() -> tuple[Any, ValidatingGraph]:
         load_id="ld-run-1",
         investigation_scope="case-1",
         storage=ObjectStorageConfig(bucket="staging"),
-        scheme=SCHEME,
+        scheme=SCHEME, subscribed=(),
     )
     await graph.commit_transaction(tx)
     return done, graph
@@ -285,7 +285,7 @@ async def test_a_source_load_s_raw_rows_are_never_replaced() -> None:
             load_id="ld-run-2",
             investigation_scope="case-1",
             storage=store,
-            scheme=SCHEME,
+            scheme=SCHEME, subscribed=(),
         )
     assert staging.read_raw_rows(path, storage=store) == before
     assert graph.open_nodes == [] and graph.open_edges == []
@@ -313,7 +313,7 @@ async def test_a_list_version_names_one_set_of_rows() -> None:
             load_id="ld-run-3",
             investigation_scope="case-1",
             storage=ObjectStorageConfig(bucket="staging"),
-            scheme=SCHEME,
+            scheme=SCHEME, subscribed=(),
         )
     store = ObjectStorageConfig(bucket="staging")
     listed = read_staged_table(list_rows_path(ESTABLISHMENTS, storage=store), storage=store)
@@ -341,7 +341,7 @@ async def test_a_refused_run_writes_no_raw_or_list_rows() -> None:
             load_id="ld-run-4",
             investigation_scope="case-1",
             storage=ObjectStorageConfig(bucket="staging"),
-            scheme=SCHEME,
+            scheme=SCHEME, subscribed=(),
         )
     store = ObjectStorageConfig(bucket="staging")
     assert not _exists("staging/loads/ld-vb-1/raw.parquet")
@@ -386,7 +386,7 @@ async def test_no_row_key_raw_or_hashed_reaches_an_element_or_test() -> None:
         graph=ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
         ontology=ONTOLOGY,
         principal=LOADER,
-        scheme=SCHEME,
+        scheme=SCHEME, subscribed=(),
     )
     hashed = {ref.row_key for t in done.staging.tables.values() for r in t.rows for ref in r.refs}
     raw_keys = {row["booking_id"] for row in _rows("visit_bookings.csv")}
@@ -457,7 +457,7 @@ async def test_test_and_the_load_reject_the_same_rows() -> None:
         graph=ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
         ontology=ONTOLOGY,
         principal=LOADER,
-        scheme=SCHEME,
+        scheme=SCHEME, subscribed=(),
     )
 
     def rejected(records: Any) -> list[tuple[int, str]]:

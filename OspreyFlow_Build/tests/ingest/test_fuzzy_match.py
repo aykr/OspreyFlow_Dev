@@ -121,6 +121,7 @@ async def _load(recipe: Recipe, graph: ValidatingGraph | None = None, load_id: s
         recipe, sources=_sources(), lists={}, dataset_id="pid", graph=graph,  # type: ignore[arg-type]
         ontology=ONTOLOGY, tx=tx, principal=LOADER, load_id=load_id,  # type: ignore[arg-type]
         investigation_scope="case-1", storage=ObjectStorageConfig(bucket="staging"), scheme=SCHEME,
+        subscribed=(),
     )  # fmt: skip
     await graph.commit_transaction(tx)
     return done, graph
@@ -226,7 +227,7 @@ async def test_test_and_the_load_write_the_same_same_as() -> None:
     tested = await dry_run_staged_recipe(
         _recipe(0.6), sources=_sources(), lists={}, dataset_id="pid",
         graph=ValidatingGraph(ONTOLOGY), ontology=ONTOLOGY, principal=LOADER,  # type: ignore[arg-type]
-        scheme=SCHEME,
+        scheme=SCHEME, subscribed=(),
     )  # fmt: skip
     same_as = [e for e in tested.result.edges if e.type == "SAME_AS"]
     assert len(same_as) == 3
@@ -273,11 +274,11 @@ def test_a_fuzzy_match_is_the_last_step() -> None:
 
     problems = staging_rule_violations(
         [step, DeriveStep.model_validate(after)],
-        sources=["visits", "owners"], lists=[], dataset_id="pid", marked=()
+        sources=["visits", "owners"], lists=[], dataset_id="pid", marked=(), subscribed=()
     )  # fmt: skip
     assert any("is the last step" in p for p in problems), problems
     assert staging_rule_violations([step], sources=["visits", "owners"], lists=[],
-                                   dataset_id="pid", marked=()) == []  # fmt: skip
+                                   dataset_id="pid", marked=(), subscribed=()) == []  # fmt: skip
 
 
 @pytest.mark.parametrize(
@@ -334,7 +335,8 @@ def test_a_step_with_too_many_pairs_and_no_blocking_key_is_refused() -> None:
 
 def test_run_staging_runs_a_fuzzy_match_at_the_real_call_site() -> None:
     result = run_staging(
-        [FuzzyMatchStep.model_validate(_step(0.6))], sources=_sources(), lists={}, dataset_id="pid", marked=()
+        [FuzzyMatchStep.model_validate(_step(0.6))], sources=_sources(), lists={}, dataset_id="pid", marked=(),
+        subscribed=()
     )
     assert result.reports[0].matched == 3
     assert "match_score" in result.output.columns

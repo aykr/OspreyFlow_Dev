@@ -75,13 +75,15 @@ COUNTS = (
 
 def _gate(step: SqlStep) -> list[str]:
     return staging_rule_violations(
-        [step], sources=["visits", "pin_calls"], lists=[], dataset_id="pid", marked=()
+        [step], sources=["visits", "pin_calls"], lists=[], dataset_id="pid", marked=(),
+        subscribed=()
     )
 
 
 def _run(step: SqlStep, **kwargs: object) -> StagedTable:
     return run_staging(
-        [step], sources=_tables(), lists={}, dataset_id="pid", marked=(), **kwargs  # type: ignore[arg-type]
+        [step], sources=_tables(), lists={}, dataset_id="pid", marked=(),
+        **{"subscribed": (), **kwargs},  # type: ignore[arg-type]
     ).output
 
 
@@ -275,7 +277,8 @@ def test_a_ref_tells_nothing_of_a_withheld_row() -> None:
     carried into a cell (`_ref AS r`) shows no gap where a withheld row was."""
     step = _step("SELECT booking_id, _ref AS r, _ref FROM visits ORDER BY booking_id", ("visits",))
     out = run_staging(
-        [step], sources=_tables(), lists={}, dataset_id="pid", may_read=_hide(1), marked=()
+        [step], sources=_tables(), lists={}, dataset_id="pid", may_read=_hide(1), marked=(),
+        subscribed=()
     ).output  # fmt: skip
     tokens = [r.cells["r"] or "" for r in out.rows]
     assert len(set(tokens)) == 2 and not any("#" in t or "visits" in t for t in tokens)
@@ -313,7 +316,7 @@ def test_a_row_the_reader_may_not_read_is_absent() -> None:
     assert "A. Khan" in {r.cells["visitor_name"] for r in unlimited.rows}
     result = run_staging(
         [_step(select, ("visits",))], sources=_tables(), lists={}, dataset_id="pid",
-        may_read=_hide(2), marked=()
+        may_read=_hide(2), marked=(), subscribed=()
     )  # fmt: skip
     names = {r.cells["visitor_name"] for r in result.output.rows}
     assert names == {"S. Whitlow", "J Pryce"}
@@ -322,7 +325,7 @@ def test_a_row_the_reader_may_not_read_is_absent() -> None:
     # Not even a count over it: an aggregate over the table counts only what the reader may read.
     counted = run_staging(
         [_step("SELECT count(*) AS n, list(_ref) AS _ref FROM visits", ("visits",))],
-        sources=_tables(), lists={}, dataset_id="pid", may_read=_hide(2), marked=()
+        sources=_tables(), lists={}, dataset_id="pid", may_read=_hide(2), marked=(), subscribed=()
     ).output  # fmt: skip
     assert counted.rows[0].cells["n"] == "2"
 
@@ -392,7 +395,7 @@ def _marked_tables() -> dict[str, StagedTable]:
 def _marked_gate(select: str) -> list[str]:
     return staging_rule_violations(
         [_step(select, ("visits",))], sources=["visits"], lists=[], dataset_id="pid",
-        marked=MARKED,
+        marked=MARKED, subscribed=(),
     )  # fmt: skip
 
 
@@ -400,7 +403,7 @@ def _marked_run(select: str, *, check: bool = True) -> StagedTable:
     if check:
         return run_staging(
             [_step(select, ("visits",))], sources=_marked_tables(), lists={}, dataset_id="pid",
-            marked=MARKED,
+            marked=MARKED, subscribed=(),
         ).output  # fmt: skip
     table, _report = run_sql_step(
         _step(select, ("visits",)), [_marked_tables()["visits"]], marked=MARKED, check=False
@@ -745,7 +748,7 @@ async def test_test_runs_a_slow_sql_step_off_the_event_loop(monkeypatch: pytest.
         await dry_run_staged_recipe(
             recipe, sources=fuzzy_sources(), lists={}, dataset_id="pid",
             graph=ValidatingGraph(ONTOLOGY), ontology=ONTOLOGY, principal=LOADER,  # type: ignore[arg-type]
-            scheme=SCHEME,
+            scheme=SCHEME, subscribed=(),
         )  # fmt: skip
     finally:
         task.cancel()
@@ -774,7 +777,7 @@ async def test_test_and_the_run_read_the_recipe_s_marked_columns() -> None:
         await dry_run_staged_recipe(
             recipe, sources=fuzzy_sources(), lists={}, dataset_id="pid",
             graph=ValidatingGraph(ONTOLOGY), ontology=ONTOLOGY, principal=LOADER,  # type: ignore[arg-type]
-            scheme=SCHEME,
+            scheme=SCHEME, subscribed=(),
         )  # fmt: skip
     assert any("binds a marking to a column" in p for p in refused.value.problems)
 
