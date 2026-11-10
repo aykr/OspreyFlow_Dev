@@ -6,7 +6,7 @@ own) and with this tree, each in its own interpreter, every digest from one stan
 compares every artefact byte for byte, with the one thing that must differ normalised: the commit
 the image tags and the release version name.
 
-    cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7_renders_unchanged.py 78bb4ae
+    cd OspreyFlow_Core && .venv/bin/python ../OspreyFlow_Build/process/lanes/platform/gates/p7_renders_unchanged.py [--helm] 78bb4ae
 
 Prints each configuration's artefacts and whether they match; exits 1 on any difference. The chart's
 manifests for the cluster's values are compared the same way when Docker is there (`--helm`).
@@ -89,10 +89,35 @@ def normalised(text: str) -> str:
     text = re.sub(rf"^(\s*tag: ){commit}$", r"\1<commit>", text, flags=re.M)
     text = re.sub(r"sha256:[0-9a-f]{64}", "sha256:<digest>", text)
     text = re.sub(r"(OSPREY_RELEASE_VERSION[=:] ?)\S+", r"\1<release>", text)
+    # A pod's configuration checksums hash the environment, which names the commit (above).
+    text = re.sub(r"^(\s*checksum/[a-z]+: )[0-9a-f]{16}$", r"\1<checksum>", text, flags=re.M)
+    # A Job is named by a hash of its own values (`jobs.yaml`), which are compared as values above:
+    # its raw values hold the commit and the base's doubled pins, so the hash is not compared.
+    text = re.sub(r"^(\s*name: [a-z-]+-models-)[0-9a-f]{8}$", r"\1<hash>", text, flags=re.M)
     return re.sub(rf'(\\?"version\\?": \\?"){commit}', r"\1<release>", text)
 
 
-def main(base: str) -> int:
+HELM = "alpine/helm:3.16.3"  # as `tools/cp_policy_check.py` pins it
+
+
+def helm_manifests(root: Path, values: str) -> str:
+    """The chart at `root`'s manifests for `values`, as `helm template` emits them."""
+    done = subprocess.run(
+        ["docker", "run", "--rm", "-i", "-v", f"{root}/deploy/helm/ospreyflow:/chart:ro", HELM,
+         "template", "ospreyflow", "/chart", "--namespace", "ospreyflow", "-f", "-"],
+        input=values, capture_output=True, text=True, timeout=300, check=True,
+    )  # fmt: skip
+    return done.stdout
+
+
+def with_helm(root: Path, rendered: dict[str, dict[str, str]]) -> None:
+    """Each configuration with chart values (the cluster's) gains the chart's manifests for them."""
+    for artefacts in rendered.values():
+        if "values.yaml" in artefacts:
+            artefacts["helm template"] = helm_manifests(root, artefacts["values.yaml"])
+
+
+def main(base: str, helm: bool = False) -> int:
     with tempfile.TemporaryDirectory() as folder:
         old = Path(folder) / "OspreyFlow_Core"
         old.mkdir()
@@ -102,6 +127,9 @@ def main(base: str) -> int:
         )  # fmt: skip
         subprocess.run(["tar", "-x", "-C", folder], input=archive.stdout, check=True)
         before, after = renders(old), renders(CORE)
+        if helm:
+            with_helm(old, before)
+            with_helm(CORE, after)
     differ = 0
     for name in CONFIGS:
         for artefact in sorted(set(before[name]) | set(after[name])):
@@ -121,4 +149,5 @@ def main(base: str) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "78bb4ae"))
+    args = [a for a in sys.argv[1:] if a != "--helm"]
+    sys.exit(main(args[0] if args else "78bb4ae", helm="--helm" in sys.argv[1:]))

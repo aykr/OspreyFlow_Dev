@@ -1,0 +1,37 @@
+same  local-lite  Caddyfile
+same  local-lite  RUNBOOK.md
+same  local-lite  compose.yaml
+same  local-lite  deployment.env
+same  local-lite  glass.json
+same  local-lite  versions.lock
+same  local-lite-reporting  Caddyfile
+same  local-lite-reporting  RUNBOOK.md
+same  local-lite-reporting  compose.yaml
+same  local-lite-reporting  deployment.env
+same  local-lite-reporting  glass.json
+same  local-lite-reporting  versions.lock
+same  local-lite-clickhouse  Caddyfile
+same  local-lite-clickhouse  RUNBOOK.md
+same  local-lite-clickhouse  compose.yaml
+same  local-lite-clickhouse  deployment.env
+same  local-lite-clickhouse  glass.json
+same  local-lite-clickhouse  versions.lock
+same  small  Caddyfile
+same  small  RUNBOOK.md
+same  small  compose.yaml
+same  small  deployment.env
+same  small  glass.json
+same  small  versions.lock
+same  small-managed  Caddyfile
+same  small-managed  RUNBOOK.md
+same  small-managed  compose.yaml
+same  small-managed  deployment.env
+same  small-managed  glass.json
+same  small-managed  versions.lock
+same  cluster-aws  helm template
+same  cluster-aws  values.yaml
+same  cluster-aws  versions.lock
+same  cluster-azure  helm template
+same  cluster-azure  values.yaml
+same  cluster-azure  versions.lock
+p7_renders_unchanged: 0 artefact(s) differ from main
