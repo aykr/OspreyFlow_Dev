@@ -86,6 +86,14 @@ GAZETTEER_SOURCE_IDENTIFIERS: tuple[str, ...] = (
     "tiger_geoid",
     "nad_address_id",
 )
+#: ADR-147 Amendment 3 (CARRIES row 23, the strict reading): of those, the ones only a gazetteer
+#: carries, withheld from every node for every request reader and never matched by a case's search,
+#: whatever dataset the node is in: a gazetteer loaded through the Studio arrives in a case's own
+#: dataset as a plain file, unmarked. `uprn` is not among them: a case's own `Location` with a
+#: `uprn` keeps it (Amendment 1 point 3a).
+GAZETTEER_ONLY_IDENTIFIERS: tuple[str, ...] = tuple(
+    name for name in GAZETTEER_SOURCE_IDENTIFIERS if name != "uprn"
+)
 
 #: A query parameter named like a key (ADR-147 decision 2a's list).
 _KEY_NAMED = re.compile(r"key|token|secret|sig|password|auth", re.I)
