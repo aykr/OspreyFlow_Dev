@@ -25,6 +25,7 @@ from tools.cp_policy_check import (
     helm_template,
     main,
     our_dockerfiles,
+    pod_spec,
     render_values,
 )
 
@@ -191,6 +192,99 @@ def test_a_deny_policy_that_does_not_cover_every_pod_is_refused(
     deny = next(d for d in docs if d["metadata"]["name"] == "default.ospreyflow-deny-egress")
     deny["spec"]["selector"] = "app.kubernetes.io/name == 'api'"
     assert {v.rule for v in check_manifests(docs, registry)} == {"no-deny-egress"}
+
+
+# ---- red, each branch of the check alone (reviewer point 2) -----------------------------------
+# Planted in Helm's own output, the shape a template edit would emit, so each fires alone; each is
+# asserted by its own branch's words, so a test is not satisfied by a neighbouring branch.
+
+
+def _helm(development: tuple[dict[str, Any], str]) -> tuple[list[dict[str, Any]], str]:
+    values, registry = development
+    return helm_template(yaml.safe_dump(values)), registry
+
+
+def _doc(docs: list[dict[str, Any]], kind: str, name: str) -> dict[str, Any]:
+    return next(d for d in docs if d["kind"] == kind and d["metadata"]["name"] == name)
+
+
+def _found(docs: list[dict[str, Any]], registry: str) -> list[tuple[str, str]]:
+    return [(v.rule, v.detail) for v in check_manifests(docs, registry)]
+
+
+def _api_container(docs: list[dict[str, Any]]) -> dict[str, Any]:
+    return _doc(docs, "Deployment", "api")["spec"]["template"]["spec"]["containers"][0]
+
+
+def test_privilege_escalation_alone_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    docs, registry = _helm(development)
+    _api_container(docs)["securityContext"]["allowPrivilegeEscalation"] = True
+    assert _found(docs, registry) == [("privileged", "allowPrivilegeEscalation is not false")]
+
+
+def test_a_capability_added_alone_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    docs, registry = _helm(development)
+    _api_container(docs)["securityContext"]["capabilities"]["add"] = ["NET_ADMIN"]
+    [(rule, detail)] = _found(docs, registry)
+    assert rule == "privileged" and detail.startswith("capabilities are not all dropped")
+
+
+def test_capabilities_not_dropped_alone_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    docs, registry = _helm(development)
+    _api_container(docs)["securityContext"]["capabilities"] = {"drop": ["NET_RAW"]}
+    [(rule, detail)] = _found(docs, registry)
+    assert rule == "privileged" and detail.startswith("capabilities are not all dropped")
+
+
+def test_run_as_non_root_false_with_a_numeric_user_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    docs, registry = _helm(development)
+    _api_container(docs)["securityContext"]["runAsNonRoot"] = False
+    assert _found(docs, registry) == [("root", "runAsNonRoot is not true")]
+
+
+def test_an_init_container_is_held_to_the_rules(development: tuple[dict[str, Any], str]) -> None:
+    docs, registry = _helm(development)
+    keycloak = next(d for d in docs if d["metadata"]["name"] == "keycloak" and pod_spec(d))
+    init = pod_spec(keycloak)["initContainers"][0]  # type: ignore[index]
+    init["securityContext"]["allowPrivilegeEscalation"] = True
+    found = check_manifests(docs, registry)
+    assert [(v.rule, v.where.endswith(init["name"])) for v in found] == [("privileged", True)]
+
+
+def test_a_container_port_below_1024_alone_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    docs, registry = _helm(development)
+    _api_container(docs)["ports"] = [{"containerPort": 80}]
+    assert _found(docs, registry) == [("low-port", "containerPort 80")]
+
+
+def test_a_service_port_below_1024_alone_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    docs, registry = _helm(development)
+    _doc(docs, "Service", "api")["spec"]["ports"][0]["port"] = 443
+    assert _found(docs, registry) == [("low-port", "port 443")]
+
+
+def test_a_service_target_port_below_1024_alone_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    docs, registry = _helm(development)
+    _doc(docs, "Service", "api")["spec"]["ports"][0]["targetPort"] = 80
+    assert _found(docs, registry) == [("low-port", "targetPort 80")]
+
+
+def test_a_stateful_set_s_read_write_many_claim_template_is_refused(
+    development: tuple[dict[str, Any], str],
+) -> None:
+    docs, registry = _helm(development)
+    arcadedb = _doc(docs, "StatefulSet", "arcadedb")
+    claim = arcadedb["spec"]["volumeClaimTemplates"][0]
+    claim["spec"]["accessModes"] = ["ReadWriteMany"]
+    assert _found(docs, registry) == [("rwx", f"claim {claim['metadata']['name']}")]
 
 
 def test_main_fails_on_a_planted_fault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
