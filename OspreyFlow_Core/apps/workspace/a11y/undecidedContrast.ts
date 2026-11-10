@@ -1,165 +1,183 @@
-// WCAG 1.4.3 where axe-core cannot decide it, shared by every axe scan in the workspace and the
-// install harness (`a11y/*.spec.ts`, `../harness/a11y/*.spec.ts`; rules-b's T3, 10 November 2026).
-// No runtime import, so the harness app imports it by path.
+// WCAG 1.4.3 where axe-core cannot decide it (rules-b's T3, 10 November 2026). axe leaves
+// `color-contrast` *incomplete*, never violated, when it cannot find the text's background: inside a
+// fixed, transformed overlay (L2.11a's dialog plant stayed green), for 1:1 text it reads as
+// deliberate hiding (platform-b's P6), over another element. Every axe scan in the workspace and the
+// install harness calls `checkUndecidedContrast` after its violations (`a11y/*.spec.ts`,
+// `../harness/a11y/*.spec.ts`, which import this file by path).
+//
+// This half reads, in the page, what the judgement needs: each node's computed styles up to `<html>`,
+// a painted `::before`/`::after` laid over it, and what `elementsFromPoint` finds under and over its
+// text. `src/color/textContrast.ts` judges it, in Node, unit-tested at every boundary. It fails
+// closed: an element painted under or over the text that is not the node or an ancestor (map tiles
+// under a chip, a picture), a filter or blend, a colour it cannot read, a node in a frame or shadow
+// root are offenders, never passes. Its limits: a foreign element with `pointer-events: none` is left
+// out by `elementsFromPoint` (only the node and its ancestors are lifted for the probe), and the probe
+// samples three points on the text, not every pixel.
 import type { Page } from "@playwright/test";
 
-/** What this reads of an axe-core result: the rules left incomplete and their nodes' targets. */
+import {
+  excuses,
+  judge,
+  type Judgement,
+  type ListedFinding,
+  type Sample,
+} from "../src/color/textContrast";
+
+/** What this reads of an axe-core result: the rules left incomplete, their nodes and axe's reasons. */
 export interface AxeIncomplete {
-  incomplete: { id: string; nodes: { target: unknown[] }[] }[];
+  incomplete: {
+    id: string;
+    nodes: { target: unknown[]; any?: { data?: unknown }[] }[];
+  }[];
 }
 
-// WCAG 1.4.3 where axe-core cannot decide it. axe leaves `color-contrast` *incomplete*, never
-// failed, when it cannot find the text's background: inside a fixed, transformed overlay (rules-b's
-// L2.11a: text the colour of a dialog's own surface stayed green with the dialog open) and for text
-// whose colour equals its background, which axe reads as deliberate hiding (platform-b's P6: 1:1
-// words in the map's panel). Before this, every-harness passed both. Each node axe leaves undecided
-// is measured here: its colour composited over its own ancestors' backgrounds (a dialog's surface is
-// its ancestor, whatever the transform), against 4.5:1, or 3:1 for large text (24px, or 18.66px
-// bold); over a gradient, on each of its colours, the worst counting. A node it cannot measure
-// either (a picture on the way, a colour it cannot read) is an offender too, never a pass. What lies
-// under a node only by position (map tiles under an overlay) is not its ancestor and is not seen: the
-// measure reads the node's own surfaces. Returns [selector, why], so a failure says where.
-async function measureUndecided(
-  page: Page,
-  selectors: string[],
-): Promise<[string, string][]> {
-  return page.evaluate((targets) => {
-    type Rgba = [number, number, number, number];
-    function parse(css: string): Rgba | null {
-      const rgb = css.match(
-        /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/,
-      );
-      if (rgb) {
-        const a =
-          rgb[4] === undefined
-            ? 1
-            : rgb[4].endsWith("%")
-              ? parseFloat(rgb[4]) / 100
-              : parseFloat(rgb[4]);
-        return [+rgb[1], +rgb[2], +rgb[3], a];
-      }
-      const srgb = css.match(
-        /^color\(srgb\s+([-\d.e]+)\s+([-\d.e]+)\s+([-\d.e]+)(?:\s*\/\s*([\d.]+%?))?\s*\)$/,
-      );
-      if (srgb) {
-        const a =
-          srgb[4] === undefined
-            ? 1
-            : srgb[4].endsWith("%")
-              ? parseFloat(srgb[4]) / 100
-              : parseFloat(srgb[4]);
-        return [+srgb[1] * 255, +srgb[2] * 255, +srgb[3] * 255, a];
-      }
-      return null;
-    }
-    function over(top: Rgba, under: Rgba): Rgba {
-      const a = top[3] + under[3] * (1 - top[3]);
-      if (a === 0) return [0, 0, 0, 0];
-      const mix = (i: number) =>
-        (top[i] * top[3] + under[i] * under[3] * (1 - top[3])) / a;
-      return [mix(0), mix(1), mix(2), a];
-    }
-    function luminance([r, g, b]: Rgba): number {
-      const lin = (c: number) => {
-        const s = c / 255;
-        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-      };
-      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-    }
-    const offenders: [string, string][] = [];
-    for (const selector of targets) {
+/** Listed findings by selector: each excused only while it measures as listed (`excuses`). */
+export type ListedFindings = Record<string, ListedFinding>;
+
+interface Asked {
+  selector: string | null;
+  unreadable: string | null;
+  axeReason: string | null;
+}
+
+async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
+  return page.evaluate((nodes) => {
+    const REPLACED = new Set(["CANVAS", "IMG", "SVG", "VIDEO", "IFRAME", "PICTURE", "OBJECT", "EMBED"]);
+    const name = (e: Element) =>
+      `${e.tagName.toLowerCase()}${e.classList.length ? `.${e.classList[0]}` : ""}`;
+    const transparent = (css: string) => /^rgba\(0, 0, 0, 0\)$|^transparent$/.test(css);
+    const painted = (e: Element) => {
+      const s = getComputedStyle(e);
+      return REPLACED.has(e.tagName.toUpperCase()) || !transparent(s.backgroundColor) || s.backgroundImage !== "none";
+    };
+    const opaque = (e: Element) => {
+      const bg = getComputedStyle(e).backgroundColor;
+      return /^rgb\(/.test(bg) || /^color\(srgb [^/]*\)$/.test(bg);
+    };
+    const blank = (unreadable: string, selector: string, axeReason: string | null) => ({
+      selector, unreadable, text: "", color: "", fontSize: "", fontWeight: "", chain: [],
+      overlappedBy: null, axeReason,
+    });
+    return nodes.map(({ selector, unreadable, axeReason }) => {
+      if (unreadable || !selector) return blank(unreadable ?? "no selector", selector ?? "?", axeReason);
       let el: HTMLElement | null = null;
       try {
         el = document.querySelector<HTMLElement>(selector);
       } catch {
-        // A node in a frame or a shadow root: axe's target is a path, not one selector.
+        // An invalid selector: unreadable below.
       }
-      if (!el) {
-        offenders.push([selector, "not found to measure"]);
-        continue;
+      if (!el) return blank("not found to measure", selector, axeReason);
+      const chain = [];
+      for (let at: Element | null = el; at; at = at.parentElement) {
+        const s = getComputedStyle(at);
+        let paintedPseudo: string | null = null;
+        for (const pseudo of ["::before", "::after"]) {
+          const p = getComputedStyle(at, pseudo);
+          const shows = p.content !== "none" && p.content !== "normal";
+          const paints = !transparent(p.backgroundColor) || p.backgroundImage !== "none";
+          // Laid over the box (absolute or fixed), so it may lie under the text; an inline one sits
+          // beside it, as a bullet does. axe's own `pseudoContent` reason fails it either way.
+          if (shows && paints && /absolute|fixed/.test(p.position)) paintedPseudo = pseudo;
+        }
+        chain.push({
+          name: name(at), backgroundColor: s.backgroundColor, backgroundImage: s.backgroundImage,
+          opacity: s.opacity, filter: s.filter, backdropFilter: s.backdropFilter,
+          mixBlendMode: s.mixBlendMode, paintedPseudo,
+        });
+      }
+      if (axeReason === "pseudoContent" && !chain.some((l) => l.paintedPseudo)) {
+        chain[0].paintedPseudo = "::before or ::after (axe: pseudoContent)";
+      }
+      // Under and over the text: from the top of the stack at points on it, every element until an
+      // ancestor with an opaque background; anything painted that is neither the node, inside it,
+      // nor an ancestor is a surface the walk up the tree cannot see.
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      let rects = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+      if (!rects.length) rects = [el.getBoundingClientRect()];
+      const inView = (r: DOMRect) => r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
+      if (!rects.every(inView)) {
+        el.scrollIntoView({ block: "center", inline: "center" });
+        rects = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+        if (!rects.length) rects = [el.getBoundingClientRect()];
+      }
+      let overlappedBy: string | null = null;
+      const points = [rects[0], rects[Math.floor(rects.length / 2)], rects[rects.length - 1]].map(
+        (r) => [r.left + r.width / 2, r.top + r.height / 2] as const,
+      );
+      // `elementsFromPoint` leaves out an element with `pointer-events: none` (the map's chip is one),
+      // which would hide whether a foreign element lies over the text or under it: the node and its
+      // ancestors take pointer events for the probe, and their own inline values are put back.
+      const lifted: [HTMLElement, string, string][] = [];
+      for (let at: HTMLElement | null = el; at; at = at.parentElement) {
+        lifted.push([at, at.style.getPropertyValue("pointer-events"), at.style.getPropertyPriority("pointer-events")]);
+        at.style.setProperty("pointer-events", "auto", "important");
+      }
+      try {
+        for (const [x, y] of points) {
+          if (overlappedBy) break;
+          for (const e of document.elementsFromPoint(x, y)) {
+            if (e === el || e.contains(el)) {
+              // The node or an ancestor: an opaque one hides whatever lies beneath it.
+              if (opaque(e)) break;
+              continue;
+            }
+            if (el.contains(e)) continue;
+            if (painted(e)) {
+              overlappedBy = name(e);
+              break;
+            }
+          }
+        }
+      } finally {
+        for (const [at, value, priority] of lifted) {
+          if (value) at.style.setProperty("pointer-events", value, priority);
+          else at.style.removeProperty("pointer-events");
+        }
       }
       const style = getComputedStyle(el);
-      const fg = parse(style.color);
-      // The background: the element's and its ancestors' colours, nearest first, until opaque.
-      // Every background the text may stand on: one, unless a gradient (the canvas's grid, say)
-      // lays its own colours over an element's, when the text is measured on each and the worst
-      // counts. A picture (`url(...)`) cannot be measured.
-      let bgs: Rgba[] = [[0, 0, 0, 0]];
-      let why = "";
-      for (
-        let at: Element | null = el;
-        at && bgs.some((b) => b[3] < 1);
-        at = at.parentElement
-      ) {
-        const s = getComputedStyle(at);
-        const layer = parse(s.backgroundColor);
-        if (!layer) {
-          why = `an unread background colour ${s.backgroundColor}`;
-          break;
-        }
-        let layers: Rgba[] = [layer];
-        if (s.backgroundImage !== "none") {
-          const where = `<${at.tagName.toLowerCase()}${at.className ? `.${String(at.className).split(" ")[0]}` : ""}>`;
-          if (/url\(/.test(s.backgroundImage)) {
-            why = `a background picture on ${where}`;
-            break;
-          }
-          const stops =
-            s.backgroundImage.match(/(rgba?|color)\([^)]*\)/g) ?? [];
-          const read = stops.map(parse);
-          if (read.some((c) => !c)) {
-            why = `an unread gradient on ${where}`;
-            break;
-          }
-          layers = [layer, ...read.map((c) => over(c as Rgba, layer))];
-        }
-        // What is nearer lies over what is further up the tree.
-        bgs = bgs.flatMap((b) =>
-          b[3] < 1 ? layers.map((l) => over(b, l)) : [b],
-        );
-      }
-      // The page itself, as the browser draws under everything: white.
-      bgs = bgs.map((b) => (b[3] < 1 ? over(b, [255, 255, 255, 1]) : b));
-      if (!why && !fg) why = `an unread colour ${style.color}`;
-      const text = (el.textContent ?? "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 40);
-      if (why || !fg) {
-        offenders.push([selector, `not measurable, ${why} ("${text}")`]);
-        continue;
-      }
-      const ratio = Math.min(
-        ...bgs.map((bg) => {
-          const [hi, lo] = [luminance(over(fg, bg)), luminance(bg)].sort(
-            (x, y) => y - x,
-          );
-          return (hi + 0.05) / (lo + 0.05);
-        }),
-      );
-      const size = parseFloat(style.fontSize);
-      const large =
-        size >= 24 || (size >= 18.66 && parseInt(style.fontWeight, 10) >= 700);
-      const need = large ? 3 : 4.5;
-      if (ratio < need)
-        offenders.push([
-          selector,
-          `${ratio.toFixed(2)}:1 < ${need}:1 ("${text}")`,
-        ]);
-    }
-    return offenders;
-  }, selectors);
+      return {
+        selector, unreadable: null, axeReason, chain, overlappedBy,
+        text: (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40),
+        color: style.color, fontSize: style.fontSize, fontWeight: style.fontWeight,
+      };
+    });
+  }, asked);
 }
 
-/** The color-contrast nodes axe left incomplete in `results`, measured: each [selector, why]. */
-export async function undecidedContrastOffenders(
-  page: Page,
-  results: AxeIncomplete,
-): Promise<[string, string][]> {
-  const undecided = results.incomplete
+/** Every colour-contrast node axe left incomplete in `results`, read and judged. */
+export async function judgeUndecided(page: Page, results: AxeIncomplete): Promise<Judgement[]> {
+  const asked: Asked[] = results.incomplete
     .filter((rule) => rule.id === "color-contrast")
     .flatMap((rule) =>
-      rule.nodes.map((node) => node.target.map(String).join(" >>> ")),
+      rule.nodes.map((node) => {
+        const data = node.any?.[0]?.data as { messageKey?: string } | undefined;
+        const axeReason = data?.messageKey ?? null;
+        const [only] = node.target;
+        // A frame's or a shadow root's node: axe's target is a path, never one selector here.
+        if (node.target.length !== 1 || typeof only !== "string") {
+          return { selector: JSON.stringify(node.target), unreadable: "a node in a frame or a shadow root", axeReason };
+        }
+        return { selector: only, unreadable: null, axeReason };
+      }),
     );
-  return measureUndecided(page, undecided);
+  return (await read(page, asked)).map(judge);
+}
+
+/**
+ * The scan's undecided contrast, measured: `unlisted` names each failure no listed finding excuses
+ * ("selector: why ("text")"), and `gone` each listed finding no longer found as listed, so the list
+ * never outlives what it excuses.
+ */
+export async function checkUndecidedContrast(
+  page: Page,
+  results: AxeIncomplete,
+  known: ListedFindings = {},
+): Promise<{ unlisted: string[]; gone: string[] }> {
+  const failing = (await judgeUndecided(page, results)).filter((j) => j.why);
+  const excused = (j: Judgement) => Object.hasOwn(known, j.selector) && excuses(known[j.selector], j);
+  return {
+    unlisted: failing.filter((j) => !excused(j)).map((j) => `${j.selector}: ${j.why} ("${j.text}")`),
+    gone: Object.keys(known).filter((selector) => !failing.some((j) => j.selector === selector && excused(j))),
+  };
 }

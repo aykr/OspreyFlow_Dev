@@ -35,6 +35,4 @@ All four apply at the branch head (`git apply --check`); the audit patch was reg
 
 ## T3 (10 November 2026)
 
-| Patch | Owner | What | Its test, red first |
-| --- | --- | --- | --- |
-| `a11y-siblings-T3.patch` | shared (`apps/workspace/a11y/{a11y,canvas-focus}.spec.ts`, `apps/harness/a11y/{a11y,install-page}.spec.ts`) | The same undecided-contrast check as every-harness, through `a11y/undecidedContrast.ts`, at each sibling axe scan (the self-check's "every sibling run path"), with the showcase's one finding listed in `a11y.spec.ts` (the warning toast's glyph, design system) | P4 in `t3/RED_RECORD.md`: a 1:1 plant in the harness app, red in 34 of 34; the workspace's scans went red on the toast glyph before it was listed |
+`a11y-siblings-T3.patch` (the same undecided-contrast check at the sibling axe scans: `apps/workspace/a11y/{a11y,canvas-focus}.spec.ts`, `apps/harness/a11y/{a11y,install-page}.spec.ts`) was ratified by the orchestrator to go in directly. It is in the branch, and the patch file is gone.

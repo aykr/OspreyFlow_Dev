@@ -12,6 +12,7 @@
 // uses: `wcag2a`/`wcag2aa` alone never run `target-size` (2.5.8) or `label-content-name-mismatch`
 // (2.5.3). An automated scan finds only part of WCAG; a pass here is not a claim of conformance.
 import AxeBuilder from "@axe-core/playwright";
+import { checkUndecidedContrast } from "../../workspace/a11y/undecidedContrast";
 import { expect, test, type Page } from "@playwright/test";
 
 import { INSTALL_BASE, INSTALL_TOKEN } from "./installPage";
@@ -48,6 +49,8 @@ async function scan(page: Page) {
   await page.evaluate(() => document.fonts.ready);
   const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  const contrast = await checkUndecidedContrast(page, results);
+  expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
 }
 
 for (const theme of ["dark", "light"] as const) {

@@ -4,6 +4,7 @@
 // text is the node's name, type and links — and scans the page with axe in that state, so the
 // region added for it brings no violation of its own.
 import AxeBuilder from "@axe-core/playwright";
+import { checkUndecidedContrast } from "./undecidedContrast";
 import { expect, test } from "@playwright/test";
 
 test("the focused node is announced in a polite status region, and the page passes axe", async ({ page }) => {
@@ -23,4 +24,6 @@ test("the focused node is announced in a polite status region, and the page pass
     .exclude("#after-canvas")
     .analyze();
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  const contrast = await checkUndecidedContrast(page, results);
+  expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
 });

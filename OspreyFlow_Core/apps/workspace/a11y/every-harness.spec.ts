@@ -19,7 +19,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
 
-import { undecidedContrastOffenders } from "./undecidedContrast";
+import { checkUndecidedContrast, type ListedFindings } from "./undecidedContrast";
 
 const KEYBOARD = new URL("../keyboard/", import.meta.url);
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -278,18 +278,69 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
 };
 
-// The undecided-contrast findings on main when the measure above was added (rules-b's T3, 10 November
-// 2026), each carried by its owner rather than excused: by the test's title, the node's selector and
-// what it measured. Fixed ones come off; a new one is never added here to make a run green.
-const CONTRAST_FINDINGS: Record<string, Record<string, string>> = Object.fromEntries(
-  // Platform's (P-steps, the map): the basemap's attribution chip in `MapView.tsx` sets
-  // `--text-secondary` on a raw `rgba(0,0,0,0.4)`, not a token pair: 2.85:1 on its own surfaces in
-  // the light theme, in every state of the map. CARRIES row to platform.
-  ["", ...EXTRA_STATES["map-view-harness.html"]].map((state) => [
-    `map-view-harness.html${state ? ` ${state}` : ""} (light)`,
-    { "main > div > div > div:nth-child(2)": "2.85:1, the attribution chip (platform)" },
+// The undecided-contrast findings on main when the measure was added (rules-b's T3, 10 November 2026),
+// each carried by its owner (CARRIES) rather than excused: by the test's title and the node's
+// selector, with the text it held and the ratio it measured (a floor: worse fails), or the reason
+// it could not be measured. Fixed ones come off; a new one is never added to make a run green.
+const CONTRAST_FINDINGS: Record<string, ListedFindings> = Object.fromEntries([
+  // Platform's (the map): the basemap's attribution chip in `MapView.tsx`, `--text-secondary` on a raw
+  // `rgba(0,0,0,0.4)` laid over the map's canvas, so what is under its words is the map itself: not
+  // measurable in any theme, in every state of the map (2.85:1 on its own surfaces in light).
+  ...["", ...(EXTRA_STATES["map-view-harness.html"] ?? [])].flatMap((state) =>
+    (["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
+      `map-view-harness.html${state ? ` ${state}` : ""} (${variant})`,
+      {
+        "main > div > div > div:nth-child(2)": {
+          text: "Harness tiles ©", ratio: "unmeasurable", reason: "over or under canvas", owner: "platform",
+        },
+      },
+    ]),
+  ),
+  // Shell's (L2.3's prototype variant b): the rail's ⋯ More glyph, on a transparent button laid over
+  // the rail (and under GOV.UK, over the notification banner), so its background is not its own.
+  ...(["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
+    `case-screen-options-harness.html variant=b (${variant})`,
+    {
+      'button[aria-label="More"] > span': {
+        text: "⋯",
+        ratio: "unmeasurable",
+        reason:
+          variant === "govuk" ? "over or under div.govuk-notification-banner__content" : "over or under nav.left-rail",
+        owner: "shell",
+      },
+    },
   ]),
-);
+  // Home's: the start page's key cap ("G", `.home-key` in `home/home.css`) is drawn at `opacity: 0.8`,
+  // which takes the primary button's words below 4.5:1 in light (4.12:1) and GOV.UK (3.92:1).
+  ...(
+    [
+      ["start-harness.html", ".btn--primary > kbd"],
+      ["start-harness.html rights=investigate", "kbd"],
+      ["start-harness.html figures=1&rights=investigate,triage_alerts,read_alert_queue", ".btn--primary > kbd"],
+      ["alert-figures-harness.html home=1", "kbd"],
+    ] as const
+  ).flatMap(([page, selector]) =>
+    ([["light", 4.12], ["govuk", 3.92]] as const).map(([variant, ratio]): [string, ListedFindings] => [
+      `${page} (${variant})`,
+      { [selector]: { text: "G", ratio, owner: "home" } },
+    ]),
+  ),
+  // Shell's: the top bar's More views drawn open under GOV.UK lies over the notification banner's
+  // words, so what is under them is the menu.
+  [
+    "places-harness.html open=views (govuk)",
+    Object.fromEntries(
+      [
+        [".govuk-notification-banner__content > .btn", "Case: Kestrel"],
+        ['.context-banner__sep[aria-hidden="true"]:nth-child(4)', "·"],
+        ["span:nth-child(5)", "reads Prison intel"],
+      ].map(([selector, text]) => [
+        selector,
+        { text, ratio: "unmeasurable", reason: "over or under div.menu-panel", owner: "shell" },
+      ]),
+    ),
+  ],
+]);
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();
 
@@ -363,20 +414,9 @@ for (const name of pages) {
         // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
         // node fails, unless it is a listed finding carried by its owner, and a listed one that is
         // gone fails too, so the list never outlives what it excuses.
-        const offenders = await undecidedContrastOffenders(page, results);
-        const known = CONTRAST_FINDINGS[title] ?? {};
-        const unlisted = offenders.filter(([selector]) => !(selector in known));
-        expect(
-          unlisted,
-          "colour contrast axe left undecided, measured too low or unmeasurable",
-        ).toEqual([]);
-        const gone = Object.keys(known).filter(
-          (selector) => !offenders.some(([s]) => s === selector),
-        );
-        expect(
-          gone,
-          "listed contrast findings no longer found: take them off CONTRAST_FINDINGS",
-        ).toEqual([]);
+        const { unlisted, gone } = await checkUndecidedContrast(page, results, CONTRAST_FINDINGS[title]);
+        expect(unlisted, "colour contrast axe left undecided, too low or unmeasurable").toEqual([]);
+        expect(gone, "listed contrast findings no longer found as listed: update CONTRAST_FINDINGS").toEqual([]);
       });
     }
     // The words do not change with the theme or the brand, so one look per state.
