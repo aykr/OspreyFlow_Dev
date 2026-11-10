@@ -1,6 +1,6 @@
 #!/bin/sh
 # L1.7a's live set: every live file the publish commit reaches, and the rights table.
-cd ../OspreyFlow_Core && exec .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rfE \
+cd ../OspreyFlow_Core && exec .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q -rA \
   ../OspreyFlow_Build/tests/services/api/test_route_rights.py \
   ../OspreyFlow_Build/tests/ingest/test_studio_publish_pipeline.py \
   ../OspreyFlow_Build/tests/ingest/test_pipeline_run.py \
