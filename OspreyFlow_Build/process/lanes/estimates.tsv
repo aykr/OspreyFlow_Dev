@@ -1,19 +1,22 @@
-# as of 2026-11-09T22:19:22Z
-platform	P5	four fixes from re-review, then merge	~2–3 h
-studio	L1.5	clear; live run on b at 165d144, then merge	~1½–2 h
-rules	L2.10	sent back: a count leak, re-gates, 4 more fixes	~3–4 h
-admin	L2.7	round 3 done; server make test, live on f, re-review	~2–3 h
-admin	L2.5b	after L2.7	~3 h after L2.7
-case	L3.6	after L3.4 and L2.10	~3 h after both
-case	L3.9	next for case, fresh session	~8–10 h
-rules	L2.11	after L2.10	~8–10 h after L2.10
-studio	L1.7	after L1.5	~8–10 h after L1.5
-platform-b	P5b	new sister lane, starting now	~3–4 h
-studio-b	L1.7a	dulwich now; tips after L2.7	~2 h, tips after L2.7
-docs	D2a	starting now, minus alerts/rules pages	~6–8 h; D2b last
-platform	P7	cloud-platform profile, fresh session after P5	starts ~01:00–02:00; ~10–12 h
-platform	P8–P10	after P7 (P8 needs two owner rulings)	~8 h each, in turn
-studio-b	L1.10	marking ceiling, after L1.7a	~3 h after L1.7a
-studio-b	L1.9	S3 and Athena, after P7	~8 h after P7
-platform	P6	gazetteer panel, after P9	~3 h after P9
-docs	D2c	Cloud Platform guide, after P10	~6 h after P10
+# as of 2026-11-10T05:33:16Z
+admin	L2.7	merge gating now	~06:15
+studio	L1.5	clear; merges after L2.7	~07:00
+platform	P5	clear; merges after L1.5	~07:45
+docs	D2a	in independent review, then merge	~08:30
+rules	L2.10	last plants, re-review, merge	~09:00
+studio-b	L1.7a	dulwich: ci, review, merge	~09:30
+platform-b	P5b	after docs: rows, PDF, gates, review	~10:30
+case	L3.9	type-mapping rework, gates, review	~13:00–15:00
+admin	L2.5b	full Disable transfer, after L2.7	~10:00–11:00
+studio-b	tips	Studio's tips patches, after L2.7	~09:30–10:30
+studio-b	L1.10	marking ceiling, after L1.7a	~13:00
+studio	L1.7	operations, releases, carries	~17:00–19:00
+rules	L2.11	rule editor, after L2.10	~19:00–21:00
+case	L3.6	drawn-watch alerts, after L3.9	~17:00–18:00
+platform	P7	cloud-platform profile, after P5	~19:00–21:00
+platform	P8–P10	shared disk, backups, Entra; in turn	~11 Nov, evening
+studio-b	L1.9	S3 and Athena, after P7	~11 Nov, morning
+platform	P6	gazetteer panel, after P9	~11 Nov
+docs	D2b	decks, after L2.11	~11 Nov, morning
+docs	D2c	Cloud Platform guide, after P10	~12 Nov
+platform	P11	held until the client asks for AI	—
