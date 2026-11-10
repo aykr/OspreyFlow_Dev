@@ -277,9 +277,9 @@ def test_the_mode_flag_and_the_answers_file_must_agree(
 
 
 def test_without_yes_or_config_the_prompts_make_the_answers(rig: Rig, tmp_path: Path) -> None:
-    rig.replies = ["n", str(tmp_path / "in"), str(tmp_path / "tiles"), "hmp"]
+    rig.replies = ["n", str(tmp_path / "in"), str(tmp_path / "tiles"), str(tmp_path / "bk"), "hmp"]
     assert rig("install", "--mode", "lite", "--force") == 0
-    assert len(rig.questions) == 4
+    assert len(rig.questions) == 5
     config = rig.config()
     assert config["reporting"] == {"sync": False, "superset": False}
     assert config["components"]["storage"]["ingest"] == str(tmp_path / "in")  # type: ignore[index]
@@ -288,6 +288,50 @@ def test_without_yes_or_config_the_prompts_make_the_answers(rig: Rig, tmp_path: 
     rig.questions.clear()
     assert rig("install", "--mode", "lite", "--yes", "--force") == 0
     assert rig.questions == []
+
+
+def test_install_asks_for_the_backups_folder(rig: Rig, tmp_path: Path) -> None:
+    """ADR-114 Amendment 37 decision 1: setup asks where backups go, offering
+    `~/OspreyFlow/backups`, and the answer reaches `components.storage.backups`; a blank reply
+    takes the folder offered, never the schema's placeholder or the checkout."""
+    rig.replies = ["n", str(tmp_path / "in"), str(tmp_path / "tiles"), str(tmp_path / "bk"), "hmp"]
+    assert rig("install", "--mode", "lite", "--force") == 0
+    asked = [q for q in rig.questions if "backups" in q.lower()]
+    assert len(asked) == 1, rig.questions
+    storage = rig.config()["components"]["storage"]  # type: ignore[index]
+    assert storage["backups"] == str(tmp_path / "bk")
+    rig.questions.clear()
+    rig.replies = ["n", "", "", "", "hmp"]
+    assert rig("install", "--mode", "lite", "--force") == 0
+    storage = rig.config()["components"]["storage"]  # type: ignore[index]
+    assert storage["backups"] == str(Path.home() / "OspreyFlow" / "backups")
+
+
+def test_the_install_checks_the_backups_folder_before_anything_is_written(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 38 decision 8: the install runs the doctor's backups checks on the folder
+    its answers name, so a folder inside the checkout is refused before `osprey.yaml` is written,
+    and one a sync client copies is warned of. Found by the orchestrator's independent review: the
+    install ran the doctor without them."""
+    (rig.product / ".git").mkdir()
+    before = (rig.product / "osprey.yaml").read_text(encoding="utf-8")
+    answers = tmp_path / "answers.yaml"
+    answers.write_text(yaml.safe_dump(
+        {"mode": "lite", "folders": {"backups": str(rig.product / "sets")}}))  # fmt: skip
+    assert rig("install", "--mode", "lite", "--config", str(answers), "--yes", "--force") == 1
+    out = capsys.readouterr().out
+    assert "inside the checkout" in out and "Nothing was installed" in out, out
+    assert (rig.product / "osprey.yaml").read_text(encoding="utf-8") == before
+    assert not rig.runner.with_word("harness.apply")
+    rig.probes.system_name = "Darwin"
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    answers.write_text(yaml.safe_dump(
+        {"mode": "lite", "folders": {"backups": "~/Documents/osprey-backups"}}))  # fmt: skip
+    assert rig("install", "--mode", "lite", "--config", str(answers), "--yes", "--force") == 0
+    out = capsys.readouterr().out
+    assert any(line.startswith("⚠") and "osprey-backups" in line and "sync" in line
+               for line in out.splitlines()), out  # fmt: skip
 
 
 def test_the_install_alias_is_accepted(rig: Rig) -> None:

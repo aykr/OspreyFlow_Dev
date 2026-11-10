@@ -350,6 +350,11 @@ def test_a_name_installed_already_is_refused_and_left_alone(
         (("install", "--mode", "lite", "--yes", "--address", "http://x.localhost:9000"),
          "--address goes with --name"),
         (("install", "--mode", "lite", "--yes", "--name", "Bad_Name"), "cannot name a deployment"),
+        # ADR-114 Amendment 38: a profile's name is the checkout's own deployment's backups
+        # subfolder, so a deployment by that name would share its sets.
+        (("install", "--mode", "lite", "--yes", "--name", "local-lite"), "the name of a profile"),
+        (("install", "--mode", "lite", "--yes", "--name", "small"), "the name of a profile"),
+        (("install", "--mode", "lite", "--yes", "--name", "cluster"), "the name of a profile"),
         (("start", "--name", "nonesuch"), "no deployment called 'nonesuch'"),
     ],
 )  # fmt: skip
@@ -410,6 +415,22 @@ def test_name_on_every_verb_reaches_only_that_deployment(
     assert reached, f"{verb} did not reach bravo: {said}"
     assert str(alpha) not in said and alpha_address not in said, f"{verb} reached alpha"
     assert str(checkout) not in said, f"{verb} reached the checkout's deployment"
+
+
+def test_a_named_deployments_backup_goes_to_its_subfolder_of_the_backups_folder(
+    machine: Machine,
+) -> None:
+    """ADR-114 Amendment 37 decision 3 replaces ADR-138's `<deployment folder>/backups`: the backup
+    is pointed at the deployment's own `osprey.yaml` and given no `--out-root`, so `harness.backup`
+    writes to `<components.storage.backups>/<deployment name>/` — by the name it reads there."""
+    assert machine.install("bravo") == 0
+    machine.docker.calls.clear()
+    assert machine("backup", "--name", "bravo") == 0
+    (argv,) = [a for a, _e, _c in machine.docker.calls if "harness.backup" in a]
+    assert "--out-root" not in argv
+    assert argv[argv.index("--config") + 1] == str(machine.root / "bravo" / "osprey.yaml")
+    assert machine.config("bravo")["deployment"]["name"] == "bravo"  # type: ignore[index]
+    assert str(machine.root / "bravo" / "backups") not in " ".join(argv)
 
 
 def test_a_verb_without_name_acts_on_the_one_last_used(machine: Machine) -> None:
@@ -551,3 +572,42 @@ def test_name_may_come_before_or_after_the_demo_packs_own_words(
     assert machine(*words) == 0
     (seed,) = [e for a, e, _c in machine.docker.calls if "scripts.seed_internal" in a]
     assert seed["OSPREYFLOW_DEPLOYMENT_DIR"] == str(machine.root / "bravo")
+
+
+def test_the_profile_names_refused_are_the_schemas_profiles() -> None:
+    """The command runs before the product's Python, so it holds the profiles' names itself; they
+    must be every one the schema has, or a new profile's name becomes a deployment's."""
+    from ospreyflow.deployments import PROFILE_NAMES
+
+    from schemas.deployment import Profile
+
+    assert set(PROFILE_NAMES) == {p.value for p in Profile}
+
+
+def test_a_deployment_installed_by_a_profiles_name_before_is_still_reached(
+    machine: Machine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The refusal is the install's: one installed as `small` before Amendment 38 is still named
+    by its own verbs (this one is a bare folder, so `stop` goes on to say nothing is rendered)."""
+    folder = machine.root / "small"
+    folder.mkdir(parents=True)
+    (folder / "osprey.yaml").write_text(yaml.safe_dump(
+        {"profile": "local-lite", "deployment": {"name": "small"},
+         "network": {"public_origin": "http://small.localhost:8091"}}))  # fmt: skip
+    machine("stop", "--name", "small")
+    said = capsys.readouterr().err
+    assert "the name of a profile" not in said and "no deployment called" not in said, said
+
+
+def test_the_checkouts_own_deployment_name_is_refused_for_a_named_one(
+    machine: Machine, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The checkout's own deployment goes by `deployment.name` when its osprey.yaml gives one
+    (ADR-132 Amendment 1), so a deployment installed by that name would share its backups
+    subfolder (second lane-reviewer pass; ADR-114 Amendment 38 decision 6)."""
+    config = machine.product / "osprey.yaml"
+    raw = yaml.safe_load(config.read_text()) if config.is_file() else {}
+    config.write_text(yaml.safe_dump({**(raw or {}), "deployment": {"name": "acme"}}))
+    assert machine("install", "--mode", "lite", "--yes", "--name", "acme") == 1
+    assert "the checkout's own deployment" in capsys.readouterr().err
+    assert not (machine.root / "acme").exists()

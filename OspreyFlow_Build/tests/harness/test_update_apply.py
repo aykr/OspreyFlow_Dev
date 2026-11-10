@@ -764,6 +764,18 @@ def test_a_superset_container_on_another_digest_than_the_lock_is_a_failed_update
 # ---- ADR-114 Amendment 33 decision 5 (drop 2, unit 6): update on Small on a server of your own ---
 
 
+def _backup_refuses(out: Path, checkout: Path | None = None) -> str:
+    """What the real `harness.backup` says of `--out-root` inside the checkout (ADR-114
+    Amendment 37: it exits 1 and writes nothing), so a fake backup refuses what it refuses (rule
+    15): the real checkout always, and the test's stand-in checkout when there is one."""
+    from harness import backup
+
+    for root in (backup.checkout_root(), checkout):
+        if root is not None and backup.is_inside(out, root):
+            return f"backup: REFUSED\n  {out} is inside the checkout ({root})"
+    return ""
+
+
 def test_update_moves_a_self_contained_small(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -773,7 +785,7 @@ def test_update_moves_a_self_contained_small(
     directory = tmp_path / "deploy" / "generated" / "small"
     directory.mkdir(parents=True)
     backups = tmp_path / "srv-backups"
-    (directory / "osprey.yaml").write_text(yaml.safe_dump({
+    (tmp_path / "osprey.yaml").write_text(yaml.safe_dump({
         "profile": "small",
         "network": {"public_origin": "https://osprey.example.internal",
                     "tls": {"certificate": "/etc/ospreyflow/tls/osprey.crt",
@@ -786,15 +798,115 @@ def test_update_moves_a_self_contained_small(
         ran.append(list(argv))
         if "harness.backup" in argv:
             out = Path(argv[argv.index("--out-root") + 1])
+            refused = _backup_refuses(out)
+            if refused:
+                return 1, refused
             (out / "20261103T000000Z-small-abc").mkdir(parents=True)
         return 0, ""
 
     monkeypatch.setattr(update, "_subprocess", subprocess_)
     host = update.real_host(directory, tmp_path)
     made = host.backup()
-    assert made.parent == backups
+    # ADR-114 Amendment 37 decision 3: in the deployment's own subfolder of that folder.
+    assert made.parent == backups / "small"
     (argv,) = [a for a in ran if "harness.backup" in a]
-    assert argv[argv.index("--out-root") + 1] == str(backups)
+    assert argv[argv.index("--out-root") + 1] == str(backups / "small")
+
+
+def test_an_updates_backup_is_never_written_inside_the_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ADR-114 Amendment 37 decision 2: the update's own backup of a lite deployment whose
+    `osprey.yaml` names no folder (none, or the committed placeholder) goes to
+    `~/OspreyFlow/backups/<deployment>/`, never the checkout's `backups/` — which `harness.backup`
+    now refuses, so the update would otherwise stop at its first step; a named folder is used."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    repo = tmp_path / "checkout"
+    directory = repo / "deploy" / "generated" / "local-lite"
+    directory.mkdir(parents=True)
+    ran: list[list[str]] = []
+
+    def subprocess_(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]:
+        ran.append(list(argv))
+        if "harness.backup" in argv:
+            out = Path(argv[argv.index("--out-root") + 1])
+            refused = _backup_refuses(out, checkout=repo)
+            if refused:
+                return 1, refused
+            (out / f"2026110{len(ran)}T000000Z-local-lite-abc").mkdir(parents=True)
+        return 0, ""
+
+    monkeypatch.setattr(update, "_subprocess", subprocess_)
+    fallback = tmp_path / "home" / "OspreyFlow" / "backups" / "local-lite"
+    for raw in ({}, {"components": {"storage": {"backups": "/var/lib/osprey/backups"}}}):
+        (repo / "osprey.yaml").write_text(yaml.safe_dump(raw))
+        made = update.real_host(directory, repo).backup()
+        assert made.parent == fallback
+        assert not made.resolve().is_relative_to(repo.resolve())
+        # Amendment 37 decision 2: the operator is told, as `ospreyflow backup` tells them.
+        said = capsys.readouterr().err
+        assert str(fallback.parent) in said and "folders.backups" in said, said
+    (repo / "osprey.yaml").write_text(
+        yaml.safe_dump({"components": {"storage": {"backups": str(tmp_path / "mine")}}})
+    )
+    # The checkout's own deployment is read from the checkout's `osprey.yaml`, as `ospreyflow
+    # backup` reads it, not from a rendered copy that a save without a re-render left stale
+    # (ADR-114 Amendment 38 decision 9); and the harness is given no --config of its own.
+    (directory / "osprey.yaml").write_text(
+        yaml.safe_dump({"components": {"storage": {"backups": str(tmp_path / "stale")}}})
+    )
+    assert update.real_host(directory, repo).backup().parent == tmp_path / "mine" / "local-lite"
+    assert "folders.backups" not in capsys.readouterr().err
+    assert all("--config" not in argv and "--generated-root" not in argv for argv in ran)
+
+
+def test_an_updates_backup_and_restore_name_a_named_deployment_to_the_harness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 38 decision 9: a deployment kept by name (ADR-138) is
+    `~/.ospreyflow/deployments/<name>/`, its `osprey.yaml` there and rendered there, so the update's
+    backup and rollback restore pass `harness.backup`/`harness.restore` that `osprey.yaml` as
+    `--config` and its parent as `--generated-root`, as `ospreyflow backup` does. Without them the
+    harness reads the checkout's `osprey.yaml` and looks for `deploy/generated/<name>/compose.yaml`,
+    which the real one refuses ("no rendered deployment"), so the fake refuses it too (rule 15)."""
+    from harness import backup as real_backup
+    from harness import restore as real_restore
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    directory = tmp_path / "home" / ".ospreyflow" / "deployments" / "beta"
+    directory.mkdir(parents=True)
+    (directory / "compose.yaml").write_text("services: {}\n")
+    folder = tmp_path / "srv-backups"
+    (directory / "osprey.yaml").write_text(yaml.safe_dump({
+        "deployment": {"name": "beta"}, "components": {"storage": {"backups": str(folder)}},
+    }))  # fmt: skip
+    ran: list[list[str]] = []
+
+    def given(argv: Sequence[str], flag: str, default: Path) -> Path:
+        return Path(argv[argv.index(flag) + 1]) if flag in argv else default
+
+    def subprocess_(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]:
+        ran.append(list(argv))
+        module = next(a for a in argv if a.startswith("harness."))
+        defaults = real_backup if module == "harness.backup" else real_restore
+        root = given(argv, "--generated-root", defaults.DEFAULT_OUT_ROOT)
+        profile = argv[argv.index("--profile") + 1]
+        if not (root / profile / "compose.yaml").is_file():
+            said = module.removeprefix("harness.")
+            return 1, f"{said}: no rendered deployment at {root / profile / 'compose.yaml'}."
+        if module == "harness.backup":
+            (given(argv, "--out-root", folder) / "20261110T000000Z-beta-abc").mkdir(parents=True)
+        return 0, ""
+
+    monkeypatch.setattr(update, "_subprocess", subprocess_)
+    host = update.real_host(directory, tmp_path / "checkout")
+    made = host.backup()
+    assert made.parent == folder / "beta"
+    host.restore(made)
+    for argv in ran:
+        assert "--config" in argv, argv
+        assert argv[argv.index("--config") + 1] == str(directory / "osprey.yaml"), argv
+        assert argv[argv.index("--generated-root") + 1] == str(directory.parent), argv
 
 
 # --- the stores moved to named volumes (ADR-114 Amendment 35) -----------------------------------

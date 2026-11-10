@@ -9,6 +9,8 @@ a person at the prompts and CI install the same way.
     folders:                       # host folders; absolute, or under the home folder with ~
       ingest: ~/OspreyFlow/ingest  # what the Ingest Studio lists (read-only to the Conduit)
       tiles: ~/OspreyFlow/basemap  # where a built basemap lives
+      backups: ~/OspreyFlow/backups  # where `ospreyflow backup` writes, outside the checkout:
+                                   #   each deployment's sets in <this>/<deployment name>/
     models:
       local_only: true             # no case content leaves the deployment
     demo_packs: [operation-ledger, hmp]
@@ -40,7 +42,8 @@ a person at the prompts and CI install the same way.
       ingest: /srv/ospreyflow/ingest   # folders.ingest: where the CSV exports are put
       redirect_http: false         #   true also publishes 80, only to send people to 443
       listen_address: 192.0.2.10   #   optional: one interface of the server; default every one
-      backups: /srv/ospreyflow/backups  # where `ospreyflow backup` writes; ~/OspreyFlow/backups
+      backups: /srv/ospreyflow/backups  # folders.backups, by its older name; give one, or
+                                   #   both naming the same folder
       memory_gib: auto             #   or a number (GiB): what the stores are sized to
       gpu: nvidia                  #   optional: the local engine on the server's NVIDIA GPU; none
     sign_in:                       # small on a server, optional; without it, local accounts only
@@ -115,7 +118,7 @@ DEFAULT_ORGANISATION_LABEL = "Organisation account"
 ORGANISATION_SECRET_VARIABLE = "OSPREY_ORG_SIGN_IN_SECRET"
 _SECTIONS = {
     "components": {"dashboards"},
-    "folders": {"ingest", "tiles"},
+    "folders": {"ingest", "tiles", "backups"},
     "models": {"local_only"},
     "cloud": {"provider", "region", "domain", "size", "dns_zone", "admin_email", "api_cidrs"},
     "mail": {"host", "port", "from", "starttls", "username"},
@@ -164,7 +167,8 @@ class Answers:
     server: dict[str, Any] = field(default_factory=dict)
     #: The first administrator's email, on a server of your own (a cloud's is `cloud.admin_email`).
     admin_email: str | None = None
-    #: Amendment 33 decision 5: where `ospreyflow backup` writes on a server of your own.
+    #: Where `ospreyflow backup` writes (ADR-114 Amendment 37 decision 1, every profile;
+    #: Amendment 33 decision 5 first gave it to a server of your own). None leaves the base's.
     backups: Path | None = None
     #: Amendment 33 decision 6: `"auto"` (measured by the install), a number of GiB, or None.
     memory_gib: int | str | None = None
@@ -560,12 +564,46 @@ def load_answers(
         case_domains=starter.domain.case_domains if starter is not None else None,
         server=server.get("network", {}),
         admin_email=str(admin_email) if admin_email is not None else None,
-        backups=server.get("backups", home / "OspreyFlow" / "backups") if server else None,
+        backups=_backups(folders, server, cloud=bool(cloud) or bool(external), home=home),
         memory_gib=server.get("memory_gib"),
         gpu=server.get("gpu", "none"),
         organisation=organisation,
         grading_scheme=_grading_scheme(sections["grading"]),
     )
+
+
+#: The schema's `components.storage.backups` default (`harness.backup.LEGACY_PLACEHOLDER`).
+BACKUPS_PLACEHOLDER = "/var/lib/osprey/backups"
+
+
+def _backups(
+    folders: Mapping[str, Any], server: Mapping[str, Any], *, cloud: bool, home: Path
+) -> Path | None:
+    """ADR-114 Amendment 37 decision 1: the backups folder, `folders.backups` or Amendment 33's
+    `server.backups` as the same setting, refused when both are given and differ. With neither,
+    `~/OspreyFlow/backups` on this machine or a server of your own; a cloud's server is built
+    elsewhere, so nothing is written for it and its own `osprey.yaml` decides."""
+    named = None
+    if folders.get("backups"):
+        named = _host_path("folders.backups", folders["backups"], home)
+    old = server.get("backups")
+    if named is not None and old is not None and Path(named) != Path(old):
+        raise AnswersRefused(
+            f"folders.backups ({named}) and server.backups ({old}) name different folders; they "
+            "are the same setting, so give one, or both naming the same folder"
+        )
+    chosen = named or old
+    if chosen is not None and str(chosen).rstrip("/") == BACKUPS_PLACEHOLDER and not server:
+        # ADR-114 Amendment 38: `ospreyflow backup` reads the placeholder as no folder named off a
+        # server of your own, so a choice of it would be set aside without a word.
+        raise AnswersRefused(
+            f"folders.backups {BACKUPS_PLACEHOLDER} is the settings' placeholder, which a backup "
+            "off a server of your own reads as no folder named; give another folder, for example "
+            "~/OspreyFlow/backups"
+        )
+    if chosen is None and not cloud:
+        chosen = home / "OspreyFlow" / "backups"
+    return Path(chosen) if chosen is not None else None
 
 
 def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
@@ -619,7 +657,7 @@ def osprey_config(answers: Answers, base: Mapping[str, Any]) -> dict[str, Any]:
         # ADR-114 Amendment 33: the server's address, and its own certificate's paths.
         network.update(copy.deepcopy(answers.server))
     if answers.backups is not None:
-        # Amendment 33 decision 5: where `ospreyflow backup` writes on this server.
+        # Amendment 37 decision 1: where `ospreyflow backup` writes, for every profile.
         storage["backups"] = str(answers.backups)
     if isinstance(answers.memory_gib, int):
         # Decision 6: a number given is written as it is; `auto` is measured by the install.

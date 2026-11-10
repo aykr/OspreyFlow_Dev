@@ -75,10 +75,13 @@ from harness import identity, keycloak_admin
 from harness.backup import (
     REALM,
     BackupFailed,
+    FoundSet,
     _compose,
     _env_value,
     _run,
     arcadedb_request,
+    backups_folder,
+    find_sets,
     schema_versions,
 )
 from harness.render import (
@@ -798,7 +801,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
             "and refuses to proceed until it is acknowledged with --yes."
         ),
     )
-    parser.add_argument("directory", type=Path)
+    parser.add_argument(
+        "directory",
+        nargs="?",
+        default=None,
+        help="the set: its folder, or its name, looked for in the deployment's backups folder "
+        "first and then where sets were written before; left out, the sets are listed",
+    )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--profile", default=None)
     parser.add_argument("--generated-root", type=Path, default=DEFAULT_OUT_ROOT)
@@ -811,6 +820,31 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _chosen_set(given: str, found: list[FoundSet]) -> FoundSet | None:
+    """The set the operator named (ADR-114 Amendment 37 decision 3): a folder, as it is (said to be
+    in an old place when it is one; one that is not a set is refused by `run_restore`, as before);
+    else a set's bare name, the deployment's own folder first (`found` lists it before an old copy
+    of the same name)."""
+    path = Path(given).expanduser()
+    if path.is_dir() or "/" in given or given.startswith(("~", ".")):
+        own = path.resolve()
+        return next((s for s in found if s.path.resolve() == own), FoundSet(path))
+    return next((s for s in found if s.path.name == given), None)
+
+
+def _list_sets(found: list[FoundSet], home: Path) -> int:
+    if not found:
+        print(f"restore: no sets for this deployment in {home} or where sets were written before.")
+        return 0
+    print(f"restore: this deployment's sets, newest first (its folder: {home})")
+    for item in found:
+        print(f"  {item.path}")
+        if item.belongs_in is not None:
+            print(f"    in an old place; move it with: {item.move_command()}")
+    print("Restore one with: ospreyflow restore <its name or folder>")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
     # ADR-114 Amendment 4 decision 7: the deployment's names reach its proxy on this machine.
@@ -820,6 +854,24 @@ def main(argv: list[str] | None = None) -> int:
     answer_the_deployment_here(config)
     # ADR-132 Amendment 1: the deployment's own folder, `deployment.name` or the profile.
     profile = args.profile or generated_folder(config)
+    found = find_sets(config, profile)
+    if args.directory is None:
+        return _list_sets(found, backups_folder(config)[0] / profile)
+    chosen = _chosen_set(args.directory, found)
+    if chosen is None:
+        print(
+            f"restore: REFUSED\n  no set {args.directory} for {profile}, in "
+            f"{backups_folder(config)[0] / profile} or where sets were written before\n  "
+            "list this deployment's sets with: ospreyflow restore",
+            file=sys.stderr,
+        )
+        return 2
+    if chosen.belongs_in is not None:
+        print(
+            f"restore: {chosen.path} is in an old place (ADR-114 Amendment 37). Move it to "
+            f"{chosen.belongs_in} with:\n  {chosen.move_command()}"
+        )
+    args.directory = chosen.path
     compose_file = args.generated_root / profile / "compose.yaml"
     if not compose_file.exists():
         print(f"restore: no rendered deployment at {compose_file}.", file=sys.stderr)

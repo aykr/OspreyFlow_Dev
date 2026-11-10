@@ -1707,6 +1707,18 @@ def _render_runbook(config: OspreyConfig, images: Sequence[ServiceImage]) -> str
     path and which Stage 2 §4 writes by hand — that one is a measurement, not a render.
     """
     rows = "\n".join(f"| `{i.service}` | `{i.image}` |" for i in images)
+    # ADR-114 Amendment 38 decision 9: where `harness.backup` writes this deployment's sets, not
+    # the setting verbatim (the schema's placeholder is no folder named off a server). Imported
+    # here, as `harness.backup` imports this module.
+    from harness.backup import FALLBACK_SPELLING, named_backups_folder
+
+    named = named_backups_folder(config)
+    sets = generated_folder(config)
+    backups = (
+        f"`{named.rstrip('/')}/{sets}/`"
+        if named is not None
+        else f"`{FALLBACK_SPELLING}/{sets}/` (`osprey.yaml` names no folder)"
+    )
     hosts = (
         "\n".join(f"- `{h.name}` — `{h.address}`" for h in config.cluster.hosts)
         if config.cluster.hosts
@@ -1740,7 +1752,7 @@ Search backend: `{config.components.search.value}`{
 | --- | --- |
 | Data | `{config.components.storage.data}` |
 | Staging | `{config.components.storage.staging}` |
-| Backups | `{config.components.storage.backups}` |
+| Backups | {backups} |
 | Ingest (read-only into the Conduit) | `{config.components.storage.ingest}` |
 
 ## Addresses

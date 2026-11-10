@@ -1,0 +1,18 @@
+[WebServer] INFO:     Started server process [65719]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:7217 (Press CTRL+C to quit)
+
+Running 9 tests using 1 worker
+
+  ✓  1 keyboard/setup-screens.spec.ts:505:1 › install page: Tab reaches the Mode screen's radio group and a real Enter saves the mode (348ms)
+  ✓  2 keyboard/setup-screens.spec.ts:531:1 › install page: the Mode screen's starter is chosen by keyboard, the GOV.UK service named, and a real Enter saves it (227ms)
+  ✓  3 keyboard/setup-screens.spec.ts:584:1 › install page: a keyboard-activated switch reaches Folders and a real Enter saves them (212ms)
+  ✓  4 keyboard/setup-screens.spec.ts:621:1 › install page: a keyboard-activated switch reaches Demo packs and a real Enter saves the ticked pack (163ms)
+  ✓  5 keyboard/setup-screens.spec.ts:647:1 › install page: a provider's key field is reached by keyboard, a real Enter sends it and the page says key set (246ms)
+  ✓  6 keyboard/setup-screens.spec.ts:688:1 › install page: Small's Cloud and region screen is reached by keyboard and a real Enter saves it (191ms)
+  ✓  7 keyboard/setup-screens.spec.ts:733:1 › install page: Small's Domain screen is reached by keyboard and a real Enter saves it (180ms)
+  ✓  8 keyboard/setup-screens.spec.ts:763:1 › install page: Small's Review says how it is built and a real Enter saves the answers (160ms)
+  ✓  9 keyboard/setup-screens.spec.ts:782:1 › install page: Lite's Install is reached by keyboard, a real Enter runs it and the page says it closes (371ms)
+
+  9 passed (5.1s)

@@ -1,0 +1,13 @@
+[WebServer] INFO:     Started server process [65964]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:7219 (Press CTRL+C to quit)
+
+Running 4 tests using 1 worker
+
+  ✓  1 a11y/install-page.spec.ts:55:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (597ms)
+  ✓  2 a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (452ms)
+  ✓  3 a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (465ms)
+  ✓  4 a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (431ms)
+
+  4 passed (3.9s)

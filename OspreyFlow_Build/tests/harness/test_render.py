@@ -288,6 +288,40 @@ def test_the_runbook_carries_this_deployment_s_own_paths_not_a_template(
     )
 
 
+def test_the_runbook_names_the_folder_backups_are_written_to_not_the_placeholder() -> None:
+    """ADR-114 Amendment 38 decision 9: the runbook's Paths table says where `harness.backup`
+    writes this deployment's sets (`harness.backup.default_out_root`), not
+    `components.storage.backups` verbatim: a lite `osprey.yaml` that keeps the schema's placeholder
+    `/var/lib/osprey/backups` backs up to `~/OspreyFlow/backups/<deployment>/`, and a named folder
+    gets the deployment's subfolder."""
+
+    def backups_row(raw: dict[str, object]) -> str:
+        runbook = render(OspreyConfig.model_validate(raw), resolver=_fake_resolver).artefacts[
+            "RUNBOOK.md"
+        ]
+        (row,) = [line for line in runbook.splitlines() if line.startswith("| Backups |")]
+        return row
+
+    lite = backups_row({})
+    assert "/var/lib/osprey/backups" not in lite, lite
+    assert "`~/OspreyFlow/backups/local-lite/`" in lite, lite
+    storage = {"storage": {"backups": "/srv/osprey/backups"}}
+    named = backups_row({"deployment": {"name": "alpha"}, "components": storage})
+    assert "`/srv/osprey/backups/alpha/`" in named, named
+    # A folder written from `~` is printed as written, so no renderer's home goes into the file.
+    home = backups_row({"components": {"storage": {"backups": "~/sets/"}}})
+    assert "`~/sets/local-lite/`" in home, home
+    # On Small on a server of your own the placeholder is the folder (decision 1).
+    server = backups_row({
+        "profile": "small",
+        "network": {"public_origin": "https://osprey.example.internal",
+                    "tls": {"certificate": "/etc/ospreyflow/tls/osprey.crt",
+                            "key": "/etc/ospreyflow/tls/osprey.key"}},
+        "components": {"storage": {"backups": "/var/lib/osprey/backups"}},
+    })  # fmt: skip
+    assert "`/var/lib/osprey/backups/small/`" in server, server
+
+
 def test_the_runbook_does_not_send_the_operator_to_a_workspace_admin_page(
     rendered: RenderResult,
 ) -> None:

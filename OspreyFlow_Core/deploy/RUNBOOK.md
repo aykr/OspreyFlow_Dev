@@ -23,9 +23,14 @@ docker compose -f deploy/generated/local-lite/compose.yaml stop api
 PYTHONPATH=.:packages .venv/bin/python -m harness.backup --profile local-lite --require-quiesced
 docker compose -f deploy/generated/local-lite/compose.yaml start api
 
-# Restore. Without --yes this is a dry run: it prints the projection and writes nothing.
-PYTHONPATH=.:packages .venv/bin/python -m harness.restore backups/<set>
-PYTHONPATH=.:packages .venv/bin/python -m harness.restore backups/<set> --yes
+# The set goes to <backups folder>/<deployment>/ (components.storage.backups, ~/OspreyFlow/backups
+# when none is named; ADR-114 Amendment 37), never inside the checkout. List the sets:
+PYTHONPATH=.:packages .venv/bin/python -m harness.restore
+
+# Restore one by its name (or its folder). Without --yes this is a dry run: it prints the
+# projection and writes nothing.
+PYTHONPATH=.:packages .venv/bin/python -m harness.restore <set>
+PYTHONPATH=.:packages .venv/bin/python -m harness.restore <set> --yes
 ```
 
 `--yes` is the acknowledgement ADR-049's amendment 11 requires. Read the projection before you give

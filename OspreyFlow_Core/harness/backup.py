@@ -64,6 +64,8 @@ import argparse
 import base64
 import hashlib
 import json
+import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -88,26 +90,105 @@ from harness.site import (
     answer_the_deployment_here,
     deployment_origins,
 )
-from schemas.deployment import OspreyConfig, generated_folder, self_contained_small
+from schemas.deployment import (
+    OspreyConfig,
+    StorageRoots,
+    generated_folder,
+    self_contained_small,
+)
 
 #: The realm the deployment's people live in (`harness/realm.py`).
 REALM = "osprey"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-#: `05_DEPLOYMENT.md` §2.1's Components screen names `backups` as a storage root. This is the
-#: repository-local default for a `local-lite` machine; the rendered `OSPREY_BACKUP_ROOT` is what a
-#: real deployment uses, and `--out-root` is how an operator points at it.
-DEFAULT_BACKUP_ROOT = REPO_ROOT / "backups"
+#: The schema's default for `components.storage.backups`, which the committed `osprey.yaml` also
+#: carries. Off a server of your own nobody ever chose it (before ADR-114 Amendment 37 the backup
+#: wrote to the checkout whatever it said), so there it is read as no folder named.
+LEGACY_PLACEHOLDER: str = StorageRoots.model_fields["backups"].default
 
 
-def default_out_root(config: OspreyConfig) -> Path:
-    """Where a backup set is written when `--out-root` is not given: on Small on a server of your
-    own, the folder `server.backups` named (`components.storage.backups`, ADR-114 Amendment 33
-    decision 5); elsewhere the checkout's `backups/`, as before."""
-    if self_contained_small(config):
-        return Path(config.components.storage.backups)
-    return DEFAULT_BACKUP_ROOT
+#: The fallback folder as the operator writes it: what setup offers and the runbook prints.
+FALLBACK_SPELLING = "~/OspreyFlow/backups"
+
+
+def fallback_backups_folder() -> Path:
+    """`~/OspreyFlow/backups`: what setup offers (Amendment 37 decision 1), and where a set goes
+    when the deployment's `osprey.yaml` names no folder (decision 2)."""
+    return Path(FALLBACK_SPELLING).expanduser()
+
+
+def named_backups_folder(config: OspreyConfig) -> str | None:
+    """`components.storage.backups` as written, when it names a folder (ADR-114 Amendment 38
+    decision 1: the placeholder, or a blank, names none off a server of your own); else `None`.
+    On a server of your own the setting left out is the schema's default, the placeholder, where
+    Amendment 33 always wrote."""
+    storage = config.components.storage
+    given = "backups" in storage.model_fields_set or self_contained_small(config)
+    value = storage.backups.strip() if given else ""
+    placeholder = value and Path(value) == Path(LEGACY_PLACEHOLDER)
+    return value if value and (not placeholder or self_contained_small(config)) else None
+
+
+def backups_folder(config: OspreyConfig) -> tuple[Path, str | None]:
+    """The deployment's backups folder (`components.storage.backups`, ADR-114 Amendment 37
+    decision 1, read for every profile), and what to tell the operator when there was none: an
+    `osprey.yaml` from before the amendment names none, or names the placeholder."""
+    named = named_backups_folder(config)
+    if named is not None:
+        return Path(named).expanduser(), None
+    folder = fallback_backups_folder()
+    return folder, (
+        f"This deployment's osprey.yaml names no backups folder of its own (none, or the "
+        f"placeholder {LEGACY_PLACEHOLDER}), so the set goes to {folder}. Name one as "
+        "components.storage.backups (folders.backups in the install answers)."
+    )
+
+
+def default_out_root(config: OspreyConfig, name: str | None = None) -> Path:
+    """Where a set is written when `--out-root` is not given: the deployment's own subfolder of its
+    backups folder, `<folder>/<deployment name>/` (Amendment 37 decision 3), so two deployments'
+    sets never mix (ADR-138). `name` is `--profile`'s, when given; else `generated_folder`."""
+    return backups_folder(config)[0] / (name or generated_folder(config))
+
+
+def checkout_root() -> Path:
+    """The git checkout this product is in: the folder above `OspreyFlow_Core` that holds `.git`
+    (a file in a worktree), else `OspreyFlow_Core` itself (a published repository, an image)."""
+    for candidate in (REPO_ROOT, REPO_ROOT.parent):
+        if (candidate / ".git").exists():
+            return candidate
+    return REPO_ROOT
+
+
+def is_inside(folder: Path, root: Path) -> bool:
+    """Whether `folder`, once made, would be `root` or under it. Compared by the file each existing
+    ancestor is (`os.path.samefile`), not by spelling: on a case-insensitive disk
+    `ospreyflow_core/backups` is `OspreyFlow_Core/backups`, and a link, or a mount of the checkout
+    itself, is the folder it shows. Resolved as the system resolves it (`..` after a link is the
+    link's own parent), never by tidying the spelling first."""
+    target = folder.expanduser().resolve()
+    for candidate in (target, *target.parents):
+        try:
+            if candidate.exists() and os.path.samefile(candidate, root):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def refuse_inside_the_checkout(folder: Path) -> None:
+    """Amendment 37 decision 2: no backup is ever written inside the checkout (the git checkout, so
+    the folder holding this product too), which is synced, copied and shared with its working
+    tree; a set holds the deployment's data and any real-data exception (ADR-035 §C3)."""
+    checkout = checkout_root().resolve()
+    if is_inside(folder, checkout):
+        raise BackupFailed(
+            "out-root",
+            f"{folder} is inside the checkout ({checkout}); a backup is never written there. "
+            "Name a folder outside it with --out-root, or leave it out to use the deployment's "
+            "backups folder (components.storage.backups).",
+        )
 
 
 #: The files that make a restore reproducible rather than merely possible. Each is copied verbatim
@@ -602,10 +683,80 @@ AUDIT_DISPOSITION: dict[str, Any] = {
 }
 
 
+#: A set's folder name, `<UTC stamp>-<deployment>-<sha>` (`new_set_folder`).
+#: The sha is letters and digits only, so a failed backup's `<set>.incomplete` never matches.
+SET_NAME = re.compile(r"^(?P<stamp>\d{8}T\d{6}Z)-(?P<name>.+)-(?P<sha>[0-9A-Za-z]+)$")
+
+
+@dataclass(frozen=True)
+class FoundSet:
+    """A deployment's set, where it is. `belongs_in` is the deployment's own folder when the set is
+    still in an old place (ADR-114 Amendment 37 decision 3), else None."""
+
+    path: Path
+    belongs_in: Path | None = None
+
+    def move_command(self) -> str | None:
+        """The one command that moves it to where it belongs; the operator runs it, never us."""
+        if self.belongs_in is None:
+            return None
+        to = shlex.quote(str(self.belongs_in))
+        return f"mkdir -p {to} && mv {shlex.quote(str(self.path))} {to}/"
+
+
+def sets_in(folder: Path, name: str | None = None) -> list[Path]:
+    """The sets directly in `folder` (named as `new_set_folder` names one; never a failed backup's
+    `.incomplete`), only `name`'s when it is given."""
+    if not folder.is_dir():
+        return []
+    found = []
+    for child in folder.iterdir():
+        matched = SET_NAME.match(child.name)
+        if child.is_dir() and matched and (name is None or matched["name"] == name):
+            found.append(child)
+    return found
+
+
+def old_places(config: OspreyConfig, name: str) -> list[tuple[Path, str | None]]:
+    """Where `name`'s sets were written before Amendment 37, each with the name its sets must carry
+    to be this deployment's (None: every set there is): the checkout's `backups/` (every install
+    off a server), a named deployment's own `backups/` (ADR-138), and the top of the backups folder
+    (Amendment 33's server). The git checkout's root, where it is above the product, is checked
+    too (Amendment 38 decision 5)."""
+    roots = dict.fromkeys((REPO_ROOT, checkout_root()))
+    return [
+        *((root / "backups", name) for root in roots),
+        (Path.home() / ".ospreyflow" / "deployments" / name / "backups", None),
+        (backups_folder(config)[0], name),
+    ]
+
+
+def find_sets(config: OspreyConfig, name: str) -> list[FoundSet]:
+    """`name`'s sets, newest first: its own folder's, then any still in an old place, each with
+    where it belongs."""
+    home = backups_folder(config)[0] / name
+    found = [FoundSet(path) for path in sets_in(home)]
+    seen = {home.resolve()}
+    for folder, carrying in old_places(config, name):
+        if folder.resolve() in seen:
+            continue
+        seen.add(folder.resolve())
+        found += [FoundSet(path, home) for path in sets_in(folder, carrying)]
+    return sorted(found, key=lambda s: (s.path.name, s.belongs_in is None), reverse=True)
+
+
 def new_set_folder(out_root: Path, profile: str) -> Path:
     """A new set's folder under `out_root`, readable by its owner only: it holds the case data and
     the people's identities with the dashboards' client secrets (ADR-114 Amendment 33 decision 5
-    puts it in a folder of its own on a server)."""
+    puts it in a folder of its own on a server). Never inside the checkout (Amendment 37)."""
+    if Path(profile).name != profile or profile in ("", ".", ".."):
+        raise BackupFailed(
+            "out-root", f"{profile!r} cannot name a set: a deployment's name is one folder's name"
+        )
+    # The folder checked is the folder written: `~` expanded and made absolute once, so a `~` the
+    # shell left alone (`--out-root=~/x`) is never a folder named `~` under the working directory.
+    out_root = out_root.expanduser().absolute()
+    refuse_inside_the_checkout(out_root)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     target = out_root / f"{stamp}-{profile}-{git_sha()}"
     target.mkdir(parents=True, exist_ok=False)
@@ -870,8 +1021,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--out-root",
         type=Path,
         default=None,
-        help="where the set is written; default: server.backups on Small on a server of your "
-        "own, else the checkout's backups/",
+        help="the folder the set is written in, never inside the checkout; default: "
+        "<components.storage.backups>/<deployment name>/",
     )
     parser.add_argument("--generated-root", type=Path, default=DEFAULT_OUT_ROOT)
     parser.add_argument("--database", default="ospreyflow")
@@ -891,9 +1042,20 @@ def main(argv: list[str] | None = None) -> int:
     # ADR-114 Amendment 33 decision 2: on a server, its own names here, its certificate trusted
     # (the identity export reaches the deployment's identity provider).
     answer_the_deployment_here(config)
-    out_root = args.out_root or default_out_root(config)
     # ADR-132 Amendment 1: the deployment's own folder, `deployment.name` or the profile.
     profile = args.profile or generated_folder(config)
+    if args.out_root is not None:
+        out_root = args.out_root.expanduser().absolute()
+    else:
+        out_root = default_out_root(config, profile)
+        notice = backups_folder(config)[1]
+        if notice:
+            print(f"backup: {notice}")
+    try:
+        refuse_inside_the_checkout(out_root)
+    except BackupFailed as refused:
+        print(f"backup: REFUSED\n  {refused.detail}", file=sys.stderr)
+        return 1
     compose_file = args.generated_root / profile / "compose.yaml"
     if not compose_file.exists():
         print(

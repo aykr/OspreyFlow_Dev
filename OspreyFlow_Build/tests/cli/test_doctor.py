@@ -15,6 +15,7 @@ What a mistake would do, and the case that catches it:
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -454,3 +455,271 @@ def test_the_doctor_warns_of_an_installed_deployment_that_joins_by_email(
     config.write_text(yaml.safe_dump(raw), encoding="utf-8")
     assert rig("doctor") == 0
     assert "nOAuth" not in capsys.readouterr().out
+
+
+# ---- ADR-114 Amendment 37 decisions 4 and 5: sets left behind, and a folder a sync client copies --
+
+
+def _a_set(folder: Path, name: str, size: int = 2048) -> Path:
+    made = folder / name
+    made.mkdir(parents=True)
+    (made / "manifest.json").write_text("{}")
+    (made / "graph.tgz").write_bytes(b"\0" * (size - 2))
+    return made
+
+
+def test_doctor_names_sets_left_in_the_git_roots_backups_folder(
+    rig: Rig, capsys: pytest.CaptureFixture[str], tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """The git checkout's root is the checkout too (Amendment 38 decision 5), so a set left in its
+    `backups/` is named with its move command, as one in the product's is. Independent review."""
+    folder = tmp_path_factory.mktemp("outside") / "bk"  # outside the stand-in checkout
+    (rig.product / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "components": {"storage": {"backups": str(folder)}}}))  # fmt: skip
+    root = rig.product.parent
+    (root / ".git").mkdir()
+    left = _a_set(root / "backups", "20261101T000000Z-local-lite-abc1234")
+    assert rig("doctor") == 0
+    out = capsys.readouterr().out
+    assert f"mkdir -p {folder}/local-lite && mv {left} {folder}/local-lite/" in out, out
+
+
+def test_doctor_names_sets_left_in_the_checkout_with_the_move_command(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Decision 4: a set in the checkout's `backups/` or a named deployment's old `backups/`
+    (ADR-138) is named, with its size and the one command that moves it into its deployment's
+    subfolder of the configured folder. A warning: the doctor still passes, and it never moves or
+    deletes a set."""
+    folder = tmp_path / "bk"
+    (rig.product / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "components": {"storage": {"backups": str(folder)}}}))  # fmt: skip
+    left = _a_set(rig.product / "backups", "20261101T000000Z-local-lite-abc1234")
+    named = tmp_path / "home" / ".ospreyflow" / "deployments" / "alpha"
+    named.mkdir(parents=True)
+    (named / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "deployment": {"name": "alpha"},
+         "components": {"storage": {"backups": str(folder)}}}))  # fmt: skip
+    old = _a_set(named / "backups", "20261102T000000Z-alpha-abc1234", size=3 * 1024 * 1024)
+    # Amendment 33's server wrote sets straight into the folder: an old place too.
+    top = _a_set(folder, "20261103T000000Z-local-lite-abc1234")
+    # A failed backup's `.incomplete` is not a set to move.
+    _a_set(rig.product / "backups", "20261104T000000Z-local-lite-abc1234.incomplete")
+    assert rig("doctor") == 0
+    out = capsys.readouterr().out
+    warned = [line for line in out.splitlines() if line.startswith("⚠") and "left" in line]
+    assert len(warned) == 3, out
+    assert "incomplete" not in out
+    top_line = next(line for line in warned if f"left in {folder}:" in line)
+    assert f"mkdir -p {folder}/local-lite && mv {top} {folder}/local-lite/" in top_line
+    checkout_line = next(line for line in warned if str(rig.product / "backups") in line)
+    assert "1 backup set" in checkout_line and "2.0 KB" in checkout_line
+    assert f"mkdir -p {folder}/local-lite && mv {left} {folder}/local-lite/" in checkout_line
+    named_line = next(line for line in warned if str(named / "backups") in line)
+    assert "3.0 MB" in named_line
+    assert f"mkdir -p {folder}/alpha && mv {old} {folder}/alpha/" in named_line
+    # Never moved or deleted.
+    assert (left / "graph.tgz").stat().st_size == 2046 and old.is_dir() and top.is_dir()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every folder")
+def test_a_set_the_doctor_cannot_read_all_of_is_said_to_be_at_least_its_size(
+    tmp_path: Path,
+) -> None:
+    """A server's sets are 0700 and may be root's: what cannot be read is not counted silently as
+    nothing, and the command says it needs the owner (`sudo`)."""
+    from ospreyflow.doctor import backups_checks
+
+    product = tmp_path / "product"
+    made = _a_set(product / "backups", "20261101T000000Z-local-lite-abc1234")
+    shut = made / "postgres"
+    shut.mkdir()
+    (shut / "dump.sql").write_bytes(b"x" * 4096)
+    shut.chmod(0)
+    try:
+        checks = backups_checks(FakeProbes(), product, [("local-lite", _BASE)], home=tmp_path)
+    finally:
+        shut.chmod(0o700)
+    (check,) = [c for c in checks if c.name == "backups-left-behind"]
+    assert "at least 2.0 KB" in check.says and "could not be read" in check.says
+    assert "sudo" in check.fix
+
+
+def test_a_backups_folder_inside_the_checkout_fails_the_doctor(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every backup would be refused there (and every update with it), so the doctor fails before
+    the operator finds out at the first backup. The checkout is the folder above the product that
+    holds `.git`, as `OspreyFlow_Core`'s parent does."""
+    (rig.product.parent / ".git").write_text("gitdir: elsewhere\n")
+    (rig.product / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "components": {"storage": {"backups": str(rig.product.parent / "sets")}}}))
+    assert rig("doctor") == 1
+    out = capsys.readouterr().out
+    line = next(line for line in out.splitlines() if "inside the checkout" in line)
+    assert line.startswith("✘") and str(rig.product.parent / "sets") in line
+    # A relative folder is the product's, as the backup (run in the product) reads it.
+    (rig.product / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "components": {"storage": {"backups": "sets"}}}))  # fmt: skip
+    assert rig("doctor") == 1
+    assert str(rig.product / "sets") in capsys.readouterr().out
+
+
+def test_off_a_checkout_the_doctor_calls_no_folder_inside_one(tmp_path: Path) -> None:
+    """`ospreyflow doctor` run where there is no checkout (the product is then the folder it was
+    run in) says nothing of a checkout, rather than calling the home folder one."""
+    from ospreyflow.doctor import backups_checks
+
+    home = tmp_path / "home"
+    home.mkdir()
+    config = {**_BASE, "components": {"storage": {"backups": str(home / "OspreyFlow" / "backups")}}}
+    checks = backups_checks(FakeProbes(), home, [("local-lite", config)], home=home)
+    assert not any(c.name == "backups-in-checkout" for c in checks)
+
+
+def test_a_named_deployments_unreadable_settings_are_said_not_raised(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    named = tmp_path / "home" / ".ospreyflow" / "deployments" / "alpha"
+    named.mkdir(parents=True)
+    (named / "osprey.yaml").write_text("profile: [unclosed\n")
+    rig("doctor")
+    out = capsys.readouterr().out
+    assert any("alpha" in line and "could not be read" in line for line in out.splitlines()), out
+
+
+_BASE = {"profile": "local-lite", "network": {"public_origin": "http://ospreyflow.localhost"}}
+
+
+@pytest.mark.parametrize(
+    ("system", "where"),
+    [
+        ("Darwin", "Library/CloudStorage/GoogleDrive-someone@example.org/My Drive/backups"),
+        ("Darwin", "Library/Mobile Documents/com~apple~CloudDocs/backups"),
+        ("Darwin", "Documents/OspreyFlow/backups"),
+        ("Darwin", "Desktop/backups"),
+        ("Windows", "OneDrive - Example Department/OspreyFlow/backups"),
+        ("Windows", "OneDrive/backups"),
+    ],
+)
+def test_doctor_warns_a_backups_folder_a_sync_client_copies(
+    tmp_path: Path, system: str, where: str
+) -> None:
+    """Decision 5: a backups folder under a root a sync client copies is warned of — a warning,
+    not a refusal, saying a set holds the deployment's data and any real-data exception."""
+    from ospreyflow.doctor import backups_checks
+
+    home = tmp_path / "home"
+    probes = FakeProbes()
+    probes.system_name = system
+    config = {**_BASE, "components": {"storage": {"backups": str(home / where)}}}
+    (check,) = [c for c in backups_checks(probes, tmp_path, [("local-lite", config)], home=home)
+                if c.name == "backups-synced"]  # fmt: skip
+    assert check.warn and check.ok
+    assert str(home / where) in check.says
+    assert "real-data exception" in check.says and "ADR-035" not in check.says
+    assert check.fix
+
+
+def test_a_plain_backups_folder_or_one_reached_through_a_link_is_judged_by_where_it_is(
+    tmp_path: Path,
+) -> None:
+    """`~/OspreyFlow/backups` is not warned of; a folder that is a link into `~/Documents` is, as
+    the sync client copies what the link points at."""
+    from ospreyflow.doctor import backups_checks
+
+    home = tmp_path / "home"
+    probes = FakeProbes()
+    probes.system_name = "Darwin"
+
+    def synced(folder: Path) -> bool:
+        config = {**_BASE, "components": {"storage": {"backups": str(folder)}}}
+        checks = backups_checks(probes, tmp_path, [("local-lite", config)], home=home)
+        return any(c.name == "backups-synced" for c in checks)
+
+    assert not synced(home / "OspreyFlow" / "backups")
+    (home / "Documents" / "real").mkdir(parents=True)
+    (home / "Backups").symlink_to(home / "Documents" / "real")
+    assert synced(home / "Backups")
+    # In another letter case, which macOS's own disk does not tell apart (lane-reviewer).
+    assert synced(home / "documents" / "osprey")
+    assert synced(home / "DESKTOP" / "osprey")
+
+
+def test_the_doctor_warns_of_the_answers_backups_folder_before_the_install(
+    rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`ospreyflow doctor --config <answers>` checks the folder the answers name, before anything
+    is installed (the install runs this doctor first)."""
+    rig.probes.system_name = "Darwin"
+    answers = tmp_path / "answers.yaml"
+    answers.write_text(yaml.safe_dump(
+        {"mode": "lite", "folders": {"backups": "~/Documents/osprey-backups"}}))  # fmt: skip
+    assert rig("doctor", "--config", str(answers)) == 0
+    out = capsys.readouterr().out
+    assert any(line.startswith("⚠") and "osprey-backups" in line and "sync" in line
+               for line in out.splitlines()), out  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {},
+        {"components": {"storage": {"backups": "/var/lib/osprey/backups"}}},
+        {"components": {"storage": {"backups": "/srv/mine"}}},
+        {"components": {"storage": {"backups": " "}}},
+        {"components": {"storage": {"backups": "~"}}},
+        {"components": {"storage": {"backups": "~/mine"}}},
+        {"components": {"storage": {"backups": "/var/lib/osprey/backups/"}}},
+        {"profile": "small", "components": {"storage": {"backups": "/var/lib/osprey/backups"}},
+         "network": {"public_origin": "https://osprey.example.internal"}},
+        {"profile": "small", "network": {"public_origin": "https://osprey.example.internal"}},
+        {"profile": "small", "network": {"public_origin": "https://osprey.example.org"},
+         "external": {"postgres": {"host": "db.example.org"}},
+         "components": {"storage": {"backups": "/var/lib/osprey/backups"}}},
+    ],
+)  # fmt: skip
+def test_the_doctor_and_the_backup_agree_on_the_folder(
+    raw: dict[str, object], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The command reads `osprey.yaml` as a mapping (it runs before the product's own Python); the
+    rule it applies is `harness.backup`'s, so it looks where the backup writes."""
+    from harness import backup
+    from ospreyflow.doctor import backups_folder_of
+
+    from schemas.deployment import OspreyConfig
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert backups_folder_of(raw, home=tmp_path) == backup.backups_folder(
+        OspreyConfig.model_validate(raw)
+    )[0]
+
+
+def test_the_doctors_mirrors_of_the_backups_rules_are_the_backups_own(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The doctor carries copies of `harness.backup`'s set name, placeholder, checkout and
+    inside-a-folder rules, as it runs before the product's Python; each must say what the
+    original says (rule 12: the comment that says so is held by this)."""
+    from harness import backup
+    from ospreyflow import answers, doctor
+
+    from schemas.deployment import OspreyConfig, generated_folder
+
+    assert doctor.SET_NAME.pattern == backup.SET_NAME.pattern
+    assert doctor.LEGACY_BACKUPS_PLACEHOLDER == backup.LEGACY_PLACEHOLDER
+    assert answers.BACKUPS_PLACEHOLDER == backup.LEGACY_PLACEHOLDER
+    root = tmp_path / "checkout"
+    core = root / "OspreyFlow_Core"
+    core.mkdir(parents=True)
+    (root / ".git").write_text("gitdir: elsewhere\n")
+    monkeypatch.setattr(backup, "REPO_ROOT", core)
+    assert doctor._git_checkout(core) == backup.checkout_root() == root
+    (tmp_path / "to-core").symlink_to(core)
+    for folder in (root / "bk", core, tmp_path / "bk", tmp_path / "to-core" / ".." / "bk",
+                   tmp_path / "to-core" / "x", root / "new" / "deeper"):  # fmt: skip
+        assert doctor._is_inside(folder, root) == backup.is_inside(folder, root), folder
+    for raw in ({}, {"profile": "small", "network": {"public_origin": "https://o.example.org"},
+                     "external": {"postgres": {"host": "db"}}},
+                {"deployment": {"name": "acme"}}):  # fmt: skip
+        assert doctor.deployment_name_of(raw) == generated_folder(OspreyConfig.model_validate(raw))
