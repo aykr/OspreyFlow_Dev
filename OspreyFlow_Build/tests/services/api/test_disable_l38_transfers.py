@@ -388,7 +388,9 @@ async def _reads(raw: asyncpg.Connection, case_id: str, *datasets: str) -> None:
 @pytest.mark.parametrize(
     ("reads", "highest"),
     # A case reads one dataset (`investigation_datasets_one_per_case`): several are a composite's.
-    [(("ds-secret",), "SECRET"), (("ds-off",), "OFFICIAL"), ((), "SECRET"), (("cmp",), "SECRET")],
+    # The composite's members are OFFICIAL alone, so reading them is told apart from the scheme's
+    # highest, at which a composite with no marking of its own would read if they were missed.
+    [(("ds-secret",), "SECRET"), (("ds-off",), "OFFICIAL"), ((), "SECRET"), (("cmp",), "OFFICIAL")],
 )  # fmt: skip
 async def test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest(
     world: SimpleNamespace, reads: tuple[str, ...], highest: str
@@ -405,8 +407,7 @@ async def test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest
     await _dataset(raw, "cmp", None)
     await raw.execute("UPDATE datasets SET kind = 'composite' WHERE id = 'cmp'")
     await raw.execute(
-        "INSERT INTO composite_members (composite_id, member_id, position) VALUES "
-        "('cmp', 'ds-off', 0), ('cmp', 'ds-secret', 1)"
+        "INSERT INTO composite_members (composite_id, member_id, position) VALUES ('cmp', 'ds-off', 0)"
     )
     await _reads(raw, "c-k", *reads)
     view = await _view(raw, "c-k", "ana")
