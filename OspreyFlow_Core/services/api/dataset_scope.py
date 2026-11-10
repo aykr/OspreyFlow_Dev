@@ -42,6 +42,8 @@ from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, Protocol
 
+from services.ingest.ceiling import refuse_writes_above_the_ceiling
+
 from ports.graph import BulkGraphLoader, GraphPort, LinkCloned
 from schemas.domain import (
     Edge,
@@ -505,6 +507,7 @@ class DatasetStampingGraph:
         stamped = _stamp_nodes(nodes, self._into())
         await self._refuse_into_a_composite(_named(stamped))
         await self._checked(stamped)
+        refuse_writes_above_the_ceiling(stamped)  # ADR-148 decision 10, the backstop
         ids = await self._inner.upsert_nodes(stamped, tx)
         await self._written()
         return ids
@@ -513,6 +516,7 @@ class DatasetStampingGraph:
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
         await self._checked(stamped)
+        refuse_writes_above_the_ceiling(stamped)  # ADR-148 decision 10, the backstop
         ids = await self._inner.upsert_edges(stamped, tx)
         await self._written()
         return ids
@@ -676,6 +680,7 @@ class BulkDatasetStampingGraph(DatasetStampingGraph):
         stamped = _stamp_edges(edges, self._into())
         await self._refuse_into_a_composite(_named(stamped))
         await self._checked(stamped)
+        refuse_writes_above_the_ceiling(stamped)  # ADR-148 decision 10, the backstop
         result = await inner.bulk_load_edges(stamped, **kwargs)
         await self._written()
         return result

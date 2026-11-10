@@ -10,17 +10,25 @@ scheme does), since a guessed ceiling would let through what the deployment may 
 
 from __future__ import annotations
 
+import functools
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from ontology.handling import HandlingScheme, load_uk_le_scheme
 
 from .recipe_rules import RecipeRuleError, handling_bindings, literal_handling, template_elements
 
 if TYPE_CHECKING:
+    from schemas.domain import Handling
     from schemas.ingest import Recipe
+
+
+class _Marked(Protocol):
+    @property
+    def handling(self) -> Handling: ...
+
 
 #: The rendered `deployment.env` line the Conduit and the ingest service read.
 CEILING_ENV = "OSPREY_HIGHEST_MARKING"
@@ -122,3 +130,29 @@ def refuse_rows_above_the_ceiling(
             continue
         if ceiling.above(marking.classification):
             raise AboveTheDeploymentCeiling(ceiling.marking)
+
+
+@functools.lru_cache(maxsize=8)
+def _ceiling_for(raw: str) -> DeploymentCeiling:
+    """The ceiling a rendered value names, read once per value (the scheme is a file)."""
+    scheme = load_uk_le_scheme()
+    if not raw:
+        return DeploymentCeiling(marking=scheme.classification[-1], scheme=scheme)
+    if raw not in scheme.classification:
+        raise CeilingUnknown(
+            f"{CEILING_ENV} {raw!r} is not a classification of the {scheme.name} handling "
+            f"scheme: use one of {', '.join(scheme.classification)}"
+        )
+    return DeploymentCeiling(marking=raw, scheme=scheme)
+
+
+def refuse_writes_above_the_ceiling(writes: Iterable[_Marked]) -> None:
+    """The backstop (L1.10, the orchestrator's (a)): node or link writes, judged by their own
+    marking before the store is reached. The dataset-stamping graph asks it of every write, so a
+    path the engine's own check never sees (a demo seed writing the graph directly) cannot write
+    above the ceiling either. The ceiling is the rendered setting, read once per value."""
+    ceiling = _ceiling_for((os.environ.get(CEILING_ENV) or "").strip())
+    if ceiling.is_the_scheme_s_highest:
+        return
+    if any(ceiling.above(write.handling.classification) for write in writes):
+        raise AboveTheDeploymentCeiling(ceiling.marking)
