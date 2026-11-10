@@ -5,26 +5,31 @@
 Loaded on the command line, so a run without `-n` is untouched. In a worker (xdist's `config.workerinput`, which a
 child process never inherits, unlike `PYTEST_XDIST_WORKER`), at `pytest_configure`, before any test module is imported:
 
-- ArcadeDB: `ArcadeDBConfig.from_env("ospreyflow")` gives `ospreyflow_x<run>_gwN`, made here with the deployment's
+- ArcadeDB: `ArcadeDBConfig.from_env("ospreyflow")` gives `ospreyflow_x<run>_t<started>_gwN`, made here with the deployment's
   schema, as the Conduit makes its own. The name is hard-coded where the
   Conduit, the worker and 21 test call sites open it (`services/api/run_resources.py`, `worker_main.py`), so the
   classmethod is the one place every caller passes through; a per-test `conformance_*` name is left as it is.
-- Postgres: `POSTGRES_DB` is `ospreyflow_x<run>_gwN`, created here (every store makes its own tables on connect).
-- Valkey: `VALKEY_DB` is N + 1 (at most 15 workers), flushed here and at the end.
+- Postgres: `POSTGRES_DB` is `ospreyflow_x<run>_t<started>_gwN`, created here (every store makes its own tables on
+  connect).
+- Valkey: `VALKEY_DB` is the next free database, flushed here and at the end: N + 1 for a top-level run, after the
+  outer run's for a nested one (`OSPREY_WORKER_VALKEY_TAKEN`, which the controller exports to its workers and so to
+  their children). At most 15 in all, refused before any worker starts; `-n auto` is given what is left.
 - DuckDB, the default analytics engine: `ANALYTICS_DB_PATH` is a file in the worker's own folder.
-- The object store: `MINIO_BUCKET_PREFIX` is `ospreyflow-x<run>-gwN-`.
+- The object store: `MINIO_BUCKET_PREFIX` is `ospreyflow-x<run>-t<started>-gwN-`.
 - ClickHouse is left alone: its live tests already name their own databases, and `CLICKHOUSE_DATABASE` would override
   those names (`analytics_clickhouse/client.py`'s `from_env`).
 
-At the end each worker removes what it made, each store tried on its own. A killed earlier run's names
-(`*_x*_gw*`) are swept only when the top-level command asks (`OSPREY_WORKER_SWEEP=1`): nothing can tell them from a
-running run's.
+At the end each worker removes what it made, each store tried on its own. A killed earlier run's names are swept at
+the start of each live run, by the start time in the name (as `adapters/graph_arcadedb/testing.py` does for its own):
+only names older than `STALE_AFTER`, longer than any run takes, so a running run's (an outer one's included) are
+never dropped.
 
 **What cannot be redirected in-process runs on one worker** (`SERIAL`, as `xdist_group("serial")`, which is why
 `--dist loadgroup` is required with `-n`): the tests that start a child process opening `ospreyflow` itself, and the
 ones whose Valkey client ignores `VALKEY_DB` (`db=0`, or no `db` at all). During a serial test the in-process
-redirect is off too, so the test and its children open the one shared graph, as today; the serial tests run one at a
-time on that worker and no other test opens the shared name. Valkey's pub/sub channels are not per database, so they
+redirect is off too, so the test and its children open the one shared graph; the serial tests run one at a time on
+that worker and no other test opens the shared name. The other stores stay the worker's own for a serial test, in
+the test and in its children alike, since a child inherits the worker's environment. Valkey's pub/sub channels are not per database, so they
 stay shared (investigation ids keep them apart). Its proof is `tests/test_worker_isolation.py` (offline) and
 `tests/test_worker_isolation_live.py` (two workers, the same names, on a leased stack).
 """
@@ -36,6 +41,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
@@ -46,8 +52,13 @@ import pytest
 SHARED = "ospreyflow"
 #: The most workers: Valkey has 16 databases (0 to 15) and db 0 stays the serial files' own.
 MOST_WORKERS = 15
+#: How many Valkey databases (from db 1) the runs enclosing this one have taken.
+TAKEN = "OSPREY_WORKER_VALKEY_TAKEN"
+#: A name older than this is a killed run's: longer than any run takes (the longest live run measured, about an hour).
+STALE_AFTER = 6 * 3600
 
-#: Files that start a child process opening `ospreyflow` (or a fixed folder), or that hard-code Valkey's db 0, with why.
+#: Files that start a child process opening `ospreyflow` (or a fixed folder), run a fixed compose project, or hard-code
+#: Valkey's db 0, with why.
 SERIAL = {
     "tests/services/api/test_statelessness.py": "two uvicorn Conduits, which open ArcadeDB's ospreyflow themselves",
     "tests/services/api/test_statelessness_clickhouse.py": "the same two uvicorn Conduits",
@@ -61,9 +72,17 @@ SERIAL = {
     "tests/services/api/test_schedule_executor.py": "Valkey(host=config.host, port=config.port): db 0, VALKEY_DB unread",
     "tests/services/api/test_studio_load_stamps_its_case_dataset_live.py": "Valkey(host=..., port=...): db 0",
     "tests/test_worker_isolation_live.py": "its red run's child pytest opens the shared names",
+    "tests/harness/test_apply_env.py": "the fixed compose project osprey-local-lite, down -v on 8080/8081",
+    "tests/harness/test_six_screen_live_exit.py": "a fixed compose project (COMPOSE_PROJECT), down -v",
+    "tests/harness/test_sustained_load.py": "the fixed compose project osprey-local-lite, down -v",
 }
 
-_LEFT = re.compile(r"^ospreyflow[_-]x[0-9a-f]{8}[_-]gw\d+")
+_LEFT = re.compile(r"^ospreyflow[_-]x[0-9a-f]{8}[_-]t(\d{10})[_-]gw\d+")
+
+
+def stale(names: list[str], now: float) -> list[str]:
+    """The names a killed run left: this plugin's own shape, and started more than `STALE_AFTER` ago."""
+    return [n for n in names if (m := _LEFT.match(n)) and now - int(m.group(1)) >= STALE_AFTER]
 
 
 def worker_index(worker: str) -> int:
@@ -73,17 +92,17 @@ def worker_index(worker: str) -> int:
     return int(match.group(1))
 
 
-def worker_names(worker: str, run: str) -> dict[str, str]:
-    """The environment one worker runs under: every store's name its own."""
+def worker_names(worker: str, run: str, started: int, first: int = 1) -> dict[str, str]:
+    """The environment one worker runs under: every store's name its own. `first` is the Valkey database of gw0."""
     n = worker_index(worker)
-    if n + 1 > MOST_WORKERS:
-        raise pytest.UsageError(f"at most {MOST_WORKERS} workers: Valkey has 16 databases, db 0 the serial files'")
+    if first + n > MOST_WORKERS:
+        raise pytest.UsageError(f"at most {MOST_WORKERS} workers in all: Valkey has 16 databases, db 0 the serial files'")
     run = run.replace("-", "")[:8].lower()
     return {
-        "OSPREY_ARCADEDB_DATABASE": f"{SHARED}_x{run}_{worker}",
-        "POSTGRES_DB": f"{SHARED}_x{run}_{worker}",
-        "VALKEY_DB": str(n + 1),
-        "MINIO_BUCKET_PREFIX": f"{SHARED}-x{run}-{worker}-",
+        "OSPREY_ARCADEDB_DATABASE": f"{SHARED}_x{run}_t{started}_{worker}",
+        "POSTGRES_DB": f"{SHARED}_x{run}_t{started}_{worker}",
+        "VALKEY_DB": str(first + n),
+        "MINIO_BUCKET_PREFIX": f"{SHARED}-x{run}-t{started}-{worker}-",
     }
 
 
@@ -122,7 +141,7 @@ async def _postgres(admin: str, create: str | None, drop: list[str] | None = Non
         names = drop or []
         if left:
             rows = await conn.fetch("SELECT datname FROM pg_database")
-            names = [r["datname"] for r in rows if _LEFT.match(r["datname"])]
+            names = stale([r["datname"] for r in rows], time.time())
         for name in names:
             await conn.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
         if create:
@@ -157,7 +176,7 @@ async def _arcadedb(drop: str | None, left: bool = False) -> list[str]:
     try:
         names = [drop] if drop else []
         if left:
-            names = [d for d in await client.list_databases() if _LEFT.match(d)]
+            names = stale(await client.list_databases(), time.time())
         for name in names:
             await client.drop_database_named(name)
         return names
@@ -177,7 +196,8 @@ def _valkey_flush(db: int) -> None:
         client.close()  # type: ignore[no-untyped-call]
 
 
-def _buckets(prefix_pattern: re.Pattern[str] | str) -> list[str]:
+def _buckets(prefix: str | None) -> list[str]:
+    """The buckets under `prefix`, or (None) the stale ones."""
     from pyarrow import fs as pa_fs
     from services.ingest.staging import ObjectStorageConfig
 
@@ -187,7 +207,7 @@ def _buckets(prefix_pattern: re.Pattern[str] | str) -> list[str]:
         scheme="https" if config.use_ssl else "http", region=config.region, allow_bucket_deletion=True,
     )  # fmt: skip
     found = [i.path for i in s3.get_file_info(pa_fs.FileSelector("", recursive=False))]
-    gone = [b for b in found if (prefix_pattern.match(b) if isinstance(prefix_pattern, re.Pattern) else b.startswith(prefix_pattern))]
+    gone = stale(found, time.time()) if prefix is None else [b for b in found if b.startswith(prefix)]
     for bucket in gone:
         s3.delete_dir(bucket)
     return gone
@@ -203,9 +223,9 @@ def _live() -> bool:
 
 
 class _Worker:
-    def __init__(self, worker: str, run: str) -> None:
+    def __init__(self, worker: str, run: str, first: int) -> None:
         self.admin = os.environ.get("POSTGRES_DB", SHARED)
-        self.names = worker_names(worker, run)
+        self.names = worker_names(worker, run, int(time.time()), first)
         self.folder = Path(tempfile.mkdtemp(prefix=f"osprey-{worker}-"))
         self.made: list[str] = []  # what start() has made, so finish() removes exactly that, even after a failed start
 
@@ -249,28 +269,46 @@ _STATE: dict[str, _Worker] = {}
 
 
 def _sweep() -> None:
-    """What a killed earlier run left: every `ospreyflow_x*_gw*` name on the stack. Only when the run asks for it
-    (`OSPREY_WORKER_SWEEP=1`, the lane's own top-level command), since it cannot tell a killed run's names from a
-    running one's, and a nested or second run would otherwise drop the first's."""
+    """What a killed earlier run left: this plugin's names started more than `STALE_AFTER` ago (`stale`)."""
     asyncio.run(_arcadedb(None, left=True))
     asyncio.run(_postgres(os.environ.get("POSTGRES_DB", SHARED), None, left=True))
-    _buckets(re.compile(r"^ospreyflow-x[0-9a-f]{8}-gw\d+-"))
+    _buckets(None)
+
+
+def _taken() -> int:
+    try:
+        return int(os.environ.get(TAKEN, "0"))
+    except ValueError as error:
+        raise pytest.UsageError(f"{TAKEN} is a number of Valkey databases, not {os.environ[TAKEN]!r}") from error
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:
+    """`-n auto` on a host with more CPUs than Valkey databases left: as many workers as fit, not a refusal."""
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
+    return max(1, min(cpus, MOST_WORKERS - _taken()))
 
 
 def pytest_configure(config: pytest.Config) -> None:
     workerinput = getattr(config, "workerinput", None)  # xdist's own mark of a worker, never inherited by a child
     if workerinput is None:
-        workers = config.getoption("numprocesses", default=None)
+        workers = len(config.getoption("tx", default=None) or [])  # xdist's own count, after -n auto and --maxprocesses
         if not workers:
             return
         if config.getoption("dist", default="no") != "loadgroup":
             raise pytest.UsageError("tests.worker_isolation needs --dist loadgroup with -n: the serial files share one worker")
-        if isinstance(workers, int) and workers > MOST_WORKERS:
-            raise pytest.UsageError(f"at most {MOST_WORKERS} workers: Valkey has 16 databases, db 0 the serial files'")
-        if _live() and os.environ.get("OSPREY_WORKER_SWEEP") == "1":
+        taken = _taken()
+        if taken + workers > MOST_WORKERS:
+            raise pytest.UsageError(
+                f"at most {MOST_WORKERS} workers in all: Valkey has 16 databases, db 0 the serial files'"
+                + (f", and the enclosing run took {taken}" if taken else "")
+            )
+        os.environ[TAKEN] = str(taken + workers)  # the workers inherit it, and so does any run nested in them
+        if _live():
             _sweep()
         return
-    state = _Worker(workerinput["workerid"], workerinput.get("testrunuid") or "00000000")
+    first = _taken() - int(workerinput["workercount"]) + 1
+    state = _Worker(workerinput["workerid"], workerinput.get("testrunuid") or "00000000", first)
     _STATE["worker"] = state  # before start(), so a start that fails part-way is still cleared
     state.start()
 

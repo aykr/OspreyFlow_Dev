@@ -4,11 +4,14 @@ A planted file runs under `-n 2` in a subprocess with the lease's ports. Each wo
 the plugin redirects, the way the Conduit opens it (`ArcadeDBConfig.from_env("ospreyflow")`, `PostgresConfig.from_env()`,
 `ValkeyConfig.from_env()`, `s3_bucket("MINIO_BUCKET", "staging")`), waits at a barrier until the other has written,
 then reads back what is under that key. With `tests.worker_isolation` each worker finds only its own; without it, the
-red, each finds both, in every store. Each worker removes what it wrote, and the plugin removes its databases.
+red, each finds both, in every store. Each worker removes what it wrote, and the plugin removes its databases; afterwards the outer test checks that
+nothing of the inner run's is left in any store (`_left_behind`). In the red run the two workers share one database and
+one bucket, so each makes what is missing in turn, gw0 first, and the maker removes it once both have removed theirs.
 
 DuckDB's path is a file path, proved distinct offline (`tests/test_worker_isolation.py`); ClickHouse is not redirected.
-Live only: in the Makefile `test` target's `--ignore` list and CI's `conformance` job (`makefile-T1p4.diff`,
-`ci-yml-T1p4.diff`), and run under `stack_lease.sh`.
+Live only: under `stack_lease.sh`, or CI's `conformance` job; in the Makefile `test` target's `--ignore` list and
+that job's list (`makefile-T1p4.diff`, `ci-yml-T1p4.diff`, to land with the merge). Inside an outer `-n` run it is
+serial, and its inner workers take the Valkey databases after the outer run's.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -50,10 +54,12 @@ async def _arcadedb(step):
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
     kind = f"T1Probe_{RUN}"
     try:
-        if step == "write":
+        if step == "prepare":
             if client._config.database not in await client.list_databases():
                 await client.create_database_if_absent()
                 (SHARED / f"made-arcadedb-{WORKER}").touch()  # the red run made the stack's shared one: removed after
+            return None
+        if step == "write":
             try:
                 await client.sql(f"CREATE DOCUMENT TYPE {kind} IF NOT EXISTS")
             except Exception:
@@ -130,10 +136,12 @@ def _objects(step):
     s3 = filesystem(ObjectStorageConfig.named("MINIO_BUCKET", "staging"))
     folder = f"{s3_bucket('MINIO_BUCKET', 'staging')}/t1probe-{RUN}"
     bucket = folder.split("/")[0]
-    if step == "write":
+    if step == "prepare":
         if s3.get_file_info(bucket).type == pa_fs.FileType.NotFound:
+            s3.create_dir(bucket)
             (SHARED / f"made-bucket-{WORKER}").touch()
-        s3.create_dir(bucket)
+        return None
+    if step == "write":
         with s3.open_output_stream(f"{folder}/{WORKER}") as out:
             out.write(b"same")
         return None
@@ -141,17 +149,12 @@ def _objects(step):
         return sorted(i.base_name for i in s3.get_file_info(pa_fs.FileSelector(folder, allow_not_found=True)))
     if s3.get_file_info(f"{folder}/{WORKER}").type != pa_fs.FileType.NotFound:
         s3.delete_file(f"{folder}/{WORKER}")
-    if (SHARED / f"made-bucket-{WORKER}").exists():  # the red run made the stack's shared bucket: removed once empty
-        config = ObjectStorageConfig.named("MINIO_BUCKET", "staging")
-        admin = pa_fs.S3FileSystem(
-            endpoint_override=config.endpoint, access_key=config.access_key, secret_key=config.secret_key,
-            scheme="https" if config.use_ssl else "http", region=config.region, allow_bucket_deletion=True,
-        )
-        deadline = time.monotonic() + 60
-        while admin.get_file_info(pa_fs.FileSelector(bucket, recursive=True)) and time.monotonic() < deadline:
-            time.sleep(0.2)  # the other worker's object still there
-        if not admin.get_file_info(pa_fs.FileSelector(bucket, recursive=True)):
-            admin.delete_dir(bucket)
+    if s3.get_file_info(folder).type != pa_fs.FileType.NotFound and not s3.get_file_info(pa_fs.FileSelector(folder)):
+        s3.delete_dir(folder)
+    _barrier("objects-removed")  # both workers' objects gone before the bucket the red run made is
+    if (SHARED / f"made-bucket-{WORKER}").exists():
+        from services.api.object_transfer import store_from_env
+        store_from_env(allow_bucket_deletion=True).delete_dir(bucket)
 
 
 STORES = {
@@ -162,10 +165,42 @@ STORES = {
 }
 
 
+def _prepare():
+    """Each worker makes what is missing in turn, gw0 first: in the red run the two share one database and one
+    bucket, and two that both found it absent would both make it and both drop it."""
+    if WORKER != "gw0":
+        _barrier_on("prepared-gw0")
+    for prepare in (STORES["arcadedb"], STORES["objects"]):
+        prepare("prepare")
+    (SHARED / f"prepared-{WORKER}").touch()
+    _barrier("prepared")
+
+
+def _barrier_on(name):
+    deadline = time.monotonic() + 120
+    while not (SHARED / name).exists():
+        assert time.monotonic() < deadline, f"{name} never came"
+        time.sleep(0.1)
+
+
+def _names():
+    from adapters.graph_arcadedb.client import ArcadeDBConfig
+    from conduit_common.s3 import s3_bucket
+    from services.api.config import PostgresConfig, ValkeyConfig
+    return {
+        "run": RUN,
+        "arcadedb": ArcadeDBConfig.from_env(database="ospreyflow").database,
+        "postgres": PostgresConfig.from_env().database,
+        "valkey": ValkeyConfig.from_env().db,
+        "bucket": s3_bucket("MINIO_BUCKET", "staging"),
+    }
+
+
 @pytest.mark.parametrize("side", ["a", "b"])
 def test_the_same_key_in_every_store(side):
-    seen = {}
+    seen = {"names": _names()}
     try:
+        _prepare()
         for write in STORES.values():
             write("write")
         _barrier("written")
@@ -183,7 +218,7 @@ def test_the_same_key_in_every_store(side):
 '''
 
 
-def _run(tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess[str], dict[str, dict[str, list[str]]]]:
+def _run(tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess[str], dict[str, dict[str, Any]]]:
     (tmp_path / "test_planted.py").write_text(_PLANTED)
     out = tmp_path / "out"
     out.mkdir()
@@ -207,23 +242,86 @@ def _run(tmp_path: Path, *args: str) -> tuple[subprocess.CompletedProcess[str], 
 
 STORES = ("arcadedb", "postgres", "valkey", "objects")
 
-
-@pytest.mark.skipif(
-    not os.environ.get("OSPREY_LANE") and os.environ.get("CI", "").lower() != "true",
+#: Under a lease, or in CI's conformance job (the one job with stores, which alone names its ArcadeDB container);
+#: never CI's `test` job, which sets `CI` too but has no stores.
+_LIVE = pytest.mark.skipif(
+    not os.environ.get("OSPREY_LANE")
+    and not (os.environ.get("CI", "").lower() == "true" and os.environ.get("OSPREY_TEST_ARCADEDB_CONTAINER")),
     reason="live: under stack_lease.sh, or CI's conformance job",
 )
+
+
+def _left_behind(seen: dict[str, dict[str, Any]]) -> list[str]:
+    """What the inner run left on the stack under its own names: each worker's databases, Valkey db and buckets (the
+    plugin's to remove), and the probe's type, table, key and folder (the planted file's). Rule 12: teardown is
+    claimed, so it is checked."""
+    import asyncio
+
+    import asyncpg
+    import valkey
+    from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+    from services.api.config import PostgresConfig, ValkeyConfig
+    from services.api.object_transfer import store_from_env
+
+    names = [stores["names"] for stores in seen.values()]
+    run = {n["run"] for n in names}.pop()
+    left: list[str] = []
+
+    async def graph_and_tables() -> None:
+        client = ArcadeDBClient(ArcadeDBConfig.from_env(database="worker-isolation-check"))
+        try:
+            databases = await client.list_databases()
+            left.extend(f"arcadedb {n['arcadedb']}" for n in names if n["arcadedb"] != "ospreyflow" and n["arcadedb"] in databases)
+            for database in {n["arcadedb"] for n in names} & set(databases):
+                shared = ArcadeDBClient(ArcadeDBConfig.from_env(database=str(database)))
+                try:
+                    if await shared.sql("SELECT FROM schema:types WHERE name = :n", params={"n": f"T1Probe_{run}"}):
+                        left.append(f"arcadedb type T1Probe_{run} in {database}")
+                finally:
+                    await shared.aclose()
+        finally:
+            await client.aclose()
+        conn = await asyncpg.connect(PostgresConfig.from_env().dsn)
+        try:
+            have = {r["datname"] for r in await conn.fetch("SELECT datname FROM pg_database")}
+            left.extend(f"postgres {n['postgres']}" for n in names if n["postgres"] != os.environ.get("POSTGRES_DB", "ospreyflow") and n["postgres"] in have)
+            if await conn.fetchval("SELECT to_regclass($1)", f"t1probe_{run}") is not None:
+                left.append(f"postgres table t1probe_{run}")
+        finally:
+            await conn.close()
+
+    asyncio.run(graph_and_tables())
+    for db in {int(n["valkey"]) for n in names}:
+        client = valkey.Valkey(**{**ValkeyConfig.from_env().client_kwargs(), "db": db})
+        try:
+            if client.exists(f"t1probe:{run}"):
+                left.append(f"valkey t1probe:{run} in db {db}")
+            if db != 0 and client.dbsize():
+                left.append(f"valkey db {db} not flushed")
+        finally:
+            client.close()  # type: ignore[no-untyped-call]
+    s3 = store_from_env()
+    from pyarrow import fs as pa_fs
+
+    for bucket in {str(n["bucket"]) for n in names}:
+        if s3.get_file_info(f"{bucket}/t1probe-{run}").type != pa_fs.FileType.NotFound:
+            left.append(f"objects {bucket}/t1probe-{run}")
+        elif "-x" in bucket and s3.get_file_info(bucket).type != pa_fs.FileType.NotFound:
+            left.append(f"bucket {bucket}")
+    return left
+
+
+@_LIVE
 def test_two_workers_writing_the_same_names_never_see_each_other_s(tmp_path: Path) -> None:
     ran, seen = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "2", "--dist", "loadgroup")
     assert ran.returncode == 0, ran.stdout + ran.stderr
     assert sorted(seen) == ["gw0", "gw1"], (seen, ran.stdout)
     for worker, stores in seen.items():
         assert {s: stores[s] for s in STORES} == {s: [worker] for s in STORES}, (worker, seen)
+    assert _left_behind(seen) == []
 
 
-@pytest.mark.skipif(
-    not os.environ.get("OSPREY_LANE") and os.environ.get("CI", "").lower() != "true",
-    reason="live: under stack_lease.sh, or CI's conformance job",
-)
+@_LIVE
 def test_without_the_plugin_each_worker_sees_both_in_every_store_the_red(tmp_path: Path) -> None:
     """The planted cross-worker leak, caught: the same run on the stack's shared names."""
     ran, seen = _run(tmp_path, "-n", "2")
@@ -231,3 +329,4 @@ def test_without_the_plugin_each_worker_sees_both_in_every_store_the_red(tmp_pat
     assert sorted(seen) == ["gw0", "gw1"], (seen, ran.stdout)
     for worker, stores in seen.items():
         assert {s: stores[s] for s in STORES} == {s: ["gw0", "gw1"] for s in STORES}, (worker, seen)
+    assert _left_behind(seen) == []

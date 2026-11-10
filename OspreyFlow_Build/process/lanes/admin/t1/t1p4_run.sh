@@ -64,11 +64,11 @@ for s in "${steps[@]}"; do
     isolation) step isolation "${P[@]}" "$B/tests/test_worker_isolation_live.py" ;;
     graph)
       step graph-serial "${P[@]}" "$B/tests/conformance/graph_port"
-      OSPREY_WORKER_SWEEP=1 step graph-n4 "${P[@]}" "${X[@]}" -n 4 "$B/tests/conformance/graph_port"
-      OSPREY_WORKER_SWEEP=1 step graph-n8 "${P[@]}" "${X[@]}" -n 8 "$B/tests/conformance/graph_port" ;;
+      step graph-n4 "${P[@]}" "${X[@]}" -n 4 "$B/tests/conformance/graph_port"
+      step graph-n8 "${P[@]}" "${X[@]}" -n 8 "$B/tests/conformance/graph_port" ;;
     access)
       step access-serial "${P[@]}" "${access[@]}"
-      OSPREY_WORKER_SWEEP=1 step access-n4 "${P[@]}" "${X[@]}" -n 4 "${access[@]}" ;;
+      step access-n4 "${P[@]}" "${X[@]}" -n 4 "${access[@]}" ;;
     *) echo "no step $s" >&2; exit 2 ;;
   esac
 done

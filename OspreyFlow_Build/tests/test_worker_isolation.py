@@ -11,6 +11,7 @@ writing the same keys on a leased stack, is `tests/test_worker_isolation_live.py
 from __future__ import annotations
 
 import ast
+import asyncio
 import json
 import os
 import re
@@ -42,6 +43,7 @@ def _names():
         "valkey": ValkeyConfig.from_env().db,
         "bucket": s3_bucket("MINIO_BUCKET", "staging"),
         "analytics": os.environ.get("ANALYTICS_DB_PATH", "the default"),
+        "taken": os.environ.get("OSPREY_WORKER_VALKEY_TAKEN"),
     }
 
 @pytest.mark.parametrize("i", range(8))
@@ -55,7 +57,7 @@ def test_names(i):
 
 def _env(out: Path, **extra: str) -> dict[str, str]:
     drop = ("OSPREY_LANE", "PYTEST_ADDOPTS", "OSPREY_STORE_MARK", "POSTGRES_DB", "VALKEY_DB", "MINIO_BUCKET_PREFIX",
-            "ANALYTICS_DB_PATH", "MINIO_BUCKET")  # fmt: skip
+            "ANALYTICS_DB_PATH", "MINIO_BUCKET", "OSPREY_WORKER_VALKEY_TAKEN")  # fmt: skip  (a top-level run unless set)
     return {
         **{k: v for k, v in os.environ.items() if k not in drop and not k.startswith("PYTEST_XDIST_")},
         "ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993", "CLICKHOUSE_HTTP_PORT": "59994",
@@ -91,8 +93,9 @@ def test_two_workers_open_different_names_in_every_store(tmp_path: Path) -> None
     for worker, names in seen.items():
         assert names["conformance"] == "conformance_1_abc", "a per-test name was rewritten"
         assert names["arcadedb"] == names["arcadedb_positional"] == names["postgres"]
-        assert re.fullmatch(rf"ospreyflow_x[0-9a-f]{{8}}_{worker}", names["arcadedb"]), names
+        assert re.fullmatch(rf"ospreyflow_x[0-9a-f]{{8}}_t[0-9]{{10}}_{worker}", names["arcadedb"]), names
         assert names["valkey"] == int(worker[2:]) + 1 and names["valkey"] != 0
+        assert names["taken"] == "2", "the controller exports the databases its workers took, for a run nested in one"
         assert names["bucket"].startswith("ospreyflow-x") and names["bucket"].endswith(f"-{worker}-staging"), names
 
 
@@ -121,9 +124,21 @@ def test_n_without_loadgroup_is_refused(tmp_path: Path) -> None:
 def test_more_workers_than_valkey_has_databases_is_refused() -> None:
     from tests.worker_isolation import worker_names
 
-    assert worker_names("gw14", "abcdef12")["VALKEY_DB"] == "15"
+    assert worker_names("gw14", "abcdef12", 1_700_000_000)["VALKEY_DB"] == "15"
     with pytest.raises(pytest.UsageError, match="at most 15 workers"):
-        worker_names("gw15", "abcdef12")
+        worker_names("gw15", "abcdef12", 1_700_000_000)
+    assert worker_names("gw1", "abcdef12", 1_700_000_000, first=13)["VALKEY_DB"] == "14"
+    with pytest.raises(pytest.UsageError, match="at most 15 workers"):
+        worker_names("gw3", "abcdef12", 1_700_000_000, first=13)
+
+
+def test_a_worker_id_not_of_xdist_s_shape_is_refused() -> None:
+    from tests.worker_isolation import worker_index
+
+    assert worker_index("gw12") == 12
+    for wrong in ("master", "gw", "gw1a", "1"):
+        with pytest.raises(pytest.UsageError, match="gwN"):
+            worker_index(wrong)
 
 
 def test_each_serial_file_exists_and_is_grouped() -> None:
@@ -145,8 +160,14 @@ def test_each_serial_file_exists_and_is_grouped() -> None:
     assert items[-1].marks == []
 
 
-#: What only a separate process would reach: the shapes `SERIAL` exists for, besides Valkey's db 0.
-_CHILD = re.compile(r"services\.api\.app:app|scripts\.seed_pid\b|\"-m\",\s*\"pytest\"")
+#: What only a separate process would reach, or what is one per machine: the shapes `SERIAL` exists for, besides
+#: Valkey's db 0. A child Conduit, seeder, CLI or pytest (`-m services.…`, `scripts.…`, `cli`, `pytest`, uvicorn);
+#: a compose project (`docker compose -p <name>`, one per machine whatever the worker, `down -v` on its ports); a
+#: multiprocessing child (spawned, it never sees the in-process redirect).
+_CHILD = re.compile(
+    r"services\.api\.app:app|\"-m\",\s*\"(?:pytest|uvicorn|services\.|scripts\.|cli\b)"
+    r"|\bscripts\.seed_pid\b|\"compose\",\s*\"-p\"|\bmultiprocessing\b|ProcessPoolExecutor"
+)
 
 
 def _valkey_db_0(source: str) -> bool:
@@ -160,9 +181,15 @@ def _valkey_db_0(source: str) -> bool:
         if name not in ("Valkey", "ValkeyConfig"):
             continue
         keywords = {k.arg: k.value for k in node.keywords}
-        if None in keywords:  # **kwargs
-            continue
         db = keywords.get("db")
+        if db is None and len(node.args) >= 3:  # Valkey(host, port, db) and ValkeyConfig(host, port, db)
+            db = node.args[2]
+        unpacked = keywords.get(None)
+        if db is None and isinstance(unpacked, ast.Dict):  # Valkey(**{**config.client_kwargs(), "db": 0})
+            pairs = dict(zip(unpacked.keys, unpacked.values, strict=True))
+            db = next((v for k, v in pairs.items() if isinstance(k, ast.Constant) and k.value == "db"), None)
+        if db is None and None in keywords:  # **kwargs that may carry one
+            continue
         if db is None and name == "Valkey" or isinstance(db, ast.Constant) and db.value == 0:
             return True
     return False
@@ -201,11 +228,19 @@ def test_the_serial_check_names_a_file_that_should_be_serial(tmp_path: Path, mon
         "tests/test_h.py": "client = Valkey(host=config.host, port=config.port, db=config.db)\n",
         "tests/test_i.py": 'client = Valkey(\n    host=h,\n    port=int(os.environ.get("VALKEY_PORT", "6379")),\n    db=int(os.environ.get("VALKEY_DB", "0")),\n)\n',
         "tests/test_j.py": "config = ValkeyConfig(host='localhost', port=6379, db=0)\n",
+        "tests/test_k.py": 'client = valkey.Valkey(**{**ValkeyConfig.from_env().client_kwargs(), "db": 0})\n',
+        "tests/test_l.py": "config = ValkeyConfig('localhost', 6379, 0)\n",
+        "tests/test_m.py": 'subprocess.run(["docker", "compose", "-p", LOCAL_LITE_PROJECT, "down", "-v"])\n',
+        "tests/test_n.py": 'ctx = multiprocessing.get_context("spawn")\n',
+        "tests/test_o.py": 'subprocess.run([sys.executable, "-m", "scripts.make_home_cases"])\n',
+        "tests/test_p.py": 'subprocess.run([sys.executable, "-m", "cli", "status"])\n',
+        "tests/test_q.py": 'client = valkey.Valkey(**{**ValkeyConfig.from_env().client_kwargs(), "db": cfg.db})\n',
     }
     for rel, text in shapes.items():
         (tmp_path / rel).write_text(text)
     assert unserialised(list(shapes)) == [
-        "tests/test_a.py", "tests/test_b.py", "tests/test_c.py", "tests/test_f.py", "tests/test_g.py", "tests/test_j.py"
+        "tests/test_a.py", "tests/test_b.py", "tests/test_c.py", "tests/test_f.py", "tests/test_g.py", "tests/test_j.py",
+        "tests/test_k.py", "tests/test_l.py", "tests/test_m.py", "tests/test_n.py", "tests/test_o.py", "tests/test_p.py",
     ]  # fmt: skip
 
 
@@ -256,3 +291,113 @@ def test_more_workers_than_valkey_has_databases_is_refused_before_any_worker_sta
     ran, seen = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "16", "--dist", "loadgroup")
     assert ran.returncode != 0 and "at most 15 workers" in ran.stdout + ran.stderr
     assert seen == {}
+
+
+# --- After both reviews (10 November 2026 evening) -------------------------------------------------------------------
+
+
+def test_a_run_nested_in_a_worker_takes_the_valkey_databases_after_the_outer_run_s(tmp_path: Path) -> None:
+    """The live proof runs `-n 2` inside a worker of an outer `-n N` run: its workers must not take db 1 and db 2,
+    the outer gw0's and gw1's, and flush them mid-test. The outer controller exports how many it took."""
+    ran, seen = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "2", "--dist", "loadgroup",
+                     OSPREY_WORKER_VALKEY_TAKEN="4")  # fmt: skip
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    assert {w: n["valkey"] for w, n in seen.items()} == {"gw0": 5, "gw1": 6}, seen
+    assert {n["taken"] for n in seen.values()} == {"6"}
+
+
+def test_a_nested_run_that_would_pass_db_15_is_refused_before_any_worker_starts(tmp_path: Path) -> None:
+    ran, seen = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "2", "--dist", "loadgroup",
+                     OSPREY_WORKER_VALKEY_TAKEN="14")  # fmt: skip
+    assert ran.returncode != 0 and "the enclosing run took 14" in ran.stdout + ran.stderr
+    assert seen == {}
+
+
+def test_n_auto_takes_as_many_workers_as_valkey_has_databases_left(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`-n auto` on the 16-core server was refused (16 > 15): it is given what fits instead."""
+    from tests import worker_isolation
+
+    monkeypatch.setattr(os, "sched_getaffinity", lambda _pid: set(range(16)), raising=False)
+    monkeypatch.delenv("OSPREY_WORKER_VALKEY_TAKEN", raising=False)
+    assert worker_isolation.pytest_xdist_auto_num_workers(None) == 15  # type: ignore[arg-type]
+    monkeypatch.setenv("OSPREY_WORKER_VALKEY_TAKEN", "11")
+    assert worker_isolation.pytest_xdist_auto_num_workers(None) == 4  # type: ignore[arg-type]
+    # Through xdist itself, at its real call site: 13 taken leaves 2, and `-n auto` runs on them, not refused.
+    ran, seen = _run(tmp_path, "-p", "tests.worker_isolation", "-n", "auto", "--dist", "loadgroup",
+                     OSPREY_WORKER_VALKEY_TAKEN="13")  # fmt: skip
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    assert sorted(n["valkey"] for n in seen.values()) == [14, 15], seen
+
+
+def test_the_sweep_takes_only_this_plugin_s_names_from_a_killed_run() -> None:
+    """A running run's names (an outer one's, or a second lane's on the same stack) are never stale; nor is
+    anything not of this plugin's shape: the shared names, a per-test `conformance_*`, or the old unstamped shape."""
+    from tests.worker_isolation import STALE_AFTER, stale
+
+    now = 1_800_000_000
+    old, fresh = now - STALE_AFTER - 1, now - 60
+    names = [
+        f"ospreyflow_x1a2b3c4d_t{old}_gw0", f"ospreyflow-x1a2b3c4d-t{old}-gw3-staging",
+        f"ospreyflow_x1a2b3c4d_t{fresh}_gw0", f"ospreyflow-x1a2b3c4d-t{fresh}-gw1-staging",
+        "ospreyflow", "ospreyflow-staging", f"conformance_{old}_abc", "ospreyflow_x1a2b3c4d_gw0",
+    ]  # fmt: skip
+    assert stale(names, now) == [f"ospreyflow_x1a2b3c4d_t{old}_gw0", f"ospreyflow-x1a2b3c4d-t{old}-gw3-staging"]
+
+
+def _fake_stores(monkeypatch: pytest.MonkeyPatch, fail: set[str]) -> list[str]:
+    """Each store's make and clear recorded; a store in `fail` raises, as an unreachable one would."""
+    from tests import worker_isolation
+
+    calls: list[str] = []
+
+    def step(name: str, result: object = None):  # type: ignore[no-untyped-def]
+        def run(*_args: object, **_kwargs: object) -> object:
+            calls.append(name)
+            if name in fail:
+                raise ConnectionError(name)
+            return result
+
+        return run
+
+    monkeypatch.setattr(worker_isolation, "_valkey_flush", step("valkey"))
+    monkeypatch.setattr(worker_isolation, "_buckets", step("buckets", []))
+    monkeypatch.setattr(worker_isolation, "redirect_arcadedb", lambda _target: None)
+    monkeypatch.setattr(asyncio, "run", lambda value: value)
+    monkeypatch.setattr(
+        worker_isolation, "_postgres", lambda _admin, create, drop=None, left=False: step("postgres-made" if create else "postgres")()
+    )  # fmt: skip
+    monkeypatch.setattr(worker_isolation, "_arcadedb_create", step("arcadedb-made"))
+    monkeypatch.setattr(worker_isolation, "_arcadedb", lambda _drop, left=False: step("arcadedb")())
+    monkeypatch.setattr(os, "environ", {**os.environ, "OSPREY_WORKER_STORES": "1"})
+    return calls
+
+
+def test_a_store_that_fails_to_clear_does_not_leave_the_others_behind(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.worker_isolation import _Worker
+
+    calls = _fake_stores(monkeypatch, fail={"arcadedb"})
+    worker = _Worker("gw0", "abcdef12", 1)
+    worker.start()
+    with pytest.raises(ConnectionError, match="arcadedb"):
+        worker.finish()
+    assert calls == ["valkey", "postgres-made", "arcadedb-made", "arcadedb", "postgres", "valkey", "buckets"], calls
+    assert not worker.folder.exists()
+
+
+def test_a_start_that_fails_part_way_is_still_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ArcadeDB refused at start: the Valkey db and Postgres database already made are still cleared, and the
+    graph whose making was begun is dropped too (it may exist), at `pytest_unconfigure`."""
+    from tests import worker_isolation
+
+    calls = _fake_stores(monkeypatch, fail={"arcadedb-made"})
+
+    from types import SimpleNamespace
+
+    _config = SimpleNamespace(workerinput={"workerid": "gw0", "testrunuid": "abcdef12" * 4, "workercount": 1})
+    monkeypatch.setitem(os.environ, "OSPREY_WORKER_VALKEY_TAKEN", "1")
+    with pytest.raises(ConnectionError):
+        worker_isolation.pytest_configure(_config)  # type: ignore[arg-type]
+    worker_isolation.pytest_unconfigure(_config)  # type: ignore[arg-type]
+    assert calls == ["valkey", "postgres-made", "arcadedb-made", "arcadedb", "postgres", "valkey"], calls
