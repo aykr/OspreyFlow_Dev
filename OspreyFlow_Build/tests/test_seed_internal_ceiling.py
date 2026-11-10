@@ -93,11 +93,27 @@ def test_cyber_intrusions_declaration_holds_for_every_write() -> None:
     assert all(SCHEME.classification.index(w.handling.classification) <= top for w in writes)
 
 
-def test_paysims_declaration_holds_for_its_one_marking() -> None:
-    """Every PaySim write takes the seed's one marking (`_HANDLING`, `_graph_writes`)."""
+def test_paysims_declaration_holds_for_every_write() -> None:
+    """Every PaySim write takes the seed's one marking: `build_graph_writes` stamps each node and
+    link with the handling it is given (proved over synthetic rows), and the seed gives it
+    `_HANDLING`, within the declaration."""
     from scripts import seed_paysim
+
+    from demo_fixtures.paysim import PaysimRow, build_graph_writes
+    from schemas.domain import Handling
 
     declared = DATASETS["paysim"].highest_marking
     assert declared is not None
     marking = seed_paysim._HANDLING.classification
     assert SCHEME.classification.index(marking) <= SCHEME.classification.index(declared)
+    probe = Handling(
+        classification="PUBLIC", handling_code="P", originator="probe", owning_unit="probe"
+    )
+    rows = [
+        PaysimRow(index=i, step=1, type="TRANSFER", amount=9.5, origin=f"C{i}",
+                  destination=f"C{i + 1}", is_fraud=1, is_flagged=0)
+        for i in range(3)
+    ]  # fmt: skip
+    nodes, edges = build_graph_writes(rows, created_by="seed", handling=probe)
+    assert nodes and edges
+    assert all(w.handling == probe for w in [*nodes, *edges]), "a write at another marking"

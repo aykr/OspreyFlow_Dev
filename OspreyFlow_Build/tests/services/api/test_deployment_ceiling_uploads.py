@@ -35,6 +35,18 @@ NAME = "SYN-CEILING-FILE.png"
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setenv("OSPREY_HIGHEST_MARKING", "OFFICIAL-SENSITIVE")
+    # The routes prefer the ceiling the start read; one left by an earlier test's start is not
+    # this test's (the lane review of L1.10, item 4).
+    from services.ingest.ceiling import DeploymentCeiling
+
+    from ontology.handling import load_uk_le_scheme
+
+    monkeypatch.setattr(
+        app.state,
+        "deployment_ceiling",
+        DeploymentCeiling(marking="OFFICIAL-SENSITIVE", scheme=load_uk_le_scheme()),
+        raising=False,
+    )
     content, pictures = _Content(), _Pictures()
     app.dependency_overrides[get_principal] = lambda: UPLOADER
     app.dependency_overrides[get_document_content] = lambda: content
@@ -58,7 +70,10 @@ def test_a_document_above_the_ceiling_is_refused_before_anything_is_stored(clien
     assert response.status_code == 422, response.text
     body = response.json()
     assert body["error"] == "above_the_deployments_highest_marking"
-    assert "OFFICIAL-SENSITIVE" in str(body) and NAME not in str(body)
+    # `detail` is what the Glass shows (`AddFiles.tsx`, `entityPictures.ts`): the limit, in words
+    # for a file, never its name.
+    assert "OFFICIAL-SENSITIVE" in body["detail"] and "not added" in body["detail"]
+    assert NAME not in str(body)
     assert client.content.calls == []
 
 
@@ -72,6 +87,7 @@ def test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored(client
     response = client.put(PICTURE, params=_params("SECRET"), content=b"\x89PNG")
     assert response.status_code == 422, response.text
     assert response.json()["error"] == "above_the_deployments_highest_marking"
+    assert "OFFICIAL-SENSITIVE" in response.json()["detail"]
     assert NAME not in response.text
     assert client.pictures.calls == []
 

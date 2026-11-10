@@ -1,7 +1,8 @@
-"""ADR-148 decision 10's backstop (L1.10): every write through the dataset-stamping graph (every
-load, every seed, every analyst write into a dataset) is refused before the store is reached when
-it is marked above the deployment's highest marking, so a path the engine's own check never sees
-(a demo seed writing the graph directly) still cannot write above the ceiling."""
+"""ADR-148 decision 10's backstop (L1.10): every new element written through the dataset-stamping
+graph (an upsert, a bulk load or a correction: a load, a seed, an analyst's write) is refused
+before the store is reached when it is marked above the deployment's highest marking, so a path
+the engine's own check never sees (a demo seed writing the graph directly) still cannot write
+above the ceiling."""
 
 from __future__ import annotations
 
@@ -86,3 +87,31 @@ async def test_writes_at_the_ceiling_are_written() -> None:
     await graph.upsert_edges([_edge("OFFICIAL")], tx=None)
     await graph.bulk_load_edges([_edge("OFFICIAL-SENSITIVE")])  # type: ignore[attr-defined]
     assert (len(inner.nodes), len(inner.edges), len(inner.bulk)) == (1, 1, 1)
+
+
+class _Correcting(_RecordingGraph):
+    def __init__(self) -> None:
+        super().__init__()
+        self.corrections: list[Any] = []
+
+    async def supersede_node(self, node_id: str, replacement: NodeWrite, tx: Any, **kw: Any) -> str:
+        self.corrections.append(replacement)
+        return replacement.id
+
+    async def supersede_edge(self, edge_id: str, replacement: EdgeWrite, tx: Any, **kw: Any) -> str:
+        self.corrections.append(replacement)
+        return replacement.id
+
+
+async def test_a_correction_above_the_ceiling_never_reaches_the_store() -> None:
+    """A correction (`supersede_node`, `supersede_edge`: the analyst's edits, the extractions'
+    writer, a picture) writes a new element as a write does (the lane review of L1.10, item 7)."""
+    inner = _Correcting()
+    graph = stamping(inner, dataset="case-layer")  # type: ignore[arg-type]
+    with pytest.raises(AboveTheDeploymentCeiling):
+        await graph.supersede_node("n-old", _node("SECRET"), tx=None)
+    with pytest.raises(AboveTheDeploymentCeiling):
+        await graph.supersede_edge("e-old", _edge("SECRET"), tx=None, old_type="ASSOCIATE_OF")
+    assert inner.corrections == []
+    await graph.supersede_node("n-old", _node("OFFICIAL"), tx=None)
+    assert len(inner.corrections) == 1

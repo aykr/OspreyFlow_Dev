@@ -6,6 +6,7 @@ its test, each red first, `process/lanes/studio-b/l1.10/`)."""
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from services.ingest import ceiling as ceiling_module
@@ -191,3 +192,84 @@ def test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables() ->
     for write in ("source_tables,", "prepare_staged_load("):
         assert source.find(write) != -1, write
         assert check < source.find(write), f"the check comes after {write}"
+
+
+# --- the lane review of L1.10 ----------------------------------------------------------------
+
+
+def _two_unit_recipe() -> Any:
+    """Two people, each restricted (code R) to a different unit, the first's classification read
+    from a column: a row of it is a conflict between units, which `row_marking` refuses outright."""
+    from tests.ingest.test_load_record_created_and_merged import _recipe
+
+    recipe = _recipe()
+    entities = [
+        e.model_copy(update={"handling": handling})
+        for e, handling in zip(
+            recipe.row_template.entities,
+            [
+                {"classification": {"field": "cls"}, "handling_code": "R",
+                 "originator": "unit-1", "owning_unit": "unit-1"},
+                {"handling_code": "R", "originator": "unit-2", "owning_unit": "unit-2"},
+            ],
+            strict=True,
+        )
+    ]  # fmt: skip
+    template = recipe.row_template.model_copy(update={"entities": entities})
+    defaults = recipe.defaults.model_copy(update={"units": ["unit-1", "unit-2"]})
+    return recipe.model_copy(update={"row_template": template, "defaults": defaults})
+
+
+def test_a_row_whose_units_conflict_is_still_judged() -> None:
+    """A unit conflict once skipped the row; it is staged all the same, so it is judged."""
+    from tests.ingest.test_load_record_created_and_merged import _row
+
+    ceiling = DeploymentCeiling(marking="OFFICIAL-SENSITIVE", scheme=SCHEME)
+    recipe = _two_unit_recipe()
+    with pytest.raises(AboveTheDeploymentCeiling):
+        ceiling_module.refuse_rows_above_the_ceiling(
+            recipe, [{**_row("SYN-1", "SYN-2", 1), "cls": "SECRET"}], ceiling
+        )
+    ceiling_module.refuse_rows_above_the_ceiling(
+        recipe, [{**_row("SYN-1", "SYN-2", 1), "cls": "OFFICIAL"}], ceiling
+    )
+
+
+def test_a_row_whose_classification_reads_is_judged_by_it_alone() -> None:
+    """A bad originator cell beside a readable OFFICIAL classification is the engine's to reject
+    (it names the cause); the ceiling judges the classification, not the whole marking widened."""
+    from tests.ingest.pid_golden_support import recipe_for
+
+    ceiling = DeploymentCeiling(marking="OFFICIAL-SENSITIVE", scheme=SCHEME)
+    row = {**_rows("OFFICIAL")[0], "originator": "no-such-unit"}
+    ceiling_module.refuse_rows_above_the_ceiling(recipe_for(FILE), [row], ceiling)
+
+
+def test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so() -> None:
+    """Fails closed, honestly: a classification the scheme does not define could be anything, and
+    the engine holds such a row's sample at the scheme's highest; the words say it cannot be read,
+    not that it is above."""
+    from tests.ingest.pid_golden_support import recipe_for
+
+    ceiling = DeploymentCeiling(marking="OFFICIAL-SENSITIVE", scheme=SCHEME)
+    with pytest.raises(AboveTheDeploymentCeiling) as raised:
+        ceiling_module.refuse_rows_above_the_ceiling(
+            recipe_for(FILE), [_rows("SEKRIT")[0]], ceiling
+        )
+    words = str(raised.value)
+    assert "cannot be read" in words and "OFFICIAL-SENSITIVE" in words
+    assert PLANTED not in words and "SEKRIT" not in words
+
+
+def test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused() -> None:
+    from tests.ingest.test_load_record_created_and_merged import _recipe
+
+    recipe = _recipe()
+    first, *rest = recipe.row_template.entities
+    secret = first.model_copy(update={"handling": {"classification": "SECRET"}})
+    template = recipe.row_template.model_copy(update={"entities": [secret, *rest]})
+    ceiling = DeploymentCeiling(marking="OFFICIAL-SENSITIVE", scheme=SCHEME)
+    with pytest.raises(AboveTheDeploymentCeiling):
+        ceiling_module.refuse_fixed_markings_above_the_ceiling(
+            recipe.model_copy(update={"row_template": template}), ceiling
+        )
