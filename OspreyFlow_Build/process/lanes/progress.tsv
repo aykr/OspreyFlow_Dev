@@ -30,7 +30,7 @@ rules	L2.8c	S	done	The other link supersedes through the repoint journal
 rules	L2.8d	S	done	An alert naming a corrected node in referent_node_ids is listed again (ADR-109 Am 11 point 7)
 rules	L2.9	L	done	Four places: Rules and Monitoring; /alerts/<id>; the way back
 rules	L2.10	L	done	One queue; What raises alerts; watches; team routing; Raise an alert (merged ab42128)
-rules	L2.11	L	building	The rule editor: declared dataset, BPMN and DMN, draft-test-live
+rules	L2.11	L	done	The rule editor: declared dataset, BPMN and DMN, draft-test-live (merged 075e240)
 rules-b	L2.12	M	done	Reporting folded: Figures, Alert monitoring, the Reports Viewer
 case	L3.1	L	done	Phase 5 as amended: one dataset per case, composites, the analyst layer; no branch layers
 case	L3.1b	L	done	Phase 5's model half; Make live's owner step; home cases; drawn kind

@@ -1,5 +1,4 @@
 # as of 2026-11-10T17:56Z
-rules	L2.11	rule editor: the review's must-fixes, then one round of server gates; merge	~19:45	A
 studio	L1.7	rebased with its review's fixes; server make test, ci and live; merge	~20:30	A
 docs	D2b	the decks; rule-editor slides after L2.11; review against CLAIMS.md	~21:00	A
 orchestrator	publish	the product repo from main at demo-ready (server ci/test/scans green)	~22:30	A
