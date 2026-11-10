@@ -76,6 +76,16 @@
 - **Live, the rules lease on stack c:** the three plants red; the delta at d52fc9f passed 289, none failed (`gates/d52fc9f.live.txt`). Released and down.
 - **`glass-keyboard` at 6e90f52** (`registry-L2.10.patch` applied uncommitted, then reverted; the orchestrator's local slot): 689 passed, 1 skipped, 2 failed, both main's own (`boards.spec.ts:225` and `:423`, fixed in f6def92 on lane/case) (`gates/6e90f52.keyboard.txt`).
 
+**Rebased onto today's main and re-gated (the orchestrator's ask, 10 November)** at b40bd93, base main at 6379dd1:
+- **The rebase:** onto 380987e, then again onto 6379dd1, since P5b landed during the first. Five conflicts, each resolved by keeping both sides: app.py's imports, test_place_routes.py (Admin › Audit's row and L2.10's watches and teams rows), the decision log and citation allowlist (both appended), and ADR_RESERVATIONS.md (one row each for ADR-146 Amendment 4 and ADR-133 Amendment 10, both written: the duplicate fixed).
+- **`make test` on the server** at c9c1061 (`gates/c9c1061.test.txt`): 10,200 passed, 12 skipped, 4 failed; test-js 2,900 of 2,901 (the MatrixView first-frame budget under load).
+  - Two failures are the host's: test_valkey_config (main's own) and the GPU preflight.
+  - Two were L2.10 meeting today's main, fixed at b40bd93: five L2.10 audit actions unclassified in main's new audit kinds (added to `audit_section.py` with the other alert actions, ratified by the orchestrator), and the Reports Viewer journey naming the two inbox routes L2.10 removed. Both files pass again (16 passed). The orchestrator ruled that the narrow fix needs no full rerun.
+- **Live, the rules lease on stack c** at b40bd93, 09:17–10:27Z (`gates/b40bd93.live.txt`): test_route_rights and the 48 live files, 801 passed, none failed. Down and released.
+- **`make -k ci`** at b40bd93 (`gates/b40bd93.ci.txt`): green apart from the eight `trivy-image-*` scans, opentofu-check and chart-check, which need Docker (off on this Mac).
+- **`glass-keyboard`** at b40bd93 (`registry-L2.10.patch` applied uncommitted, then reverted; `gates/b40bd93.keyboard.txt`): 731 passed, 1 skipped, none failed. Main's two board failures are gone at this base.
+- **Main moved again** during the re-gate (to 17c202d, 144 commits). Not rebased again, since the lane is gated.
+
 11. **Decisions taken** (Prompt L, for the owner to overrule):
     - **Trends:** a routed alert is counted for its team's members alone, not the home case's Authors (the narrower answer).
     - **"My team":** offered only for a rule already saved with it.
@@ -111,5 +121,6 @@
     - the live and server records: 3b6ed0e, then the deltas at 274d114 and 778c4d8;
     - the orchestrator's review: 77c5a56 api, 12d5488 analytics, 86366d7 workspace, 1e94fdf records, bb4466d the live run's fix, then the gates and this report;
     - the re-review: d52fc9f the fixes, 6e90f52 its live records, then the keyboard record and this report;
+    - the rebase onto 6379dd1: b40bd93, L2.10 meeting today's main; then the re-gate's records.
     - then this report and the friction row.
 15. **Still running:** nothing. The lease on c is released, its stack is down, and no server run is alive.

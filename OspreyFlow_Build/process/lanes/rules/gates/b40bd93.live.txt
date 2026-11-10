@@ -1,0 +1,28 @@
+## L2.10 rebased onto main at 6379dd1, the live delta (test_route_rights and the 48 live files): the rules lease, stack c, by stack_lease.sh remote, at b40bd93, start 2026-11-10T09:12:28Z
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261110T091710Z/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py ../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_pack_store.py ../OspreyFlow_Build/tests/services/api/test_pack_store_query.py ../OspreyFlow_Build/tests/services/api/test_pack_export.py ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py ../OspreyFlow_Build/tests/services/api/test_alert_facts.py ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_monitors.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_hotlists.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_change_stream.py ../OspreyFlow_Build/tests/services/api/test_reports.py ../OspreyFlow_Build/tests/services/api/test_report_freshness.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_trend_store.py ../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_risk.py ../OspreyFlow_Build/tests/ingest/test_revert_load.py ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py
+........................................................................ [  8%]
+........................................................................ [ 17%]
+........................................................................ [ 26%]
+........................................................................ [ 35%]
+........................................................................ [ 44%]
+........................................................................ [ 53%]
+........................................................................ [ 62%]
+........................................................................ [ 71%]
+........................................................................ [ 80%]
+........................................................................ [ 89%]
+........................................................................ [ 98%]
+.........                                                                [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_pack_export.py::test_an_item_needing_its_originator_needs_a_justification_and_a_reference
+tests/services/api/test_pack_export.py::test_an_item_needing_its_originator_needs_a_justification_and_a_reference
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+801 passed, 3 warnings in 4209.44s (1:10:09)
+# exit 0 end 2026-11-10T10:27:29Z
+# the rules lease on c: down and released 2026-11-10T10:28:06Z
