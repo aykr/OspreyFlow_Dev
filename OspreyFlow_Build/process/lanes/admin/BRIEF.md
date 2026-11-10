@@ -20,3 +20,9 @@ the same workers to `make test` itself (offline, on the server's 16 cores): `-n 
 `--dist loadgroup`, the files that cannot share a process kept to one worker, and the order-dependence it exposes fixed
 or named. Prove it: the same commit's `make test` serial and parallel give the same pass and fail set, and the wall
 time before and after. Its Makefile half as a diff for the orchestrator.
+
+**Decided by the orchestrator, 10 November evening (T1 part 4):** (a) the test stacks' Postgres `max_connections`
+raised to 400 through `scripts/stack_lease.sh`'s `up` (ratified for that one setting; test stacks only, never
+`osprey-small` or the product's settings), with a test, red first; ClickHouse left unredirected (its live tests name
+their own databases), recorded in the friction row.
+
