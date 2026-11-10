@@ -247,11 +247,13 @@ async def test_a_refusal_while_running_is_sent_once_and_a_re_apply_completes(
     _same(await _dump(client), await _dump(whole))
 
 
+@pytest.mark.parametrize("how", ["one_at_a_time", "batched"])
 async def test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled(
-    databases: Any,
+    databases: Any, how: str
 ) -> None:
     """The case the script's own read timeout is for: an index built over nodes already there, and
-    the copy-up after the script filling the field those nodes held only in their map."""
+    the copy-up after the script filling the field those nodes held only in their map. Run both
+    ways, one statement at a time (main's) and batched, so a difference is the batch's."""
     client = await databases()
     ontology = load_default_ontology()
     await apply_schema(client, ontology)
@@ -274,11 +276,26 @@ async def test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled(
             ]
         }
     )
+    plan = schema_statements(changed)
+    mine = [st for st in plan.ddl if "t1_probe" in st]
     started = time.perf_counter()
-    await apply_schema(client, changed)
+    if how == "batched":
+        await apply_schema(client, changed)
+    else:
+        for statement in plan.ddl:
+            await client.sql(statement)
+        for type_name, prop in plan.backfills:
+            await schema_module._backfill_flattened_field(client, type_name, prop)
     took = time.perf_counter() - started
-    indexes = await client.sql("SELECT name, typeName, properties FROM schema:indexes")
+    indexes = await client.sql("SELECT FROM schema:indexes")
+    on_type = [i for i in indexes if name in str(i.get("typeName")) or name in str(i.get("name"))]
+    props = await client.sql(f"SELECT properties FROM schema:types WHERE name = '{name}'")
+    seen = [(i.get("name"), i.get("typeName"), i.get("properties")) for i in on_type]
+    names = [p.get("name") for r in props for p in (r.get("properties") or [])]
+    print(
+        f"\n{how}: the statements naming t1_probe {mine}; {took:.1f} s over {rows} nodes\n"
+        f"indexes on {name}: {seen}\nits properties: {names}"
+    )
     assert any(i.get("typeName") == name and i.get("properties") == ["t1_probe"] for i in indexes)
     found = await client.sql(f"SELECT count(*) AS n FROM {name} WHERE t1_probe = 'v1'")
     assert found[0]["n"] == rows // 5, found
-    print(f"\na new index over {rows} nodes, applied with the whole schema: {took:.1f} s")
