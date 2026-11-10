@@ -16,10 +16,11 @@ installs and runs OspreyFlow, the [user guide](user-guide.md), for analysts, and
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.1** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.2** · 2026-11-10 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.2 | 2026-11-10 | Describes v0.5.0. No change to its content. |
 | 1.1 | 2026-11-10 | Promotion as built (case lane's L3.4). One door in: Small on your own server publishes 443 alone. |
 | 1.0 | 2026-11-09 | First issue: the two architecture levels, the tiers and ports, the four places, cases and datasets (one dataset per case, home cases, the analyst layer, views instead of branches), access control in the store, where the data lives, every interface, the licence register's traps, and the limits. |
 

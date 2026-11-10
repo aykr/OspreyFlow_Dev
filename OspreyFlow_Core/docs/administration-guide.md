@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.68** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.69** · 2026-11-10 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.69 | 2026-11-10 | Describes v0.5.0. No change to its content. |
 | 1.68 | 2026-11-10 | Rules' L2.10 and platform-b's P6 as built, no longer *coming*. §9.8: a rule's alerts routed to one team (*‹Team› only*), read by its members and the home case's Authors, enforced in the query; the lead's or cover's *Give to* and *Suppress until…*. §10a: the case map's *Gazetteers in this case's dataset*, with *Add* and *Remove* for `run_pipelines` |
 | 1.67 | 2026-11-10 | §8's commands: `ospreyflow release export` and `import [--dry-run]` (a dataset's release as a YAML bundle) and `ospreyflow run` (an orchestrator's trigger as a service identity), the studio lane's L1.7 (ADR-140 Amendment 9 decision 4, ADR-141). |
 | 1.66 | 2026-11-10 | Appendix A: `deployment.highest_marking`, the deployment's marking ceiling (studio-b's L1.10, ADR-148 Amendment 2): a load or an import marked above it is refused before anything is written. |

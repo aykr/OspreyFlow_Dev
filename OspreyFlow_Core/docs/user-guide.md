@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.42** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.43** · 2026-11-10 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.43 | 2026-11-10 | Describes v0.5.0. No change to its content. |
 | 1.42 | 2026-11-10 | Rules' L2.10, case's L3.6 and L3.H1 as built, no longer *coming*. §4: a rule's alerts routed to one team, read by its members and the home case's Authors, given out or suppressed by its lead. §5.14: a drawn item's watch, the *Drawn items* alert when a load meets it, and the load result's count |
 | 1.41 | 2026-11-10 | Admin's L2.7 as built. §3: Home's *What you can do, and what you answer for*, with *Why can I do this?*; *Needs you* in the top bar. |
 | 1.40 | 2026-11-10 | Promotion as built (case lane's L3.4). §5.14: *Promote…*, its sheet and its checks, one load into the case's dataset, reviewed where the dataset asks; *Promotions from this board*; the board's Alerts panel and the canvas's alert badge. §7.1: the place's tabs as built, Connection strength in the Glass's rail. Still coming: Figures' Drawing panel (the Conduit does not count it yet). |

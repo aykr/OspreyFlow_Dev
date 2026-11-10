@@ -6,6 +6,150 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.5.0 — 2026-11-10
+
+The workspace is rebuilt around four places, branches give way to case views, analysts draw on
+boards and promote what they draw, alerts arrive in one queue that can route to a team, and Admin
+becomes a place of its own. An existing deployment needs the steps below once.
+
+**Before you update.**
+- **Back up first, and know where the backup goes.** Backups no longer go inside the checkout: a
+  set is written to `<backups folder>/<deployment>/`. An `osprey.yaml` from v0.4.x names no backups
+  folder (or the placeholder `/var/lib/osprey/backups`), so its sets, the update's own backup
+  included, go to `~/OspreyFlow/backups/<deployment>/`, and the backup's first line says so; name a
+  folder as `components.storage.backups` to stop that line (administration guide §13). Sets taken
+  before this release stay where they were: `ospreyflow doctor` names each such folder, its size
+  and the one command that moves it, and never moves or deletes a set itself; until they are moved,
+  `ospreyflow restore` still lists and restores them. `doctor` warns when the backups folder is
+  under a folder a sync client copies.
+- **Nothing to do for the numeric user.** Every image now runs as `10001:10001`. The Python images
+  already did, so the volumes an existing deployment wrote need no change of owner. One exception:
+  on Linux, the harness image no longer carries a `docker` group, so whoever runs it with the Docker
+  socket adds `--group-add "$(stat -c %g /var/run/docker.sock)"`.
+- **Nothing changes for the highest marking unless you set it.** `deployment.highest_marking` is
+  new and unset by default, which means the handling scheme's highest: everything you load today
+  still loads. Set it only to refuse loads marked above it; a value outside the scheme stops the
+  Conduit starting.
+- **Git is gone from the Conduit's image.** A pipeline's recipe is committed in-process, into the
+  same repository as before, which carries over as it is. Only someone who ran `git` by hand inside
+  the `api` container loses anything.
+- **The grading scheme** is new: `grading.scheme`, by default `5x5x5`, changed only with
+  `ospreyflow grading change`. **A model provider named `local`** is now refused (it is the
+  deployment's own engine's name): rename it before updating.
+- **Rights.** Rights come with the roles, so existing people gain the new ones on update: Analysts
+  may draw on boards, promote and propose link types; Data Engineers review promotions, accept link
+  types, edit a dataset's model and merge datasets; Administrators manage models. No one is given
+  the new Rule author role or the Super user preset: assign them in Admin. Analysts can no longer
+  make a branch. A Data Engineer no longer opens Rules and Monitoring without a rule-writing or
+  triage role.
+
+**After you update: once, on a deployment made before this release.** `ospreyflow update` runs
+none of these. Run each in this order, inside the deployment, first with `--dry-run` (which writes
+nothing and says what it would do), then without; a second run changes nothing. On Lite the
+container is `osprey-local-lite-api-1`; on a deployment installed by name, `docker ps` names its
+`api` container:
+`docker exec osprey-local-lite-api-1 python -m scripts.<name> --dry-run`
+1. `migrate_cases_to_one_dataset` places every case on one dataset (a case naming several reads a
+   composite of them, so it reads exactly what it read before) and gives it its analyst layer. A
+   case it cannot place is reported, never guessed.
+2. `migrate_branches_to_views` turns each branch into a view of its original case. A branch's own
+   drawn or added items move into the original's layer, tagged with the branch's name, so nothing
+   is lost; a case opened from an alert stays a case. Each view is private to the original case's
+   maker; the people the branch was shared with are listed, to share the view with them. Until it
+   runs, existing branches stay cases.
+3. `seed_target_models` gives each dataset its first domain model, live, from the packs its cases
+   chose, so no case loses a pack's figures. A pack the ontology no longer carries is named.
+4. `make_home_cases` gives each dataset its home case, its Author the dataset's maker. A dataset
+   whose maker is a service account, disabled or gone is named as needing an owner: give it one
+   in Admin › Datasets › *Change owner…*.
+5. `migrate_sources` registers each recipe's file as a source of its dataset and moves each
+   pipeline's folder watch onto it. Files read under different governance are named, for you to
+   register by hand on the Studio's Sources tab.
+6. `remark_alert_nodes` re-marks alerts written before this release no lower than the links they
+   cite. An alert resting on markings of different units is listed, not changed.
+
+**The workspace has four places.**
+- **Four places, each with one job:** the Glass (investigate a case), the Ingest Studio (bring data in), Rules
+  and Monitoring (work the alerts), and Admin (run the deployment). You see only the places your roles open.
+  A place switcher sits in the top bar (inside the GOV.UK header under that theme), and a context banner says
+  where you are. You arrive at **Home**, which replaces *Start*: a card for each place, what needs your
+  attention, your recent cases, and *What you can do, and what you answer for*, with **Why can I do this?**
+  for each right. **Needs you**, in the top bar, lists what waits for you.
+- **No branches.** A selection is kept with **Save as a view**: a view is a saved lens on the case that holds
+  no data, opens read-only, and changes nothing in the case. *Views in this case* lists them, private or shared.
+- **Figures replace the Reports view.** A case's figures, and the dashboards, are read in the Glass; a
+  board's Alerts panel counts its open alerts.
+
+**Drawing boards, and promotion.**
+- **A drawing board** holds what you know that the data does not yet say: you declare a person, an account or
+  a place, and draw links, with a marking, a grading and a source note. It goes into the case's own analyst
+  layer, read with the dataset and never written into it; no other case sees it. A drawing can also be a case
+  of its own, on a starter model (the POLE core, FIBO, NIEM or STIX).
+- **Promote…** proposes drawn items into the dataset. Where the dataset asks for a second person, nothing is
+  readable outside the case until one of its Authors with *Review promotions*, never the proposer, approves it
+  in the Ingest Studio's *Analyst promotions*. A promotion can be reverted.
+- **A drawn dataset merged into another**, in the Ingest Studio: map the models, match, dry run, merge.
+- **A removed case's layer** is merged into the dataset or deleted, each after a dry run, by the dataset's
+  Authors in the Ingest Studio; an administrator may also delete it in Admin › Datasets.
+- **Your own link types.** An analyst proposes a link type in a case; a data engineer accepts it into the
+  dataset's model.
+
+**Rules and Monitoring.**
+- **One queue for every alert you may see**: rules, hotlists, watched patterns, alerts raised by an analyst and
+  drawn items, filtered by whose they are, their age, state and severity. Each says what fired it, in words.
+- **Team routing.** A rule's alerts can go to one team (**‹Team› only**): only its members, and the Authors of
+  the dataset's home case, read them, enforced in the query. The team's lead, or their cover, gives an alert
+  to a member, or sets it aside with **Suppress until…** (up to 90 days; it stays open and counted).
+- **From the Glass:** **Save as a watch**, **Watch for this**, and **Raise an alert…** to the case or the dataset.
+- **Drawn watches.** Drawing an item watches for it: a load that writes something like it raises a *Drawn
+  items* alert, "A load met a drawn item", with **Open the board**; the load's result says how many.
+- **A new role, Rule author**, writes the rules and works the alerts. Rules and Monitoring opens to whoever
+  triages alerts or writes rules, and reads the queue.
+
+**The Ingest Studio.**
+- **Pipelines in guided and expert mode**, with a drawer beside the pipeline and a Preview that marks nothing.
+- **Staging steps as pipeline nodes:** Lookup, Join, Filter, Derive, Union and Dedupe, each with a live sample
+  of the first ten rows, writing nothing. Guided mode stays free of any expression language.
+- **The expert steps:** a sandboxed SQL transform and a fuzzy match, for holders of *Write SQL transforms*.
+- **Connectors:** a screening-list connector; SQL and API connections bound to the datasets an administrator
+  names, never to a private, loopback or metadata address.
+- **A dataset's domain model**, its changes flagging and pausing exactly the pipelines they affect.
+- **Deploy.** **Deploy as v‹n›** commits a pipeline's recipe to the deployment's own repository; **Deploy and
+  run now** runs it too.
+
+**Admin.**
+- **Admin is a place of its own**, in sections: People and roles, Roles, Teams, Datasets, Grading scheme,
+  Connections, Models, Maps, Operations, Audit and System. *Coming:* Approval rights and Uploads.
+- **Roles.** Five built-in roles (Analyst, Data Engineer, Administrator, Reports Viewer, Rule author), custom
+  roles copied from them, and the Super user preset. A refusal names the roles that would allow it.
+- **Teams**, with a lead and cover.
+- **Disable…** reads what a person answers for (cases, teams, hotlists, watches, rules, schedules, views,
+  boards, proposed link types and drawn watches) and asks who takes each; nothing is deleted, every transfer is
+  audited, and a recipient not cleared to an item's marking is refused.
+- **Datasets**, with their Authors, kind and linked cases; a dataset's home case is never removed.
+- **Audit**, read by unit; **Operations**, with promotions waiting and overdue.
+- **Models**: add, edit and remove engines; calls and tokens per engine; limits per engine.
+- **Maps**: each provider with its state; the local basemap built and verified; a unit's gazetteer.
+- **The grading scheme** a deployment uses, and `ospreyflow grading change`, refused without a dry run first.
+
+**The map.**
+- **A basemap switch**, by keyboard too.
+- **Find a place** searches the gazetteers the case's dataset holds, never an outside geocoder.
+- **The gazetteer panel**: beside the place search, *Gazetteers in this case's dataset*, with **Add** and **Remove**.
+
+**The deployment.**
+- **A highest marking per deployment** (`deployment.highest_marking`): a load, an upload or a demonstration
+  pack marked above it is refused before anything is written. Admin › System shows it.
+- **Backups in a folder you name**, never inside the checkout: see *Before you update*.
+- **Every image runs as the numeric user 10001:10001**: the workspace and Superset images were the last to
+  change. See *Before you update* for the harness image.
+- **Git is no longer in the Conduit's image**: a pipeline's recipe is committed in-process.
+- **The preflight checks a named deployment's own published ports**, read from its `deployment.env`.
+
+**Placeholders, filled before this release is published:**
+- **The rule editor** (L2.11): *to be written once it merges.*
+- **Phase 10, operations and releases between environments** (L1.7): *to be written once it merges.*
+
 ## v0.4.12 — 2026-11-05
 
 v0.4.11 was tagged but never released: its security scan stopped it (the first bullet below), so
