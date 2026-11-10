@@ -35,6 +35,17 @@ export function FoldersScreen({
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
+    // ADR-114 Amendment 38 decision 1, as `ospreyflow install` refuses it: the schema's
+    // placeholder is a folder only on Small on a server of your own, where Amendment 33 wrote.
+    const ownServer =
+      config.profile === "small" && !Object.values(config.external ?? {}).some((service) => service != null);
+    if (!ownServer && backups.trim().replace(/\/+$/, "") === SHIPPED.backups) {
+      setError(
+        `${SHIPPED.backups} is the settings' placeholder, a folder only on Small on a server of your own: ` +
+          "name a folder on this machine for backups, for example ~/OspreyFlow/backups.",
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     try {

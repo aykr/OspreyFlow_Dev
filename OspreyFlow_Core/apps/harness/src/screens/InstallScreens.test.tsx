@@ -188,6 +188,23 @@ describe("FoldersScreen", () => {
     });
   });
 
+  it("refuses the schema's backups placeholder off a server of your own, as the command does", async () => {
+    // ADR-114 Amendment 38 decision 1 (independent review): nobody off a server chose it, so a
+    // choice of it is refused with the reason rather than set aside without a word.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<FoldersScreen config={{ components: { storage: {} } }} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Backups folder"), { target: { value: "/var/lib/osprey/backups/" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save folders" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/placeholder.*~\/OspreyFlow\/backups/);
+    expect(onSave).not.toHaveBeenCalled();
+    cleanup();
+    // On Small on a server of your own it is that server's folder (Amendment 33), so it is saved.
+    render(<FoldersScreen config={{ profile: "small", components: { storage: {} } }} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Backups folder"), { target: { value: "/var/lib/osprey/backups" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save folders" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+  });
+
   it("suggests folders under the person's home in place of the container paths the schema ships", () => {
     render(
       <FoldersScreen
