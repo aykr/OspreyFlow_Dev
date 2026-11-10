@@ -1,5 +1,5 @@
 // The undecided-contrast judgement's boundaries (rules-b's T3; the orchestrator's review, item 4):
-// each branch shown with the strings Chrome produces, so a wrong threshold, a dropped gradient stop
+// each path shown with the strings Chrome produces, so a wrong threshold, a dropped gradient stop
 // or an ignored overlap fails here, not only a 1:1 plant in a browser.
 import { describe, expect, it } from "vitest";
 

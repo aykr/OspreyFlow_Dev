@@ -1,6 +1,6 @@
 // WCAG 1.4.3 for text axe-core leaves undecided (rules-b's T3, 10 November 2026). The browser half
 // (`a11y/undecidedContrast.ts`) reads each node's computed styles and what lies under its text; this
-// half judges them, in Node, so every branch is unit-tested (`textContrast.test.ts`) with the strings
+// half judges them, in Node, so every rule of it is unit-tested (`textContrast.test.ts`) with the strings
 // Chrome produces. It fails closed: anything it cannot read or model is an offender, never a pass.
 
 /** One premultiplied-free colour: r, g, b in 0–255, a in 0–1. */
