@@ -44,6 +44,7 @@ from services.api.app import (
     get_ontology,
     get_patterns_store,
     get_principal,
+    get_principal_names,
     get_screening_lists,
     get_typology_rules,
 )
@@ -144,6 +145,14 @@ class _World:
         return self.rules
 
 
+class _NoNames:
+    """A directory that knows no one's name, so a version is shown by id alone; the route's own
+    reading, not another file's directory left on `app.state`."""
+
+    async def display_names(self, ids: list[str]) -> dict[str, str]:
+        return {}
+
+
 def _world(policy: str) -> Iterator[tuple[_World, TestClient]]:
     w = _World(policy)
     con = duckdb.connect(":memory:")
@@ -158,7 +167,7 @@ def _world(policy: str) -> Iterator[tuple[_World, TestClient]]:
         get_typology_rules: w.rules_store, get_audit: lambda: w.audit,
         get_datasets: lambda: w.datasets, get_graph: lambda: w.graph,
         get_analytics: lambda: AnalyticsDuckDBAdapter(con, SCHEME), get_hotlists_store: _Hotlists,
-        get_screening_lists: _NoScreeningLists,
+        get_screening_lists: _NoScreeningLists, get_principal_names: _NoNames,
     })  # fmt: skip
     try:
         with TestClient(app, raise_server_exceptions=False) as client:

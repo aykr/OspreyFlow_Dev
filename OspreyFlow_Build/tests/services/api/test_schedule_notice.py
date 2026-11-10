@@ -1,7 +1,7 @@
 """ADR-110 decision 10 and Amendment 3, point 1: a failed or refused scheduled run tells its owner,
-as an alert with no typology in the owner's own inbox — with its words on the personal alert view —
-and never in the case team's queue. Against the throwaway Postgres; the view through its own
-function."""
+as an alert with no typology in the owner's own list, with its words — and never in the case's
+queue, the one queue of ADR-146 decision 1 included. Against the throwaway Postgres; the queue
+through its own function."""
 
 from __future__ import annotations
 
@@ -50,16 +50,16 @@ async def test_a_notice_reaches_the_owners_inbox_with_its_words_and_no_case_queu
         (mine,) = await store.list_authorized(reader)
         assert mine.id == notice.id and mine.typology is None
         assert await store.list_case_queue(case, reader) == []
-        # L2.10 (ADR-146 decision 1): the inbox went into the one queue, which shows the notice to
-        # its owner, with its words and no referent, and to no one else in the case.
-        (queued,) = await monitoring_queue(store, _NothingReadable(), NO_TRANSACTIONS, case, reader)  # type: ignore[arg-type]
-        assert queued.alert.id == notice.id
-        assert queued.alert.words == "The scheduled run of Daily export was refused: x"
-        assert queued.alert.rule_id == f"schedule:{recipe.recipe_id}"
-        assert queued.alert.referent_node_ids == []
-        someone_else = reader.model_copy(update={"id": f"other-{new_id()}"})
-        assert await store.list_authorized(someone_else) == []
+        assert mine.words == "The scheduled run of Daily export was refused: x"
+        assert (mine.rule_id, mine.referent_node_ids) == (f"schedule:{recipe.recipe_id}", [])
+        # L2.10 (ADR-146 decision 1): the one queue holds no notice, its owner's or anyone's — a
+        # notice is no kind (`alerts._KIND_SQL`), in its owner's own list alone. The database is
+        # shared, so the queue is asked only whether this notice is in it.
         nothing = _NothingReadable()
-        assert await monitoring_queue(store, nothing, NO_TRANSACTIONS, case, someone_else) == []  # type: ignore[arg-type]
+        someone_else = reader.model_copy(update={"id": f"other-{new_id()}"})
+        for who in (reader, someone_else):
+            queued = await monitoring_queue(store, nothing, NO_TRANSACTIONS, case, who)  # type: ignore[arg-type]
+            assert notice.id not in {q.alert.id for q in queued}
+        assert await store.list_authorized(someone_else) == []
     finally:
         await store.close()
