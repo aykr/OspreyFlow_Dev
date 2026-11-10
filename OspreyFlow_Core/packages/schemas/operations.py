@@ -43,12 +43,15 @@ class RunQuotaInput(BaseModel):
 
 
 class RunQuotaUse(BaseModel):
-    """The quota as the Runs tab's bar shows it: today's runs against the limit."""
+    """The quota as the Runs tab's bar shows it. `runs_today` counts every unit's runs into the
+    dataset, so only a reader holding `administer_system` is given it (rules 3 and 7, the strict
+    reading; ADR-141 Amendment 1); anyone else is told only whether the quota is `used`."""
 
     model_config = ConfigDict(extra="forbid")
 
     quota: RunQuota | None = None
-    runs_today: int = Field(ge=0)
+    runs_today: int | None = Field(default=None, ge=0)
+    used: bool = False
 
 
 class ExternallyOwnedInput(BaseModel):
