@@ -33445,11 +33445,18 @@ run's working tables, and Test not judging the ceiling.
   - a staged pipeline;
   - at the ceiling, and none set.
 
+**The staged cases' fixture.** L1.7's Join refuses to pair rows of differing markings
+(`staging_catalogue.refuse_a_differing_marking`), and an unmarked table differs from any marking (it fails closed;
+a declared default marking for such a source is ADR-140 Amendment 19, reserved). So the staged cases mark each owner
+as the bookings it joins (`test_deployment_ceiling_staged.marked_inputs`), the SECRET booking meeting a SECRET owner,
+and the refusal is the ceiling's. The controls show the Join met those owners (`joined_owners`), so the guard was
+passed, not skipped.
+
 **Still carried:**
 - From Amendment 2:
   - the drawn item (case-b);
-  - the promotion and drawn-merge writes (case, reserved as Amendment 4);
   - cloud-platform's OFFICIAL-SENSITIVE default (P7).
+  - (The promotion and drawn-merge writes are closed by Amendment 4.)
 - New: a staged pipeline's Test judges only the rows it runs (the first 10,000 of each source, after the steps),
   so a staged file above the ceiling past them is told only at Load.
 - New: a backstop refusal after raw staging leaves that load's raw and resolved rows staged, on any load.
