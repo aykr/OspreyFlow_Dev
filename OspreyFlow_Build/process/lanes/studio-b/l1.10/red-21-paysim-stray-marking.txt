@@ -1,4 +1,4 @@
-# head 68c4032; plant: one PaySim link written at the seed's marking, not the one given
+# head de1e6f6; plant: one PaySim link written at the seed's marking, not the one given
 # command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
 # must fail: test_paysims_declaration_holds_for_every_write; for the reason 'a write at another marking'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
@@ -7,4 +7,4 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_cei
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write - AssertionError: a write at another marking
-1 failed, 5 passed in 0.39s
+1 failed, 5 passed in 0.42s

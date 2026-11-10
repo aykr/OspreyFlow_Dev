@@ -1,4 +1,4 @@
-# head 68c4032; plant: a cyber-intrusion node written above its declaration
+# head de1e6f6; plant: a cyber-intrusion node written above its declaration
 # command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
 # must fail: test_cyber_intrusions_declaration_holds_for_every_write; all failed: yes
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
@@ -7,4 +7,4 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_cei
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write - assert False
-1 failed, 5 passed in 0.38s
+1 failed, 5 passed in 0.41s

@@ -1,4 +1,4 @@
-# head 68c4032; plant: a demo pack's declared highest not judged before its seed
+# head de1e6f6; plant: a demo pack's declared highest not judged before its seed
 # command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
 # must fail: test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts, test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_within_the_ceiling_is_seeded

@@ -1,4 +1,4 @@
-# head 68c4032; plant: nothing set read as the scheme's lowest, not its highest
+# head de1e6f6; plant: nothing set read as the scheme's lowest, not its highest
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_nothing_set_is_the_scheme_s_highest, test_with_no_ceiling_set_a_secret_row_loads_as_before; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -13,8 +13,12 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_reads_is_judged_by_it_alone
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_empty_cell_takes_the_element_s_default_and_is_judged_by_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_condition_s_column_keeps_rows_apart_when_judged_once_per_combination
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_bound_element_s_default_above_the_ceiling_is_refused_before_any_staging
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_missing_column_is_not_read_as_an_empty_one
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_nothing_set_is_the_scheme_s_highest - AssertionError: assert 'PUBLIC' == 'SECRET'
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing - services.ingest.ceiling.AboveTheDeploymentCeiling: This load would write rows marked above this deployment's highest marking, PUBLIC, so nothing was loaded. Mark the source no higher than PUBLIC, or load it into a deployment cleared to hold it.
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_load_at_the_ceiling_passes - services.ingest.ceiling.AboveTheDeploymentCeiling: This load would write rows marked above this deployment's highest marking, PUBLIC, so nothing was loaded. Mark the source no higher than PUBLIC, or load it into a deployment cleared to hold it.
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_with_no_ceiling_set_a_secret_row_loads_as_before - services.ingest.ceiling.AboveTheDeploymentCeiling: This load would write rows marked above this deployment's highest marking, PUBLIC, so nothing was loaded. Mark the source no higher than PUBLIC, or load it into a deployment cleared to hold it.
-4 failed, 12 passed in 5.55s
+4 failed, 16 passed in 5.74s

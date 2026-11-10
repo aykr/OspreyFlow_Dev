@@ -1,4 +1,4 @@
-# head 68c4032; plant: the Conduit's start reads no ceiling
+# head de1e6f6; plant: the Conduit's start reads no ceiling
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py
 # must fail: test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything; for the reason 'the start went on to open the stores'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_ceiling_is_rendered_for_the_conduit
@@ -16,5 +16,9 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_reads_is_judged_by_it_alone
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_an_empty_cell_takes_the_element_s_default_and_is_judged_by_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_condition_s_column_keeps_rows_apart_when_judged_once_per_combination
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_bound_element_s_default_above_the_ceiling_is_refused_before_any_staging
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_a_missing_column_is_not_read_as_an_empty_one
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py::test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything - AssertionError: the start went on to open the stores
-1 failed, 15 passed in 25.28s
+1 failed, 19 passed in 26.42s

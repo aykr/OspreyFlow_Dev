@@ -1,4 +1,4 @@
-# head 68c4032; plant: the stamping graph's writes not judged against the ceiling
+# head de1e6f6; plant: the stamping graph's writes not judged against the ceiling
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_backstop.py
 # must fail: test_a_node_above_the_ceiling_never_reaches_the_store, test_a_link_above_the_ceiling_never_reaches_the_store, test_a_bulk_load_above_the_ceiling_never_reaches_the_store; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_backstop.py::test_writes_at_the_ceiling_are_written
@@ -6,4 +6,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_backstop.p
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_backstop.py::test_a_node_above_the_ceiling_never_reaches_the_store - Failed: DID NOT RAISE AboveTheDeploymentCeiling
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_backstop.py::test_a_link_above_the_ceiling_never_reaches_the_store - Failed: DID NOT RAISE AboveTheDeploymentCeiling
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_backstop.py::test_a_bulk_load_above_the_ceiling_never_reaches_the_store - Failed: DID NOT RAISE AboveTheDeploymentCeiling
-3 failed, 2 passed, 1 warning in 1.55s
+3 failed, 2 passed, 1 warning in 1.71s
