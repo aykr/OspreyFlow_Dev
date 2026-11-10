@@ -1,0 +1,24 @@
+# UPG: 13 anonymous volumes this rehearsal left on ospreyflow-test (found by the lane-reviewer, not the teardown,
+# whose counts read the project label and osprey-upg* names only). This session's permission classifier refused
+# the removal (unverifiable deletion scope); the orchestrator put it to the owner. REMOVED BY THE OWNER,
+# 10 November ~21:00 UTC, guarded per volume (no container using it); checked from this session afterwards
+# (read-only `docker volume inspect` of each id): 0 of the 13 present.
+# Synthetic data only; mounted by no container. Read-only attribution, 10 November 2026 ~21:00 UTC:
+# id | created | used by | first entry inside
+1fa42def0288d751459b581ccd9fe3d90daeb7b09397a42f52287c635fc9b341 | 20:31:24 | none | ospreyflow/ospreyflow-backup-20261110-203511804.zip, -203602121.zip (run 4's backups)
+62623e8642a122825517f1d870cc793c69afc4a14709e5a17e05dee515a2910f | 18:30:29 | none | server-event-log-20261110-183031.0.jsonl, arcadedb.log.* (run 1's ArcadeDB log)
+63c1ce4d992722b0c28983ddc462cd5e97a317e6dcd76f6e0a4d32bfc45ec9d4 | 18:30:29 | none | empty
+70598f2ec025e9e44aaff697a9698cc687cecfba5d47b80385bd4fa9d82da26b | 20:31:24 | none | server-event-log-20261110-203126.0.jsonl (run 4's ArcadeDB log)
+74ff48ebc76ec3c7097fc99934a9926a7f1c3f0b09d7d9938d2df7aec76bc34e | 18:30:29 | none | empty
+7cec29223f82461e002acdf6d6900045567397b9765c712109ede24ec94c3bce | 18:30:29 | none | ospreyflow/ospreyflow-backup-20261110-191823491.zip (run 1's backup, 19:18:23)
+94ca1835fca0bc32be3b48b5193b6a7cb0b81cf79141a64b3a35e8e7fbffc319 | 20:36:08 | none | empty (made during run 4's first apply)
+b194ecff293bea3021fe3ef87c3c303e7b2913d9b8eca784c661aee2b0d41451 | 20:31:24 | none | empty
+d7728e932bd37016ec9493e50704403e81f6c7d6aa8eb34d9c6b480bd003d522 | 19:36:33 | none | empty
+db4d00047e01cee472dbb04f02b7940ffef87086dafa95d4e2e385a206fb2d44 | 19:36:33 | none | server-event-log-20261110-193634.0.jsonl (run 2's ArcadeDB log)
+e39a4e866c88cfbe63ae792d5699fa7aa3fde66469925a2729c43127cdd71681 | 19:36:33 | none | ospreyflow/ospreyflow-backup-20261110-193949180.zip (run 2's backup)
+e3f6c42c0c69d4e1357376e4f3dde542dcf309073edc7ba0ea0af0c21eac6da4 | 20:31:24 | none | empty
+ec9583272eea81908c7e11b76636e0e4ecff7eaffa509413da134129dff89ada | 19:36:33 | none | empty
+# How: ArcadeDB's image declares anonymous volumes (backups, log, replication, one more). down -v removes those
+# of the containers present; a container recreated earlier (run 1's and run 4's harness.apply --build) or removed
+# with docker rm -f without -v (run 2) orphaned its own. Run 3 recreated no ArcadeDB and left none.
+# Removal, once approved: for each id, docker ps -a -q --filter volume=<id> is empty, then docker volume rm <id>.

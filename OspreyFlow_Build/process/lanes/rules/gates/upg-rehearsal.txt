@@ -7,9 +7,12 @@ operation-ledger, prison-intelligence in run 1; the first two in run 2). No leas
 Guards: upg_guard.sh (compose only as -p osprey-upg with the run's own compose file; volume removal
 osprey-upg_* only; no prune; no image removal) shown red in upg-guard-red.txt; image tags through P5b's
 OwnImages (upg_images.py); deployment.env compared by per-key hashes only (upg_envdiff.py, shown red in
-upg-envdiff-red.txt). Every log: upg-run1/ and upg-run2/ (secret lines hidden by the install itself; a
-scan for PASSWORD=/SECRET=/sk- found none). Passwords read from deployment.env inside the server, never
-printed.
+upg-envdiff-red.txt); the teardown's refusals shown red in upg-teardown-red.txt. Every log: upg-run1/ to
+upg-run4/ (secret lines hidden by the install itself; a scan of all four for PASSWORD=/SECRET=/sk- found
+none). Passwords read from deployment.env inside the server, never printed. The server-side helpers the
+driver calls (chk.sh, snap.sh, rights.py, migrate.sh, withpw.sh, answers.yaml) are in upg-server-helpers/.
+Files marked "copied from the rules session's terminal" were not fetched before the server folder went;
+their text is the session's own output.
 
 == What could not be rehearsed, and why
 `ospreyflow update` moves only to a signed release (find_release, a cosign-verified lock, GHCR pull).
@@ -83,13 +86,21 @@ tagged: one real `ospreyflow update` from a fresh v0.4.12 on this server, before
    3 (the branch is gone, a view now); Fixture Corp opens, views 1, boards 0; Ledger's alert-queue 1
    (K1 open, counts open=1); Studio recipe-registry 19, a pipeline's runs 200; Admin /v1/admin/system
    200 (version dev-11b13bc, highest_marking SECRET).
+   FAILED on the way (09-checks-after.txt), each mine, not the product's: :12 404 on `recipes//runs`
+   (my recipe-id query was empty); :18-20 NameError and :24-28 KeyError in my rights script (shell
+   quoting, then the recipe's key name); :31 405, a GET on `.../pipeline` (not a GET route); :36 422 on a
+   rule's runs ("this rule runs as data loads, not on a schedule"). So a Studio pipeline was never shown
+   to OPEN: the registry (19) and one recipe's runs (1) were. v0.4.12 has no boards, so boards 0 tests
+   only that the route answers.
    ADR-146 Am. 6 decision 13: the Ledger rule's owner (demo admin) holds deploy_rules -> it keeps
    running. Nobody holds author_rules after the upgrade (Rule author is new and given to no one), so the
    three converted drafts cannot be tested (403 right_required author_rules) or made live until an
    administrator assigns Rule author. A second list refresh found no new version (outcome unchanged),
    so a pre-L2.11 rule raising an alert under the new code was not re-proven in run 1; run 2 holds the
    list's version 2 back for after the upgrade.
-9  teardown (10-teardown-run1.txt): down -v on osprey-upg only; volumes left none; images: 3 of the
+9  teardown (10-teardown-run1.txt, copied from the session): down -v on osprey-upg only; osprey-upg*
+   volumes left none, BUT the 4 anonymous volumes of the first ArcadeDB container (orphaned when
+   harness.apply --build recreated it) were left (upg-run4/leaked-volumes.txt); images: 3 of the
    run's own removed, osprey/superset:local put back to its old ID; check: nothing of the run's left;
    others' tags changed meanwhile listed (ospreyflow/*:ci, osprey-test-workspace:proxy), not touched.
 
@@ -111,10 +122,14 @@ tagged: one real `ospreyflow update` from a fresh v0.4.12 on this server, before
    osprey-upg kept up at this state for platform-b's next head.
 5  teardown (upg-run2/10-teardown-run2.txt): MY DEFECT. `down -v` failed (the compose file Compose cannot
    read) and the same command line went on to delete the folder and checkout, leaving 18 containers and
-   9 volumes; removed by project label with `docker rm -f`, guarded to osprey-upg-*. A load spike to
+   9 volumes; the same line also ran rm_volumes after the failed down (refused "in use"). The 18 were
+   removed by project label with `docker rm -f` (no -v), its names checked against osprey-upg-* in the
+   command but outside upg_guard.sh, then the 2 networks and 9 named volumes; ArcadeDB's 4 anonymous
+   volumes were left (leaked-volumes.txt). A load spike to
    ~1,100 coincided (with three test IdPs starting under another lane's pytest): server timings from
    19:50 until it settled are contaminated (friction 2026-11-10-rules-upg-teardown.md). Run 3's
-   teardown refuses to remove any folder unless down -v succeeded and nothing of the project is left.
+   folder removal waited on the teardown's exit 0 (typed, not logged); the teardown itself removes no
+   folder and now refuses on a failed down -v, a container left, or an orphaned anonymous volume.
 
 == Run 3 — platform-b 07fc398 -> a9f5c69 (option A: refresh refuses; the route is backup, apply, update, apply)
 Before it: a named update's files step reaches the WRONG deployment. cli `update` passes no
@@ -135,13 +150,17 @@ its install (01b-provider-refused-2480.log; the same workaround).
    failed ... credentials for `litellm` are not valid"; api and report-sync not started. Cause: reapply
    restarts the changed services with `up -d --no-deps --force-recreate --wait`, so the new one-shot
    litellm-db never ran (no container; pg_roles held keycloak, no litellm). The render was consistent.
+   (05f-litellm-diagnosis.txt, copied from the session.)
    `ospreyflow start --name osprey-upg` then RECOVERED it: litellm-db ran, 12 healthy, the gateway's key
    equal to the Conduit's, /v1/models 200 (05b, 05c). Sent to platform-b (fixed at 11e92f4, then d85f514).
    Torn down cleanly (10-teardown-run3.txt); run 4 fresh, since litellm-db had now run.
 
 == Run 4 — platform-b d85f514 (tree e800e2b), fresh v0.4.12 (logs: upg-run4/)
-   install, provider (1 OSPREY_MODEL_KEY_ line), fixtures as run 3; (a) on 11e92f4's export, unchanged
-   at d85f514: refused, 43/43 unchanged. PASS. Checkout then moved to d85f514's export.
+   install, provider (1 OSPREY_MODEL_KEY_ line), fixtures as run 3; (a) on 11e92f4's export (the clone's
+   34ef9bd): refused, 43/43 unchanged. PASS; it stands for d85f514, whose refresh.py is byte-identical
+   to 11e92f4's (00-checkout-commits.txt). The v0.4.12 backup's "exit 0" in 03 is tail's status, not
+   the backup's (unmeasured; the set was written). Checkout then moved to d85f514's export, the clone's
+   0e4f6f0, which the deployment reports as dev-0e4f6f0.
 (b) backup exit 0; first apply exit 0 (05-apply-1.log): litellm-db ran, 12 healthy, "the model keys
    were not moved into the gateway; they stay in deployment.env ... No module named
    services.api.model_keys" (v0.4.12's api image, as expected); the gateway's master key equals the
@@ -152,27 +171,50 @@ its install (01b-provider-refused-2480.log; the same workaround).
    opensearch-data 812 -> 720 KiB with its container untouched (merging), map- and model-settings new.
    `ospreyflow update --name osprey-upg --yes`: "Already at v0.4.12; nothing to do" (no newer release).
    Stand-in for the release's pull: `ospreyflow stop`, then `harness.apply --build` (12 healthy,
-   verify 3/3; it moved the key itself); second apply: "no model key to move", restarted keycloak only.
-   Keys: no OSPREY_MODEL_KEY_* left, OSPREY_MODEL_KEYS_IN_GATEWAY=yes, `ospreyflow models`: gemini key
-   present: yes. PASS.
-(c) today's files step twice (OSPREYFLOW_DEPLOYMENT_DIR set): exit 0, 43/43 unchanged each time. PASS.
-(d) the seven migrations, dry run / run / re-run, every re-run 0 writes (10-migrations.txt). PASS.
+   verify 3/3; it moved the key: 07-apply-build.log:9); second apply: "no model key to move"
+   (08-apply-2.log:1), restarted keycloak only. So the SECOND APPLY MOVING THE KEYS IS NOT SHOWN: the
+   stand-in moved them first. Keys at the end: no OSPREY_MODEL_KEY_* left,
+   OSPREY_MODEL_KEYS_IN_GATEWAY=yes, `ospreyflow models`: gemini key present: yes.
+(c) refresh's files step by hand, twice, OSPREYFLOW_DEPLOYMENT_DIR set as today's update.py sets it:
+   43/43 files unchanged each time. PASS for the files. Its "exit 0" in 09 is tail's status, not
+   refresh's (unmeasured; the driver now records the command's own). Today's update.py running its own
+   files step is NOT shown (update stopped at "Already at").
+(d) the seven migrations, dry run / run / re-run, every re-run 0 writes. PASS (10-migrations.txt is the
+   driver's digest, the last lines of each pass; the passes' full output is 08-<n>-<name>.*.txt).
+   migrate_sources (no recipes in these two packs) and remark_alert_nodes (no alert node yet) had
+   nothing to do in run 4; run 1 had (19 sources; 1 node, re-marked none). remark_alert_nodes has never
+   re-marked a node in any run, so its re-mark path and its "second run changes nothing" are untested.
    After the upgrade: the list's version 2 released and refreshed: the Ledger rule made under v0.4.12
    raised its alert (open=1) — a pre-L2.11 rule raises alerts under the new code (11-*.txt).
-End state: 77/77 secrets held at v0.4.12 byte for byte (only the moved key gone; OSPREY_MODEL_ENGINES
-   and OSPREY_RELEASE_VERSION changed, neither a secret); 12 healthy; gateway key = Conduit key.
-NOT PROVEN: api and workspace on the v0.5.0 lock's digests (no lock: images built from the checkout);
-   update's pull, pin_images, verify_running and rollback. (ii) the default deployment: NOT RUN, cannot
-   be on this box (a default Lite publishes 127.0.0.1:2480, held by osprey-small's proxy); platform-b's
-   unit cases cover its selection.
-Teardown (12-teardown-run4.txt): down -v exit 0; 0 containers, volumes, networks; the run's tags removed,
-   osprey/superset:local put back; others' tags changed meanwhile: none; /root/osprey-runs/rules-upg
-   removed.
+   No Studio check and no engineer sign-in in run 4 (these packs carry no recipes).
+End state: of the 80 keys deployment.env held at v0.4.12, 77 byte for byte the same, every secret among
+   them; the other 3: OSPREY_MODEL_KEY_GEMINI moved into the gateway, OSPREY_MODEL_ENGINES and
+   OSPREY_RELEASE_VERSION changed (neither a secret); the diff's exit 1 for those 3 read and accepted
+   (08b-keys.txt). 12 healthy; gateway key = Conduit key.
+NOT PROVEN:
+   - api and workspace on the v0.5.0 lock's digests (no lock: images built from the checkout);
+   - `ospreyflow update` itself: its pull, pin_images, verify_running and rollback, and today's
+     update.py running its own files step (in (c), refresh was run by hand with the variable);
+   - what v0.4.12's update does after the refusal: in main's update.py a failed files step is an
+     UpdateFailed and leads to _roll_back (checkout back, down -v, restart, restore); v0.4.12's own
+     handling was not run, so "changing nothing" is shown for the folder only;
+   - the second apply moving the keys (the stand-in moved them first);
+   - `ospreyflow start` as the recovery on d85f514 (seen on a9f5c69 only);
+   - the `start --build` route the refusal offers a deployment built from a checkout;
+   - (ii) the default deployment: NOT RUN, cannot be on this box (a default Lite publishes
+     127.0.0.1:2480, held by osprey-small's proxy); platform-b's unit cases cover its selection.
+Teardown (12-teardown-run4.txt): down -v exit 0; osprey-upg* containers and volumes 0; the run's tags
+   removed, osprey/superset:local put back; others' tags changed meanwhile: none. BUT 5 anonymous
+   volumes of run 4 (and 8 of runs 1 and 2) were left, unseen by its counts; found by the lane-reviewer,
+   removed by the owner (upg-run4/leaked-volumes.txt). Networks were not counted and the folder removal
+   was typed, not logged. busybox:1.36 (the capture's du) and v0.4.12's ghcr.io/aykr images were on the
+   server before the runs (osprey-small runs v0.4.12; busybox in run 1's image list) and were left.
 
 == The CHANGELOG's upgrade steps, as proven (for docs)
 - The seven one-off scripts run in the order: migrate_cases_to_one_dataset, migrate_branches_to_views,
   seed_target_models, make_home_cases, migrate_rules_to_datasets, migrate_sources, remark_alert_nodes;
-  each `--dry-run` first; a second run changes nothing (all seven proven so).
+  each `--dry-run` first; a second run changed nothing in every run (remark_alert_nodes never had a node
+  to re-mark, so its re-mark path is untested).
 - On a named deployment the container is `<name>-api-1` (osprey-upg-api-1); the scripts need no host
   environment.
 - make_home_cases names datasets made by a seed or service account as needing an owner: give each one in
@@ -182,10 +224,15 @@ Teardown (12-teardown-run4.txt): down -v exit 0; 0 containers, volumes, networks
   case; an administrator must give someone Rule author (author_rules) before they can be tested and made
   live. A live case rule keeps running while its owner holds deploy_rules or author_rules (decision 13):
   check each rule's owner still holds one, in Admin > People.
-- The update from v0.4.12, as proven on platform-b's d85f514 (run 4), with the checkout at v0.5.0:
-  `ospreyflow backup --name <x>`; `ospreyflow apply --name <x>` (says the model keys are not yet moved);
-  `ospreyflow update --name <x>`; `ospreyflow apply --name <x>` again (moves the keys into the gateway);
-  then the seven scripts. A plain `ospreyflow update` from v0.4.12 refuses first, in those words,
-  changing nothing. If an apply left the gateway unhealthy, `ospreyflow start --name <x>` recovers it.
-- OWED after the tag: one real `ospreyflow update --name` from a fresh v0.4.12 on this server (the
-  release's pull, pin, verify and rollback, and the lock's digests), before the owner's own.
+- The update from v0.4.12 (platform-b's d85f514, run 4). PROVEN: refresh's files step, as v0.4.12's
+  update runs it, refuses in words naming the route and changes nothing in the deployment's folder; with
+  the checkout at the new version, `ospreyflow backup --name <x>` then `ospreyflow apply --name <x>`
+  (litellm-db made, 12 healthy, the model keys reported not yet moved on the old images); today's files
+  step then changes nothing; the seven scripts; the end state above. STOOD IN FOR: `ospreyflow update
+  --name <x>` (no release to move to) by `harness.apply --build`, which also moved the keys. OWED to the
+  post-tag check: steps 3 and 4 as written (`ospreyflow update --name <x>`, then `ospreyflow apply
+  --name <x>` moving the keys), what v0.4.12's update does after the refusal (rollback, and where the
+  checkout is left), and the lock's digests. `ospreyflow start --name <x>` recovered an unhealthy gateway
+  on a9f5c69 only.
+- OWED after the tag: one real `ospreyflow update --name` from a fresh v0.4.12 on this server, before the
+  owner's own (the orchestrator's first post-release check).

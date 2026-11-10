@@ -1,0 +1,17 @@
+# Copied from the rules session's terminal (10 November 2026, ~20:21 UTC): the diagnosis of run 3's first
+# apply, read-only commands on the server; values masked (no secret printed by any of them).
+$ dc ps -a --format "{{.Service}} {{.State}} {{.Health}}"   (abridged: no litellm-db row at all)
+api created ; keycloak-db exited ; litellm running starting ; report-sync created ; (12 others running)
+$ docker logs osprey-upg-litellm-1 | grep ... | sort | uniq -c   (top lines)
+     12 Error: P1000: Authentication failed against database server at `postgres`, the provided database credentials for `litellm` are not valid.
+     12 Datasource "client": PostgreSQL database "litellm", schema "public" at "postgres:5432"
+      3 LiteLLM Proxy: Database migration failed but continuing startup.
+$ (compose.yaml, values as written) litellm DATABASE_URL: postgresql://litellm:${OSPREY_LITELLM_DB_PASSWORD:?...}@postgres:5432/litellm
+  litellm-db: psql ... CREATE ROLE litellm ... ALTER ROLE litellm WITH LOGIN PASSWORD :'pw' (pw=${OSPREY_LITELLM_DB_PASSWORD})
+  deployment.env: OSPREY_LITELLM_DB_PASSWORD 1, OSPREY_LITELLM_MASTER_SECRET 1, OSPREY_LITELLM_SALT_SECRET 1 (lines present, non-empty)
+$ docker ps -a | grep upg-litellm
+osprey-upg-litellm-1 Up 29 seconds (health: starting)
+$ echo "select rolname from pg_roles where rolname in ('litellm','keycloak');" | docker exec -i osprey-upg-postgres-1 psql -At
+keycloak
+$ sed -n 3p 05-apply-1.log   (the reapply's own command, its tail)
+ ... up -d --no-deps --force-recreate --wait api litellm ner report-sync superset workspace
