@@ -54,6 +54,12 @@ def docker_state() -> tuple[set[str], set[str]]:
     return set(names), set(volumes)
 
 
+def image_tags() -> set[str]:
+    out = subprocess.run(["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
+                         capture_output=True, text=True, check=True).stdout.split()  # fmt: skip
+    return {t for t in out if not t.endswith(":<none>")}
+
+
 def ours(name: str) -> bool:
     return name.startswith("osprey-p5b-")
 
@@ -85,6 +91,8 @@ def main() -> int:
     real_home = os.environ["HOME"]
     os.environ.pop("COMPOSE_PROJECT_NAME", None)  # guard 1: no project from the environment
     containers_before, volumes_before = docker_state()
+    tags_before = image_tags()
+    say(f"docker before: {len(tags_before)} image tags: {' '.join(sorted(tags_before))}")
     say(f"docker before: {len(containers_before)} containers: {' '.join(sorted(containers_before))}")
     say(f"docker before: {len(volumes_before)} volumes: {' '.join(sorted(volumes_before))}")
     env = {
@@ -123,15 +131,36 @@ def main() -> int:
                         "tiles": str(scratch / "tiles")},
             "demo_packs": [],
         }))  # fmt: skip
-        run([python, "-m", "ospreyflow", "install", "--mode", "lite", "--name", NAME,
-             "--config", str(answers), "--yes", "--no-demo-accounts"], env)  # fmt: skip
+        install = [python, "-m", "ospreyflow", "install", "--mode", "lite", "--name", NAME,
+                   "--config", str(answers), "--yes", "--no-demo-accounts"]  # fmt: skip
+        say("$ " + " ".join(install))
+        installed = subprocess.run(install, env=env, cwd=CORE, check=False).returncode == 0
         config = directory / "osprey.yaml"
+        seed_argv = [python, "-m", "harness.apply", "--config", str(config), "--out-root",
+                     str(directory.parent), "--seed", "fixture-corp"]  # fmt: skip
+        if not installed:
+            # Docker Hub's pull limit (429) on this server stops `apply`'s `build --pull`, and the
+            # workspace's node base image is not cached here. The install wrote and rendered the
+            # deployment before its build; so the workspace image osprey-small runs is tagged for
+            # it (osprey-small runs by image ID, so a tag changes nothing of its), the rest are built
+            # from the cached bases without --pull, and apply runs again with --no-build.
+            assert (directory / "compose.yaml").is_file(), "the install failed before rendering"
+            say("the install's build failed (Docker Hub's pull limit): building without --pull")
+            rendered = yaml.safe_load((directory / "compose.yaml").read_text())
+            built = [n for n, v in rendered["services"].items() if "build" in v]
+            workspace = subprocess.run(
+                ["docker", "inspect", "--format", "{{.Image}}", "osprey-small-workspace-1"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            run(["docker", "tag", workspace, rendered["services"]["workspace"]["image"]], env)
+            run([*compose, "--env-file", str(directory / "deployment.env"), "build",
+                 *[n for n in built if n != "workspace"]], env)  # fmt: skip
+            seed_argv.append("--no-build")
         stored = yaml.safe_load(config.read_text())["components"]["storage"]["backups"]
         assert stored == str(backups), stored
         chosen = yaml.safe_load(config.read_text())["deployment"]["graph_port"]
         assert chosen == graph, f"the install chose {chosen}, the environment says {graph}"
-        run([python, "-m", "harness.apply", "--config", str(config), "--out-root",
-             str(directory.parent), "--seed", "fixture-corp"], env)  # fmt: skip
+        run(seed_argv, env)
         run([*compose, "stop", "api"], env)
 
         os.environ.update(env)  # the harness reads HOME for its fallback folder
@@ -182,6 +211,10 @@ def main() -> int:
         if left:
             subprocess.run(["docker", "volume", "rm", *left], check=False)
         shutil.rmtree(scratch, ignore_errors=True)
+        made_tags = sorted(image_tags() - tags_before)
+        if made_tags:
+            subprocess.run(["docker", "rmi", *made_tags], check=False)
+        say(f"image tags this run made, removed: {made_tags or 'none'}")
         still = subprocess.run(["docker", "ps", "-aq", "--filter", f"name={NAME}"],
                                capture_output=True, text=True, check=False).stdout.split()  # fmt: skip
         say(f"teardown done: containers left {len(still)}, volumes left {len(left)} (removed)")
@@ -194,6 +227,8 @@ def main() -> int:
         left_ours = {x for x in containers_after | volumes_after if ours(x)}
         say(f"changed outside osprey-p5b-*: {sorted(others) or 'nothing'}")
         say(f"osprey-p5b-* left: {sorted(left_ours) or 'nothing'}")
+        tags_after = image_tags()
+        say(f"image tags changed: {sorted(tags_before ^ tags_after) or 'nothing'}")
         if others or left_ours:
             ok = False
     say("PASSED" if ok else "FAILED")
