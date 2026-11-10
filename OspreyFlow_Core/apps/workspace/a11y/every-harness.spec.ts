@@ -279,134 +279,17 @@ const EXTRA_STATES: Record<string, string[]> = {
 };
 
 // The undecided-contrast findings on main when the measure was added (rules-b's T3, 10 November 2026),
-// each carried by its owner (CARRIES) rather than excused: by the test's title and the node's
-// selector, with the text it held and the ratio it measured (a floor: worse fails), or the reason
-// it could not be measured. Fixed ones come off; a new one is never added to make a run green.
-const CONTRAST_FINDINGS: Record<string, ListedFindings> = Object.fromEntries([
-  // Platform's (the map): the basemap's attribution chip in `MapView.tsx`, `--text-secondary` on a raw
-  // `rgba(0,0,0,0.4)` laid over the map's canvas, so what is under its words is the map itself: not
-  // measurable in any theme, in every state of the map (2.85:1 on its own surfaces in light).
-  ...["", ...(EXTRA_STATES["map-view-harness.html"] ?? [])].flatMap((state) =>
-    (["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
-      `map-view-harness.html${state ? ` ${state}` : ""} (${variant})`,
-      {
-        "main > div > div > div:nth-child(2)": {
-          text: "Harness tiles ©", ratio: "unmeasurable", reason: "over or under canvas.sigma-mouse", owner: "platform",
-        },
-      },
-    ]),
-  ),
-  // Shell's (L2.3's prototype variant b): the rail's ⋯ More glyph, on a transparent button laid over
-  // the rail (and under GOV.UK, over the notification banner), so its background is not its own.
-  ...(["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
-    `case-screen-options-harness.html variant=b (${variant})`,
-    {
-      'button[aria-label="More"] > span': {
-        text: "⋯",
-        ratio: "unmeasurable",
-        reason:
-          variant === "govuk" ? "over or under div.govuk-notification-banner__content" : "over or under nav.left-rail",
-        owner: "shell",
-      },
-    },
-  ]),
-  // Home's: the start page's key cap ("G", `.home-key` in `home/home.css`) is drawn at `opacity: 0.8`,
-  // which takes the primary button's words below 4.5:1 in light (4.12:1) and GOV.UK (3.92:1).
-  ...(
-    [
-      ["start-harness.html", ".btn--primary > kbd"],
-      ["start-harness.html rights=investigate", "kbd"],
-      ["start-harness.html figures=1&rights=investigate,triage_alerts,read_alert_queue", ".btn--primary > kbd"],
-      ["alert-figures-harness.html home=1", "kbd"],
-    ] as const
-  ).flatMap(([page, selector]) =>
-    ([["light", 4.12], ["govuk", 3.92]] as const).map(([variant, ratio]): [string, ListedFindings] => [
-      `${page} (${variant})`,
-      { [selector]: { text: "G", ratio, owner: "home" } },
-    ]),
-  ),
-  // Case's (L3.3, the boards): the board's link lines are one SVG laid over the board, so the items'
-  // "⟶" handles and the photo's label lie over or under it, and so does the blank board's words.
-  // Which of the label's selectors a state draws follows whether the item is a button there.
-  ...(
-    [
-      ["board=b-wing&pictured=1&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)", "button"],
-      ["board=b-wing", "plain"],
-      ["board=b-wing&as=bob", "label"],
-      ["board=b-night", "empty"],
-      ["board=b-wing&press=Declare%20a%20Location", "button"],
-      ["board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)", "button"],
-      ["board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CDraw%20a%20link%E2%80%A6", "button"],
-      ["board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CWithdraw%20Unknown%20male%20%E2%80%9CTall%E2%80%9D", "plain"],
-      ["board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D", "button"],
-      ["board=b-wing&press=menu%3APerson%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)", "button"],
-      ["board=b-wing&press=Promote%E2%80%A6", "plain"],
-      ["board=b-wing&policy=second_person_reviews&press=Promote%E2%80%A6%7CSend%20for%20review", "plain"],
-    ] as const
-  ).flatMap(([state, kind]) => {
-    const lines = { ratio: "unmeasurable", reason: "over or under svg.board__lines", owner: "case" } as const;
-    const label = (button: boolean): ListedFindings => ({
-      [`div[data-board-item="doc-photo"] > .board-item__body${button ? '[type="button"]' : ""} > .board-item__label`]:
-        { text: "Photo of Mercer, 3 Nov", ...lines },
-    });
-    const handles: ListedFindings = Object.fromEntries(
-      ["p-mercer", "p-ward", "d-tall", "d-ms", "doc-photo", "d-bob"].map((id) => [
-        `div[data-board-item="${id}"] > .board-item__handle[title="Drag to draw a link"][aria-hidden="true"]`,
-        { text: "⟶", ...lines },
-      ]),
-    );
-    const found: ListedFindings =
-      kind === "empty"
-        ? { ".board__empty": { text: "A blank board. Choose a type and declare", ...lines } }
-        : kind === "label"
-          ? label(false)
-          : { ...handles, ...label(kind === "button") };
-    return (["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
-      `boards-harness.html ${state} (${variant})`,
-      found,
-    ]);
-  }),
-  // The metrics panel's rarity note and the views' delete question (under GOV.UK): axe reads each as
-  // partly covering another element and names none, and the probe finds nothing either; kept closed
-  // (the metrics panel, rules' since the split; case's views).
-  ...(["dark", "light", "govuk"] as const).map((variant): [string, ListedFindings] => [
-    `metrics-panel-harness.html filter=rarity (${variant})`,
-    {
-      "p:nth-child(7)": {
-        text: "Filters dim, they never remove: what fal",
-        ratio: "unmeasurable",
-        reason: "partly covered, by axe's reading; the probe found nothing",
-        owner: "rules (metrics panel)",
-      },
-    },
-  ]),
-  [
-    "views-harness.html asking=delete (govuk)",
-    {
-      ".govuk-body-s": {
-        text: "Delete this view? Nothing on the case is",
-        ratio: "unmeasurable",
-        reason: "partly covered, by axe's reading; the probe found nothing",
-        owner: "case (views)",
-      },
-    },
-  ],
-  // Shell's: the top bar's More views drawn open under GOV.UK lies over the notification banner's
-  // words, so what is under them is the menu.
-  [
-    "places-harness.html open=views (govuk)",
-    Object.fromEntries(
-      [
-        [".govuk-notification-banner__content > .btn", "Case: Kestrel"],
-        ['.context-banner__sep[aria-hidden="true"]:nth-child(4)', "·"],
-        ["span:nth-child(5)", "reads Prison intel"],
-      ].map(([selector, text]) => [
-        selector,
-        { text, ratio: "unmeasurable", reason: "over or under div.menu-panel", owner: "shell" },
-      ]),
-    ),
-  ],
-]);
+// each carried by its owner (CARRIES) rather than excused, in `contrastFindings.json`: by the test's
+// title and the node's selector, with the text it held and either the ratio it measured (a floor:
+// worse fails) or the exact reason it could not be measured and what its own surfaces gave (a floor
+// too). Fixed ones come off; a new one is never added to make a run green. The owners, by page:
+// the map's attribution chip over the map's canvas (platform); the case screen's variant b ⋯ and
+// places' open More views under GOV.UK (shell); the boards' handles and labels where a link line or
+// another item lies at them (case); Show as BPMN's words on the drawing's task box, in its dialog and
+// in the rule editor (rules-b, L2.11a's own); Home's key cap at `opacity: 0.8` (home).
+const CONTRAST_FINDINGS = JSON.parse(
+  readFileSync(new URL("./contrastFindings.json", import.meta.url), "utf8"),
+) as Record<string, ListedFindings>;
 
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();
 

@@ -82,10 +82,10 @@ A listed finding no longer found fails. A listed title that is not a scanned loo
 - Plants as above.
 - In full, at 46e53d3: workspace 927 passed and 40 failed; harness app 34 passed.
   - The 40 were new findings of the final probe, listed in the next commit (boards, metrics, views); the gate's code did not change.
-  - The 52 looks they fall in then passed as listed.
+  - Those 40 looks then passed as listed (the run matched 52 titles in all; the other 12 passed already).
   - So the whole of every-harness and the siblings is green: 967 plus 34.
 
-## What it finds on main (listed, not fixed; each in CARRIES with its owner)
+## What it finds on main (listed, not fixed; carried by owner: the map chip, toast glyph, key cap and shell's two are in CARRIES; the boards', metrics' and views' rows are added by merger-c2 at merge)
 - **Platform (the map):** `MapView.tsx`'s attribution chip is `--text-secondary` on a raw `rgba(0,0,0,0.4)`, over the map's canvas. It is unmeasurable in every theme and state: "over or under canvas.sigma-mouse".
 - **Design system:** the warning toast's glyph is `--warning`, 4.41:1 in light (`a11y/showcase.html`). It is `aria-hidden`, beside words; whether 1.4.11's 3:1 applies is the owner's call.
 - **Home:** the start page's key cap "G" (`.home-key`, `opacity: 0.8`) is 4.12:1 in light and 3.92:1 under GOV.UK, on the primary button.

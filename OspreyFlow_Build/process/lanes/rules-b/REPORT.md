@@ -1,29 +1,40 @@
-# rules-b lane · report · L2.11a, the rule's standards: BPMN 2.0 and DMN (10 November 2026)
+# rules-b lane · report · T3, dialogs' colour contrast actually gated (10 November 2026)
 
-1. **Export to `.bpmn` and `.dmn`, and import back to the same rule: met.** `tests/rule_standards/test_codec.py` has a round trip for every shape of every blank. The route's round trip, dataset included, is in `test_rule_standards_routes.py`.
-2. **An unsupported file is refused in words, naming what it holds: met.** It covers a BPMN, DMN, `osprey:` or vendor element or attribute, an element out of its place, and an attribute the model would drop. Each is planted in a file the codec wrote (rule 15).
-3. **Access (rules 3 and 4): met.**
-   - **Export:** a rule the reader may not see is the same 404 as a missing one, offline and live (red with the store's reach dropped).
-   - **Import:** `author_rules` at Author. The dataset must be the case's chosen source or composite; any other is the app's `dataset_not_found`.
-   - **Caps:** both are red by plant.
-   - **Tables:** the rights and levels rows (`author_rules` came off the not-yet list). The export's row in the wire census's `NON_JSON_ROUTES` is ratified with its proof: the XML states no figure (`test_an_export_states_no_figure_of_anything_the_reader_cannot_see`, red by four codec plants).
-4. **Stored beside each version (ADR-146 Amendment 5, option (a)): the codec's half is met.** `rule_files` is the save's function, and Export serves stored bytes (red with it rendering). Rules wires the store in L2.11, with its two tests.
-5. **Show as BPMN by keyboard and axe: met.** `ShowAsBpmn.test.tsx` passes (6). `keyboard/rule-standards.spec.ts` passes (4): Tab, open, Escape, Close, focus back, and Escape back to the editor, each red with its handler removed. Axe passes in three themes (12). A text-contrast plant stayed green, so that is a recorded gap (`gates/ed3e1d1.keyboard-axe.txt`).
-6. **Red record:** `l2.11a/RED_RECORD.md` §1–§9. **Friction row:** `process/friction/2026-11-10-rules-b-rule-standards.md`.
-7. **Live:** lease rules-b on stack d (server). Two runs at e81e8a2, then a second set at 7be4916 (`gates/`).
-8. **Gates at d44e32d** (rebased onto fb704c4, L2.10 in; tree 5c5b983; no rebase onto 2456d2c, agreed). `gates/d44e32d.ci.txt` has only Docker red, and `gates/d44e32d.test.txt` has pytest at 10426 passed, 2 failed and 13 skipped, and vitest at 2943 passed and 1 failed; each failure is an environment one, explained there. Gating found three gaps, all fixed: the stale `ImportedRule.ts` (72f6a2d), spec 03's rows (the patch), and the census row.
-9. **Lane-reviewer:** run once. It found eight must-fix and eight minor items; all are fixed except two left minors (decisions 8 and 9 below).
-10. **Patches, applied unstaged for the gates:** `audit-L2.11a.patch` (regenerated after L2.10), `every-harness-L2.11a.patch` and `spec03-L2.11a.patch`. The audit and spec 03 patches are needed at merge (`test_audit_kinds` and `route-coverage-check`). `registry-L2.11a.patch` goes in with the merge.
-11. **For ratification:** the routes in `app.py` (one block); the schemas commits 101d98c and 72f6a2d; the rows in `test_investigation_levels.py` and `test_route_rights.py`; `src/alerts/ruleStandards/**`; and Amendment 5 (written). **Still running:** nothing.
+(L2.11a's report is in git history, at 35ed3df and before.)
+
+1. **The gate fails on axe's undecided colour contrast: met.**
+   - `a11y/undecidedContrast.ts` reads each node axe leaves incomplete. `src/color/textContrast.ts` judges it in Node, failing closed on anything it cannot read or model.
+   - It is called after every axe scan: every-harness, the workspace's `a11y.spec.ts` and `canvas-focus.spec.ts`, and the install harness's two specs.
+2. **Red on both plants: met.**
+   - P1, the L2.11a dialog text on its own surface: 6 of 6 looks.
+   - P2, platform-b's 1:1 panel words: 3 of 3.
+   - Then the stale check, the oklab grid, a foreign `pointer-events: none` overlay, a `none` colour, and each sibling; all of them are in `t3/RED_RECORD.md`.
+   - Unit cases are in `textContrast.test.ts`, with each rule's planted fault red (U1 to U19).
+3. **Green with each finding listed: met.** Main's findings are listed in `CONTRAST_FINDINGS` (every-harness) and `SHOWCASE_CONTRAST_FINDINGS` (`a11y.spec.ts`).
+   - Each is excused only by its selector, its text and its ratio. An unmeasurable one is excused by its exact reason, pinned to its own surfaces' ratio.
+   - A listed finding no longer found fails, and so does a listed title that is not a look.
+4. **Findings by owner:**
+   - platform: the map chip;
+   - design system: the toast glyph;
+   - home: the key cap;
+   - shell: variant b's ⋯ and places' open menu;
+   - case: the boards' lines and views' delete question;
+   - rules: the metrics rarity note;
+   - plus the truncated texts this round lists (RED_RECORD).
+5. **Reviews:**
+   - Mine and the orchestrator's of 9dab1ef: 10 must-fixes, all fixed in 7ce19d0.
+   - merger-c2's of bd9b4ef: 2 must-fixes, fixed in 46e53d3.
+   - merger-c2's of e94b18c: 3 more silent passes, fixed this round.
+6. **Gates:** GATES.
+7. **Friction row:** `process/friction/2026-11-10-rules-b-contrast-gate.md`. **Still running:** nothing.
 
 ## Decisions taken (each the recommended option; the owner may overrule)
 
-1. **Codec input.** Q: build on which rule model? Options: wait for L2.11's, or use today's `SentenceRuleInput`. **Chose:** `SentenceRuleInput`, one function per side, so the switch is one import. Agreed with rules.
-2. **File shapes.** Q: how should DMN carry what FEEL cannot say? Options: FEEL expressions, or `osprey:` extensions. **Chose:** extensions, plus one fixed FEEL form per operator. Nothing is read as an expression (rule 8).
-3. **Library.** Q: a BPMN/DMN library or hand-written XML? **Chose:** hand-written, read with `defusedxml`, which is already a dependency, so the licence register is unchanged.
-4. **Import's right.** Q: `deploy_rules` or `author_rules`? **Chose:** `author_rules` at Author (the editor's draft right). Agreed with rules.
-5. **Wiring.** Q: an `include_router` line or routes in `app.py`? **Chose:** three thin routes in `app.py`, the work in `rule_standards_routes.py`, as `watch_routes.py` does. Ratified by rules and the orchestrator.
-6. **Import body.** Q: multipart or JSON? **Chose:** JSON (`RuleFilesUpload`), so the body is capped as it streams before anything is spooled.
-7. **Declared dataset.** Q: membership of the read set, or the case's chosen dataset by kind? **Chose:** chosen and by kind (the strict option), refused as the app's missing dataset.
-8. **Left as minor:** the fake store does not model another case's whole-deployment rule (a missing grant, not a refusal); `_attr`/`_text` are not `saxutils`.
-9. **Left as minor:** XML-illegal control characters in a name would export a malformed file. The model allows them; the fix is a refusal at save, which belongs to rules' L2.11.
+1. **Where the judgement lives.** Q: in the page (`page.evaluate`) or in Node? **Chose:** Node (`src/color/textContrast.ts`), so tsc and Vitest cover every rule. The orchestrator ratified it.
+2. **The sibling scans.** Q: a patch, or the branch? **Chose:** the branch. The orchestrator ratified it.
+3. **axe's "partly obscured".** Q: always fail it closed and list, or measure it? **Chose:** measure it, when the probe finds nothing foreign at its points. The probe scrolls the text into view and lifts every element's pointer events, and surfaces are judged point by point.
+   - Always closed (merger-c2's suggestion, tried in the browser) failed 174 looks. Nearly every one was text below the fold or past a scrolling box. Listing them would have excused text wholesale.
+   - The old clip exception's faults are gone either way. Its wrong surface for spilling text is now judged per point (merger-c2's plant measures 1.26:1), and there is no clip-or-cover classification left to prove.
+4. **axe's `bgOverlap`, `imgNode`, `bgImage`.** Q: always closed, or measured when the probe finds nothing? **Chose:** as decision 3, measured only when the probe finds nothing foreign at any point. The probe lifts every element's pointer events, and its points spread first, middle and last. A dialog's own text, which axe often marks this way, is then decided rather than excused wholesale.
+5. **The arithmetic duplicated** (`src/map/contrast.ts`, `src/color/oklab.ts`). Q: reuse them by changing glass's files, or keep a local copy? **Chose:** the local copy. merger-c2 carries the reuse to glass.
+6. **The SVG link layer on boards.** Q: paints wherever its box is, or only through its shapes? **Chose:** only through its shapes, so a handle is unmeasurable only where an edge runs under it.

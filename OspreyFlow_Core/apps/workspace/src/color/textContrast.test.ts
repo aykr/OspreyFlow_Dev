@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   excuses,
-  gradientColours,
   gradientSurfaces,
   judge,
   needFor,
@@ -36,7 +35,7 @@ function layer(more: Partial<Layer> = {}): Layer {
     backdropFilter: "none",
     mixBlendMode: "normal",
     paintedPseudo: null,
-    covers: true,
+    covers: [true],
     ...more,
   };
 }
@@ -51,7 +50,6 @@ function sample(more: Partial<Sample> = {}): Sample {
     fontWeight: "400",
     chain: [layer(), layer({ name: "body", backgroundColor: WHITE })],
     overlappedBy: null,
-    clippedBy: null,
     axeReason: null,
     ...more,
   };
@@ -100,6 +98,13 @@ describe("the colours Chrome writes", () => {
     expect(underNone.why).toMatch(/unread background colour/);
   });
 
+  it("reads a channel out of its range as unread, not as a colour", () => {
+    for (const css of ["rgb(-1000 0 0)", "rgb(0 0 900)", "rgba(0, 0, 0, 2)", "color(srgb 4 0 0)", "oklab(3 0 0)"]) {
+      expect(parseColour(css), css).toBeNull();
+    }
+    expect(parseColour("color(srgb 1.0001 -0.0001 0.5)")).toEqual([255, 0, 127.5, 1]);
+  });
+
   it("reads nothing it does not know, so the caller fails it", () => {
     for (const css of ["lab(50 20 30)", "lch(50 20 30)", "color(display-p3 1 0 0)", "currentcolor", "hsl(0 0% 0%)"]) {
       expect(parseColour(css), css).toBeNull();
@@ -112,7 +117,8 @@ describe("gradients", () => {
     const grid =
       "linear-gradient(oklab(0.4 0.01 0.02 / 0.4) 1px, rgba(0, 0, 0, 0) 1px), " +
       "linear-gradient(90deg, oklab(0.4 0.01 0.02 / 0.4) 1px, rgba(0, 0, 0, 0) 1px)";
-    expect(gradientColours(grid)).toHaveLength(4);
+    // Each layer: the colour beneath it (unpainted parts), its two stops and 7 between them = 10.
+    expect(gradientSurfaces(grid, [255, 255, 255, 1])).toHaveLength(100);
   });
 
   it("measures the text on every stop, so a stop the colour of the text fails", () => {
@@ -147,9 +153,26 @@ describe("gradients", () => {
     expect(darkest).toBeCloseTo(255 * 0.36, 3);
   });
 
+  it("keeps the element's own background beneath an opaque stop, as a sized layer leaves it", () => {
+    // background: #000 linear-gradient(#fff, #fff) 0 0 / 1px 1px no-repeat; color: #000.
+    const sized = judge(
+      sample({
+        color: "rgb(0, 0, 0)",
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)", backgroundImage: "linear-gradient(rgb(255, 255, 255), rgb(255, 255, 255))" })],
+      }),
+    );
+    expect(sized.why).toMatch(/^1\.00:1/);
+  });
+
+  it("skips a `none` layer among gradients, and fails a spread too large to measure", () => {
+    expect(gradientSurfaces("none, linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))", [255, 255, 255, 1])).not.toBeNull();
+    const many = Array.from({ length: 4 }, () => "linear-gradient(rgb(0, 0, 0), rgb(255, 255, 255), rgb(0, 0, 0))").join(", ");
+    expect(gradientSurfaces(many, [255, 255, 255, 1])).toBeNull();
+  });
+
   it("fails a stop it cannot read, and a picture, rather than dropping them", () => {
-    expect(gradientColours("linear-gradient(lab(50 0 0), transparent)")).toBeNull();
-    expect(gradientColours('url("tile.png")')).toBeNull();
+    expect(gradientSurfaces("linear-gradient(lab(50 0 0), transparent)", [255, 255, 255, 1])).toBeNull();
+    expect(gradientSurfaces('url("tile.png")', [255, 255, 255, 1])).toBeNull();
     const pictured = judge(sample({ chain: [layer({ backgroundColor: WHITE, backgroundImage: "url(a.png)" })] }));
     expect(pictured.ratio).toBeNull();
     expect(pictured.why).toMatch(/picture or unread gradient/);
@@ -179,13 +202,32 @@ describe("what lies under the text", () => {
     expect(faded.why).toMatch(/< 4\.5:1/);
   });
 
-  it("measures a text axe calls partly obscured only when an overflow clip explains it", () => {
-    const clipped = judge(sample({ axeReason: "elmPartiallyObscured", clippedBy: "div.app-header__account" }));
-    expect(clipped.ratio).not.toBeNull();
-    expect(clipped.why).toBe("");
-    const unexplained = judge(sample({ axeReason: "elmPartiallyObscured" }));
-    expect(unexplained.ratio).toBeNull();
-    expect(unexplained.why).toMatch(/partly covered/);
+  it("measures a text axe calls partly covered on its own surfaces when the probe finds nothing", () => {
+    // axe says this of text below the fold or past a scrolling box; the probe, with the text scrolled
+    // into view and every element taking pointer events, decides what lies at its points.
+    for (const axeReason of ["elmPartiallyObscured", "elmPartiallyObscuring"]) {
+      expect(judge(sample({ axeReason, color: greyAt(7) })).why).toBe("");
+      expect(judge(sample({ axeReason, color: greyAt(4.4) })).why).toMatch(/^4\.40:1 < 4\.5:1/);
+      const covered = judge(sample({ axeReason, overlappedBy: "div.toast" }));
+      expect(covered.ratio).toBeNull();
+      expect(covered.why).toMatch(/over or under div\.toast/);
+    }
+  });
+
+  it("measures a text that spills past its box on both surfaces, point by point", () => {
+    // <div style="width:40px; white-space:nowrap; background:#222; color:#333">Account name</div> on white:
+    // the first point is on the div, the others past it on the page.
+    const spill = judge(
+      sample({
+        color: "rgb(51, 51, 51)",
+        chain: [
+          layer({ backgroundColor: "rgb(34, 34, 34)", covers: [true, false, false] }),
+          layer({ backgroundColor: WHITE, covers: [true, true, true] }),
+        ],
+      }),
+    );
+    // #333 on #222 (1.26:1) counts, not #333 on the page past the box (12.6:1).
+    expect(spill.ratio).toBeCloseTo(ratioOf([51, 51, 51, 1], [34, 34, 34, 1]), 6);
   });
 
   it("lays nothing under the text from an ancestor whose box is not under it", () => {
@@ -193,7 +235,7 @@ describe("what lies under the text", () => {
     const outside = judge(
       sample({
         color: "rgb(0, 0, 0)",
-        chain: [layer({ backgroundColor: "rgb(0, 0, 0)", covers: false }), layer({ backgroundColor: WHITE })],
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)", covers: [false] }), layer({ backgroundColor: WHITE })],
       }),
     );
     expect(outside.why).toBe("");
@@ -213,8 +255,6 @@ describe("what lies under the text", () => {
       [{ unreadable: "a node in a shadow root" }, /shadow root/],
       [{ color: "currentcolor" }, /unread colour/],
       [{ chain: [layer({ backgroundColor: "lab(50 0 0)" })] }, /unread background colour/],
-      [{ axeReason: "elmPartiallyObscured" }, /partly covered.*axe: elmPartiallyObscured/],
-      [{ axeReason: "elmPartiallyObscuring" }, /partly covered/],
     ];
     for (const [more, why] of cases) {
       const j = judge(sample({ color: "rgb(0, 0, 0)", ...more }));
@@ -240,9 +280,14 @@ describe("a listed finding", () => {
       text: "Words",
       ratio: "unmeasurable" as const,
       reason: "over or under canvas.maplibregl-canvas",
+      own: 7,
       owner: "platform",
     };
     expect(excuses(listed, over)).toBe(true);
+    // Pinned to its own surfaces too: the same reason with its colours fallen is not excused.
+    const fallen = judge(sample({ overlappedBy: "canvas.maplibregl-canvas", color: greyAt(2) }));
+    expect(excuses(listed, fallen)).toBe(false);
+    expect(excuses({ ...listed, own: null }, over)).toBe(false);
     expect(excuses({ ...listed, reason: "over or under canvas" }, over)).toBe(false);
     expect(excuses(listed, judge(sample({ overlappedBy: "canvas.other" })))).toBe(false);
     expect(excuses(listed, judge(sample({ chain: [layer({ filter: "blur(1px)" })] })))).toBe(false);

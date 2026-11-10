@@ -18,9 +18,9 @@ export interface Layer {
   mixBlendMode: string;
   /** A `::before`/`::after` that paints (content set and a background), as `::before` etc. */
   paintedPseudo: string | null;
-  /** Whether this element's box lies under every probed point of the text; its own surface is
-   * under the text only then (an overflowing or positioned text leaves it). */
-  covers: boolean;
+  /** For each probed point of the text, whether this element's box lies under it: its own surface
+   * is under the text there only (a text spilling past its box stands on what is beyond it). */
+  covers: boolean[];
 }
 
 /** What the browser read of one undecided node. */
@@ -36,10 +36,6 @@ export interface Sample {
   chain: Layer[];
   /** A painted element under or over the text that is not the node nor an ancestor, or null. */
   overlappedBy: string | null;
-  /** The node or an ancestor axe named as covering part of the text: a clip (a truncated name, a
-   * cell past its scrolling box, the viewport's edge), or null. The visible part stands on its own
-   * surfaces. */
-  clippedBy: string | null;
   /** axe's own reason for leaving it undecided (`messageKey`), kept for the message. */
   axeReason: string | null;
 }
@@ -49,6 +45,9 @@ export interface Judgement {
   text: string;
   /** The worst ratio over the text's possible backgrounds, or null when unmeasurable. */
   ratio: number | null;
+  /** When unmeasurable, the worst ratio on its own surfaces alone (the walk up its tree), if that can
+   * be read: a listed unmeasurable finding is pinned to it, so its colours cannot fall unseen. */
+  ownRatio: number | null;
   /** 4.5 or 3. */
   need: number;
   /** Why it fails; empty when it passes. */
@@ -90,8 +89,15 @@ function number(part: string, percentOf = 1): number {
  */
 export function parseColour(css: string): Rgba | null {
   const read = parseColourParts(css);
-  // A `none` component or alpha (CSS Color 4's missing component) parses to NaN: unread, never a pass.
-  return read && read.every(Number.isFinite) ? read : null;
+  // A `none` component or alpha (CSS Color 4's missing component) parses to NaN, and a channel out of
+  // its range (rgb(-1000 …)) is no colour Chrome draws as written: both unread, never a pass. A hair
+  // outside the range (an out-of-gamut mix rounding) is clamped.
+  if (!read || !read.every(Number.isFinite)) return null;
+  const [r, g, b, a] = read;
+  const near = (v: number, hi: number) => v >= -0.5 && v <= hi + 0.5;
+  if (![r, g, b].every((v) => near(v, 255)) || !(a >= -0.001 && a <= 1.001)) return null;
+  const clamp = (v: number, hi: number) => Math.max(0, Math.min(hi, v));
+  return [clamp(r, 255), clamp(g, 255), clamp(b, 255), clamp(a, 1)];
 }
 
 function parseColourParts(css: string): Rgba | null {
@@ -112,10 +118,13 @@ function parseColourParts(css: string): Rgba | null {
     return [number(at(1)) * 255, number(at(2)) * 255, number(at(3)) * 255, alpha];
   }
   if (name === "oklab" && parts.length === 3) {
-    return [...oklabToRgb(number(at(0)), number(at(1), 0.4), number(at(2), 0.4)), alpha];
+    const l = number(at(0));
+    if (!(l >= 0 && l <= 1.001)) return null;
+    return [...oklabToRgb(l, number(at(1), 0.4), number(at(2), 0.4)), alpha];
   }
   if (name === "oklch" && parts.length === 3) {
     const [l, c, h] = [number(at(0)), number(at(1), 0.4), parseFloat(at(2))];
+    if (!(l >= 0 && l <= 1.001) || !(c >= 0)) return null;
     const rad = (h * Math.PI) / 180;
     return [...oklabToRgb(l, c * Math.cos(rad), c * Math.sin(rad)), alpha];
   }
@@ -125,6 +134,8 @@ function parseColourParts(css: string): Rgba | null {
 const COLOUR = /\b(?:rgba?|color|oklab|oklch|lab|lch|hsla?|hwb)\([^()]*\)|\b(?:transparent|currentcolor)\b/gi;
 /** Samples taken between two neighbouring stops, so a smooth gradient's in-between colours count. */
 const STEPS = 8;
+/** Past this many possible backgrounds, layered gradients are not measured (unmeasurable, not a pass). */
+const MAX_SURFACES = 20_000;
 
 function lerp(a: Rgba, b: Rgba, t: number): Rgba {
   // Premultiplied, as browsers interpolate gradients (in sRGB here; Chrome takes oklab for modern
@@ -163,27 +174,21 @@ export function gradientSurfaces(image: string, base: Rgba): Rgba[] | null {
   let surfaces: Rgba[] = [base];
   // Painted bottom first: the last layer lies lowest.
   for (const layer of layersOf(image).reverse()) {
+    if (layer === "none") continue;
     if (!/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i.test(layer)) return null;
     const stops = (layer.match(COLOUR) ?? []).map(parseColour);
     if (!stops.length || stops.some((c) => c === null)) return null;
     const read = stops as Rgba[];
-    const samples: Rgba[] = [...read];
+    // A layer may leave part of the box unpainted (its size, position or repeat), so the colour
+    // beneath it is a sample too.
+    const samples: Rgba[] = [[0, 0, 0, 0], ...read];
     for (let i = 0; i + 1 < read.length; i += 1) {
       for (let k = 1; k < STEPS; k += 1) samples.push(lerp(read[i] as Rgba, read[i + 1] as Rgba, k / STEPS));
     }
     surfaces = surfaces.flatMap((under) => samples.map((top) => over(top, under)));
+    if (surfaces.length > MAX_SURFACES) return null;
   }
   return surfaces;
-}
-
-/** The colours a gradient names, or null when any cannot be read (kept for the unit cases). */
-export function gradientColours(image: string): Rgba[] | null {
-  if (image === "none") return [];
-  if (/url\(|image-set\(|element\(|paint\(|cross-fade\(/i.test(image)) return null;
-  const colours = image.match(COLOUR);
-  if (!colours) return null;
-  const read = colours.map(parseColour);
-  return read.some((c) => c === null) ? null : (read as Rgba[]);
 }
 
 /** `top` drawn over `under` (source-over), both straight alpha. */
@@ -218,52 +223,62 @@ export function needFor(fontSize: string, fontWeight: string): number {
 // ---- the judgement ----
 
 /**
- * The text's colour and its background as drawn, over every background it may stand on (a gradient's
- * each colour), with each ancestor's opacity applied to its whole group. The worst ratio counts.
+ * The worst ratio of the text on its own surfaces: the walk up its tree, at each probed point only
+ * through the elements whose box is under that point, each gradient's every colour, and each
+ * ancestor's opacity on its whole group. A string when that walk cannot be read (why).
+ */
+function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
+  const points = Math.max(1, ...sample.chain.map((l) => l.covers.length));
+  let worst = Infinity;
+  for (let p = 0; p < points; p += 1) {
+    let pairs: [Rgba, Rgba][] = [[fg, [0, 0, 0, 0]]];
+    for (const layer of sample.chain) {
+      if (layer.filter !== "none" || layer.backdropFilter !== "none" || layer.mixBlendMode !== "normal") {
+        return `a filter or blend on <${layer.name}>`;
+      }
+      if (layer.paintedPseudo) return `a painted ${layer.paintedPseudo} on <${layer.name}>`;
+      const colour = parseColour(layer.backgroundColor);
+      if (!colour) return `an unread background colour ${layer.backgroundColor} on <${layer.name}>`;
+      const painted = gradientSurfaces(layer.backgroundImage, colour);
+      if (!painted) return `a background picture or unread gradient on <${layer.name}>`;
+      const opacity = parseFloat(layer.opacity);
+      if (!(opacity >= 0 && opacity <= 1)) return `an unread opacity ${layer.opacity} on <${layer.name}>`;
+      // An element whose box is not under this point lays nothing under the text there.
+      const surfaces: Rgba[] = (layer.covers[p] ?? true) ? painted : [[0, 0, 0, 0]];
+      pairs = pairs.flatMap(([ink, bg]) => surfaces.map((s): [Rgba, Rgba] => [over(ink, s), over(bg, s)]));
+      if (pairs.length > MAX_SURFACES) return `more than ${MAX_SURFACES} possible backgrounds`;
+      if (opacity < 1) {
+        pairs = pairs.map(([ink, bg]) => [
+          [ink[0], ink[1], ink[2], ink[3] * opacity],
+          [bg[0], bg[1], bg[2], bg[3] * opacity],
+        ]);
+      }
+    }
+    const page: Rgba = [255, 255, 255, 1];
+    for (const [ink, bg] of pairs) worst = Math.min(worst, ratioOf(over(ink, page), over(bg, page)));
+  }
+  return Number.isFinite(worst) ? worst : `a measure that came out ${worst}`;
+}
+
+/**
+ * The text's colour on what lies under it. Measured on its own surfaces when nothing else does;
+ * unmeasurable, with what its own surfaces give beside it, when anything else might.
  */
 export function judge(sample: Sample): Judgement {
   const need = needFor(sample.fontSize, sample.fontWeight);
   const base = { selector: sample.selector, text: sample.text, need };
-  const fail = (why: string): Judgement => ({ ...base, ratio: null, why: `not measurable: ${why}` });
   const axe = sample.axeReason ? ` (axe: ${sample.axeReason})` : "";
-  if (sample.unreadable) return fail(sample.unreadable + axe);
-  if (sample.overlappedBy) return fail(`over or under ${sample.overlappedBy}${axe}`);
-  // axe saw part of the text covered and the probe's points found nothing: measured only when what
-  // axe named is the text's own box or an ancestor's (a clip); else fail closed.
-  const partly = sample.axeReason === "elmPartiallyObscured" || sample.axeReason === "elmPartiallyObscuring";
-  if (partly && !sample.clippedBy) {
-    return fail(`partly covered, by axe's reading; the probe found nothing${axe}`);
-  }
-  const fg = parseColour(sample.color);
-  if (!fg) return fail(`an unread colour ${sample.color}${axe}`);
-  // [text pixel, background pixel] pairs, one per possible background.
-  let pairs: [Rgba, Rgba][] = [[fg, [0, 0, 0, 0]]];
-  for (const layer of sample.chain) {
-    if (layer.filter !== "none" || layer.backdropFilter !== "none" || layer.mixBlendMode !== "normal") {
-      return fail(`a filter or blend on <${layer.name}>${axe}`);
-    }
-    if (layer.paintedPseudo) return fail(`a painted ${layer.paintedPseudo} on <${layer.name}>${axe}`);
-    const colour = parseColour(layer.backgroundColor);
-    if (!colour) return fail(`an unread background colour ${layer.backgroundColor} on <${layer.name}>${axe}`);
-    const painted = gradientSurfaces(layer.backgroundImage, colour);
-    if (!painted) return fail(`a background picture or unread gradient on <${layer.name}>${axe}`);
-    // An element whose box is not under the text lays nothing under it.
-    const surfaces: Rgba[] = layer.covers ? painted : [[0, 0, 0, 0]];
-    pairs = pairs.flatMap(([ink, bg]) => surfaces.map((s): [Rgba, Rgba] => [over(ink, s), over(bg, s)]));
-    const opacity = parseFloat(layer.opacity);
-    if (!(opacity >= 0 && opacity <= 1)) return fail(`an unread opacity ${layer.opacity} on <${layer.name}>${axe}`);
-    if (opacity < 1) {
-      pairs = pairs.map(([ink, bg]) => [
-        [ink[0], ink[1], ink[2], ink[3] * opacity],
-        [bg[0], bg[1], bg[2], bg[3] * opacity],
-      ]);
-    }
-  }
-  const page: Rgba = [255, 255, 255, 1];
-  const ratio = Math.min(...pairs.map(([ink, bg]) => ratioOf(over(ink, page), over(bg, page))));
-  if (!Number.isFinite(ratio)) return fail(`a measure that came out ${ratio}${axe}`);
+  const fg = sample.unreadable ? null : parseColour(sample.color);
+  const own = fg ? onOwnSurfaces(sample, fg) : null;
+  const ownRatio = typeof own === "number" ? own : null;
+  const fail = (why: string): Judgement => ({ ...base, ratio: null, ownRatio, why: `not measurable: ${why}${axe}` });
+  if (sample.unreadable) return fail(sample.unreadable);
+  if (sample.overlappedBy) return fail(`over or under ${sample.overlappedBy}`);
+  if (!fg) return fail(`an unread colour ${sample.color}`);
+  if (typeof own === "string") return fail(own);
+  const ratio = own as number;
   const why = ratio < need ? `${ratio.toFixed(2)}:1 < ${need}:1${axe}` : "";
-  return { ...base, ratio, why };
+  return { ...base, ratio, ownRatio: null, why };
 }
 
 /** A finding on main, listed with its owner: excused only while it measures as listed or better. */
@@ -274,15 +289,22 @@ export type ListedFinding =
       ratio: "unmeasurable";
       /** The exact reason it must still give, as `judge` words it (axe's own reason aside). */
       reason: string;
+      /** What its own surfaces gave when listed (a floor: worse fails), or null when they too were
+       * unreadable. */
+      own: number | null;
       owner: string;
     };
+
+const FLOOR = 0.005;
 
 /** Whether `finding` is the listed one and no worse. */
 export function excuses(listed: ListedFinding | undefined, finding: Judgement): boolean {
   if (!listed || listed.text !== finding.text) return false;
   if (listed.ratio === "unmeasurable") {
     const why = finding.why.replace(/ \(axe: [^)]*\)$/, "");
-    return finding.ratio === null && why === `not measurable: ${listed.reason}`;
+    if (finding.ratio !== null || why !== `not measurable: ${listed.reason}`) return false;
+    if (listed.own === null) return finding.ownRatio === null;
+    return finding.ownRatio !== null && finding.ownRatio >= listed.own - FLOOR;
   }
-  return finding.ratio !== null && finding.ratio >= listed.ratio - 0.005;
+  return finding.ratio !== null && finding.ratio >= listed.ratio - FLOOR;
 }

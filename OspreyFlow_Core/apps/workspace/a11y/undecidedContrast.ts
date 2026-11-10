@@ -6,13 +6,14 @@
 // `../harness/a11y/*.spec.ts`, which import this file by path).
 //
 // This half reads, in the page, what the judgement needs: each node's computed styles up to `<html>`,
-// a painted `::before`/`::after` laid over it, and what `elementsFromPoint` finds under and over its
-// text. `src/color/textContrast.ts` judges it, in Node, unit-tested at every boundary. It fails
-// closed: an element painted under or over the text that is not the node or an ancestor (map tiles
-// under a chip, a picture), a filter or blend, a colour it cannot read, a node in a frame or shadow
-// root are offenders, never passes. Its limit: the probe samples points across the text (left, middle
-// and right of up to five line boxes), not every pixel; axe's own "partly covered" fails closed where
-// the points miss it.
+// which of those elements lie under each probed point of its text, a painted `::before`/`::after`
+// laid over it, and what `elementsFromPoint` finds under and over the text. `src/color/textContrast.ts`
+// judges it, in Node, unit-tested at every boundary. It fails closed: an element painted under or over
+// the text that is neither the node nor an ancestor (map tiles under a chip, an overlay, a drawn line),
+// axe's "partly covered" (its points cannot be ruled out here), a filter or blend, a colour it cannot
+// read, a node in a frame or shadow root are offenders, never passes. Its limit: the probe samples
+// points (the left, middle and right of up to five line boxes, the first, middle and last among them),
+// not every pixel.
 import type { Page } from "@playwright/test";
 
 import {
@@ -27,7 +28,7 @@ import {
 export interface AxeIncomplete {
   incomplete: {
     id: string;
-    nodes: { target: unknown[]; any?: { data?: unknown; relatedNodes?: { target: unknown[] }[] }[] }[];
+    nodes: { target: unknown[]; any?: { data?: unknown }[] }[];
   }[];
 }
 
@@ -38,8 +39,6 @@ interface Asked {
   selector: string | null;
   unreadable: string | null;
   axeReason: string | null;
-  /** The elements axe names as covering the node (`relatedNodes`), as selectors. */
-  related: string[];
 }
 
 async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
@@ -53,15 +52,29 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       const shows = p.content !== "none" && p.content !== "normal";
       return shows && (!transparent(p.backgroundColor) || p.backgroundImage !== "none");
     };
-    // A foreign element that changes what is seen at the text: a replaced element, a background, a
-    // painted `::before`/`::after`, or a filter or blend.
-    const painted = (e: Element) => {
+    // SVG's drawn parts: its shapes paint, its root's empty box does not (a board's link layer).
+    const SHAPES = new Set(["LINE", "PATH", "RECT", "CIRCLE", "ELLIPSE", "POLYLINE", "POLYGON", "TEXT", "TSPAN", "IMAGE", "USE"]);
+    // A foreign element that changes what is seen at the point (x, y): a replaced element or an SVG
+    // shape, a background, a painted `::before`/`::after`, a filter or blend, an inset shadow, a border
+    // under the point, or words of its own.
+    const painted = (e: Element, x: number, y: number) => {
       const s = getComputedStyle(e);
-      return (
-        REPLACED.has(e.tagName.toUpperCase()) || !transparent(s.backgroundColor) || s.backgroundImage !== "none" ||
-        s.filter !== "none" || s.backdropFilter !== "none" || s.mixBlendMode !== "normal" ||
-        pseudoPaints(e, "::before") || pseudoPaints(e, "::after")
-      );
+      const tag = e.tagName.toUpperCase();
+      if (tag === "SVG") return !transparent(s.backgroundColor) || s.backgroundImage !== "none";
+      if (REPLACED.has(tag) || SHAPES.has(tag)) return true;
+      if (!transparent(s.backgroundColor) || s.backgroundImage !== "none") return true;
+      if (s.filter !== "none" || s.backdropFilter !== "none" || s.mixBlendMode !== "normal") return true;
+      if (/inset/.test(s.boxShadow)) return true;
+      if (pseudoPaints(e, "::before") || pseudoPaints(e, "::after")) return true;
+      const r = e.getBoundingClientRect();
+      const w = (side: string) => (s.getPropertyValue(`border-${side}-style`) === "none" ? 0 : parseFloat(s.getPropertyValue(`border-${side}-width`)) || 0);
+      if (x < r.left + w("left") || x > r.right - w("right") || y < r.top + w("top") || y > r.bottom - w("bottom")) return true;
+      return [...e.childNodes].some((n) => {
+        if (n.nodeType !== Node.TEXT_NODE || (n.textContent ?? "").trim() === "") return false;
+        const words = document.createRange();
+        words.selectNodeContents(n);
+        return [...words.getClientRects()].some((t) => x >= t.left && x <= t.right && y >= t.top && y <= t.bottom);
+      });
     };
     // An ancestor hides what lies beneath it only when its own background is opaque and neither it
     // nor anything above it is translucent (an opacity lets the group's underlay through).
@@ -75,9 +88,9 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     };
     const blank = (unreadable: string, selector: string, axeReason: string | null) => ({
       selector, unreadable, text: "", color: "", fontSize: "", fontWeight: "", chain: [],
-      overlappedBy: null, clippedBy: null, axeReason,
+      overlappedBy: null, axeReason,
     });
-    return nodes.map(({ selector, unreadable, axeReason, related }) => {
+    return nodes.map(({ selector, unreadable, axeReason }) => {
       if (unreadable || !selector) return blank(unreadable ?? "no selector", selector ?? "?", axeReason);
       let el: HTMLElement | null = null;
       try {
@@ -100,34 +113,13 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         el.scrollIntoView({ block: "center", inline: "center" });
         rects = boxes();
       }
-      // Where axe saw part of the text covered, a denser grid: five across and three down each box.
-      const partly = axeReason === "elmPartiallyObscured" || axeReason === "elmPartiallyObscuring";
-      const across = partly ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1];
-      const down = partly ? [0.2, 0.5, 0.8] : [0.5];
-      const points = rects.slice(0, 5).flatMap((r) => {
+      // The left, middle and right of up to five line boxes, spread from the first to the last.
+      const picks = rects.length <= 5 ? rects : [0, 1, 2, 3, 4].map((k) => rects[Math.round((k * (rects.length - 1)) / 4)] as DOMRect);
+      const points = picks.flatMap((r) => {
         const inset = Math.min(2, r.width / 4);
-        return down.flatMap((v) =>
-          across.map((u) => [r.left + inset + (r.width - 2 * inset) * u, r.top + r.height * v] as const),
-        );
+        const y = r.top + r.height / 2;
+        return [[r.left + inset, y], [r.left + r.width / 2, y], [r.right - inset, y]] as const;
       });
-      // What axe says covers part of the text: the text itself or an ancestor is a clip (a truncated
-      // name, a cell past its scrolling box, a button past the viewport's edge), whose visible part
-      // stands on its own surfaces; anything else is an overlay, unmeasurable. With nothing named,
-      // the judgement fails it closed.
-      let clippedBy: string | null = null;
-      let coveredBy: string | null = null;
-      if (partly) {
-        for (const sel of related) {
-          let rel: Element | null = null;
-          try {
-            rel = document.querySelector(sel);
-          } catch {
-            // An unreadable selector: treated as a foreign cover below.
-          }
-          if (rel && (rel === el || rel.contains(el))) clippedBy ??= name(rel);
-          else coveredBy ??= rel ? name(rel) : sel;
-        }
-      }
       const chain = [];
       for (let at: Element | null = el; at; at = at.parentElement) {
         const s = getComputedStyle(at);
@@ -140,7 +132,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
           }
         }
         const box = at.getBoundingClientRect();
-        const covers = points.every(([x, y]) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom);
+        const covers = points.map(([x, y]) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom);
         chain.push({
           name: name(at), backgroundColor: s.backgroundColor, backgroundImage: s.backgroundImage,
           opacity: s.opacity, filter: s.filter, backdropFilter: s.backdropFilter,
@@ -155,7 +147,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       // surface the walk up the tree cannot see. `elementsFromPoint` leaves out whatever has
       // `pointer-events: none` (the map's chip, an overlay laid over the page), so for the probe every
       // element takes pointer events, by a style sheet removed straight after.
-      let overlappedBy: string | null = coveredBy;
+      let overlappedBy: string | null = null;
       const lift = document.createElement("style");
       lift.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
       document.head.append(lift);
@@ -168,7 +160,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
               continue;
             }
             if (el.contains(e)) continue;
-            if (painted(e)) {
+            if (painted(e, x, y)) {
               overlappedBy = name(e);
               break;
             }
@@ -179,7 +171,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       }
       const style = getComputedStyle(el);
       return {
-        selector, unreadable: null, axeReason, chain, overlappedBy, clippedBy,
+        selector, unreadable: null, axeReason, chain, overlappedBy,
         text: (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40),
         color: style.color, fontSize: style.fontSize, fontWeight: style.fontWeight,
       };
@@ -195,7 +187,6 @@ export async function judgeUndecided(page: Page, results: AxeIncomplete): Promis
       rule.nodes.map((node) => {
         const data = node.any?.[0]?.data as { messageKey?: string } | undefined;
         const axeReason = data?.messageKey ?? null;
-        const related = (node.any?.[0]?.relatedNodes ?? []).map((r) => r.target.map(String).join(" >>> "));
         const [only] = node.target;
         // A frame's or a shadow root's node: axe's target is a path, never one selector here.
         if (node.target.length !== 1 || typeof only !== "string") {
@@ -203,10 +194,9 @@ export async function judgeUndecided(page: Page, results: AxeIncomplete): Promis
             selector: JSON.stringify(node.target),
             unreadable: "a node in a frame or a shadow root",
             axeReason,
-            related,
           };
         }
-        return { selector: only, unreadable: null, axeReason, related };
+        return { selector: only, unreadable: null, axeReason };
       }),
     );
   return (await read(page, asked)).map(judge);
@@ -225,7 +215,12 @@ export async function checkUndecidedContrast(
   const failing = (await judgeUndecided(page, results)).filter((j) => j.why);
   const excused = (j: Judgement) => Object.hasOwn(known, j.selector) && excuses(known[j.selector], j);
   return {
-    unlisted: failing.filter((j) => !excused(j)).map((j) => `${j.selector}: ${j.why} ("${j.text}")`),
+    unlisted: failing
+      .filter((j) => !excused(j))
+      .map((j) => {
+        const own = j.ratio === null ? ` [own surfaces ${j.ownRatio === null ? "unread" : `${j.ownRatio.toFixed(2)}:1`}]` : "";
+        return `${j.selector}: ${j.why}${own} ("${j.text}")`;
+      }),
     gone: Object.keys(known).filter((selector) => !failing.some((j) => j.selector === selector && excused(j))),
   };
 }
