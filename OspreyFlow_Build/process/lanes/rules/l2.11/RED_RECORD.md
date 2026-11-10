@@ -113,3 +113,23 @@ passed). StageD's case for the retired schedule form is removed with the form.
 3. **A refused author run anyway:** red, only "a rule whose author cannot act is recorded refused, never run".
 
 The store's `test_a_list_refresh_reads_only_the_running_rules_that_name_that_list` runs at the next leased run.
+
+## §10 The lane-reviewer's L2.11 round (items 1 to 29), offline
+
+All offline (480 passed across the rule suites at 17fc646). The live cases run at the next leased run.
+- **List refresh at its three call sites and in its own judge** (`test_rule_list_refresh.py`, 9 passed): each plant
+  is red only in its own case. The plants:
+  1. *Refresh now*'s hook removed;
+  2. the scheduled refresh's hook removed;
+  3. the dataset's own import's hook removed;
+  4. a refresh judged as a schedule ("no schedule");
+  5. the list's owner not asked (another dataset's same-id list);
+  6. no stop after three refusals.
+- **The migration** (`test_migrate_rules_to_datasets.py`, 7 passed): the copies' own patterns, a rule changed while
+  it runs left for the next, and a rule whose pattern cannot be read left whole.
+- **The older routes** (`test_rule_sentence_routes.py`, 9 passed): only a rule just for its author.
+- **The Glass:** `RuleEditor.test.tsx` 9 passed, the opened rule included, and `SentenceBuilder.test.tsx` updated;
+  113 passed across `alerts/`.
+- **Keyboard:** four new cases plus the moved team case, registry ids in the patch (+8, −3 in all). Shown red with
+  each handler removed at the local keyboard gate.
+- **Axe:** two editor states, `tab=rules&editor=tested` and `tab=rules&editor=bpmn`, scanned at the local axe gate.

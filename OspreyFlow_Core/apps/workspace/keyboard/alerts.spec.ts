@@ -572,7 +572,7 @@ const WRITTEN = {
   conditions: [{ op: "one_of", property: "listing", values: ["sanction", "pep"] }],
   relationship: null,
   frequency: { kind: "count", link_type: "PRESENT_AT", at_least: 3, within_days: 7 },
-  severity: "high", team: "case", runs: "post_commit", on_hit: "load", scope: "this_case",
+  severity: "high", team: "case", runs: "post_commit", on_hit: "load", scope: "just_me",
 };  // prettier-ignore
 
 test("a rule is written as a sentence, shown as its drawn pattern and deployed, by keyboard", async ({ page }) => {
@@ -651,22 +651,88 @@ test("a rule is written on a dataset, saved as a draft, tested and made live, by
   registerCovered(REGISTRY, "make-a-rule-live-by-keyboard");
 });
 
-test("a sentence's alerts are sent to a named team, by keyboard (ADR-146 decision 8)", async ({ page }) => {
-  const state = await serve(page);
+/** The rule editor's routes for a keyboard case: one dataset with its lists, a draft saved, and
+ * every body sent kept. */
+async function serveTheEditor(page: Page, state: State) {
+  const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/*/v1/investigations/inv-1/rules/datasets", (route) =>
+    route.fulfill(fulfil([{ id: "ds-prison", name: "Prison records", kind: "source", second_person: false, ontology: ONTOLOGY,
+      lists: [{ id: "l-uk", name: "UK sanctions", kind: "screening", version: 3, deployment_wide: true }] }])),
+  );  // prettier-ignore
   await page.route("**/*/v1/investigations/inv-1/alert-teams", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{ role_id: "team-7", display_name: "Prison intel", lead: false, members: [] }]) }),
+    route.fulfill(fulfil([{ role_id: "team-7", display_name: "Prison intel", lead: false, members: [], member_count: 6 }])),
   );
-  await page.goto("/keyboard/alerts-harness.html");
-  await writeTheSentence(page);
-  await chooseByTyping(page, page.getByRole("combobox", { name: "Alert goes to (team)" }), "team:team-7");
-  await page.getByLabel("Name of the sentence rule").focus();
-  await page.keyboard.type("Listed people for the team");
-  await press(page, page.getByRole("button", { name: "Deploy the sentence" }));
-  await expect.poll(() => (state.sent.find((s) => s.path === "rules/sentence")?.body as { sentence?: Record<string, unknown> } | undefined)?.sentence).toMatchObject({
-    team: "team",
-    team_id: "team-7",
+  await page.route("**/*/v1/investigations/inv-1/rules/drafts", (route) => {
+    const body = route.request().postDataJSON();
+    state.sent.push({ method: "POST", path: "rules/drafts", body });
+    return route.fulfill(fulfil({ id: "r-new", investigation_id: "inv-1", owner_id: "analyst-1", name: body.name, status: "draft",
+      created_at: "2026-11-10T09:00:00Z", trigger: body.sentence.runs, budget_ms: 5000, dataset_id: "ds-prison",
+      params: { typology: "sentence", pattern_id: "p", sentence: body.sentence } }, 201)); // prettier-ignore
   });
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await chooseByTyping(page, page.getByRole("combobox", { name: "The dataset this rule watches" }), "ds-prison");
+  await press(page, page.getByRole("button", { name: "Choose the dataset" }));
+  return page.getByRole("form", { name: "Write a rule on Prison records" });
+}
+
+const drafted = (state: State) => (state.sent.find((s) => s.path === "rules/drafts")?.body as { sentence?: Record<string, unknown> } | undefined)?.sentence;
+
+test("a rule's alerts are sent to a named team, said before saving, by keyboard (ADR-146 decisions 3 and 8)", async ({ page }) => {
+  const state = await serve(page);
+  const form = await serveTheEditor(page, state);
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Subject" }), "Person");
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Alert goes to (team)" }), "team:team-7");
+  await expect(form.getByRole("status", { name: "Where its alerts go" })).toContainText("seen by the 6 members of Prison intel");
+  await form.getByLabel("Name of the rule").focus();
+  await page.keyboard.type("Listed people for the team");
+  await press(page, form.getByRole("button", { name: "Save the draft" }));
+  await expect.poll(() => drafted(state)).toMatchObject({ team: "team", team_id: "team-7" });
   registerCovered(REGISTRY, "send-a-rules-alerts-to-a-named-team-by-keyboard");
+});
+
+test("a rule names a screening list its dataset reads and runs as it refreshes, by keyboard (ADR-146 decision 3)", async ({ page }) => {
+  const state = await serve(page);
+  const form = await serveTheEditor(page, state);
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Subject" }), "Person");
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Relationship" }), "on_screening_list");
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Screening list" }), "l-uk");
+  registerCovered(REGISTRY, "choose-a-rules-screening-list-by-keyboard");
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Runs" }), "list_refresh");
+  await form.getByLabel("Name of the rule").focus();
+  await page.keyboard.type("Listed people as the list refreshes");
+  await press(page, form.getByRole("button", { name: "Save the draft" }));
+  await expect.poll(() => drafted(state)).toMatchObject({ runs: "list_refresh", relationship: { kind: "on_screening_list", list_id: "l-uk" } });
+  registerCovered(REGISTRY, "run-a-rule-when-its-list-refreshes-by-keyboard");
+});
+
+test("another Author approves a rule going live, and sends another back, by keyboard (ADR-146 Amendment 6)", async ({ page }) => {
+  const state = await serve(page);
+  const waiting = (id: string, name: string) => ({
+    id, investigation_id: "inv-1", owner_id: "author-2", name, status: "draft", created_at: "2026-11-10T09:00:00Z",
+    trigger: "post_commit", budget_ms: 5000, dataset_id: "ds-prison", pending_action: "deploy", pending_by: "author-2",
+    pending_asked_by: "author-2", pending_make_live: true, pending_version: 1,
+    params: { typology: "sentence", pattern_id: "p", sentence: { ...WRITTEN, scope: "this_case" } },
+  });  // prettier-ignore
+  state.rules.push(waiting("r-go", "Going live") as never, waiting("r-back", "Sent back") as never);
+  const fulfil = (body: unknown) => ({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  for (const [id, verb] of [["r-go", "approve"], ["r-back", "reject"]] as const) {
+    await page.route(`**/*/v1/investigations/inv-1/rules/${id}/${verb}`, (route) => {
+      state.sent.push({ method: "POST", path: `rules/${id}/${verb}`, body: route.request().postDataJSON() });
+      return route.fulfill(fulfil({ ...waiting(id, id), status: verb === "approve" ? "active" : "draft", pending_action: null }));
+    });
+  }
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await press(page, page.getByRole("button", { name: "Approve Going live" }));
+  await expect.poll(() => state.sent.some((s) => s.path === "rules/r-go/approve")).toBe(true);
+  registerCovered(REGISTRY, "approve-a-rule-going-live-by-keyboard");
+  await press(page, page.getByRole("button", { name: "Reject Sent back" }));
+  await page.getByLabel("Why reject the change to Sent back").focus();
+  await page.keyboard.type("test it on the full month");
+  await press(page, page.getByRole("button", { name: "Send the rejection of Sent back" }));
+  await expect.poll(() => state.sent.find((s) => s.path === "rules/r-back/reject")?.body).toEqual({ reason: "test it on the full month" });
+  registerCovered(REGISTRY, "send-back-a-rule-going-live-by-keyboard");
 });
 
 test("a sentence is previewed on the last 90 days, by keyboard, and nothing is deployed", async ({ page }) => {

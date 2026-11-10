@@ -32873,9 +32873,25 @@ unchanged except where this says so.
      stored, against the new version, and is recorded with the rule's runs in words. A refresh that kept nothing
      new starts none.
 
-**Still open:** the older sentence builder stays below the editor, for a rule just for its author and for rules saved
-before the editor, until its keyboard cases move to the editor. Its whole-deployment choice, and the older route's,
-go then.
+10. **The older sentence form keeps rules just for their author** (*decided*, the lane-reviewer's L2.11 item 2). Its
+    deploy and change routes refuse anything else (409 `use_the_rule_editor`), so no case rule goes live untested or
+    past its dataset's second person. Rules made before the editor keep their maker–checker, their retirement and
+    their approval; a whole-deployment rule is converted by the migration, not changed.
+11. **The details the code decides** (rule 11):
+    - **Who "the author" is.** Whoever last saved the draft. Its approver must be neither that person nor whoever
+      asked for it to go live. A make-live sent back keeps its draft's test.
+    - **What a rule reads.** A load, a schedule, a refresh and *Test* read the rule's declared dataset alone, a
+      composite with its members (`datasets.read_set`), never the case's layer. Its drawn pattern is saved in that
+      dataset. A case that no longer reads the dataset reads nothing through the rule.
+    - **List ids are per dataset.** A refresh starts only the rules whose dataset reads that owner's list (a
+      dataset's own, or a deployment-wide one it subscribes to). Three refusals in a row stop a refresh rule, as they
+      stop a schedule.
+    - **A draft never made live can be retired.**
+    - **Versions saved outside the editor have no stored files:** the older routes, a retirement and the
+      migration's copies. Export renders those with the same `rule_files`.
+    - **The migration.** Each copy gets its own drawn pattern, saved in its dataset. It is owned by the original's
+      administrator, who need not be an Author of the copy's home case; its runs then say so, as any rule whose
+      author cannot act. A rule changed while the migration runs is left for its next run.
 
 ### Tests that would fail (rule 12)
 

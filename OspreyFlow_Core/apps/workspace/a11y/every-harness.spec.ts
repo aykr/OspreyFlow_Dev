@@ -163,6 +163,10 @@ const EXTRA_STATES: Record<string, string[]> = {
     "tab=lists",
     // ADR-133 Amendment 9 (L2.11): the manager's Lists tab, read-only, with the latest refreshes.
     "tab=lists&lists=manage",
+    // ADR-146 decision 3 (L2.11; the lane-reviewer's item 16): the rule editor on its dataset, a
+    // rule on a screening list saved and tested, then shown as BPMN.
+    "tab=rules&editor=tested",
+    "tab=rules&editor=bpmn",
     "tab=rules&template=high_risk_jurisdiction",
     // ADR-133 stage (d): a whole-deployment rule waiting for a second person (Approve and Reject
     // offered), a scheduled rule's runs and versions open, a sentence set to run every week, a
