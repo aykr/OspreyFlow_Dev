@@ -35,7 +35,7 @@ const STUB_PYTHON = '#!/bin/sh\necho "stub $*"\n';
 
 // Distinct from `keyboard/playwright.config.ts`'s own 5191/7217, so both suites can run
 // concurrently (CI does) without a port collision.
-const VITE_PORT = lanePort(5193); // this lane's own (T2, lane_ports.tsv): 5193 on main
+const VITE_PORT = lanePort(5193); // this lane's own (T2, apps/lanePorts.ts): 5193 on main
 const API_PORT = String(lanePort(7219));
 
 export default defineConfig({

@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "@playwright/test";
-import { lanePort } from "../../lanePorts";
+import {
+  API_PORT,
+  INSTALL_API_PORT,
+  INSTALL_VITE_PORT,
+  VITE_PORT,
+} from "./ports";
 
 // A scratch `osprey.yaml`, not this checkout's real one — `harness.webapp`'s own `Save` actions
 // really write to disk, and this suite must never touch the repository's own committed config.
@@ -38,11 +43,10 @@ const SCRATCH_OUT_ROOT = join(
   `osprey-generated-keyboard-spec-${process.pid}`,
 );
 
-// Not the real default (7100; it was 7000 until that was found to collide) — `vite.config.ts`'s
+// API_PORT (./ports.ts) is not the real default (7100; it was 7000 until that was found to collide) — `vite.config.ts`'s
 // own module docstring has the reason: 7000 collides with macOS's AirPlay Receiver on a real development
 // machine, which answered every proxied request with its own 403 while `reuseExistingServer`
 // quietly never started this suite's own server at all. A scratch port for a scratch server.
-const API_PORT = String(lanePort(7217)); // this lane's own (T2, lane_ports.tsv): 7217 on main
 
 // `--apply-command`'s own real seam (`harness/webapp.py`'s own docstring) — a real, if tiny,
 // subprocess standing in for `python -m harness.apply`, so a keyboard-driven Launch click proves
@@ -60,9 +64,6 @@ const FAKE_APPLY_COMMAND = JSON.stringify([
 // `.venv/bin/python` is a stub that only echoes, so a keyboard-driven Install runs no real install
 // (the page runs `<product>/.venv/bin/python -m ospreyflow install …`). Its draft and answers are
 // scratch files too, never this checkout's `osprey.yaml`.
-const INSTALL_API_PORT = String(lanePort(7218));
-const INSTALL_VITE_PORT = lanePort(5192);
-const VITE_PORT = lanePort(5191);
 const INSTALL_SCRATCH = join(
   tmpdir(),
   `osprey-install-keyboard-spec-${process.pid}`,

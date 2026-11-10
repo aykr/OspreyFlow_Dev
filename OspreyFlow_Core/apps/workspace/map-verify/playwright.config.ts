@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 import { lanePort } from "../../lanePorts";
 
-// This lane's own port (T2, `OspreyFlow_Build/scripts/lane_ports.tsv`): 5185 on main.
+// This lane's own port (T2, `apps/lanePorts.ts`): 5185 on main.
 const PORT = lanePort(5185);
 
 // `spec/00_ARCHITECTURE.md` §1.2.1's contrast-floor Verify check — a

@@ -5,7 +5,7 @@
 // `playwright.config.ts` starts it) and a real `PUT /api/config`, not a mocked response.
 import { expect, type Page, type Response, test } from "@playwright/test";
 
-import { lanePort } from "../../lanePorts";
+import { INSTALL_VITE_PORT } from "./ports";
 import {
   assertAllCovered,
   registerCovered,
@@ -595,7 +595,7 @@ test("a real keyboard-triggered preflight run streams every check and enables La
 // an HttpOnly cookie; the spec presents the same one the printed link would have set. These cases
 // share the page's one server and run in order: Lite's screens, then Small's, then Lite's Install
 // last, because the page shuts itself down when an install ends.
-const INSTALL_BASE = `http://localhost:${lanePort(5192)}`; // playwright.config.ts's INSTALL_VITE_PORT
+const INSTALL_BASE = `http://localhost:${INSTALL_VITE_PORT}`;
 const INSTALL_TOKEN = "keyboard-spec-install-token"; // the same literal is in playwright.config.ts
 
 async function openInstallPage(page: Page) {

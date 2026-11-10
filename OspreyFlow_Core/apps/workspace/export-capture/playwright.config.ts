@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 import { lanePort } from "../../lanePorts";
 
-// This lane's own port (T2, `OspreyFlow_Build/scripts/lane_ports.tsv`): 5186 on main.
+// This lane's own port (T2, `apps/lanePorts.ts`): 5186 on main.
 const PORT = lanePort(5186);
 
 // A real Chromium instance with a real WebGL context — the one thing this project's own vitest

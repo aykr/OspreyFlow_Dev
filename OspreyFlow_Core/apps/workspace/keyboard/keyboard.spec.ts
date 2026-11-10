@@ -30,7 +30,7 @@
 // `actionRegistry.ts`'s own docstring has the full reasoning for why this exists now.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { lanePort } from "../../lanePorts";
+import { KEYBOARD_PORT } from "./ports";
 
 import {
   assertAllCovered,
@@ -295,7 +295,7 @@ for (const [shape, query, origin] of [
   [
     "the deployed same-origin address",
     "?api=same-origin",
-    `http://localhost:${lanePort(5185)}/v1/`,
+    `http://localhost:${KEYBOARD_PORT}/v1/`,
   ],
   ["an explicit address", "", "http://keyboard-test.invalid/v1/"],
 ] as const) {

@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 import { lanePort } from "../../lanePorts";
 
-// This lane's own port (T2, `OspreyFlow_Build/scripts/lane_ports.tsv`): 5184 on main.
+// This lane's own port (T2, `apps/lanePorts.ts`): 5184 on main.
 const PORT = lanePort(5184);
 
 export default defineConfig({

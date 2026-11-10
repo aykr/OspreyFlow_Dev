@@ -1,18 +1,22 @@
 // @vitest-environment node
-// Each lane's local Playwright runs get their own vite and harness ports (CARRIES, 10 November
-// 2026: admin's axe run waited while case's vite held 5184, and lanes wrote override configs).
-// Every config below is loaded as two lanes would load it, and their ports must never meet; slot 0
-// (`main`, the orchestrator, a checkout with no lane) keeps today's ports.
+// Each lane's Playwright runs get their own vite and harness ports (CARRIES, 10 November 2026:
+// admin's axe run waited while case's vite held 5184, and lanes wrote override configs). Every
+// config below is loaded as two slots would load it, and their ports must never meet; with no slot
+// (`main`, a checkout of the product alone) they are today's. The slot comes from
+// `$OSPREY_PORTS_SLOT`, set by whatever starts the run (`apps/lanePorts.ts`).
 //
 // Not here, by design: `live/` serves on 5173 because it must be the demo's own port (its config
 // says why), and `deck-capture/` is an owner-run capture whose page asks its tile server's port in
 // browser code; neither is a lane's routine run.
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { laneOf, parseTable, slotOf, STEP, TABLE } from "../../lanePorts";
+import { inLinkedWorktree, lanePort, slotOf } from "../../lanePorts";
 
 const CONFIGS = [
   "../a11y/playwright.config.ts",
@@ -24,6 +28,9 @@ const CONFIGS = [
   "../../harness/keyboard/playwright.config.ts",
 ] as const;
 
+/** Today's ports: what every config used before T2, and still uses with no slot. */
+const TODAY = /\b(518[3-6]|519[1-4]|721[7-9]|7220)\b/;
+
 type Server = { port?: number; url?: string; command?: string };
 type Loaded = { webServer?: Server | Server[]; use?: { baseURL?: string } };
 
@@ -34,9 +41,7 @@ function portsOf(config: Loaded): number[] {
   for (const server of servers) {
     if (server.port !== undefined) ports.add(Number(server.port));
     if (server.url !== undefined) ports.add(Number(new URL(server.url).port));
-    for (const match of (server.command ?? "").matchAll(
-      /--port[ =]\$?\{?(\d+)/g,
-    )) {
+    for (const match of (server.command ?? "").matchAll(/--port[ =](\d+)/g)) {
       ports.add(Number(match[1]));
     }
   }
@@ -44,122 +49,128 @@ function portsOf(config: Loaded): number[] {
   return [...ports].sort();
 }
 
-async function load(
-  path: string,
-  lane: string | undefined,
-  serverLane?: string,
-): Promise<number[]> {
+async function load(path: string, slot: string | undefined): Promise<number[]> {
   vi.resetModules();
-  if (lane === undefined) delete process.env.OSPREY_LANE;
-  else process.env.OSPREY_LANE = lane;
-  if (serverLane === undefined) delete process.env.OSPREY_PORTS_LANE;
-  else process.env.OSPREY_PORTS_LANE = serverLane;
+  if (slot === undefined) delete process.env.OSPREY_PORTS_SLOT;
+  else process.env.OSPREY_PORTS_SLOT = slot;
   const url = new URL(path, import.meta.url).href;
   const module = (await import(/* @vite-ignore */ url)) as { default: Loaded };
   return portsOf(module.default);
 }
 
-const saved = {
-  lane: process.env.OSPREY_LANE,
-  server: process.env.OSPREY_PORTS_LANE,
-};
+const saved = process.env.OSPREY_PORTS_SLOT;
 afterEach(() => {
-  if (saved.lane === undefined) delete process.env.OSPREY_LANE;
-  else process.env.OSPREY_LANE = saved.lane;
-  if (saved.server === undefined) delete process.env.OSPREY_PORTS_LANE;
-  else process.env.OSPREY_PORTS_LANE = saved.server;
+  if (saved === undefined) delete process.env.OSPREY_PORTS_SLOT;
+  else process.env.OSPREY_PORTS_SLOT = saved;
 });
 
-describe("each lane's local Playwright runs use ports of their own", () => {
-  it.each(CONFIGS)("%s: two lanes never share a port", async (path) => {
-    const admin = await load(path, "admin");
-    const kase = await load(path, "case");
-    expect(admin.length).toBeGreaterThan(0);
+describe("each lane's Playwright runs use ports of their own", () => {
+  it.each(CONFIGS)("%s: two slots never share a port", async (path) => {
+    const one = await load(path, "1");
+    const two = await load(path, "2");
+    expect(one.length).toBeGreaterThan(0);
     expect(
-      admin.filter((port) => kase.includes(port)),
-      `admin ${admin}, case ${kase}`,
+      one.filter((port) => two.includes(port)),
+      `slot 1 ${one}, slot 2 ${two}`,
     ).toEqual([]);
   });
 
-  it.each(CONFIGS)("%s: main keeps today's ports", async (path) => {
-    const main = await load(path, "main");
+  it.each(CONFIGS)("%s: slot 0 is today's ports", async (path) => {
+    const today = await load(path, "0");
     expect(
-      main.every(
-        (port) =>
-          (port >= 5183 && port <= 5194) || (port >= 7217 && port <= 7220),
-      ),
+      today.every((port) => TODAY.test(String(port))),
+      `${today}`,
     ).toBe(true);
   });
 
-  it.each(CONFIGS)(
-    "%s: two lanes' offline runs on the server never share a port",
-    async (path) => {
-      const rules = await load(path, undefined, "rules");
-      const studio = await load(path, undefined, "studio");
-      expect(
-        rules.filter((port) => studio.includes(port)),
-        `rules ${rules}, studio ${studio}`,
-      ).toEqual([]);
-    },
-  );
-
-  it("a lane not in the table is refused in words naming it", async () => {
-    await expect(load(CONFIGS[0], "no-such-lane")).rejects.toThrow(
-      /lane_ports\.tsv/,
+  it("a slot that is not a whole number is refused in words", async () => {
+    await expect(load(CONFIGS[0], "case")).rejects.toThrow(
+      /OSPREY_PORTS_SLOT=case .* whole number/,
     );
+    expect(() => slotOf({ OSPREY_PORTS_SLOT: "-1" })).toThrow(/whole number/);
+    expect(slotOf({ OSPREY_PORTS_SLOT: " 7 " })).toBe(7);
+    expect(lanePort(5185, { OSPREY_PORTS_SLOT: "7" })).toBe(5885);
   });
-});
 
-describe("the table's blocks stay clear of each other and of every port already spoken for", () => {
-  it("no lane's ports meet another lane's, a stack's, the owner's deployment's or the demo's", async () => {
-    const table = parseTable(readFileSync(TABLE, "utf8"));
-    const today = new Set<number>();
-    for (const path of CONFIGS)
-      for (const port of await load(path, "main")) today.add(port);
-    const stacks = readFileSync(join(TABLE, "..", "lane_stacks.tsv"), "utf8")
-      .split("\n")
-      .filter((line) => line && !line.startsWith("#"))
-      .map((line) => Number(line.split("\t")[3]));
-    const spoken = new Set([...stacks, 2480, 5432, 80, 8000, 8080, 8081, 5173]);
-    const owner = new Map<number, string>();
-    for (const [lane, slot] of [["main", 0] as const, ...table]) {
-      for (const base of today) {
-        const port = base + STEP * slot;
-        expect(
-          spoken.has(port),
-          `${lane}'s ${port} is already spoken for`,
-        ).toBe(false);
-        expect(
-          owner.get(port),
-          `${lane}'s ${port} is also ${owner.get(port)}'s`,
-        ).toBeUndefined();
-        owner.set(port, lane);
+  it("with no slot: the main checkout keeps today's; a linked worktree is refused in words", () => {
+    expect(slotOf({}, () => false)).toBe(0);
+    expect(() => slotOf({}, () => true)).toThrow(
+      /linked worktree and OSPREY_PORTS_SLOT is not set/,
+    );
+    expect(slotOf({ OSPREY_PORTS_SLOT: "3" }, () => true)).toBe(3);
+    expect(() =>
+      slotOf({ OSPREY_PORTS_SLOT: "unlisted-admin-b" }, () => false),
+    ).toThrow(/unlisted-admin-b is not a whole number.*lane_ports\.tsv/);
+  });
+
+  it("a linked worktree is told apart from the main checkout, on any branch or a detached head", () => {
+    // The two shapes the independent review named: docs on d2b-scratch (not lane/<name>), and a gate's
+    // detached head. Neither may pass as the main checkout.
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync("git", args, {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+    const root = mkdtempSync(join(tmpdir(), "lane-ports-"));
+    const main = join(root, "main");
+    execFileSync("git", ["init", "-q", "-b", "main", main]);
+    writeFileSync(join(main, "f"), "x");
+    git(main, "add", "f");
+    git(
+      main,
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@example.invalid",
+      "commit",
+      "-qm",
+      "x",
+    );
+    git(
+      main,
+      "worktree",
+      "add",
+      "-q",
+      "-b",
+      "d2b-scratch",
+      join(root, "scratch"),
+    );
+    git(main, "worktree", "add", "-q", "--detach", join(root, "gate"));
+    expect(inLinkedWorktree(main)).toBe(false);
+    expect(inLinkedWorktree(join(root, "scratch"))).toBe(true);
+    expect(inLinkedWorktree(join(root, "gate"))).toBe(true);
+    expect(inLinkedWorktree(root)).toBe(false); // no git at all: not a worktree of anything
+    expect(() =>
+      slotOf({}, () => inLinkedWorktree(join(root, "gate"))),
+    ).toThrow(/linked worktree/);
+  });
+
+  it("no spec or page beside a config names one of today's ports itself", () => {
+    // A spec that kept a literal (keyboard.spec.ts's same-origin address, setup-screens.spec.ts's
+    // install page) would point at another lane's server once its config moved.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const found: string[] = [];
+    for (const config of CONFIGS) {
+      const folder = dirname(join(here, config));
+      for (const file of readdirSync(folder)) {
+        if (!/\.(ts|tsx)$/.test(file) || file === "playwrightPorts.test.ts")
+          continue;
+        const text = readFileSync(join(folder, file), "utf8")
+          .split("\n")
+          .filter(
+            (line) =>
+              !line.trim().startsWith("//") && !/^\s*(\*|\/\*)/.test(line),
+          )
+          .join("\n")
+          .replace(/lanePort\(\d+\)/g, "")
+          .replace(/\s\/\/\s.*$/gm, ""); // a trailing comment ("5193 on main") is not a port in use
+        if (TODAY.test(text)) found.push(join(folder, file));
       }
     }
-    expect(new Set(table.values()).size, "two lanes share a slot").toBe(
-      table.size,
-    );
-  });
-
-  it("a lane is $OSPREY_LANE, else its branch; a sub-branch takes its lane's slot", () => {
-    const table = new Map([
-      ["admin", 1],
-      ["case", 2],
-      ["case-b", 3],
-    ]);
-    expect(laneOf({}, "lane/case-b")).toBe("case-b");
-    expect(laneOf({ OSPREY_LANE: "case" }, "lane/admin")).toBe("case");
-    expect(laneOf({}, "main")).toBeNull();
-    expect(laneOf({ OSPREY_LANE: "main" }, "lane/admin")).toBeNull();
-    // On the test server: no git, and stack_lease.sh names the lane for every run, offline too.
-    expect(laneOf({ OSPREY_PORTS_LANE: "rules-b" }, null)).toBe("rules-b");
     expect(
-      laneOf({ OSPREY_LANE: "case", OSPREY_PORTS_LANE: "rules-b" }, null),
-    ).toBe("case");
-    expect(slotOf("admin-ddl", table)).toBe(1);
-    expect(slotOf("case-b-l37", table)).toBe(3);
-    expect(slotOf(null, table)).toBe(0);
-    expect(slotOf("admin", null)).toBe(0); // a checkout of the product alone: today's ports
-    expect(() => slotOf("glass", table)).toThrow(/lane_ports\.tsv.*add "glass/);
+      found,
+      "use lanePort(<today's port>) from apps/lanePorts.ts",
+    ).toEqual([]);
   });
 });

@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 import { lanePort } from "../../lanePorts";
 
-// This lane's own port (T2, `OspreyFlow_Build/scripts/lane_ports.tsv`): 5183 on main.
+// This lane's own port (T2, `apps/lanePorts.ts`): 5183 on main.
 const PORT = lanePort(5183);
 
 // `spec/02_GLASS_FRONTEND.md` §5/§6's CI gates (perf regression proxy +

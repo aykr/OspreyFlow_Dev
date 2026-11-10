@@ -1,9 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
-import { lanePort } from "../../lanePorts";
+import { KEYBOARD_PORT } from "./ports";
 
-// This lane's own port (T2, `OspreyFlow_Build/scripts/lane_ports.tsv`): 5185 on main.
-const PORT = lanePort(5185);
+const PORT = KEYBOARD_PORT; // this run's own (T2, ./ports.ts): 5185 on main
 
 export default defineConfig({
   testDir: ".",
