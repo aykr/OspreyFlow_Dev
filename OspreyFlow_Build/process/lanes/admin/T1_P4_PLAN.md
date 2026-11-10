@@ -52,5 +52,26 @@ child had been on two graphs). The serial tests run one at a time on that worker
 - pytest-xdist 3.8.0 and execnet 2.1.2 (both MIT) in Core's dev group, as their own commit at the branch's head.
 - The plugin goes on the command line, not into `tests/conftest.py`: the brief says no shared test file tonight. Wiring
   it into the conftest, the lease's `live` verb and the Makefile is a diff for the orchestrator.
-- ClickHouse is left alone (see above), a departure from the brief's list put to the orchestrator. The graph_port
-  sweep's one-hour window is kept; no test runs that long.
+- ClickHouse is left alone (see above), a departure from the brief's list. The orchestrator accepted it, in its
+  message of 10 November 2026: "The ClickHouse departure is accepted: leave it… Record it in the brief's exit and the
+  friction row."
+- (After both reviews) Names carry their start time, and the sweep takes only names older than `STALE_AFTER` (six
+  hours, longer than the longest run measured, about an hour). It runs at the start of every live `-n` run, with no
+  opt-in flag, as the orchestrator's review proposed.
+- (After both reviews) A nested run's Valkey databases come after its outer run's, through
+  `OSPREY_WORKER_VALKEY_TAKEN`. `-n auto` is given what is left, not refused.
+- (After both reviews) The test stacks' Postgres allows 400 connections. `stack_lease.sh up` sets it on each stack it
+  starts. This was the orchestrator's decision (a), ratified for that one setting and written into the brief. Only
+  the `osprey-test-*` stacks change.
+- (After both reviews) The rule 3 access set stays a list of files: the 18 live access-control and withheld-read files,
+  plus `test_route_rights.py`. A rule 3 marker would be a change to `pytest.ini` and to each of those files, all
+  shared test files, so it is named and left for the orchestrator.
+- (After both reviews, the lane review's 14) Without a lane, the plugin still points `POSTGRES_DB` at a database it
+  does not make. That is left as it is: such a run has the offline ports, which reach nothing, and the port guard
+  refuses any live port without a lease. Refusing it would refuse `make test -n` itself.
+- (After both reviews) The plugin's S3 handle (`_buckets`) and its ArcadeDB sweep stay its own. The live proof's
+  bucket removal now uses `object_transfer.store_from_env`. The plugin keeps `ObjectStorageConfig`, which `s3_bucket`
+  reads, so that the plugin and the code under test see one endpoint. `testing.py`'s sweep takes only `conformance_*`
+  names.
+- (After both reviews) Wiring the plugin into `tests/conftest.py`, so it no longer needs `-p`, is a diff for the
+  orchestrator (`conftest-T1p4.diff`), with the Makefile's parallel `make test` (`makefile-T1p4.diff`).

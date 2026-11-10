@@ -1,0 +1,12 @@
+--- a/OspreyFlow_Build/tests/conftest.py
++++ b/OspreyFlow_Build/tests/conftest.py
+@@ -36,7 +36,8 @@
+ 
+ # `pytest.mark.store`, enforced at the connection (admin's T1 part 2): an unmarked test that reaches a store's port is
+ # reported, or failed with OSPREY_STORE_MARK=fail (tests/store_mark.py).
+-pytest_plugins = ["tests.store_mark"]
++# tests.worker_isolation: each pytest-xdist worker its own stores (admin T1 part 4); a no-op without -n.
++pytest_plugins = ["tests.store_mark", "tests.worker_isolation"]
+ 
+ 
+ @pytest.fixture(autouse=True)

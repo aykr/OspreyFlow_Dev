@@ -1,0 +1,4 @@
+# T1 part 4: pytest-xdist and execnet through tools.licence_check (the Python half of make licence-check), a46e272, 2026-11-10T19:27:36Z
+licence-check: 78 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+execnet 2.1.2 MIT allowed
+pytest-xdist 3.8.0 MIT allowed
