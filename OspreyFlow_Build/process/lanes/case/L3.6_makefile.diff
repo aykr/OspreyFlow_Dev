@@ -11,3 +11,23 @@ index a1bd159..fd305fe 100644
  	$(if $(SKIP_JS),,$(MAKE) -C $(CORE) test-js)
  
  # AnalyticsPort's suite over both adapters, and the ClickHouse adapter's own cases, against a
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index aac26e0..e639827 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -714,6 +714,7 @@ jobs:
+           ../OspreyFlow_Build/tests/test_make_home_cases_store.py
+           ../OspreyFlow_Build/tests/services/api/test_case_views_store.py
+           ../OspreyFlow_Build/tests/services/api/test_board_store.py
++          ../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py
+           ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py
+           ../OspreyFlow_Build/tests/services/api/test_promotion_store.py
+           ../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
+@@ -1092,6 +1093,7 @@ jobs:
+           --ignore=../OspreyFlow_Build/tests/test_make_home_cases_store.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_case_views_store.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_board_store.py
++          --ignore=../OspreyFlow_Build/tests/services/api/test_drawn_watch_queue_live.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py
+           --ignore=../OspreyFlow_Build/tests/services/api/test_promotion_store.py
+           --ignore=../OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py
