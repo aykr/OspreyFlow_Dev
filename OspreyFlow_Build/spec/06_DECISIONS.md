@@ -31154,7 +31154,10 @@ a render, which `apply` is and refresh is not.
    apply moves the providers' keys into the gateway, on the new images), or `ospreyflow start
    --build` for one built from a checkout. Each step is given with `--name <deployment>` for a
    deployment kept by name, and with the checkout at the version being moved to. Refresh never
-   mints a secret, and Amendment 8 point 6a's "never touch a secret" stands.
+   mints a secret, and Amendment 8 point 6a's "never touch a secret" stands. On that route
+   `ospreyflow apply` (ADR-137's re-apply) brings a service the deployment never had (the gateway's
+   database step) up with the whole project first, as an install does, so it runs before the
+   gateway that depends on it; only then are the services whose files changed recreated.
 2. **Nothing Compose cannot read.** The files pass runs on a staged copy beside the deployment. Only
    a result whose every required name (`${NAME:?…}`) has a value in `deployment.env` is moved into
    place. Otherwise refresh refuses, naming the names, never a value, and the folder is left byte
@@ -31191,6 +31194,7 @@ a render, which `apply` is and refresh is not.
 | the gateway's settings read in list form too; no gateway, no refusal on its account | `::test_a_list_form_gateway_environment_is_read_too`, `::test_no_gateway_is_no_refusal_on_its_account` |
 | a required secret not held is refused by name, and nothing changes | `::test_a_required_secret_the_deployment_does_not_hold_is_refused_and_nothing_changes` |
 | every named volume a mount refers to is declared, and Compose itself accepts the project (on the test server) | `::test_every_named_volume_a_mount_refers_to_is_declared`, `::test_compose_itself_accepts_the_refreshed_project` |
+| `ospreyflow apply` starts a newly rendered service with the whole project before recreating the changed ones | `tests/harness/test_apply_changed_settings.py::test_a_service_the_new_render_adds_is_started_with_its_dependencies_first` |
 | the words always name the deployment (`--name default` for the checkout's own) | `::test_the_refusal_words_always_name_the_deployment` |
 | the top-of-pass check alone refuses a v0.4.12 gateway whose secrets are held, with no pass run | `::test_the_salt_check_alone_refuses_a_v0_4_12_gateway_whose_secrets_are_held` |
 | a file a service mounts on its own keeps its inode; a long-syntax mount declares its volume; a future or impossible stamp marks nothing | `::test_a_file_a_service_mounts_on_its_own_keeps_its_inode`, `::test_a_long_syntax_mount_declares_its_own_named_volume`, `::test_a_rollback_point_from_the_future_or_no_clock_marks_nothing` |
