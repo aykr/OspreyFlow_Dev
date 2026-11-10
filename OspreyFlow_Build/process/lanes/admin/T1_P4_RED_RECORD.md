@@ -127,3 +127,34 @@ What changed, by finding:
   `OSPREY_TEST_ARCADEDB_CONTAINER`, which only the conformance job sets.
 - **`test_valkey_config.py` assumed db 0 and port 6379** (the orchestrator, 11). It now clears `VALKEY_DB` and
   `VALKEY_PORT`. It was red under `VALKEY_DB=7` (2 failed) and under the offline port pin (1 failed); green after.
+
+## Live at the head (stack e, the lease admin took at 2026-11-10T21:15:07Z)
+
+Logs: `gates/t1p4_live_stack_e_14677db.txt` and `gates/t1p4_live_stack_e_9577288.txt`.
+- **`up` on a real stack** printed "Test stack e's Postgres (osprey-test-e-pg): max_connections 400."
+- **Rule 3's access set** (test_route_rights.py and the 18 live access-control and withheld-read files): the same 124
+  passed serially (1085 s) and at 4 workers (1881 s), with no failure either way. This is the brief's "the same pass
+  and fail set". It is slower in parallel, not faster.
+  - The cause is not established. Each worker makes its own graph and schema at start, and every access file opens
+    its own databases on the one ArcadeDB server. graph_port below shows that server capping the gain at about 2×.
+  - That is part 5's question (the slow waits), and it is recorded, not hidden.
+- **graph_port at the head:** 376 passed each way; 475 s serially, 241 s at 4 workers (1.97×), 226 s at 8 (2.10×).
+  The figures at `b5d8000`, before both reviews, were 483, 379 and 282 s.
+- **The isolation proof** at 14677db: its own assertions held in both runs (with the plugin, each worker saw only
+  its own key in all four stores; without it, both). Both runs then failed in the new teardown check with
+  `KeyError: 'names'`: the planted test replaced, rather than added to, the dict holding its names.
+  - Fixed at 9577288. Both tests pass on the same lease (9 s), including the check that nothing of the inner run's
+    names is left in any store.
+
+`make test` serial against parallel, offline on the server at d5908a6 (`gates/t1p4_make_test_d5908a6.txt`): the
+same 10609 outcomes serially (1889 s), at `-n auto` (408 s, 4.6×) and at `-n 8` (392 s, 4.8×).
+- Four failures are the same in all three runs:
+  - `test_no_new_drift_beyond_the_allowlist`, the live proof not yet in the ignore lists. It clears with the
+    Makefile and `ci.yml` diffs, as shown with both applied.
+  - `test_deployment_guard`'s teardown scan, which took the serial check's planted `down -v` string for a real
+    teardown. Fixed at 78cd4f8 (the planted shape asks for `ps`).
+  - `test_render_memory`'s OpenSearch case and the webapp GPU preflight, which fail on that host whatever the order.
+- The first comparison, at 92c66a0's plugin (`gates/t1p4_make_test_first.txt`), differed in three places:
+  - each worker's own Keycloak "never became ready" (now the containers group);
+  - `test_valkey_config` (fixed);
+  - `-n auto` refused on 16 CPUs (now capped).
