@@ -4,6 +4,7 @@ platform's rules. Red on:
 
 - a pod or container that may run as root: no `runAsNonRoot: true`, or no numeric `runAsUser`
   (the image's own user decides then, perhaps by name, which `runAsNonRoot` cannot check);
+- a numeric user other than 10001 (ADR-148 decision 3);
 - a privileged container, one that may gain privilege, or one that keeps a capability;
 - a port below 1024 (a container's, or a Service's);
 - a `ReadWriteMany` claim, a claim's or a StatefulSet's;
@@ -94,6 +95,8 @@ def _pod_rules(doc: dict[str, Any], spec: dict[str, Any], registry: str) -> Iter
             yield Violation("named-uid", at, "no numeric runAsUser: the image's user decides")
         elif not isinstance(user, int) or isinstance(user, bool) or user <= 0:
             yield Violation("root", at, f"runAsUser is {user!r}")
+        elif user != UID:
+            yield Violation("other-uid", at, f"runAsUser is {user}, not {UID}")
         if own.get("privileged") is True:
             yield Violation("privileged", at, "privileged: true")
         if own.get("allowPrivilegeEscalation") is not False:

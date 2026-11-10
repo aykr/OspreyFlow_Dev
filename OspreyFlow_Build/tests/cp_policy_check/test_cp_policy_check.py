@@ -125,6 +125,16 @@ def test_uid_zero_is_refused(development: tuple[dict[str, Any], str]) -> None:
     assert "root" in _rules(values, registry)
 
 
+def test_a_user_other_than_10001_is_refused(development: tuple[dict[str, Any], str]) -> None:
+    """ADR-148 decision 3: every rendered pod runs as 10001, not merely as someone other than
+    root, so a pod given another numeric user is held to it too (reviewer point 16)."""
+    values, registry = copy.deepcopy(development)
+    values["podSecurity"] = {"user": 1000, "group": 1000}
+    assert ("other-uid", "runAsUser is 1000, not 10001") in {
+        (v.rule, v.detail) for v in check_manifests(helm_template(yaml.safe_dump(values)), registry)
+    }
+
+
 def test_a_named_uid_is_refused(development: tuple[dict[str, Any], str]) -> None:
     values, registry = copy.deepcopy(development)
     values["podSecurity"] = {"user": None, "group": 10001}  # the image's own user decides
