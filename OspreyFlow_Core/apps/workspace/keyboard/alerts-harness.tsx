@@ -19,6 +19,7 @@ window.__ALERTS__ = { canvasNodeIds: null, addressed: [] };
 
 createRoot(document.getElementById("root")!).render(
   <RulesPlace
+    canMakeLive
     apiBaseUrl="http://keyboard-test.invalid"
     bearerToken="unused"
     investigationId="inv-1"

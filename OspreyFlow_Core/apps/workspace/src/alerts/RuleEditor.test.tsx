@@ -167,6 +167,16 @@ describe("the rule editor (ADR-146 decision 3)", () => {
     expect(await screen.findByText(/Ledger asks for a second person/)).toBeTruthy();
   });
 
+  it("offers Make live only to someone who holds deploy_rules; a Rule author saves and tests", async () => {
+    world();
+    render(<RuleEditor apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="author" patterns={[]} canMakeLive={false} onChanged={vi.fn()} />);
+    await choose("ds-prison");
+    fireEvent.change(await screen.findByLabelText("Name of the rule"), { target: { value: "Okafor" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the draft" }));
+    expect(await screen.findByRole("button", { name: "Test on the last 30 days" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Make live" })).toBeNull();
+  });
+
   it("is written by a case Author alone", () => {
     world();
     render(<RuleEditor apiBaseUrl="http://api" bearerToken="t" investigationId="c1" level="viewer" patterns={[]} canMakeLive onChanged={vi.fn()} />);

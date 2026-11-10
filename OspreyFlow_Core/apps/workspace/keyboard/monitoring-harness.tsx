@@ -279,6 +279,7 @@ window.fetch = async (input: RequestInfo | URL) => {
 
 createRoot(document.getElementById("root")!).render(
   <RulesPlace
+    canMakeLive
     apiBaseUrl="http://monitoring-harness.invalid"
     bearerToken="unused"
     investigationId="inv-1"

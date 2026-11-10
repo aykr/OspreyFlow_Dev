@@ -1821,6 +1821,7 @@ export function App() {
             accountId={principal?.sub ?? null}
             isAdministrator={principal?.roles?.includes("osprey-admin") ?? false}
             canManageLists={rights?.has("load_screening_lists") ?? false}
+            canMakeLive={rights?.has("deploy_rules") ?? false}
             onCanvas={(outcome, nodeIds) => {
               applyStarterDelta(outcome.delta);
               pendingHighlight.current = nodeIds;

@@ -267,6 +267,8 @@ export interface RulesPanelProps extends AlertsApi {
   isAdministrator?: boolean;
   /** ADR-133 decision 7: who is reading, so their own proposal is not offered to them to approve. */
   accountId?: string | null;
+  /** `deploy_rules`: whether *Make live* is offered at all (the server refuses it either way). */
+  canMakeLive?: boolean;
 }
 
 /** When the rule runs, in words: before or after each load, or on its schedule (stage (d)). */
@@ -422,7 +424,7 @@ export function RulesPanel(props: RulesPanelProps) {
         {...props}
         opening={opening}
         patterns={patterns}
-        canMakeLive
+        canMakeLive={props.canMakeLive ?? false}
         onChanged={(words) => {
           setSaid(words);
           reload();

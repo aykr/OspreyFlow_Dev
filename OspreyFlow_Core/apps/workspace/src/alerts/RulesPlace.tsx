@@ -46,6 +46,8 @@ export interface RulesPlaceProps {
   isAdministrator: boolean;
   /** ADR-112's `load_screening_lists`: subscribing to and refreshing a screening list. */
   canManageLists?: boolean;
+  /** `deploy_rules`: *Make live* is offered only to someone who holds it (ADR-146 decision 3). */
+  canMakeLive?: boolean;
   onCanvas: (outcome: CanvasOutcome, nodeIds: string[]) => void;
   /** The alert at the address on screen and the Conduit's answer for it; `null` for no address. */
   address?: { alertId: string; state: AlertAtAddressState } | null;
@@ -128,7 +130,7 @@ export function RulesPlace(props: RulesPlaceProps) {
       {tab === "raises" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)" }}>
           <AlertSourcesPanel {...api} />
-          <RulesPanel {...api} level={level} isAdministrator={props.isAdministrator} accountId={props.accountId} />
+          <RulesPanel {...api} level={level} isAdministrator={props.isAdministrator} accountId={props.accountId} canMakeLive={props.canMakeLive ?? false} />
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-12)", maxWidth: 640 }}>
             <HotlistPanel {...api} />
             <MonitorPanel {...api} />

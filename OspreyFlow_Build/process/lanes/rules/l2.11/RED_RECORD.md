@@ -133,3 +133,5 @@ All offline (480 passed across the rule suites at 17fc646). The live cases run a
 - **Keyboard:** four new cases plus the moved team case, registry ids in the patch (+8, −3 in all). Shown red with
   each handler removed at the local keyboard gate.
 - **Axe:** two editor states, `tab=rules&editor=tested` and `tab=rules&editor=bpmn`, scanned at the local axe gate.
+
+- **Make live offered only with `deploy_rules`** (the orchestrator's minor, after the review): `RuleEditor.test.tsx` 10 passed; red with the gate opened (Make live shown to a Rule author): only that case.
