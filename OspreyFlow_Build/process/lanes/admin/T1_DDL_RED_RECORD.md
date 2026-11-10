@@ -58,3 +58,13 @@ same 585 statements in the same order with the same 8 copy-ups; that was checked
   `_indexes_on`. It has its own red, `test_the_index_check_finds_nothing_when_the_index_is_left_out`, which leaves the
   `t1_probe` CREATE INDEX out of the batch and also checks it still finds the `id` index. The populated case's time over
   500 nodes was 1.2 s one at a time and 0.1 s batched.
+- **At f6fe015, the step's last live run:** `graph_port` and `test_route_rights.py` gave 380 passed and 0 failed, under
+  "stack c, the lease orchestrator took at 2026-11-10T11:44:53Z; wall 514 s, set-up 15 s" (`gates/f6fe015.live.txt`).
+  The timings:
+  - a fresh database: 16.1 s one at a time, 0.2 s batched;
+  - applied again: 0.8 s one at a time, 0.1 s batched;
+  - the adapter's open: 0.3 s.
+
+  The earlier runs' logs are `gates/ebc74d8.live.txt`, `gates/e789147.live.txt` and `gates/a62f7f4.probe.txt`.
+- **`make -k ci` at e789147** (`gates/e789147.ci.txt`): green apart from Docker's checks and test-file-coverage-check.
+  The latter is fixed in 15caebd (`gates/15caebd.coverage.txt`). `make test` is the orchestrator's run, at e789147.
