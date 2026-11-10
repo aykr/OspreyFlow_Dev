@@ -44,19 +44,30 @@ function portsOf(config: Loaded): number[] {
   return [...ports].sort();
 }
 
-async function load(path: string, lane: string | undefined): Promise<number[]> {
+async function load(
+  path: string,
+  lane: string | undefined,
+  serverLane?: string,
+): Promise<number[]> {
   vi.resetModules();
   if (lane === undefined) delete process.env.OSPREY_LANE;
   else process.env.OSPREY_LANE = lane;
+  if (serverLane === undefined) delete process.env.OSPREY_PORTS_LANE;
+  else process.env.OSPREY_PORTS_LANE = serverLane;
   const url = new URL(path, import.meta.url).href;
   const module = (await import(/* @vite-ignore */ url)) as { default: Loaded };
   return portsOf(module.default);
 }
 
-const saved = process.env.OSPREY_LANE;
+const saved = {
+  lane: process.env.OSPREY_LANE,
+  server: process.env.OSPREY_PORTS_LANE,
+};
 afterEach(() => {
-  if (saved === undefined) delete process.env.OSPREY_LANE;
-  else process.env.OSPREY_LANE = saved;
+  if (saved.lane === undefined) delete process.env.OSPREY_LANE;
+  else process.env.OSPREY_LANE = saved.lane;
+  if (saved.server === undefined) delete process.env.OSPREY_PORTS_LANE;
+  else process.env.OSPREY_PORTS_LANE = saved.server;
 });
 
 describe("each lane's local Playwright runs use ports of their own", () => {
@@ -79,6 +90,18 @@ describe("each lane's local Playwright runs use ports of their own", () => {
       ),
     ).toBe(true);
   });
+
+  it.each(CONFIGS)(
+    "%s: two lanes' offline runs on the server never share a port",
+    async (path) => {
+      const rules = await load(path, undefined, "rules");
+      const studio = await load(path, undefined, "studio");
+      expect(
+        rules.filter((port) => studio.includes(port)),
+        `rules ${rules}, studio ${studio}`,
+      ).toEqual([]);
+    },
+  );
 
   it("a lane not in the table is refused in words naming it", async () => {
     await expect(load(CONFIGS[0], "no-such-lane")).rejects.toThrow(
@@ -128,6 +151,11 @@ describe("the table's blocks stay clear of each other and of every port already 
     expect(laneOf({ OSPREY_LANE: "case" }, "lane/admin")).toBe("case");
     expect(laneOf({}, "main")).toBeNull();
     expect(laneOf({ OSPREY_LANE: "main" }, "lane/admin")).toBeNull();
+    // On the test server: no git, and stack_lease.sh names the lane for every run, offline too.
+    expect(laneOf({ OSPREY_PORTS_LANE: "rules-b" }, null)).toBe("rules-b");
+    expect(
+      laneOf({ OSPREY_LANE: "case", OSPREY_PORTS_LANE: "rules-b" }, null),
+    ).toBe("case");
     expect(slotOf("admin-ddl", table)).toBe(1);
     expect(slotOf("case-b-l37", table)).toBe(3);
     expect(slotOf(null, table)).toBe(0);

@@ -563,6 +563,8 @@ def test_offline_runs_on_the_server_with_no_stack_the_closed_ports_and_no_lane(l
     for pin in ("ARCADEDB_HTTP_PORT=59991", "POSTGRES_PORT=59992", "VALKEY_PORT=59993", "CLICKHOUSE_HTTP_PORT=59994"):
         assert pin in export, export
     assert "OSPREY_LANE" not in export
+    # The lane's own Playwright ports on the server too, where lanes' copies run side by side (T2).
+    assert "OSPREY_PORTS_LANE=case" in export, export
     assert "mkdir -p osprey-runs/case.meta/lease" in text and "/info" not in text  # an empty lease directory
     assert "stdin make -k test SKIP_JS=1 " in text
 
@@ -646,6 +648,7 @@ def test_a_remote_run_lists_its_30_slowest_tests_and_logs_its_wall_time_with_its
     text = log.read_text()
     export = next(l for l in text.splitlines() if l.startswith("stdin export "))
     assert "PYTEST_ADDOPTS=--durations=30" in export, export
+    assert "OSPREY_PORTS_LANE=case" in export, export
     start = _started(text)
     assert "Wall time:" in start and "stack b, the lease case took at 20" in start, start
     assert "/wall" in start and "set-up before it" in start, start  # the seconds kept beside the log, for a table

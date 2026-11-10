@@ -149,7 +149,9 @@ for d,ds,fs in os.walk(\".\"):
     where="no stack, no lease"
   fi
   { printf 'cd %q || exit 1\n' "$rroot/$rel"
-    printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta"
+    # OSPREY_PORTS_LANE: the lane's own Playwright ports (OspreyFlow_Core/apps/lanePorts.ts), as lanes' copies run
+    # side by side here; not OSPREY_LANE, which an offline run must not name (the port guard's rule).
+    printf 'export %s PYTEST_ADDOPTS=--durations=30 OSPREY_LEASE_DIR=$HOME/%s/lease OSPREY_PORTS_LANE=%s PATH=$HOME/.local/node/bin:$HOME/.local/bin:$PATH\n' "$exports" "$rmeta" "$who"
     printf '%q ' "$@"; echo; } > "$list.cmd"
   rc=0
   setup=$(( $(date +%s) - t_setup ))

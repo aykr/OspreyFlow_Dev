@@ -40,12 +40,16 @@ function branch(): string | null {
   }
 }
 
-/** This run's lane: $OSPREY_LANE, else the `lane/<name>` branch; null for main or no lane. */
+/**
+ * This run's lane: $OSPREY_LANE, else $OSPREY_PORTS_LANE (set by `stack_lease.sh` for every run on
+ * the test server, whose copies have no git and run side by side), else the `lane/<name>` branch;
+ * null for main or no lane.
+ */
 export function laneOf(
   env: NodeJS.ProcessEnv,
   head: string | null,
 ): string | null {
-  const named = env.OSPREY_LANE?.trim();
+  const named = (env.OSPREY_LANE || env.OSPREY_PORTS_LANE)?.trim();
   if (named) return named === "main" ? null : named;
   return head?.startsWith("lane/") ? head.slice("lane/".length) : null;
 }
@@ -76,7 +80,6 @@ export function lanePort(
   const table = existsSync(TABLE)
     ? parseTable(readFileSync(TABLE, "utf8"))
     : null;
-  return (
-    base + STEP * slotOf(laneOf(env, env.OSPREY_LANE ? null : branch()), table)
-  );
+  const named = env.OSPREY_LANE || env.OSPREY_PORTS_LANE;
+  return base + STEP * slotOf(laneOf(env, named ? null : branch()), table);
 }
