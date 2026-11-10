@@ -886,9 +886,11 @@ The invariants, each with the test that fails if it is broken (rule 12):
   row; *Open the board* opens the board the drawn item's own provenance names (`DrawnAssertion.
   board_id`), read as the reader with the rest of the evidence. A drawn link's watch never matches
   (only nodes are loaded as matches). The run is inside the load's request, best effort and audited
-  (`watch_evaluation_failed`), as the other watches. The run's report says how many it raised for the
-  run's own principal (`drawn_watch_alerts`, L3.H1), never another owner's (rules 3 and 7), and none where
-  its counts are withheld.
+  (`watch_evaluation_failed`), as the other watches. The answer to the run's own request (its report as
+  the route returns it) says how many alerts it raised for the run's own principal (`drawn_watch_alerts`,
+  L3.H1), never another owner's, and the same whether or not another owner's watch failed (rules 3 and 7);
+  none where its counts are withheld. The run ledger keeps no such count, so no other reader is told it.
+  A home case keeps reading its dataset: choosing another for it is refused (`home_case_kept`), as removing it is.
   - `test_drawn_watch_alerts.py` (one per match per case, the owner's reach, composites, the claim
     given back), `test_drawn_watch_queue.py` (withheld whole, red with the drawn item left out),
     `test_drawn_watch_queue_live.py` (the owner's in its case alone; never in a trend), each red by

@@ -45,7 +45,7 @@ from .board_store import BoardItemStore
 from .change_stream import ChangeStreamEntry, ChangeStreamWriter, touched_node_ids
 from .config import ApiConfig
 from .datasets import DatasetStore
-from .drawn_watches import DrawnWatchRun, holds_a_level_in, raise_into
+from .drawn_watches import DrawnWatchesFailed, DrawnWatchRun, holds_a_level_in, raise_into
 from .evaluation import DatasetReach, evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
@@ -482,11 +482,14 @@ async def _run_drawn_watches_best_effort(
         holds_a_level=holds_a_level_in(deps.investigations),
         raise_alert=raise_into(deps.alerts_store),
     )
+    counted = 0
     try:
         return await run.after_load(
             dataset_id, entry.node_ids, load_id=load_id, counted_for=principal.id
         )
     except Exception as exc:  # noqa: BLE001 - as `_evaluate_watches_best_effort`'s: audited
+        # Another owner's watch failing never changes what the loader is told (rule 7).
+        counted = exc.counted if isinstance(exc, DrawnWatchesFailed) else 0
         await deps.audit.record(
             principal=principal,
             action="watch_evaluation_failed",
@@ -494,7 +497,7 @@ async def _run_drawn_watches_best_effort(
             resolved_query={"load_id": load_id, "drawn_watches": True, "error": str(exc)},
             result_cardinality=0,
         )
-        return 0
+        return counted
 
 
 async def _evaluate_watches_best_effort(

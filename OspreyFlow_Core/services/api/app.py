@@ -3673,7 +3673,22 @@ async def set_case_datasets_route(
     audit: AuditDep,
 ) -> list[Dataset]:
     """Changes what the case reads: its Author's, audited, every dataset of the Author's unit
-    (ADR-099). Nothing else widens a case's datasets."""
+    (ADR-099). Nothing else widens a case's datasets.
+
+    A dataset's home case reads that dataset while it exists (ADR-145 Amendment 4 decision 2; L3.H1):
+    choosing anything else for it is refused in words naming nothing beyond the case, before
+    anything is written (re-choosing its own dataset changes nothing)."""
+    home_of = await datasets.dataset_of_home_case(investigation.id)
+    if home_of is not None and list(body.dataset_ids) != [home_of]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "home_case_kept",
+                "message": "this is its dataset's home case, which holds the dataset's reports, "
+                "alerts and promotion reviews, so it keeps reading its dataset while the dataset "
+                "exists",
+            },
+        )
     before = [d.id for d in await datasets.of_case(investigation.id, principal)]
     changed = await datasets.set_for_case(
         investigation.id, body.dataset_ids, principal, case_name=investigation.name

@@ -43,8 +43,8 @@ async function runNow() {
 
 describe("a run's drawn-watch count", () => {
   it("is said in words, in the singular and the plural", () => {
-    expect(drawnWatchWords(1)).toBe("This load met 1 of your drawn items: its alert is in Rules and Monitoring › Alerts");
-    expect(drawnWatchWords(3)).toBe("This load met 3 of your drawn items: their alerts are in Rules and Monitoring › Alerts");
+    expect(drawnWatchWords(1)).toBe("This load raised 1 alert on your drawn items: it is in Rules and Monitoring › Alerts");
+    expect(drawnWatchWords(3)).toBe("This load raised 3 alerts on your drawn items: they are in Rules and Monitoring › Alerts");
   });
 
   it("is said in the load result beside the counts", async () => {
@@ -54,10 +54,20 @@ describe("a run's drawn-watch count", () => {
     expect(screen.getByText("Nodes created: 4")).toBeTruthy();
   });
 
-  it("says nothing when the load met none, or the report does not carry it", async () => {
-    serve({ ...REPORT, drawn_watch_alerts: 0 });
+  it.each([
+    ["the load met none", { ...REPORT, drawn_watch_alerts: 0 }],
+    ["the report does not carry it", REPORT],
+  ])("says nothing when %s", async (_, body) => {
+    serve(body);
     await runNow();
     await screen.findByText("Nodes created: 4");
-    expect(screen.queryByText(/of your drawn items/)).toBeNull();
+    expect(screen.queryByText(/on your drawn items/)).toBeNull();
+  });
+
+  it("says nothing when the counts are withheld (the Conduit sends none then)", async () => {
+    serve({ load_id: "L2", recipe_id: "r1", recipe_version: 2, withheld: true, expert_steps: [] });
+    await runNow();
+    expect(await screen.findByText(/Counts withheld/)).toBeTruthy();
+    expect(screen.queryByText(/on your drawn items/)).toBeNull();
   });
 });

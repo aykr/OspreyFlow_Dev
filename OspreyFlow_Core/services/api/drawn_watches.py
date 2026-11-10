@@ -49,7 +49,7 @@ from schemas.domain import NOT_SAME_AS, SAME_AS, Alert, AlertMode, Handling, Nod
 from .alerts import AlertStore
 from .board_store import BoardItemStore
 from .boards import resembles
-from .dataset_scope import readable_of_case
+from .dataset_scope import HoldsALevel, case_reads
 from .investigations import AccessLevel, InsufficientAccessError, InvestigationNotFoundError
 
 
@@ -105,10 +105,6 @@ def raise_into(store: AlertStore) -> Callable[[DrawnWatchMatch], Awaitable[None]
     return raise_alert
 
 
-#: Whether a principal holds any level on a case now (its Viewer check), as `app.holds_a_level_in`.
-HoldsALevel = Callable[[Principal, str], Awaitable[bool]]
-
-
 def holds_a_level_in(investigations: Any) -> HoldsALevel:
     async def holds(principal: Principal, case_id: str) -> bool:
         try:
@@ -126,14 +122,31 @@ async def case_read_set(
     """What a request under `case_id` reads for `owner`, as `dataset_scope.scope_to_case` decides
     it, without setting the request's scope (this runs inside the loader's request): a case's
     borrowed read-only layer only for one holding a level on its own case."""
-    read = await datasets.ids_of_case(case_id)
-    if read and not await datasets.layer_of_case(case_id):
-        borrowed = await datasets.read_only_layer_of(case_id)
-        if borrowed is not None and borrowed in read:
-            original = await datasets.case_of_layer(borrowed)
-            holds = original is not None and await holds_a_level(owner, original)
-            return readable_of_case(read, borrowed, holds_the_original=holds)
-    return list(read)
+    read, _, _ = await case_reads(datasets, case_id, owner, holds_a_level)
+    return read
+
+
+@dataclass
+class _Counts:
+    """The alerts raised for `counted_for` (every one, with none), counted as each is raised."""
+
+    counted_for: str | None
+    raised: int = 0
+
+    def tell(self, watch: DrawnWatch) -> None:
+        if self.counted_for is None or watch.owner == self.counted_for:
+            self.raised += 1
+
+
+class DrawnWatchesFailed(Exception):
+    """A watch failed (its owner's resolution, its save); every other watch still ran. `counted`
+    is what was raised for `counted_for` all the same, so the run's report never depends on whether
+    another owner's watch failed (rule 7)."""
+
+    def __init__(self, counted: int, cause: Exception) -> None:
+        super().__init__(str(cause))
+        self.counted = counted
+        self.cause = cause
 
 
 @dataclass
@@ -165,7 +178,7 @@ class DrawnWatchRun:
         another owner's is neither counted nor said to the loader)."""
         if not node_ids:
             return 0
-        raised = 0
+        counts = _Counts(counted_for)
         failed: Exception | None = None
         # A watch on a composite is on each of its members (the case reads them all).
         watched = [dataset_id, *(c.id for c in await self.datasets.composites_of(dataset_id))]
@@ -174,17 +187,20 @@ class DrawnWatchRun:
                 # One watch's failure (its owner's resolution, its save) never skips the rest; the
                 # first is raised once every watch has run, for the caller to audit.
                 try:
-                    made = await self._run(watch, dataset_id, node_ids, load_id)
-                    if counted_for is None or watch.owner == counted_for:
-                        raised += made
-                except Exception as error:  # noqa: BLE001 - raised again below
+                    await self._run(watch, dataset_id, node_ids, load_id, counts)
+                except Exception as error:  # noqa: BLE001 - raised again below, with the count
                     failed = failed or error
         if failed is not None:
-            raise failed
-        return raised
+            raise DrawnWatchesFailed(counts.raised, failed) from failed
+        return counts.raised
 
     async def _run(
-        self, watch: DrawnWatch, dataset_id: str, node_ids: Sequence[str], load_id: str | None
+        self,
+        watch: DrawnWatch,
+        dataset_id: str,
+        node_ids: Sequence[str],
+        load_id: str | None,
+        counts: _Counts,
     ) -> int:
         owner = await self.owner_of(watch.owner)
         if owner is None or not await self.holds_a_level(owner, watch.case_id):
@@ -237,12 +253,14 @@ class DrawnWatchRun:
                     _log.warning("a drawn watch's claim was not given back", exc_info=True)
                 raise
             raised += 1
+            counts.tell(watch)  # as each is raised, so a later failure loses none of the count
         return raised
 
 
 __all__: Sequence[str] = (
     "DRAWN_WATCH_PREFIX",
     "DrawnWatchMatch",
+    "DrawnWatchesFailed",
     "DrawnWatchRun",
     "drawn_watch_alert",
     "case_read_set",

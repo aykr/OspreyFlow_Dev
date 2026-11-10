@@ -259,6 +259,31 @@ def readable_of_case(
     return list(datasets)
 
 
+async def case_reads(
+    store: DatasetStore,
+    investigation_id: str,
+    principal: Principal,
+    holds_a_level: HoldsALevel | None,
+) -> tuple[list[str], str | None, str | None]:
+    """What a request under `investigation_id` reads for `principal`, the case's own layer, and the
+    original case's layer it borrows read-only (if any): the whole read-set rule in one place, for
+    `scope_to_case` and the drawn watches' run (`drawn_watches.case_read_set`), which runs inside
+    another request and so sets no scope of its own. With no level check to ask, or no original
+    case found, the borrowed layer is read by no one."""
+    datasets = await store.ids_of_case(investigation_id)
+    layer = await store.layer_of_case(investigation_id) if datasets else None
+    borrowed = await store.read_only_layer_of(investigation_id) if datasets and not layer else None
+    if borrowed is not None and borrowed in datasets:
+        original = await store.case_of_layer(borrowed)
+        holds = (
+            holds_a_level is not None
+            and original is not None
+            and await holds_a_level(principal, original)
+        )
+        datasets = readable_of_case(datasets, borrowed, holds_the_original=holds)
+    return datasets, layer, borrowed
+
+
 async def scope_to_case(
     principal: Principal,
     investigation_id: str,
@@ -275,17 +300,7 @@ async def scope_to_case(
     November 2026, on rule 3, as for the alert jump): a member of that case alone reads no layer,
     and with no check to ask, no one does. Either way nothing is written into it
     (`ReadOnlyLayerError`)."""
-    datasets = await store.ids_of_case(investigation_id)
-    layer = await store.layer_of_case(investigation_id) if datasets else None
-    borrowed = await store.read_only_layer_of(investigation_id) if datasets and not layer else None
-    if borrowed is not None and borrowed in datasets:
-        original = await store.case_of_layer(borrowed)
-        holds = (
-            holds_a_level is not None
-            and original is not None
-            and await holds_a_level(principal, original)
-        )
-        datasets = readable_of_case(datasets, borrowed, holds_the_original=holds)
+    datasets, layer, borrowed = await case_reads(store, investigation_id, principal, holds_a_level)
     scoped = principal.model_copy(update={"datasets": datasets})
     set_case_datasets(datasets, layer=layer, scope=(investigation_id, store, scoped))
     if borrowed is not None:

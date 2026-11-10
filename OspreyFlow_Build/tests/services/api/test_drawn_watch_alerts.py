@@ -27,6 +27,7 @@ import pytest
 from services.api.change_stream import ChangeStreamEntry
 from services.api.datasets import COMPOSITE, Dataset
 from services.api.drawn_watches import (
+    DrawnWatchesFailed,
     DrawnWatchMatch,
     DrawnWatchRun,
     case_read_set,
@@ -431,8 +432,9 @@ async def test_one_watchs_failure_never_skips_the_others(run: SimpleNamespace) -
         saved.append(match.watch.case_id)
 
     run.run.raise_alert = raise_alert
-    with pytest.raises(RuntimeError, match="the alert store is down"):
+    with pytest.raises(DrawnWatchesFailed, match="the alert store is down") as failed:
         await run.run.after_load("src", [alike])
+    assert isinstance(failed.value.cause, RuntimeError)
     assert saved[0] == "failed" and len(saved) == 2 and saved[1] in (K, B)
 
 
@@ -450,8 +452,9 @@ async def test_a_claim_not_given_back_keeps_the_saves_own_failure(
 
     run.run.raise_alert = failing_save
     monkeypatch.setattr(run.world.items, "release_match", failing_release)
-    with pytest.raises(RuntimeError, match="the alert store is down"):
+    with pytest.raises(DrawnWatchesFailed, match="the alert store is down") as failed:
         await run.run.after_load("src", [alike])
+    assert isinstance(failed.value.cause, RuntimeError)
 
 
 async def test_a_runs_report_counts_only_the_drawn_watch_alerts_raised_for_its_own_principal(
@@ -489,3 +492,29 @@ def test_the_routes_view_says_the_count_and_a_withheld_one_says_none() -> None:
     secret = LoadReport.model_validate({**report.model_dump(), "markings": [marking]})
     held = report_view(secret, PEOPLE["bob"], scheme)
     assert held.withheld and held.drawn_watch_alerts == 0
+    # A pipeline's run carries it too (one count for the whole run, on the run's own report).
+    from schemas.ingest import PipelineRunReport
+
+    piped = PipelineRunReport(load_id="l", recipe_id="r", recipe_version=1, drawn_watch_alerts=2)
+    assert report_view(piped, PEOPLE["alice"], scheme).drawn_watch_alerts == 2
+
+
+async def test_another_owners_failing_watch_never_changes_the_loaders_count(
+    run: SimpleNamespace,
+) -> None:
+    """Rule 7: Alice loads; Carol's watch in B matches too, and its save fails. Alice is told of
+    her own alert all the same, whichever watch runs first, and the failure is audited."""
+    _tall()
+    _item(_board("carol", B), who="carol", case=B, label="Tall", properties={"family_name": "Tall"})
+    alike = _load(run, "p-alike", family_name="Tall")
+
+    class _CarolsFails(_Alerts):
+        async def save(self, alert: Alert, *, handlings: Any = ()) -> None:
+            if alert.owner_id == "carol":
+                raise RuntimeError("the alert store is down")
+            await super().save(alert, handlings=handlings)
+
+    alerts = _CarolsFails()
+    assert await _after_run(_deps(run, alerts), alike, loader=PEOPLE["alice"]) == 1
+    assert [a.owner_id for a, _ in alerts.saved] == ["alice"]
+    assert [r for r in run.world.audit.records if r["action"] == "watch_evaluation_failed"]
