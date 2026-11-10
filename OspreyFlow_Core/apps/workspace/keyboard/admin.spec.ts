@@ -321,7 +321,7 @@ test("a removed case's layer is deleted, as a dry run, by keyboard", async ({ pa
   await details(page);
   await expect(page.getByRole("button", { name: "Delete Op Kestrel's layer (dry run)" })).toHaveCount(0);
   await press(page, "Delete Op Heron's layer (dry run)");
-  await expect(page.getByRole("status")).toContainText("Promoted items are never touched.");
+  await expect(page.getByRole("status")).toContainText("Deleting it withdraws those not promoted; promoted items are never touched.");
   expect(asked).toContain("POST datasets/enron/cases/gone-1/delete/dry-run");
   registerCovered(REGISTRY, "dry-run-a-removed-cases-delete-by-keyboard");
 });
