@@ -192,6 +192,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    part 4. After the publish it takes every Track B step. I keep the release path, the reservations, the stacks and
    the pushes.
 
+27. **A failed scheduled load is shown to nobody, so its notice will go to *Needs you*.** The rules lane found that since
+   L2.10 removed the owner's own alert inbox (ADR-110 Amendment 3 decision 10), a failed or refused scheduled load's
+   notice is written but shown nowhere. I chose *Needs you*, filtered to the owner, with an access-control test
+   (ADR-110 Amendment 19, reserved for rules). The other homes were the Studio's Runs or *Admin › Schedules*. It lands
+   after the v0.5.0 tag, and the release notes list it as a known issue. Overrule here.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
