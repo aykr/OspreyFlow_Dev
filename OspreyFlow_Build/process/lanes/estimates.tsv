@@ -1,9 +1,9 @@
-# as of 2026-11-10T08:30Z
-rules	L2.10	done; rebase onto main (5 conflicts), re-gate, last look	~12:00	A
-studio-b	L1.7a	fixes reviewed; Am 17, gates at one head, the lock probe	~11:00	A
+# as of 2026-11-10T09:13Z
+rules	L2.10	rebased, make test done; live on c, then ci and keyboard	~11:30	A
+studio-b	L1.7a	back: rebase, git out of the image with the licence gate's tests	~13:00	A
 platform-b	preflight ports	a named install refused where 2480 is held; after P5b	~12:00	A
 case	L3.9	review: fake, live copies, grading, target recheck; then gates	~12:30	A
-studio-b	tips	Studio's tips patches, after L1.7a	~11:30–12:30	A
+studio-b	tips	Studio's tips patches, after L1.7a	~14:00–15:00	A
 studio-b	L1.10	marking ceiling, after L1.7a	~13:00	B
 studio	L1.7	operations, releases, carries	~17:00–19:00	A
 rules	L2.11	rule editor (form, draft/test/live, migration), after L2.10	~17:00–18:30	A
