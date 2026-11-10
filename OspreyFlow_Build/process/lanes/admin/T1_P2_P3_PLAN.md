@@ -38,15 +38,15 @@ run nowhere offline.
 
 ## Part 3: selection by change
 
-The prototype is written; it waits for part 2's marker. `OspreyFlow_Build/scripts/live_select.py` and `OspreyFlow_Build/scripts/live_map.tsv` give, for
+Built on today's live set, the Makefile's `--ignore` list, which part 2's marks replace later. `OspreyFlow_Build/scripts/live_select.py` and `OspreyFlow_Build/scripts/live_map.tsv` give, for
 a lane's diff against main:
-- the store-marked test files whose imports reach a changed Python file (including imports inside functions, and
+- the live test files whose imports reach a changed Python file (including imports inside functions, and
   modules named in a string);
 - for paths imports cannot see, a rule from the map (`none`, `all`, or named tests);
 - the full set for any path no rule covers, and for a removed Python file;
 - `test_route_rights.py` always, so the selection is never empty.
 
-`stack_lease.sh live <lane>` runs that selection with `-m store`. The full set stays a nightly run on main, the
+`stack_lease.sh live <lane>` runs that selection (with `-m store` once part 2 lands). The full set stays a nightly run on main, the
 orchestrator's to schedule.
 - Red first: a change under an unmapped path selects the full set; an empty diff selects route rights; a change
   to the graph adapter selects `conformance/graph_port`.

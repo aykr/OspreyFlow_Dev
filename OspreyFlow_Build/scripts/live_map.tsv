@@ -18,3 +18,9 @@ OspreyFlow_Build/Makefile	all	the live set itself
 OspreyFlow_Core/deploy/**	all	the stores' images and their configuration
 OspreyFlow_Build/scripts/lane_stacks.tsv	all	the stacks' ports
 OspreyFlow_Build/scripts/live_map.tsv	none	this map: it chooses which live tests run, and no test reads it (test_live_select.py builds its own)
+OspreyFlow_Build/tests/ingest/golden/**	tests/ingest	the ingest golden files: read by tests/ingest alone (and the offline test_studio_expert_routes.py)
+OspreyFlow_Build/tests/ingest/fixtures/**	tests/ingest	the ingest fixtures: read by tests/ingest alone
+**/Dockerfile	tests/harness	an image: the live harness tests build and run images (test_harness_image.py, test_bundle_exit_test.py, test_workspace_bundle.py); the stores' own containers are deploy/compose's
+OspreyFlow_Build/marketing_site/**	none	the public site: read only by the offline test_website_wording.py
+OspreyFlow_Build/tests/fixtures/citation_allowlist.txt	none	citation-check's allowlist, an offline gate's
+OspreyFlow_Build/scripts/stack_lease.sh	none	the runner itself: its tests are offline (test_stack_lease.py), and a fault in it stops every live run, loudly
