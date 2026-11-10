@@ -33121,3 +33121,52 @@ unchanged except where this says so.
 - Keyboard: `keyboard/alerts.spec.ts`'s "a rule is written on a dataset, saved as a draft, tested and made live".
 
 The records are in `process/lanes/rules/l2.11/RED_RECORD.md`.
+
+### ADR-142, Amendment 7 (10 November 2026) — a second merge session prepares merges; the orchestrator alone lands them
+
+*The owner's word, 10 November: "set up a second merge session", with some of today's merges handed over too.*
+
+**Context.** Every review, trial merge and merge record went through the orchestrator. When several lanes reported
+"built" at once, some waited on it rather than on their gates, and the release-blocking work it was doing tonight
+(the upgrade fix, the v0.5.0 publish) made it wait longer.
+
+**Decisions.**
+
+1. **The merger.** A second Claude Code session, in its own worktree (`~/dev/osprey-wt/merger`, detached), prepares
+   the merges of the lanes the orchestrator hands it. It does everything up to the merge commit: the independent
+   lane-reviewer at "built" (Amendment 6), relaying both reviews' findings, confirming the lane has stopped (rule 14),
+   `lanes_launch.sh merge-ok`, the trial merge onto current `main`, the lane's patches and owner-file diffs applied as
+   the orchestrator applied them, lint on the merged diff, checking the server gate records, and the step's lines in
+   `progress.tsv`, `estimates.tsv` and `CARRIES.md` inside the merge commit.
+2. **The orchestrator alone lands on `main`, fast-forward only.** The merger sends "land <commit> on <main it was
+   built on>". The orchestrator runs `git merge --ff-only <commit>` in its checkout. If `main` has moved, the merger
+   rebuilds the merge on the new `main`. It runs the gates again (one `make -k ci` on the server) only if the new
+   commits on `main` touch code rather than `spec/` or `process/`. So rule 14's "only the orchestrator merges to
+   `main`" still holds, and no two sessions ever write in one worktree.
+3. **What stays with the orchestrator.** It keeps:
+   - the release path (tonight: platform-b's upgrade fix, studio's L1.7, docs' v0.5.0 step and the publish);
+   - ADR and amendment reservations;
+   - `MORNING.md`;
+   - the stack leases' grants;
+   - deciding questions on the owner's behalf;
+   - pushing.
+
+   The merger asks the orchestrator for a number, a stack or a ruling, and never decides them itself.
+4. **Handed over.** From 10 November, about 20:30, the merger takes rules-b's T3, case's L3.H2, studio-b's L1.10b
+   and admin's T1 part 4. After the v0.5.0 publish it also takes every Track B step: platform's P7 to P12,
+   studio-b's L1.9, case-b, and docs' D2c. The orchestrator can hand over or take back any step by message.
+5. **Same rules.** The merger works under PROMPT_L.md's restrictions:
+   - no Docker on the Mac and no desktop apps;
+   - heavy runs only on the test server;
+   - no real data;
+   - never `make dev-up`.
+
+   It runs on the `sol` account, which also counts towards the 30% share.
+
+**Consequences.** Reviews and trial merges for two queues run at once, and landing a prepared merge takes the
+orchestrator seconds. The cost is one more rebuild when `main` moves between "land" and landing. The records are
+written by whichever session prepares the merge, still inside one commit on `main`.
+
+**The test that would fail.** A merge commit on `main` whose first parent is not the `main` it was built on, or that
+was not a fast-forward, shows the rule broken. `git log --first-parent main` shows only the orchestrator's landings,
+and each one is checked against the merger's "land" message in `process/lanes/merger/LANDED.md`.

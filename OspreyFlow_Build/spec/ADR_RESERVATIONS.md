@@ -109,6 +109,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-148 Amendment 4 | The ceiling on promotions and drawn merges as built (L3.H2): refused per item, on the record and before the load's transaction, in words naming the limit | case | 2026-11-10 | reserved |
 | ADR-142 Amendment 6 | The fix-and-check order: both reviews at 'built', in parallel; one rebase, then one round of gates; heavy runs on the test server; a self-check list of recurring findings | orchestrator | 2026-11-10 | written |
 | ADR-114 Amendment 39 | Refresh (and so update) mints, once, a secret a service it brings in requires and the deployment lacks, as harness.apply mints it; it never changes or regenerates a secret the deployment holds (the v0.4.12 to v0.5.0 upgrade) | platform-b | 2026-11-10 | reserved |
+| ADR-142 Amendment 7 | A second merge session (the merger) prepares merges for lanes the orchestrator hands it; the orchestrator alone lands them on main, fast-forward only, and alone pushes (the owner's word, 10 November) | orchestrator | 2026-11-10 | written |
 
 ## Baseline
 
