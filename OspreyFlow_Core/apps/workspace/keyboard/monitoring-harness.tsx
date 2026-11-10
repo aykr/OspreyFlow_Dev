@@ -361,12 +361,6 @@ if (template) {
   choose("High-risk jurisdictions", "XA, XB");
 }
 
-// `?lists=manage&tab=lists&refreshed=1`: a refresh just made, its words shown.
-if (params.get("refreshed")) {
-  for (let i = 0; i < 40 && !document.querySelector('[aria-label="Refresh now: Synthetic sanctions list"]'); i++) await settle();
-  document.querySelector<HTMLButtonElement>('[aria-label="Refresh now: Synthetic sanctions list"]')?.click();
-}
-
 // `?opened=1` (with `stage=d&tab=rules`): the scheduled rule's runs and its versions shown.
 if (params.get("opened")) {
   for (let i = 0; i < 40 && !document.querySelector('[aria-label="Schedule and runs of Listed people, every morning"]'); i++) await settle();

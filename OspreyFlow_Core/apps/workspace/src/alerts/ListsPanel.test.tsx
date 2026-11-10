@@ -3,7 +3,7 @@
 // state — a failure in words — with its licence; whoever may load lists refreshes one, subscribes
 // to one and reads the refreshes; anyone else reads the lists from the route that carries no
 // deployment-wide counts (rule 7), and is offered no action. The data is synthetic (rule 9).
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ListsPanel, listState } from "./ListsPanel";
@@ -76,24 +76,7 @@ describe("the Lists tab", () => {
     expect(ofac!.textContent).not.toContain("Licence not confirmed");
   });
 
-  it("says in the subscribe form which connectors' licences are not confirmed, and why", async () => {
-    serve();
-    render(<ListsPanel {...props} canManage={true} />);
-    const connector = (await screen.findByRole("combobox", { name: "Connector" })) as HTMLSelectElement;
-    const labels = Array.from(connector.options).map((o) => o.textContent);
-    expect(labels).toContain("UN Security Council consolidated list (licence not confirmed)");
-    expect(labels).toContain("OpenSanctions (FollowTheMoney entities) (licence not confirmed)");
-    expect(labels).toContain("OFAC SDN list (US Treasury)");
-    fireEvent.change(connector, { target: { value: "un_consolidated" } });
-    const form = screen.getByRole("form", { name: "Subscribe to a list" });
-    expect(form.textContent).toContain(
-      "Licence not confirmed: no open licence was found for the UN consolidated list, and the UN's general terms allow personal, non-commercial use only; its terms are to be confirmed with the UN. Only OspreyFlow's synthetic list may be read through this connector.",
-    );
-    fireEvent.change(connector, { target: { value: "ofac_sdn" } });
-    expect(form.textContent).not.toContain("Licence not confirmed");
-  });
-
-  it("says the OFSI connector reads a closed list, on its row and in the subscribe form, and offers its successor", async () => {
+  it("says the OFSI connector reads a closed list, on its row", async () => {
     // ADR-133 Amendment 6: the OFSI Consolidated List closed on 28 January 2026; the FCDO's UK
     // Sanctions List is its successor. The words are the Conduit's (`CLOSED_LISTS`).
     const closed =
@@ -112,16 +95,6 @@ describe("the Lists tab", () => {
       const ofsi = rows.find((r) => r.textContent?.includes("Old OFSI file"))!;
       expect(ofsi.textContent).toContain(`Closed list: ${closed}.`);
       for (const other of rows.filter((r) => r !== ofsi)) expect(other.textContent).not.toContain("Closed list");
-      const connector = screen.getByRole("combobox", { name: "Connector" }) as HTMLSelectElement;
-      const labels = Array.from(connector.options).map((o) => o.textContent);
-      expect(labels).toContain("HM Treasury OFSI consolidated list (closed 28 January 2026): reads a closed list");
-      expect(labels).toContain("UK Sanctions List (FCDO)");
-      fireEvent.change(connector, { target: { value: "ofsi_consolidated" } });
-      const form = screen.getByRole("form", { name: "Subscribe to a list" });
-      expect(form.textContent).toContain(`Closed list: ${closed}. Subscribe to the UK Sanctions List (FCDO) for UK designations.`);
-      fireEvent.change(connector, { target: { value: "uk_sanctions_list" } });
-      expect(form.textContent).not.toContain("Closed list");
-      expect(form.textContent).not.toContain("Licence not confirmed");
     } finally {
       LISTS.pop();
     }
@@ -152,37 +125,24 @@ describe("the Lists tab", () => {
     expect(screen.queryByRole("button", { name: /Refresh now/ })).toBeNull();
     expect(screen.queryByRole("form", { name: "Subscribe to a list" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Latest refreshes" })).toBeNull();
-    expect(screen.getByText("An administrator or a data engineer subscribes to a list and refreshes it.")).toBeTruthy();
+    expect(screen.getByText(/imported, mapped and refreshed in the Ingest Studio's Sources/)).toBeTruthy();
   });
 
-  it("refreshes a list for whoever may load lists, and says what the refresh did", async () => {
+  it("offers no add, refresh or schedule even to whoever may load lists, and shows their refreshes (ADR-133 Amendment 9)", async () => {
     const calls = serve();
     render(<ListsPanel {...props} canManage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Refresh now: Synthetic list" }));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("1 alert raised"));
-    expect(calls.some((c) => c.method === "POST" && c.path.endsWith("/Synthetic%20list/refresh"))).toBe(true);
-    const refreshes = screen.getByRole("region", { name: "Latest refreshes" });
+    await screen.findByRole("table", { name: "Screening lists and their versions" });
+    expect(screen.queryByRole("button", { name: /Refresh now/ })).toBeNull();
+    expect(screen.queryByRole("form", { name: "Subscribe to a list" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save the schedule" })).toBeNull();
+    expect(calls.every((c) => c.method === "GET")).toBe(true);
+    const refreshes = await screen.findByRole("region", { name: "Latest refreshes" });
     expect(refreshes.textContent).toContain("4 customers re-screened against 2 changed entries");
-  });
-
-  it("subscribes to a list through its connector and a file in the ingest folder", async () => {
-    const calls = serve();
-    render(<ListsPanel {...props} canManage />);
-    const form = await screen.findByRole("form", { name: "Subscribe to a list" });
-    fireEvent.change(within(form).getByLabelText("List name"), { target: { value: "UN list" } });
-    fireEvent.change(within(form).getByLabelText("Connector"), { target: { value: "un_consolidated" } });
-    fireEvent.change(within(form).getByLabelText("File in the ingest folder"), { target: { value: "lists/consolidated.xml" } });
-    fireEvent.change(within(form).getByLabelText("Real dataset it is"), { target: { value: "un_consolidated" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Subscribe" }));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Subscribed to “UN list”"));
-    expect(calls.find((c) => c.method === "POST")?.body).toEqual({
-      list_name: "UN list", source: "un_consolidated", location: "lists/consolidated.xml",
-      dataset: "un_consolidated", use: "local_development",
-    }); // prettier-ignore
+    expect(screen.getByText(/imported, mapped and refreshed in the Ingest Studio's Sources/)).toBeTruthy();
   });
 
   it("says a list never read, failing or current", () => {
-    expect(listState({ ...LISTS[0], version: null } as never)).toBe("Not yet read: refresh it to load its first version.");
+    expect(listState({ ...LISTS[0], version: null } as never)).toBe("Not yet read: it is refreshed in the Ingest Studio's Sources.");
     expect(listState(LISTS[1] as never)).toContain("Refused:");
   });
 });

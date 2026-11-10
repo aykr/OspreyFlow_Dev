@@ -65,3 +65,11 @@ of each team hold the case (2 and 1), with no one named. Red with the count take
    only once tested".
 3. **The team named without its count:** red, "says where its alerts go before saving, with how many of the
    team hold the case".
+
+## §6 The Lists tab read-only (carry, ADR-133 Amendment 9), offline
+
+`alerts/ListsPanel.test.tsx`: 6 passed. Red with a *Refresh now* button put back for whoever may load lists: only
+"offers no add, refresh or schedule even to whoever may load lists, and shows their refreshes". The keyboard case
+is replaced by the read-only one. The registry patch drops `refresh-a-screening-list-by-keyboard`,
+`subscribe-to-a-screening-list-by-keyboard` and `set-a-list-refresh-schedule-by-keyboard`. The Conduit's routes
+stay for the operator's command until the tab is retired.

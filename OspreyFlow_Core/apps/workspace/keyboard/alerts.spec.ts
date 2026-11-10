@@ -693,26 +693,14 @@ test("the screening lists are read by keyboard, with no action offered to a read
   registerCovered(REGISTRY, "read-the-screening-lists-by-keyboard");
 });
 
-test("a screening list is refreshed and another subscribed to, by keyboard (ADR-133 stage c)", async ({ page }) => {
-  const state = await serve(page);
+test("whoever may load lists is offered no add, refresh or schedule on the Lists tab, by keyboard (ADR-133 Amendment 9)", async ({ page }) => {
+  await serve(page);
   await page.goto("/keyboard/alerts-harness.html?lists=manage");
   await press(page, page.getByRole("tab", { name: "What raises alerts" }));
-  await press(page, page.getByRole("button", { name: "Refresh now: Synthetic list" }));
-  await expect(page.getByRole("status")).toContainText("1 alert raised");
-  expect(state.sent.some((s) => s.path === "/v1/admin/screening-lists/Synthetic%20list/refresh")).toBe(true);
-  registerCovered(REGISTRY, "refresh-a-screening-list-by-keyboard");
-  const form = page.getByRole("form", { name: "Subscribe to a list" });
-  await form.getByLabel("List name").focus();
-  await page.keyboard.type("UN list");
-  await form.getByRole("combobox", { name: "Connector" }).selectOption("un_consolidated");
-  await form.getByLabel("File in the ingest folder").focus();
-  await page.keyboard.type("lists/consolidated.xml");
-  await press(page, form.getByRole("button", { name: "Subscribe" }));
-  await expect(page.getByRole("status")).toContainText("Subscribed to “UN list”");
-  expect(state.sent.find((s) => s.path === "/v1/admin/screening-lists")?.body).toEqual({
-    list_name: "UN list", source: "un_consolidated", location: "lists/consolidated.xml", dataset: null, use: "local_development",
-  });  // prettier-ignore
-  registerCovered(REGISTRY, "subscribe-to-a-screening-list-by-keyboard");
+  await expect(page.getByRole("table", { name: "Screening lists and their versions" })).toContainText("Synthetic list");
+  await expect(page.getByRole("button", { name: /Refresh now/ })).toHaveCount(0);
+  await expect(page.getByRole("form", { name: "Subscribe to a list" })).toHaveCount(0);
+  await expect(page.getByText(/imported, mapped and refreshed in the Ingest Studio's Sources/)).toBeVisible();
 });
 
 test("every registered Alerts action has its own proving test case above", () => {
