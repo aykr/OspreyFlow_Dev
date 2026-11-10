@@ -110,3 +110,22 @@ applied the schema one statement at a time.
 | `tests/ingest/test_transaction_keepalive_live.py` | 2 | 1.2 | 60 | 0 |
 | `tests/services/api/test_source_refresh_snapshot_live.py` | 5 | 1.2 | 3 | 0 |
 | `tests/conformance/graph_port/test_type_aliases.py` | 5 | 1.1 | 1 | 0 |
+
+## Before and after: one file, the same 38 tests (part 1's exit criterion)
+
+`tests/ingest/test_alert_evidence_withheld_live.py` was the slowest file per test in the measured run. It was run again
+alone on today's main, with the same flags and the same meter.
+
+| | Tree | Lease | Its 38 tests | Per test |
+| --- | --- | --- | --- | --- |
+| **Before** | `lane/admin` at 5d9a4a4, before the batched schema | stack b, the lease admin took at 2026-11-10T10:33Z (inside the 3 h 22 min run) | 1,235 s (20.6 min) | 32.5 s |
+| **After** | main 1fe2066, with the batched schema | stack b, the lease admin took at 2026-11-10T13:58:54Z: wall 114 s, set-up 47 s | 111.3 s (pytest 113.6 s) | 2.9 s |
+
+**11 times faster.** It is not the same commit, because the change measured is a commit. Between the two trees, this
+file's own code and the store's are unchanged apart from the batch. The "before" is this file's share of the long run;
+the "after" is the file run alone. The log is `gates/t1p1-remeasure.live.txt` and the records are
+`gates/t1p1-remeasure.meter.jsonl`.
+
+**The graph-commit case passes on today's main.**
+`test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert` failed in the measured run and passes here.
+Rules has it as a carry.

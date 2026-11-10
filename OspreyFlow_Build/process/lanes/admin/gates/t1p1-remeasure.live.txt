@@ -1,0 +1,57 @@
+Running on ospreyflow-test (stack b, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261110T135949Z/log: sh -c cd ../OspreyFlow_Core && rm -f $HOME/osprey-runs/admin.meta/t1-remeasure.jsonl && PYTHONPATH=../OspreyFlow_Build/process/lanes/admin/t1 OSPREY_T1_METER=$HOME/osprey-runs/admin.meta/t1-remeasure.jsonl .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:randomly -p t1_meter ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py
+......................................                                   [100%]
+--------------------- 38 unmarked test(s) reached a store ----------------------
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_chain_of_writes_brings_the_alert_to_the_newest_revision: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_puts_back_the_node_its_own_record_re_marked: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_writes_back_a_list_another_close_has_repointed_since: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_commit_is_reported_failed_but_landed_keeps_its_record: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[cancellation]: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[timeout]: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_over_a_hidden_link_or_transaction_is_withheld_from_the_rule_audit: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_its_words: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_stays_in_the_audit_when_its_alert_follows_a_link_to_its_successor: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_graph_failure_leaves_every_alert_on_the_live_link: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_that_fails_is_retried_by_the_next_read: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_another_test_left_never_breaks_an_unrelated_read: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_what_the_graph_committed_not_what_it_recorded: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_held_open_by_its_writer_is_not_settled_by_a_read_part_way: ArcadeDB on port 2492, Postgres on port 55434
+tests/ingest/test_alert_evidence_withheld_live.py::test_a_row_held_with_the_findings_words_is_shown_with_the_rules_name_alone: Postgres on port 55434
+… and 18 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= slowest 30 durations =============================
+6.30s call     tests/ingest/test_alert_evidence_withheld_live.py::test_more_records_settled_at_once_than_the_store_holds_connections_all_finish
+5.44s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_puts_back_the_node_its_own_record_re_marked
+5.43s call     tests/ingest/test_alert_evidence_withheld_live.py::test_two_settles_of_one_record_at_once_leave_one_live_alert_node
+5.25s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[timeout]
+5.03s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_chain_of_writes_brings_the_alert_to_the_newest_revision
+4.65s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on
+4.53s call     tests/ingest/test_alert_evidence_withheld_live.py::test_the_loader_writes_a_link_and_its_transactions_above_their_ends
+4.09s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_another_test_left_never_breaks_an_unrelated_read
+3.92s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[cancellation]
+3.61s call     tests/ingest/test_alert_evidence_withheld_live.py::test_an_evaluations_count_is_withheld_from_a_reader_who_cannot_see_every_finding
+3.52s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_what_the_graph_committed_not_what_it_recorded
+3.15s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_row_raised_over_a_link_reverted_since_the_judgement_is_listed_for_no_one
+3.12s call     tests/ingest/test_alert_evidence_withheld_live.py::test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marking
+3.10s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_over_a_hidden_link_or_transaction_is_withheld_from_the_rule_audit
+3.10s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_its_words
+3.06s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_confirmed_match_repoints_every_alert_citing_it_so_none_leaves_the_queue
+3.03s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_graph_failure_leaves_every_alert_on_the_live_link
+3.02s call     tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole
+2.98s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_stays_in_the_audit_when_its_alert_follows_a_link_to_its_successor
+2.93s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_stale_record_is_dropped_if_its_link_is_live_and_applied_if_superseded
+2.81s call     tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_raised_without_its_node_over_a_hidden_link_or_transactions_is_withheld_whole
+2.71s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_triage_refused_after_the_graph_commit_still_repoints_every_citing_alert
+2.71s call     tests/ingest/test_alert_evidence_withheld_live.py::test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_still_raises_the_row
+2.58s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert
+2.52s call     tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_over_a_link_marked_above_its_ends_is_not_readable_as_a_node
+2.31s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_that_fails_is_retried_by_the_next_read
+2.28s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read
+1.95s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_commit_is_reported_failed_but_landed_keeps_its_record
+1.87s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_writes_back_a_list_another_close_has_repointed_since
+1.72s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds
+38 passed in 113.56s (0:01:53)
+Wall time: 114 s, exit 0 (stack b, the lease admin took at 2026-11-10T13:58:54Z; set-up before it 47 s)
