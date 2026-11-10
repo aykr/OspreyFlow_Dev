@@ -275,6 +275,11 @@ PUBLISH_LOCK_NAME = "osprey-publish.lock"
 #: process stopped while holding the lock must not hang every publish; the re-review's minor).
 PUBLISH_LOCK_WAIT_SECONDS = 30.0
 
+#: The directory a first use makes its git directory in before renaming it into place; one a
+#: crashed first use left is swept once it is older than any live first use could be.
+_ASIDE_PREFIX = ".git-init-"
+_ASIDE_STALE_SECONDS = 600.0
+
 #: A temporary file `_write_recipe_file` makes beside a recipe; one a crash left is swept.
 _TEMPORARY = re.compile(r"\.[A-Za-z0-9][A-Za-z0-9._-]*\.yaml\.[0-9a-f]{16}\.tmp")
 
@@ -309,11 +314,21 @@ def _open_repository(repo_root: Path) -> Repo:
     `core.worktree`); one that is bare or names a worktree other than `repo_root` is refused, so
     the index can describe no tree but the one the file is written to.
     """
+    own = repo_root / ".git"
+    with suppress(FileNotFoundError):
+        if not stat.S_ISDIR(os.lstat(own).st_mode):
+            # A `.git` file naming another repository's directory, or a link: what would be
+            # written (index, objects, lock, `HEAD`) is another repository's.
+            raise GitCommitError("the recipe repository's .git is not a directory of its own")
     try:
         repo = Repo(str(repo_root))
     except NotGitRepository:
         repo = _initialise(repo_root)
-    if repo.bare or Path(repo.path).resolve() != repo_root.resolve():
+    if (
+        repo.bare
+        or Path(repo.path).resolve() != repo_root.resolve()
+        or Path(repo.controldir()).resolve() != own.resolve()
+    ):
         repo.close()
         raise GitCommitError(
             "the recipe repository is bare or its config names another working tree"
@@ -323,23 +338,35 @@ def _open_repository(repo_root: Path) -> Repo:
 
 def _initialise(repo_root: Path) -> Repo:
     repo_root.mkdir(parents=True, exist_ok=True)
-    making = Path(tempfile.mkdtemp(prefix=".git-init-", dir=repo_root))
+    # An aside directory a crashed first use left (older than any live first use can be).
+    for left in repo_root.glob(f"{_ASIDE_PREFIX}*"):
+        with suppress(OSError):
+            if time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:
+                shutil.rmtree(left)
+    making = Path(tempfile.mkdtemp(prefix=_ASIDE_PREFIX, dir=repo_root))
     try:
         with Repo.init(str(making), config=StackedConfig([ConfigFile()])) as made:
             made.refs.set_symbolic_ref(HEADREF, Ref(b"refs/heads/main"))
-        try:
-            os.rename(making / ".git", repo_root / ".git")
-        except OSError:
-            if not (repo_root / ".git").is_dir():
-                raise  # not another process's repository: a real failure
+        os.rename(making / ".git", repo_root / ".git")
+    except OSError:
+        if not (repo_root / ".git").is_dir():
+            raise  # not another process's repository: a real failure
     finally:
         shutil.rmtree(making, ignore_errors=True)
     return Repo(str(repo_root))
 
 
+def _held_off() -> GitCommitError:
+    return GitCommitError(
+        f"another publish has held the recipe repository for over {PUBLISH_LOCK_WAIT_SECONDS:g} s; "
+        "publish again"
+    )
+
+
 @contextmanager
-def _publish_lock(repo: Repo) -> Iterator[None]:
-    """The exclusive `flock` on `PUBLISH_LOCK_NAME`, its file opened without following a link."""
+def _publish_lock(repo: Repo, deadline: float) -> Iterator[None]:
+    """The exclusive `flock` on `PUBLISH_LOCK_NAME`, its file opened without following a link,
+    waited for until `deadline` (the same one the in-process lock was waited for under)."""
     path = os.path.join(repo.controldir(), PUBLISH_LOCK_NAME)
     try:
         fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o666)
@@ -348,17 +375,13 @@ def _publish_lock(repo: Repo) -> Iterator[None]:
             f"the recipe repository's {PUBLISH_LOCK_NAME} is a symbolic link or cannot be opened"
         ) from exc
     try:
-        deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS
         while True:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
             except BlockingIOError:
                 if time.monotonic() >= deadline:
-                    raise GitCommitError(
-                        "another publish has held the recipe repository for over "
-                        f"{PUBLISH_LOCK_WAIT_SECONDS:g} s; publish again"
-                    ) from None
+                    raise _held_off() from None
                 time.sleep(0.05)
         try:
             yield
@@ -447,9 +470,17 @@ def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str)
     registry row is left unpublished.
     """
     path = relative_path.encode("utf-8")
-    with _REPOSITORY_LOCK, _open_repository(repo_root) as repo, _publish_lock(repo):
-        written = _write_recipe_file(repo_root, relative_path, data)
-        _stage_and_commit(repo, path, written, data, message)
+    # One limit for both locks, so publishes queued behind a held `flock` are refused within one
+    # wait, none holding a worker thread for a wait of its own after another's.
+    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS
+    if not _REPOSITORY_LOCK.acquire(timeout=PUBLISH_LOCK_WAIT_SECONDS):
+        raise _held_off()
+    try:
+        with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):
+            written = _write_recipe_file(repo_root, relative_path, data)
+            _stage_and_commit(repo, path, written, data, message)
+    finally:
+        _REPOSITORY_LOCK.release()
 
 
 def _stage_and_commit(
