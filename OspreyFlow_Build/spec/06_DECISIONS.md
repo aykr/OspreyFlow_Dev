@@ -32806,3 +32806,64 @@ with the rules lane, and the storage is the orchestrator's ruling of 10 November
 
 **Cost.** Two small text blobs per rule version (a few kilobytes). No new dependency: `defusedxml` was
 already one. The XML is written by hand for the three elements, as the Cost section allowed.
+
+### ADR-148, Amendment 2 (10 November 2026) — the deployment's marking ceiling as built (L1.10, decision 10)
+
+Status: accepted. Written in the studio-b lane at step L1.10, with the orchestrator's rulings of 10 November on the
+entry points outside the lane's files.
+
+**Context.** Decision 10 says a load, a drawn item or an import marked above `deployment.highest_marking` is refused
+before anything is written, in words that say the deployment's limit and never the item's content. This amendment
+records where that is enforced, what it does not touch, and what is left to other lanes.
+
+**Decision.**
+1. **The setting.** `deployment.highest_marking` in `osprey.yaml` (`packages/schemas/deployment.py`), unset meaning
+   the handling scheme's highest. It is checked at render against the scheme the Conduit loads (UK law
+   enforcement, `harness.site.highest_marking`) and rendered as `OSPREY_HIGHEST_MARKING`. The Conduit reads it at
+   its start (`services.ingest.ceiling.DeploymentCeiling`), and an unknown value stops the start rather than guess
+   the limit.
+2. **Every load, in one place.** `engine.run_recipe` judges each row's marking (the engine's own `row_marking`)
+   after its existing refusals and before raw staging, its first write. One row above the ceiling refuses the whole
+   load (`AboveTheDeploymentCeiling`, a typed 422 `above_the_deployments_highest_marking`).
+   - A part whose marking cannot be read counts as its strictest possible marking, so the check fails closed. A
+     row rejected for a conflict between units is not written and is not judged.
+   - `run_recipe` reads the ceiling from the environment when a caller does not pass one, so none can leave it
+     out. That covers Studio runs, Run now, the scheduler, connectors and refreshes, held-row releases, the seeds
+     that load through the engine, the site grid and the batch CLI.
+   - A staged pipeline writes its step tables before `run_recipe`, so its markings that no column sets are judged
+     first, in `pipeline_run`.
+3. **Imports that carry their own marking**: a document added to a case and an entity's picture are refused before
+   the body is read.
+4. **The backstop.** The dataset-stamping graph's upserts and bulk load refuse any node or link above the ceiling
+   before the store is reached. So a path the engine never sees, a demo seed writing the graph directly, still
+   cannot write above it.
+5. **Demo packs** are refused before their seed starts, so a pack written in several transactions is never partly
+   written. Each declares its highest marking only where a test proves every write is within it (cyber-intrusion
+   and PaySim, OFFICIAL); a pack that declares none is judged as the scheme's highest.
+6. **Writes are capped; reads are not.** The ceiling refuses what is written. Where an unmarked dataset is read as
+   the scheme's highest in an access check (`promotions.highest()`'s fallback, and the same top in `admin_people`,
+   `person_ownership`, `boards` and `app.py`), that reading is kept. Capping it at the ceiling would loosen access.
+   On the write side, a promotion or a drawn merge that would write data marked above the ceiling must be refused
+   as a load is: carried to the case lane (`promotions.py`, `drawn_merge.py`).
+
+**Not loads:** a restore (whole stores into an empty deployment) and reference lists (which carry no marking).
+
+**Carried:**
+- The drawn item (case-b, `boards.py`, and the board's picture route).
+- The promotion and drawn-merge writes (case).
+- cloud-platform's OFFICIAL-SENSITIVE default (P7, `lane/platform`).
+- System showing the ceiling (admin: `process/lanes/studio-b/L1.10_system_ceiling.diff`).
+- Declarations for the other demo packs, each with its proof.
+
+**Tests** (each red first, `process/lanes/studio-b/l1.10/red_plants.py`, 13 plants):
+- **Decision 1:** `tests/services/api/test_deployment_ceiling.py`, its render and reader cases, and
+  `test_the_conduits_start_stops_on_an_unknown_ceiling_before_opening_anything`.
+- **Decision 2:**
+  - `test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing`, which plants a SECRET row; nothing
+    is committed or staged, and the words name the limit and not the row;
+  - `test_a_load_at_the_ceiling_passes` and `test_with_no_ceiling_set_a_secret_row_loads_as_before`;
+  - the staged pipeline's order, `test_a_staged_pipeline_judges_its_fixed_markings_before_its_step_tables`, which
+    is structural, since a staged branch needs its stores to run.
+- **Decision 3:** `test_deployment_ceiling_uploads.py`.
+- **Decision 4:** `test_deployment_ceiling_backstop.py`.
+- **Decision 5:** `tests/test_seed_internal_ceiling.py`.
