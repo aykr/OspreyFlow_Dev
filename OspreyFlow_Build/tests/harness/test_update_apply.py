@@ -849,6 +849,53 @@ def test_an_updates_backup_is_never_written_inside_the_checkout(
     assert update.real_host(directory, repo).backup().parent == tmp_path / "mine" / "local-lite"
 
 
+def test_an_updates_backup_and_restore_name_a_named_deployment_to_the_harness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-114 Amendment 38 decision 9: a deployment kept by name (ADR-138) is
+    `~/.ospreyflow/deployments/<name>/`, its `osprey.yaml` there and rendered there, so the update's
+    backup and rollback restore pass `harness.backup`/`harness.restore` that `osprey.yaml` as
+    `--config` and its parent as `--generated-root`, as `ospreyflow backup` does. Without them the
+    harness reads the checkout's `osprey.yaml` and looks for `deploy/generated/<name>/compose.yaml`,
+    which the real one refuses ("no rendered deployment"), so the fake refuses it too (rule 15)."""
+    from harness import backup as real_backup
+    from harness import restore as real_restore
+
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    directory = tmp_path / "home" / ".ospreyflow" / "deployments" / "beta"
+    directory.mkdir(parents=True)
+    (directory / "compose.yaml").write_text("services: {}\n")
+    folder = tmp_path / "srv-backups"
+    (directory / "osprey.yaml").write_text(yaml.safe_dump({
+        "deployment": {"name": "beta"}, "components": {"storage": {"backups": str(folder)}},
+    }))  # fmt: skip
+    ran: list[list[str]] = []
+
+    def given(argv: Sequence[str], flag: str, default: Path) -> Path:
+        return Path(argv[argv.index(flag) + 1]) if flag in argv else default
+
+    def subprocess_(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]:
+        ran.append(list(argv))
+        module = next(a for a in argv if a.startswith("harness."))
+        defaults = real_backup if module == "harness.backup" else real_restore
+        root = given(argv, "--generated-root", defaults.DEFAULT_OUT_ROOT)
+        profile = argv[argv.index("--profile") + 1]
+        if not (root / profile / "compose.yaml").is_file():
+            return 1, f"backup: no rendered deployment at {root / profile / 'compose.yaml'}."
+        if module == "harness.backup":
+            (given(argv, "--out-root", folder) / "20261110T000000Z-beta-abc").mkdir(parents=True)
+        return 0, ""
+
+    monkeypatch.setattr(update, "_subprocess", subprocess_)
+    host = update.real_host(directory, tmp_path / "checkout")
+    made = host.backup()
+    assert made.parent == folder / "beta"
+    host.restore(made)
+    for argv in ran:
+        assert argv[argv.index("--config") + 1] == str(directory / "osprey.yaml"), argv
+        assert argv[argv.index("--generated-root") + 1] == str(directory.parent), argv
+
+
 # --- the stores moved to named volumes (ADR-114 Amendment 35) -----------------------------------
 
 

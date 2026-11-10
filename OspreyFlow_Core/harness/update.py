@@ -649,10 +649,18 @@ def real_host(
     def run(argv: Sequence[str]) -> tuple[int, str]:
         return _subprocess(argv, cwd=repo)
 
+    # ADR-114 Amendment 38 decision 9: the deployment named to the harness by its own
+    # `osprey.yaml` and the folder it is rendered under, as `ospreyflow backup` does for one kept
+    # by name (ADR-138); for the checkout's own, the copy rendered beside its compose file.
+    copy = directory / "osprey.yaml"
+    pointed = ["--config", str(copy), "--generated-root", str(directory.parent)]
+    if not copy.is_file():
+        pointed = []
+
     def backup() -> Path:
         root = _backup_root(directory)
         before = set(root.iterdir()) if root.is_dir() else set()
-        _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name,
+        _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name, *pointed,
                        "--out-root", str(root)], "back up every store")  # fmt: skip
         made = sorted(set(root.iterdir()) - before) if root.is_dir() else []
         if not made:
@@ -661,7 +669,7 @@ def real_host(
 
     def restore(path: Path) -> None:
         _ok_real(run, [*python, "-m", "harness.restore", str(path), "--profile", directory.name,
-                       "--yes"], "restore the backup")  # fmt: skip
+                       *pointed, "--yes"], "restore the backup")  # fmt: skip
 
     def files() -> dict[str, bool]:
         said = _ok_real(
