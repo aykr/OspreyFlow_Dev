@@ -210,6 +210,16 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    marking is the silent lowering the guard exists to prevent. The lawful route is for a source to declare a default
    marking, which is audited (ADR-140 Amendment 19, reserved for studio, after v0.5.0). Overrule here.
 
+30. **The docs lane has been frozen since 18:13, so I've moved its release step elsewhere.** Docs is stuck on a
+   permission prompt in its Terminal window. It asked to read
+   `OspreyFlow_presentations/D2B/pptx_tools.py`, which is outside its worktree. Nothing it was sent since then
+   reached it, including its question to me ("where is the deck review's full text?"), which I missed.
+   - **The v0.5.0 release notes** are being finished from docs' own draft (034fbe3) by an agent of mine. It works in
+     its own worktree, `~/dev/osprey-wt/docs-v050` on `lane/docs-v050`, and the publish goes ahead from that.
+   - **When you are up:** answer or deny docs' prompt. Then tell it that the v0.5.0 step was done on
+     `lane/docs-v050`, and that it should rebase onto main and go back to the decks. The deck review's text is in
+     `process/lanes/docs/` or with me.
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
