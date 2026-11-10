@@ -66,6 +66,17 @@ PLANTS = [
    "    if await datasets.dataset_of_home_case(investigation.id) is not None:\n        raise HTTPException(",
    "    if False:\n        raise HTTPException(",
    HOME, "safety_net_removes"),
+  # The merger's review (rule 15): test_home_cases.py:334, another unit's administrator answered as for a
+  # case that does not exist, body and all. The unit check is the store's (the fake stands in for it): a
+  # store whose 404 for another unit's case says so, a status the app passes through unchanged.
+  ("another unit's case answered with its own 404 body",
+   "../OspreyFlow_Build/tests/services/api/test_home_cases.py",
+   "        if made is None or case_id in self.removed or made.owning_unit != principal.org_unit:\n",
+   "        if made is not None and case_id not in self.removed and made.owning_unit != principal.org_unit:\n"
+   "            from fastapi import HTTPException\n"
+   "            raise HTTPException(404, {\"error\": \"investigation_not_found\", \"in\": \"another unit\"})\n"
+   "        if made is None or case_id in self.removed or made.owning_unit != principal.org_unit:\n",
+   HOME, "safety_net_removes"),
   # Part 2: the ceiling on promotions and drawn merges.
   ("an item above the ceiling unnamed at the sheet and the route",
    "services/api/promotions.py",

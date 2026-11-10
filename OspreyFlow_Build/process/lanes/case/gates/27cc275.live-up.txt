@@ -1,0 +1,1 @@
+Test stack b up for case: osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore osprey-test-b-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
