@@ -134,6 +134,42 @@ def test_no_backup_is_written_inside_the_checkout(
     assert not (stand_in / "backups").exists()
 
 
+def test_an_out_root_from_tilde_is_the_home_folder_never_a_folder_named_tilde(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`ospreyflow backup --out-root=~/x`: the shell expands no `~` after `=`, so the harness gets
+    `~/x` itself, run from the product folder. The folder checked and the folder written must be
+    the one Path, `$HOME/x`; before, the check expanded `~` and `mkdir` did not, so the set landed in
+    `<product>/~/x/`, inside the checkout. Found by the orchestrator's independent review."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    stand_in = tmp_path / "checkout"
+    product = stand_in / "OspreyFlow_Core"
+    product.mkdir(parents=True)
+    (stand_in / ".git").write_text("gitdir: elsewhere\n")
+    monkeypatch.setattr(backup, "REPO_ROOT", product)
+    monkeypatch.chdir(product)
+    made = backup.new_set_folder(Path("~/x"), "local-lite")
+    assert made.parent == home / "x"
+    assert not (product / "~").exists()
+    # And `main` hands the store steps that same folder.
+    path = tmp_path / "osprey.yaml"
+    path.write_text("{}\n")
+    (tmp_path / "generated" / "local-lite").mkdir(parents=True)
+    (tmp_path / "generated" / "local-lite" / "compose.yaml").write_text("services: {}\n")
+    seen: dict[str, object] = {}
+
+    def run_backup(**kwargs: object) -> Path:
+        seen.update(kwargs)
+        raise backup.BackupFailed("graph", "stopped by the test")
+
+    monkeypatch.setattr(backup, "run_backup", run_backup)
+    argv = ["--config", str(path), "--generated-root", str(tmp_path / "generated"), "--out-root=~/y"]
+    assert backup.main(argv) == 1
+    assert seen["out_root"] == home / "y"
+    assert not (product / "~").exists()
+
+
 def test_a_folder_anywhere_in_the_git_checkout_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

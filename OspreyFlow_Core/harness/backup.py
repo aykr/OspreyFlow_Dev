@@ -751,6 +751,9 @@ def new_set_folder(out_root: Path, profile: str) -> Path:
         raise BackupFailed(
             "out-root", f"{profile!r} cannot name a set: a deployment's name is one folder's name"
         )
+    # The folder checked is the folder written: `~` expanded and made absolute once, so a `~` the
+    # shell left alone (`--out-root=~/x`) is never a folder named `~` under the working directory.
+    out_root = out_root.expanduser().absolute()
     refuse_inside_the_checkout(out_root)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     target = out_root / f"{stamp}-{profile}-{git_sha()}"
@@ -1040,7 +1043,7 @@ def main(argv: list[str] | None = None) -> int:
     # ADR-132 Amendment 1: the deployment's own folder, `deployment.name` or the profile.
     profile = args.profile or generated_folder(config)
     if args.out_root is not None:
-        out_root = args.out_root
+        out_root = args.out_root.expanduser().absolute()
     else:
         out_root = default_out_root(config, profile)
         notice = backups_folder(config)[1]
