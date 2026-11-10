@@ -19,6 +19,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 
+from services.ingest.ceiling import DeploymentCeiling, refuse_rows_above_the_ceiling
 from services.ingest.engine import RowKeys, dry_run_recipe
 from services.ingest.pipeline import staging_from_pipeline
 from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, _shape_mask
@@ -255,6 +256,9 @@ async def run_verify(
             raise RecipeRuleError([DATASET_WITHHELD])
         if not sample_markings(draft, scheme, sampled).readable_by(principal, scheme):
             raise RecipeRuleError([TEST_WITHHELD])
+        # ADR-148 Amendment 3: every row of the file judged against the deployment's ceiling, not
+        # only the sample, so a file the load would refuse is told here, in the load's words.
+        refuse_rows_above_the_ceiling(recipe, all_rows, DeploymentCeiling.from_env())
         result = await dry_run_recipe(
             recipe,
             sampled,

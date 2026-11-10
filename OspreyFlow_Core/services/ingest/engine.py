@@ -2375,18 +2375,24 @@ async def dry_run_recipe(
     row_keys: RowKeys | None = None,
     investigation_scope: str | None = None,
     row_refs: Mapping[int, Sequence[SourceRef]] | None = None,
+    ceiling: DeploymentCeiling | None = None,
 ) -> DryRunResult:
     """Verify (`09_INGEST_STUDIO.md` §5): the same `resolve_rows()` output
     Map's own preview machinery is built on, simulated instead of loaded.
     `load_id="dry-run"` is never persisted anywhere — `resolve_rows` only
     threads it onto `StagedRow`s that this function itself consumes and
-    discards."""
+    discards. `ceiling` (ADR-148 Amendment 3): the rows it runs are judged
+    against the deployment's marking ceiling as `run_recipe` judges every row,
+    so Test refuses what the load would, in the same words."""
     _require_scheme_to_judge_bound_handling(recipe, scheme)
     _refuse_staging_without_its_refs(recipe, row_refs)
     _fuzzy_problems(recipe)
     sample = list(rows)
     # Judged as the run judges (ADR-127 decision 5), by asking the store and writing nothing.
     already = await kept_among(recipe, sample, row_keys, investigation_scope)
+    refuse_rows_above_the_ceiling(
+        recipe, sample, ceiling if ceiling is not None else DeploymentCeiling.from_env()
+    )
     resolved = resolve_rows_keyed(
         recipe,
         sample,
