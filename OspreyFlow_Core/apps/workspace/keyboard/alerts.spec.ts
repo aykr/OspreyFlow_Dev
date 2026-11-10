@@ -3,7 +3,16 @@
 // the queue; deploy and retire a rule; release and reject held rows; page the rule audit — no
 // `page.mouse`, no `.click()`. Each action proves its effect reached the server (or the canvas
 // callback), not merely that a control received focus.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { expect, test, type Locator, type Page } from "@playwright/test";
+
+/** The `.bpmn` rules-b's codec writes (its fixture), served as the saved draft's file. */
+const BPMN_FILE = readFileSync(
+  fileURLToPath(new URL("../src/alerts/ruleStandards/fixtures/visits-to-listed-people.bpmn", import.meta.url)),
+  "utf8",
+);
 
 import { ALERTS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
 import { chooseByTyping } from "./chooseByTyping";
@@ -600,6 +609,9 @@ test("a rule is written on a dataset, saved as a draft, tested and made live, by
     record("rules/drafts")(route);
     return route.fulfill(fulfil(draft, 201));
   });
+  await page.route("**/*/v1/investigations/inv-1/rules/r-new/export.bpmn", (route) =>
+    route.fulfill({ status: 200, contentType: "application/xml", body: BPMN_FILE }),
+  );
   await page.route("**/*/v1/investigations/inv-1/rules/r-new/test", (route) => {
     record("rules/r-new/test")(route);
     return route.fulfill(fulfil({ rule_id: "r-new", version: 1, days: 30, would_raise: 2, words: "" }));
@@ -621,6 +633,13 @@ test("a rule is written on a dataset, saved as a draft, tested and made live, by
   await press(page, form.getByRole("button", { name: "Save the draft" }));
   await expect.poll(() => (state.sent.find((s) => s.path === "rules/drafts")?.body as { dataset_id?: string } | undefined)?.dataset_id).toBe("ds-prison");
   registerCovered(REGISTRY, "save-a-rule-draft-by-keyboard");
+  // ADR-146 decision 3: the saved draft drawn read-only, closed by Escape, focus back on its button.
+  const show = page.getByRole("button", { name: "Show as BPMN" });
+  await press(page, show);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(show).toBeFocused();
   const live = page.getByRole("button", { name: "Make live" });
   await expect(live).toBeDisabled();
   await press(page, page.getByRole("button", { name: "Test on the last 30 days" }));

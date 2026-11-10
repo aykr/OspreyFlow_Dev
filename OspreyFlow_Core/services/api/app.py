@@ -25,7 +25,6 @@ from __future__ import annotations
 import asyncio
 import csv
 import functools
-import importlib
 import io
 import json
 import logging
@@ -129,6 +128,7 @@ from ports.media import MediaStore
 from ports.model import ModelPort
 from ports.recognise import RecogniserRefusedError, RecogniserUnavailableError
 from principal_auth import PrincipalRevoked
+from rule_standards import StoredRuleFiles, rule_files
 from schemas.admin import (
     AccessInput,
     AdminDataset,
@@ -426,8 +426,8 @@ from schemas.rights import (
     RightsResponse,
     rights_for,
 )
-from schemas.rule_standards import ImportedRule
 from schemas.rule_editor import RuleDatasetOffer, RuleTestResult
+from schemas.rule_standards import ImportedRule
 from schemas.screening import (
     ScreeningLists,
     ScreeningListsOverview,
@@ -14862,7 +14862,10 @@ async def export_rule_standard_file(
     """The rule's `.bpmn` or `.dmn`, read as the rules list reads it (the reader's reach in its
     `WHERE`): a rule the reader may not see is the same 404 as a missing one. Audited."""
     rule = await typology_rules.get_listed(rule_id, investigation.id, principal)
-    exported = export_rule_file(rule, kind)
+    # ADR-146 Amendment 5: the files saved beside the version the reader reaches, byte for byte.
+    kept = await typology_rules.rule_files(rule.id, rule.version)
+    stored = None if kept is None else StoredRuleFiles(bpmn=kept.bpmn, dmn=kept.dmn)
+    exported = export_rule_file(rule, kind, stored=stored)
     await audit.record(principal=principal, action="export_rule_file",
                        investigation_id=investigation.id,
                        resolved_query={"rule_id": rule_id, "file": kind},
@@ -15028,10 +15031,11 @@ def _rule_files_renderer(request: Request) -> Callable[[SentenceRuleInput], Rule
     set_on_app = getattr(request.app.state, "rule_files", None)
     if set_on_app is not None:
         return cast(Callable[[SentenceRuleInput], RuleFiles], set_on_app)
-    codec = importlib.import_module("rule_standards")
 
     def render(body: SentenceRuleInput) -> RuleFiles:
-        files = codec.rule_files(body, dataset_id=body.dataset_id)
+        if body.dataset_id is None:
+            raise ValueError("a rule's files name its dataset; choose it first")
+        files = rule_files(body, dataset_id=body.dataset_id)
         return RuleFiles(bpmn=files.bpmn, dmn=files.dmn)
 
     return render

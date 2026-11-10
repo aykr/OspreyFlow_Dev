@@ -8,7 +8,8 @@ import { useEffect, useState } from "react";
 import type { RuleDatasetOffer, RuleTestResult, SavedPattern, TypologyRule } from "../../../../packages/schemas/generated";
 import { Button, Select } from "../design/primitives";
 import type { AccessLevel } from "../investigation/cases";
-import { listRuleDatasets, makeRuleLive, testRuleDraft, type AlertsApi } from "./api";
+import { listRuleDatasets, makeRuleLive, readRuleBpmn, testRuleDraft, type AlertsApi } from "./api";
+import { ShowAsBpmn } from "./ruleStandards/ShowAsBpmn";
 import { SentenceBuilder } from "./SentenceBuilder";
 
 export interface RuleEditorProps extends AlertsApi {
@@ -35,6 +36,16 @@ export function RuleEditor(props: RuleEditorProps) {
   const [dataset, setDataset] = useState<RuleDatasetOffer | null>(null);
   const [saved, setSaved] = useState<TypologyRule | null>(null);
   const [tested, setTested] = useState<RuleTestResult | null>(null);
+  // ADR-146 decision 3: *Show as BPMN* draws the files saved beside the draft, read-only.
+  const [bpmn, setBpmn] = useState<string | null>(null);
+  useEffect(() => {
+    setBpmn(null);
+    if (!saved) return;
+    readRuleBpmn(api, saved.id)
+      .then(setBpmn)
+      .catch(() => setBpmn(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved]);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const author = props.level === "author";
@@ -164,6 +175,7 @@ export function RuleEditor(props: RuleEditorProps) {
                   </Button>
                 )}
               </span>
+              {bpmn && <ShowAsBpmn bpmnXml={bpmn} />}
               {tested && (
                 <p className="value" role="status" aria-label="Test result" style={{ margin: 0 }}>
                   {testWords(tested)} Counted as you, over what you may see. Nothing was raised.

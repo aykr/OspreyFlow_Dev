@@ -254,6 +254,20 @@ export const readRuleDraft = (a: AlertsApi, ruleId: string) =>
 export const testRuleDraft = (a: AlertsApi, ruleId: string) =>
   call<RuleTestResult>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/test`), a.bearerToken, "Testing the draft", { method: "POST" });
 
+/** The rule's `.bpmn` as saved beside its version (ADR-146 Amendment 5), for *Show as BPMN*. */
+export async function readRuleBpmn(a: AlertsApi, ruleId: string): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/export.bpmn`), {
+      headers: { Authorization: `Bearer ${a.bearerToken}` },
+    });
+  } catch {
+    throw new Error("The server could not be reached.");
+  }
+  if (!response.ok) throw await failure(response, "Reading the rule as BPMN");
+  return await response.text();
+}
+
 /** *Make live*: at once, or waiting for a second person where the dataset's policy asks. */
 export const makeRuleLive = (a: AlertsApi, ruleId: string) =>
   call<TypologyRule>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/make-live`), a.bearerToken, "Making the rule live", { method: "POST" });

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { OntologySchema } from "../../../../packages/schemas/generated";
 import { RuleEditor } from "./RuleEditor";
+import BPMN from "./ruleStandards/fixtures/visits-to-listed-people.bpmn?raw";
 
 afterEach(() => {
   cleanup();
@@ -57,6 +58,7 @@ function world(over: Record<string, (body: unknown) => Response> = {}) {
     "POST rules/drafts": () => json(201, DRAFT),
     "POST rules/r1/test": () => json(200, { rule_id: "r1", version: 1, days: 30, would_raise: 3, words: "…" }),
     "POST rules/r1/make-live": () => json(200, { ...DRAFT, status: "active" }),
+    "rules/r1/export.bpmn": () => new Response(BPMN, { status: 200 }),
     ...over,
   });
 }
@@ -127,6 +129,17 @@ describe("the rule editor (ADR-146 decision 3)", () => {
     await waitFor(() => expect(calls.some((c) => c.path === "rules/drafts")).toBe(true));
     const sent = calls.find((c) => c.path === "rules/drafts")?.body as { sentence: { relationship: { list_id?: string } } };
     expect(sent.sentence.relationship.list_id).toBe("l-uk");
+  });
+
+  it("shows the saved draft as BPMN, drawn from the files saved beside it (ADR-146 Amendment 5)", async () => {
+    const calls = world();
+    editor();
+    await choose("ds-prison");
+    fireEvent.change(await screen.findByLabelText("Name of the rule"), { target: { value: "Okafor" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save the draft" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show as BPMN" }));
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(calls.some((c) => c.path === "rules/r1/export.bpmn")).toBe(true);
   });
 
   it("says a dataset asks for a second person before it is made live", async () => {

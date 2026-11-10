@@ -278,3 +278,28 @@ def test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approv
     w.as_ = w.checker  # an Author with deploy_rules, not an administrator
     approved = client.post(f"{_base(w)}/{rule_id}/approve")
     assert (approved.status_code, approved.json()["status"]) == (200, "active")
+
+
+def test_the_stored_files_are_the_codecs_at_every_saved_version(world: tuple[_World, TestClient]) -> None:
+    """ADR-146 Amendment 5, rules' half: every save writes beside its version exactly what rules-b's
+    codec writes for the rule as saved (`rule_standards.rule_files`), the real codec, not a stand-in;
+    saving again rewrites them. Red with the save storing files from the sentence before it was
+    normalised, or not rewriting them on a second save."""
+    from rule_standards import rule_files
+
+    w, client = world
+    app.state.rule_files = None  # the real codec
+    store = client.portal.call(w.rules_store)  # type: ignore[union-attr]
+    first = {"name": "Okafor", "dataset_id": "ds-1", "sentence": LISTED}
+    made = client.post(f"{_base(w)}/drafts", json=first)
+    assert made.status_code == 201, made.text
+    rule_id = made.json()["id"]
+    again = {**first, "sentence": {**LISTED, "severity": "low"}}
+    for body in (first, again):
+        if body is again:
+            assert client.put(f"{_base(w)}/{rule_id}/draft", json=body).status_code == 200
+        draft = client.get(f"{_base(w)}/{rule_id}/draft").json()
+        kept = client.portal.call(store.rule_files, rule_id, draft["version"])  # type: ignore[union-attr]
+        expected = rule_files(SentenceRuleInput.model_validate(
+            {**body, "sentence": draft["params"]["sentence"]}), dataset_id="ds-1")  # fmt: skip
+        assert kept is not None and (kept.bpmn, kept.dmn) == (expected.bpmn, expected.dmn)

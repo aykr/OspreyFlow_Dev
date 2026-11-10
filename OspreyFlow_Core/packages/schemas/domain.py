@@ -1304,8 +1304,9 @@ class TypologyRule(TypologyRuleInput):
     pending_action: RuleChangeAction | None = None
     pending_by: str | None = None
     pending_version: int | None = None
-    #: ADR-146 decision 3: the change waiting is a tested draft asked to go live under its dataset's
-    #: second-person policy, which another Author with `deploy_rules` decides, not the administrator.
+    #: ADR-146 decision 3: the change waiting is a tested draft asked to go live under its
+    #: dataset's second-person policy, which another Author with `deploy_rules` decides, not the
+    #: administrator.
     pending_make_live: bool = False
     #: ADR-106: `pending_by`'s display name, resolved when the rules list is served and never
     #: stored (step 9d finding 1: the waiting change named its proposer by an identity-provider id).

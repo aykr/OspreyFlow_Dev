@@ -43,8 +43,8 @@ from schemas.profile import ALL_MODELS as PROFILE_MODELS  # noqa: E402
 from schemas.promotions import ALL_MODELS as PROMOTION_MODELS  # noqa: E402
 from schemas.provider_profile import ALL_MODELS as PROVIDER_PROFILE_MODELS  # noqa: E402
 from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
-from schemas.rule_standards import ALL_MODELS as RULE_STANDARDS_MODELS  # noqa: E402
 from schemas.rule_editor import ALL_MODELS as RULE_EDITOR_MODELS  # noqa: E402
+from schemas.rule_standards import ALL_MODELS as RULE_STANDARDS_MODELS  # noqa: E402
 from schemas.screening import ALL_MODELS as SCREENING_MODELS  # noqa: E402
 from schemas.sentences import ALL_MODELS as SENTENCE_MODELS  # noqa: E402
 from schemas.sources import ALL_MODELS as SOURCE_MODELS  # noqa: E402

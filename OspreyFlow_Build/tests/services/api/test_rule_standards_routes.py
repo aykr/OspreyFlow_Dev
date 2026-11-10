@@ -123,6 +123,11 @@ class _Rules:
             _rule("r-template", sentence=False), _rule("r-whole", dataset=None),
         )}  # fmt: skip
         self.writes: list[str] = []
+        #: The files rules' save stored beside a version (L2.11), by (rule id, version): a read.
+        self.stored: dict[tuple[str, int], Any] = {}
+
+    async def rule_files(self, rule_id: str, version: int) -> Any:
+        return self.stored.get((rule_id, version))
 
     async def get_listed(
         self, rule_id: str, investigation_id: str, principal: Principal
@@ -214,6 +219,18 @@ def test_export_gives_the_two_files_of_the_rule_and_is_audited(world: dict[str, 
     assert dmn.status_code == 200 and "<dmn:decisionTable " in dmn.text
     assert [e["action"] for e in world["audit"].entries] == ["export_rule_file", "export_rule_file"]
     assert world["audit"].entries[0]["resolved_query"] == {"rule_id": "r-1", "file": "bpmn"}
+
+
+def test_the_export_route_serves_the_files_stored_beside_the_rules_version(world: dict[str, Any]) -> None:
+    """ADR-146 Amendment 5 at the route (L2.11): the version the reader reaches is served as its
+    save stored it, byte for byte. Red with the route rendering afresh."""
+    from services.api.typology_rules import RuleFiles
+
+    rule = world["rules"].rules["r-1"]
+    world["rules"].stored[(rule.id, rule.version)] = RuleFiles(
+        bpmn=b"<!-- stored --><bpmn:definitions/>", dmn=b"<!-- stored --><dmn:definitions/>")  # fmt: skip
+    assert _as(VIEWER).get(f"{BASE}/r-1/export.bpmn").content == b"<!-- stored --><bpmn:definitions/>"
+    assert _as(VIEWER).get(f"{BASE}/r-1/export.dmn").content == b"<!-- stored --><dmn:definitions/>"
 
 
 def test_an_exported_rule_imports_back_to_the_same_rule(world: dict[str, Any]) -> None:
