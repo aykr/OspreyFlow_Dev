@@ -1,28 +1,212 @@
-# Rules · UPG · the v0.4.12 → v0.5.0 upgrade rehearsal (interim, 10 November 2026 ~20:00 UTC)
+# rules lane · report · UPG, the v0.4.12 → v0.5.0 upgrade rehearsed on ospreyflow-test (10 November 2026, 18:20–21:10 UTC)
 
-- **Exit: upgrade rehearsed end to end, every step recorded: PARTLY MET.** Run 1 (main 5df2a3e): v0.4.12 →
-  main via the install's `harness.apply --build`, then all seven migrations dry run, run and re-run (each re-run
-  writes 0), and the screens' routes checked (`gates/upg-rehearsal.txt`, `gates/upg-run1/`). `ospreyflow update`
-  itself cannot target an unreleased head (signed release only): its steps were run by hand.
-- **Blocking finding:** update's files step (`scripts.refresh --files-only`) leaves a v0.4.12 deployment with no
-  gateway secrets, so update fails. platform-b's fix 0b45910 FAILS run 2 (`gates/upg-run2/`): the secrets take two
-  passes (the salt is never written), api's `map-settings`/`model-settings` volumes are undeclared, and the old
-  litellm keeps `sk-ospreyflow-dev` while the Conduit gets the new key. Run 3 (`gates/upg_run.sh`) waits for its
-  next head.
-- **Exit: CHANGELOG's steps confirmed or corrected: MET for the migrations** (order, dry runs, no-op re-runs,
-  `migrate_rules_to_datasets` after `make_home_cases`, Rule author to assign, owners needing one); NOT for update.
-- Commits: e08cb51 (tools, guards and env diff shown red), 45382f6 (record, runs 1 and 2), b1e65db (run 3 driver).
+- **Exit — rehearsed end to end, every step recorded: MET, with what stood in named.** Four runs (`gates/upg-rehearsal.txt`, `gates/upg-run1..4/`). Run 1 (main 5df2a3e): v0.4.12 → main, seven migrations; found update's files step breaks every pre-Amendment-2 deployment. Runs 2–3: platform-b's fixes failed (two-pass minting, undeclared volumes, gateway key; then reapply skipping `litellm-db`); a named update refreshing the wrong deployment found in code. Run 4 (platform-b d85f514, fresh v0.4.12): the refusal changes nothing (43/43 files), backup + apply bring it over (12 healthy, stores untouched, gateway key = Conduit key), files step a no-op, seven migrations, a v0.4.12 rule raises an alert after, 77 of 80 env keys byte-identical (every secret among them).
+- **Exit — CHANGELOG's steps confirmed or corrected: MET for the migrations** (order; `migrate_rules_to_datasets` after `make_home_cases`; Rule author to assign; owners needing one) **and the refusal and first apply. NOT PROVEN** (owed to the orchestrator's post-tag check): `ospreyflow update` itself (no release; stood in by `harness.apply --build`, which moved the keys, so the second apply's move is unshown), today's update.py running its own files step, v0.4.12's rollback after the refusal, the lock's digests, `start` as recovery on d85f514, the `start --build` route, the default deployment (2480 held on that box).
+- **Reviews:** the lane-reviewer found 13 anonymous volumes my teardowns left (runs 1, 2, 4) and the record calling them 0; overclaimed update steps; tail's exit statuses recorded as commands'; uncommitted helpers; unrecorded check failures. The orchestrator's review found the same claims plus REPORT replacing main's. All fixed; the 13 volumes removed by the owner (my session was refused). The teardown now fails on an orphaned anonymous volume, shown red (its first reds refused for the wrong reason, recorded).
+- **Commits:** e08cb51, 45382f6, b1e65db, 407088d, 49f92d5, c773f12, c49e5d1, and the review fixes on top.
 
 ## Decisions taken
-- Orchestrator socket 8906 gone, no orchestrator listed: took the one live slot, said so by heartbeat; later
-  confirmed right (14277).
-- Update cannot reach main's head (no release): v0.4.12 from the signed tag, the clone moved to the head's user-repo
-  export, update's steps by hand; the real update owed once v0.5.0 is tagged.
-- The whole-deployment rule left pending (approval needs a second admin): exercises "copied as a draft".
-- Run 2 without the prison pack (run 1 covered its recipes); its list's version 2 held back for after the upgrade.
-- Release-shaped images built under refresh's pinned references in place of a pull (run 3), claimed and removed.
+- Orchestrator's socket gone: took the one live slot, said so by heartbeat (confirmed right).
+- Update cannot reach an unreleased head: v0.4.12 from its signed tag, the clone moved to each head's user-repo export, update's steps by hand; (a) emulated with v0.4.12's own rollback point (approved).
+- Whole-deployment rule left pending (no second admin); provider key synthetic (`upg-synthetic-not-a-real-key-0000`); runs 2–4 without the prison pack.
 
 ## Requests / questions
-- platform-b: the three defects above; apply/stop surviving an uninterpolable compose file; start --build on a
-  release-installed deployment (both carried). The v0.4.12 2480 preflight finding is in CARRIES.
-- Still running: osprey-upg on ospreyflow-test, kept up at the orchestrator's word; nothing local.
+- None open; carries are platform-b's (start --build on a release install; apply/stop on an unreadable compose file; the 2480 preflight). Nothing of mine is running; osprey-upg is gone from the server.
+
+# rules lane · report · L2.11, the rule editor: declared dataset, draft, Test and Make live, the rule files, the migration (10 November 2026; resumed once; the review's must-fixes, gated at 0f319d4)
+
+**What is done, half-done and untouched**
+
+| Brief item | State | Proving test |
+| --- | --- | --- |
+| The declared dataset: chosen first, fixed once saved, only the case's own source or composite | done | `test_rule_editor.py::test_a_rule_is_declared_only_on_the_cases_own_source_or_composite`; `test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved` |
+| Conditions narrowed to the dataset's live model | done | `test_rule_editor.py::test_the_conditions_offer_no_type_outside_the_datasets_live_model`; the save, `test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused` |
+| Draft and live; Test over 30 days, its count the tester's alone (rule 7) | done | `test_rule_drafts_store.py`; `test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone` |
+| Make live with the second person, from the dataset's `promotion_policy` | done | `test_rule_editor.py::test_a_composite_asks_for_a_second_person_when_any_member_does`; `test_rule_editor_routes.py::test_neither_the_author_nor_the_asker_sends_a_make_live_back`; `RuleEditor.test.tsx` (deploy_rules) |
+| Changes: every step audited and listed | done | `test_rule_editor_routes.py`; `test_rule_maker_checker_routes.py` |
+| Per-version .bpmn/.dmn via rules-b's `rule_files()`; Export with `stored=`; Show as BPMN | done | `test_rule_editor_routes.py` (codec equality); `test_rule_standards_routes.py`; `keyboard/alerts.spec.ts` (Escape) |
+| The list picker (`list_id`) and `runs: list_refresh` that actually runs | done | `test_rule_editor.py::test_a_rule_reads_only_a_list_its_dataset_may_and_its_subjects_rows`; `test_rule_list_refresh.py` (9, the three call sites) |
+| `migrate_rules_to_datasets`, dry run first | done | `test_migrate_rules_to_datasets.py` (7); `test_migrate_rules_to_datasets_store.py` (live) |
+| The older routes kept for just_me only | done | `test_rule_sentence_routes.py` (409 `use_the_rule_editor`) |
+| The Lists tab read-only (carry) | done | `ListsPanel.test.tsx`; `keyboard/alerts.spec.ts` |
+| Keyboard (rule 13), axe, registry | done | `keyboard/alerts.spec.ts`, 8 ids in `registry-L2.11.patch`, each red with its handler removed; `a11y/every-harness.spec.ts` |
+| Spec: ADR-146 Amendment 6, spec 03's six routes | done | — |
+| ci.yml and Makefile wiring | half-done, by design | `L2.11_ci_yml.diff` for the orchestrator to apply; `test-file-coverage-check` green with it applied |
+
+1. **Decisions taken under Prompt L, logged in MORNING.md** (PLAN.md has the reasons):
+   - *Make live* reads the dataset's `promotion_policy`, and a composite asks for a second person when any member does.
+   - Test runs over the stored draft, as its author, and goes no wider than the dataset's reach.
+   - One draft and one live version per rule.
+   - New rules can't take the whole-deployment scope; the migration converts the rules that already have it.
+2. **Live, the rules lease, stack c, on the server:**
+   - **The delta at 56e3c73** was `stack_lease.sh live rules` plus the lane's named files: 3305 passed and 38 failed. 36 of the failures were the server's, in files the diff doesn't touch (RED_RECORD §11 names them). Two were the lane's:
+     - a send-back by a make-live's author or asker answered 409, not 403 `own_change`;
+     - `test_schedule_notice` asserted behaviour main doesn't have.
+   - **Both were fixed and shown red** at their call sites (`gates/5a1fb61.plants.txt`). The delta at 5a1fb61 passed 31, and each file passes alone too (`gates/5a1fb61.live.txt`).
+   - Earlier deltas: `5fa7b83`, `953b7a1` and `6c80b31`. Stack c is down and released.
+3. **Local, at 7ee2d56 / eae4092** (code identical; the latter adds records only):
+   - **glass-keyboard**, with the registry patch: 747 passed and 4 failed. The four were in connections and ingest-studio and were caused by load; retaken alone, 55 of 55 passed. The eight new actions were each red with their handler removed.
+   - **glass-a11y:** 963 passed.
+   - **test-js:** 2970 of 2971. The miss was MatrixView's first-frame budget under load; it passed alone.
+   - **`make -k ci`:** green apart from the Docker scans (trivy-image ×8, opentofu, chart) and `test-file-coverage-check`, which goes green with `L2.11_ci_yml.diff`.
+4. **`make test` offline on the server:** 10,527 passed, with 12 failed and 13 errors, all expected (`gates/05ec309.test.txt`, at the head):
+   - the three new live files (22 cases) run because their Makefile ignores are in the unapplied `L2.11_ci_yml.diff`, and `test_test_file_coverage_check` fails for the same reason;
+   - the server's usual pair: valkey_config (main's own) and the webapp's GPU preflight.
+
+   The first take, at eae4092, found a real defect, fixed at 05ec309 (RED_RECORD §13). The scheduled, folder-watched and command-line runs never had the rule's list reader or reach: `from_state` read them as state attributes no Conduit holds, and `RunResources` never built them. So on those paths a composite's rule read only the composite's own id, and a rule naming a list could not run. Both paths now build them from their own stores. The test is red with that building removed. Proven live at 291787c on stack b, at the orchestrator's ask: 278 passed, none failed (`gates/291787c.runpath.live.txt`).
+5. **Reviews:**
+   - My lane-reviewer's 29 findings were all built, with plants (RED_RECORD §10).
+   - The orchestrator's conditions were met: list_refresh runs, the ci wiring is a diff, registries are passed by their literal names, test_schedule_notice is repointed, and Make live is gated on deploy_rules.
+   - rules-b's L2.11a codec is integrated (RED_RECORD §8).
+6. **The orchestrator's independent review at 291787c: four must-fixes, built** (RED_RECORD §14; Amendment 6 point 11, decisions 12 and 13). Each is red by a plant at its call site.
+   1. **Rule 3.** A scheduled or refreshed rule now reads its declared dataset alone, never the author's whole case scope (the layer included). Once its case stops reading that dataset, it is refused in words.
+   2. **`POST …/rules`.** It keeps a pattern or template rule just for its author: the author's own alerts, no `Alert` node. A case-wide one is refused, 409 `use_the_rule_editor`. The form says so, and its five keyboard cases end at a just-for-me rule.
+   3. **Who a rule runs as.** On a load, a slot and a refresh, the author must hold `author_rules` or `deploy_rules`. So a Rule author's scheduled rule runs.
+   4. **Rule 12.** Whoever asked for a make-live can't approve it; this is now tested.
+   - **Re-gated:**
+     - offline: the rule files pass, and the five offline plants are red;
+     - live, at 5b4c6ba on a fresh stack b: 666 passed, and the two live plants are red. The three KYC failures are an existing order dependence; they fail alike without this change;
+     - `make -k ci` and `make test`: make -k ci on the server at 0f319d4 (`gates/0f319d4.ci-server.txt`) is green apart from `test-file-coverage-check`, which waits on `L2.11_ci_yml.diff`. The eight trivy image scans, opentofu and chart ran for real and passed. make test on the server at 877971a (`gates/877971a.test.txt`): 10,531 passed, with 15 failed and 13 errors:
+       - the new live files the unapplied diff leaves in, and the coverage test;
+       - valkey_config and the GPU preflight;
+       - two `test_alerts_and_the_layer` cases, the same fixture gap as decision 13's others. Fixed at 0f319d4; the file passes, 12 of 12.
+7. **Ratification list:** files this step changed outside the rules lane's own (`apps/workspace/src/alerts/**`, and the alerts, rules, watches and monitoring modules and routes):
+   - Ratified earlier: `scripts/migrate_rules_to_datasets.py`, `services/api/audit_section.py`'s actions, the Studio list routes' refresh hooks in `app.py`, `recipe_run.py`'s fields, and the schemas (`sentences.py`, `domain.py`, `monitoring.py`, the new `rule_editor.py`, `generate_ts.py` and `generated/`).
+   - New since: `run_resources.py`'s `rule_lists` and `rule_reach` (§13); `domain.py`'s `TypologyRuleInput.just_me` (decision 12); the keyboard harnesses and `a11y/every-harness.spec.ts`.
+   - Ingest's test fixtures, given a role so that their rules run (decision 13): `tests/ingest/{test_typology_rules,test_kyc_rules,test_rule_writes_in_the_record,test_typology_rule_routes}.py`.
+   - `tests/services/api/{test_schedule_notice,test_load_records,test_recipe_run_path,test_run_resources}.py`.
+8. **Carries for tomorrow** (the orchestrator's no-new-scope note):
+   - **The template-to-draft path.** The editor's draft, *Test* and *Make live* for a pattern or template rule (decision 12's open point). *Test* previews sentences only.
+   - **The composite list ambiguity** (the review's item 5).
+   - **`test_kyc_rules.py`'s order dependence.** Three cases read the screening matches that earlier cases left in the shared ArcadeDB graph. Seen on main's gates too.
+   - **Does a scheduled run's notice still reach a screen after L2.10?** The one queue gives a notice no kind (`alerts._KIND_SQL`), so it sits only in its owner's own list (`AlertStore.list_authorized`). Whether the Glass still shows that list is unverified. It loses a notice; it is not an access problem.
+   - **Main's test-file `ruff` drift**, seen while fixing: `test_rule_editor_routes.py` and several app.py `# fmt: skip` blocks don't pass `ruff format --check` run from Core. They pass the project's own lint.
+
+---
+
+# rules lane · report · L2.10, one queue, watches, team routing, Raise an alert (9 November 2026; resumed twice, regated at 8e8b9ff)
+
+1. **Team routing, the new rule 3 read: met.** Read in the query, never after it (the queue's list, counts, detail, address and triage writes; a pack's alert item; trends; the rule audit). A routed alert writes no `Alert` node. Red with the check opened at `_routed_sql`: `test_monitoring_queue.py`'s three routing cases and `test_pack_alert_item.py`; trends in the analytics suite; the audit in `test_typology_rules.py` (RED_RECORD §1, §5, §6).
+2. **One queue: met.** The inbox's routes and component are gone, and *what fired it* is on the explanation (`alerts/OneQueue.test.tsx`; `test_alert_view_explains_live.py`). **Filters:** the filter case in `test_monitoring_queue.py`, live. **What raises alerts:** `test_team_lead_and_watches.py`.
+3. **Watches from the Glass, and G16: met.** *Watch for this* and *Save as a watch*, plus a watched pattern's own schedule. The schedule runs as its owner and is confined to its dataset, red when not confined: a Glass-made watch alerted on `n-elsewhere` (`test_team_lead_and_watches.py`).
+4. **The lead's tools: met.** The hand-off, *Suppress until…* and the taken-back marking (`test_team_lead_and_watches.py`, `keyboard/alerts.spec.ts`).
+5. **Raise an alert…: met.** It is refused before anything is written: to a Viewer, for a dataset the case doesn't read, for a layer, where there is no home case, and for a drawn item (`test_raise_an_alert.py`, RED_RECORD §2).
+6. **The carries: met.** The read path's purge (`test_read_path_purge.py`); the KYC sweep is no longer stopped whole (`test_composite_monitors.py`). `model_limit_reached` is on main since P3. The list picker is left to L2.11, as the brief says; main's new carry (the Lists tab, 4389138) is L2.11's too.
+7. **Keyboard, axe, registry: met.** Every new action has its case, red with its handler removed. The registry ids are in `registry-L2.10.patch`. Axe passes in dark, light and GOV.UK.
+8. **Gates at 8e8b9ff** (tree 7992ecf2…, rebased onto main at 3be89a7 after the orchestrator's review; `gates/8e8b9ff.*`, `gates/855899f.test.txt`). Closed ports, `OSPREY_LANE` unset. Main moved again afterwards; I did not rebase again, since the lane had gated.
+   - **`make -k ci`:** green except the eight `trivy-image-*` scans, `opentofu-check` and `chart-check`. Those need Docker, which is off on this Mac by the owner's choice.
+   - **`make test`, on the server** (`stack_lease.sh offline`, at 855899f, code identical to 8e8b9ff): 9,529 passed and 3 failed, each named in the file:
+     - `test_valkey_config`, main's own;
+     - `test_webapp_preflight`'s GPU case, because the server has a GPU;
+     - `test_layout`, tripped by the verb's own folders at the copy's root (since cleared).
+   - **`make test` on this Mac** (8e8b9ff): 24 failed and 30 errors, each named: this machine's usual 4, plus 20 failures and 30 errors that need Docker.
+   - **`test-js`:** 2,762 of 2,763. The miss is the MatrixView first-frame budget, run under load; it was green re-taken alone.
+   - **`glass-a11y`:** 723 passed, every harness in dark, light and GOV.UK.
+   - **`glass-keyboard`** (`registry-L2.10.patch` applied uncommitted): 689 passed. ALERTS_ACTIONS and WATCH_PANEL_ACTIONS are covered whole. Two failures are main's own, `boards.spec.ts:225` and its registry check `:423` (the keyboard harness gave the board no grades), fixed in f6def92 on lane/case and carried in CARRIES.md.
+9. **Live: the rules lease, stack c, on the server** (`stack_lease.sh remote`), at 855899f, 18:54–19:58Z (`gates/855899f.live.txt`).
+   - **Files:** `test_route_rights.py` and the 49 live files the change reaches, now with the analytics suite and `test_typology_rule_routes.py`.
+   - **Result:** 779 passed and 1 failed. `test_kyc_rules`' true positive passes.
+   - **The one failure was a real defect:** rules' `event_frequency` on ClickHouse. ClickHouse 25.8, the version deployed, refuses a RANGE window offset of 2^31 ms or more, so every frequency span past 24.9 days failed. It hadn't run against a real ClickHouse since stack a went off.
+   - **Fixed at 274d114, then 778c4d8,** under its own heading below. The orchestrator ruled that the 779 can stand with the fix's delta. The delta at 778c4d8 (the analytics suite whole, `test_route_rights.py` and the live files that evaluate rules) is `gates/778c4d8.live.txt`: 310 passed, none failed.
+   - **Three earlier attempts are recorded as not counted:**
+     - the first pass's 122 ClickHouse cases, not run because the stack had no ClickHouse then;
+     - a retake orphaned by an ssh drop;
+     - a run whose log the verb's prune deleted, a bug fixed on main at dc0b7cd.
+   - The lease is released and stack c is down.
+10. **Reviews:** two rounds by my own lane-reviewer, and the orchestrator's independent review (b839f81 onward), every finding built and red first (RED_RECORD §5, §8, §9). The ClickHouse fix had two rounds of its own, below.
+**A fix to main's own code: ClickHouse `event_frequency` (ADR-133; first seen on main on 7 November, in MORNING).**
+- **The defect.** ClickHouse 25.8, the version the deployment pins, refuses a RANGE window offset of 2^31 or more. The adapter's span window was in milliseconds, so every frequency condition with a span past 24.9 days failed in a ClickHouse deployment; ADR-133 allows 366 days. No live run had met a real ClickHouse since stack a went off.
+- **First fix (1f04c2c), withdrawn after my lane-reviewer's round.** It was a self-join with two defects: it paired every two events of a subject (n²), and it cut the edge to milliseconds against a microsecond column.
+- **Fix (274d114, then 778c4d8).** Each event's running count, non-null amounts and Decimal sum (a RANGE frame with no offset), less the running figures before `at - INTERVAL N DAY`, by an ASOF JOIN on the `DateTime64` itself. Exact to the microsecond, n log n, with `join_use_nulls = 0` set on the query.
+- **Both adapters now sum a declared amount as Decimal(38,9)** (778c4d8; the DuckDB adapter changes too), so a total a rule compares is the same on each: 0.1 and 0.2 make 0.3. An amount past that is no amount, never 0. Spec 04 says so.
+- **Its case,** at the real call site: a 90-day span with a third event 1 µs either side of the edge, `[±1]`. Red on c's ClickHouse against the old window (refused) and against the self-join (`18.0 == 12.0`); 16 frequency cases green on both adapters.
+- **Its lane-reviewer's second round:** the first round's four items closed. Seven more found, each built and red at its real call site (RED_RECORD §12a):
+  - the access case was blind to the target branch's check: plants added at the far end, red on both adapters with that check removed;
+  - an amount past Decimal128(9) was counted as a present 0;
+  - the edge was pinned from one side only;
+  - ties were exercised by nothing;
+  - `join_use_nulls` was left to the server;
+  - the adapters summed differently;
+  - the records were uncommitted.
+- **The five ClickHouse plants** were red on c, and the DuckDB ones offline.
+- **Records:** RED_RECORD §12 and §12a; `gates/274d114.live.txt` and `gates/778c4d8.live.txt`.
+
+**The orchestrator's independent review at fea68fc: sent back, and built** (RED_RECORD §12b):
+1. **Rule 7.** A sweep failure's counts are withheld from a reader its rule's firings are hidden from, as `rule_evaluated`'s are. Red on c with the withholding removed.
+2. **Re-gated at 1e94fdf:**
+   - `make -k ci` here: green apart from the image, opentofu and chart scans (Docker off);
+   - `make test` on the server: 9,531 passed, and 2 failed, both the host's (valkey_config, which is main's, and the GPU preflight);
+   - test-js: 2,762 of 2,763, the miss the MatrixView timing case.
+3. **`account_activity`.** It reads amounts as decimals on both adapters through one `_decimal_amount`, under ADR-133 Amendment 10:
+   - each amount is rounded to 9 places;
+   - one past 10^29, inf or nan is no amount;
+   - a total of 10^28 or more is refused (`AmountTotalOutOfRange`), never wrapped. DuckDB's plain decimal SUM was found to wrap silently.
+4. **The read-path purge** is proved through the real app. Red on c with the lifespan's line removed.
+5. **Ratification list** updated (item 12).
+6. **The tie case** is four tied events. Red on c with a ROWS frame (`6 == 4`).
+- **Minors:**
+  - approve_close's dataset refusal is `not_the_home_cases_author`;
+  - the team-leave case runs through a real signed token;
+  - one `chooseByTyping`;
+  - one friction row;
+  - the records' base, lease intervals and withdrawn-fix pointer corrected.
+- **Live, the rules lease on stack c:**
+  - The five plants were each red for their own reason. The delta at 1e94fdf passed 317, with 9 failures: a defect of that commit's own, a NULL activity sum read by `float()`.
+  - Fixed at bb4466d. Its delta, the analytics suite whole, passed 266 (`gates/1e94fdf.live.txt`, `gates/bb4466d.live.txt`).
+  - Released and down.
+
+**The orchestrator's re-review at 724d297: sent back, and built at d52fc9f** (RED_RECORD §12c):
+1. **A sweep failure's documents not judged** are counted across every customer the rule screens, so the count and its counted words are withheld from every reader of the rule audit; the words without the number are kept. Red on c by two plants (the count withheld only when a firing is hidden; a digit kept in the words).
+2. **`account_activity`'s own refusal, shown alone:** a total of 1.2 × 10^28 that the decimal holds but the limit refuses. Red with only that call removed, on DuckDB offline and ClickHouse on c.
+3. **Minors:** ClickHouse's activity comment; ADR-133 Amendment 10 point 3 narrowed; a team member leaves from their next token (ADR-146 Amendment 4 point 1, `alert_routing.py`); ruff and mypy on the files changed since `make -k ci` (`gates/d52fc9f.lint.txt`).
+- **Live, the rules lease on stack c:** the three plants red; the delta at d52fc9f passed 289, none failed (`gates/d52fc9f.live.txt`). Released and down.
+- **`glass-keyboard` at 6e90f52** (`registry-L2.10.patch` applied uncommitted, then reverted; the orchestrator's local slot): 689 passed, 1 skipped, 2 failed, both main's own (`boards.spec.ts:225` and `:423`, fixed in f6def92 on lane/case) (`gates/6e90f52.keyboard.txt`).
+
+**Rebased onto today's main and re-gated (the orchestrator's ask, 10 November)** at b40bd93, base main at 6379dd1:
+- **The rebase:** onto 380987e, then again onto 6379dd1, since P5b landed during the first. Five conflicts, each resolved by keeping both sides: app.py's imports, test_place_routes.py (Admin › Audit's row and L2.10's watches and teams rows), the decision log and citation allowlist (both appended), and ADR_RESERVATIONS.md (one row each for ADR-146 Amendment 4 and ADR-133 Amendment 10, both written: the duplicate fixed).
+- **`make test` on the server** at c9c1061 (`gates/c9c1061.test.txt`): 10,200 passed, 12 skipped, 4 failed; test-js 2,900 of 2,901 (the MatrixView first-frame budget under load).
+  - Two failures are the host's: test_valkey_config (main's own) and the GPU preflight.
+  - Two were L2.10 meeting today's main, fixed at b40bd93: five L2.10 audit actions unclassified in main's new audit kinds (added to `audit_section.py` with the other alert actions, ratified by the orchestrator), and the Reports Viewer journey naming the two inbox routes L2.10 removed. Both files pass again (16 passed). The orchestrator ruled that the narrow fix needs no full rerun.
+- **Live, the rules lease on stack c** at b40bd93, 09:17–10:27Z (`gates/b40bd93.live.txt`): test_route_rights and the 48 live files, 801 passed, none failed. Down and released.
+- **`make -k ci`** at b40bd93 (`gates/b40bd93.ci.txt`): green apart from the eight `trivy-image-*` scans, opentofu-check and chart-check, which need Docker (off on this Mac).
+- **`glass-keyboard`** at b40bd93 (`registry-L2.10.patch` applied uncommitted, then reverted; `gates/b40bd93.keyboard.txt`): 731 passed, 1 skipped, none failed. Main's two board failures are gone at this base.
+- **Main moved again** during the re-gate (to 17c202d, 144 commits). Not rebased again, since the lane is gated.
+
+11. **Decisions taken** (Prompt L, for the owner to overrule):
+    - **Trends:** a routed alert is counted for its team's members alone, not the home case's Authors (the narrower answer).
+    - **"My team":** offered only for a rule already saved with it.
+    - **Suppress until…:** at most 90 days ahead; the status is unchanged, so it still counts open.
+    - **Dataset alerts:** closed by the home case's Authors alone.
+    - **A watch's schedule:** daily at 06:00 Europe/London by default.
+    - **Watch for this:** reviewed in 90 days.
+    - **Addresses:** a dataset or schedule alert's address answers 404 outside its own case, until a later step.
+12. **Requests to the orchestrator:**
+    - K11's scheduled-run notices need a home in the Studio's schedules (studio).
+    - *Raise an alert…* on the selection bar and on a question's answer (case and questions).
+    - Apply `registry-L2.10.patch`.
+    - Ratify the files outside rules' map, the schemas commit (9b845e0, d8390a6, e382474) going separately and first at merge:
+      - the Conduit: `investigations.py`, `recipe_run.py`, `run_resources.py`, `packs.py`, `app.py`'s routes;
+      - the analytics adapters and port: `analytics_clickhouse/adapter.py`, `analytics_duckdb/adapter.py` (`event_frequency`, `account_activity`) and `alert_facts.py`; `ports/analytics.py` (`AmountTotalOutOfRange`);
+      - the Glass: `App.tsx`, `App.test.tsx`, `inspector/Inspector.tsx`, `patterns/QueryBuilderPanel.tsx`, `patterns/api.ts`, `rights/visibility.ts`, `reports/packText.ts` (rules-b's area, a one-line alert-item change), `a11y/every-harness.spec.ts`;
+      - spec 01, 02, 03 and 04, and ADR-133 Amendment 10; `citation_allowlist.txt`;
+      - the tests this branch changes (other lanes' among them): tests/conformance/analytics_port/test_suite.py, tests/fixtures/citation_allowlist.txt, tests/ingest/test_alert_evidence_withheld_live.py, tests/ingest/test_kyc_rules.py, tests/ingest/test_typology_rule_routes.py, tests/ingest/test_typology_rules.py, tests/scenarios/ledger_monitoring_support.py, tests/scenarios/pid_monitoring_support.py, tests/scenarios/test_phase7_stage6c_watch_routes.py, tests/services/api/test_alert_evidence_withheld.py, tests/services/api/test_alert_node_marking.py, tests/services/api/test_alert_queue_counts.py, tests/services/api/test_alert_runs_partly_raised.py, tests/services/api/test_alert_view_explains_live.py, tests/services/api/test_alert_view_explains.py, tests/services/api/test_composite_monitors.py, tests/services/api/test_evaluation_touched_nodes.py, tests/services/api/test_evaluation.py, tests/services/api/test_investigation_levels.py, tests/services/api/test_load_records.py, tests/services/api/test_monitoring_queue.py, tests/services/api/test_monitors.py, tests/services/api/test_pack_alert_item.py, tests/services/api/test_place_routes.py, tests/services/api/test_raise_an_alert.py, tests/services/api/test_read_path_purge.py, tests/services/api/test_recipe_run_path.py, tests/services/api/test_revert_closes_alerts.py, tests/services/api/test_route_rights.py, tests/services/api/test_run_resources.py, tests/services/api/test_sentence_rules.py, tests/services/api/test_team_lead_and_watches.py.
+    - The ADR-146 Amendment 4 reservation.
+13. **Questions for the owner:** none open. Q3 was ruled (a), as Amendment 4 point 9.
+14. **Commits** (rebased onto 3be89a7):
+    - schemas: 9b845e0, d8390a6, e382474;
+    - the Conduit: c80fbe9;
+    - the Glass: 93e8786;
+    - keyboard: a214218;
+    - review rounds: 18dc869, then b839f81, 9c11cb8, 396c45b, 7bed439, c98052b and 5c81b0b;
+    - live and test reds: 4eaceff, 01af58e, 38ca288, 8e8b9ff;
+    - spec: 8b73b8c, 3189839, 47327ec, 44c02cd;
+    - ci fixes: 51e5bdd, e1bd6a3, bbe22ba, 148b381;
+    - records: a513b6e, 6263f6b, 7aef8ba;
+    - the gates at 8e8b9ff: aef9bb2, 412f893, 855899f;
+    - the ClickHouse fix: 1f04c2c, then 274d114 and 778c4d8 after two review rounds;
+    - the live and server records: 3b6ed0e, then the deltas at 274d114 and 778c4d8;
+    - the orchestrator's review: 77c5a56 api, 12d5488 analytics, 86366d7 workspace, 1e94fdf records, bb4466d the live run's fix, then the gates and this report;
+    - the re-review: d52fc9f the fixes, 6e90f52 its live records, then the keyboard record and this report;
+    - the rebase onto 6379dd1: b40bd93, L2.10 meeting today's main; then the re-gate's records.
+    - then this report and the friction row.
+15. **Still running:** nothing. The lease on c is released, its stack is down, and no server run is alive.
