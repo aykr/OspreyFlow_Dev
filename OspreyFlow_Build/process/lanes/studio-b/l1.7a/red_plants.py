@@ -259,6 +259,23 @@ PLANTS = [
      [("                ours = sorted(os.listdir(left)) in ([], [\".git\"])\n",
        "                ours = True  # PLANT\n")], [REPO_TESTS],
      ["test_an_aside_holding_more_than_a_git_directory_is_kept"], "holding more than .git was swept"),
+    ("put-back-reads-the-parent", "the put-back reads the parent the publish read at the start, not "
+     "the current HEAD: a rival's commit of the same recipe undone",
+     [("            head_id: ObjectID | None = repo.refs[HEADREF]\n",
+       "            head_id: ObjectID | None = repo[repo.refs[HEADREF]].parents[0]  # PLANT\n")],
+     [REPO_TESTS], ["test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to"],
+     "not to the current HEAD"),
+    ("tree-written-as-the-recipe", "the put-back writes whatever HEAD holds at the path, a tree too",
+     [("                if not isinstance(blob, Blob):\n", "                if False:  # PLANT\n")],
+     [REPO_TESTS], ["test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written"],
+     "a tree was written"),
+    ("no-commit-head-not-refused-first", "a HEAD that is no commit refused only after the write",
+     [("            _refuse_a_head_that_is_no_commit(repo)\n", "")], [REPO_TESTS],
+     ["test_a_head_that_is_not_a_commit_is_refused_before_the_write"], "written before"),
+    ("first-use-unlocked", "the in-process lock not taken, so the first-use sweep runs under no lock",
+     [(ACQUIRE, "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS  # PLANT\n"),
+      ("        _REPOSITORY_LOCK.release()\n", "        pass  # PLANT\n")], [REPO_TESTS],
+     ["test_the_first_use_sweep_runs_under_the_in_process_lock"], "the first sweep ran with"),
 ]
 
 def run(files: list[str]) -> str:

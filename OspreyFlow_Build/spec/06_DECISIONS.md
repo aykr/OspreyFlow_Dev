@@ -31499,10 +31499,12 @@ file lives in a `.git` that does not exist yet.
 1. **A refused publish puts the file back as `HEAD` holds it** (adding to point 5). Once the new bytes are in place
    (after `os.replace`), any failure puts the recipe's file and its index entry back as the current `HEAD` holds
    them, a rival's commit included. A recipe `HEAD` does not hold, including where `HEAD` holds `recipes` as a file,
-   is removed. A `HEAD` that is no commit (an annotated tag, say) leaves the file as written, since what it holds
-   cannot be read and the recipe may be published. Neither the put-back nor the removal follows a link below the
-   root. The put-back is best effort: its own failure is logged, and the publish's error is the one raised. A
-   refusal before the write (an id, a link, a foreign `.git`, the lock's wait) has written nothing to put back.
+   is removed. A `HEAD` that is no commit (an annotated tag, say) refuses the publish before the write, since what
+   it holds cannot be read and a write could be neither committed nor put back. Where `HEAD` holds no file at the
+   path (a directory there), the put-back leaves the file as written and logs why, and never writes a tree as the
+   recipe. Neither the put-back nor the removal follows a link below the root. The put-back is best effort: its own failure is logged, and the publish's error is the one raised. A
+   refusal before the write (an id, a link, a foreign `.git`, a `HEAD` that is no commit, the lock's wait) has
+   written nothing to put back.
 2. **The aside sweep removes only what a first use makes** (adding to point 6): an aside of `mkdtemp`'s shape that
    is empty or holds one `.git` and nothing else. One holding anything more is kept, however old.
 3. **Point 6 corrected.** At first use the stale aside is swept under the in-process lock, before the `flock`
@@ -31514,10 +31516,15 @@ file lives in a `.git` that does not exist yet.
   - `test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it`,
     `test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to`,
     `test_a_new_recipe_refused_is_not_left_on_the_volume` and `test_a_failure_after_the_rename_is_put_back_too`;
-  - `test_a_recipes_file_in_head_counts_as_holding_no_recipe` and
-    `test_a_head_that_is_not_a_commit_leaves_the_file_rather_than_removing_it`;
+  - `test_a_recipes_file_in_head_counts_as_holding_no_recipe`,
+    `test_a_head_that_is_not_a_commit_is_refused_before_the_write` and
+    `test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written`;
+  - the same-recipe rival commits through git's plumbing, so its case passes only when the put-back reads the
+    current `HEAD`, not the parent the publish read (plant `put-back-reads-the-parent`);
   - `test_a_failure_after_staging_leaves_nothing_committed` (extended).
 - **Decision 2:** `test_an_aside_holding_more_than_a_git_directory_is_kept` and `test_an_empty_stale_aside_is_swept`.
+- **Decision 3:** `test_the_first_use_sweep_runs_under_the_in_process_lock`, probing the first sweep (the lock held,
+  the `flock`'s file not yet there) and a later one (both); red with the in-process lock not taken.
 
 ### ADR-145, Amendment 8 (9 November 2026) — Disable and the items an administrator may not see (L3.8)
 
