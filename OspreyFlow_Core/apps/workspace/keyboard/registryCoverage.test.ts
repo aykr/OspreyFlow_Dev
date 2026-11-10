@@ -20,7 +20,7 @@ const KEYBOARD_DIR = dirname(fileURLToPath(import.meta.url));
 
 /**
  * The registry names one spec's source asserts: `assertAllCovered("<LITERAL>", …)`, or a name passed
- * through a string constant the same file declares (`const REGISTRY = "RULES_PLACE_ACTIONS";`, the
+ * through a string `const` the same file declares once (`const REGISTRY = "RULES_PLACE_ACTIONS";`, the
  * shape two lanes used on 10 November 2026 and this scan once read as "never asserted"). A first
  * argument it cannot resolve to a string is returned in `unread`, so the caller fails in words
  * rather than reading the registry as unasserted.
@@ -29,20 +29,25 @@ export function assertedNamesIn(source: string): {
   names: string[];
   unread: string[];
 } {
-  const constants = new Map<string, string>();
-  const declared =
-    /\b(?:const|let)\s+(\w+)\s*(?::\s*string\s*)?=\s*["'](\w+)["']/g;
-  for (const [, name, value] of source.matchAll(declared))
-    constants.set(name, value);
+  // Comments first: a call or a constant written in one is not in the spec.
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
+  // `const` only (a `let` can be reassigned), and a name declared twice is never guessed between:
+  // one of them may be shadowed inside a `describe` (the independent review, 10 November 2026).
+  const constants = new Map<string, string | null>();
+  const declared = /\bconst\s+(\w+)\s*(?::\s*string\s*)?=\s*["'](\w+)["']/g;
+  for (const [, name, value] of code.matchAll(declared)) {
+    constants.set(name, constants.has(name) ? null : value);
+  }
   const names: string[] = [];
   const unread: string[] = [];
-  for (const [, literal, identifier] of source.matchAll(
-    /assertAllCovered\(\s*(?:["'](\w+)["']|([A-Za-z_$][\w$.]*))/g,
+  for (const [, literal, other] of code.matchAll(
+    /assertAllCovered\(\s*(?:["'](\w+)["']|(`[^`]*`|[A-Za-z_$][\w$.]*))/g,
   )) {
-    if (literal !== undefined) names.push(literal);
-    else if (constants.has(identifier))
-      names.push(constants.get(identifier) as string);
-    else unread.push(identifier);
+    const resolved = other === undefined ? literal : constants.get(other);
+    if (resolved) names.push(resolved);
+    else unread.push(other as string);
   }
   return { names, unread };
 }
@@ -84,6 +89,39 @@ describe("the scan reads a registry's name however a spec passes it", () => {
     expect(assertedNamesIn(spec)).toEqual({
       names: ["RULES_PLACE_ACTIONS"],
       unread: [],
+    });
+  });
+
+  it("never reads a let, which can be reassigned (the independent review)", () => {
+    const spec =
+      'let REGISTRY = "PACKS_ACTIONS";\n' +
+      'REGISTRY = "MAPS_ACTIONS";\n' +
+      "assertAllCovered(REGISTRY, MAPS_ACTIONS);\n";
+    expect(assertedNamesIn(spec)).toEqual({ names: [], unread: ["REGISTRY"] });
+  });
+
+  it("never guesses between two constants of one name, as when one is shadowed in a describe", () => {
+    const spec =
+      'const REGISTRY = "PACKS_ACTIONS";\n' +
+      'describe("maps", () => {\n  const REGISTRY = "MAPS_ACTIONS";\n' +
+      "  assertAllCovered(REGISTRY, MAPS_ACTIONS);\n});\n";
+    expect(assertedNamesIn(spec)).toEqual({ names: [], unread: ["REGISTRY"] });
+  });
+
+  it("reads nothing inside a comment", () => {
+    const spec =
+      '// assertAllCovered("PACKS_ACTIONS", PACKS_ACTIONS);\n' +
+      '/* const REGISTRY = "MAPS_ACTIONS";\n assertAllCovered("MAPS_ACTIONS", MAPS_ACTIONS); */\n' +
+      "assertAllCovered(REGISTRY, ADMIN_ACTIONS);\n";
+    expect(assertedNamesIn(spec)).toEqual({ names: [], unread: ["REGISTRY"] });
+  });
+
+  it("says a template literal is unread, rather than missing the call", () => {
+    expect(
+      assertedNamesIn("assertAllCovered(`PACKS_ACTIONS`, PACKS_ACTIONS);"),
+    ).toEqual({
+      names: [],
+      unread: ["`PACKS_ACTIONS`"],
     });
   });
 
