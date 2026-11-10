@@ -58,7 +58,9 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
       8 November). Docker stays on afterwards for your demo; the lanes' stacks stay on the server.
    3. The product repo: `OspreyFlow_Build/scripts/publish_user_repo_update.sh` (its checks refuse real names, local
       paths, `osprey.yaml`, `data/` and the real-data list), then `git push origin main` in `OspreyFlow_user_repo`.
-   The new README stays a draft (`README_DRAFT.md`) until you approve it, so the published README is today's.
+   The new README stays a draft until you approve it, so the published README is today's. (The review found the
+   draft sat under `OspreyFlow_Core`, which the publish copies whole; docs is moving it to
+   `OspreyFlow_Build/process/lanes/docs/README_DRAFT.md`, and I check the published tree for it before pushing.)
    **To overrule:** say what to change.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
