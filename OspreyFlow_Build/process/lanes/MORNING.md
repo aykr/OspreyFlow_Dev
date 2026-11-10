@@ -118,6 +118,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
 16. **No new demo-track steps before tonight's release (your word, 10 November afternoon).** What a review or
    test finds goes to CARRIES for tomorrow, unless it is a real access-control (rule 3) problem or blocks the demo.
    T1's merged parts are folded into its one step on the dashboard.
+17. **Two rule-editor decisions from L2.11's independent review (rules; ADR-146 Amendment 6).** (a) A pattern
+   rule or an AML/KYC template added to a case no longer goes live at once: it becomes a draft in the rule's declared
+   dataset, needing Test and Make live like any rule (ADR-146 decision 3: no rule goes live untested). (b) A rule
+   runs as its author, who must hold `author_rules` (the right to have written it), on every run path (load,
+   schedule, list refresh, Test); before, a Rule author's live rule ran at a load but never on a schedule. Its reach
+   stays the rule's declared dataset alone. **To overrule:** say "(a) live at once" or "(b) deploy_rules".
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

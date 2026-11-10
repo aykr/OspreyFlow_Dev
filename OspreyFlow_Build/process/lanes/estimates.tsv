@@ -1,8 +1,8 @@
-# as of 2026-11-10T14:36Z
+# as of 2026-11-10T16:15Z
 studio	L1.7	releases, run API, quotas; make test, then ci and merge	~17:30	A
-rules	L2.11	rule editor built; live, keyboard/axe/ci, make test, merge	~17:30	A
-docs	D2b	the decks, after L2.11	~19:30	A
-orchestrator	release	your deployment rebuilt; product repo published	~21:00	A
+rules	L2.11	review: 4 must-fixes (schedule reach, template drafts, run-as right, asker test); re-gate	~19:00	A
+docs	D2b	the decks, after L2.11	~20:30	A
+orchestrator	release	your deployment rebuilt; product repo published	~22:00	A
 admin	T1	parts 1, 3, 2a, batch merged; marks, parallel, sleeps	11 Nov	A
 studio-b	L1.10	marking ceiling: entry points built; packs, gates	~18:00	B
 platform	P7	fresh session from HANDOFF; ConfigMap, review points	~11 Nov, midday	B
