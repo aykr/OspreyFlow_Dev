@@ -79,6 +79,8 @@ import { MapView } from "./map/MapView";
 import { MatrixView } from "./matrix/MatrixView";
 import { fetchCaseInfluencers } from "./strength/api";
 import { searchPlaces } from "./map/places";
+import { addGazetteer, caseGazetteers, removeGazetteer } from "./map/gazetteers";
+import type { GazetteerControls } from "./map/MapControls";
 import { defaultProvider, fetchMapConfig, switchableProviders } from "./map/providers";
 import { instantAtFraction, itemsUpTo } from "./playback/math";
 import {
@@ -569,6 +571,23 @@ export function App() {
   const pictureTypes = useMemo(
     () => new Set(ontologyEdgeTypes.find((t) => t.name === "DEPICTS")?.to ?? []),
     [ontologyEdgeTypes],
+  );
+  // P6: the case's gazetteers beside the map's place search, bound once per case, token and
+  // rights, so the panel reads them once rather than on every render. Changes are offered only to
+  // a person holding `run_pipelines`; the Conduit refuses anyone else all the same.
+  const gazetteerControls = useMemo<GazetteerControls | undefined>(
+    () =>
+      investigationId
+        ? {
+            load: () => caseGazetteers(API_BASE_URL, bearerToken, investigationId),
+            add: (datasetId, gazetteerId) =>
+              addGazetteer(API_BASE_URL, bearerToken, datasetId, gazetteerId),
+            remove: (datasetId, gazetteerId) =>
+              removeGazetteer(API_BASE_URL, bearerToken, datasetId, gazetteerId),
+            mayChange: rights?.has("run_pipelines") ?? false,
+          }
+        : undefined,
+    [investigationId, bearerToken, rights],
   );
   const hotspotEdgeTypes = useMemo(
     () => locationEdgeTypeNames(ontologyEdgeTypes),
@@ -2112,6 +2131,7 @@ export function App() {
                               searchPlaces(API_BASE_URL, bearerToken, investigationId, query)
                           : undefined
                       }
+                      gazetteers={gazetteerControls}
                       nodeCoordinates={nodeCoordinates}
                       geoBins={geoBins}
                       snailTrail={revealedSightings}

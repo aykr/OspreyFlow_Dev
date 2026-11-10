@@ -48,7 +48,13 @@ import { currentTheme, onThemeChange } from "../theme/theme";
 import type { WorkingSetGraph } from "../workingset/store";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
 import { conduitRequest } from "./conduitRequest";
-import { BasemapSwitch, PlaceSearch, type SearchPlaces } from "./MapControls";
+import {
+  BasemapSwitch,
+  CaseGazetteerPanel,
+  PlaceSearch,
+  type GazetteerControls,
+  type SearchPlaces,
+} from "./MapControls";
 import { mapStart, type BasemapCentre } from "./mapStart";
 import { overlayColours } from "./overlayColours";
 import { registerAuthorisedPmtilesSource } from "./pmtilesAuth";
@@ -210,6 +216,9 @@ export interface MapViewProps {
   /** P4, the place search over the case's gazetteer (`places.ts`'s `searchPlaces`, bound to the
    * case). Absent, no search is drawn. */
   searchPlaces?: SearchPlaces;
+  /** P6, the case's gazetteers beside the place search (`gazetteers.ts`, bound to the case and the
+   * person's `run_pipelines`). Absent, no panel is drawn. */
+  gazetteers?: GazetteerControls;
 }
 
 /** How close a found place is shown: a village fills the view, a city's centre is legible. */
@@ -231,10 +240,12 @@ export function MapView({
   onNodeClick,
   providers,
   searchPlaces,
+  gazetteers,
 }: MapViewProps) {
   // The basemap the analyst chose (P4); the caller's `provider` until they choose another. A chosen
   // id the list no longer holds falls back to the caller's, never to a provider not offered.
   const [chosenId, setChosenId] = useState(provider.id);
+  const [placesVersion, setPlacesVersion] = useState(0);
   const active = providers?.find((p) => p.id === chosenId) ?? provider;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -584,17 +595,25 @@ export function MapView({
           Hosted provider — {active.client_scope}
         </div>
       )}
-      {((providers !== undefined && providers.length > 1) || searchPlaces) && (
+      {((providers !== undefined && providers.length > 1) || searchPlaces || gazetteers) && (
         <div className="map-controls">
           {providers !== undefined && (
             <BasemapSwitch providers={providers} chosen={active.id} onChoose={setChosenId} />
           )}
           {searchPlaces && (
             <PlaceSearch
+              // A gazetteer added or removed changes what the search offers: it starts afresh.
+              key={placesVersion}
               search={searchPlaces}
               onGo={(place) =>
                 mapRef.current?.jumpTo({ center: [place.lon, place.lat], zoom: PLACE_ZOOM })
               }
+            />
+          )}
+          {gazetteers && (
+            <CaseGazetteerPanel
+              {...gazetteers}
+              onChanged={() => setPlacesVersion((version) => version + 1)}
             />
           )}
         </div>
