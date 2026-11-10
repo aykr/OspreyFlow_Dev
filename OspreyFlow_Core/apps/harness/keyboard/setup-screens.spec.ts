@@ -5,7 +5,12 @@
 // `playwright.config.ts` starts it) and a real `PUT /api/config`, not a mocked response.
 import { expect, type Page, type Response, test } from "@playwright/test";
 
-import { assertAllCovered, registerCovered, SETUP_SCREENS_ACTIONS } from "./actions";
+import { lanePort } from "../../lanePorts";
+import {
+  assertAllCovered,
+  registerCovered,
+  SETUP_SCREENS_ACTIONS,
+} from "./actions";
 
 test("Tab reaches the Profile screen's own options and a real keyboard Enter saves it", async ({
   page,
@@ -16,9 +21,13 @@ test("Tab reaches the Profile screen's own options and a real keyboard Enter sav
   // Starting focus is the document body — proving Tab actually reaches each control, the same
   // discipline every spec in `apps/workspace/keyboard/` already follows.
   await page.keyboard.press("Tab"); // the light and dark button comes first
-  await expect(page.getByRole("button", { name: /Switch to the light theme/ })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: /Switch to the light theme/ }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // Profile nav button
-  await expect(page.getByRole("button", { name: "Profile", exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Profile", exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // Components nav button
   await page.keyboard.press("Tab"); // Models nav button
   await page.keyboard.press("Tab"); // Governance nav button
@@ -34,17 +43,31 @@ test("Tab reaches the Profile screen's own options and a real keyboard Enter sav
   await expect(page.getByRole("textbox", { name: /^Address/ })).toBeFocused();
   await page.keyboard.type("https://osprey.example.org");
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Save profile" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Save profile" }),
+  ).toBeFocused();
 
   const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/config") && r.request().method() === "PUT"),
+    page.waitForResponse(
+      (r) => r.url().includes("/api/config") && r.request().method() === "PUT",
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
-  const savedProfile = (await response.json()) as { profile: string; network: { public_origin: string } };
-  expect([savedProfile.profile, savedProfile.network.public_origin]).toEqual(["small", "https://osprey.example.org"]);
-  await expect(page.getByText("Profile", { exact: false }).first()).toBeVisible();
-  await expect(page.locator(".summary-rail").getByText("decided")).toBeVisible();
+  const savedProfile = (await response.json()) as {
+    profile: string;
+    network: { public_origin: string };
+  };
+  expect([savedProfile.profile, savedProfile.network.public_origin]).toEqual([
+    "small",
+    "https://osprey.example.org",
+  ]);
+  await expect(
+    page.getByText("Profile", { exact: false }).first(),
+  ).toBeVisible();
+  await expect(
+    page.locator(".summary-rail").getByText("decided"),
+  ).toBeVisible();
 
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-profile");
 });
@@ -66,16 +89,26 @@ test("a keyboard-activated screen switch reaches Components and a real Enter sav
   await page.keyboard.press("Tab"); // Geospatial nav button
   await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab"); // graph store select
-  await expect(page.getByRole("combobox", { name: "Graph store" })).toBeFocused();
+  await expect(
+    page.getByRole("combobox", { name: "Graph store" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // analytics engine select
-  await expect(page.getByRole("combobox", { name: "Analytics engine" })).toBeFocused();
+  await expect(
+    page.getByRole("combobox", { name: "Analytics engine" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // the ingest folder (folder watch, ADR-110 Amendment 4)
-  await expect(page.getByRole("textbox", { name: "Ingest folder" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Ingest folder" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // Save components button
-  await expect(page.getByRole("button", { name: "Save components" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Save components" }),
+  ).toBeFocused();
 
   const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/config") && r.request().method() === "PUT"),
+    page.waitForResponse(
+      (r) => r.url().includes("/api/config") && r.request().method() === "PUT",
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
@@ -91,7 +124,9 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
   await page.keyboard.press("Enter");
   await page.getByRole("checkbox", { name: /Local only/ }).waitFor();
   // The model choices are read from the harness after the screen opens (ADR-095).
-  await page.getByRole("combobox", { name: "Entity extraction model" }).waitFor();
+  await page
+    .getByRole("combobox", { name: "Entity extraction model" })
+    .waitFor();
 
   // Models is no longer the last nav button (Governance, Geospatial, Preflight follow it in the
   // DOM) — the same "Enter leaves focus on the activated button itself" finding as Components
@@ -101,7 +136,9 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
   await page.keyboard.press("Tab"); // Preflight nav button
   // ADR-095: the four model choices come first, the extraction model on its shipped default.
   await page.keyboard.press("Tab");
-  const extraction = page.getByRole("combobox", { name: "Entity extraction model" });
+  const extraction = page.getByRole("combobox", {
+    name: "Entity extraction model",
+  });
   await expect(extraction).toBeFocused();
   await expect(extraction).toHaveValue("qwen2.5:7b-instruct");
   // Typing chooses an option on every platform (an arrow key opens the menu on macOS).
@@ -111,23 +148,30 @@ test("a keyboard-activated screen switch reaches Models and a real Enter saves i
   await page.keyboard.press("Tab"); // transcription model
   await page.keyboard.press("Tab"); // embedding model
   await page.keyboard.press("Tab"); // the "local only" checkbox
-  await expect(page.getByRole("checkbox", { name: /Local only/ })).toBeFocused();
+  await expect(
+    page.getByRole("checkbox", { name: /Local only/ }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // Save models button (hosted-fallback fields hidden while local only)
   await expect(page.getByRole("button", { name: "Save models" })).toBeFocused();
 
   const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/config") && r.request().method() === "PUT"),
+    page.waitForResponse(
+      (r) => r.url().includes("/api/config") && r.request().method() === "PUT",
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
-  expect(((await response.json()) as { models: { extraction: string } }).models.extraction).toBe(
-    "qwen2.5:14b-instruct",
-  );
+  expect(
+    ((await response.json()) as { models: { extraction: string } }).models
+      .extraction,
+  ).toBe("qwen2.5:14b-instruct");
 
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-models");
 });
 
-test("Tab reaches the Governance screen and a real keyboard Enter saves it", async ({ page }) => {
+test("Tab reaches the Governance screen and a real keyboard Enter saves it", async ({
+  page,
+}) => {
   await page.goto("/keyboard/setup-harness.html");
   await page.getByRole("button", { name: "Governance", exact: true }).focus();
   await page.keyboard.press("Enter");
@@ -139,18 +183,28 @@ test("Tab reaches the Governance screen and a real keyboard Enter saves it", asy
   await page.keyboard.press("Tab"); // Geospatial nav button
   await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab"); // Identity provider input
-  await expect(page.getByRole("textbox", { name: "Identity provider" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Identity provider" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // Handling scheme select
-  await expect(page.getByRole("combobox", { name: "Handling scheme" })).toBeFocused();
+  await expect(
+    page.getByRole("combobox", { name: "Handling scheme" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // Ontology input
   await expect(page.getByRole("textbox", { name: "Ontology" })).toBeFocused();
   await page.keyboard.press("Tab"); // Real-data exceptions file path input
-  await expect(page.getByRole("textbox", { name: "Real-data exceptions file path" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Real-data exceptions file path" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // Save governance button
-  await expect(page.getByRole("button", { name: "Save governance" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Save governance" }),
+  ).toBeFocused();
 
   const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/config") && r.request().method() === "PUT"),
+    page.waitForResponse(
+      (r) => r.url().includes("/api/config") && r.request().method() === "PUT",
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
@@ -174,13 +228,19 @@ test("a real keyboard walkthrough adds a real-data exception through the Governa
   await page.keyboard.press("Tab"); // Real-data exceptions file path
   await page.keyboard.press("Tab"); // Save governance button
   await page.keyboard.press("Tab"); // Dataset name input
-  await expect(page.getByRole("textbox", { name: "Dataset name" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Dataset name" }),
+  ).toBeFocused();
   await page.keyboard.type("Keyboard Spec Corpus");
 
   await page.keyboard.press("Tab"); // local_development checkbox
-  await expect(page.getByRole("checkbox", { name: "local_development" })).toBeFocused();
+  await expect(
+    page.getByRole("checkbox", { name: "local_development" }),
+  ).toBeFocused();
   await page.keyboard.press("Space");
-  await expect(page.getByRole("checkbox", { name: "local_development" })).toBeChecked();
+  await expect(
+    page.getByRole("checkbox", { name: "local_development" }),
+  ).toBeChecked();
 
   await page.keyboard.press("Tab"); // scale_testing checkbox
   await page.keyboard.press("Tab"); // owner_run_demonstration checkbox
@@ -198,11 +258,15 @@ test("a real keyboard walkthrough adds a real-data exception through the Governa
   await page.keyboard.type("ADR-035 §C3");
 
   await page.keyboard.press("Tab"); // Add exception button
-  await expect(page.getByRole("button", { name: "Add exception" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Add exception" }),
+  ).toBeFocused();
 
   const [response] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/real-data-exceptions") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/real-data-exceptions") &&
+        r.request().method() === "POST",
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -246,7 +310,9 @@ test("a real keyboard Enter removes a real-data exception through the Governance
 
   const [response] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/real-data-exceptions/") && r.request().method() === "DELETE",
+      (r) =>
+        r.url().includes("/api/real-data-exceptions/") &&
+        r.request().method() === "DELETE",
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -267,7 +333,9 @@ test("a real keyboard walkthrough registers a local provider through the Geospat
   // Geospatial is the 5th of 6 nav buttons — one sibling (Preflight) follows it in the DOM.
   await page.keyboard.press("Tab"); // Preflight nav button
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("textbox", { name: "Provider id" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Provider id" }),
+  ).toBeFocused();
   await page.keyboard.type("osm-local-keyboard-spec");
 
   await page.keyboard.press("Tab");
@@ -275,14 +343,20 @@ test("a real keyboard walkthrough registers a local provider through the Geospat
   await page.keyboard.type("Keyboard spec region");
 
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("textbox", { name: "PMTiles path" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "PMTiles path" }),
+  ).toBeFocused();
   await page.keyboard.type("/tmp/keyboard-spec.pmtiles");
 
   await page.keyboard.press("Tab"); // Register provider button
-  await expect(page.getByRole("button", { name: "Register provider" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Register provider" }),
+  ).toBeFocused();
 
   const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/geospatial/register-provider")),
+    page.waitForResponse((r) =>
+      r.url().includes("/api/geospatial/register-provider"),
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
@@ -306,18 +380,24 @@ test("Tab reaches Build local basemap and Verify, each a real keyboard-triggered
   await page.keyboard.press("Tab"); // Region
   await expect(page.getByLabel("Region")).toBeFocused();
   await page.keyboard.press("Tab"); // Build local basemap button
-  await expect(page.getByRole("button", { name: "Build local basemap" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Build local basemap" }),
+  ).toBeFocused();
 
   // ADR-147 decision 6: the Conduit's own build, run in its container. This console has launched
   // nothing, so the route answers 409 in words; this proves the button is keyboard-reachable and
   // really calls the route with the region (`test_webapp_geospatial.py` proves the run itself).
   const [buildResponse] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/geospatial/build-basemap")),
+    page.waitForResponse((r) =>
+      r.url().includes("/api/geospatial/build-basemap"),
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(buildResponse.status()).toBe(409);
   expect(buildResponse.request().postDataJSON()).toEqual({ region: "rutland" });
-  await expect(page.getByRole("status").filter({ hasText: "Launch it first" })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Launch it first" }),
+  ).toBeVisible();
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-build-basemap");
 
   await page.keyboard.press("Tab"); // Verify button
@@ -346,7 +426,9 @@ test("a real keyboard walkthrough generates, downloads and confirms the artefact
 
   const [generateResponse] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/artefacts/generate") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/artefacts/generate") &&
+        r.request().method() === "POST",
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -355,7 +437,9 @@ test("a real keyboard walkthrough generates, downloads and confirms the artefact
   await page.getByRole("link", { name: "Download compose.yaml" }).waitFor();
 
   await page.keyboard.press("Tab"); // Download compose.yaml link
-  await expect(page.getByRole("link", { name: "Download compose.yaml" })).toBeFocused();
+  await expect(
+    page.getByRole("link", { name: "Download compose.yaml" }),
+  ).toBeFocused();
 
   const [download] = await Promise.all([
     page.waitForEvent("download"),
@@ -368,16 +452,22 @@ test("a real keyboard walkthrough generates, downloads and confirms the artefact
   await page.keyboard.press("Tab"); // Download versions.lock link
   await page.keyboard.press("Tab"); // Download RUNBOOK.md link
   await page.keyboard.press("Tab"); // Confirm artefacts button
-  await expect(page.getByRole("button", { name: "Confirm artefacts" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Confirm artefacts" }),
+  ).toBeFocused();
 
   const [confirmResponse] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/artefacts/confirm") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/artefacts/confirm") &&
+        r.request().method() === "POST",
     ),
     page.keyboard.press("Enter"),
   ]);
   expect(confirmResponse.ok()).toBe(true);
-  await expect(page.getByRole("button", { name: "Artefacts confirmed" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Artefacts confirmed" }),
+  ).toBeVisible();
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-confirm-artefacts");
 });
 
@@ -389,7 +479,10 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   // Preflight failed the gpu check; on a Mac that check always skips, which hid it (15 October 2026).
   // Lite's own address too: the Profile test gave Small an https:// one (S11).
   const reset = await page.request.put("/api/config", {
-    data: { profile: "local-lite", network: { public_origin: "http://ospreyflow.localhost" } },
+    data: {
+      profile: "local-lite",
+      network: { public_origin: "http://ospreyflow.localhost" },
+    },
   });
   expect(reset.ok()).toBe(true);
   await page.goto("/keyboard/setup-harness.html");
@@ -399,7 +492,9 @@ test("a real keyboard-triggered preflight run streams every check and enables La
 
   // Launch starts disabled — the real attribute, before any check has run and before the
   // artefacts are confirmed.
-  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Launch", exact: true }),
+  ).toBeDisabled();
 
   // A rendered deployment is what every check that reads deploy/generated/<profile>/ needs —
   // Preflight's own real dependency (`RenderedOutputMissing` otherwise), not invented for this
@@ -407,7 +502,9 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   await page.getByRole("button", { name: "Generate" }).focus();
   await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/artefacts/generate") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/artefacts/generate") &&
+        r.request().method() === "POST",
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -415,7 +512,9 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   await page.getByRole("button", { name: "Confirm artefacts" }).focus();
   await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/artefacts/confirm") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/artefacts/confirm") &&
+        r.request().method() === "POST",
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -433,15 +532,22 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   await expect(page.getByText("oidc-audience — pass")).toBeVisible();
   // Every check passes or skips on the fixed-size host (keyboard/console_fixed_host.py); a failing
   // one is named here, with its reason, rather than surfacing later as a disabled Launch.
-  expect(await page.getByText(/ — fail/).allTextContents(), "Preflight checks failing on this host").toEqual([]);
+  expect(
+    await page.getByText(/ — fail/).allTextContents(),
+    "Preflight checks failing on this host",
+  ).toEqual([]);
   // Still disabled — the artefacts are confirmed and every check passes or skips, but the Docker
   // target is not yet confirmed.
-  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Launch", exact: true }),
+  ).toBeDisabled();
 
   await page.getByRole("button", { name: "Re-check memory" }).focus();
   const [recheckResponse] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/preflight/stream") && r.url().includes("only=memory"),
+      (r) =>
+        r.url().includes("/api/preflight/stream") &&
+        r.url().includes("only=memory"),
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -452,7 +558,9 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   await page.getByRole("button", { name: "Confirm target" }).focus();
   const [targetResponse] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/launch/target/confirm") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/launch/target/confirm") &&
+        r.request().method() === "POST",
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -460,11 +568,15 @@ test("a real keyboard-triggered preflight run streams every check and enables La
   await expect(page.getByText("(confirmed)")).toBeVisible();
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-confirm-target");
 
-  await expect(page.getByRole("button", { name: "Launch", exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Launch", exact: true }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "Launch", exact: true }).focus();
   const [launchResponse] = await Promise.all([
     page.waitForResponse(
-      (r) => r.url().includes("/api/launch/stream") && r.request().method() === "POST",
+      (r) =>
+        r.url().includes("/api/launch/stream") &&
+        r.request().method() === "POST",
     ),
     page.keyboard.press("Enter"),
   ]);
@@ -483,13 +595,15 @@ test("a real keyboard-triggered preflight run streams every check and enables La
 // an HttpOnly cookie; the spec presents the same one the printed link would have set. These cases
 // share the page's one server and run in order: Lite's screens, then Small's, then Lite's Install
 // last, because the page shuts itself down when an install ends.
-const INSTALL_BASE = "http://localhost:5192";
+const INSTALL_BASE = `http://localhost:${lanePort(5192)}`; // playwright.config.ts's INSTALL_VITE_PORT
 const INSTALL_TOKEN = "keyboard-spec-install-token"; // the same literal is in playwright.config.ts
 
 async function openInstallPage(page: Page) {
   await page
     .context()
-    .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    .addCookies([
+      { name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE },
+    ]);
   await page.goto(`${INSTALL_BASE}/keyboard/install-harness.html`);
   await page.getByRole("navigation", { name: "Install screens" }).waitFor();
 }
@@ -510,13 +624,19 @@ test("install page: Tab reaches the Mode screen's radio group and a real Enter s
   // dark button, then Lite's nine screens: Mode, Folders, Profile, Components, Map, Models,
   // Governance, Demo packs, Review.
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: /Switch to the light theme/ })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: /Switch to the light theme/ }),
+  ).toBeFocused();
   await tabTimes(page, 9);
-  await expect(page.getByRole("button", { name: "Review", exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Review", exact: true }),
+  ).toBeFocused();
   await page.keyboard.press("Tab"); // the radio group, on the checked radio
   await expect(page.getByRole("radio", { name: /^Lite/ })).toBeFocused();
   await page.keyboard.press("Tab"); // the starter (ADR-138), left at "No starter"
-  await expect(page.getByRole("combobox", { name: "Starter (optional)" })).toBeFocused();
+  await expect(
+    page.getByRole("combobox", { name: "Starter (optional)" }),
+  ).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Save mode" })).toBeFocused();
   const [response] = await Promise.all([
@@ -546,7 +666,9 @@ test("install page: the Mode screen's starter is chosen by keyboard, the GOV.UK 
   await expect(service).toBeFocused();
   await expect(service).toHaveValue("Analyse crime intelligence");
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("textbox", { name: "Organisation" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Organisation" }),
+  ).toBeFocused();
   await page.keyboard.type("Keyboard Test Department");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("combobox", { name: "Phase" })).toBeFocused();
@@ -558,7 +680,10 @@ test("install page: the Mode screen's starter is chosen by keyboard, the GOV.UK 
   ]);
   expect(response.ok()).toBe(true);
   const saved = (await response.json()) as {
-    answers: { starter: string; appearance: { service_name: string; organisation: string; phase: string } };
+    answers: {
+      starter: string;
+      appearance: { service_name: string; organisation: string; phase: string };
+    };
   };
   expect(saved.answers.starter).toBe("govuk-crime");
   expect(saved.answers.appearance).toEqual({
@@ -576,8 +701,14 @@ test("install page: the Mode screen's starter is chosen by keyboard, the GOV.UK 
   await expect(starter).toHaveValue("");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Save mode" })).toBeFocused();
-  const [cleared] = await Promise.all([page.waitForResponse(isAnswersPut), page.keyboard.press("Enter")]);
-  expect(((await cleared.json()) as { answers: { starter?: string } }).answers.starter).toBeUndefined();
+  const [cleared] = await Promise.all([
+    page.waitForResponse(isAnswersPut),
+    page.keyboard.press("Enter"),
+  ]);
+  expect(
+    ((await cleared.json()) as { answers: { starter?: string } }).answers
+      .starter,
+  ).toBeUndefined();
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-starter");
 });
 
@@ -590,22 +721,32 @@ test("install page: a keyboard-activated switch reaches Folders and a real Enter
   await page.getByRole("textbox", { name: "Ingest folder" }).waitFor();
   await tabTimes(page, 7); // Profile, Components, Map, Models, Governance, Demo packs, Review
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("textbox", { name: "Ingest folder" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Ingest folder" }),
+  ).toBeFocused();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("/srv/osprey/ingest");
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("textbox", { name: "Basemap folder" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Basemap folder" }),
+  ).toBeFocused();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("/srv/osprey/basemap");
   await page.keyboard.press("Tab");
   // ADR-114 Amendment 37 decision 1: the backups folder, asked at setup.
-  await expect(page.getByRole("textbox", { name: "Backups folder" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Backups folder" }),
+  ).toBeFocused();
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type("/srv/osprey/backups");
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Save folders" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Save folders" }),
+  ).toBeFocused();
   const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/config") && r.request().method() === "PUT"),
+    page.waitForResponse(
+      (r) => r.url().includes("/api/config") && r.request().method() === "PUT",
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
@@ -634,13 +775,18 @@ test("install page: a keyboard-activated switch reaches Demo packs and a real En
   await expect(boxes.first()).toBeChecked();
   await tabTimes(page, packs - 1);
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Save demo packs" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Save demo packs" }),
+  ).toBeFocused();
   const [response] = await Promise.all([
     page.waitForResponse(isAnswersPut),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
-  expect(((await response.json()) as { answers: { demo_packs: string[] } }).answers.demo_packs).toHaveLength(1);
+  expect(
+    ((await response.json()) as { answers: { demo_packs: string[] } }).answers
+      .demo_packs,
+  ).toHaveLength(1);
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-demo-packs");
 });
 
@@ -650,13 +796,21 @@ test("install page: a provider's key field is reached by keyboard, a real Enter 
   // The draft enables Gemini, through the page's own configuration route (a scratch draft).
   await page
     .context()
-    .addCookies([{ name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE }]);
+    .addCookies([
+      { name: "osprey_install", value: INSTALL_TOKEN, url: INSTALL_BASE },
+    ]);
   const enabled = await page.request.put(`${INSTALL_BASE}/api/config`, {
     data: {
       models: {
         local_only: false,
         sendable_handling_codes: ["P"],
-        providers: [{ name: "gemini", label: "Gemini", roles: { extraction: "gemini-2.5-flash" } }],
+        providers: [
+          {
+            name: "gemini",
+            label: "Gemini",
+            roles: { extraction: "gemini-2.5-flash" },
+          },
+        ],
       },
     },
   });
@@ -664,18 +818,29 @@ test("install page: a provider's key field is reached by keyboard, a real Enter 
   await openInstallPage(page);
   await page.getByRole("button", { name: "Models", exact: true }).focus();
   await page.keyboard.press("Enter");
-  const codes = page.getByRole("textbox", { name: "Sendable handling codes (comma-separated)" });
+  const codes = page.getByRole("textbox", {
+    name: "Sendable handling codes (comma-separated)",
+  });
   await codes.waitFor();
   await expect(page.getByText("no key")).toBeVisible();
   await codes.focus();
   await page.keyboard.press("Tab");
-  const field = page.getByRole("textbox", { name: "Key for Gemini", exact: true });
+  const field = page.getByRole("textbox", {
+    name: "Key for Gemini",
+    exact: true,
+  });
   await expect(field).toBeFocused();
   await page.keyboard.type("keyboard-spec-not-a-real-key");
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Set the key for Gemini" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Set the key for Gemini" }),
+  ).toBeFocused();
   const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/install/keys/gemini") && r.request().method() === "PUT"),
+    page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/install/keys/gemini") &&
+        r.request().method() === "PUT",
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
@@ -704,9 +869,13 @@ test("install page: Small's Cloud and region screen is reached by keyboard and a
   expect(modeResponse.ok()).toBe(true);
   // Small's screens only now: Mode, Cloud and region, Domain, Components, Models, Governance,
   // Demo packs, Review.
-  await expect(page.getByRole("button", { name: "Folders", exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Folders", exact: true }),
+  ).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Cloud and region", exact: true }).focus();
+  await page
+    .getByRole("button", { name: "Cloud and region", exact: true })
+    .focus();
   await page.keyboard.press("Enter");
   await page.getByRole("textbox", { name: "Region" }).waitFor();
   await tabTimes(page, 6); // Domain, Components, Models, Governance, Demo packs, Review
@@ -718,15 +887,18 @@ test("install page: Small's Cloud and region screen is reached by keyboard and a
   await page.keyboard.press("Tab");
   await expect(page.getByRole("combobox", { name: "Size" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Save cloud and region" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Save cloud and region" }),
+  ).toBeFocused();
   const [response] = await Promise.all([
     page.waitForResponse(isAnswersPut),
     page.keyboard.press("Enter"),
   ]);
   expect(response.ok()).toBe(true);
-  expect(((await response.json()) as { answers: { cloud: { region: string } } }).answers.cloud.region).toBe(
-    "eu-west-2",
-  );
+  expect(
+    ((await response.json()) as { answers: { cloud: { region: string } } })
+      .answers.cloud.region,
+  ).toBe("eu-west-2");
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-cloud");
 });
 
@@ -739,22 +911,33 @@ test("install page: Small's Domain screen is reached by keyboard and a real Ente
   await page.getByRole("textbox", { name: "Domain name" }).waitFor();
   await tabTimes(page, 5); // Components, Models, Governance, Demo packs, Review
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("textbox", { name: "Domain name" })).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Domain name" }),
+  ).toBeFocused();
   await page.keyboard.type("osprey.example.org");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Save domain" })).toBeFocused();
   // S11: the draft's profile becomes Small only now, with its https:// address in the same write.
-  const isConfigPut = (r: Response) => r.url().includes("/api/config") && r.request().method() === "PUT";
+  const isConfigPut = (r: Response) =>
+    r.url().includes("/api/config") && r.request().method() === "PUT";
   const [response, draft] = await Promise.all([
     page.waitForResponse(isAnswersPut),
     page.waitForResponse(isConfigPut),
     page.keyboard.press("Enter"),
   ]);
   expect(draft.ok()).toBe(true);
-  const drafted = (await draft.json()) as { profile: string; network: { public_origin: string } };
-  expect([drafted.profile, drafted.network.public_origin]).toEqual(["small", "https://osprey.example.org"]);
+  const drafted = (await draft.json()) as {
+    profile: string;
+    network: { public_origin: string };
+  };
+  expect([drafted.profile, drafted.network.public_origin]).toEqual([
+    "small",
+    "https://osprey.example.org",
+  ]);
   expect(response.ok()).toBe(true);
-  const saved = (await response.json()) as { answers: { cloud: { domain: string; region: string } } };
+  const saved = (await response.json()) as {
+    answers: { cloud: { domain: string; region: string } };
+  };
   expect(saved.answers.cloud.domain).toBe("osprey.example.org");
   expect(saved.answers.cloud.region).toBe("eu-west-2"); // what the Cloud screen saved is kept
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-save-domain");
@@ -766,10 +949,16 @@ test("install page: Small's Review says how it is built and a real Enter saves t
   await openInstallPage(page);
   await page.getByRole("button", { name: "Review", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByText(/A small server is built from a terminal on this computer/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Install", exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText(/A small server is built from a terminal on this computer/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Install", exact: true }),
+  ).toHaveCount(0);
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Save answers" })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Save answers" }),
+  ).toBeFocused();
   const [response] = await Promise.all([
     page.waitForResponse(isAnswersPut),
     page.keyboard.press("Enter"),
@@ -801,15 +990,24 @@ test("install page: Lite's Install is reached by keyboard, a real Enter runs it 
   await page.getByRole("button", { name: "Review", exact: true }).focus();
   await page.keyboard.press("Enter");
   // The doctor's lines, as the page ran it (the stub echoes what it was asked to run).
-  await expect(page.getByRole("log").first()).toContainText("doctor --mode lite");
+  await expect(page.getByRole("log").first()).toContainText(
+    "doctor --mode lite",
+  );
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Install", exact: true })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Install", exact: true }),
+  ).toBeFocused();
   const [run] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/install/run") && r.request().method() === "POST"),
+    page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/install/run") && r.request().method() === "POST",
+    ),
     page.keyboard.press("Enter"),
   ]);
   expect(run.ok()).toBe(true);
-  await expect(page.getByRole("log", { name: "Install output" })).toContainText("install --mode lite");
+  await expect(page.getByRole("log", { name: "Install output" })).toContainText(
+    "install --mode lite",
+  );
   await expect(page.getByText(/OspreyFlow is installed/)).toBeVisible();
   await expect(page.getByText("This page closes now.")).toBeVisible();
   registerCovered("SETUP_SCREENS_ACTIONS", "submit-install");

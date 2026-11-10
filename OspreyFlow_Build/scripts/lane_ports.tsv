@@ -1,0 +1,18 @@
+# Each lane's slot for its local Playwright runs (T2, 10 November 2026: two lanes' runs met on vite's 5184/5185).
+# Read by OspreyFlow_Core/apps/lanePorts.ts, which every Playwright config but live/ and deck-capture/ asks for
+# its ports: a config's own port plus 100 x the lane's slot. The lane is $OSPREY_LANE, else the worktree's
+# lane/<name> branch (lane/admin-ddl is admin's); main, or no lane, is slot 0 and today's ports. A lane not
+# here is refused in words: add it with the next free slot. The 100-port steps stay clear of the stacks' ports
+# (lane_stacks.tsv) and the owner's deployment's (2480, 5432, 80, 8000, 8080, 8081), which the configs' test checks.
+# Tab-separated: lane, slot.
+admin	1
+case	2
+case-b	3
+docs	4
+glass	5
+platform	6
+platform-b	7
+rules	8
+rules-b	9
+studio	10
+studio-b	11
