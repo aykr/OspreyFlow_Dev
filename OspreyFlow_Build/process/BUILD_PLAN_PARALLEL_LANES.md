@@ -349,3 +349,11 @@ the lane records each one in `REPORT.md`.
 
 After each merge, the orchestrator gives the full commands to start the product and where to click. At
 least once per lane, the same walk is done under the GOV.UK brand.
+
+**10 November evening: tonight's order and where runs happen (the owner).** Demo-ready: L2.11, then L1.7, then D2b;
+then the product repo published from `main` (make ci, make test and the image scans green on the test server). The
+owner's laptop deployment is rebuilt only after the whole build, both tracks, is finished. Heavy runs leave the
+owner's Mac: `make -k ci` and `make test` run on the test server (`stack_lease.sh offline`); browser tests run there
+too (Chromium installed, 10 November) one lane at a time until T2's per-lane ports land, and in the Mac's two slots
+otherwise. Lanes never open desktop apps on the Mac. Started tonight for tomorrow: admin T1 part 4, platform-b T2,
+rules-b T3, case L3.H2, studio-b L1.10b; platform P7's acceptance on kind (down by 20:30).

@@ -131,10 +131,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    everyone else is told the quota is used, without a count. Recorded in ADR-141 Amendment 1. **To overrule:** say
    "show the count".
 19. **Your laptop's rebuild moves to after the whole build; heavy runs move to the server (your word, 10 November
-   evening).** Item 7's step 2 (your local deployment) waits until the build is finished; the product repo is still
-   published from `main` at demo-ready. Lanes now run `make -k ci` on the test server through `stack_lease.sh
-   offline <lane>` (Docker and trivy there, so the image scans really run), freeing this Mac; Playwright stays here
-   until the server has Chromium's system libraries (an apt install, asked of you).
+   evening).** Item 7's step 2 (your local deployment) waits until both tracks are finished; the product repo is still
+   published from `main` at demo-ready, tonight. Lanes run `make -k ci` and `make test` on the test server (Docker and
+   trivy there, so the image scans really run); browser tests can run there too now (Chromium and its 12 system
+   packages installed with your approval; `osprey-small` untouched), one lane at a time until per-lane ports land
+   (T2). Lanes never open desktop apps on this Mac (a deck agent tried Keynote this evening).
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

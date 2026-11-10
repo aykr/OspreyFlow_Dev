@@ -1,16 +1,17 @@
-# as of 2026-11-10T17:13Z
-rules	L2.11	rule editor: review's 4 must-fixes, then re-gate and merge	~19:30	A
-studio	L1.7	rebased; review's 4 fixes (run count, quota check, service token, records); re-gate	~20:30	A
-docs	D2b	the decks, after L2.11	~21:00	A
-orchestrator	release	your deployment rebuilt; product repo published	~22:30	A
-admin	T1	part 4 (parallel live runs) tonight on a branch; the marks tomorrow morning	11 Nov	A
-platform	P7	cloud-platform profile: ConfigMap, review points (fresh session)	11 Nov, midday	B
+# as of 2026-11-10T17:46Z
+rules	L2.11	rule editor: review's 4 must-fixes, then server ci, live, merge	~19:30	A
+studio	L1.7	rebased with the review's fixes; server make test, ci, live; merge	~20:30	A
+docs	D2b	the decks (rule-editor slides after L2.11; screenshots from the server)	~21:00	A
+orchestrator	publish	the product repo from main at demo-ready (server ci/test/scans green)	~22:30	A
+admin	T1	part 4 (parallel runs) live tonight; the marks tomorrow morning	11 Nov	A
+platform-b	T2	tooling: per-lane ports (lets browser tests run side by side on the server)	~11 Nov, morning	A
+rules-b	T3	dialogs' colour contrast gated	~11 Nov, morning	A
+case	L3.H2	drawn watches on every load; the ceiling on promotions	~11 Nov, morning	B
+studio-b	L1.10b	the ceiling's carries (Am 3)	~11 Nov, morning	B
+platform	P7	cloud-platform profile: acceptance on kind tonight, then merge	11 Nov, midday	B
 studio-b	L1.9	S3 and Athena, after P7	11 Nov, afternoon	B
 platform	P11	the model route: the client's gateway or Bedrock, after P7	12 Nov	B
-platform	P12	Laurium: licence check first (stops for you if it fails), then the adapter; after P7	12 Nov	B
+platform	P12	Laurium: licence check first (stops for you if it fails), then the adapter	12 Nov	B
 platform	P8–P10	shared disk, backups, Entra; in turn after P7	12 Nov	B
-docs	D2c	Cloud Platform guide (now with the extraction engine and Laurium), after P10–P12	13 Nov	B
-case	L3.H2	drawn watches on every load; ceiling on promotions	~11 Nov, morning	B
-studio-b	L1.10b	the ceiling's carries	~11 Nov, morning	B
-platform-b	T2	tooling: per-lane ports, docker tests, registries	~11 Nov, morning	A
-rules-b	T3	dialogs' colour contrast gated	~11 Nov, morning	A
+docs	D2c	Cloud Platform guide, with the extraction engine and Laurium, after P10–P12	13 Nov	B
+orchestrator	your laptop	rebuild your local deployment after the whole build (your word)	after D2c	B
