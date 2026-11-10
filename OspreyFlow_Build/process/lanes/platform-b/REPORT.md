@@ -1,12 +1,20 @@
-# Platform-b · P5b · backups in a folder named at setup (ADR-114 Amendments 37 and 38): report
+# Platform-b · the preflight ports fix (after P5b, before P6): report
 
-1. **Exit, met.** Amendment 37's tests table, and Amendment 38's (decisions 1–9, written here), are green. The tables name every test: `tests/harness/test_backup.py`, `test_restore_finds_sets.py`, `test_update_apply.py`, `test_render.py`; `tests/cli/test_answers.py`, `test_install.py`, `test_doctor.py`, `test_named_deployments.py`; the guided page's `InstallScreens.test.tsx` and `keyboard/setup-screens.spec.ts`. Each was shown red by a plant at its call site (`plants.md`). Axe runs dark and light only, as the install page has no GOV.UK theme (the orchestrator's ruling).
-2. **Gates.** `make -k ci` and the install page's keyboard and axe runs were taken here at 2729153; the commits after it change only records and two docstrings. Keyboard: 9 passed. Axe: 4 passed. `make -k ci` failed only on its 10 Docker targets (8 trivy scans, which also fail `core-check`, plus `opentofu-check` and `chart-check`), since Docker is off here. `make test` runs offline on the server at the ready-to-merge head, `gates/<sha>.test.txt`. Its counts, and the reason for each failure, go in the ready-to-merge message once the run lands.
-3. **Live run: not achieved, live proof owed** (the orchestrator's decision). There were three attempts on ospreyflow-test (`gates/live-attempts.txt`). No step of the backup, the rollback or the restore was reached in any of them: each stopped at the install or the apply. Decision 9's live proof is owed, to run once the server has a Docker Hub mirror or login (the orchestrator's carry). Until that carry closes, the driver refuses to run (`tests/test_live_driver_own_tags.py`).
-4. **Incident.** Attempt 3's teardown deleted three of another lane's images, because it removed every tag new since the run's start. It also left `osprey/superset:local`, which existed before the run, pointing at the run's build. Its "image tags changed: nothing" line was false, and `live-attempts.txt` corrects it. I reported it at once and have made no attempt since. The incident is in P5b's friction row.
-5. **Reviews.** Three lane-reviewer passes and the orchestrator's independent review. Each finding was fixed red-first; they are listed in `plants.md` and Amendment 38. They include the checkout guard (the git root, letter case, a link followed by `..`), a profile's or the checkout's own name sharing a subfolder, `--out-root=~`, the install's own backups checks, the update's settings for a named deployment, and a server's setting left out.
-6. **Left, and why.** Decision 7: two checkouts sharing one folder is unsupported and not yet detected. The guided page passes a relative folder through. The `~/OspreyFlow/backups` spelling is repeated in the CLI and the TSX, and pinned only on the CLI side. The admin guide's text is a carry for docs (`CARRY-admin-guide-13.md` sections 1–7, including the `NOT_YET_IN_THE_GUIDE` entry docs removes red-first).
-7. **Ratify:** `harness/update.py`; `harness/render.py` (the runbook row, 14 lines, ratified); `cli/ospreyflow/main.py` (the prompt, and the doctor's and the install's checks) and `deployments.py`; `apps/harness`'s Folders and Review screens and `setup-screens.spec.ts`; `deploy/RUNBOOK.md`; `tests/test_admin_guide.py`'s exemption; `.gitignore` (ratified).
-8. **Routed.** `harness/preflight/ports.py` ignores `deployment.env`, so a named install fails wherever 2480 is held. This is platform-b's next step, before P6 (ratified), and the live driver's port workaround comes out with it.
-9. **No route added.** P5b adds no route, and no live file reaches one, so `test_route_rights.py` isn't required. Commits: `git log main..lane/platform-b`, in small Conventional Commits naming their files.
-10. **Questions:** none. **Running:** nothing of mine once the gates' runs end; I'll say so when they do.
+P5b merged at f8df603; its report is in main's history.
+
+1. **Exit, met.** A deployment kept by name is no longer refused where another deployment holds 2480. The ports check resolves the published `${OSPREY_ARCADEDB_PORT:-2480}` from the deployment's own `deployment.env`, under the shell's environment, as Compose does (`harness/preflight/ports.py`, ratified). Proved by `tests/harness/test_named_render.py::test_the_preflight_checks_the_deployments_own_graph_port`, run through `harness.apply.preflight` on the install's context: its own port is checked, a held one is refused, and the shell still wins. `::test_the_ports_check_reads_an_env_file_as_compose_does` covers `export`, inline comments and quotes. Each branch was shown red by a plant (`plants.md`).
+2. **Spec.** Spec 05 §2.1 now says which environment the check resolves against (rule 11).
+3. **Live driver.** Its port workaround is taken out, because the shell's value would have hidden the fix. The driver still refuses to run until the owed proof's carry closes.
+4. **Review.** The lane-reviewer found:
+   - the workaround masking the fix;
+   - the red not on record;
+   - the test copying the call site rather than going through it;
+   - the env reader differing from Compose's.
+
+   All four are fixed.
+5. **Left, and why (for CARRIES' platform-b row).**
+   - `declared_ports` still defaults to `os.environ` for its two test-side callers, `test_harness_image.py` and `test_apply_changed_settings.py`, both on checkout renders whose `deployment.env` says 2480. `test_harness_image.py:129`'s docstring now over-claims "the same function the check calls".
+   - The tree has five hand-written `deployment.env` readers. One beside `SECRETS_FILE` could serve them all, which is a refactor for its owners.
+   - The reapply path (with `own_ports`) uses the same `check`, but has no named-deployment case of its own.
+6. **Gates.** `make test` (offline, on the server) and `make -k ci` (here) at the ready-to-merge head, `gates/<sha>.*`. The counts go in the message.
+7. **Friction:** `process/friction/2026-11-10-platform-b-preflight-ports.md`. **Route:** none added. **Questions:** none. **Next:** P6 (`P6_PLAN.md` on `prep/platform-b-p6`), folded into the BRIEF when it starts.
