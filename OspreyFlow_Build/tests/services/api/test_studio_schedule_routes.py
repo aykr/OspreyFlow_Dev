@@ -55,6 +55,10 @@ class _Recipes:
     async def get(self, recipe_id: str) -> StudioRecipeDraft:
         return self.draft
 
+    async def external_owner(self, recipe_id: str) -> None:
+        """ADR-141 decision 11: not owned externally."""
+        return None
+
     async def set_paused(self, recipe_id: str, *, paused: bool, reason: str | None) -> None:
         self.draft = self.draft.model_copy(
             update={"schedule_paused": paused, "schedule_paused_reason": reason if paused else None}

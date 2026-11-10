@@ -429,14 +429,14 @@ async def test_a_pipeline_whose_second_branch_raises_keeps_the_first_branchs_rec
 
 
 def _deps_namespace() -> Any:
-    return SimpleNamespace(recipe_runs=Ledger(), media=InMemoryMediaStore())
+    return SimpleNamespace(recipe_runs=Ledger(), media=InMemoryMediaStore(), run_quotas=None)
 
 
 async def test_a_run_that_fails_after_the_commit_keeps_its_record_and_is_marked_failed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ledger = Ledger()
-    deps = SimpleNamespace(recipe_runs=ledger, media=InMemoryMediaStore())
+    deps = SimpleNamespace(recipe_runs=ledger, media=InMemoryMediaStore(), run_quotas=None)
 
     async def execute(deps: Any, *, sink: Any, **kwargs: Any) -> Any:
         await sink.committed(_report("load-1"), source="one.csv")
@@ -819,7 +819,7 @@ async def test_a_failed_run_stores_the_markings_of_the_loads_that_committed(
     """Amendment 26: a run that fails after a branch committed SECRET rows has counts that include
     them; the ledger keeps the markings it reached, so the listing withholds them."""
     ledger = Ledger()
-    deps = SimpleNamespace(recipe_runs=ledger, media=InMemoryMediaStore())
+    deps = SimpleNamespace(recipe_runs=ledger, media=InMemoryMediaStore(), run_quotas=None)
     secret = Handling(classification="SECRET", handling_code="P", originator="u", owning_unit="u")
 
     async def execute(deps: Any, *, sink: Any, **kwargs: Any) -> Any:

@@ -940,7 +940,7 @@ from .rules_place import PLACE as RULES_PLACE
 from .rules_place import opens_rules_place, reads_queue_rows, refusal_wait
 from .rules_place import refusal as rules_place_refusal
 from .rules_place import rows_refusal as queue_rows_refusal
-from .run_quotas import PostgresQuotaStore, QuotaRefused, QuotaStore, day_start
+from .run_quotas import QuotaRefused, QuotaStore, day_start
 from .run_resources import RECIPES_REPO_ROOT, build_run_resources
 from .run_source import (
     SourceChangedSinceVerifyError,
@@ -1190,7 +1190,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # L3.8: what a person owns that the case lane keeps, which Disable… lists (ADR-145 A4).
     person_ownership = await PostgresOwnershipStore.connect(config.postgres.dsn)
     # ADR-141 decision 6: the run quotas every run's start judges (`run_quotas.judge`).
-    run_quotas = await PostgresQuotaStore.connect(config.postgres.dsn)
+    run_quotas = resources.run_quotas
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
@@ -1582,7 +1582,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await admin_people.close()
         await audit_section.close()
         await promotion_ageing.close()
-        await run_quotas.close()
         await person_ownership.close()
         app.state.ownership = None
         # A closed store must not outlive the app: a request's custom roles are read through it.

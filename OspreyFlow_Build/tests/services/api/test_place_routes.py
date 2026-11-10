@@ -73,7 +73,7 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     (r"^/v1/exports$", frozenset({"admin"}), "the export ledger, Admin's right (ADR-112 A8)"),
     (r"/ingest/(extract|candidates)", frozenset({"glass"}),
      "extraction of a case's files, an investigation right (ADR-112 I4)"),
-    (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files|model)"
+    (r"/ingest/|^/v1/ingest/|^/v1/datasets/\{dataset_id\}/(sources|source-files|model|release)"
      r"|^/v1/datasets/\{dataset_id\}/(screening-subscriptions|reference-lists)|^/v1/studio/",
      frozenset({"ingest"}), "the Ingest Studio (Sources' lists and connectors, ADR-140 A13)"),
     # L3.4: the Studio's Analyst promotions and a removed case's layer, under Runs (ADR-143
@@ -110,6 +110,10 @@ EXEMPT = {
     # it refuses everyone else (`test_route_rights.py`). Exempt only while no
     # screen calls it (`test_the_export_ledger_is_exempt_only_while_no_screen_calls_it`).
     "list_exports_route": "no screen calls it",
+    # ADR-141 decision 10: the run API is a service identity's, which no person signs in as, so no
+    # place is shown from it; a person's token is refused (403, `service_identity.py`).
+    "start_external_run_route": "a service identity's route; no person's place",
+    "read_external_run": "a service identity's route; no person's place",
 }
 
 #: A place must be usable, not only answered (the orchestrator's settlement, 7 November 2026): the

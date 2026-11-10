@@ -146,6 +146,8 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         # L3.6: the drawn watches a load is run against, and the case read sets of their owners.
         "board_items": given["board_items"], "datasets": given["datasets"],
         "investigations": given["investigations"],
+        # ADR-141 decision 6: the run quotas, judged at the run's start.
+        "run_quotas": given["run_quotas"],
         # Build order step 30: the run is held to the files Verify recorded; none here.
         "studio_recipes": _NothingVerified(),
     }

@@ -1,0 +1,29 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
+index a585883..4869fae 100644
+--- a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
++++ b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
+@@ -93,6 +93,7 @@
+    "places": [],
+    "answered_hidden": [
+     "add_dataset_gazetteer_route",
++    "read_pipeline_quota",
+     "recipe_runs_route",
+     "remove_dataset_gazetteer_route",
+     "run_studio_recipe"
+@@ -568,6 +569,7 @@
+    "places": [],
+    "answered_hidden": [
+     "add_dataset_gazetteer_route",
++    "read_pipeline_quota",
+     "recipe_runs_route",
+     "remove_dataset_gazetteer_route",
+     "run_studio_recipe"
+@@ -643,6 +645,8 @@
+    ],
+    "places": [],
+    "answered_hidden": [
++    "clear_pipeline_owned_externally",
++    "mark_pipeline_owned_externally",
+     "pause_recipe_schedule",
+     "publish_studio_recipe",
+     "resume_recipe_schedule",

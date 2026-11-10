@@ -119,6 +119,7 @@ STORES = (
     "PostgresListStore",
     "InvestigationStore",
     "PostgresBoardItemStore",
+    "PostgresQuotaStore",
 )
 
 
@@ -244,6 +245,7 @@ CONSTRUCTED_ONLY_IN_THE_BUILDER = (
     "ScreeningListStore.connect(",
     "KycExpiryStore.connect(",
     "RecipeRunStore.connect(",
+    "PostgresQuotaStore.connect(",
     "ExtractionCandidateStore.connect(",
     "PostgresDatasetStore.connect(",
     "AuditWriter.connect(",
