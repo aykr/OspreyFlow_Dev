@@ -69,6 +69,13 @@
   - Fixed at bb4466d. Its delta, the analytics suite whole, passed 266 (`gates/1e94fdf.live.txt`, `gates/bb4466d.live.txt`).
   - Released and down.
 
+**The orchestrator's re-review at 724d297: sent back, and built at d52fc9f** (RED_RECORD §12c):
+1. **A sweep failure's documents not judged** are counted across every customer the rule screens, so the count and its counted words are withheld from every reader of the rule audit; the words without the number are kept. Red on c by two plants (the count withheld only when a firing is hidden; a digit kept in the words).
+2. **`account_activity`'s own refusal, shown alone:** a total of 1.2 × 10^28 that the decimal holds but the limit refuses. Red with only that call removed, on DuckDB offline and ClickHouse on c.
+3. **Minors:** ClickHouse's activity comment; ADR-133 Amendment 10 point 3 narrowed; a team member leaves from their next token (ADR-146 Amendment 4 point 1, `alert_routing.py`); ruff and mypy on the files changed since `make -k ci` (`gates/d52fc9f.lint.txt`).
+- **Live, the rules lease on stack c:** the three plants red; the delta at d52fc9f passed 289, none failed (`gates/d52fc9f.live.txt`). Released and down.
+- **`glass-keyboard` at 6e90f52** (`registry-L2.10.patch` applied uncommitted, then reverted; the orchestrator's local slot): 689 passed, 1 skipped, 2 failed, both main's own (`boards.spec.ts:225` and `:423`, fixed in f6def92 on lane/case) (`gates/6e90f52.keyboard.txt`).
+
 11. **Decisions taken** (Prompt L, for the owner to overrule):
     - **Trends:** a routed alert is counted for its team's members alone, not the home case's Authors (the narrower answer).
     - **"My team":** offered only for a rule already saved with it.
@@ -103,5 +110,6 @@
     - the ClickHouse fix: 1f04c2c, then 274d114 and 778c4d8 after two review rounds;
     - the live and server records: 3b6ed0e, then the deltas at 274d114 and 778c4d8;
     - the orchestrator's review: 77c5a56 api, 12d5488 analytics, 86366d7 workspace, 1e94fdf records, bb4466d the live run's fix, then the gates and this report;
+    - the re-review: d52fc9f the fixes, 6e90f52 its live records, then the keyboard record and this report;
     - then this report and the friction row.
 15. **Still running:** nothing. The lease on c is released, its stack is down, and no server run is alive.

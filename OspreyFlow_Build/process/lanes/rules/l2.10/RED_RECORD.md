@@ -325,7 +325,8 @@ It closed the first round's four items and found seven more. Each is built, red 
    - Red on c, plant 1: the count withheld only when a firing is hidden. The member's and the quiet rule's entries keep
      `documents_not_judged`.
    - Red on c, plant 2: the counted words kept. A digit is in the words.
-2. **The keyboard gate after 86366d7** (`chooseByTyping.ts`): `gates/<head>.keyboard.txt`.
+2. **The keyboard gate after 86366d7** (`chooseByTyping.ts`): `gates/6e90f52.keyboard.txt`, 689 passed; the two failures are main's
+   own (`boards.spec.ts:225` and `:423`). ALERTS_ACTIONS and WATCH_PANEL_ACTIONS are covered whole.
 3. **`account_activity`'s own refusal, shown alone.** A total of 1.2 × 10^28, which the decimal holds but the limit
    refuses, leaves no store overflow to refuse it instead (rule 15).
    - Red with only that call removed: on DuckDB, offline (DID NOT RAISE, 2); on ClickHouse, on c (DID NOT RAISE, 4).
