@@ -21,7 +21,7 @@ COMMIT_TESTS = "../OspreyFlow_Build/tests/services/api/test_studio_publish_commi
 IMAGE_TESTS = "../OspreyFlow_Build/tests/test_connectors_are_carried_into_the_image.py"
 
 INDEX_BLOCK = """    repo.object_store.add_object(blob)
-    index = repo.open_index()
+    index = repo.open_index(config=ConfigFile())  # its settings from no config, not the user's
     index[path] = index_entry_from_stat(written, blob.id)
     index.write()
 """
@@ -88,15 +88,16 @@ PLANTS = [
      [("            HEADREF, head if head is not None else ZERO_SHA, commit.id,\n",
        "            HEADREF, None, commit.id,  # PLANT\n")], [REPO_TESTS], [RACE]),
     ("process-lock-removed", "the thread lock kept, the publish flock not taken: "
-     "`fcntl.flock(fd, fcntl.LOCK_EX)` -> `pass`",
-     [("        fcntl.flock(fd, fcntl.LOCK_EX)\n", "        pass  # PLANT\n")], [REPO_TESTS],
+     "`fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)` -> `pass`",
+     [("                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n", "                pass  # PLANT\n")],
+     [REPO_TESTS],
      ["test_the_index_is_read_and_written_under_a_lock_another_process_honours"]),
     ("porcelain-commit", "the commit made by dulwich's worktree commit, which reads the config "
      "and runs the hooks in .git/hooks (the independent review, item 2)",
      [("    if not unchanged:\n",
        "    if not unchanged:\n        repo.get_worktree().commit(message=message.encode(), "
        "committer=_COMMIT_IDENTITY, author=_COMMIT_IDENTITY)  # PLANT\n        return\n")],
-     [REPO_TESTS], ["test_publish_never_execs_a_binary"], "spawned a process: ['.git/hooks/pre-commit']"),
+     [REPO_TESTS], ["test_publish_never_execs_a_binary"], "'.git/hooks/pre-commit'"),
     ("porcelain-signed-commit", "the same worktree commit with its hooks skipped, for a commit "
      "with a parent (the second publish, after the config is planted, since dulwich runs "
      "post-commit even with no_verify), so it reaches the signer `commit.gpgsign` and "
@@ -106,7 +107,7 @@ PLANTS = [
        "        repo.get_worktree().commit(message=message.encode(), "
        "committer=_COMMIT_IDENTITY, author=_COMMIT_IDENTITY, no_verify=True)  # PLANT\n"
        "        return\n    if not unchanged:\n")],
-     [REPO_TESTS], ["test_publish_never_execs_a_binary"], "'trap.sh', '--detach-sign'"),
+     [REPO_TESTS], ["test_publish_never_execs_a_binary"], "trap.sh', '--detach-sign'"),
     ("staged-through-filters", "the recipe staged by dulwich's worktree stage, which applies "
      "the `.gitattributes` filter the config names",
      [("    repo.object_store.add_object(blob)\n",
@@ -154,12 +155,13 @@ PLANTS = [
      [REPO_TESTS], ["test_a_rival_making_the_repository_first_is_joined_not_refused"]),
     ("init-reads-user-config", "first use initialised with the user's and the system's config",
      [("Repo.init(str(making), config=StackedConfig([ConfigFile()]))",
-       "Repo.init(str(making))  # PLANT")],
+       "Repo.init(str(making))")],
      [REPO_TESTS], ["test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says"],
      "read the user's or the system's git config"),
     ("index-reads-user-config", "the index opened with the whole config stack: "
      "`open_index(config=ConfigFile())` -> `open_index()`",
-     [("    index = repo.open_index(config=ConfigFile())", "    index = repo.open_index()  # PLANT")],
+     [("    index = repo.open_index(config=ConfigFile())  # its settings from no config, not the user's",
+       "    index = repo.open_index()  # PLANT")],
      [REPO_TESTS], ["test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says"],
      "read the user's or the system's git config"),
     ("worktree-unchecked", "a config naming another worktree not refused",

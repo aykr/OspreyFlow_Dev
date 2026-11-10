@@ -1,4 +1,4 @@
-# head acdd7ac; plant: a dulwich or filesystem failure left untyped: `except Exception` -> `except ZeroDivisionError`
+# head dc1e683; plant: a dulwich or filesystem failure left untyped: `except Exception` -> `except ZeroDivisionError`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_failed_write_is_a_typed_error_not_a_bare_500; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -18,11 +18,19 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[..]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[.hidden]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[]
-PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[x\x00y]
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipes_directory_is_refused
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipe_file_is_refused
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500
-2 failed, 22 passed in 2.76s
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_linked_publish_lock_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_making_the_repository_first_is_joined_not_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_repository_whose_config_names_another_tree_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[01JC5Q8K3ZP6V2T9XR4W7HMNBD]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[a_b.c-1]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_id_of_the_shapes_the_studio_mints_is_accepted[9]
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_temporary_file_a_crash_left_is_swept
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - OSError: index.lock is held
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500 - ValueError: Expected file to start with 'gitdir: '
+2 failed, 30 passed in 5.91s
