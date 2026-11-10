@@ -387,15 +387,15 @@ async def _reads(raw: asyncpg.Connection, case_id: str, *datasets: str) -> None:
 
 @pytest.mark.parametrize(
     ("reads", "highest"),
-    [(("ds-off", "ds-secret"), "SECRET"), (("ds-off",), "OFFICIAL"), ((), "SECRET"),
-     (("cmp",), "SECRET")],
+    # A case reads one dataset (`investigation_datasets_one_per_case`): several are a composite's.
+    [(("ds-secret",), "SECRET"), (("ds-off",), "OFFICIAL"), ((), "SECRET"), (("cmp",), "SECRET")],
 )  # fmt: skip
 async def test_a_view_or_board_goes_only_to_someone_cleared_to_its_cases_highest(
     world: SimpleNamespace, reads: tuple[str, ...], highest: str
 ) -> None:
     """ADR-145 Amendment 9 (the strict reading, MORNING item 8): a view sends its node count
-    unfiltered, so its recipient must clear the highest marking its case reads: the highest of its
-    datasets, a composite's members included; a case reading none, at the scheme's highest. Each
+    unfiltered, so its recipient must clear the highest marking its case reads: its dataset's, or
+    the highest of a composite's members; a case reading none, at the scheme's highest. Each
     item says the marking its *Transfer to…* is offered by; a recipient below it is refused,
     naming nothing."""
     raw = world.raw
