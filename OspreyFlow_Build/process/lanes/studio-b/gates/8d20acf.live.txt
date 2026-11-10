@@ -1,0 +1,131 @@
+# live set at 8d20acf (lease studio-b): the branch's own test files and test_route_rights, per the orchestrator's grant (the rebase changed fixtures only; no change-based selection)
+Test stack c up for studio-b: osprey-test-c-arcadedb osprey-test-c-pg osprey-test-c-valkey osprey-test-c-objectstore osprey-test-c-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Running on ospreyflow-test (stack c, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b.meta/runs/20261110T233752Z/log: sh -c p=${MINIO_ENDPOINT##*:}; for i in $(seq 90); do curl -sf http://localhost:$p/minio/health/ready >/dev/null && echo "minio ready after ${i} tries" && break; sleep 2; done; cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rA ../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py
+......................................                                   [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+_____ test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was ______
+------------------------------ Captured log call -------------------------------
+WARNING  services.ingest.staged_run:staged_run.py:270 a refused load's step table staging/loads/ld-run-s/staged/with_establishment.parquet was not removed
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/ingest/staged_run.py", line 268, in remove_step_tables
+    fs.delete_file(path)
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py", line 283, in stubborn
+    raise RuntimeError("the store would not remove it")
+RuntimeError: the store would not remove it
+___________ test_fixture_corps_declaration_is_the_highest_it_writes ____________
+------------------------------ Captured log call -------------------------------
+WARNING  splink.linker:linker.py:971 
+ -- WARNING --
+You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+Comparison: 'family_name':
+    m values not fully trained
+Comparison: 'family_name':
+    u values not fully trained
+Comparison: 'given_names':
+    m values not fully trained
+Comparison: 'given_names':
+    u values not fully trained
+Comparison: 'date_of_birth':
+    m values not fully trained
+Comparison: 'date_of_birth':
+    u values not fully trained
+The 'probability_two_random_records_match' setting has been set to the default value (0.0001). 
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+______ test_each_right_is_refused_without_it_and_needs_the_case_level_too ______
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 23:41:21] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 159 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route __
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 23:41:26] "GET /jwks.json HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2026 23:41:28] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 159 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+---------------------- 2 unmarked test(s) reached a store ----------------------
+tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+============================= slowest 30 durations =============================
+10.12s call     tests/test_seed_internal_ceiling.py::test_prison_intelligences_declaration_holds_for_every_write
+6.15s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+4.97s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+3.00s call     tests/test_seed_internal_ceiling.py::test_the_scale_cohorts_declaration_holds_for_every_write
+2.03s call     tests/services/api/test_deployment_ceiling_verify.py::test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it
+1.85s call     tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample
+0.75s call     tests/test_seed_internal_ceiling.py::test_hmps_declaration_is_the_highest_it_writes
+0.33s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.31s call     tests/ingest/test_deployment_ceiling_staged_live.py::test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store
+0.29s call     tests/ingest/test_deployment_ceiling_staged_live.py::test_a_refused_staged_load_leaves_no_step_table_in_the_object_store
+0.26s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.19s call     tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables
+0.14s call     tests/test_seed_internal_ceiling.py::test_ledgers_declaration_holds_for_every_write
+0.14s call     tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
+0.13s call     tests/test_seed_internal_ceiling.py::test_fixture_corps_declaration_is_the_highest_it_writes
+0.13s call     tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_without_steps
+0.11s call     tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
+0.10s call     tests/services/api/test_deployment_ceiling_staged.py::test_only_the_row_check_s_refusals_remove_the_step_tables
+0.10s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.10s call     tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
+0.09s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.08s call     tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling
+0.07s call     tests/services/api/test_deployment_ceiling_verify.py::test_test_passes_a_file_at_the_ceiling
+0.07s call     tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
+0.07s call     tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables
+0.06s call     tests/services/api/test_deployment_ceiling_verify.py::test_with_no_ceiling_set_test_passes_as_before
+0.06s teardown tests/ingest/test_deployment_ceiling_staged_live.py::test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store
+0.04s teardown tests/ingest/test_deployment_ceiling_staged_live.py::test_a_refused_staged_load_leaves_no_step_table_in_the_object_store
+0.02s call     tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts
+0.02s call     tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_within_the_ceiling_is_seeded
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py::test_a_refused_staged_load_leaves_no_step_table_in_the_object_store
+PASSED ../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py::test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_only_the_row_check_s_refusals_remove_the_step_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_passes_a_file_at_the_ceiling
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_with_no_ceiling_set_test_passes_as_before
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_without_steps
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_rendered_every_pack_is_seeded_as_before
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_every_pack_declares_its_highest_marking
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_hmps_declaration_is_the_highest_it_writes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_fixture_corps_declaration_is_the_highest_it_writes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_ledgers_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_prison_intelligences_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_the_scale_cohorts_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_a_staged_public_dataset_is_seeded_as_before
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_enrons_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+38 passed, 1 warning in 34.99s
+Wall time: 217 s, exit 0 (stack c, the lease studio-b took at 2026-11-10T23:37:41Z; set-up before it 9 s)
+# live exit 0
+Test stack c down for studio-b: osprey-test-c-arcadedb osprey-test-c-pg osprey-test-c-valkey osprey-test-c-objectstore osprey-test-c-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack c released by studio-b.
+c: free d: free e: free f: free g: free 
