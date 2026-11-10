@@ -72,6 +72,7 @@ from .audit import AuditWriter
 from .dataset_scope import reach_clause
 from .hotlists import BOOTSTRAP_SQL as _HOTLISTS_BOOTSTRAP_SQL
 from .hotlists import take_bootstrap_lock
+from .scheduler import NOTICE_RULE_PREFIX
 
 DisclosurePolicy = Literal["strict", "notify"]
 
@@ -856,6 +857,31 @@ class AlertStore:
                 *extra,
             )
         return [_row_to_alert(row) for row in rows]
+
+    async def list_schedule_notices(
+        self, principal: Principal, *, since: datetime, limit: int = 20
+    ) -> tuple[list[Alert], int]:
+        """ADR-110 Amendment 19: the principal's own open notices of their scheduled loads raised
+        since `since`, newest first, at most `limit`, with how many there are in all (so more than
+        `limit` is said, never cut silently: rule 2). A notice is any alert whose `rule_id` is
+        `schedule:<recipe id>` (`scheduler.NOTICE_RULE_PREFIX`), so those written before the
+        amendment are served too. `owner_id` is filtered in the query itself, list and count alike:
+        no one, an administrator or a team lead included, reads or counts another's (rule 3)."""
+        reach, extra = reach_clause(principal, 4)
+        where = (
+            "owner_id = $1 AND rule_id LIKE $2 AND status = 'open' AND created_at >= $3"
+            f"{reach}"
+        )
+        args = (principal.id, f"{NOTICE_RULE_PREFIX}%", since, *extra)
+        async with self._pool.acquire() as conn:
+            total = await conn.fetchval(f"SELECT count(*) FROM alerts WHERE {where}", *args)
+            rows = await conn.fetch(
+                f"SELECT {_COLUMNS} FROM alerts WHERE {where} "
+                f"ORDER BY created_at DESC LIMIT ${4 + len(extra)}",
+                *args,
+                limit,
+            )
+        return [_row_to_alert(row) for row in rows], int(total or 0)
 
     async def list_case_queue(self, investigation_id: str, principal: Principal) -> list[Alert]:
         """ADR-109 ruling 3 — the case team's queue: every rule-raised alert of the case within

@@ -15,14 +15,30 @@ proposed*. It names no right of its own, because each half is gated by what it l
   asked of, so nothing of it is said, not even that one is open (ADR-143 Amendment 4 (b), the
   strict reading, ruled at L2.7's review); for one they may read, the service answers a count
   alone (`LinkTypeService.open_proposal_count`), so no proposal reaches this module.
+- **Scheduled loads' notices** (ADR-110 Amendment 19, granted to the rules lane for this item): the
+  reader's own notices of the last seven days, newest first, at most twenty with the total said,
+  through `AlertStore.list_schedule_notices`, which reads by owner in the query. They are anyone's
+  who owns a schedule, so no right gates them; they are only ever their owner's.
 """
 
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterable, Sequence
+from datetime import datetime, timedelta
+from typing import Protocol
 
-from schemas.admin import NeedsYouProposals
-from schemas.domain import Principal
+from schemas.admin import NeedsYouProposals, ScheduleNoticeEntry
+from schemas.domain import Alert, Principal
+
+#: Amendment 19: how far back a notice stays in *Needs you*, and how many are listed at once.
+NOTICE_DAYS = 7
+NOTICE_LIMIT = 20
+
+
+class ScheduleNotices(Protocol):
+    async def list_schedule_notices(
+        self, principal: Principal, *, since: datetime, limit: int = ...
+    ) -> tuple[list[Alert], int]: ...
 
 
 async def proposals_to_decide(
@@ -62,3 +78,20 @@ async def reached_datasets(
         if ids and ids[0] not in reached:
             reached.append(ids[0])
     return reached
+
+
+async def schedule_notices_for(
+    principal: Principal, store: ScheduleNotices, now: datetime
+) -> tuple[list[ScheduleNoticeEntry], int]:
+    """The reader's own scheduled loads' notices (Amendment 19) and how many there are in all. The
+    store reads by owner in its query; this only shapes what it served."""
+    notices, total = await store.list_schedule_notices(
+        principal, since=now - timedelta(days=NOTICE_DAYS), limit=NOTICE_LIMIT
+    )
+    return [
+        ScheduleNoticeEntry(
+            notice_id=n.id, recipe_id=n.rule_id.split(":", 1)[-1], raised_at=n.created_at,
+            words=n.words or "A scheduled load did not finish.",
+        )
+        for n in notices
+    ], total  # fmt: skip

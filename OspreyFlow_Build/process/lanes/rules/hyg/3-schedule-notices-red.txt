@@ -1,0 +1,9 @@
+# rules-hyg item 3, ADR-110 Amendment 19: each case shown red at its call site, then green.
+# --- plant 1 (route, app.py my_needs_you_route): the store's notices not served, schedule_notices=[]
+1
+FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_schedule_notice_is_served_to_its_owner_alone
+1 failed, 10 passed, 1 warning in 1.74s
+# --- plant 2 (needs_you.schedule_notices_for): another's notices asked for, the store given a principal not the reader's (id of the notice's owner)
+FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_schedule_notice_is_served_to_its_owner_alone
+1 failed, 10 passed, 1 warning in 1.71s
+11 passed, 1 warning in 1.53s

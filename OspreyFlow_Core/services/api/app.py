@@ -18993,6 +18993,7 @@ async def my_needs_you_route(
     datasets: DatasetsDep,
     link_types: LinkTypesDep,
     scheme: HandlingSchemeDep,
+    alerts_store: AlertsStoreDep,
 ) -> NeedsYou:
     """The reader's *Needs you* (ADR-145 decision 11, A2; L2.7; `needs_you.py` says what each
     half reads). It names no right because each half is gated by what it lists, as the reader. The
@@ -19038,7 +19039,14 @@ async def my_needs_you_route(
         proposals = await needs_you_module.proposals_to_decide(
             [d for d in reached if d in held], names, link_types.open_proposal_count, words
         )
-    return NeedsYou(promotions_overdue=overdue, proposals=proposals)
+    # ADR-110 Amendment 19: the reader's own scheduled loads' notices, read by owner in the query.
+    notices, notices_total = await needs_you_module.schedule_notices_for(
+        principal, alerts_store, now
+    )
+    return NeedsYou(
+        promotions_overdue=overdue, proposals=proposals,
+        schedule_notices=notices, schedule_notices_total=notices_total,
+    )  # fmt: skip
 
 
 # --- Admin › Models (ADR-135 Amendment 2, ADR-112 Amendment 7) ----------------------------------
