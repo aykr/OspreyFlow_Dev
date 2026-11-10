@@ -39,20 +39,40 @@ class CeilingUnknown(ValueError):
     not start, rather than guess the deployment's limit."""
 
 
-class AboveTheDeploymentCeiling(RecipeRuleError):
-    """A load is refused whole, before anything is written, because it would write a marking above
-    the deployment's highest. A `RecipeRuleError`, so every caller (a run, the run ledger, the
-    Studio's routes) already handles it. Its words say the limit, never the content."""
+#: The words for each kind of refusal (ADR-148 decision 10): the deployment's limit, never the
+#: item's content.
+_WORDS: dict[str, str] = {
+    "load": (
+        "This load would write rows marked above this deployment's highest marking, {c}, so "
+        "nothing was loaded. Mark the source no higher than {c}, or load it into a deployment "
+        "cleared to hold it."
+    ),
+    "unreadable": (
+        "Some rows' classification cannot be read, and such a row is held at the handling "
+        "scheme's highest marking, above this deployment's highest, {c}, so nothing was loaded. "
+        "Correct the source's classification column, or mark it no higher than {c}."
+    ),
+    "import": (
+        "This file is marked above this deployment's highest marking, {c}, so it was not added. "
+        "Mark it no higher than {c}."
+    ),
+    "write": (
+        "This would write something marked above this deployment's highest marking, {c}, so "
+        "nothing was written."
+    ),
+}
 
-    def __init__(self, ceiling: str) -> None:
-        super().__init__(
-            [
-                f"This load would write rows marked above this deployment's highest marking, "
-                f"{ceiling}, so nothing was loaded. Mark the source no higher than {ceiling}, or "
-                "load it into a deployment cleared to hold it."
-            ]
-        )
+
+class AboveTheDeploymentCeiling(RecipeRuleError):
+    """A load, an import or a write is refused whole, before anything is written, because it
+    would hold a marking above the deployment's highest (or one that cannot be read). A
+    `RecipeRuleError`, so every caller (a run, the run ledger, the Studio's routes) already
+    handles it. Its words say the limit, never the content."""
+
+    def __init__(self, ceiling: str, kind: str = "load") -> None:
+        super().__init__([_WORDS[kind].format(c=ceiling)])
         self.ceiling = ceiling
+        self.kind = kind
 
 
 @dataclass(frozen=True)
@@ -66,8 +86,12 @@ class DeploymentCeiling:
     def from_env(cls, scheme: HandlingScheme | None = None) -> DeploymentCeiling:
         """The rendered setting, in the scheme the Conduit loads (UK law enforcement,
         `services/api/run_resources.py`). Nothing set is the scheme's highest: no ceiling."""
-        scheme = scheme or load_uk_le_scheme()
-        raw = (os.environ.get(CEILING_ENV) or "").strip()
+        return cls.of((os.environ.get(CEILING_ENV) or "").strip(), scheme or load_uk_le_scheme())
+
+    @classmethod
+    def of(cls, raw: str, scheme: HandlingScheme) -> DeploymentCeiling:
+        """The ceiling a rendered value names: none is the scheme's highest; an unknown one is
+        refused."""
         if not raw:
             return cls(marking=scheme.classification[-1], scheme=scheme)
         if raw not in scheme.classification:
@@ -111,39 +135,83 @@ def refuse_fixed_markings_above_the_ceiling(recipe: Recipe, ceiling: DeploymentC
         raise AboveTheDeploymentCeiling(ceiling.marking)
 
 
+def _row_classifications(
+    recipe: Recipe, row: Mapping[str, str], scheme: HandlingScheme
+) -> tuple[set[str], bool]:
+    """The classifications one row's elements would be written at, and whether any cannot be read.
+    Classification alone is judged, element by element (an element whose `when` does not hold
+    writes nothing): a bound cell, or the element's default where the cell is empty, both kept, so
+    the stricter decides. A column the source lacks, or a value the scheme does not define, cannot
+    be read. A bad originator or code beside a readable classification is the engine's to reject,
+    with its cause; a conflict between units does not stop the row being judged."""
+    from .engine import _condition_holds
+
+    defaults = recipe.defaults.handling
+    found: set[str] = set()
+    unreadable = False
+    elements = template_elements(recipe.row_template)
+    for element in elements:
+        if not _condition_holds(element.when, row):
+            continue
+        literal = literal_handling(element.handling) or {}
+        default = str(literal.get("classification") or defaults.get("classification") or "")
+        found.add(default)
+        column = handling_bindings(element.handling).get("classification")
+        if column is None:
+            continue
+        if column not in row:
+            unreadable = True
+            continue
+        cell = (row[column] or "").strip()
+        if not cell:
+            continue
+        if cell in scheme.classification:
+            found.add(cell)
+        else:
+            unreadable = True
+    if not elements:
+        found.add(str(defaults.get("classification") or ""))
+    return {c for c in found if c}, unreadable
+
+
 def refuse_rows_above_the_ceiling(
     recipe: Recipe, rows: Iterable[Mapping[str, str]], ceiling: DeploymentCeiling
 ) -> None:
-    """Each row's marking, as the engine marks a record of the whole row (`engine.row_marking`): a
-    part that cannot be read counts as its strictest possible marking, so the check fails closed.
-    A row rejected for a conflict between units is not written, so it is not judged. One row above
-    the ceiling refuses the whole load."""
+    """Every row's classifications (`_row_classifications`), each distinct combination of the
+    columns they depend on resolved once, as the engine's own `_row_markings` keys them, not once
+    per row of a million. One row above the ceiling refuses the whole load; one whose
+    classification cannot be read refuses it too (the engine holds such a row's sample at the
+    scheme's highest), in words that say so."""
     if ceiling.is_the_scheme_s_highest:
         return
-    from .engine import RowRejected, row_marking
-
     refuse_fixed_markings_above_the_ceiling(recipe, ceiling)
+    columns: set[str] = set()
+    for element in template_elements(recipe.row_template):
+        bound = handling_bindings(element.handling).get("classification")
+        if bound is not None:
+            columns.add(bound)
+        if element.when is not None:
+            columns.add(element.when.field)
+    ordered = sorted(columns)
+    seen: set[tuple[str | None, ...]] = set()
+    unreadable = False
     for row in rows:
-        try:
-            marking = row_marking(recipe, row, ceiling.scheme)
-        except RowRejected:
+        key = tuple(row.get(c) for c in ordered)
+        if key in seen:
             continue
-        if ceiling.above(marking.classification):
+        seen.add(key)
+        found, cannot_read = _row_classifications(recipe, row, ceiling.scheme)
+        if any(ceiling.above(c) for c in found):
             raise AboveTheDeploymentCeiling(ceiling.marking)
+        unreadable = unreadable or cannot_read
+    if unreadable:
+        raise AboveTheDeploymentCeiling(ceiling.marking, "unreadable")
 
 
 @functools.lru_cache(maxsize=8)
 def _ceiling_for(raw: str) -> DeploymentCeiling:
     """The ceiling a rendered value names, read once per value (the scheme is a file)."""
-    scheme = load_uk_le_scheme()
-    if not raw:
-        return DeploymentCeiling(marking=scheme.classification[-1], scheme=scheme)
-    if raw not in scheme.classification:
-        raise CeilingUnknown(
-            f"{CEILING_ENV} {raw!r} is not a classification of the {scheme.name} handling "
-            f"scheme: use one of {', '.join(scheme.classification)}"
-        )
-    return DeploymentCeiling(marking=raw, scheme=scheme)
+    return DeploymentCeiling.of(raw, load_uk_le_scheme())
 
 
 def refuse_writes_above_the_ceiling(writes: Iterable[_Marked]) -> None:
@@ -155,4 +223,4 @@ def refuse_writes_above_the_ceiling(writes: Iterable[_Marked]) -> None:
     if ceiling.is_the_scheme_s_highest:
         return
     if any(ceiling.above(write.handling.classification) for write in writes):
-        raise AboveTheDeploymentCeiling(ceiling.marking)
+        raise AboveTheDeploymentCeiling(ceiling.marking, "write")

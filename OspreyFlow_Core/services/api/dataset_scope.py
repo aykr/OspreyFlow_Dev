@@ -562,6 +562,7 @@ class DatasetStampingGraph:
     ) -> NodeId:
         held = await self._held_for(lambda reader: self._inner.get_nodes([node_id], reader))
         await self._refuse_correcting(held, replacement.datasets)
+        refuse_writes_above_the_ceiling([replacement])  # ADR-148 decision 10, the backstop
         # Each cloned link reported on, so the alerts' repoint journal records it (ADR-109 Am. 11).
         new_id = await self._inner.supersede_node(
             node_id, replacement, tx, on_link_cloned=on_link_cloned
@@ -574,6 +575,7 @@ class DatasetStampingGraph:
     ) -> str:
         held = await self._held_for(lambda reader: self._inner.get_edges([edge_id], reader))
         await self._refuse_correcting(held, replacement.datasets)
+        refuse_writes_above_the_ceiling([replacement])  # ADR-148 decision 10, the backstop
         new_id = await self._inner.supersede_edge(edge_id, replacement, tx, old_type=old_type)
         await self._written()
         return new_id

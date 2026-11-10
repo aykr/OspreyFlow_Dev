@@ -2845,7 +2845,12 @@ async def _above_the_ceiling_handler(
     refused before anything is written, in words that say the limit, never the content."""
     return JSONResponse(
         status_code=422,
-        content={"error": "above_the_deployments_highest_marking", "problems": exc.problems},
+        content={
+            "error": "above_the_deployments_highest_marking",
+            # `detail` is what the Glass shows a person (`AddFiles.tsx`, `entityPictures.ts`).
+            "detail": exc.problems[0],
+            "problems": exc.problems,
+        },
     )
 
 
@@ -2856,7 +2861,7 @@ def refuse_above_the_deployment_ceiling(request: Request, classification: str) -
     held = getattr(request.app.state, "deployment_ceiling", None)
     ceiling = held if held is not None else DeploymentCeiling.from_env()
     if classification in ceiling.scheme.classification and ceiling.above(classification):
-        raise AboveTheDeploymentCeiling(ceiling.marking)
+        raise AboveTheDeploymentCeiling(ceiling.marking, "import")
 
 
 @app.exception_handler(RecipeRuleError)

@@ -232,9 +232,14 @@ def _refuse_a_pack_above_the_ceiling(name: str, spec: Dataset, directory: Path) 
         )
     held = spec.highest_marking or scheme.classification[-1]
     if scheme.classification.index(held) > scheme.classification.index(ceiling):
+        holds = (
+            f"holds data marked up to {held}"
+            if spec.highest_marking is not None
+            else f"declares no highest marking, so it is judged as the scheme's highest, {held}"
+        )
         raise SeedRefused(
-            f"the {name} demo pack holds data marked up to {held}, above this deployment's "
-            f"highest marking, {ceiling}, so nothing was loaded"
+            f"the {name} demo pack {holds}, above this deployment's highest marking, {ceiling}, "
+            "so nothing was loaded"
         )
 
 

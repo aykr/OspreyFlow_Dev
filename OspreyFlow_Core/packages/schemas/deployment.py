@@ -951,8 +951,9 @@ class DeploymentConfig(BaseModel):
         description=(
             "Default: the handling scheme's highest. The highest marking this deployment may hold: "
             "a load or an import marked above it is refused before anything is written, in words "
-            "that say this limit and never the item's content. One of the handling scheme's "
-            "classifications."
+            "that say this limit and never the item's content. A demo pack that declares no "
+            "highest marking is judged as the scheme's highest, so under a lower setting it is "
+            "refused. One of the handling scheme's classifications."
         ),
     )
 
