@@ -8,6 +8,7 @@ Run from OspreyFlow_Core with the closed offline ports pinned (no stack):
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -34,6 +35,12 @@ ID_CASES = [f"test_a_recipe_id_that_is_not_one_file_name_is_refused[{case}]"
             for case in ("../x", ".git/x", "../../outside", "a/b", "..", ".hidden", "")]  # fmt: skip
 RACE = "test_a_real_writer_moving_head_mid_commit_is_refused"
 FAKE_REFUSAL = "test_a_failed_commit_is_an_error_not_a_quiet_success"
+LOCK_PROBE = "test_the_index_is_read_and_written_under_a_lock_another_process_honours"
+LOCKED = (
+    "    with _REPOSITORY_LOCK, _open_repository(repo_root) as repo, _publish_lock(repo):\n"
+    "        written = _write_recipe_file(repo_root, relative_path, data)\n"
+    "        _stage_and_commit(repo, path, written, data, message)\n"
+)
 
 #: (slug, what the plant does, [(old, new)], test files, the tests that must go red)
 PLANTS = [
@@ -81,8 +88,8 @@ PLANTS = [
      [("            HEADREF, head if head is not None else ZERO_SHA, commit.id,\n",
        "            HEADREF, None, commit.id,  # PLANT\n")], [REPO_TESTS], [RACE]),
     ("process-lock-removed", "the thread lock kept, the publish flock not taken: "
-     "`fcntl.flock(lock, fcntl.LOCK_EX)` -> `pass`",
-     [("        fcntl.flock(lock, fcntl.LOCK_EX)\n", "        pass  # PLANT\n")], [REPO_TESTS],
+     "`fcntl.flock(fd, fcntl.LOCK_EX)` -> `pass`",
+     [("        fcntl.flock(fd, fcntl.LOCK_EX)\n", "        pass  # PLANT\n")], [REPO_TESTS],
      ["test_the_index_is_read_and_written_under_a_lock_another_process_honours"]),
     ("porcelain-commit", "the commit made by dulwich's worktree commit, which reads the config "
      "(hooks, signer, filters) as git does (the independent review, item 2)",
@@ -107,13 +114,28 @@ PLANTS = [
      "`if not stat.S_ISREG(...)` -> `if False`",
      [("            if not stat.S_ISREG(existing.st_mode):\n", "            if False:  # PLANT\n")],
      [REPO_TESTS], ["test_a_symlinked_recipe_file_is_refused"]),
+    ("lock-narrowed-to-the-swap", "the publish flock taken around the compare-and-swap alone "
+     "(the independent re-review, item 3): not over the write, the index or the commit",
+     [(LOCKED, LOCKED.replace(", _publish_lock(repo):", ":  # PLANT")),
+      ("        if not repo.refs.set_if_equals(\n",
+       "        with _publish_lock(repo):  # PLANT\n            moved = not repo.refs.set_if_equals(\n"),
+      (CAS_CLOSE, CAS_CLOSE.replace("        ):  # fmt: skip", "            )\n        if moved:  # PLANT"))],
+     [REPO_TESTS], [LOCK_PROBE]),
+    ("lock-after-the-write", "the publish flock taken after the recipe file is written: over the "
+     "index and the commit only",
+     [(LOCKED, LOCKED.replace(", _publish_lock(repo):", ":  # PLANT").replace(
+         "        _stage_and_commit(", "        with _publish_lock(repo):\n            _stage_and_commit("))],
+     [REPO_TESTS], [LOCK_PROBE]),
+    ("lock-file-link-followed", "the lock file opened following a link: `O_NOFOLLOW` dropped",
+     [("os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC", "os.O_RDWR | os.O_CREAT | os.O_CLOEXEC")],
+     [REPO_TESTS], ["test_a_linked_publish_lock_is_refused"]),
 ]
 
 def run(files: list[str]) -> str:
     done = subprocess.run(
         [".venv/bin/pytest", "-c", "../OspreyFlow_Build/pytest.ini", "-p", "no:cacheprovider",
          "-q", "-rA", *files],
-        cwd=CORE, capture_output=True, text=True,
+        cwd=CORE, capture_output=True, text=True, env={**os.environ, "COLUMNS": "400"},
     )  # fmt: skip
     keep = ("PASSED", "FAILED", "ERROR")
     out = done.stdout.replace("\x00", "\\x00")  # one id case holds a NUL
