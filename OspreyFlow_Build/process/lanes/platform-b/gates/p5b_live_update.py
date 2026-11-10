@@ -288,14 +288,17 @@ def main() -> int:
                         "ingest": str(scratch / "ingest"),
                         "tiles": str(scratch / "tiles"),
                     },
-                    # Synthetic and in-repo (rule 9), seeded by the install itself.
+                    # Synthetic and in-repo (rule 9), seeded by the install itself. The seed
+                    # shares its case with the demo accounts, so they are made too: they live
+                    # in this deployment's own identity provider and go with its volumes.
                     "demo_packs": ["fixture-corp"],
+                    "demo_accounts": True,
                 }
             )
         )
         install = [
             python, "-m", "ospreyflow", "install", "--mode", "lite", "--name", NAME,
-            "--config", str(answers), "--yes", "--no-demo-accounts",
+            "--config", str(answers), "--yes",
         ]  # fmt: skip
         say("$ " + " ".join(install))
         installed = subprocess.run(install, env=env, cwd=CORE, check=False).returncode == 0
