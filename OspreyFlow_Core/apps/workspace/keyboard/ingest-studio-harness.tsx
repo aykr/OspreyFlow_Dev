@@ -208,6 +208,9 @@ const KNOWN_KINDS = new Set(["domain_model", "source", "profile", "map", "extrac
 // steps' save, YAML save and Check SQL need; without it the save refuses an expert step changed (403,
 // in words) and Check SQL refuses outright, as the Conduit does.
 if (startParams.get("rights") === "expert") RIGHTS.add("write_sql_transforms");
+// `?rights=releases` (L1.7): Studio › Releases asks Edit target model too, as an export or import
+// writes the model; given only here, so the other cases meet the Studio as they did.
+if (startParams.get("rights") === "releases") RIGHTS.add("edit_target_model");
 const EXPERT_WORDS =
   "This change adds, edits or removes an expert step (a SQL transform or a fuzzy match), which needs the right to write SQL transforms (write_sql_transforms), granted by an administrator. The pipeline's other steps can be edited without it.";
 const expertParts = (graph: { nodes: { id: string; kind: string; label: string; config?: unknown }[]; edges: { source: string; target: string }[] }) => {
@@ -500,7 +503,7 @@ function Host() {
         investigationId={caseId}
         onOpenCase={setCaseId}
         // The rights the harness's routes grant, so the Studio offers what they would take (L1.8).
-        rights={NO_RIGHTS ? new Set() : new Set([...RIGHTS, "revert_loads", "edit_target_model", "add_ingest_files", "load_screening_lists", "accept_types", "read_held_rows", "decide_held_rows"])}
+        rights={NO_RIGHTS ? new Set() : new Set([...RIGHTS, "revert_loads", "add_ingest_files", "load_screening_lists", "accept_types", "read_held_rows", "decide_held_rows"])}
         username="engineer-1"
       />
       <p role="status" aria-label="Case the Studio works through">{caseId}</p>

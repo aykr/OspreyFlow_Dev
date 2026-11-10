@@ -1039,7 +1039,7 @@ test("Test discloses the pipeline's expert steps, read by keyboard", async ({ pa
 
 // ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases, by keyboard alone.
 test("a release is exported by keyboard, and its files listed", async ({ page }) => {
-  await page.goto(HARNESS);
+  await page.goto(`${HARNESS}?rights=releases`);
   await tab(page, "5 Releases");
   const version = page.getByLabel("Release version");
   await version.focus();
@@ -1056,7 +1056,7 @@ test("a release is exported by keyboard, and its files listed", async ({ page })
 });
 
 test("a release is checked, then imported as drafts, by keyboard", async ({ page }) => {
-  await page.goto(HARNESS);
+  await page.goto(`${HARNESS}?rights=releases`);
   await tab(page, "5 Releases");
   // A folder is chosen in the system's own picker, which the page cannot drive; the files are set on
   // the input as the picker sets them, and every step after is the keyboard's.
