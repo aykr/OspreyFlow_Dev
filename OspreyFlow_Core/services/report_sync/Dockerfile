@@ -29,7 +29,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
     HOME="/app"
 
-USER osprey
+USER 10001:10001
 # The heartbeat check `__main__` describes: unhealthy once a pass has not finished in two intervals.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD ["python", "-m", "services.report_sync", "--health"]

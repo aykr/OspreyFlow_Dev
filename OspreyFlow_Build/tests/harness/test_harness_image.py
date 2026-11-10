@@ -289,7 +289,7 @@ def test_the_image_runs_read_only_and_non_root_without_crashing(built_image: str
     """Console mode's own other two constraints, together: `--read-only` (with a `--tmpfs /tmp`
     for anything that genuinely needs scratch space) does not stop the image from starting or
     importing its own entrypoint module, and the process is non-root regardless of which mode it
-    runs — `USER osprey` is baked into the image, not toggled by a flag."""
+    runs — `USER 10001:10001` (the `osprey` user) is baked into the image, not toggled by a flag."""
     whoami = subprocess.run(
         [
             "docker",
