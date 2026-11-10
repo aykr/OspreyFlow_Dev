@@ -33,6 +33,10 @@ done at its current head. If not, start one.
 3. A code conflict goes back to the lane for a rebase. Don't resolve it yourself.
 4. Apply the lane's ci.yml / Makefile diffs and patches, as named in its report. These are the owner's files, applied
    only at merge. Lint the merged diff (ruff on changed Python; eslint/tsc on changed TS) and fix only line wrapping.
+   **Then run the lane's own changed test files on the merged tree** (offline on the server, or live under a granted
+   stack), whatever its gates showed at its base. Two lanes' changes can conflict in meaning with no textual conflict:
+   on 10 November L1.7's join guard refused the fixture that six of L1.10b's tests use, which `make -k ci` does not run
+   and both lanes' `make test` had run only on their own bases.
 5. In the same commit, update `process/lanes/progress.tsv` (column 4 exactly `done`, the hash in the description),
    `estimates.tsv` (rewrite its `# as of` line) and `CARRIES.md` (the step's carries). Commit as
    `merge(lane/<lane>): <step>, <summary> (<head>)`.
