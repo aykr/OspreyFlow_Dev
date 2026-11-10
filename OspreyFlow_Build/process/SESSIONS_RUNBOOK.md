@@ -225,13 +225,17 @@ orchestrator still reads the branch before believing it.
    the report the prompt asks for (also saved to `process/lanes/<lane>/REPORT.md`).
 2. **Questions** come back as multiple choice. Answer them in the lane's tab, or tell the orchestrator,
    which can batch all three lanes' questions into one round for you.
-3. **When a lane is ready to merge** (its heartbeat says so; or tell the orchestrator), the
-   orchestrator, without waiting for you:
-   - reads the branch (`git log main..lane/studio`, `git diff main...lane/studio`), not the report;
-   - has the `lane-reviewer` agent read it against the brief and rules 1–15;
-   - nudges the lane to rebase (`git rebase main`) and re-run its touched tests;
-   - takes the lease, merges, runs `make ci`, assembles the friction log, pushes and logs the push;
-   - nudges the other lanes to rebase, and writes the merged lane its next brief;
+3. **When a lane's code is built** (ADR-142 Amendment 6), it messages the orchestrator "built at <hash>" and
+   starts its own lane-reviewer; the orchestrator starts its independent review of the same hash at once. The lane
+   fixes both reviews' findings together, rebases onto main, then runs the gates **once**: `make test` and
+   `make -k ci` on the test server (`stack_lease.sh offline <lane>`), browser tests in a granted slot, and the live
+   check (`stack_lease.sh live <lane>`). Then it reports ready-to-merge, and the orchestrator, without waiting for you:
+   - reads the branch (`git log main..lane/<lane>`, `git diff main...lane/<lane>`), not the report;
+   - trial-merges onto today's main, applies the lane's diffs to owner and shared files, and runs the checks the
+     merge itself could break (lint, types, the coverage checks, the lane's own tests); a conflict in code sends the
+     lane back to rebase rather than being resolved by hand;
+   - merges, assembles the friction log, and records the merge (pushing only once, at the end);
+   - nudges the other lanes, and writes the merged lane its next brief;
    - tells you what to check by hand.
    A lane that is quiet or stuck is nudged; one whose session has ended is reopened on Prompt R.
    The orchestrator acts only while it is running a turn. Prompt O ends by putting it in **watch

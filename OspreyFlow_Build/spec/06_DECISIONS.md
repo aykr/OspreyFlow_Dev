@@ -32952,3 +32952,37 @@ teams, with their own extraction schemas and prompts.
 Clients who do not choose Laurium carry none of it. The architecture page shared with the client shows
 Laurium beside the model gateway; if the lane places it other than in the Conduit and workers, the page is
 corrected in D2c.
+
+### ADR-142, Amendment 6 (10 November 2026) — the fix-and-check order: one round of gates, not three
+
+*The owner's decision of 10 November 2026, after measuring the day: a step's fix-and-check stage (between its code
+being built and its merge) took longer than writing the code, because the gates ran two or three times.*
+
+**Context.** On 10 November a typical step ran its own reviewer, then its full gates (`make test` on the server about
+25 minutes, `make -k ci` 30–90 minutes, browser tests, a live check up to three hours), then the orchestrator's
+independent review, which found must-fixes; the fixes then re-ran every gate, and a step built on the morning's main
+met six merges by the evening and had to rebase and re-gate again (L1.7a, P5b, L2.10, L2.11, L1.7). The same findings
+recurred across lanes (a keyboard registry passed through a constant; an owner's file committed rather than sent as a
+diff; lint not run on a changed file; a check on one run path but not its siblings; an accepted ADR edited in place).
+
+**Decisions.**
+
+1. **Both reviews start when the code is built.** A lane messages the orchestrator "built at <hash>" and starts its
+   own lane-reviewer; the orchestrator starts its independent review of the same hash at the same moment.
+2. **Fixes from both reviews go in together**, in one pass.
+3. **Rebase onto main then, never after the gates.** A step that would run past a day merges in smaller pieces rather
+   than drift.
+4. **The gates run once, at that head:** `make test` and `make -k ci` on the test server through `stack_lease.sh
+   offline <lane>` (Docker, trivy and Chromium there: the image scans run for real); browser tests in a slot the
+   orchestrator grants (the test server's, or the owner's Mac's two); the live check through `stack_lease.sh live
+   <lane>` (Amendment 5). A gate re-runs only for what a later change touches.
+5. **A self-check list before "built"**, kept in `process/lanes/PROMPT_L.md`: registries by literal name; owner and
+   shared files as diffs; lint, mypy and tsc over the branch's own diff; every sibling run path given the same check;
+   each refusal and each "never" tested red first; each plant at the real call site in the shape the code receives;
+   an ADR changed only by a new amendment under a reserved number; a live file that collects. The orchestrator adds to
+   it whenever a finding recurs.
+6. **The owner's Mac runs no lane's heavy work, opens no desktop app for a lane and starts no Docker for one.**
+
+**Consequences.** The orchestrator's independent review no longer waits for a lane's gates; a lane's gate records are
+taken once and cited at merge. `make test` itself moves to parallel workers on the server (T1, ADR-142 Amendment 5's
+companion). Steps begun before 10 November evening finish under the old order.

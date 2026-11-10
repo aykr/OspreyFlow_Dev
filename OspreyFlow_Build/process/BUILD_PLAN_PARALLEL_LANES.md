@@ -315,6 +315,14 @@ the lane records each one in `REPORT.md`.
 | Orchestrator | `spec/06_DECISIONS.md` (appends, reservations), `spec/ADR_RESERVATIONS.md`, `process/**`, `OspreyFlow_Build/tools/friction_assemble.py`, `OspreyFlow_Build/tools/adr_reservations_check.py`, `OspreyFlow_Build/scripts/{stack_lease,lanes_heartbeat,lanes_launch}.sh` |
 | Shared, by small orchestrator-merged commits only | `packages/schemas/**` (and the generated types); `keyboard/actionRegistry.ts`; `apps/workspace/src/design/tokens.css`; `OspreyFlow_Core/Makefile` and `.github/workflows/ci.yml` (the owner's); every `Dockerfile`'s `USER` line (P7's numeric UID, a shared commit made first) |
 
+## The fix-and-check order (ADR-142 Amendment 6, 10 November 2026)
+
+Every step from 10 November evening: **built** (the lane messages "built at <hash>") → **both reviews at once** (the
+lane's reviewer and the orchestrator's independent one) → **fixes together** → **rebase onto main** → **gates once**
+(`make test` and `make -k ci` on the test server; browser tests in a granted slot; `stack_lease.sh live`) →
+**ready-to-merge** → the orchestrator's trial merge and merge. The self-check list a lane runs before "built" is in
+`process/lanes/PROMPT_L.md`. Heavy runs never on the owner's Mac.
+
 ## Merge order
 
 1. Step 0.
