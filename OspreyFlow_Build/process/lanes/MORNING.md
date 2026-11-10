@@ -49,6 +49,17 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    platform's P5 and docs' D2a merge together into one merge result, gated once, right after admin's L2.7, instead
    of one after another (about 1½ hours saved). A failing batch is split to find the cause. Steps that touch the same
    files still merge one at a time. **To overrule:** say "one at a time".
+7. **Your request, 10 November: at demo-ready, refresh your deployment and publish a new version.** Planned for
+   when Track A is merged (about 21:00 today; the decks, D2b, aren't part of the product repo, so it doesn't wait for
+   them):
+   1. `make ci` and `make test` green on `main`, the merge gates as usual.
+   2. Your local deployment: `ospreyflow backup` (data and Enron, kept out of `~/Documents`), then Docker Desktop
+      started and `ospreyflow start --build --name default`, restoring from the backup if needed (your word of
+      8 November). Docker stays on afterwards for your demo; the lanes' stacks stay on the server.
+   3. The product repo: `OspreyFlow_Build/scripts/publish_user_repo_update.sh` (its checks refuse real names, local
+      paths, `osprey.yaml`, `data/` and the real-data list), then `git push origin main` in `OspreyFlow_user_repo`.
+   The new README stays a draft (`README_DRAFT.md`) until you approve it, so the published README is today's.
+   **To overrule:** say what to change.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
