@@ -230,7 +230,7 @@ def test_the_serial_check_names_a_file_that_should_be_serial(tmp_path: Path, mon
         "tests/test_j.py": "config = ValkeyConfig(host='localhost', port=6379, db=0)\n",
         "tests/test_k.py": 'client = valkey.Valkey(**{**ValkeyConfig.from_env().client_kwargs(), "db": 0})\n',
         "tests/test_l.py": "config = ValkeyConfig('localhost', 6379, 0)\n",
-        "tests/test_m.py": 'subprocess.run(["docker", "compose", "-p", LOCAL_LITE_PROJECT, "down", "-v"])\n',
+        "tests/test_m.py": 'subprocess.run(["docker", "compose", "-p", LOCAL_LITE_PROJECT, "ps"])\n',
         "tests/test_n.py": 'ctx = multiprocessing.get_context("spawn")\n',
         "tests/test_o.py": 'subprocess.run([sys.executable, "-m", "scripts.make_home_cases"])\n',
         "tests/test_p.py": 'subprocess.run([sys.executable, "-m", "cli", "status"])\n',
