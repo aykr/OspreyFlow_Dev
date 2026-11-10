@@ -1844,6 +1844,9 @@ class AlertTeam(BaseModel):
     #: ADR-106: the members by name (id -> name), resolved at read time for the members served
     #: (the lead's own team alone); never stored. The Glass shows these, an id only where unnamed.
     member_names: dict[str, str] = Field(default_factory=dict)
+    #: ADR-146 decision 3: how many of the team hold this case, for the editor's "Its alerts will
+    #: appear in Alerts, seen by the 6 members of …" said before saving. People, never data.
+    member_count: int = Field(default=0, ge=0)
 
 
 class HotlistAudienceInput(BaseModel):

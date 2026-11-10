@@ -14076,13 +14076,15 @@ async def read_alert_teams(
         return []
     out: list[AlertTeam] = []
     for team in await roles.teams(today):
-        members: list[str] = []
-        if team.role_id in led:
-            members = sorted(
-                await _team_members_in_case(request, investigations, investigation.id, team.role_id)
-            )
+        in_case = sorted(
+            await _team_members_in_case(request, investigations, investigation.id, team.role_id)
+        )
+        # Members are listed to the team's own lead alone; how many there are is said to anyone
+        # routing a rule's alerts (ADR-146 decision 3: "seen by the 6 members of …").
+        members = in_case if team.role_id in led else []
         out.append(AlertTeam(role_id=team.role_id, display_name=team.display_name,
-                             lead=team.role_id in led, members=members))  # fmt: skip
+                             lead=team.role_id in led, members=members,
+                             member_count=len(in_case)))  # fmt: skip
     # ADR-106: the members served, by name, asked for those ids alone (the lane-reviewer's round on
     # the L2.10 fix: a lead's hand-off named people by their identity-provider ids).
     served = sorted({m for t in out for m in t.members})

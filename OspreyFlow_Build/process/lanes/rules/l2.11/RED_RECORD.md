@@ -49,3 +49,9 @@ Live: the rules lease, stack c, by `stack_lease.sh remote`, at 5fa7b83 (`gates/5
 The store case (`test_migrate_rules_to_datasets_store.py`, its own schema, seeded as a store before
 L2.11) runs at the next leased run. It proves the dry run at `_main` changes no table, column, index or row,
 the real run leaves no whole-deployment rule, and a second run changes nothing.
+
+## §4 The team's member count for "where its alerts go" (`read_alert_teams`), offline
+
+`test_the_teams_a_rule_may_go_to_list_members_to_the_lead_alone` now also asserts the deployer is told how many
+of each team hold the case (2 and 1), with no one named. Red with the count taken from the lead-only list
+(`member_count=len(members)`): 1 failed.
