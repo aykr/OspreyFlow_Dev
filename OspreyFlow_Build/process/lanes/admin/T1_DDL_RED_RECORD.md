@@ -2,7 +2,7 @@
 
 Each check was planted out at its real call site, its test run red, and the file put back and green. These plants were
 run by hand, one at a time. Offline: closed ports, no lane. The file is `OspreyFlow_Core/packages/adapters/graph_arcadedb/schema.py`
-throughout. The tests are `OspreyFlow_Build/tests/adapters/graph_arcadedb/test_schema_batch.py` and `test_schema_backfill.py` (13 cases).
+throughout. The tests are `OspreyFlow_Build/tests/adapters/graph_arcadedb/test_schema_batch.py` and `test_schema_backfill.py` (14 cases).
 
 | Plant | Red |
 | --- | --- |
@@ -11,6 +11,7 @@ throughout. The tests are `OspreyFlow_Build/tests/adapters/graph_arcadedb/test_s
 | No timeout of the script's own | 1 failed: the golden case (`timeout == 600`) |
 | A permanent refusal retried (the denylist check removed) | 4 failed: the three parse errors and the run-time refusal (each sent 6 times) |
 | No re-send on a failure to connect | 1 failed: `…failure_to_connect_re_sends_the_whole_script` |
+| `CommandSQLParsingException` off the denylist (added after the live proof named it) | 1 failed: `…does_not_parse_is_never_retried_even_as_a_5xx` |
 
 **The design changed under review.** My first version undid a refused script by dropping what it had added. My
 lane-reviewer found that the cluster profile starts several Conduits and workers at once. One of them, refused,
@@ -28,4 +29,12 @@ same 585 statements in the same order with the same 8 copy-ups; that was checked
   type and bucket part is kept.
 - The comparison's own red, `test_the_dump_comparison_names_a_missing_index`, passed at ebc74d8: one
   `CREATE INDEX … BY ITEM` left out of the batch is named as missing.
-- The timings and the whole `graph_port` run at the new head are recorded when they arrive.
+- At 366afad: the whole of `tests/conformance/graph_port` and `test_route_rights.py`, 377 passed, 0 failed, under
+  "stack c, the lease orchestrator took at 2026-11-10T11:13:03Z; wall 471 s, set-up 8 s" (`gates/366afad.live.txt`).
+  The timings it printed, for 585 statements:
+  - a fresh database: 15.8 s one at a time, 0.2 s batched;
+  - the schema applied again (the Conduit's start-up): 0.8 s one at a time, 0.1 s batched;
+  - `arcadedb_adapter`'s open (create and apply): 0.3 s.
+- The real classes. A parse error is refused as `com.arcadedb.exception.CommandSQLParsingException`, which is not on
+  the denylist. A run-time refusal is refused as `com.arcadedb.exception.SchemaException`. Each script was sent
+  once (`client.scripts == 1`).

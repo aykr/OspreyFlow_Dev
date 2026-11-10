@@ -67,6 +67,9 @@ _NON_RETRYABLE_ARCADEDB_EXCEPTIONS = frozenset(
     {
         "com.arcadedb.exception.SchemaException",
         "com.arcadedb.query.sql.parser.ParseException",
+        # What a `sqlscript` that does not parse is refused as (the live proof at 366afad); sent
+        # once there, and named here so a 5xx for it is never retried either.
+        "com.arcadedb.exception.CommandSQLParsingException",
         "com.arcadedb.exception.ConcurrentModificationException",
     }
 )

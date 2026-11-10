@@ -241,6 +241,20 @@ async def test_a_failure_to_connect_re_sends_the_whole_script() -> None:
     assert fake.scripts() == 3 and "mx_KNOWS" in fake.types
 
 
+async def test_a_script_that_does_not_parse_is_never_retried_even_as_a_5xx() -> None:
+    """ArcadeDB refuses an unparsable script as `CommandSQLParsingException` (the live proof at
+    366afad); a 500 carrying it is still permanent."""
+    refused = ArcadeDBError(
+        "ArcadeDB error 500",
+        status_code=500,
+        exception_class="com.arcadedb.exception.CommandSQLParsingException",
+    )
+    fake = FakeArcade(failures=[refused])
+    with pytest.raises(SchemaApplyError):
+        await apply_schema(fake, _ontology())  # type: ignore[arg-type]
+    assert fake.scripts() == 1
+
+
 async def test_a_script_that_timed_out_is_not_sent_again_beside_itself() -> None:
     """A read timeout means the script reached the server and may still be running there."""
     fake = FakeArcade(failures=[httpx.ReadTimeout("no answer")])
