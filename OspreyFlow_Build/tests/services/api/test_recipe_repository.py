@@ -852,3 +852,118 @@ async def test_an_aside_holding_more_than_a_git_directory_is_kept(tmp_path: Path
     await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
 
     assert (stranger / "notes.txt").exists(), "an aside holding more than .git was swept"
+
+
+def _fail_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(*args: object, **kwargs: object) -> object:
+        raise OSError("[Errno 5] Input/output error")
+
+    monkeypatch.setattr(studio_publish, "commit_tree_changes", broken)
+
+
+@needs_git
+async def test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The put-back reads the current `HEAD`: a rival that committed this very recipe in the
+    window leaves the file as the rival committed it, not as it was before."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    real = studio_publish.commit_tree_changes
+
+    def with_a_rival(*args: object, **kwargs: object) -> object:
+        made = real(*args, **kwargs)  # type: ignore[arg-type]
+        # The rival's own bytes, staged and committed by real git over ours in the window.
+        (repo / "recipes" / "alpha.yaml").write_text("version: theirs\n")
+        _git(repo, "add", "recipes/alpha.yaml")
+        _git(repo, "-c", "user.name=Op", "-c", "user.email=op@localhost",
+             "commit", "-q", "-m", "theirs")  # fmt: skip
+        return made
+
+    monkeypatch.setattr(studio_publish, "commit_tree_changes", with_a_rival)
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: theirs\n"
+    assert _git(repo, "status", "--porcelain") == ""
+
+
+@needs_git
+async def test_a_head_that_is_not_a_commit_leaves_the_file_rather_than_removing_it(
+    tmp_path: Path,
+) -> None:
+    """When `HEAD` cannot be read as a commit (an annotated tag, say), what it holds is unknown:
+    the put-back leaves the file rather than removing a recipe that may be published."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    _git(repo, "-c", "user.name=Op", "-c", "user.email=op@localhost",
+         "tag", "-a", "-m", "a tag", "v1")  # fmt: skip
+    tag = _git(repo, "rev-parse", "v1").strip()
+    (repo / ".git" / "HEAD").write_text(tag + "\n")
+
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert (repo / "recipes" / "alpha.yaml").exists(), "a recipe was removed for want of a commit"
+
+
+@needs_git
+async def test_a_failure_after_the_rename_is_put_back_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure in the write after `os.replace` put the new bytes in place (the directory's
+    `fsync`) leaves nothing ahead of `HEAD` either."""
+    import stat as stat_module
+
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    real = os.fsync
+
+    def failing_on_a_directory(fd: int) -> None:
+        if stat_module.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError("[Errno 5] Input/output error")
+        real(fd)
+
+    monkeypatch.setattr(studio_publish.os, "fsync", failing_on_a_directory)
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+    monkeypatch.setattr(studio_publish.os, "fsync", real)
+
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: 1\n", "the file is ahead"
+
+
+@needs_git
+async def test_a_recipes_file_in_head_counts_as_holding_no_recipe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When `HEAD` holds `recipes` as a file, it holds no `recipes/<id>.yaml`: the put-back
+    removes the refused recipe's file, as for any recipe `HEAD` does not hold."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "--initial-branch=main")
+    (repo / "recipes").write_text("a file, not a directory\n")
+    _git(repo, "add", "recipes")
+    _git(repo, "-c", "user.name=Op", "-c", "user.email=op@localhost", "commit", "-q", "-m", "f")
+    (repo / "recipes").unlink()
+    _fail_commit(monkeypatch)
+
+    with pytest.raises(GitCommitError):
+        await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=repo)
+
+    assert not (repo / "recipes" / "alpha.yaml").exists(), "the refused recipe's file is left"
+
+
+@needs_git
+async def test_an_empty_stale_aside_is_swept(tmp_path: Path) -> None:
+    """A first use that crashed between making its aside and initialising in it leaves the aside
+    empty; that is ours too, and swept once stale."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    empty = repo / ".git-init-z9x8c7v6"
+    empty.mkdir()
+    old = time.time() - 3600
+    os.utime(empty, (old, old))
+
+    await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert not empty.exists(), "an empty stale aside is still there"
