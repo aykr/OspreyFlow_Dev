@@ -60,10 +60,13 @@ def test_a_service_identitys_token_names_its_client(
     jwks_url: str, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
 ) -> None:
     key, _ = keypair
-    token = sign_token(
-        key, {"sub": "uuid-1", "azp": "Airflow-Prod", "preferred_username": "service-account-airflow-prod",
-              "iat": default_claims()["iat"], "exp": default_claims()["exp"]},
-    )  # fmt: skip
+    claims = {
+        "sub": "uuid-1",
+        "azp": "Airflow-Prod",
+        "preferred_username": "service-account-airflow-prod",
+        "exp": default_claims()["exp"],
+    }
+    token = sign_token(key, claims)
     assert _verifier(jwks_url).client_of(token) == "Airflow-Prod"
 
 
@@ -130,12 +133,21 @@ def test_no_account_id_is_served_not_even_inside_a_refusals_words() -> None:
 
 
 class _Ledger:
+    """The ledger's `window`, filtering by unit as its `WHERE` does, over two units' runs."""
+
     def __init__(self) -> None:
         self.asked: list[list[str] | None] = []
+        self.held = [
+            _run(),
+            _run(run_id="run-u2", recipe_id="rcp-unit-2-only", owning_unit="unit-2"),
+        ]
 
     async def window(self, *, since: datetime, units: list[str] | None) -> list[RecipeRun]:
         self.asked.append(None if units is None else list(units))
-        return [_run()]
+        return [r for r in self.held if units is None or r.owning_unit in units]
+
+    async def get(self, run_id: str) -> RecipeRun | None:
+        return next((r for r in self.held if r.run_id == run_id), None)
 
 
 class _Recipes:
@@ -185,3 +197,58 @@ def test_operations_reads_the_readers_unit_unless_they_administer_the_system(
     assert ledger.asked == asked
     if status == 200:
         assert OWNER_ID not in answer.text
+
+
+def test_a_reader_of_another_unit_sees_nothing_of_this_ones_runs(ledger: _Ledger) -> None:
+    app.dependency_overrides[get_principal] = lambda: READER.model_copy(
+        update={"org_unit": "unit-2"}
+    )
+    answer = TestClient(app).get("/v1/admin/operations/runs", params={"days": 7})
+    assert answer.status_code == 200, answer.text
+    assert "rcp-1" not in answer.text and "unit-1" not in answer.text
+    assert [r["pipeline_id"] for r in answer.json()["rows"]] == ["rcp-unit-2-only"]
+
+
+class _Verifier:
+    def __init__(self, client: str | None, status: int = 403) -> None:
+        self.client, self.status = client, status
+
+    def client_of(self, token: str) -> str:
+        if self.client is None:
+            raise ServiceIdentityRefused("not a service identity's", status=self.status)
+        return self.client
+
+
+@pytest.mark.parametrize(
+    ("client", "expected"),
+    [("airflow-prod", 200), ("another-client", 404), (None, 403)],
+    ids=["the-trigger", "another-client", "a-person"],
+)
+def test_a_run_is_read_back_only_by_the_client_that_triggered_it(
+    ledger: _Ledger, client: str | None, expected: int
+) -> None:
+    from services.api.app import get_principal_resolver
+
+    ledger.held.append(
+        _run(
+            run_id="run-ext", trigger="external", triggered_by="airflow-prod", external_run_id="d:1"
+        )
+    )
+
+    class _Owner:
+        async def resolve_for_owner_detailed(self, owner_id: str) -> Principal:
+            return READER
+
+    app.state.service_identities = _Verifier(client)
+    app.dependency_overrides[get_principal_resolver] = lambda: _Owner()
+    try:
+        answer = TestClient(app).get(
+            "/v1/runs/run-ext", headers={"Authorization": "Bearer anything"}
+        )
+    finally:
+        del app.state.service_identities
+    assert answer.status_code == expected, answer.text
+    if expected == 200:
+        assert answer.json()["rows_read"] == 10 and answer.json()["external_run_id"] == "d:1"
+    else:
+        assert "rows_read" not in answer.text

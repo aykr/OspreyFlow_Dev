@@ -1,0 +1,36 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/Schedules.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/Schedules.test.tsx
+index 64fa561..7bcc364 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/Schedules.test.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/Schedules.test.tsx
+@@ -49,6 +49,10 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null =
+       // ADR-145 decision 9: Operations opens with what ages (`sections/Operations.tsx`).
+       if (path === "operations/ageing")
+         return json(200, { alert_after_days: 3, rules: [], waiting: [], promotions_recorded: false });
++      // ADR-141 (L1.7): then the runs, the scheduler, external triggers and quotas (`OperationsFigures`).
++      if (path === "operations/runs")
++        return json(200, { days: 7, units: ["unit-1"], rows: [], external: [], quotas: [],
++          scheduler: { skipped: 0, missed: 0, running_now: 0, refused: [], paused: [] } });  // prettier-ignore
+       if (path === "schedules") return json(200, [SCHEDULE, SECRET]);
+       if (path === "schedules/feed/pause")
+         return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1", next_run: null });
+diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Operations.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Operations.tsx
+index 7a2d6ba..022d2af 100644
+--- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Operations.tsx
++++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Operations.tsx
+@@ -8,6 +8,7 @@ import type { OperationsAgeing } from "../../../../../packages/schemas/generated
+ import { Button, Input } from "../../design/primitives";
+ import { operationsAgeing, setPromotionAlertDays, type AdminApi } from "../api";
+ import { Schedules } from "../Schedules";
++import { OperationsFigures } from "./OperationsFigures";
+ 
+ const when = (iso: string) =>
+   new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" });
+@@ -115,6 +116,8 @@ export function Operations({ api }: { api: AdminApi }) {
+   return (
+     <div style={{ display: "grid", gap: "var(--sp-16)" }}>
+       <Ageing api={api} />
++      {/* ADR-141 (L1.7, the studio lane by agreement): the runs, the scheduler, external triggers, quotas. */}
++      <OperationsFigures api={api} />
+       <Schedules api={api} />
+     </div>
+   );
