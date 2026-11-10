@@ -20,6 +20,7 @@ CORE = HERE.parents[4] / "OspreyFlow_Core"
 PIPELINE = CORE / "services/api/pipeline_run.py"
 STAGED = CORE / "services/ingest/staged_run.py"
 VERIFY = CORE / "services/api/studio_verify.py"
+ENGINE = CORE / "services/ingest/engine.py"
 SEEDS = CORE / "scripts/seed_internal.py"
 PID_PLAN = CORE / "packages/demo_fixtures/pid_plan.py"
 LEDGER = CORE / "packages/demo_fixtures/ledger.py"
@@ -31,6 +32,12 @@ TABLES = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.
 PACKS = "../OspreyFlow_Build/tests/test_seed_internal_ceiling.py"
 VERIFYING = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py"
 
+DRY_RUN_CHECK = (
+    "    refuse_rows_above_the_ceiling(\n"
+    "        recipe, sample, ceiling if ceiling is not None else DeploymentCeiling.from_env()\n"
+    "    )\n"
+)
+WHOLE_FILE_CHECK = "        refuse_rows_above_the_ceiling(recipe, all_rows, DeploymentCeiling.from_env())\n"
 REMOVAL = "        await asyncio.to_thread(remove_step_tables, prepared, storage)\n        raise\n"
 
 #: (slug, what, [(file, old, new)], test files, the tests that must go red, the reason or None)
@@ -87,6 +94,17 @@ PLANTS = [
      [(ENRON, '    classification="OFFICIAL",\n    handling_code="P",\n    originator="enron-demo",',
        '    classification="SECRET",\n    handling_code="P",\n    originator="enron-demo",')],
      [PACKS], ["test_enrons_declaration_holds_for_every_write"], "a write above the declaration"),
+    ("dry-run-unjudged", "Test's dry run judges no row against the ceiling",
+     [(ENGINE, DRY_RUN_CHECK, "")],
+     [VERIFYING], ["test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling"], 'AssertionError: {"rows_read":'),
+    ("sample-only", "Verify judges only its sample, not the whole file",
+     [(VERIFY, WHOLE_FILE_CHECK, "")],
+     [VERIFYING], ["test_test_judges_every_row_of_the_file_not_only_its_sample"], 'AssertionError: {"rows_read":'),
+    ("test-unjudged", "Test judges nothing against the ceiling, in Verify or its dry run",
+     [(ENGINE, DRY_RUN_CHECK, ""), (VERIFY, WHOLE_FILE_CHECK, "")],
+     [VERIFYING], ["test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words",
+                   "test_test_judges_every_row_of_the_file_not_only_its_sample",
+                   "test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling"], 'AssertionError: {"rows_read":'),
 ]
 
 

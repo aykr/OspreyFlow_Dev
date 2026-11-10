@@ -1,4 +1,4 @@
-# head 3a662a8; no plant
+# head a394f8c; no plant
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables
@@ -17,4 +17,9 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_the_public_
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_enrons_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
-18 passed, 1 warning in 8.73s
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_passes_a_file_at_the_ceiling
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_with_no_ceiling_set_test_passes_as_before
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling
+23 passed, 1 warning in 9.08s
