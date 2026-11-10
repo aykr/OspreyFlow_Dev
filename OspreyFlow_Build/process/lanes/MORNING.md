@@ -145,6 +145,33 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    session (the upgrade rehearsal) already run on sol; case switches at 20:50, at a safe point, so 3 of about 9
    sessions are on sol. Studio, docs and the rest stay on ayan through tonight's release.
 
+22. **The decks (D2b): six questions decided on the recommendation.** The drafts are in `OspreyFlow_presentations/`
+   (not committed; no earlier draft changed). (1) A full recapture of screenshots, from the server demo deployment
+   after the release (43 marked boxes). (2) No count of rights in the decks (main has 52; a number drifts). (3) The
+   prison deck's chapter 10b takes its two minutes from chapters 7 and 9 (60-minute) or 6+7 and 8 (45-minute). (4) The
+   demo shows *Promote…* up to its preview but does not send it (a rehearsal reset cannot undo a promotion). (5) The
+   prison demo leaves `deployment.highest_marking` unset (the pack declares no marking). (6) The Pitch's reference
+   [10] is checked tonight or dropped. Also: four lines in the guides still call built features "coming" (team
+   routing, the drawn-item alert, adding a gazetteer); docs fixes those four before the publish. **To overrule:**
+   name the number.
+   *Updated:* tonight's publish is **v0.5.0** (the last release, v0.4.12, was 5 November; today adds major features,
+   so a minor bump): docs writes its CHANGELOG section (release notes and upgrade steps) and moves every guide to "For
+   OspreyFlow v0.5.0" before the publish, and the user repository gets the tag `v0.5.0` with the release. **To
+   overrule:** name another version.
+
+23. **The v0.5.0 publish waits for a rehearsed upgrade (docs found it).** `ospreyflow update` does not run the six
+   one-off migrations a v0.4.12 deployment needs; the release notes now list them in order, each dry run first. Before
+   the publish, rules installs v0.4.12 as a throwaway deployment on the test server, updates it to main, runs the six
+   and checks the result, so the notes say only what was proven. Making `update` run them itself is a carry for
+   tomorrow. This moves the publish later tonight (about midnight). **To overrule:** say "publish without rehearsal".
+
+24. **The rehearsal found a release blocker, and it is being fixed before the publish.** `ospreyflow update` (and
+   `start`) from v0.4.12 fails: the model gateway added in ADR-135 Amendment 2 needs two secrets that only a fresh
+   install writes, so an existing deployment's update stops and rolls back. Platform-b is making the update write any
+   missing gateway secret once (never overwriting one); the rehearsal then re-runs the update from a fresh v0.4.12.
+   **This also matters for your own laptop deployment** when you rebuild it later: it will take the fixed update. The
+   publish moves after the fix (around 01:00).
+
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
 **Your rulings:** six lanes; rules, case, studio and platform on the `sol` account, the orchestrator, admin
