@@ -25,8 +25,8 @@ SEEDS = CORE / "scripts/seed_internal.py"
 PID_PLAN = CORE / "packages/demo_fixtures/pid_plan.py"
 LEDGER = CORE / "packages/demo_fixtures/ledger.py"
 HMP = CORE / "packages/demo_fixtures/hmp_network.py"
+HMP_EVENTS = CORE / "packages/demo_fixtures/hmp.py"
 CORP = CORE / "packages/demo_fixtures/fixture_corp.py"
-PUBLIC = CORE / "packages/demo_fixtures/public_datasets/vast_2008_mc3_calls_recipe.yaml"
 ENRON = CORE / "scripts/seed_enron.py"
 TABLES = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py"
 PACKS = "../OspreyFlow_Build/tests/test_seed_internal_ceiling.py"
@@ -74,9 +74,9 @@ PLANTS = [
      [(PID_PLAN, '    classification: str = "OFFICIAL"\n', '    classification: str = "SECRET"\n')],
      [PACKS], ["test_the_scale_cohorts_declaration_holds_for_every_write"],
      "a write above the declaration"),
-    ("ledger-secret", "the Ledger's direct writes marked SECRET",
-     [(LEDGER, 'classification="OFFICIAL", handling_code="P", originator="unit-fincrime"',
-       'classification="SECRET", handling_code="P", originator="unit-fincrime"')],
+    ("ledger-secret", "the Ledger's own direct nodes marked SECRET (its links left as they are)",
+     [(LEDGER, '            handling=_HANDLING, created_by=principal.id, created_at=now,\n            load_id=f"{load_id_prefix}-direct",',
+       '            handling=_HANDLING.model_copy(update={"classification": "SECRET"}), created_by=principal.id, created_at=now,\n            load_id=f"{load_id_prefix}-direct",')],
      [PACKS], ["test_ledgers_declaration_holds_for_every_write"], "a write above the declaration"),
     ("hmp-no-secret", "HMP's SECRET conflict lowered, so its declaration overstates",
      [(HMP, 'date(2025, 11, 2), classification="SECRET")', 'date(2025, 11, 2), classification="OFFICIAL")')],
@@ -86,10 +86,15 @@ PLANTS = [
      [(CORP, '            classification="SECRET",\n', '            classification="OFFICIAL",\n')],
      [PACKS], ["test_fixture_corps_declaration_is_the_highest_it_writes"],
      "a declaration higher than anything the pack writes"),
-    ("public-secret", "a public dataset's catalogue recipe loads at SECRET",
-     [(PUBLIC, "handling: {classification: OFFICIAL,", "handling: {classification: SECRET,")],
-     [PACKS], ["test_the_public_datasets_declaration_holds_for_every_recipe"],
-     "AboveTheDeploymentCeiling"),
+    ("public-staged-unjudged", "a staged public dataset judged as an undeclared pack, its rows unread",
+     [(SEEDS, "        _refuse_staged_rows_above_the_ceiling(name, data_root / spec.data_folder, ceiling)\n        return\n",
+       "        pass  # PLANT\n")],
+     [PACKS], ["test_a_staged_public_dataset_within_the_ceiling_is_seeded",
+               "test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts"], None),
+    ("public-rows-unjudged", "a staged public dataset's rows never judged",
+     [(SEEDS, "        refuse_rows_above_the_ceiling(recipe, rows, ceiling)\n", "        pass  # PLANT\n")],
+     [PACKS], ["test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts"],
+     "DID NOT RAISE"),
     ("enron-secret", "Enron's seed marks its writes SECRET",
      [(ENRON, '    classification="OFFICIAL",\n    handling_code="P",\n    originator="enron-demo",',
        '    classification="SECRET",\n    handling_code="P",\n    originator="enron-demo",')],
@@ -105,6 +110,47 @@ PLANTS = [
      [VERIFYING], ["test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words",
                    "test_test_judges_every_row_of_the_file_not_only_its_sample",
                    "test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling"], 'AssertionError: {"rows_read":'),
+    # SECRET is the scheme's top, so nothing the scheme defines is above HMP's declaration: these two
+    # plant a marking outside the scheme (which the ceiling counts as above it) where the first proof
+    # never looked, to show it now reads the network's own writes and the incident events.
+    ("hmp-network-unread", "HMP's network nodes and homes marked outside the scheme",
+     [(HMP, 'def _handling(classification: str = "OFFICIAL") -> Handling:',
+       'def _handling(classification: str = "TOP SECRET") -> Handling:')],
+     [PACKS], ["test_hmps_declaration_is_the_highest_it_writes"], "a write above the declaration"),
+    ("hmp-events-unread", "HMP's incident events marked outside the scheme",
+     [(HMP_EVENTS, '    handling = Handling(\n        classification="OFFICIAL",',
+       '    handling = Handling(\n        classification="TOP SECRET",')],
+     [PACKS], ["test_hmps_declaration_is_the_highest_it_writes"], "a write above the declaration"),
+    ("ceiling-before-guards", "Test without steps judges the ceiling before its withheld guards",
+     [(VERIFY, "    else:\n        # The staged path's two guards",
+       "    else:\n        refuse_rows_above_the_ceiling(recipe, all_rows, DeploymentCeiling.from_env())  # PLANT\n"
+       "        # The staged path's two guards")],
+     [VERIFYING], ["test_the_withheld_guards_come_before_the_ceiling_without_steps"], None),
+    ("staged-ceiling-before-guard", "a staged Test judges the ceiling before its clearance guard",
+     [(VERIFY, "        tested_rows = [r for rows in read.raw.values() for r in rows[:DEFAULT_SAMPLE_SIZE]]\n",
+       "        tested_rows = [r for rows in read.raw.values() for r in rows[:DEFAULT_SAMPLE_SIZE]]\n"
+       "        refuse_rows_above_the_ceiling(recipe, tested_rows, DeploymentCeiling.from_env())  # PLANT\n")],
+     [VERIFYING], ["test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline"], None),
+    ("whole-file-told-to-all", "the rest of the file judged for an author not cleared for it",
+     [(VERIFY, "lambda: sample_markings(draft, scheme, all_rows).readable_by(principal, scheme)",
+       "lambda: True  # PLANT")],
+     [VERIFYING], ["test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it"],
+     "above_the_deployments_highest_marking"),
+    ("removal-error-escapes", "a table the store will not remove turns the refusal into its error",
+     [(STAGED, "        try:\n            fs.delete_file(path)\n        except OSError as error:\n"
+       "            _log.warning(\"a refused load's step table %s was not removed: %s\", path, error)\n",
+       "        fs.delete_file(path)  # PLANT\n")],
+     [TABLES], ["test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was"],
+     "OSError: the store would not remove it"),
+    ("write-refusal-removes", "the backstop's later refusal removes the step tables too",
+     [(STAGED, "    if refused.kind in ROW_REFUSALS:\n", "    if True:  # PLANT\n")],
+     [TABLES], ["test_only_the_row_check_s_refusals_remove_the_step_tables"], None),
+    ("pack-unproved", "a pack added, declared, with no proof",
+     [(SEEDS, '    "hmp": Dataset(\n',
+       '    "extra": Dataset(script="scripts.seed_extra", case_name="x", highest_marking="OFFICIAL"),\n'
+       '    "hmp": Dataset(\n')],
+     [PACKS], ["test_every_pack_declares_its_highest_marking"],
+     "a pack whose declaration no test below proves"),
 ]
 
 
