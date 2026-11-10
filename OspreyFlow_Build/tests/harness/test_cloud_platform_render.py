@@ -121,10 +121,11 @@ def test_every_pod_runs_as_10001_and_none_keeps_a_user_of_its_own(values: dict[s
 def test_keycloak_alone_takes_its_image_s_group_as_a_supplementary_one(
     values: dict[str, Any],
 ) -> None:
-    """Keycloak's image is built for any user in group 0 (`/opt/keycloak` is `1000:0`, group-writable)
-    and writes its own build there at start; as 10001:10001 alone it cannot (measured on the kind
-    cluster, 10 November 2026). Its pod alone adds group 0 as a supplementary group: the user stays
-    10001 and non-root. Entra ID replaces it in P10 (ADR-148 decision 9)."""
+    """Keycloak's image is built for any user in group 0 (`/opt/keycloak` is `1000:0`,
+    group-writable) and writes its own build there at start; as 10001:10001 alone it cannot
+    (measured on the kind cluster, 10 November 2026). Its pod alone adds group 0 as a
+    supplementary group: the user stays 10001 and non-root. Entra ID replaces it in P10 (ADR-148
+    decision 9)."""
     groups = {p["name"]: p.get("supplementalGroups") for p in _pods(values)}
     assert groups.pop("keycloak") == [0]
     assert set(groups.values()) == {None}
@@ -178,9 +179,75 @@ def test_every_secret_the_values_read_is_one_the_terraform_writes(fixture: str) 
 
 def test_every_key_a_pod_names_in_our_secret_is_in_it(values: dict[str, Any]) -> None:
     """A pod naming a key our Secret lacks never starts (`CreateContainerConfigError`; found on the
-    kind cluster, 10 November 2026: the Conduit's gateway key, dropped when no engine is enabled)."""
+    kind cluster, 10 November 2026: the Conduit's gateway key, dropped when no engine is
+    enabled)."""
     named = {e["secret"] for c in _containers(values) for e in c.get("env", []) if "secret" in e}
     assert named <= set(values["secrets"]["keys"]), named - set(values["secrets"]["keys"])
+
+
+def _what_a_cluster_s_install_writes(config: OspreyConfig) -> dict[str, str]:
+    """Our Secret as `ospreyflow install` writes it for the same deployment on the cluster profile
+    (`harness.cluster_install`): every key the Conduit and the workers read through `envFrom`. A
+    key a person gives is given a value of its own here, as the installer's terminal would."""
+    from harness import cluster_install
+    from harness.cloud_platform import _as_cluster, _cp
+
+    as_cluster = _as_cluster(config, load_platform(_cp(config).platform))
+    given = {config.models.key_variable(p.name): f"given-{p.name}"
+             for p in config.models.enabled_providers}  # fmt: skip
+    given |= {"OSPREY_SMTP_PASSWORD": "given-smtp", "OSPREY_POSTGRES_PASSWORD": "managed"}
+    return {
+        **cluster_install._minted(as_cluster, given),
+        **cluster_install._derived(as_cluster, given, {}),
+    }
+
+
+@pytest.mark.parametrize("fixture", ["development", "production"])
+def test_every_key_a_cluster_s_install_writes_reaches_the_pods(fixture: str) -> None:
+    """The cluster's install writes the Conduit's settings into our Secret (the OIDC addresses, the
+    object store's, the database's TLS mode) and this profile has no install: each must arrive by
+    the ConfigMap (a setting), our Secret's keys (a secret), or the platform's secret (a managed
+    store's detail), or the Conduit exits at start (found on the kind cluster, 10 November 2026:
+    no `OIDC_JWKS_URL`)."""
+    config = _config(fixture)
+    values = _values(config)
+    written = _what_a_cluster_s_install_writes(config)
+    managed = set(managed_variables(config))
+    missing = sorted(
+        k for k in written
+        if k not in managed
+        and k not in values["environment"]
+        and k not in values["secrets"]["keys"]
+    )  # fmt: skip
+    assert missing == [], missing
+    secret_looking = re.compile(r"(PASSWORD|SECRET|SECRET_KEY|ACCESS_KEY|TOKEN)$|_KEY_")
+    in_the_configmap = [k for k in values["environment"] if secret_looking.search(k)]
+    assert in_the_configmap == [], in_the_configmap
+    assert values["environment"]["OIDC_JWKS_URL"].endswith("/protocol/openid-connect/certs")
+
+
+@pytest.mark.parametrize("fixture", ["development", "production"])
+def test_a_password_the_install_writes_under_two_names_is_one_password(fixture: str) -> None:
+    """The install writes one password under two names where two readers name it differently (the
+    Conduit's client secret and the token exchange's; ArcadeDB's and its root's; ClickHouse's): the
+    namespace's Terraform must write both from one `random_password`, or the Conduit's token
+    exchange and the store's own sign-in disagree."""
+    config = _config(fixture)
+    artefacts = _artefacts(config)
+    values = yaml.safe_load(artefacts["values.yaml"])
+    written = _what_a_cluster_s_install_writes(config)
+    pairs = [
+        (a, b) for a in written for b in written
+        if a < b and written[a] == written[b] and a in values["secrets"]["keys"]
+        and b in values["secrets"]["keys"]
+    ]  # fmt: skip
+    assert pairs, "the install writes no password twice; this test proves nothing"
+    secrets_tf = artefacts["terraform/secrets.tf"]
+    for a, b in pairs:
+        source_a = re.search(rf"^\s+{a}\s+=\s+(\S+)$", secrets_tf, re.M)
+        source_b = re.search(rf"^\s+{b}\s+=\s+(\S+)$", secrets_tf, re.M)
+        assert source_a and source_b, (a, b)
+        assert source_a[1] == source_b[1], (a, source_a[1], b, source_b[1])
 
 
 def test_no_managed_detail_is_in_a_file_or_our_own_secret(values: dict[str, Any]) -> None:

@@ -32039,6 +32039,14 @@ Superset.
 3. **The managed stores' details** are read from those secrets by name, by the pods that read the stores
    (the Conduit, the workers, the report sync, Superset) and no other: the workspace's nginx, which reads the
    whole env, is not handed the database's password. A `$(VAR)` in a command or a value is defined before it.
+   **What a cluster's install writes into our Secret, and this profile has no install to write**
+   (`harness.cluster_install`: the OIDC addresses and client, the object store's endpoint, region and
+   credentials mode, the database's TLS mode, the reporting secrets, the Conduit's client secret) is
+   rendered instead: a setting into the ConfigMap; a secret into our Secret's keys, which the Terraform
+   makes; and a password the install writes under two names (`ARCADEDB_ROOT_PASSWORD`,
+   `CLICKHOUSE_PASSWORD`, `OIDC_TOKEN_EXCHANGE_CLIENT_SECRET`) as a copy (`secrets.copies`), written
+   from the one `random_password`. A test holds every key the cluster's install writes to one of the
+   three, and every copy to its original's password.
 4. **Every pod runs as 10001:10001** (`podSecurity`: `runAsNonRoot`, the user and group, `fsGroup`,
    seccomp `RuntimeDefault`; every container `allowPrivilegeEscalation: false`, not privileged, every
    capability dropped). ArcadeDB, ClickHouse and Keeper start that way on volumes given to group 10001
@@ -32085,7 +32093,9 @@ a full run still needs); Entra ID (decision 9, P10); the marking ceiling (10, st
 (13); the shared folders, the settings files and the recipes repository off the shared disk (6, P8);
 `ospreyflow map upload` (decision 12's upload; with the tiles bucket, P8); reading Admin's runtime model
 and map settings for the egress list (the render reads `osprey.yaml`'s; L1.9's); the platform's own
-Gatekeeper constraints, not published to us.
+Gatekeeper constraints, not published to us; **the identity step a cluster's install runs once Keycloak
+answers** (the Conduit's client secret set on its clients, its service account's roles), which on
+this profile the kind proof runs by hand (`p7_kind.sh identity`) and P10's sign-in replaces.
 
 ### ADR-143, Amendment 5 (9 November 2026) — promotion and a removed case's layer as built (L3.4)
 

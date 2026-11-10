@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import yaml
@@ -159,6 +160,64 @@ def managed_variables(config: OspreyConfig) -> dict[str, tuple[str, str]]:
     # fails
     # to start without it. The index leg names its variable here when it lands.
     return variables
+
+
+def person_given(config: OspreyConfig) -> set[str]:
+    """Our Secret's keys a person holds and gives (a model engine's, a connection's, the mail
+    server's password): the namespace's Terraform takes each as a sensitive variable."""
+    from harness.render import connection_secret_variables, model_key_variables
+
+    given = set(model_key_variables(config).values()) | set(connection_secret_variables(config))
+    if config.mail is not None and config.mail.username:
+        given.add("OSPREY_SMTP_PASSWORD")
+    return given
+
+
+@dataclass(frozen=True)
+class _InstallWrites:
+    settings: dict[str, str]  # to the ConfigMap
+    keys: list[str]  # our Secret's, each made by the Terraform or given by a person
+    defaults: dict[str, str]  # a key of our Secret with a fixed first value
+    copies: dict[str, str]  # a key of our Secret written from another's password
+
+
+def _what_the_install_writes(
+    config: OspreyConfig, as_cluster: OspreyConfig, managed: set[str]
+) -> _InstallWrites:
+    """What `ospreyflow install` writes into our Secret on a cluster (`harness.cluster_install`),
+    which the Conduit and the workers read by `envFrom`, split for a profile with no install: a
+    setting goes to the ConfigMap; a secret to our Secret's keys, the namespace's Terraform making
+    it (`random_password`) or a person giving it; and a password the install writes under two names
+    (two readers naming it differently) is written once and copied, so the two never disagree."""
+    from harness.apply import _SECRET_KEY
+    from harness.cluster_install import _derived, _minted
+
+    given = {variable: f"given:{variable}" for variable in person_given(config)}
+    given["OSPREY_POSTGRES_PASSWORD"] = "managed"  # the platform's secret gives it (`managed`)
+    minted, again = _minted(as_cluster, given), _minted(as_cluster, given)
+    derived = _derived(as_cluster, given, {})
+    settings = {
+        k: v for k, v in derived.items()
+        if k not in managed and k not in minted and not _SECRET_KEY.search(k)
+    }  # fmt: skip
+    secret = {
+        k: v for k, v in {**minted, **derived}.items() if k not in managed and k not in settings
+    }
+    keys = sorted(secret)
+    # A value the same on two mintings is a fixed first value (`REPORT_SYNC_DASHBOARDS=[]`), or a
+    # person's; any other is a fresh password, and two keys holding one are one password.
+    defaults = {k: minted[k] for k in keys if k in minted and again[k] == minted[k]}
+    defaults = {k: v for k, v in defaults.items() if k not in given}
+    copies: dict[str, str] = {}
+    first: dict[str, str] = {}
+    # Ours first (`OSPREY_*`, the name our pods give it), so the copy is the other reader's name.
+    for key in sorted(keys, key=lambda k: (not k.startswith("OSPREY_"), k)):
+        if key in defaults or key in given:
+            continue
+        original = first.setdefault(secret[key], key)
+        if original != key:
+            copies[key] = original
+    return _InstallWrites(settings, keys, defaults, copies)
 
 
 def _as_cluster(config: OspreyConfig, platform: PlatformSettings) -> OspreyConfig:
@@ -423,9 +482,16 @@ def render_cloud_platform(
     # Decision 12: no Java in this profile's Conduit; Admin › Maps' Build reads the profile and
     # says where the basemap is built instead.
     environment["OSPREY_PROFILE"] = Profile.CLOUD_PLATFORM.value
+    # What the cluster's install writes into our Secret, and this profile has no install to write.
+    install = _what_the_install_writes(config, as_cluster, set(variables))
+    environment.update(install.settings)
     secrets = values["secrets"]
-    secrets["keys"] = [k for k in secrets["keys"] if k not in variables]
-    secrets["defaults"] = {k: v for k, v in secrets["defaults"].items() if k not in variables}
+    secrets["keys"] = sorted({k for k in secrets["keys"] if k not in variables} | set(install.keys))
+    secrets["defaults"] = {
+        **{k: v for k, v in secrets["defaults"].items() if k not in variables},
+        **install.defaults,
+    }
+    secrets["copies"] = dict(sorted(install.copies.items()))
     # The gateway's keys stay in our Secret with no engine enabled: the Conduit still names its
     # master key (found on the kind cluster, where its pod could not start without it).
 

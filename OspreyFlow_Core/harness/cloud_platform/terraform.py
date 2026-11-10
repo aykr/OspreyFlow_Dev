@@ -492,8 +492,12 @@ def render_terraform(
     )
     keys = values["secrets"]["keys"]
     defaults = values["secrets"]["defaults"]
-    given = [k for k in keys if k not in defaults and _given_by_a_person(config, k)]
-    made = [k for k in keys if k not in defaults and k not in given]
+    copies = values["secrets"].get("copies", {})
+    from harness.cloud_platform import person_given
+
+    by_a_person = person_given(config)
+    given = [k for k in keys if k not in defaults and k in by_a_person]
+    made = [k for k in keys if k not in defaults and k not in given and k not in copies]
     blocks: list[Block] = [
         (f'resource "random_password" {_q(k.lower())}', [("length", "32"), ("special", "false")])
         for k in made
@@ -506,6 +510,8 @@ def render_terraform(
         **{k: f"random_password.{k.lower()}.result" for k in made},
         **{k: f"var.{k.lower()}" for k in given},
     }
+    # One password under two names (two readers naming it differently) is written once.
+    data.update({copy: data[original] for copy, original in copies.items()})
     blocks.append(_secret(values["secrets"]["name"], dict(sorted(data.items()))))
     files["secrets.tf"] = _file(
         "Our own secrets, read by every workload from one Kubernetes Secret: each password made\n"
@@ -513,11 +519,3 @@ def render_terraform(
         blocks,
     )
     return files
-
-
-def _given_by_a_person(config: OspreyConfig, key: str) -> bool:
-    from harness.render import connection_secret_variables, model_key_variables
-
-    return key in set(model_key_variables(config).values()) | set(
-        connection_secret_variables(config)
-    )

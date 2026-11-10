@@ -179,15 +179,26 @@ standins() {
   kubectl -n "$NS" create secret generic s3-bucket-output --dry-run=client -o yaml \
     --from-literal=bucket_prefix=ospreyflow-dev- | kubectl apply -f -
 }
+first_value() {  # a key's fixed first value from the render (`secrets.defaults`), or a password
+  PYTHONPATH=. .venv/bin/python -c "import secrets, sys, yaml; d=yaml.safe_load(open('$OUT/values.yaml'))['secrets']['defaults']; sys.stdout.write(d.get('$1', secrets.token_hex(16)))"
+}
 ourselves() {  # our own Secret as the namespace's Terraform makes it: a password for each key
   # Each key the render names and the Secret lacks is added; one it holds is kept, since the stores
   # already hold its password.
   local key
   kubectl -n "$NS" get secret ospreyflow-secrets >/dev/null 2>&1 || kubectl -n "$NS" create secret generic ospreyflow-secrets
-  for key in $(PYTHONPATH=. .venv/bin/python -c "import yaml; v=yaml.safe_load(open('$OUT/values.yaml')); print(' '.join(v['secrets']['keys']))"); do
+  # A copy (one password under two names) is written from its original's, as the Terraform does.
+  local copies pair original
+  copies=$(PYTHONPATH=. .venv/bin/python -c "import yaml; v=yaml.safe_load(open('$OUT/values.yaml')); print(' '.join(f'{k}={o}' for k, o in v['secrets'].get('copies', {}).items()))")
+  for key in $(PYTHONPATH=. .venv/bin/python -c "import yaml; v=yaml.safe_load(open('$OUT/values.yaml')); s=v['secrets']; print(' '.join(k for k in s['keys'] if k not in s.get('copies', {})))"); do
     kubectl -n "$NS" get secret ospreyflow-secrets -o "jsonpath={.data.$key}" | grep -q . || \
       kubectl -n "$NS" patch secret ospreyflow-secrets --type=merge \
-        -p "{\"data\":{\"$key\":\"$(openssl rand -hex 16 | tr -d '\n' | base64 -w0)\"}}" >/dev/null
+        -p "{\"data\":{\"$key\":\"$(first_value "$key" | base64 -w0)\"}}" >/dev/null
+  done
+  for pair in $copies; do
+    key=${pair%%=*} original=${pair#*=}
+    kubectl -n "$NS" patch secret ospreyflow-secrets --type=merge -p "{\"data\":{\"$key\":\"$(
+      kubectl -n "$NS" get secret ospreyflow-secrets -o "jsonpath={.data.$original}")\"}}" >/dev/null
   done
   kubectl -n "$NS" create serviceaccount ospreyflow --dry-run=client -o yaml | kubectl apply -f -
 }
@@ -236,6 +247,23 @@ deploy() {
       \"containers\":[{\"name\":\"$d\",\"volumeMounts\":[{\"name\":\"p7-ca\",\"mountPath\":\"/etc/p7-ca\",\"readOnly\":true}]}]}}}}" >/dev/null
   done
 }
+identity() {  # what a cluster's install does once Keycloak answers, and this profile has no install
+  # to do (ADR-148 Amendment 1, "Left": on the platform it is P10's): the Conduit's client secret
+  # set on its two clients, its service account's roles, and the realm's sign-in settings.
+  kubectl -n "$NS" rollout status statefulset/keycloak --timeout=600s 2>/dev/null || \
+    kubectl -n "$NS" rollout status deployment/keycloak --timeout=600s
+  PYTHONPATH=.:packages .venv/bin/python - "$CONFIG" "$NS" <<'PY'
+import base64, json, subprocess, sys
+from harness.cluster_install import SystemKube, _configure_identity
+from harness.render import load_config
+config, namespace = load_config(sys.argv[1]), sys.argv[2]
+data = json.loads(subprocess.run(["kubectl", "-n", namespace, "get", "secret", "ospreyflow-secrets",
+                                  "-o", "jsonpath={.data}"], check=True, capture_output=True, text=True).stdout)
+values = {k: base64.b64decode(v).decode() for k, v in data.items()}
+for line in _configure_identity(SystemKube(), namespace, config, values):
+    print(line)
+PY
+}
 check() {
   set +e
   echo "== pods"; kubectl -n "$NS" get pods -o wide
@@ -255,6 +283,6 @@ check() {
 }
 
 case "${1:-}" in
-  up) up ;; down) down ;; status) status ;; tools) tools ;; deploy) deploy ;; check) check ;;
-  *) echo "usage: p7_kind.sh up|down|status|tools|deploy|check" >&2; exit 2 ;;
+  up) up ;; down) down ;; status) status ;; tools) tools ;; deploy) deploy ;; identity) identity ;; check) check ;;
+  *) echo "usage: p7_kind.sh up|down|status|tools|deploy|identity|check" >&2; exit 2 ;;
 esac
