@@ -45,10 +45,13 @@ def main(argv: list[str]) -> int:
     elif verb == "claim":
         own = _load(state)
         rendered = yaml.safe_load(Path(argv[2]).read_text())
+        # A checkout's build (`build:`), or a release's reference built here in place of its pull
+        # (`upg_run.sh release-images`): both are the run's to put back.
         own.claim(
             s["image"]
             for s in rendered["services"].values()
-            if "build" in s and "image" in s
+            if "image" in s
+            and ("build" in s or str(s["image"]).startswith("ghcr.io/aykr/"))
         )
         _save(state, own)
         print(f"upg-images: the run's images {own.made or 'none'}")
