@@ -1,30 +1,37 @@
-# Rules-b lane · brief L2.12 · reporting folded into the places
+# Rules-b lane · brief L2.11a · the rule editor's standards: BPMN 2.0 and DMN storage, export, import refusal, Show as BPMN
 
-Written by the orchestrator, 8 November 2026, after L2.9's merge (`057a10e`), for the **rules-b lane's first
-session** on account `sol` (ADR-142 Amendment 4). Rules (the parent) builds L2.10 beside you. Read ADR-145
-Amendment 4 (reporting folded into the places; the Reports Viewer) and `process/lanes/rules/REPORT.md` (L2.9)
-first. Rebase onto `main`. Opus, medium. Size M.
+Written by the orchestrator, 10 November 2026, for a **fresh rules-b session**, **from main** (rebase onto main once
+rules' L2.10 merges; the orchestrator tells you). Split from rules' L2.11 at rules' own proposal, so the demo track's
+longest step runs in two lanes. Read `spec/06_DECISIONS.md` **ADR-146** (search `## ADR-146`): decision 3's "Stored
+to the standards" and its tests (the round-trip, the import refusal, *Show as BPMN*'s keyboard case). Opus, medium.
+Size S–M.
 
-**The lane, the stacks, the merge rule.** A sister lane: your files are the plan's rules-b row (the case's
-*Figures* tab, the *Alert monitoring* board, the Reports Viewer, the dashboards door), carved from rules'; the
-shell is rules', so ask the orchestrator before touching it, and case owns the canvas (for the alert badge) and
-boards (for the Alerts panel): ask first. A test stack by `stack_lease.sh acquire rules-b "<purpose>" && …`
-only. Prompt L's rules (never stop on a question; schemas ride with the step; your own lane-reviewer, then
-make -k ci and make test at a commit rebased onto main, saved under `process/lanes/rules-b/gates/`, with a
-leased live run including `test_route_rights.py`).
+**The lane, the stacks, the merge rule.** Test stacks on the owner's server only (b to g); Docker and stack a off on
+this Mac, so never start Docker. Ask the orchestrator for a stack, and before `make -k ci` or Playwright here (two
+heavy runs at most). `make test` through `stack_lease.sh offline rules-b -- sh -c 'make -k test SKIP_JS=1; cd
+../OspreyFlow_Core && make test-js'`; one server run at a time; TaskStop does not stop the server half. Never stop
+on a question: build the recommended option (the strict one for access) and log it under "Decisions taken". Your own
+lane-reviewer, then the gates at a commit rebased onto main, saved under `gates/`. Report to the orchestrator **by
+message**; to rules by message for the interface.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 7, 12, 13 and 15 above all); ADR-145 Amendment 4; ADR-111
-(reports, dashboards and their identities); ADR-146 Amendment 2 (Home's counts route; the Reports Viewer's list).
+**First, agree the interface with rules.** Rules owns the rule's *When / If / Then* shape in `packages/schemas` and
+the editor surface. Agree the shape by message before writing code; build on rules' schema, never a second one.
 
-**Build** (the plan's row L2.12): the case's *Figures* tab replacing the Reports view, with its Alerts and
-drawing panels; the Alerts panel for boards; the *Alert monitoring* board (D2); the second dashboards door
-removed; the Reports Viewer's journey; the canvas's alert badge; the *Roles, teams and Authors* help page and
-Admin's tips.
+**Build:**
+1. A codec, a pure package over the rule model: a rule saved as a BPMN 2.0 process of three elements (a start event,
+   a business-rule task, an end event that raises the alert) and a DMN decision table for its *If*.
+2. *Export*: the `.bpmn` and `.dmn` files for a rule (the route under rules' rule routes, by agreement; rule 4's
+   access-control test for it).
+3. Import: a file with elements OspreyFlow does not run is refused, naming the unsupported elements (and nothing of
+   any rule the importer may not see).
+4. *Show as BPMN*: the read-only drawing as a component; rules mounts it in the editor. Its keyboard case (rule 13)
+   and axe in three themes, by diff for the shared harness files.
+5. ADR-146's tests: export then import gives the same rule; the refusal names the unsupported element. Red first, at
+   the real call site, the planted fault in the shape the codec really reads (rule 15).
 
-**Tests first, each red by a plant at the real call site:** ADR-145 Amendment 4's reporting and Reports Viewer
-tests; every figure counted as the reader (rule 3, no unfiltered count: rule 7); the Reports Viewer reaches
-only what decision 10 gives them; keyboard cases (rule 13), registry ids as a diff; axe in dark, light and
-GOV.UK.
+**Not yours:** the declared dataset, the form, draft/test/live, *Changes*, `scripts.migrate_rules_to_datasets`, the
+Lists tab — rules'.
 
-**Exit.** The row's exit; make ci and make test green offline; a friction fragment. Report in Prompt L's
-format, then stop.
+**Exit.** A rule exports to `.bpmn`/`.dmn` and imports back to the same rule; an unsupported file is refused in
+words; *Show as BPMN* draws it, by keyboard; a friction row. Licence register: any new package (a BPMN or DMN
+library) checked against `make licence-check` before it is added.
