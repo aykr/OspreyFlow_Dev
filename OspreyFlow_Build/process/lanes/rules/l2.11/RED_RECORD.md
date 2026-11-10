@@ -160,3 +160,35 @@ None of these files is touched by the lane's diff. The other two failures were t
 
 Run alone, `test_rule_editor_routes.py` gave a 500 on the versions route, which read a names directory
 left on `app.state` by another file. Its world now has its own. The file passes alone (9) and in company (31).
+
+## §12 The local slot at 7ee2d56: the keyboard gate, its eight plants, and test-js (gates `7ee2d56.{keyboard,keyboard-retake,keyboard-plants,test-js,test-js-retake}.txt`)
+
+**glass-keyboard, with `registry-L2.11.patch` applied uncommitted:** 747 passed and 4 failed. Every case in
+`alerts.spec.ts` and `monitoring-stage-d.spec.ts` passed, and ALERTS_ACTIONS is covered whole. The four
+failures were in `connections.spec.ts` and `ingest-studio.spec.ts`: one case each, plus each file's registry
+check, which fails with it. The lane's diff touches neither file. The run shared the Mac with test-js, and
+retaken alone with nothing else running, both files passed 55 of 55.
+
+**Rule 13, each new action red with its handler removed at its call site**, its case run alone and the file
+restored from git each time (`7ee2d56.keyboard-plants.txt`). Each failed for its own reason:
+
+| Registry id | What was removed | How the case failed |
+| --- | --- | --- |
+| choose-a-rules-dataset | the choice in `RuleEditor`'s form | the form on Prison records never opens |
+| save-a-rule-draft | `onSaved` | no *Show as BPMN* |
+| test-a-rule-draft | the call to `testRuleDraft` | no "It would have raised 2 alerts" |
+| make-a-rule-live | the call to `makeRuleLive` | no "… is live." |
+| choose-a-rules-screening-list | the picker's `onChange` | its value stays empty, not `l-uk` |
+| run-a-rule-when-its-list-refreshes | the `list_refresh` option | *Runs* has no such option |
+| approve-a-rule-going-live | `approveRule` (`RuleChanges.tsx`) | no POST to `rules/r-go/approve` |
+| send-back-a-rule-going-live | `rejectRule` | no rejection with its reason |
+
+**test-js:** 2970 of 2971. The miss was MatrixView's first-frame budget, measured under the keyboard run's
+load; alone, it passed.
+
+**glass-a11y** (registry patch applied): 963 passed, every harness in dark, light and GOV.UK, the editor's tested and
+BPMN states included. **`make -k ci`** (closed ports, `OSPREY_LANE` unset): green apart from:
+- the eight `trivy-image-*` scans, `opentofu-check` and `chart-check`, which need Docker, off on this Mac;
+- `test-file-coverage-check`, red only on the three new live files that `L2.11_ci_yml.diff` wires. With that
+  diff applied it reports "916 test file(s), 0 allowlisted, no new drift"
+  (`7ee2d56.coverage-with-diff.txt`). The diff was not committed, and both files were restored.

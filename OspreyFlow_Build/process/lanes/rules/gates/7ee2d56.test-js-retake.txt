@@ -1,0 +1,20 @@
+## test-js retake at 7ee2d56: MatrixView.budget alone, nothing else running, 2026-11-10T14:48:51Z
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace
+
+ ✓ src/matrix/MatrixView.budget.test.tsx (1 test) 2029ms
+   ✓ MatrixView at 50,000 nodes and 250,000 links (1)
+     ✓ opens inside §5's first-frame budget, drawing one page of each table and saying so 2028ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  14:48:52
+   Duration  2.48s (tests 84%, environment 12%, import 3%, transform 1%)
+
+
+Slowest 1 tests:
+  2028 ms  src/matrix/MatrixView.budget.test.tsx > MatrixView at 50,000 nodes and 250,000 links > opens inside §5's first-frame budget, drawing one page of each table and saying so
+# exit 0 end 2026-11-10T14:48:54Z
