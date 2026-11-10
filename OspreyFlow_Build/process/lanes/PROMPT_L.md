@@ -21,6 +21,21 @@ agent opened Keynote on the owner's screen, and a local test started Docker Desk
 check files headlessly. `make -k ci` and `make test` run on the test server through `stack_lease.sh offline
 <lane>`; browser tests run there or in this Mac's two slots, each slot granted by the orchestrator.
 
+**The fix-and-check order** (the owner, 10 November 2026: one round of gates, not three). (1) When the step's code is
+built, message the orchestrator "built at <hash>" and start your own lane-reviewer: the orchestrator starts its
+independent review of the same hash **at the same time**. (2) Fix both reviews' findings together. (3) Rebase onto
+main **then**, never after the gates. (4) Run the gates once, at that head: `make test` and `make -k ci` on the server
+through `stack_lease.sh offline`, browser tests in a granted slot, and a live check through `stack_lease.sh live`.
+(5) Ready-to-merge. If a step runs past a day, merge it in smaller pieces rather than let it drift.
+
+**Before saying "built", check yourself against today's recurring findings:** a keyboard registry passed to
+`assertAllCovered` by its literal name, never a constant; shared and owner files (`ci.yml`, the Makefile,
+`actionRegistry.ts`, `every-harness`, other lanes' files) sent as diffs, never committed; lint, mypy and tsc run on
+**the branch's own diff**, not on the files you remember; every sibling path given the same check (a load, a
+schedule, a refresh, a release, Test, the CLI); each refusal and each "never" tested, red first; each plant at the
+real call site in the shape the code really receives, failing for its stated reason; an ADR edited only by a new
+amendment under a reserved number; and a live file that can import (collect it).
+
 A `packages/schemas` change rides with your step, in its own commit at the head of the branch, unless the
 orchestrator has said another lane needs it first. Report ready-to-merge once, at the end of the step.
 

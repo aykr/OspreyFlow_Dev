@@ -136,6 +136,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    trivy there, so the image scans really run); browser tests can run there too now (Chromium and its 12 system
    packages installed with your approval; `osprey-small` untouched), one lane at a time until per-lane ports land
    (T2). Lanes never open desktop apps on this Mac (a deck agent tried Keynote this evening).
+20. **The fix-and-check stage shortened (your word, 10 November evening).** (1) My independent review starts when a
+   lane's code is built, in parallel with its own reviewer, so both reviews' fixes go in before one round of gates;
+   (2) a self-check list of today's recurring findings in every lane's prompt; (3) a lane rebases onto main just
+   before its gates, never after; (4) `make test` in parallel on the server (admin's T1, tomorrow). Aim: a step's
+   fix-and-check from 3–5 hours to 1–2.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 

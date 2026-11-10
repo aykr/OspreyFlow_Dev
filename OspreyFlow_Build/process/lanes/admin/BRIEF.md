@@ -14,3 +14,9 @@ demo track has freed them). Then measure the graph_port suite serial and paralle
 waits: the PID storyline, Gremlin chunking, the keep-alive) only if part 4 is done.
 
 **Exit.** Isolation proven red first; the same suite's wall time serial and parallel; a friction row.
+
+**Added at the owner's word (10 November evening): `make test` in parallel.** Once part 4's isolation is proven, apply
+the same workers to `make test` itself (offline, on the server's 16 cores): `-n auto` (or a measured N) with
+`--dist loadgroup`, the files that cannot share a process kept to one worker, and the order-dependence it exposes fixed
+or named. Prove it: the same commit's `make test` serial and parallel give the same pass and fail set, and the wall
+time before and after. Its Makefile half as a diff for the orchestrator.
