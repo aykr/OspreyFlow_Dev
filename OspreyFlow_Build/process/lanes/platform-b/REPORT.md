@@ -1,14 +1,12 @@
-# Platform-b · ADR-147 Amendment 3 · a gazetteer's own identifiers withheld from every node: report
+# Platform-b · P5b's owed live proof (CARRIES row 65, ADR-114 Amendment 38 decision 9): report
 
-P6 merged earlier today (registry-P6.patch applied); its report is in main's history. This step is CARRIES row 62 (MORNING item 11, option (a), the strict reading).
+Amendment 3 merged earlier today; its report is in main's history.
 
-1. **Exit, met.** The six identifiers only a gazetteer carries (`schemas.mapconfig.GAZETTEER_ONLY_IDENTIFIERS`) leave every node for every request reader (`ontology/handling.py`), and no node is matched on one (`graph_arcadedb/builders.py`'s `match_any_field`, inside the traversal). A case's own Location keeps its `uprn`, read and matched. Proved by `tests/ontology/test_gazetteer_identifiers_withheld.py`, `tests/adapters/graph_arcadedb/test_gazetteer_name_only_match.py`, and live, at the adapter and through the real routes, by `tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py` (six cases).
-2. **Red first at the adapter (rule 3), on stack g:** each half alone reverted to Amendment 1's. The match plant failed the three match cases; the read plant failed the three read cases (`gates/am3-live-red.txt`). The unit plants are in `plants.md`. Green: `gates/ba7e215.live.txt`, the orchestrator's narrowed set with `--durations=30`.
-3. **Spec.** ADR-147 Amendment 3 is written: decisions 1–5 with their tests. It closes Amendment 1's "Left" line, and the port contract in `ports/graph.py` (ratified) states the wider rule.
-4. **Decisions taken (overrule any).** "Matched on its name alone" is read as: a node is never matched on an identifier its reads withhold (accepted). A load's own match key is the load's work: run as the reader's scope, it reaches only visible nodes (decision 4, ruled by the orchestrator, with its named test).
-5. **Review.** The lane-reviewer found 6 must-fixes and 5 minors. All the must-fixes are fixed, among them the Studio's match question, the never-run empty step, the port contract and stale comments, the unrecorded red, and a live test whose halves had never each been shown red.
-6. **Carry for studio** (for CARRIES at merge): the Test's answer returns a matched existing node (`engine.py:2237`, `studio_verify.py`). It comes through `find_node`, which already withholds by the reader. It should still pass `withhold_sources` explicitly, so a later change to that path cannot send the six.
-7. **Left, and why.** `dataset_footprints` counts the six in a node's size, but only in Admin, and no value is shown. The new live file repeats helpers from `test_gazetteer_ids_withheld_live.py`; a shared module would serve both. The `uprn` from a Studio-loaded gazetteer stays readable as a case's own (decision 1).
-8. **Ratify:** `packages/schemas/mapconfig.py` (one constant, in its own commit); `ports/graph.py` (ratified); `builders.py` (case's file, ratified for the step).
-9. **Gates.** `make test` (offline, on the server) and `make -k ci` (here) at the ready-to-merge head. The counts go in the message.
-10. **Friction:** `process/friction/2026-11-10-platform-b-gazetteer-only-identifiers.md`. **Route:** none added. **Questions:** none.
+1. **Exit, met.** On the shared test server (stack b, under platform-b's lease), a named deployment's update backed up into its own folder (`backups/osprey-p5b-test/`), and a forced-failure rollback restored it: 185 records before, 185 after, no differences (`gates/p5b-proof-run4.txt`, PASSED at 77686d2).
+2. **Not exercised:** the rollback's `git checkout` (the server's copy has no `.git`); the driver says so at the step.
+3. **Runs 1–3, the driver's faults, each fixed:** the seed refused by preflight, then for no demo accounts (8b8c123); the old image gone before its put-back (held first, 9214d6b); compose without the env file (77686d2). Run 1's record: `gates/p5b-proof-run1.txt`.
+4. **Every teardown was clean:** only `osprey-p5b-*` removed, the run's tags put back by ID, nothing of another's changed.
+5. **Decision taken (accepted):** the after-check fails on what the run did and lists, without failing, what another lane did meanwhile.
+6. **The prune question:** nothing pruned. Docker 29's containerd image store deletes an image when a build moves its last tag (reproduced with the run's own throwaway tag). osprey-small runs by digest, so lane builds cannot move it. Its ingest image is not on the server (sent to the orchestrator).
+7. **Gates.** `make test` (offline, on the server) and `make -k ci` at the ready-to-merge head; the counts go in the message.
+8. **Friction:** `process/friction/2026-11-10-platform-b-p5b-owed-proof.md`. **Route:** none added. **Questions:** none.
