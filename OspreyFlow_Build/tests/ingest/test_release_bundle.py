@@ -70,7 +70,10 @@ def _graph(extra_source_config: dict[str, object] | None = None) -> PipelineGrap
                 id="source",
                 kind=PipelineNodeKind.SOURCE,
                 label="Visits",
-                config={"source_location": "visits.csv", **(extra_source_config or {})},
+                config={
+                    "source_location": "/srv/ingest/ds-visits/visits.csv",
+                    **(extra_source_config or {}),
+                },
             ),
             PipelineNode(id="profile", kind=PipelineNodeKind.PROFILE, label="Profile"),
             PipelineNode(id="map", kind=PipelineNodeKind.MAP, label="Map"),
@@ -100,7 +103,7 @@ def _pipeline(**changes: object) -> StudioRecipeDraft:
         "status": StudioRecipeStatus.PUBLISHED,
         "label": "Visits and contacts",
         "connector_profile": "csv",
-        "source_location": "visits.csv",
+        "source_location": "/srv/ingest/ds-visits/visits.csv",
         "handling": _HANDLING,
         "legal_basis": "Synthetic fixture: no real data",
         "owning_unit": "unit-a",
@@ -166,7 +169,7 @@ def _text(files: dict[str, bytes]) -> str:
 
 def test_an_export_holds_no_owner_membership_or_licensed_row() -> None:
     text = _text(_bundle())
-    for planted in (OWNER, PUBLISHER, CASE, LICENSED, SECRET, "ds-visits"):
+    for planted in (OWNER, PUBLISHER, CASE, LICENSED, SECRET, "ds-visits", "/srv/ingest"):
         assert planted not in text, planted
 
 

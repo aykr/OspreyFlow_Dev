@@ -41,6 +41,10 @@ ROUTE_RIGHTS = {
     "dataset_model_impact": "edit_target_model",
     "make_dataset_model_live": "edit_target_model",
     "revert_dataset_model": "edit_target_model",
+    # ADR-140 Amendment 9 decision 4: Studio › Releases, behind the dataset's own gate; export also
+    # asks publish_pipelines, import edit_pipelines (each route names both).
+    "export_dataset_release": "edit_target_model",
+    "import_dataset_release": "edit_target_model",
     "case_datasets_route": None,
     "set_case_datasets_route": "share_case",
     "list_investigations": None,

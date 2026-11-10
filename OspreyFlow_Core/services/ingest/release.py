@@ -27,6 +27,7 @@ import io
 import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import PurePosixPath
 from typing import Any
 
 import yaml
@@ -132,12 +133,16 @@ def _pipeline_of(draft: StudioRecipeDraft) -> ReleasedPipeline:
         # The load's dataset is the receiving environment's, set at import.
         if node.kind is PipelineNodeKind.LOAD:
             node.config.pop("dataset_id", None)
+        # A source's file by its name only: where it lies is this environment's own layout, and
+        # the receiving one finds the file of that name in its dataset's folder at import.
+        if node.config.get("source_location"):
+            node.config["source_location"] = file_name(str(node.config["source_location"]))
     return ReleasedPipeline(
         pipeline_id=draft.recipe_id,
         exported_version=draft.version,
         label=draft.label,
         connector_profile=draft.connector_profile,
-        source_location=draft.source_location,
+        source_location=None if draft.source_location is None else file_name(draft.source_location),
         handling=dict(draft.handling),
         legal_basis=draft.legal_basis,
         row_template=None
@@ -149,6 +154,11 @@ def _pipeline_of(draft: StudioRecipeDraft) -> ReleasedPipeline:
         pack_versions=draft.pack_versions,
         pipeline=graph.model_dump(mode="json"),
     )
+
+
+def file_name(location: str) -> str:
+    """A source's file as a bundle names it: its name, never its folder."""
+    return PurePosixPath(location.replace("\\", "/")).name
 
 
 def credential_keys(data: object, where: str = "") -> list[str]:

@@ -92,6 +92,7 @@ from services.ingest.recipe_rules import (
     handling_bindings,
     template_elements,
 )
+from services.ingest.release import ReleaseRefused as BundleRefused
 from services.ingest.staging import ObjectStorageConfig
 from services.ingest.staging_catalogue import DEPLOYMENT_WIDE
 from services.ingest.transforms import STRUCTURED_PARTS
@@ -420,6 +421,12 @@ from schemas.promotions import (
     TypeChoice,
 )
 from schemas.promotions import Promotions as PromotionsList
+from schemas.release import (
+    ReleaseBundleInput,
+    ReleaseExport,
+    ReleaseImportPlan,
+    ReleaseMetadata,
+)
 from schemas.rights import (
     CUSTOM_ROLE_PREFIX,
     ROLE_RIGHTS,
@@ -1008,6 +1015,13 @@ from .studio_recipes import (
     StudioRecipeStore,
     recipe_reader,
     reconcile_recipe_pins,
+)
+from .studio_release import (
+    apply_import,
+    bundle_from_text,
+    deployment_secrets,
+    export_release,
+    plan_import,
 )
 from .studio_staging import (
     StagedTestInputs,
@@ -9899,8 +9913,14 @@ def _subscribable(lists: Sequence[DeploymentList]) -> list[SubscribableList]:
     location, who added it, the real dataset it is, its mapping or its failure's words."""
     return [
         SubscribableList(
-            id=x.id, name=x.name, template=x.template, version=x.version, entries=x.entries,
-            updated_at=x.updated_at, failing=x.failure is not None, schedule_words=x.schedule_words,
+            id=x.id,
+            name=x.name,
+            template=x.template,
+            version=x.version,
+            entries=x.entries,
+            updated_at=x.updated_at,
+            failing=x.failure is not None,
+            schedule_words=x.schedule_words,
         )  # fmt: skip
         for x in lists
     ]
@@ -11241,6 +11261,143 @@ async def _audit_model(
     )
 
 
+# --- Studio › Releases (ADR-140 Amendment 9 decision 4) -----------------------------------------
+
+#: Export reads the live model and the published pipelines; behind the dataset's own gate.
+_EXPORTS_A_RELEASE = [
+    Depends(require_right(Right.EDIT_TARGET_MODEL)),
+    Depends(require_right(Right.PUBLISH_PIPELINES)),
+]
+#: Import writes the model's draft and pipeline drafts, as the model's and the canvas's own saves.
+_IMPORTS_A_RELEASE = [
+    Depends(require_right(Right.EDIT_TARGET_MODEL)),
+    Depends(require_right(Right.EDIT_PIPELINES)),
+    Depends(refuse_loading_a_composite),
+]
+
+
+@app.get("/v1/datasets/{dataset_id}/release", dependencies=_EXPORTS_A_RELEASE)
+async def export_dataset_release(
+    dataset_id: StudioDatasetDep,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    studio_recipes: StudioRecipesDep,
+    rows_kept: ListRowsDep,
+    staging_storage: StagingStorageDep,
+    list_store: ListStoreDep,
+    sources: SourcesDep,
+    handling_scheme: HandlingSchemeDep,
+    audit: AuditDep,
+    name: Annotated[str, Query(min_length=1, max_length=253)],
+    version: Annotated[str, Query(min_length=1, max_length=64)],
+) -> ReleaseExport:
+    """*Export* (Studio › Releases) and `ospreyflow release export`: the dataset's release as its
+    bundle's files (`services/api/studio_release.py` has what is read, as the exporter). Refused
+    in words (422 `release_refused`) when there is no live model or a file would hold a secret."""
+    try:
+        result = await export_release(
+            dataset_id=dataset_id,
+            principal=principal,
+            metadata=ReleaseMetadata.model_construct(name=name, version=version),
+            models=models,
+            recipes=studio_recipes,
+            rows_kept=rows_kept,
+            staging_storage=staging_storage,
+            list_store=list_store,
+            sources=sources,
+            scheme=handling_scheme,
+            secrets=deployment_secrets(),
+        )
+    except BundleRefused as refused:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content={"error": "release_refused", "problems": refused.problems}
+        )
+    await audit.record(
+        principal=principal,
+        action="export_dataset_release",
+        resolved_query={"dataset_id": dataset_id, "name": name, "version": version},
+        result_cardinality=len(result.files),
+    )
+    return ReleaseExport(
+        files={path: data.decode("utf-8") for path, data in result.files.items()},
+        left_out=result.left_out,
+    )
+
+
+@app.post("/v1/datasets/{dataset_id}/release/import", dependencies=_IMPORTS_A_RELEASE)
+async def import_dataset_release(
+    dataset_id: StudioDatasetDep,
+    principal: SourceAuthorDep,
+    body: ReleaseBundleInput,
+    models: TargetModelsDep,
+    studio_recipes: StudioRecipesDep,
+    rows_kept: ListRowsDep,
+    staging_storage: StagingStorageDep,
+    list_store: ListStoreDep,
+    sources: SourcesDep,
+    audit: AuditDep,
+    dry_run: bool = False,
+) -> ReleaseImportPlan:
+    """*Import* and `ospreyflow release import [--dry-run]`: the bundle read and checked, every
+    pipeline judged by the canvas's own gates, then (unless `dry_run`) everything written as a
+    draft. A bundle that cannot be read, or any refusal, writes nothing (422, the plan's words).
+    Nothing goes live: *Make live* stays a person's audited step."""
+    try:
+        bundle = bundle_from_text(body.files)
+    except BundleRefused as refused:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422,
+            content=ReleaseImportPlan(dry_run=dry_run, refused=refused.problems).model_dump(
+                mode="json"
+            ),
+        )
+    plan, own_lists = await plan_import(
+        bundle,
+        dataset_id=dataset_id,
+        principal=principal,
+        dry_run=dry_run,
+        models=models,
+        rows_kept=rows_kept,
+        staging_storage=staging_storage,
+        list_store=list_store,
+        sources=sources,
+    )
+    if plan.refused:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content=plan.model_dump(mode="json")
+        )
+    if dry_run:
+        await audit.record(
+            principal=principal,
+            action="plan_dataset_release_import",
+            resolved_query={"dataset_id": dataset_id, "release": bundle.manifest.metadata.name},
+            result_cardinality=len(plan.items),
+        )
+        return plan
+    made = await apply_import(
+        bundle,
+        plan,
+        own_lists,
+        dataset_id=dataset_id,
+        principal=principal,
+        models=models,
+        recipes=studio_recipes,
+        rows_kept=rows_kept,
+    )
+    await audit.record(
+        principal=principal,
+        action="import_dataset_release",
+        resolved_query={
+            "dataset_id": dataset_id,
+            "release": bundle.manifest.metadata.name,
+            "version": bundle.manifest.metadata.version,
+            "pipelines": made,
+        },
+        result_cardinality=len(plan.items),
+    )
+    return plan
+
+
 @app.get(
     "/v1/datasets/{dataset_id}/sources",
     dependencies=[Depends(require_right(Right.ADD_INGEST_FILES))],
@@ -11340,7 +11497,10 @@ def get_connector_readers(request: Request) -> Readers:
 
 
 async def _audit_refused_read(
-    audit: AuditWriter, principal: Principal, dataset_id: str, connection_id: str,
+    audit: AuditWriter,
+    principal: Principal,
+    dataset_id: str,
+    connection_id: str,
     refused: ConnectorRefused,
 ) -> None:
     """A refused connector read is audited, by ids and words alone: no server path."""
@@ -12380,8 +12540,8 @@ async def preview_studio_recipe_staging(
         principal=principal,
         scheme=scheme,
         references=await dataset_reference_lists(
-                models, recipe.dataset_id, staging_storage, lists=list_store
-            ),
+            models, recipe.dataset_id, staging_storage, lists=list_store
+        ),
         storage=staging_storage,
     )
     await audit.record(
@@ -18864,9 +19024,15 @@ async def read_audit_section_rules(
     names = await principal_names.full_names({e.principal_id for e in served})
     entries = [
         AuditSectionEntry(
-            recorded_at=e.recorded_at, who=names.get(e.principal_id, audit_section_module.NO_NAME),
-            action=e.action, kind="rules", held_in="rules", investigation_id=case_.id,
-            case_name=case_.name, detail=e.detail, result_cardinality=e.result_cardinality,
+            recorded_at=e.recorded_at,
+            who=names.get(e.principal_id, audit_section_module.NO_NAME),
+            action=e.action,
+            kind="rules",
+            held_in="rules",
+            investigation_id=case_.id,
+            case_name=case_.name,
+            detail=e.detail,
+            result_cardinality=e.result_cardinality,
         )  # fmt: skip
         for e in served
     ]
