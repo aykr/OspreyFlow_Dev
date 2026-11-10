@@ -4,8 +4,10 @@ Pure: nothing here reads a store or the network."""
 from rule_standards.codec import (
     MalformedRuleFile,
     RuleFile,
+    StoredRuleFiles,
     UnsupportedElements,
     from_files,
+    rule_files,
     to_bpmn,
     to_dmn,
 )
@@ -13,8 +15,10 @@ from rule_standards.codec import (
 __all__ = [
     "MalformedRuleFile",
     "RuleFile",
+    "StoredRuleFiles",
     "UnsupportedElements",
     "from_files",
+    "rule_files",
     "to_bpmn",
     "to_dmn",
 ]

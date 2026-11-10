@@ -48,9 +48,22 @@ function Harness() {
       >
         Export
       </button>
+      <p id="editor-heard" role="status" style={{ color: "var(--text-secondary)" }}>
+        The editor heard Escape 0 time(s).
+      </p>
     </main>
   );
 }
+
+// The editor's own Escape, as the rule editor around the button has one: the keyboard spec reads
+// what it heard, to prove the drawing keeps Escape while open and gives it back when closed.
+let heard = 0;
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  heard += 1;
+  const said = document.getElementById("editor-heard");
+  if (said) said.textContent = `The editor heard Escape ${heard} time(s).`;
+});
 
 createRoot(document.getElementById("root")!).render(<Harness />);
 if (params.get("open") === "1") {

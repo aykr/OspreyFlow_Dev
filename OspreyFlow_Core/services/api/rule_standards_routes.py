@@ -27,7 +27,13 @@ from fastapi import HTTPException, Request
 from fastapi.responses import Response
 from pydantic import ValidationError
 
-from rule_standards import MalformedRuleFile, UnsupportedElements, from_files, to_bpmn, to_dmn
+from rule_standards import (
+    MalformedRuleFile,
+    StoredRuleFiles,
+    UnsupportedElements,
+    from_files,
+    rule_files,
+)
 from schemas.domain import OntologySchema, TypologyRule
 from schemas.rule_standards import RULE_FILE_MAX_CHARS, ImportedRule, RuleFilesUpload
 from schemas.sentences import SentenceRuleInput, SentenceRuleParams
@@ -51,8 +57,13 @@ def _file_name(name: str, kind: str) -> str:
     return f"{slug[:60]}.{kind}"
 
 
-def export_rule_file(rule: TypologyRule, kind: str) -> Response:
-    """One of the rule's two files, as an attachment."""
+def export_rule_file(
+    rule: TypologyRule, kind: str, *, stored: StoredRuleFiles | None = None
+) -> Response:
+    """One of the rule's two files, as an attachment. `stored` is the version's files as rules'
+    save wrote them (ADR-146 Amendment 5), served byte for byte, never rendered again; a rule saved
+    before the save wrote them has none, and its files are rendered by the same `rule_files` the
+    save calls, so the two cannot differ."""
     if not isinstance(rule.params, SentenceRuleParams):
         raise _refused(
             422,
@@ -67,24 +78,21 @@ def export_rule_file(rule: TypologyRule, kind: str) -> Response:
             "This rule names no dataset, so it cannot be stored as BPMN and DMN until it is made "
             "one rule per dataset.",
         )
-    as_written = SentenceRuleInput(
-        name=rule.name,
-        sentence=rule.params.sentence,
-        budget_ms=rule.budget_ms,
-        max_matches=rule.params.max_matches,
-    )
-    try:
-        xml = (
-            to_bpmn(as_written, dataset_id=rule.dataset_id)
-            if kind == "bpmn"
-            else to_dmn(as_written)
+    if stored is None:
+        as_written = SentenceRuleInput(
+            name=rule.name,
+            sentence=rule.params.sentence,
+            budget_ms=rule.budget_ms,
+            max_matches=rule.params.max_matches,
         )
-    except ValueError as exc:
-        raise _refused(
-            422, "rule_cannot_be_stored", f"This rule cannot be written as DMN: {exc}."
-        ) from None
+        try:
+            stored = rule_files(as_written, dataset_id=rule.dataset_id)
+        except ValueError as exc:
+            raise _refused(
+                422, "rule_cannot_be_stored", f"This rule cannot be written as DMN: {exc}."
+            ) from None
     return Response(
-        content=xml,
+        content=stored.bpmn if kind == "bpmn" else stored.dmn,
         media_type=_MEDIA[kind],
         headers={"Content-Disposition": f'attachment; filename="{_file_name(rule.name, kind)}"'},
     )

@@ -57,6 +57,11 @@ test("Escape and Close each shut the drawing and give focus back to Show as BPMN
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(button).toBeFocused();
+  // The drawing kept that Escape from the editor, and gives the next one back to it.
+  const heard = page.locator("#editor-heard");
+  await expect(heard).toHaveText("The editor heard Escape 0 time(s).");
+  await page.keyboard.press("Escape");
+  await expect(heard).toHaveText("The editor heard Escape 1 time(s).");
   registerCovered(REGISTRY, "close-show-as-bpmn-by-escape-focus-returns");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -71,7 +76,7 @@ test("a stored file that is not a rule's process is said so, and not drawn", asy
 }) => {
   await page.goto("/keyboard/rule-standards-harness.html?file=other");
   await press(page, page.getByRole("button", { name: "Show as BPMN" }));
-  await expect(page.getByRole("status")).toContainText(
+  await expect(page.getByRole("dialog").getByRole("status")).toContainText(
     "not a process OspreyFlow runs",
   );
   await expect(page.getByRole("img")).toHaveCount(0);

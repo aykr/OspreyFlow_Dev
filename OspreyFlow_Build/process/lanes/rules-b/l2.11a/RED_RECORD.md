@@ -89,3 +89,9 @@ The keyboard spec's reds (each id's handler removed) are recorded with the Playw
 Note on the declared-length check: its first test also streamed the body, so the streamed cap caught it
 and the plant stayed green, which is rule 15's fallthrough. The case that counts now makes reading the
 body itself an error.
+
+## §6 Stored files (ADR-146 Amendment 5) and Escape given back
+
+| Plant | Red |
+| --- | --- |
+| Export ignores the stored files (renders every time) | `test_export_serves_the_stored_files_not_a_fresh_render` |

@@ -28,7 +28,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from rule_standards import to_bpmn, to_dmn
+from rule_standards import StoredRuleFiles, rule_files, to_bpmn, to_dmn
 from services.api import rule_standards_routes
 from services.api.app import (
     app,
@@ -365,3 +365,21 @@ def test_an_imported_rule_naming_an_undeclared_property_is_refused_in_words(
     refused = _import(RULE_AUTHOR, *_files(rule=bad))
     assert refused.status_code == 422
     assert refused.json()["reason"] == "unknown_property"
+
+
+def test_export_serves_the_stored_files_not_a_fresh_render() -> None:
+    """ADR-146 Amendment 5: a version's files as rules' save stored them are served byte for byte.
+    The stored bytes here differ from what the codec would write now (a comment and the version's
+    own words), so a fresh render could not pass."""
+    rule = _rule("r-1")
+    stored = StoredRuleFiles(bpmn=b"<!-- stored at version 3 -->\n<bpmn:definitions/>",
+                             dmn=b"<!-- stored at version 3 -->\n<dmn:definitions/>")  # fmt: skip
+    for kind, sent in (("bpmn", stored.bpmn), ("dmn", stored.dmn)):
+        served = rule_standards_routes.export_rule_file(rule, kind, stored=stored)
+        assert served.body == sent, kind
+    # A rule saved before the files were stored is rendered by the save's own function.
+    fresh = rule_standards_routes.export_rule_file(rule, "dmn")
+    assert fresh.body == rule_files(
+        SentenceRuleInput(name=rule.name, sentence=SENTENCE, budget_ms=6000, max_matches=120),
+        dataset_id=DATASET,
+    ).dmn

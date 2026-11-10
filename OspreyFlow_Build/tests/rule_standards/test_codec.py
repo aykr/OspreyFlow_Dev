@@ -33,6 +33,7 @@ from rule_standards import (
     RuleFile,
     UnsupportedElements,
     from_files,
+    rule_files,
     to_bpmn,
     to_dmn,
 )
@@ -432,3 +433,11 @@ def test_a_team_is_refused_while_the_sentence_cannot_name_one() -> None:
     with pytest.raises(UnsupportedElements) as refused:
         from_files(planted.encode(), dmn.encode())
     assert refused.value.names == ["osprey:teamId (on osprey:raise)"]
+
+
+def test_the_files_rules_save_stores_are_the_codecs_own_bytes_and_import_back() -> None:
+    rule = _rule()
+    stored = rule_files(rule, dataset_id=DATASET)
+    bpmn, dmn = _files(rule)
+    assert (stored.bpmn, stored.dmn) == (bpmn.encode(), dmn.encode())
+    assert from_files(stored.bpmn, stored.dmn) == RuleFile(rule=rule, dataset_id=DATASET)

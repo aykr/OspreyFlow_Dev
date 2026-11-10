@@ -370,6 +370,24 @@ def to_dmn(rule: SentenceRuleInput) -> str:
     )
 
 
+@dataclass(frozen=True)
+class StoredRuleFiles:
+    """A rule version's two files, as they are stored beside it and as Export serves them: the
+    UTF-8 bytes `to_bpmn` and `to_dmn` wrote, never rendered again (ADR-146 Amendment 5)."""
+
+    bpmn: bytes
+    dmn: bytes
+
+
+def rule_files(rule: SentenceRuleInput, *, dataset_id: str) -> StoredRuleFiles:
+    """What rules' save writes beside each rule version, in the same transaction: the two files,
+    exactly as Export then serves them. A rule the files cannot hold (a number no decision table
+    holds) raises `ValueError`, so the save is refused rather than stored without its files."""
+    return StoredRuleFiles(
+        bpmn=to_bpmn(rule, dataset_id=dataset_id).encode(), dmn=to_dmn(rule).encode()
+    )
+
+
 # --- reading ------------------------------------------------------------------------------------
 
 

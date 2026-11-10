@@ -107,6 +107,9 @@ describe("ShowAsBpmn", () => {
       });
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(editorHeard).toBe(0);
+      // Closed, it holds nothing: the editor's Escape is its own again.
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      expect(editorHeard).toBe(1);
     } finally {
       document.removeEventListener("keydown", editor);
     }
