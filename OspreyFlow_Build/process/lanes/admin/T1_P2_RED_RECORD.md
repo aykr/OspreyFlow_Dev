@@ -62,3 +62,14 @@ marks, since pytest imports a file before `-m` deselects anything, so it works t
 
 So `test_schedule_notice.py` is the only live file on main that cannot import. The orchestrator has carried its fix to
 rules, since rules knows what replaced `alert_to_view`. Until then the step is red on main, and that is its purpose.
+
+**Gates at c34f62b** (on main 76260b0):
+- `make -k ci` (`gates/c34f62b.ci.txt`): green apart from Docker's checks.
+- `make test`, offline on the server, the orchestrator's run (`gates/c34f62b.test.txt`: no stack, no lease, wall 1614 s,
+  set-up 15 s): pytest 10,500 passed, 2 failed (the known GPU and Valkey-host cases), 13 skipped; vitest 2,963 passed,
+  1 failed (MatrixView's known timing test).
+
+**The guard's report in that run was exactly `{}`.** No unmarked test in `make test`'s set reached a store's port. That
+is expected, since `make test` still `--ignore`s every live file. Fail mode will meet its work only when that list
+gives way to `-m "not store"`. The empty file is itself proof the guard ran in the real suite, since it writes its
+report on every run. Tomorrow's mark commit must show the same `{}` with `make test` run as `-m "not store"`.
