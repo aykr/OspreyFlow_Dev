@@ -20,6 +20,7 @@
 // harness-specific CSS anywhere overrides it (checked directly: `apps/harness/src/app.css` sets no
 // `outline` property at all).
 import AxeBuilder from "@axe-core/playwright";
+import { checkUndecidedContrast } from "../../workspace/a11y/undecidedContrast";
 import { expect, test } from "@playwright/test";
 
 const SCREENS = [
@@ -57,6 +58,8 @@ for (const theme of ["dark", "light"] as const) {
       // real, disclosed finding, not fixed here (a different surface, out of this round's scope).
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
       expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      const contrast = await checkUndecidedContrast(page, results);
+      expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
     });
   }
 }

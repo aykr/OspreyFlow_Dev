@@ -19,6 +19,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
 
+import { checkUndecidedContrast, type ListedFindings } from "./undecidedContrast";
+
 const KEYBOARD = new URL("../keyboard/", import.meta.url);
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -278,6 +280,19 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
 };
 
+// The undecided-contrast findings on main when the measure was added (rules-b's T3, 10 November 2026),
+// each carried by its owner (CARRIES) rather than excused, in `contrastFindings.json`: by the test's
+// title and the node's selector, with the text it held and either the ratio it measured (a floor:
+// worse fails) or the exact reason it could not be measured and what its own surfaces gave (a floor
+// too). Fixed ones come off; a new one is never added to make a run green. The owners, by page:
+// the map's attribution chip over the map's canvas (platform); the case screen's variant b ⋯ and
+// places' open More views under GOV.UK (shell); the boards' handles and labels where a link line or
+// another item lies at them (case); Show as BPMN's words on the drawing's task box, in its dialog and
+// in the rule editor (rules-b, L2.11a's own); Home's key cap at `opacity: 0.8` (home).
+const CONTRAST_FINDINGS = JSON.parse(
+  readFileSync(new URL("./contrastFindings.json", import.meta.url), "utf8"),
+) as Record<string, ListedFindings>;
+
 const pages = readdirSync(KEYBOARD).filter((name) => name.endsWith(".html")).sort();
 
 function appliesBrand(page: string): boolean {
@@ -326,12 +341,16 @@ test("the scan found the harness pages", () => {
   expect(pages.length).toBeGreaterThan(30);
 });
 
+// Every look's title, as each test below is named, so a listed finding under a mistyped title fails.
+const TITLES = new Set<string>();
+
 for (const name of pages) {
   const variants = ["dark", "light", ...(appliesBrand(name) ? ["govuk"] : [])] as const;
   for (const state of ["", ...(EXTRA_STATES[name] ?? [])]) {
     for (const variant of variants) {
       const query = [state, variant === "govuk" ? "brand=govuk" : ""].filter(Boolean).join("&");
       const title = `${name}${state ? ` ${state}` : ""} (${variant})`;
+      TITLES.add(title);
       test(`${title} has no automated WCAG 2.2 A or AA violations`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
         await page.goto(`/keyboard/${name}${query ? `?${query}` : ""}`);
@@ -347,6 +366,12 @@ for (const name of pages) {
         for (const selector of HARNESS_ONLY[name] ?? []) builder = builder.exclude(selector);
         const results = await builder.analyze();
         expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+        // axe's undecided colour contrast, measured here (1.4.3): a shortfall or an unmeasurable
+        // node fails, unless it is a listed finding carried by its owner, and a listed one that is
+        // gone fails too, so the list never outlives what it excuses.
+        const { unlisted, gone } = await checkUndecidedContrast(page, results, CONTRAST_FINDINGS[title]);
+        expect(unlisted, "colour contrast axe left undecided, too low or unmeasurable").toEqual([]);
+        expect(gone, "listed contrast findings no longer found as listed: update CONTRAST_FINDINGS").toEqual([]);
       });
     }
     // The words do not change with the theme or the brand, so one look per state.
@@ -359,3 +384,7 @@ for (const name of pages) {
     });
   }
 }
+
+test("every listed contrast finding names a look this file scans", () => {
+  expect(Object.keys(CONTRAST_FINDINGS).filter((title) => !TITLES.has(title))).toEqual([]);
+});

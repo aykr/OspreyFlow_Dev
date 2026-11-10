@@ -4,6 +4,19 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+import { checkUndecidedContrast, type ListedFindings } from "./undecidedContrast";
+
+// The design showcase's undecided-contrast findings on main when the measure was added (rules-b's T3,
+// 10 November 2026), carried by their owner (CARRIES): each excused only while it measures as listed.
+// The design system's: the warning toast's glyph is `--warning` on the toast in the light theme
+// (4.5:1 for text; whether the glyph, beside the toast's words, is held to 1.4.11's 3:1 is the
+// owner's call).
+const SHOWCASE_CONTRAST_FINDINGS: Record<string, ListedFindings> = {
+  light: {
+    '.toast--warning > .toast__glyph[aria-hidden="true"]': { text: "△", ratio: 4.41, owner: "design system" },
+  },
+};
+
 // `wcag2a` and `wcag2aa`, both — axe-core's own rule tags are not hierarchical: a rule tagged
 // `wcag2a` (`button-name`, `image-alt`, ...) is not also returned by `wcag2aa` alone. Round 09:
 // found still missing here — `apps/harness/a11y/a11y.spec.ts`'s own docstring had already
@@ -25,6 +38,8 @@ for (const theme of ["dark", "light"] as const) {
     }
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    const contrast = await checkUndecidedContrast(page, results);
+    expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
   });
 
   // ADR-114 Amendment 33 decision 4 (step 20 drop 2): with the organisation's identity provider
@@ -38,6 +53,8 @@ for (const theme of ["dark", "light"] as const) {
     await page.getByRole("button", { name: "Continue with organisation sign-in" }).waitFor();
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    const contrast = await checkUndecidedContrast(page, results);
+    expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
   });
 
   // Round 09: the one real screen this file scanned for a general violation sweep was sign-in —
@@ -54,6 +71,8 @@ for (const theme of ["dark", "light"] as const) {
     await page.getByRole("application", { name: "Network canvas" }).waitFor();
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    const contrast = await checkUndecidedContrast(page, results);
+    expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
   });
 
   test(`${theme} theme has no automated colour-contrast violations`, async ({ page }) => {
@@ -78,6 +97,10 @@ for (const theme of ["dark", "light"] as const) {
       contrastViolations,
       JSON.stringify(contrastViolations, null, 2),
     ).toEqual([]);
+    // axe's undecided contrast, measured (`undecidedContrast.ts`), with main's listed findings.
+    const { unlisted, gone } = await checkUndecidedContrast(page, results, SHOWCASE_CONTRAST_FINDINGS[theme]);
+    expect(unlisted, "colour contrast axe left undecided, too low or unmeasurable").toEqual([]);
+    expect(gone, "listed contrast findings no longer found as listed").toEqual([]);
   });
 }
 
@@ -94,5 +117,7 @@ for (const [name, url] of [
     await page.waitForLoadState("networkidle");
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    const contrast = await checkUndecidedContrast(page, results);
+    expect(contrast.unlisted, "colour contrast axe left undecided").toEqual([]);
   });
 }

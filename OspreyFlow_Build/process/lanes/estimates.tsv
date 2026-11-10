@@ -1,10 +1,9 @@
-# as of 2026-11-10T22:40Z
+# as of 2026-11-10T23:10Z
 platform-b	UPG-fix	update from v0.4.12 refuses in words; the one-time apply route; reviews done at d85f514; gates once after run 4	~22:30	A
 rules	UPG	rehearsal run 4 from a fresh v0.4.12 on d85f514: refusal, apply, update, apply, the seven migrations	~22:00	A
 studio	L1.7	full live set on stack c, then make -k ci on the server; merge	~23:00	A
 docs	D2b	v0.5.0 CHANGELOG and upgrade wording (the route's command from run 4), the decks	~23:30	A
 orchestrator	publish	v0.5.0 from main after the upgrade fix, L1.7 and docs; new installs only if the upgrade is not green by 04:00	~01:00–04:00	A
-rules-b	T3	merger's must-fixes built; browser plants in a slot; merger's review; one round of gates (merger)	~22:30	A
 studio-b	L1.10b	gates and live run; merge by the merger	~22:30	B
 admin	T1	part 4: make test serial vs parallel offline; leased live run; merge by the merger; the marks tomorrow	11 Nov, ~11:00	A
 platform	P7	acceptance on kind on the test server; review and merge (merger, after the publish)	11 Nov, ~11:00	B

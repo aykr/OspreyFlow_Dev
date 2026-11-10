@@ -1,0 +1,1078 @@
+{
+ "boards-harness.html board=b-wing&pictured=1&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&pictured=1&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&pictured=1&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Declare%20a%20Location (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Declare%20a%20Location (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Declare%20a%20Location (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CDraw%20a%20link%E2%80%A6 (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CDraw%20a%20link%E2%80%A6 (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CDraw%20a%20link%E2%80%A6 (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CWithdraw%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CWithdraw%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CWithdraw%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Person%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn)%7CEdit%20Unknown%20male%20%E2%80%9CTall%E2%80%9D (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=menu%3APerson%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 14.74,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=menu%3APerson%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 15.64,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=menu%3APerson%20Unknown%20male%20%E2%80%9CTall%E2%80%9D%20(drawn) (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__body[type=\"button\"] > .board-item__label": {
+   "text": "Photo of Mercer, 3 Nov",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__handle",
+   "own": 18.34,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Promote%E2%80%A6 (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Promote%E2%80%A6 (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&press=Promote%E2%80%A6 (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&policy=second_person_reviews&press=Promote%E2%80%A6%7CSend%20for%20review (dark)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 6.44,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 6.44,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&policy=second_person_reviews&press=Promote%E2%80%A6%7CSend%20for%20review (light)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.41,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.41,
+   "owner": "case"
+  }
+ },
+ "boards-harness.html board=b-wing&policy=second_person_reviews&press=Promote%E2%80%A6%7CSend%20for%20review (govuk)": {
+  "div[data-board-item=\"p-mercer\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under line.board__line",
+   "own": 5.17,
+   "owner": "case"
+  },
+  "div[data-board-item=\"doc-photo\"] > .board-item__handle[title=\"Drag to draw a link\"][aria-hidden=\"true\"]": {
+   "text": "⟶",
+   "ratio": "unmeasurable",
+   "reason": "over or under span.board-item__label",
+   "own": 5.17,
+   "owner": "case"
+  }
+ },
+ "case-screen-options-harness.html variant=b (dark)": {
+  "button[aria-label=\"More\"] > span": {
+   "text": "⋯",
+   "ratio": "unmeasurable",
+   "reason": "over or under nav.left-rail",
+   "own": 10.73,
+   "owner": "shell"
+  }
+ },
+ "case-screen-options-harness.html variant=b (light)": {
+  "button[aria-label=\"More\"] > span": {
+   "text": "⋯",
+   "ratio": "unmeasurable",
+   "reason": "over or under nav.left-rail",
+   "own": 8.07,
+   "owner": "shell"
+  }
+ },
+ "case-screen-options-harness.html variant=b (govuk)": {
+  "button[aria-label=\"More\"] > span": {
+   "text": "⋯",
+   "ratio": "unmeasurable",
+   "reason": "over or under div.govuk-notification-banner__content",
+   "own": 19.59,
+   "owner": "shell"
+  }
+ },
+ "map-view-harness.html (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=1 (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=1 (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=1 (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=more (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=more (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=more (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=fail (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=fail (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html searched=fail (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=added (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=added (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=added (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=reader (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=reader (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=reader (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=nothing (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=nothing (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=nothing (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=composite (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=composite (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=composite (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=drawn (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=drawn (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=drawn (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=unbuilt (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=unbuilt (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=unbuilt (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=failed (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=failed (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=failed (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=refused (dark)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 11.31,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=refused (light)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 2.85,
+   "owner": "platform"
+  }
+ },
+ "map-view-harness.html gazetteers=refused (govuk)": {
+  "main > div > div > div:nth-child(2)": {
+   "text": "Harness tiles ©",
+   "ratio": "unmeasurable",
+   "reason": "over or under canvas.sigma-mouse",
+   "own": 6.88,
+   "owner": "platform"
+  }
+ },
+ "monitoring-harness.html tab=rules&editor=bpmn (dark)": {
+  "tspan[dy=\"0\"]": {
+   "text": "If a Person meets",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 13.17,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  },
+  "tspan[dy=\"16\"]": {
+   "text": "the conditions",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 13.17,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  }
+ },
+ "monitoring-harness.html tab=rules&editor=bpmn (light)": {
+  "tspan[dy=\"0\"]": {
+   "text": "If a Person meets",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 14.53,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  },
+  "tspan[dy=\"16\"]": {
+   "text": "the conditions",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 14.53,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  }
+ },
+ "monitoring-harness.html tab=rules&editor=bpmn (govuk)": {
+  "tspan[dy=\"0\"]": {
+   "text": "If a Person meets",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 18.34,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  },
+  "tspan[dy=\"16\"]": {
+   "text": "the conditions",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 18.34,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  }
+ },
+ "places-harness.html open=views (govuk)": {
+  ".govuk-notification-banner__content > .btn": {
+   "text": "Case: Kestrel",
+   "ratio": "unmeasurable",
+   "reason": "over or under div.menu-panel",
+   "own": 18.34,
+   "owner": "shell"
+  },
+  ".context-banner__sep[aria-hidden=\"true\"]:nth-child(4)": {
+   "text": "·",
+   "ratio": "unmeasurable",
+   "reason": "over or under div.menu-panel",
+   "own": 19.59,
+   "owner": "shell"
+  },
+  "span:nth-child(5)": {
+   "text": "reads Prison intel",
+   "ratio": "unmeasurable",
+   "reason": "over or under div.menu-panel",
+   "own": 19.59,
+   "owner": "shell"
+  }
+ },
+ "rule-standards-harness.html open=1 (dark)": {
+  "tspan[dy=\"0\"]": {
+   "text": "If a Person meets",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 13.17,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  },
+  "tspan[dy=\"16\"]": {
+   "text": "the conditions",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 13.17,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  }
+ },
+ "rule-standards-harness.html open=1 (light)": {
+  "tspan[dy=\"0\"]": {
+   "text": "If a Person meets",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 14.53,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  },
+  "tspan[dy=\"16\"]": {
+   "text": "the conditions",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 14.53,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  }
+ },
+ "rule-standards-harness.html open=1 (govuk)": {
+  "tspan[dy=\"0\"]": {
+   "text": "If a Person meets",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 18.34,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  },
+  "tspan[dy=\"16\"]": {
+   "text": "the conditions",
+   "ratio": "unmeasurable",
+   "reason": "over or under rect.show-as-bpmn__task",
+   "own": 18.34,
+   "owner": "rules-b (Show as BPMN, L2.11a)"
+  }
+ },
+ "start-harness.html (light)": {
+  ".btn--primary > kbd": {
+   "text": "G",
+   "ratio": 4.12,
+   "owner": "home"
+  }
+ },
+ "start-harness.html (govuk)": {
+  ".btn--primary > kbd": {
+   "text": "G",
+   "ratio": 3.92,
+   "owner": "home"
+  }
+ },
+ "start-harness.html rights=investigate (light)": {
+  "kbd": {
+   "text": "G",
+   "ratio": 4.12,
+   "owner": "home"
+  }
+ },
+ "start-harness.html rights=investigate (govuk)": {
+  "kbd": {
+   "text": "G",
+   "ratio": 3.92,
+   "owner": "home"
+  }
+ },
+ "start-harness.html figures=1&rights=investigate,triage_alerts,read_alert_queue (light)": {
+  ".btn--primary > kbd": {
+   "text": "G",
+   "ratio": 4.12,
+   "owner": "home"
+  }
+ },
+ "start-harness.html figures=1&rights=investigate,triage_alerts,read_alert_queue (govuk)": {
+  ".btn--primary > kbd": {
+   "text": "G",
+   "ratio": 3.92,
+   "owner": "home"
+  }
+ },
+ "alert-figures-harness.html home=1 (light)": {
+  "kbd": {
+   "text": "G",
+   "ratio": 4.12,
+   "owner": "home"
+  }
+ },
+ "alert-figures-harness.html home=1 (govuk)": {
+  "kbd": {
+   "text": "G",
+   "ratio": 3.92,
+   "owner": "home"
+  }
+ }
+}

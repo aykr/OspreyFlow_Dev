@@ -32,3 +32,7 @@ screens, which L3.4 and L1.x build) and the boards' Alerts panel mount (L3.3). B
 | `spec03-L2.11a.patch` | orchestrator (`spec/03_CONDUIT_MIDDLEWARE.md` §3.8a) | The two routes' rows: Export (`export.{kind}`, Viewer) and Import (`import`, Author), with their refusals. **The branch needs it at merge:** `make ci`'s `route-coverage-check` is red without it (it names both routes) and green with it | `route-coverage-check` at e72588c (red), then with the patch (green) |
 
 All four apply at the branch head (`git apply --check`); the audit patch was regenerated after the rebase onto L2.10's main. `audit`, `every-harness` and `spec03` were applied unstaged for the gates.
+
+## T3 (10 November 2026)
+
+`a11y-siblings-T3.patch` (the same undecided-contrast check at the sibling axe scans: `apps/workspace/a11y/{a11y,canvas-focus}.spec.ts`, `apps/harness/a11y/{a11y,install-page}.spec.ts`) was ratified by the orchestrator to go in directly. It is in the branch, and the patch file is gone.
