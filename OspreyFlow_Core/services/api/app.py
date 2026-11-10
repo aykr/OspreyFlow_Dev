@@ -71,6 +71,7 @@ from services.ingest.connectors.geo.site_grid import site_grid_rows
 from services.ingest.connectors.reads import ConnectorRefused
 from services.ingest.engine import RowKeyDefinitionChanged, RowKeyRunInProgress, run_recipe
 from services.ingest.pipeline import (
+    expert_steps_changed,
     pipeline_from_recipe,
     pipeline_rule_violations,
     pipeline_run_violations,
@@ -299,12 +300,15 @@ from schemas.ingest import (
     MapSampleRow,
     PipelineGraph,
     PipelineRunReportView,
+    PipelineYaml,
     PublishRecipeInput,
     RowTemplateUpdateInput,
     RunRecipeInput,
     SchedulePreview,
     SchedulePreviewInput,
     ScheduleUpdateInput,
+    SqlCheck,
+    SqlCheckInput,
     StagingPreview,
     StagingPreviewInput,
     StudioRecipeDraft,
@@ -957,8 +961,12 @@ from .studio_recipes import (
 from .studio_staging import (
     StagedTestInputs,
     dataset_reference_lists,
+    draft_marked,
+    pipeline_from_yaml,
+    pipeline_yaml,
     preview_staging,
     sources_not_offered,
+    sql_check,
     staging_gate,
 )
 from .studio_verify import RowTemplateMissingError, run_verify
@@ -11363,6 +11371,70 @@ async def update_studio_recipe_draft(
     return updated
 
 
+#: ADR-140 decision 3: an expert step changed without the right that writes one.
+EXPERT_RIGHT_WORDS = (
+    "This change adds, edits or removes an expert step (a SQL transform or a fuzzy match), which "
+    "needs the right to write SQL transforms (write_sql_transforms), granted by an administrator. "
+    "The pipeline's other steps can be edited without it."
+)
+
+
+async def _save_pipeline(
+    recipe: StudioRecipeDraft,
+    principal: Principal,
+    body: PipelineGraph,
+    *,
+    studio_recipes: StudioRecipeStore,
+    audit: AuditWriter,
+    models: TargetModelStore | None,
+    staging_storage: ObjectStorageConfig,
+    list_store: ListStore | None,
+    action: str,
+) -> StudioRecipeDraft | JSONResponse:
+    """The pipeline's save gate, one for the canvas's save and the YAML's (ADR-140 decision 3:
+    "editable in expert mode with the same save and publish gates"): an expert step changed only by
+    a holder of `write_sql_transforms` (403, in words), then the graph's rules, the sources' files
+    and the staging gate (422 `pipeline_invalid`, every problem in words), and nothing stored."""
+    if expert_steps_changed(pipeline_from_recipe(recipe), body) and (
+        Right.WRITE_SQL_TRANSFORMS not in rights_for(principal.roles)
+    ):
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "right_required",
+                "right": Right.WRITE_SQL_TRANSFORMS.value,
+                "problems": [EXPERT_RIGHT_WORDS],
+            },
+        )
+    problems = pipeline_rule_violations(body)
+    problems.extend(sources_not_offered(body, recipe.dataset_id))
+    problems.extend(
+        p
+        for p in staging_gate(
+            body,
+            references=await dataset_reference_lists(
+                models, recipe.dataset_id, staging_storage, lists=list_store
+            ),
+            dataset_id=recipe.dataset_id,
+            marked=draft_marked(recipe),
+        )
+        if p not in problems
+    )
+    if problems:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "pipeline_invalid", "problems": problems},
+        )
+    updated = await studio_recipes.update_pipeline(recipe.recipe_id, principal, pipeline=body)
+    await audit.record(
+        principal=principal,
+        action=action,
+        resolved_query={"recipe_id": recipe.recipe_id, "nodes": len(body.nodes)},
+        result_cardinality=1,
+    )
+    return updated
+
+
 @app.put(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/pipeline",
     dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
@@ -11382,33 +11454,102 @@ async def update_studio_recipe_pipeline(
     a violation answers 422 `pipeline_invalid` with every problem in words, and nothing is
     stored; the row-template half stays Map's own, unchanged. ADR-140 Amendment 12: its staging
     steps are judged here too, against its source nodes and the dataset's lists, in the words a
-    drawer's Preview shows (`studio_staging.staging_gate`)."""
-    problems = pipeline_rule_violations(body)
-    problems.extend(sources_not_offered(body, recipe.dataset_id))
-    problems.extend(
-        p
-        for p in staging_gate(
-            body,
-            references=await dataset_reference_lists(
-                models, recipe.dataset_id, staging_storage, lists=list_store
-            ),
-            dataset_id=recipe.dataset_id,
-        )
-        if p not in problems
+    drawer's Preview shows (`studio_staging.staging_gate`). ADR-140 decision 3 (phase 8): an expert
+    step is added, edited or removed only by a holder of `write_sql_transforms`."""
+    return await _save_pipeline(  # type: ignore[return-value]
+        recipe,
+        principal,
+        body,
+        studio_recipes=studio_recipes,
+        audit=audit,
+        models=models,
+        staging_storage=staging_storage,
+        list_store=list_store,
+        action="update_studio_recipe_pipeline",
     )
-    if problems:
-        return JSONResponse(  # type: ignore[return-value]
-            status_code=422,
-            content={"error": "pipeline_invalid", "problems": problems},
-        )
-    updated = await studio_recipes.update_pipeline(recipe.recipe_id, principal, pipeline=body)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/pipeline/yaml",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
+async def get_studio_recipe_pipeline_yaml(
+    investigation: InvestigationViewerDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    audit: AuditDep,
+) -> PipelineYaml:
+    """*Show YAML* (ADR-140 decision 3): the pipeline as YAML, its nodes with their own settings
+    (an expert step's SQL and fuzzy settings among them) and its lines. The draft's settings, never
+    a row of a source."""
     await audit.record(
         principal=principal,
-        action="update_studio_recipe_pipeline",
-        resolved_query={"recipe_id": recipe.recipe_id, "nodes": len(body.nodes)},
+        action="read_studio_recipe_pipeline_yaml",
+        resolved_query={"recipe_id": recipe.recipe_id},
         result_cardinality=1,
     )
-    return updated
+    return PipelineYaml(text=pipeline_yaml(pipeline_from_recipe(recipe)))
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/pipeline/yaml",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES)), NoLoadingInACompositeCase],
+)
+async def update_studio_recipe_pipeline_yaml(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_AUTHOR))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    body: PipelineYaml,
+    models: TargetModelsDep,
+    staging_storage: StagingStorageDep,
+    list_store: ListStoreDep,
+) -> StudioRecipeDraft:
+    """Expert mode's YAML edit (ADR-140 decision 3): the text read as a pipeline (`yaml.safe_load`,
+    never run), refused in words if it is not one, then saved through the canvas's own gates
+    (`_save_pipeline`)."""
+    graph, problems = pipeline_from_yaml(body.text)
+    if graph is None:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content={"error": "pipeline_invalid", "problems": problems}
+        )
+    return await _save_pipeline(  # type: ignore[return-value]
+        recipe,
+        principal,
+        graph,
+        studio_recipes=studio_recipes,
+        audit=audit,
+        models=models,
+        staging_storage=staging_storage,
+        list_store=list_store,
+        action="update_studio_recipe_pipeline_yaml",
+    )
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/sql-check",
+    dependencies=[Depends(require_right(Right.WRITE_SQL_TRANSFORMS))],
+)
+async def check_studio_recipe_sql(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: PrincipalDep,
+    audit: AuditDep,
+    body: SqlCheckInput,
+) -> SqlCheck:
+    """A SQL step's drawer's *Check SQL* (ADR-140 decision 12): the sandbox's gate on the step's
+    SELECT, in its words, before it is saved: one SELECT, its inputs and nothing else, no file or
+    network function, its `_ref` columns carried. Nothing runs over a row; the drawer's live sample
+    (`…/staging-preview`) shows what it gives."""
+    check = sql_check(body.pipeline, body.step, marked=draft_marked(recipe))
+    await audit.record(
+        principal=principal,
+        action="check_studio_recipe_sql",
+        resolved_query={"recipe_id": recipe.recipe_id, "step": body.step},
+        result_cardinality=len(check.problems),
+    )
+    return check
 
 
 @app.get(
@@ -11637,7 +11778,21 @@ async def preview_studio_recipe_staging(
     over the first ten rows of each source, read as Map's sample is read (`edit_pipelines`, the
     viewer's level, the person's own principal, masked where they may not view a row), with the
     save gate's refusals for the pipeline the drawer holds, in its own words. It writes nothing:
-    no staged Parquet, no raw rows, no draft."""
+    no staged Parquet, no raw rows, no draft. ADR-112 Amendment 8: an expert step the saved pipeline
+    does not hold, or holds otherwise, is run only for a holder of `write_sql_transforms` (the lane
+    review of L1.5, item 4: the sample runs the request's steps, so it would otherwise run any
+    SELECT an editor wrote); the saved pipeline's own expert steps run for any editor."""
+    if expert_steps_changed(pipeline_from_recipe(recipe), body.pipeline) and (
+        Right.WRITE_SQL_TRANSFORMS not in rights_for(principal.roles)
+    ):
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=403,
+            content={
+                "error": "right_required",
+                "right": Right.WRITE_SQL_TRANSFORMS.value,
+                "problems": [EXPERT_RIGHT_WORDS],
+            },
+        )
     preview = await asyncio.to_thread(
         preview_staging,
         recipe,
@@ -11999,6 +12154,7 @@ async def publish_studio_recipe(
                 models, recipe.dataset_id, staging_storage, lists=list_store
             ),
             dataset_id=recipe.dataset_id,
+            marked=draft_marked(recipe),
         )
         if unjudged:
             return JSONResponse(  # type: ignore[return-value]

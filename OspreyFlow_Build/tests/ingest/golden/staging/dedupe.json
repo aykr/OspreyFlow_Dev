@@ -129,7 +129,10 @@
     "repeats_folded": 2,
     "rejected": 0,
     "right_rows_in": 0,
-    "right_unmatched": 0
+    "right_unmatched": 0,
+    "threshold": null,
+    "matched": 0,
+    "rows_withheld": 0
    }
   ],
   "rejections": []

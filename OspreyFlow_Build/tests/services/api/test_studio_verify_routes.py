@@ -230,21 +230,44 @@ _BAD_ROWS = [
 ]
 
 
-def test_an_uncleared_principal_sees_no_rejected_value(
-    graph_client: TestClient, tmp_path: Path
+@pytest.mark.parametrize("route", ["verify", "preview-graph"])
+def test_test_of_a_pipeline_without_steps_gives_an_uncleared_reader_nothing(
+    graph_client: TestClient, tmp_path: Path, route: str
 ) -> None:
+    """Rule 3, carried from L1.4's independent review: Test (and the Map and Load Preview that run
+    it) of a pipeline with no staging steps counted rejections and elements over rows whose values
+    it masked, so a row template's conditions could tell what a hidden cell holds. It now has the
+    staged path's guard: nothing of the run for a reader not cleared for every row it reads."""
     graph_client.studio_recipes.draft = _ready_draft(  # type: ignore[attr-defined]
         tmp_path,
         source_location=_write_csv(tmp_path, _BAD_ROWS),
         handling=_UNCLEARED_HANDLING,
         row_template=_rejecting_row_template(),
     )
-    body = graph_client.post("/v1/investigations/inv-1/ingest/recipes/recipe-1/verify").json()
-    assert body["values_masked"] is True
-    report = str(body["rejections"])
-    for value in ("07ABC 123456", "07XYZ 654321", "123456", "654321", "ABC", "XYZ"):
-        assert value not in report, f"{value!r} is in the masked rejection report: {report}"
-    assert body["rejections"], "the rows were still rejected"
+    response = graph_client.post(f"/v1/investigations/inv-1/ingest/recipes/recipe-1/{route}")
+    assert response.status_code == 422, response.text
+    assert any(p.startswith("The test is withheld") for p in response.json()["problems"])
+    for value in ("07ABC 123456", "07XYZ 654321", "07700900461", "rejections", "entities_by_type"):
+        assert value not in response.text
+    assert graph_client.studio_recipes.draft.verified_at is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("route", ["verify", "preview-graph"])
+def test_test_of_a_pipeline_without_steps_gives_nothing_to_a_case_not_reading_its_dataset(
+    graph_client: TestClient, tmp_path: Path, route: str
+) -> None:
+    """Rule 4: a recipe's files are its dataset's, read by a case that reads it, as the staged
+    path already refuses (the orchestrator's review of L1.4)."""
+    graph_client.studio_recipes.draft = _ready_draft(  # type: ignore[attr-defined]
+        tmp_path,
+        source_location=_write_csv(tmp_path, _BAD_ROWS),
+        dataset_id="another-dataset",
+        row_template=_rejecting_row_template(),
+    )
+    response = graph_client.post(f"/v1/investigations/inv-1/ingest/recipes/recipe-1/{route}")
+    assert response.status_code == 422, response.text
+    assert any(p.startswith("The sample is withheld") for p in response.json()["problems"])
+    assert "07ABC 123456" not in response.text and "rejections" not in response.text
 
 
 def test_rejections_are_grouped_by_cause_not_by_value(

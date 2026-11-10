@@ -288,6 +288,10 @@ class PipelineNodeKind(StrEnum):
     DERIVE = "derive"
     UNION = "union"
     DEDUPE = "dedupe"
+    #: The expert steps (ADR-140 decisions 12 and 13; the redesign's phase 8): read-only in guided
+    #: mode, and saved only by a person holding `write_sql_transforms`.
+    SQL = "sql"
+    FUZZY_MATCH = "fuzzy_match"
 
 
 class PipelineNode(BaseModel):
@@ -945,6 +949,36 @@ class StagingStepCount(BaseModel):
     #: A Join's right table: its rows in, and those that met no left row.
     right_rows_in: int = Field(default=0, ge=0)
     right_unmatched: int = Field(default=0, ge=0)
+    #: A fuzzy match's threshold (part of the version) and its rows at or above it; its rows below
+    #: are `unmatched`, kept and counted ("212 of 1,204 matched at 0.85 or more").
+    threshold: float | None = None
+    matched: int = Field(default=0, ge=0)
+    #: A SQL step's input rows the person running it may not read: absent from its tables, never
+    #: masked (ADR-140 decision 12). Withheld with every other count.
+    rows_withheld: int = Field(default=0, ge=0)
+
+
+class ExpertStepDisclosure(BaseModel):
+    """ADR-140 decision 16 and the redesign brief §5.3–5.4: every run report, and Test, says which
+    expert steps ran and what they were, in words, whether or not its counts are withheld. It is
+    the pipeline's own configuration, never a value of a row: the SQL step's summary and its
+    SELECT; the fuzzy match's tables, comparisons and threshold, and that it writes an inferred
+    `SAME_AS`, never a merge. Its counts are in `staging_steps`, withheld with the others."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step: str
+    kind: Literal["sql", "fuzzy_match"]
+    label: str | None = None
+    #: The SQL step's own plain words, and its SELECT.
+    summary: str | None = None
+    select: str | None = None
+    #: The fuzzy match's tables, how they are compared, its threshold, and the elements whose
+    #: `SAME_AS` it writes.
+    reads: list[str] = Field(default_factory=list)
+    compares: list[str] = Field(default_factory=list)
+    threshold: float | None = None
+    same_as: list[str] = Field(default_factory=list)
 
 
 class RejectionRecord(BaseModel):
@@ -1154,6 +1188,8 @@ class LoadReport(BaseModel):
     #: ADR-140 Amendment 12: a staged run's steps, in run order, as counts. Empty for a run with
     #: no staging steps.
     staging_steps: list[StagingStepCount] = Field(default_factory=list)
+    #: ADR-140 decision 16 (phase 8): the expert steps this run ran, disclosed in words.
+    expert_steps: list[ExpertStepDisclosure] = Field(default_factory=list)
 
 
 # --- A staging step's live sample (ADR-140 Amendment 12; Q4 (a)) ---------------------------
@@ -1192,6 +1228,40 @@ class StagingPreview(BaseModel):
     profile: SourceProfile | None = None
 
 
+# --- Expert mode (ADR-140 decision 3; the redesign's phase 8) -------------------------------
+
+
+class PipelineYaml(BaseModel):
+    """The pipeline as YAML (*Show YAML*, ADR-140 decision 3): its nodes, each with its own
+    settings, and its lines, written by the Conduit. Editable in expert mode, and saved through
+    the same gates as the canvas's save (`PUT …/pipeline`): the text is read as a pipeline, never
+    run (`yaml.safe_load`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(max_length=200_000)
+
+
+class SqlCheckInput(BaseModel):
+    """`POST …/sql-check`: a SQL step's SELECT and the tables it reads, judged by the sandbox's
+    gate before it is saved. Nothing runs over any row."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pipeline: PipelineGraph
+    step: str = Field(min_length=1)
+
+
+class SqlCheck(BaseModel):
+    """The gate's words for one SQL step, empty when it may be saved. Nothing runs over a row: the
+    step's drawer shows its output on the live sample (`POST …/staging-preview`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    step: str
+    problems: list[str] = Field(default_factory=list)
+
+
 # --- The pipeline run report (06_DECISIONS.md ADR-108 phase C) -------------
 
 
@@ -1219,6 +1289,9 @@ class LoadReportView(BaseModel):
     rows_left_in_place: int = 0
     #: ADR-140 Amendment 12: each staging step's counts, withheld with the other counts.
     staging_steps: list[StagingStepCount] = Field(default_factory=list)
+    #: ADR-140 decision 16: the expert steps the run ran, in words. The pipeline's own settings,
+    #: never a row's value: given whether or not the counts are withheld.
+    expert_steps: list[ExpertStepDisclosure] = Field(default_factory=list)
     refresh_notes: list[str] = Field(default_factory=list)
     #: ADR-110 Amendment 6 point 1: an incremental refresh's rows left unread, and read without a
     #: watermark value. The watermark itself is a value of the source, and never answered.
@@ -1336,6 +1409,9 @@ class PipelineRunReportView(BaseModel):
     rows_held: int = 0
     rule_notes: list[str] = Field(default_factory=list)
     metering: RunMetering | None = None
+    #: ADR-140 decision 16: the expert steps the run's branches ran, in words, whether or not the
+    #: counts are withheld: the pipeline's own settings, never a row's value.
+    expert_steps: list[ExpertStepDisclosure] = Field(default_factory=list)
     #: As `LoadReportView.withheld`: the reader may not view every marking the run's rows were
     #: written at, so the counts are zero and the branches and stages are left out.
     withheld: bool = False
@@ -1416,6 +1492,8 @@ class VerifyReport(BaseModel):
     #: ADR-140 decision 5: the domain-model version the Test ran against; `None` when the dataset
     #: has no live model.
     model_version: int | None = None
+    #: ADR-140 decision 16 and brief §5: what each expert step disclosed, as a run report says it.
+    expert_steps: list[ExpertStepDisclosure] = Field(default_factory=list)
 
 
 # --- The load ledger (01_DOMAIN_MODEL.md §2.4, ADR-018) -------------------
@@ -1531,8 +1609,12 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     Recipe,
     RejectionRef,
     StagingStepCount,
+    ExpertStepDisclosure,
     StagingPreviewInput,
     StagingPreview,
+    PipelineYaml,
+    SqlCheckInput,
+    SqlCheck,
     RejectionRecord,
     LoadReport,
     BranchRunReport,

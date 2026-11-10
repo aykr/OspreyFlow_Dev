@@ -54,14 +54,36 @@ export const CONTACTS_PROFILE = {
 };  // prettier-ignore
 export const CONTACTS_SAMPLE_ROWS = VISIT_BOOKINGS;
 
-const STAGING = new Set(["lookup", "join", "filter", "derive", "union", "dedupe"]);
+const STAGING = new Set(["lookup", "join", "filter", "derive", "union", "dedupe", "sql", "fuzzy_match"]);
+/** Phase 8's expert steps: the harness judges their records and the sandbox's gate as the Conduit's
+ * words say them, but runs neither (no DuckDB or Splink in the browser); their samples are the route
+ * tests' (`tests/services/api/test_studio_expert_routes.py`). */
+export const EXPERT = new Set(["sql", "fuzzy_match"]);
 const text = (v: unknown) => (typeof v === "string" ? v : "");
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 function inputsOf(n: Node): string[] {
   const c = n.config ?? {};
-  if (n.kind === "join") return [text(c.left), text(c.right)];
-  if (n.kind === "union") return arr<string>(c.inputs);
+  if (n.kind === "join" || n.kind === "fuzzy_match") return [text(c.left), text(c.right)];
+  if (n.kind === "union" || n.kind === "sql") return arr<string>(c.inputs);
   return [text(c.input)];
+}
+
+/** `sql_transform.sql_gate_problems`' refusals, in its words, for the shapes the walks meet: a
+ * table function, a second statement, a SELECT dropping `_ref` (rule 15: the fake refuses). */
+export function sqlGateProblems(id: string, select: string, inputs: string[]): string[] {
+  const statements = select.split(";").filter((part) => part.trim()).length;
+  if (statements !== 1)
+    return [`step '${id}' is one SELECT statement, not ${statements}: a SQL step runs a single SELECT and nothing else`];
+  if (!/^\s*(with|select)\b/i.test(select)) return [`step '${id}''s statement is not a SELECT: a SQL step reads its tables and changes nothing`];
+  const problems: string[] = [];
+  for (const m of select.matchAll(/\b(read_\w+|query|range|glob)\s*\(/gi))
+    problems.push(`step '${id}' reads through a table function (${m[1]!.toLowerCase()}), which a SQL step may not: it reads only the tables named in its inputs`);
+  for (const m of select.matchAll(/\b(?:from|join)\s+([A-Za-z_][\w.]*)/gi))
+    if (!inputs.includes(m[1]!) && !/^\(/.test(m[1]!))
+      problems.push(`step '${id}' reads '${m[1]}', which is not one of the tables it reads (${inputs.join(", ")})`);
+  if (!/_ref\b|\*/.test(select))
+    problems.push(`step '${id}''s SELECT drops the _ref column: carry each input row's _ref through (an aggregate as list(_ref)), so every row it gives names the rows it came from`);
+  return [...new Set(problems)];
 }
 
 /** What a step's record lacks, in the gate's words (`pipeline._record_problems`). */
@@ -86,6 +108,14 @@ function recordProblems(n: Node): string[] {
       return least("inputs", 2);
     case "dedupe":
       return [...needs(["input"]), ...least("on", 1)];
+    case "sql":
+      return [...least("inputs", 1), ...needs(["select", "summary"])];
+    case "fuzzy_match": {
+      const out = [...needs(["left", "right"]), ...least("compare", 1), ...least("add", 1)];
+      const same = (c.same_as ?? {}) as Record<string, unknown>;
+      if (!text(same.left) || !text(same.right)) out.push(`step '${n.id}' needs 'same_as'`);
+      return out;
+    }
     default:
       return [];
   }
@@ -143,6 +173,9 @@ export function stagingRefusals(graph: Graph): string[] {
       problems.push(`step '${s.id}' looks up '${text(c.list)}', which names no list this dataset holds or subscribes to`);
     if ((s.kind === "lookup" || s.kind === "join") && c.normalise && !TEXT_ADAPTERS.has(text(c.normalise)))
       problems.push(`step '${s.id}' normalises its key with '${text(c.normalise)}', which is not a Knowledge Adapter that reads one column into one value of text`);
+    if (s.kind === "sql") problems.push(...sqlGateProblems(s.id, text(c.select), inputsOf(s)));
+    if (s.kind === "fuzzy_match" && s !== ordered.at(-1))
+      problems.push(`step '${s.id}' is a fuzzy match, which is the last step: Map reads its matched columns, and writes what it binds from them as inferred`);
     known.push(s.id);
   }
   for (const s of ordered.slice(0, -1))
@@ -267,6 +300,7 @@ export function stagingPreview(graph: Graph, step: string, pipelineProblems: str
     want.push(...inputsOf(node));
   }
   const runnable = order(graph).filter((n) => needed.has(n.id));
+  if (runnable.some((n) => EXPERT.has(n.kind))) return { ...empty, problems };
   if (runnable.some((n) => problems.some((p) => p.startsWith(`step '${n.id}'`)))) return empty;
   const ordered = runnable;
   if (!ordered.some((s) => s.id === step)) return { step, problems: [`the pipeline has no step '${step}' to preview`] };

@@ -281,25 +281,32 @@ def report_view(
     withheld = not may_see_counts(report.markings, reader, scheme)
     if isinstance(report, LoadReport):
         if withheld:
+            # ADR-140 decision 16: the expert steps are disclosed in every run report, withheld or
+            # not: they are the pipeline's settings, never a count or a row's value.
             return LoadReportView(
                 load_id=report.load_id,
                 recipe_id=report.recipe_id,
                 recipe_version=report.recipe_version,
+                expert_steps=report.expert_steps,
                 withheld=True,
             )
         return _load_view(report, reader, scheme)
+    expert_steps = [d for b in report.branches for d in b.report.expert_steps]
     if withheld:
         return PipelineRunReportView(
             load_id=report.load_id,
             recipe_id=report.recipe_id,
             recipe_version=report.recipe_version,
+            expert_steps=expert_steps,
             withheld=True,
         )
     data = report.model_dump(
         include=set(PipelineRunReportView.model_fields) - {"branches", "rejections"}
     )
+    data.pop("expert_steps", None)
     return PipelineRunReportView(
         **data,
+        expert_steps=expert_steps,
         rejections=_readable_rejections(report.rejections, reader, scheme),
         branches=[
             BranchRunReportView(

@@ -163,7 +163,7 @@ def pipeline_rule_violations(graph: PipelineGraph) -> list[str]:
 
 # --- Staging steps as nodes (ADR-140 Amendment 12; Q1 (a)) -------------------------------------
 
-#: The staging catalogue's node kinds (rule 8: closed; the expert steps are phase 8's).
+#: The staging catalogue's node kinds (rule 8: closed), the expert steps' included (phase 8).
 STAGING_KINDS: frozenset[PipelineNodeKind] = frozenset(
     {
         PipelineNodeKind.LOOKUP,
@@ -172,13 +172,39 @@ STAGING_KINDS: frozenset[PipelineNodeKind] = frozenset(
         PipelineNodeKind.DERIVE,
         PipelineNodeKind.UNION,
         PipelineNodeKind.DEDUPE,
+        PipelineNodeKind.SQL,
+        PipelineNodeKind.FUZZY_MATCH,
     }
+)
+#: The expert steps (ADR-140 decision 3): read-only in guided mode; changing one needs the right
+#: `write_sql_transforms` (`expert_steps_changed`).
+EXPERT_NODE_KINDS: frozenset[PipelineNodeKind] = frozenset(
+    {PipelineNodeKind.SQL, PipelineNodeKind.FUZZY_MATCH}
 )
 _STEP: TypeAdapter[StagingStep] = TypeAdapter(StagingStep)
 KIND_LABELS = {
     "lookup": "Lookup", "join": "Join", "filter": "Filter",
     "derive": "Derive", "union": "Union", "dedupe": "Dedupe",
+    "sql": "SQL transform", "fuzzy_match": "Fuzzy match",
 }  # fmt: skip
+
+
+def _expert_parts(graph: PipelineGraph) -> tuple[object, ...]:
+    nodes = sorted(
+        (n.id, n.kind.value, n.label, repr(sorted(n.config.items())))
+        for n in graph.nodes
+        if n.kind in EXPERT_NODE_KINDS
+    )
+    expert = {n.id for n in graph.nodes if n.kind in EXPERT_NODE_KINDS}
+    lines = sorted((e.source, e.target) for e in graph.edges if e.target in expert)
+    return tuple(nodes), tuple(lines)
+
+
+def expert_steps_changed(saved: PipelineGraph, new: PipelineGraph) -> bool:
+    """Whether `new` adds, changes or removes an expert step of `saved`, or a line into one: the
+    edit that needs `write_sql_transforms` (ADR-140 decision 3). A pipeline holding expert steps
+    stays editable without the right in every other part, as guided mode shows them read-only."""
+    return _expert_parts(saved) != _expert_parts(new)
 
 
 def step_nodes(graph: PipelineGraph) -> list[PipelineNode]:

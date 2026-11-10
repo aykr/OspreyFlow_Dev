@@ -33,7 +33,7 @@ round-trips through the catalogue as one.
 from __future__ import annotations
 
 import json
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 from urllib.parse import quote
@@ -54,9 +54,11 @@ from schemas.staging import (
     DeriveStep,
     FilterCondition,
     FilterStep,
+    FuzzyMatchStep,
     JoinStep,
     LookupStep,
     NormaliseSettings,
+    SqlStep,
     StagingStep,
     UnionStep,
     step_inputs,
@@ -173,6 +175,11 @@ class StepReport:
     #: left row holds). Not passed on, and counted, never dropped silently (rule 2).
     right_rows_in: int = 0
     right_unmatched: int = 0
+    #: A fuzzy match's threshold and its rows at or above it (its rows below are `unmatched`).
+    threshold: float | None = None
+    matched: int = 0
+    #: A SQL step's input rows the person running it may not read: left out of its tables.
+    rows_withheld: int = 0
 
 
 @dataclass
@@ -366,12 +373,15 @@ def staging_rule_violations(
     sources: Collection[str],
     lists: Collection[ReferenceList],
     dataset_id: str,
+    marked: Collection[str],
     subscribed: Collection[str] = (),
 ) -> list[str]:
     """What the save gate refuses in a `staging:` list, in words (the redesign's phase 7: "a join
     must name a key; a step must be fed"). `sources`: the pipeline's source tables. `lists`: the
-    lists the caller can see; a Lookup reads only what `readable_lists` gives. A join's keys, and
-    a Derive's settings and columns, are refused by the schema itself."""
+    lists the caller can see; a Lookup reads only what `readable_lists` gives. `marked`: the
+    columns the pipeline binds a marking to (`recipe_rules.marked_columns`), which a SQL step
+    passes through row by row. A join's keys, and a Derive's settings and columns, are refused by
+    the schema itself."""
     problems: list[str] = []
     known: list[str] = list(sources)
     readable, clashes = readable_lists(lists, dataset_id=dataset_id, subscribed=subscribed)
@@ -411,6 +421,18 @@ def staging_rule_violations(
             problem = _adapter_problem(step.id, step.normalise)
             if problem:
                 problems.append(problem)
+        if isinstance(step, SqlStep):
+            from .sql_transform import sql_gate_problems
+
+            problems.extend(sql_gate_problems(step, marked=marked))
+        if isinstance(step, FuzzyMatchStep) and position != len(steps) - 1:
+            # Map reads the last step's table and knows its matched columns there, so what it
+            # writes from them is written inferred (R13). A later step could carry a matched
+            # value under another name and write it asserted.
+            problems.append(
+                f"step {step.id!r} is a fuzzy match, which is the last step: Map reads its "
+                "matched columns, and writes what it binds from them as inferred"
+            )
         if isinstance(step, DeriveStep) and isinstance(step.settings, NormaliseSettings):
             if step.settings.adapter not in text_adapters():
                 problems.append(
@@ -676,12 +698,19 @@ def run_staging(
     sources: Mapping[str, StagedTable],
     lists: Mapping[str, StagedTable],
     dataset_id: str,
+    marked: Collection[str],
     subscribed: Collection[str] = (),
+    may_read: Callable[[StagedRef], bool] | None = None,
 ) -> StagingResult:
     """Run the steps in order over the source tables and the reference lists (each a
     `reference_table`, keyed by its own name), after the save gate's rules (refused whole if any
     is broken). A Lookup reads the list `readable_lists` names, by its id, never merely the table
-    a key of `lists` points at."""
+    a key of `lists` points at.
+
+    `may_read` (ADR-140 decision 12): whether the person the run is for may read a row, judged
+    by its refs. A SQL step's tables hold only the rows it allows, so a row the person may not read
+    is absent from the SQL, not masked; `None` reads every row (a caller that has already given
+    nothing to a reader not cleared for every row: a drawer's sample, Test)."""
     if not steps:
         raise StagingError(["a staging list has at least one step"])
     given: list[str] = []
@@ -699,6 +728,7 @@ def run_staging(
         sources=list(sources),
         lists=references,
         dataset_id=dataset_id,
+        marked=marked,
         subscribed=subscribed,
     )
     if problems:
@@ -721,6 +751,16 @@ def run_staging(
             done = _derive(step, tables[step.input])
         elif isinstance(step, UnionStep):
             done = _union(step, [tables[name] for name in step.inputs])
+        elif isinstance(step, SqlStep):
+            from .sql_transform import run_sql_step
+
+            done = (*run_sql_step(
+                step, [tables[name] for name in step.inputs], marked=marked, readable=may_read
+            ), [])  # fmt: skip
+        elif isinstance(step, FuzzyMatchStep):
+            from .fuzzy_match import run_fuzzy_step
+
+            done = (*run_fuzzy_step(step, tables[step.left], tables[step.right]), [])
         else:
             done = _dedupe(step, tables[step.input])
         table, report, rejected = done

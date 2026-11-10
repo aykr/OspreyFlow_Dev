@@ -50,7 +50,7 @@ def test_the_pipeline_s_step_kinds_are_the_staging_catalogue_s() -> None:
         "domain_model", "source", "profile", "map", "extract", "enrich", "load",
     }  # fmt: skip
     assert staged == _staging_kinds() == {
-        "lookup", "join", "filter", "derive", "union", "dedupe",
+        "lookup", "join", "filter", "derive", "union", "dedupe", "sql", "fuzzy_match",
     }  # fmt: skip
 
 

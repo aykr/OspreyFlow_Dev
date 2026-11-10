@@ -140,13 +140,15 @@ def test_a_preview_of_another_units_recipe_is_not_found(
     assert response.json()["error"] == "studio_recipe_not_found"
 
 
-def test_a_preview_masks_values_for_a_reader_not_cleared(
+def test_a_preview_gives_nothing_to_a_reader_not_cleared(
     graph_client: TestClient, tmp_path: Path
 ) -> None:
+    """Rule 3 (carried from L1.4's independent review): once masked, now withheld whole."""
     _ready(graph_client, tmp_path, handling=_UNCLEARED_HANDLING)
-    body = graph_client.post(f"{RECIPE}/preview-graph").json()
-    assert body["values_masked"] is True
-    assert "07960112334" not in str(body)
+    response = graph_client.post(f"{RECIPE}/preview-graph")
+    assert response.status_code == 422
+    assert any(p.startswith("The test is withheld") for p in response.json()["problems"])
+    assert "07960112334" not in response.text
 
 
 # --- Main's current reach, the same through open and both lists --------------------------------

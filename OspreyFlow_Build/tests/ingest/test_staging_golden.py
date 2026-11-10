@@ -35,7 +35,7 @@ from schemas.staging import StagingStep
 
 GOLDEN = Path(__file__).parent / "golden" / "staging"
 STEPS = TypeAdapter(list[StagingStep])
-KINDS = {"lookup", "join", "filter", "derive", "union", "dedupe"}
+KINDS = {"lookup", "join", "filter", "derive", "union", "dedupe", "sql", "fuzzy_match"}
 
 
 def run_case(case: dict[str, Any]) -> StagingResult:
@@ -52,7 +52,7 @@ def run_case(case: dict[str, Any]) -> StagingResult:
         sources=sources,
         lists=lists,
         dataset_id=case["dataset_id"],
-        subscribed=case.get("subscribed", []),
+        subscribed=case.get("subscribed", []), marked=()
     )
 
 
@@ -103,6 +103,27 @@ def test_every_input_row_is_accounted_for(name: str) -> None:
     steps = {s.id: s for s in STEPS.validate_python(case["steps"])}
     for report in result.reports:
         step = steps[report.step]
+        if report.kind == "sql":
+            # A SQL step may fold rows together (an aggregate), so its rows are accounted for by
+            # refs: each input row is named by an output row, or counted as filtered out.
+            named = {
+                (ref.source, ref.row_index)
+                for row in result.tables[report.step].rows
+                for ref in row.refs
+            }
+            assert report.rows_in == len(named) + report.filtered_out, (name, report)
+            continue
+        if report.kind == "fuzzy_match":
+            # Every left row kept; matched or counted unmatched; a right row met or counted.
+            assert report.rows_out == report.rows_in == report.matched + report.unmatched, report
+            met = {
+                ref.row_index
+                for row in result.tables[report.step].rows
+                for ref in row.refs
+                if ref.source == step.right
+            }
+            assert report.right_rows_in == len(met) + report.right_unmatched, (name, report)
+            continue
         if report.kind != "join":
             lost = report.filtered_out + report.repeats_folded + report.rejected
             assert report.rows_out == report.rows_in - lost, report

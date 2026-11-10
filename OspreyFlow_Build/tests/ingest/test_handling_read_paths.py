@@ -23,7 +23,8 @@ import pytest
 from services.api import studio_map, studio_profile, studio_verify
 from services.api.studio_map import get_sample_row
 from services.api.studio_profile import profile_recipe_source
-from services.api.studio_verify import run_verify
+from services.api.studio_verify import TEST_WITHHELD, run_verify
+from services.ingest.recipe_rules import RecipeRuleError
 
 from schemas.domain import Principal
 from schemas.ingest import RowTemplate, StudioRecipeDraft, StudioRecipeStatus
@@ -92,24 +93,25 @@ async def _verify(principal: Principal, *, binds: bool = True) -> Any:
     )
 
 
-async def test_verify_masks_each_node_by_its_own_marking() -> None:
-    official = await _verify(OFFICIAL)
-    titles = {str(n.properties["title"]): n.handling.classification for n in official.nodes}
-    assert "Open report" in titles  # an OFFICIAL row is shown to an OFFICIAL author
-    assert "Hidden report" not in titles  # a SECRET row's value is not
-    secret_nodes = [n for n in official.nodes if n.handling.classification == "SECRET"]
-    assert len(secret_nodes) == 1 and secret_nodes[0].properties["title"] != "Hidden report"
-    assert official.values_masked is True
+async def _withheld(principal: Principal) -> None:
+    """Rule 3 (carried from L1.4's independent review): Test gives a reader not cleared for every
+    row it reads nothing of the run, in words, where it once counted over rows it masked."""
+    with pytest.raises(RecipeRuleError) as refused:
+        await _verify(principal)
+    assert refused.value.problems == [TEST_WITHHELD]
+
+
+async def test_verify_is_withheld_from_a_reader_not_cleared_for_a_row_and_shown_in_full_else() -> (
+    None
+):
+    await _withheld(OFFICIAL)
     cleared = await _verify(CLEARED)
     assert {str(n.properties["title"]) for n in cleared.nodes} == {"Open report", "Hidden report"}
     assert cleared.values_masked is False
 
 
-async def test_verify_masks_a_rejected_row_by_every_marking() -> None:
-    official = await _verify(OFFICIAL)
-    (group,) = official.rejections
-    assert "TOP-SECRET" not in group.reason and "does not define" in group.reason
-    assert all("TOP-SECRET" not in s.sample and "Odd report" not in s.sample for s in group.samples)
+async def test_verify_shows_a_rejected_row_only_to_a_reader_cleared_for_every_row() -> None:
+    await _withheld(OFFICIAL)
     cleared = await _verify(CLEARED)
     (group,) = cleared.rejections
     assert any("Odd report" in s.sample for s in group.samples)
@@ -271,20 +273,20 @@ async def test_profile_sample_and_verify_mask_when_a_unit_part_has_no_units(
     draft = _no_units_draft()
     assert (await profile_recipe_source(draft, OFFICIAL, SCHEME)).values_masked is True
     assert (await get_sample_row(draft, OFFICIAL, SCHEME, 1)).values_masked is True
-    # A row that is rejected resolves to no marking: Verify masks it by this row's possible ones.
+    # A row that is rejected resolves to no marking, and a unit part with no units to name makes
+    # the row unviewable: Test gives nothing of the run (rule 3; carried from L1.4's review).
     rows = [{"title": "", "cls": "SECRET", "unit": "unit-9"}]
     _use_rows(monkeypatch, rows)
     with_template = draft.model_copy(update={"row_template": _draft(binds=False).row_template})
-    report = await run_verify(
-        with_template,
-        OFFICIAL,
-        SCHEME,
-        ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
-        ONTOLOGY,
-    )
-    (group,) = report.rejections
-    assert all("SECRET" not in sample.sample for sample in group.samples)
-    assert report.values_masked is True
+    with pytest.raises(RecipeRuleError) as refused:
+        await run_verify(
+            with_template,
+            OFFICIAL,
+            SCHEME,
+            ValidatingGraph(ONTOLOGY),  # type: ignore[arg-type]
+            ONTOLOGY,
+        )
+    assert refused.value.problems == [TEST_WITHHELD]
 
 
 async def test_a_row_is_masked_by_the_element_that_reads_it_not_the_source_defaults(

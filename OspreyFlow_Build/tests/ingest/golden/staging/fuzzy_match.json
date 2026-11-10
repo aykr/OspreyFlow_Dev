@@ -1,0 +1,166 @@
+{
+ "dataset_id": "pid",
+ "about": "A fuzzy match (expert mode): every left row kept; one whose best right row scores at least the threshold by the Splink-backed comparison takes its added columns and the score as match_score, and carries both rows' refs; one below keeps those cells empty and its own ref only, counted as unmatched. Nothing is merged.",
+ "steps": [
+  {
+   "id": "visitor_owner",
+   "kind": "fuzzy_match",
+   "left": "visits",
+   "right": "owners",
+   "compare": [
+    {
+     "left": "family",
+     "right": "owner",
+     "method": "jaro_winkler"
+    }
+   ],
+   "threshold": 0.6,
+   "add": [
+    {
+     "column": "owner",
+     "as": "matched_owner"
+    }
+   ],
+   "same_as": {
+    "left": "visitor",
+    "right": "matched"
+   }
+  }
+ ],
+ "sources": {
+  "visits": {
+   "load_id": "ld-v-9",
+   "rows": [
+    {
+     "family": "WHITLOW"
+    },
+    {
+     "family": "ELLERY"
+    },
+    {
+     "family": "OKAFOR"
+    },
+    {
+     "family": "PRICE"
+    }
+   ]
+  },
+  "owners": {
+   "load_id": "ld-o-9",
+   "rows": [
+    {
+     "owner": "WHITLOW"
+    },
+    {
+     "owner": "ELERY"
+    },
+    {
+     "owner": "PRYCE"
+    },
+    {
+     "owner": "NOBODY"
+    }
+   ]
+  }
+ },
+ "lists": {},
+ "expected": {
+  "columns": [
+   "family",
+   "matched_owner",
+   "match_score"
+  ],
+  "rows": [
+   {
+    "cells": {
+     "family": "WHITLOW",
+     "matched_owner": "WHITLOW",
+     "match_score": "0.9971"
+    },
+    "refs": [
+     [
+      "visits",
+      0,
+      "34c99cf5f36236df896356d32a730b7b11ea35753eae4bf9159a4f962ed94898",
+      "ld-v-9"
+     ],
+     [
+      "owners",
+      0,
+      "34c99cf5f36236df896356d32a730b7b11ea35753eae4bf9159a4f962ed94898",
+      "ld-o-9"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "family": "ELLERY",
+     "matched_owner": "ELERY",
+     "match_score": "0.7273"
+    },
+    "refs": [
+     [
+      "visits",
+      1,
+      "8af10c4edc5167d04b81f4e61015830f2ab54ae3ea38714109532efa4da72211",
+      "ld-v-9"
+     ],
+     [
+      "owners",
+      1,
+      "41844bcd16a7deb677cd52c4bd63671e96f36b64e278abe8e476d587260833ef",
+      "ld-o-9"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "family": "OKAFOR",
+     "matched_owner": null,
+     "match_score": null
+    },
+    "refs": [
+     [
+      "visits",
+      2,
+      "2888b07d2e7bd4c9d0c5290a5e42699ccf011be25261c1d4699ed1439758dd86",
+      "ld-v-9"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "family": "PRICE",
+     "matched_owner": null,
+     "match_score": null
+    },
+    "refs": [
+     [
+      "visits",
+      3,
+      "92024d2bb37bcc74ccbd64d99a97d49c98dc6089565e1d1f359ee846e7c925b0",
+      "ld-v-9"
+     ]
+    ]
+   }
+  ],
+  "reports": [
+   {
+    "step": "visitor_owner",
+    "kind": "fuzzy_match",
+    "rows_in": 4,
+    "rows_out": 4,
+    "unmatched": 2,
+    "filtered_out": 0,
+    "repeats_folded": 0,
+    "rejected": 0,
+    "right_rows_in": 4,
+    "right_unmatched": 2,
+    "threshold": 0.6,
+    "matched": 2,
+    "rows_withheld": 0
+   }
+  ],
+  "rejections": []
+ }
+}

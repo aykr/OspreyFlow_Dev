@@ -1,0 +1,114 @@
+lease studio, stack b, run on the server ospreyflow-test (stack_lease.sh remote, detached, main 99d92a8's), commit b5bdc1f (worktree at 8e445ad, records only above), main 3be89a7, started 16:10:30Z; --continue-on-collection-errors (the server's copy is no git checkout, so test_committed_recipes_pin.py cannot collect there); test_statelessness_clickhouse.py not in the set
+(reattached by remote-log at 17:26:40Z after this Mac's restart at about 17:09; the run on the server carried on; the log below is the run's whole log from its start)
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................................ [ 12%]
+...........................................................F............ [ 16%]
+.............................s.......................................... [ 20%]
+..............................ss........................................ [ 24%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+........ssss........................sss................................. [ 44%]
+........................................................................ [ 48%]
+........................................................................ [ 52%]
+........................................................................ [ 56%]
+........................................................................ [ 60%]
+........................................................................ [ 64%]
+........................................................................ [ 68%]
+....................F................................................... [ 72%]
+........................................................................ [ 76%]
+........................................................................ [ 80%]
+........................................................................ [ 84%]
+........................................................................ [ 88%]
+........................................................................ [ 92%]
+........................................................................ [ 96%]
+.........................................................                [100%]
+==================================== ERRORS ====================================
+_________ ERROR collecting tests/ingest/test_committed_recipes_pin.py __________
+../OspreyFlow_Build/tests/ingest/test_committed_recipes_pin.py:85: in <module>
+    @pytest.mark.parametrize("path", _committed_recipes(), ids=lambda p: p.name)
+                                     ^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/ingest/test_committed_recipes_pin.py:44: in _committed_recipes
+    listed = subprocess.run(
+/usr/lib/python3.12/subprocess.py:571: in run
+    raise CalledProcessError(retcode, process.args,
+E   subprocess.CalledProcessError: Command '['git', 'ls-files', '-z', '--', 'OspreyFlow_Core/**/*.yaml', 'OspreyFlow_Build/**/*.yaml', 'OspreyFlow_Core/**/*.yml', 'OspreyFlow_Build/**/*.yml']' returned non-zero exit status 128.
+=================================== FAILURES ===================================
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x72b214024710>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x72b2241ac740>, 'audit': <services.api.audit.AuditWriter object at 0x72b2313df380>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...atetime.datetime(2026, 11, 9, 16, 29, 2, 216122, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...atetime.datetime(2026, 11, 9, 16, 29, 2, 216122, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None) = Edge(id='01M70J8HCDMHA4RCQ231FNK47E', type='SAME_AS', source='01M70J8FE0SP0ZM175G7TF1533', target='01M70J8HC8NAZKESDF5...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+____________ test_the_rule_list_is_the_case_teams_and_nobody_elses _____________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x72b2300de270>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x72b2300df1b0>)
+
+    def test_the_rule_list_is_the_case_teams_and_nobody_elses(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        other_case = asyncio.run(_case())
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+            listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
+>           assert listed.status_code == 200 and len(listed.json()) == 1
+E           AssertionError: assert (200 == 200 and 4 == 1)
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   4 = len([{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'... 'relationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}])
+E            +    where [{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'... 'relationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}] = json()
+E            +      where json = <Response [200 OK]>.json
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:142: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 17:27:25] "GET /jwks.json HTTP/1.1" 200 -
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/ingest/test_optional_bindings.py::test_a_run_refuses_a_list_valued_transform_as_a_deduplicate_key_or_a_match
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/pydantic/main.py:520: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `DeduplicateConfig` - serialized value may not be as expected [field_name='deduplicate', input_value={'key': [{'field': 'alias... 'transform': 'split'}]}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+ERROR ../OspreyFlow_Build/tests/ingest/test_committed_recipes_pin.py - subpro...
+2 failed, 1773 passed, 10 skipped, 2 warnings, 1 error in 10699.53s (2:58:19)
+exit 1 ended 19:09:23Z

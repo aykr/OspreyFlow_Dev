@@ -270,6 +270,10 @@ ROUTE_RIGHTS = {
     "create_studio_recipe_draft": "edit_pipelines",
     "update_studio_recipe_draft": "edit_pipelines",
     "update_studio_recipe_pipeline": "edit_pipelines",
+    # ADR-140 decision 3 (phase 8): Show YAML and its save; Check SQL behind the expert right.
+    "get_studio_recipe_pipeline_yaml": "edit_pipelines",
+    "update_studio_recipe_pipeline_yaml": "edit_pipelines",
+    "check_studio_recipe_sql": "write_sql_transforms",
     "get_studio_recipe_draft": "edit_pipelines",
     "list_studio_recipe_drafts": "edit_pipelines",
     "get_studio_recipe_profile": "edit_pipelines",

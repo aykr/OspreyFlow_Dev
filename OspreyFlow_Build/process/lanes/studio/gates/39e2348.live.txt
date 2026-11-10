@@ -1,0 +1,405 @@
+lease studio, stack b, commit 39e2348, main c678a84, started 08:09:30Z
+Test stack b up for studio: osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore
+.................F...................................................... [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 15%]
+..........................................F............................. [ 19%]
+............s........................................................... [ 23%]
+.............ss.......F.........................F....................... [ 27%]
+........................................................................ [ 31%]
+........................................................................ [ 35%]
+........................................................................ [ 39%]
+...............................................................ssss..... [ 42%]
+...................sss.................................................. [ 46%]
+........................................................................ [ 50%]
+........................................................................ [ 54%]
+........................................................................ [ 58%]
+........................................................................ [ 62%]
+........................................................................ [ 66%]
+........................................................................ [ 70%]
+....F................................................................... [ 74%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+........................................................................ [ 85%]
+........................................................................ [ 89%]
+........................................................................ [ 93%]
+........................................................................ [ 97%]
+.............................................                            [100%]
+=================================== FAILURES ===================================
+____ test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert ____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x132a72510>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1330bb740>, 'audit': <services.api.audit.AuditWriter object at 0x1075c7aa0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x132b60bf0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1333480b0>
+
+    async def test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Item 6, the hard part. The graph commits the confirmed match and then the Postgres repoint
+        fails (here, on purpose, once). The close is refused; the repoint is recorded, so the very next
+        read settles it from the graph's own stored states: the second alert is listed to the cleared
+        reader citing the new revision, the record is cleared, and the OFFICIAL teammate, who may not
+        read the match, is still not given it (the settle changes which revision is cited, nothing a
+        reader is answered). Red with no record (the repoint inside the triage write, as in L2.8): the
+        second alert was gone from the queue for every reader."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            first, second, link = await _two_alerts_on_one_secret_match(stores, graph, case)
+            real = stores["alerts"].apply_repoints
+            failed: list[bool] = []
+    
+            async def fails_once(pairs: Any) -> list[str]:
+                if pairs and not failed:
+                    failed.append(True)
+                    raise ConnectionError("Postgres went away between the two stores")
+                return await real(pairs)
+    
+            monkeypatch.setattr(stores["alerts"], "apply_repoints", fails_once)
+            with pytest.raises(ConnectionError):
+                await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
+                                          disposition="true_positive", reason="matches")  # fmt: skip
+            (now,) = await graph.get_edges([e.id for e in await graph.edges_among(first.referent_node_ids, SECRET_LOADER)
+                                            if e.type == "SAME_AS"], SECRET_LOADER)  # fmt: skip
+            assert now.id != link, "the graph committed the confirmed revision"
+            queued = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics,
+                                                                             case, SECRET_LOADER)}  # fmt: skip
+            assert second.id in queued and queued[second.id].edge_ids == [now.id]
+>           assert await _pending(stores, link) == []
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:600: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:548: in _pending
+    pairs.extend((old, new) for old, new in links if old in old_links)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <list_iterator object at 0x132ba0760>
+
+>   pairs.extend((old, new) for old, new in links if old in old_links)
+                                ^^^^^^^^
+E   ValueError: too many values to unpack (expected 2)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:548: ValueError
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x146685ac0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x1061bc230>, 'audit': <services.api.audit.AuditWriter object at 0x1359018e0>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...datetime.datetime(2026, 11, 9, 8, 23, 2, 528244, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...datetime.datetime(2026, 11, 9, 8, 23, 2, 528244, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None) = Edge(id='01M6ZPEN454KA8N3SH26ZTGDFA', type='SAME_AS', source='01M6ZPEK54KVM5BYJYZF2Y6GWQ', target='01M6ZPEN40XK3Y2CZ0H...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+________________ test_every_held_at_link_has_the_plans_interval ________________
+
+loaded = (LoadReport(load_id='load-1', recipe_id='pid-nomis-prisoners', recipe_version=1, rows_read=1060, rows_deduplicated=0, ...one, legal_basis=None), load_id='load-1'), ...], <tests.ingest.recipe_test_support.MergingGraph object at 0x358493a70>)
+
+    async def test_every_held_at_link_has_the_plans_interval(
+        loaded: tuple[Any, list[Any], MergingGraph],
+    ) -> None:
+        """Not only how many are open and how many closed: each link's start and end are the plan's."""
+        _report, _events, graph = loaded
+        people, places = _person_ids(graph), _place_ids(graph)
+        planned = {
+            (_plan_person_key(lk.source), _plan_place_key(lk.target)): lk for lk in _held_at()
+        }
+        stored = {
+            (people[e.source], places[e.target]): e
+            for e in graph.committed_edges
+            if e.type == "HELD_AT"
+        }
+        assert stored.keys() == planned.keys()
+        for pair, link in planned.items():
+            interval = stored[pair].interval
+            assert stored[pair].occurrences == link.occurrences == 1, pair
+            assert interval is not None, pair
+>           assert interval.valid_from == _start_of(link.first_seen), pair
+E           AssertionError: ('Z2486ZZ', 'pid:est:fenwick-moor')
+E           assert datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc) == datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc)
+E            +  where datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc) = Interval(valid_from=datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc), valid_to=None).valid_from
+E            +  and   datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc) = _start_of(datetime.date(2024, 6, 3))
+E            +    where datetime.date(2024, 6, 3) = PlanLink(key='l000918', link_type='HELD_AT', source='principal', target='est:fenwick-moor', occurrences=1, first_seen=...P', action_code=None, sanitisation_code=None, originator='fenwick-moor-security', owning_unit='fenwick-moor-security')).first_seen
+
+../OspreyFlow_Build/tests/ingest/test_pid_recipe_r1.py:291: AssertionError
+____________________ test_every_stay_has_the_plans_interval ____________________
+
+stays = (<tests.ingest.recipe_test_support.MergingGraph object at 0x3584af590>, <tests.ingest.test_row_keys.KeyStore object at...wick-moor-security', review_date=None, legal_basis=None), load_id='load-pid_nomis_cell_stays.csv'), ...], (1587, 1671))
+
+    async def test_every_stay_has_the_plans_interval(
+        stays: tuple[MergingGraph, KeyStore, Any, Any, tuple[int, int]],
+    ) -> None:
+        graph, _store, _report, _events, _before = stays
+        stored = _stored(graph)
+        running = 0
+        for lk in _planned():
+            edge = stored[(_ref(PLAN.entity(lk.source)), _ref(PLAN.entity(lk.target)))]
+            assert edge.occurrences == lk.occurrences == 1, lk.key
+            assert edge.interval is not None
+>           assert edge.interval.valid_from == _start_of(lk.first_seen), lk.key
+E           AssertionError: l000957
+E           assert datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc) == datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc)
+E            +  where datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc) = Interval(valid_from=datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc), valid_to=datetime.datetime(2025, 1, 5, 23, 59, 59, tzinfo=datetime.timezone.utc)).valid_from
+E            +    where Interval(valid_from=datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc), valid_to=datetime.datetime(2025, 1, 5, 23, 59, 59, tzinfo=datetime.timezone.utc)) = EdgeWrite(id='01M6ZQ0PZGKZTJEEGN280WYYH0', type='PRESENT_AT', source='01M6ZQ0PFF9SYZ0ET6G9DYVX5D', target='01M6ZQ0P868...imezone.utc), load_id='load-pid_nomis_cell_stays.csv', recipe_id='pid-nomis-cell-stays', recipe_version=1, datasets=[]).interval
+E            +  and   datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc) = _start_of(datetime.date(2024, 6, 3))
+E            +    where datetime.date(2024, 6, 3) = PlanLink(key='l000957', link_type='PRESENT_AT', source='principal', target='cell:F1-03', occurrences=1, first_seen=dat...P', action_code=None, sanitisation_code=None, originator='fenwick-moor-security', owning_unit='fenwick-moor-security')).first_seen
+
+../OspreyFlow_Build/tests/ingest/test_pid_recipe_r14.py:90: AssertionError
+____________ test_the_rule_list_is_the_case_teams_and_nobody_elses _____________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x133268830>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x133268d10>)
+
+    def test_the_rule_list_is_the_case_teams_and_nobody_elses(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        other_case = asyncio.run(_case())
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+            listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
+>           assert listed.status_code == 200 and len(listed.json()) == 1
+E           AssertionError: assert (200 == 200 and 60 == 1)
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   60 = len([{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...])
+E            +    where [{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...] = json()
+E            +      where json = <Response [200 OK]>.json
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:142: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 09:11:30] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 83 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/ingest/test_optional_bindings.py::test_a_run_refuses_a_list_valued_transform_as_a_deduplicate_key_or_a_match
+  /Users/ayankar/dev/osprey-wt/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/pydantic/main.py:520: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `DeduplicateConfig` - serialized value may not be as expected [field_name='deduplicate', input_value={'key': [{'field': 'alias... 'transform': 'split'}]}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_recipe_r1.py::test_every_held_at_link_has_the_plans_interval
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_recipe_r14.py::test_every_stay_has_the_plans_interval
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+5 failed, 1830 passed, 10 skipped, 2 warnings in 7639.32s (2:07:19)
+--- the head's failures, at main c678a84, same lease
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+____ test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert ____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x12bfb8350>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x12bf873b0>, 'audit': <services.api.audit.AuditWriter object at 0x12bfbb290>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x11df00bc0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x108670140>
+
+    async def test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Item 6, the hard part. The graph commits the confirmed match and then the Postgres repoint
+        fails (here, on purpose, once). The close is refused; the repoint is recorded, so the very next
+        read settles it from the graph's own stored states: the second alert is listed to the cleared
+        reader citing the new revision, the record is cleared, and the OFFICIAL teammate, who may not
+        read the match, is still not given it (the settle changes which revision is cited, nothing a
+        reader is answered). Red with no record (the repoint inside the triage write, as in L2.8): the
+        second alert was gone from the queue for every reader."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            first, second, link = await _two_alerts_on_one_secret_match(stores, graph, case)
+            real = stores["alerts"].apply_repoints
+            failed: list[bool] = []
+    
+            async def fails_once(pairs: Any) -> list[str]:
+                if pairs and not failed:
+                    failed.append(True)
+                    raise ConnectionError("Postgres went away between the two stores")
+                return await real(pairs)
+    
+            monkeypatch.setattr(stores["alerts"], "apply_repoints", fails_once)
+            with pytest.raises(ConnectionError):
+                await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
+                                          disposition="true_positive", reason="matches")  # fmt: skip
+            (now,) = await graph.get_edges([e.id for e in await graph.edges_among(first.referent_node_ids, SECRET_LOADER)
+                                            if e.type == "SAME_AS"], SECRET_LOADER)  # fmt: skip
+            assert now.id != link, "the graph committed the confirmed revision"
+            queued = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics,
+                                                                             case, SECRET_LOADER)}  # fmt: skip
+            assert second.id in queued and queued[second.id].edge_ids == [now.id]
+>           assert await _pending(stores, link) == []
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:600: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:548: in _pending
+    pairs.extend((old, new) for old, new in links if old in old_links)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <list_iterator object at 0x12c1ab0a0>
+
+>   pairs.extend((old, new) for old, new in links if old in old_links)
+                                ^^^^^^^^
+E   ValueError: too many values to unpack (expected 2)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:548: ValueError
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x12c1e49b0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x12c1e5eb0>, 'audit': <services.api.audit.AuditWriter object at 0x11df8bfb0>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...tetime.datetime(2026, 11, 9, 10, 18, 19, 956091, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...tetime.datetime(2026, 11, 9, 10, 18, 19, 956091, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None) = Edge(id='01M6ZX1RDZD12WATXWP9HJW4AV', type='SAME_AS', source='01M6ZX1GXJMF75QTFEPW21QQAR', target='01M6ZX1RDMN7FWJAAA3...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+________________ test_every_held_at_link_has_the_plans_interval ________________
+
+loaded = (LoadReport(load_id='load-1', recipe_id='pid-nomis-prisoners', recipe_version=1, rows_read=1060, rows_deduplicated=0, ...one, legal_basis=None), load_id='load-1'), ...], <tests.ingest.recipe_test_support.MergingGraph object at 0x12c2206b0>)
+
+    async def test_every_held_at_link_has_the_plans_interval(
+        loaded: tuple[Any, list[Any], MergingGraph],
+    ) -> None:
+        """Not only how many are open and how many closed: each link's start and end are the plan's."""
+        _report, _events, graph = loaded
+        people, places = _person_ids(graph), _place_ids(graph)
+        planned = {
+            (_plan_person_key(lk.source), _plan_place_key(lk.target)): lk for lk in _held_at()
+        }
+        stored = {
+            (people[e.source], places[e.target]): e
+            for e in graph.committed_edges
+            if e.type == "HELD_AT"
+        }
+        assert stored.keys() == planned.keys()
+        for pair, link in planned.items():
+            interval = stored[pair].interval
+            assert stored[pair].occurrences == link.occurrences == 1, pair
+            assert interval is not None, pair
+>           assert interval.valid_from == _start_of(link.first_seen), pair
+E           AssertionError: ('Z2486ZZ', 'pid:est:fenwick-moor')
+E           assert datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc) == datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc)
+E            +  where datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc) = Interval(valid_from=datetime.datetime(2024, 6, 3, 0, 46, 6, tzinfo=datetime.timezone.utc), valid_to=None).valid_from
+E            +  and   datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc) = _start_of(datetime.date(2024, 6, 3))
+E            +    where datetime.date(2024, 6, 3) = PlanLink(key='l000918', link_type='HELD_AT', source='principal', target='est:fenwick-moor', occurrences=1, first_seen=...P', action_code=None, sanitisation_code=None, originator='fenwick-moor-security', owning_unit='fenwick-moor-security')).first_seen
+
+../OspreyFlow_Build/tests/ingest/test_pid_recipe_r1.py:291: AssertionError
+____________________ test_every_stay_has_the_plans_interval ____________________
+
+stays = (<tests.ingest.recipe_test_support.MergingGraph object at 0x16988a780>, <tests.ingest.test_row_keys.KeyStore object at...wick-moor-security', review_date=None, legal_basis=None), load_id='load-pid_nomis_cell_stays.csv'), ...], (1587, 1671))
+
+    async def test_every_stay_has_the_plans_interval(
+        stays: tuple[MergingGraph, KeyStore, Any, Any, tuple[int, int]],
+    ) -> None:
+        graph, _store, _report, _events, _before = stays
+        stored = _stored(graph)
+        running = 0
+        for lk in _planned():
+            edge = stored[(_ref(PLAN.entity(lk.source)), _ref(PLAN.entity(lk.target)))]
+            assert edge.occurrences == lk.occurrences == 1, lk.key
+            assert edge.interval is not None
+>           assert edge.interval.valid_from == _start_of(lk.first_seen), lk.key
+E           AssertionError: l000957
+E           assert datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc) == datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc)
+E            +  where datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc) = Interval(valid_from=datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc), valid_to=datetime.datetime(2025, 1, 5, 23, 59, 59, tzinfo=datetime.timezone.utc)).valid_from
+E            +    where Interval(valid_from=datetime.datetime(2024, 6, 3, 10, 55, 46, tzinfo=datetime.timezone.utc), valid_to=datetime.datetime(2025, 1, 5, 23, 59, 59, tzinfo=datetime.timezone.utc)) = EdgeWrite(id='01M6ZX28V397KDBNZD3KYA8Z9V', type='PRESENT_AT', source='01M6ZX2883DGJ4ACWHVBK5AG25', target='01M6ZX27ZVP...imezone.utc), load_id='load-pid_nomis_cell_stays.csv', recipe_id='pid-nomis-cell-stays', recipe_version=1, datasets=[]).interval
+E            +  and   datetime.datetime(2024, 6, 3, 0, 0, tzinfo=datetime.timezone.utc) = _start_of(datetime.date(2024, 6, 3))
+E            +    where datetime.date(2024, 6, 3) = PlanLink(key='l000957', link_type='PRESENT_AT', source='principal', target='cell:F1-03', occurrences=1, first_seen=dat...P', action_code=None, sanitisation_code=None, originator='fenwick-moor-security', owning_unit='fenwick-moor-security')).first_seen
+
+../OspreyFlow_Build/tests/ingest/test_pid_recipe_r14.py:90: AssertionError
+____________ test_the_rule_list_is_the_case_teams_and_nobody_elses _____________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x168c5b370>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x168c59850>)
+
+    def test_the_rule_list_is_the_case_teams_and_nobody_elses(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        other_case = asyncio.run(_case())
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id), json=RULE)
+            listed = client.get(f"/v1/investigations/{case}/rules", headers=_as(key, VIEWER))
+>           assert listed.status_code == 200 and len(listed.json()) == 1
+E           AssertionError: assert (200 == 200 and 61 == 1)
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +  and   61 = len([{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...])
+E            +    where [{'name': 'Structuring', 'params': {'typology': 'structuring', 'threshold': 10000.0, 'window_days': 7, 'minimum_count'...ationship': None, 'frequency': None, ...}, 'max_matches': 200}, 'trigger': 'post_commit', 'budget_ms': 5000, ...}, ...] = json()
+E            +      where json = <Response [200 OK]>.json
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:142: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 10:18:43] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 83 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.app:app.py:1057 start-up flagged 7 published recipe(s) as stale: 01M6ZWV1Y4A79V3N9HS5VP7R75, 01M6ZWV20GBRQGPCWY79RT9WWY, 01M6ZWV1ZX3ZHDYWB2EYZA7NZF, 01M6ZWV243SFABN3H31938HN5Z, 01M6ZWV24QXFHQ3BTPF5EMHEXJ, 01M6ZWV260AWP1GKW7GBFAXZDG, 01M6ZWV1S705M6VYTPV6R0DFW0
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-studio/90a8cd91-3ea4-46bf-bbd2-61b608b13f1a/scratchpad/main-wt/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_recipe_r1.py::test_every_held_at_link_has_the_plans_interval
+FAILED ../OspreyFlow_Build/tests/ingest/test_pid_recipe_r14.py::test_every_stay_has_the_plans_interval
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_rule_list_is_the_case_teams_and_nobody_elses
+5 failed, 1 warning in 106.76s (0:01:46)
+finished 10:18:45Z
+Test stack b down for studio: osprey-test-b-arcadedb osprey-test-b-pg osprey-test-b-valkey osprey-test-b-objectstore
+Lease on stack b released by studio.

@@ -1,0 +1,3 @@
+lease studio, stack b (ospreyflow-test, tunnelled), commit b5bdc1f, main 3be89a7, started 12:30:55Z; test_statelessness_clickhouse.py not run (needs stack a, the orchestrator's word)
+..FF....EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEFEEEEEEEEEEEEEEEEEEEEEEEEE [  2%]
+EEEEEEEEEEEE...........................................................WITHDRAWN: stack b's Postgres had no ospreyflow database (built from d's settings, the orchestrator's word); stopped, the database created under this lease and kept, the run started again (b5bdc1f.live.txt)

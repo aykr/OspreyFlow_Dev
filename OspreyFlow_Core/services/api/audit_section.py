@@ -116,6 +116,7 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "create_studio_recipe_draft",
         "update_studio_recipe_draft",
         "update_studio_recipe_pipeline",
+        "update_studio_recipe_pipeline_yaml",
         "update_studio_recipe_row_template",
         "add_ingest_connection",
         # Case's L3.4 (ADR-143 Amendment 5): promotions of drawn items, their review, rejection
@@ -231,6 +232,7 @@ READS_AND_OTHER: tuple[str, ...] = (
     "read_alert_queue_counts", "read_audit_section", "read_case_report", "read_disable_plan",
     "read_document", "read_document_file", "read_entity_picture", "read_entity_pictures",
     "read_load_checks", "read_operations_ageing", "read_pack", "read_people_rows",
+    "read_studio_recipe_pipeline_yaml", "check_studio_recipe_sql",
     "read_person_ownership",
     "read_published_pack", "read_report_feed", "read_rule_audit", "read_rule_runs",
     "read_rule_versions", "read_trend", "refresh_pack_item", "register_dashboard",

@@ -1,0 +1,143 @@
+{
+ "dataset_id": "pid",
+ "about": "A SQL transform (expert mode): one SELECT over its inputs, run in the sandbox. An aggregate carries every input row's _ref as a list, so each output row names every row it came from; the _ref columns are refs, never cells. An input row no output row names (here the call of a prisoner with no booking) is counted as filtered out, never lost without a word.",
+ "steps": [
+  {
+   "id": "calls",
+   "kind": "sql",
+   "inputs": [
+    "visits",
+    "pin_calls"
+   ],
+   "summary": "Counts each booking's PIN calls.",
+   "select": "SELECT v.booking_id, count(c.pin) AS calls, v._ref AS _ref, list(c._ref) AS _ref_calls FROM visits v LEFT JOIN pin_calls c ON c.pin = v.pin GROUP BY v.booking_id, v._ref ORDER BY v.booking_id"
+  }
+ ],
+ "sources": {
+  "visits": {
+   "load_id": "ld-v-9",
+   "rows": [
+    {
+     "booking_id": "VB-1",
+     "pin": "P1"
+    },
+    {
+     "booking_id": "VB-2",
+     "pin": "P2"
+    },
+    {
+     "booking_id": "VB-3",
+     "pin": "P3"
+    }
+   ]
+  },
+  "pin_calls": {
+   "load_id": "ld-c-9",
+   "rows": [
+    {
+     "pin": "P1",
+     "called": "+447700900650"
+    },
+    {
+     "pin": "P1",
+     "called": "+447700900651"
+    },
+    {
+     "pin": "P2",
+     "called": "+447700900758"
+    },
+    {
+     "pin": "P9",
+     "called": "+447700900700"
+    }
+   ]
+  }
+ },
+ "lists": {},
+ "expected": {
+  "columns": [
+   "booking_id",
+   "calls"
+  ],
+  "rows": [
+   {
+    "cells": {
+     "booking_id": "VB-1",
+     "calls": "2"
+    },
+    "refs": [
+     [
+      "visits",
+      0,
+      "fe853f744441de483eda0812e336eff4495afb92b62363a683edfecf46a724b7",
+      "ld-v-9"
+     ],
+     [
+      "pin_calls",
+      1,
+      "f363957835c597fda7275118eafa14687870003fc1f29bd37204adef6cece872",
+      "ld-c-9"
+     ],
+     [
+      "pin_calls",
+      0,
+      "144ed4b49ef2e1d6225f60cd7ec3dfcc372972013acc8145700adbbbb61ec38f",
+      "ld-c-9"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "booking_id": "VB-2",
+     "calls": "1"
+    },
+    "refs": [
+     [
+      "visits",
+      1,
+      "1cd5b5d17987f33b97d8351ff6a5e5e541c8b5aba5af7e42a7ee5b84398439cf",
+      "ld-v-9"
+     ],
+     [
+      "pin_calls",
+      2,
+      "5cba3111d3e4b444db314330fab24c0cec9ecd75a690db3faf0d2c02c7374751",
+      "ld-c-9"
+     ]
+    ]
+   },
+   {
+    "cells": {
+     "booking_id": "VB-3",
+     "calls": "0"
+    },
+    "refs": [
+     [
+      "visits",
+      2,
+      "d8d00325b2a7c00b2519850f7b5de082827a3f648b210c2c203aed315d440a0a",
+      "ld-v-9"
+     ]
+    ]
+   }
+  ],
+  "reports": [
+   {
+    "step": "calls",
+    "kind": "sql",
+    "rows_in": 7,
+    "rows_out": 3,
+    "unmatched": 0,
+    "filtered_out": 1,
+    "repeats_folded": 0,
+    "rejected": 0,
+    "right_rows_in": 0,
+    "right_unmatched": 0,
+    "threshold": null,
+    "matched": 0,
+    "rows_withheld": 0
+   }
+  ],
+  "rejections": []
+ }
+}

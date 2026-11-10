@@ -254,7 +254,10 @@ describe("PipelineStudio", () => {
   it("shows an expert step in guided mode, labelled and read-only", async () => {
     window.localStorage.clear();
     const withSql = {
-      nodes: [...CHAIN.nodes!, { id: "sql", kind: "sql_transform", label: "Visits per week", config: { sql: "SELECT 1" } }],
+      nodes: [
+        ...CHAIN.nodes!,
+        { id: "sql", kind: "sql", label: "Visits per week", config: { inputs: ["profile"], select: "SELECT 1", summary: "Counts visits per week." } },
+      ],
       edges: [...CHAIN.edges!, { source: "profile", target: "sql" }],
     } as unknown as PipelineGraph;
     serve({ registry: [draft(withSql)] });
@@ -266,8 +269,68 @@ describe("PipelineStudio", () => {
     fireEvent.click(screen.getByRole("button", { name: "SQL transform: Visits per week" }));
     const step = await screen.findByRole("region", { name: "Expert step" });
     expect(within(step).getByText("SELECT 1")).toBeTruthy();
+    expect(within(step).getByText(/Counts visits per week\./)).toBeTruthy();
     expect(within(step).queryAllByRole("button")).toHaveLength(0);
     expect(within(step).queryAllByRole("textbox")).toHaveLength(0);
   });
-});
 
+  // ADR-140 decision 3 (phase 8): the expert steps, offered in expert mode to a holder of
+  // `write_sql_transforms` only; read whole, never hidden, by everyone else.
+  const stepKinds = () =>
+    within(screen.getByRole("combobox", { name: "Staging step to add" }))
+      .getAllByRole("option")
+      .map((o) => o.textContent);
+
+  it("offers the expert steps only in expert mode, and only with the right to write them", async () => {
+    window.localStorage.clear();
+    serve();
+    render(<PipelineStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" rights={new Set(["edit_pipelines", "write_sql_transforms"])} />);
+    await openPipeline();
+    expect(stepKinds()).not.toContain("SQL transform");
+    fireEvent.click(screen.getByRole("button", { name: "Expert" }));
+    expect(stepKinds()).toEqual(expect.arrayContaining(["SQL transform", "Fuzzy match"]));
+    cleanup();
+    window.localStorage.clear();
+    serve();
+    render(<PipelineStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" rights={new Set(["edit_pipelines"])} />);
+    await openPipeline();
+    fireEvent.click(screen.getByRole("button", { name: "Expert" }));
+    expect(stepKinds()).not.toContain("SQL transform");
+    expect(stepKinds()).not.toContain("Fuzzy match");
+    window.localStorage.clear();
+  });
+
+  it("shows an expert step read-only in expert mode to someone without the right", async () => {
+    window.localStorage.clear();
+    const withSql = {
+      nodes: [
+        ...CHAIN.nodes!,
+        { id: "sql", kind: "sql", label: "Visits per week", config: { inputs: ["profile"], select: "SELECT 1", summary: "Counts visits per week." } },
+      ],
+      edges: [...CHAIN.edges!, { source: "profile", target: "sql" }],
+    } as unknown as PipelineGraph;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      ({ ok: true, status: 200, json: async () => (String(url).endsWith("/ingest/recipe-registry") ? [draft(withSql)] : draft(withSql)) }) as Response));
+    render(<PipelineStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" rights={new Set(["edit_pipelines"])} />);
+    await openPipeline();
+    fireEvent.click(screen.getByRole("button", { name: "Expert" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Pipeline" })).getByRole("button", { name: /Visits per week/ }));
+    const step = await screen.findByRole("region", { name: "Expert step" });
+    expect(within(step).getByText(/needs the right to write SQL transforms/)).toBeTruthy();
+    expect(within(step).queryAllByRole("textbox")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Check SQL" })).toBeNull();
+    window.localStorage.clear();
+  });
+
+  it("shows the save's refusal of an expert step without the right, in its words", async () => {
+    window.localStorage.clear();
+    serve({ putStatus: 403, putBody: { error: "right_required", right: "write_sql_transforms", problems: ["This change adds, edits or removes an expert step"] } });
+    render(<PipelineStudio apiBaseUrl="http://api" bearerToken="t" investigationId="inv-1" rights={new Set(["edit_pipelines", "write_sql_transforms"])} />);
+    await openPipeline();
+    fireEvent.click(screen.getByRole("button", { name: "Expert" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Staging step to add" }), { target: { value: "sql" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Step" }));
+    expect(await screen.findByText(/adds, edits or removes an expert step/)).toBeTruthy();
+    window.localStorage.clear();
+  });
+});

@@ -913,6 +913,121 @@ test("phase 7's exit: Visits and contacts is built by keys, mapped over its stag
   registerCovered(REGISTRY, "build-visits-and-contacts-by-keys-for-phase-7s-exit");
 });
 
+// Phase 8 (ADR-140 decisions 3, 12, 13 and 16): the expert steps, in expert mode, to a holder of
+// `write_sql_transforms`; Show YAML; and what Test discloses. The sandbox's and the match's own work
+// is the route and engine tests' (`test_studio_expert_routes.py`, `test_sql_transform.py`,
+// `test_fuzzy_match.py`); these prove each action is reached, and carried to its route, by keys.
+async function openContactsAsExpert(page: Page, rights = "&rights=expert") {
+  await page.goto(`${HARNESS}?contacts=built&mode=expert${rights}`);
+  await press(page, "Open Visits and contacts");
+  await expect(page.getByRole("group", { name: "Pipeline" })).toBeVisible();
+}
+
+async function typeInArea(page: Page, label: string, value: string) {
+  const box = drawer(page).getByRole("textbox", { name: label, exact: true });
+  await box.focus();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.insertText(value);
+}
+
+const CALLS_SQL = "SELECT t.*, 0 AS calls FROM titled t";
+
+async function addTheSqlStep(page: Page) {
+  await openContactsAsExpert(page);
+  await press(page, "the booking's title", false);
+  await addStep(page, "sql");
+  await expect(drawer(page).getByRole("heading", { name: "SQL transform: SQL transform" })).toBeVisible();
+  await typeInto(page, "Step name", "calls per booking");
+  await typeInArea(page, "SELECT", "SELECT * FROM read_csv('/etc/hosts')");
+  await press(page, "Check SQL");
+  await expect(drawer(page).getByRole("alert", { name: "What the sandbox refuses" })).toContainText("table function (read_csv)");
+  await typeInArea(page, "SELECT", CALLS_SQL);
+  await typeInArea(page, "What it does, in plain words", "Counts each booking's PIN calls.");
+  await press(page, "Check SQL");
+  await expect(drawer(page).getByRole("status").filter({ hasText: "The sandbox's gate accepts this SELECT." })).toBeVisible();
+  await applyStep(page);
+  await expect.poll(async () => (await lastSaved(page)).nodes.find((n) => n.id === "sql")?.config).toEqual({
+    inputs: ["titled"], select: CALLS_SQL, summary: "Counts each booking's PIN calls.",
+  });  // prettier-ignore
+}
+
+test("a SQL step is added in expert mode, its SQL checked and set in its drawer, by keyboard", async ({ page }) => {
+  test.setTimeout(120_000);
+  await addTheSqlStep(page);
+  expect((await lastSaved(page)).edges).toContainEqual({ source: "sql", target: "map" });
+  registerCovered(REGISTRY, "add-a-sql-step-and-check-its-sql-by-keyboard");
+});
+
+test("a fuzzy match is set in its drawer by keyboard, its threshold and SAME_AS saved with it", async ({ page }) => {
+  test.setTimeout(120_000);
+  await addTheSqlStep(page);
+  await addStep(page, "fuzzy_match");
+  await expect(drawer(page).getByRole("heading", { name: "Fuzzy match: Fuzzy match" })).toBeVisible();
+  await chooseIn(page, "Right table", "number_owners");
+  await press(page, "+ Comparison");
+  await typeInto(page, "Left column 1", "visitor_family_name");
+  await typeInto(page, "Right column 1", "owner_family_name");
+  await chooseIn(page, "Compared by 1", "jaro_winkler");
+  await typeInto(page, "Threshold (between 0 and 1; part of the version)", "0.6");
+  await press(page, "+ Column to bring across");
+  await typeInto(page, "Right column to bring 1", "owner_family_name");
+  await typeInto(page, "Name it (optional) 1", "matched_owner");
+  await typeInto(page, "The left row's element", "visitor");
+  await typeInto(page, "The matched row's element", "matched");
+  await applyStep(page);
+  await expect.poll(async () => (await lastSaved(page)).nodes.find((n) => n.id === "fuzzy_match")?.config).toEqual({
+    left: "sql", right: "number_owners", threshold: 0.6,
+    compare: [{ left: "visitor_family_name", right: "owner_family_name", method: "jaro_winkler" }],
+    add: [{ column: "owner_family_name", as: "matched_owner" }], same_as: { left: "visitor", right: "matched" },
+  });  // prettier-ignore
+  registerCovered(REGISTRY, "set-a-fuzzy-match-in-its-drawer-by-keyboard");
+});
+
+test("without the right, expert mode offers no expert step and reads one whole and read-only", async ({ page }) => {
+  await openContactsAsExpert(page, "");
+  const kinds = page.getByRole("combobox", { name: "Staging step to add" });
+  await expect(kinds.getByRole("option", { name: "SQL transform" })).toHaveCount(0);
+  await page.goto(`${HARNESS}?expert=1&mode=expert`);
+  await press(page, "Open Visit bookings");
+  await press(page, "Visits per week", false);
+  const step = drawer(page).getByRole("region", { name: "Expert step" });
+  await expect(step).toContainText("needs the right to write SQL transforms");
+  await expect(step).toContainText("SELECT visitor, count(*) AS visits FROM source GROUP BY visitor");
+  await expect(step.getByRole("textbox")).toHaveCount(0);
+  registerCovered(REGISTRY, "read-an-expert-step-without-the-right-by-keyboard");
+});
+
+test("the pipeline's YAML is shown and saved in expert mode by keyboard, through the save's gates", async ({ page }) => {
+  test.setTimeout(120_000);
+  await openContactsAsExpert(page);
+  await press(page, "Show YAML");
+  const area = drawer(page).getByRole("textbox", { name: "Pipeline YAML" });
+  await expect(area).toContainText("with_establishment");
+  const text = (await area.inputValue()).replace('"Lookup: establishment"', '"Lookup: the establishment"');
+  await typeInArea(page, "Pipeline YAML", text);
+  await press(page, "Save YAML");
+  await expect(drawer(page).getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
+  const put = (await asked(page)).filter((a) => a.method === "PUT" && a.path.endsWith("/r-contacts/pipeline/yaml")).at(-1)!;
+  expect((JSON.parse(put.body!) as { text: string }).text).toContain("Lookup: the establishment");
+  // Refused in the gate's words: a step that reads no line.
+  await typeInArea(page, "Pipeline YAML", "not a pipeline");
+  await press(page, "Save YAML");
+  await expect(drawer(page).getByRole("alert")).toContainText("the YAML cannot be read");
+  registerCovered(REGISTRY, "show-and-save-the-pipeline-yaml-by-keyboard");
+});
+
+test("Test discloses the pipeline's expert steps, read by keyboard", async ({ page }) => {
+  test.setTimeout(120_000);
+  await addTheSqlStep(page);
+  await press(page, "Test");
+  await press(page, "Run the test");
+  const disclosed = drawer(page).getByRole("region", { name: "Expert steps in this test" });
+  await expect(disclosed).toContainText("Counts each booking's PIN calls.");
+  await expect(disclosed).toContainText(CALLS_SQL);
+  registerCovered(REGISTRY, "read-the-expert-steps-a-test-disclosed-by-keyboard");
+});
+
 test("every registered Ingest Studio action has its own proving test case above", () => {
   assertAllCovered("INGEST_STUDIO_ACTIONS", INGEST_STUDIO_ACTIONS);
 });

@@ -31638,3 +31638,174 @@ lifespan's own sweep over the real record is `test_promotion_sweep_live.py`'s se
 `tests/services/api/test_promotion_store.py` (real Postgres); `test_boards.py`'s proposed-type cases;
 `keyboard/boards.spec.ts` and `keyboard/promotions.spec.ts`; axe in dark, light and GOV.UK. Each red
 by a plant at its call site (`process/lanes/case/L3.4_RED_RECORD.md`).
+
+### ADR-112, Amendment 8 (8 November 2026) — write_sql_transforms (D12): the expert steps' right, held by no built-in role and granted singly by an administrator
+
+Status: accepted, built in Lane 1 step L1.5 (redesign phase 8), under ADR-140 decision 3 ("the
+expert-only steps also need the right `write_sql_transforms`, granted by an administrator"). ADR-112
+and its Amendments 1 to 7 are unchanged except where this says so.
+
+**Decision.** ADR-112's table gains one row:
+
+| # | Right | Level | Analyst | Data engineer | Administrator | Reports viewer |
+| --- | --- | --- | --- | --- | --- | --- |
+| D12 | Write the expert steps, a SQL transform and a fuzzy match: add, change or remove one on a pipeline (canvas or YAML), and *Check SQL* | Editor | | | | |
+
+- **Held by no built-in role.** The right lets its holder run a SELECT they wrote over the dataset's
+  staged rows and decide matches at ingest, so it is given person by person: as `right:
+  write_sql_transforms`, or in a custom role (ADR-112 Amendment 4). It is not one of the
+  administration rights (A1 to A9): any holder of `manage_people` may grant it.
+- **What it gates.** `POST …/sql-check` declares it. `PUT …/pipeline` and `PUT …/pipeline/yaml`
+  refuse, 403 in words, a save that adds, changes or removes an expert step, or a line into one, by a
+  person without it (`pipeline.expert_steps_changed`), and so does a drawer's sample
+  (`POST …/staging-preview`) asked to run an expert step the saved pipeline does not hold as given:
+  the sample runs the request's steps, so without this an editor could run any SELECT they wrote; a pipeline holding expert steps stays editable
+  in every other part without it. Publishing, testing and running a pipeline with expert steps need
+  only their own rights: the steps were written by a holder, and every run discloses them.
+
+**Tests.** `tests/schemas/test_rights.py` (the row; fifty-two rights);
+`tests/services/api/test_route_rights.py` (`sql-check` declares it, so it guards a route);
+`tests/services/api/test_studio_expert_routes.py` (each save refused without it, red with the check
+removed; other steps edited without it).
+
+### ADR-140, Amendment 14 (8 November 2026) — Phase 8 as built: the SQL transform's sandbox and its _ref rule, the fuzzy match's inferred SAME_AS and inferred matched values, YAML editing in expert mode, the expert steps' disclosure, and open question 7 answered
+
+Status: accepted, built in Lane 1 step L1.5 (redesign phase 8). Decisions 3, 12, 13 and 16, ADR-006
+Amendment 1 and Amendments 11 and 12 are unchanged except where this says so.
+`09_INGEST_STUDIO.md` §1.0, §4 and §9 have the detail.
+
+**Decision.**
+
+1. **The step records** (`schemas/staging.py`, the branch's schemas commit): `sql` (`inputs`,
+   `select`, a mandatory `summary`) and `fuzzy_match` (`left`, `right`, `compare`, `block_on`,
+   `threshold` strictly between 0 and 1, `add`, `same_as`), both in the staging union and both
+   pipeline node kinds; `StagingStepCount` gains `threshold`, `matched` and `rows_withheld`;
+   `ExpertStepDisclosure` is on `LoadReport`, `LoadReportView`, `PipelineRunReportView` and
+   `VerifyReport`.
+2. **The sandbox** (`services/ingest/sql_transform.py`): a private DuckDB connection per run of the
+   step, its configuration locked: external access off, no autoloaded or unsigned extension, no
+   Python replacement scan, no temporary directory, one thread, a memory limit (512 MB) and a time
+   limit (30 s, by interrupt). It holds only the step's input tables; DuckDB's own catalogue
+   (settings and the sandbox's own table names, no row of another case) stays on its search path and
+   is the gate's to refuse. The dialect is DuckDB SQL as is (open question 2, the brief's
+   recommendation), narrowed by the gate, which every run asks.
+3. **The gate**, one function asked at save, a drawer's sample, *Check SQL*, Test, publish and the
+   run: exactly one statement and that a SELECT; no table function of any kind and no `SHOW`,
+   `DESCRIBE` or `SUMMARIZE`; no qualified name and no table but its inputs or a CTE visible where it
+   is named (CTE names judged by scope, so a CTE inside a subquery does not admit a catalogue table of
+   its name outside it); no `getenv`, `current_setting`, `read_text` or `read_blob`; a `_ref`
+   carried, and never named through a list of column names. **`_ref` (R15):** each input row is given a `_ref` token, and
+   every output column named `_ref` or `_ref_…` is read back as refs. A `_ref` item is a `_ref`
+   column (in a grouped SELECT, one it groups on) or `list(_ref)`/`array_agg(_ref)`; anything else
+   (`any_value(_ref)`, `min(_ref)`, a constant) is one row's ref for many and refused. At the run a
+   row with no ref, a ref naming no input row, and an input with rows none of whose refs reach the
+   output are refused; an input row no output row names is counted as filtered out (rule 2). A cell
+   that is not text, a number, a boolean or a date is refused in words. A refusal never repeats a
+   value (decision 11).
+4. **The person's own principal:** at the run, the step's tables hold only the rows the runner may
+   read (`studio_staging.row_reader`, the preview's own per-row marking); the rest are absent and
+   counted `rows_withheld`, and the `_ref` tokens are numbered over the kept rows, so none tells
+   where a withheld row was. A drawer's sample and Test already give nothing to a reader not cleared
+   for every row, and read every row.
+5. **The fuzzy match** (`services/ingest/fuzzy_match.py`): Splink's `link_only` linker over the two
+   tables, the comparisons of the ontology's registry, untrained (ADR-021), with the prior that a pair
+   matches set to one in the right table's rows (Splink's population default, one in ten thousand,
+   scores an exact name near 0.1). Each left row takes its best right row at or above the threshold;
+   ties go to the first. More than a million pairs with no blocking key are refused, never cut short.
+   It is the last step, so the matched columns are Map's own input and nothing later can carry a
+   matched value under another name.
+6. **What Map writes from it** (`services/ingest/fuzzy_links.py`, the engine): an element bound from,
+   or conditional on, a matched column (an added column or `match_score`), and a link joining one, is
+   written `inferred`, its `extraction_confidence` the row's score and `extracted_by`
+   `fuzzy_match:<step>`. The SAME_AS is written by the engine between the two elements `same_as`
+   names, on each matched row where both were written or met and are two nodes: inferred, `score`,
+   `model_version` and a `comparison_vector` naming the step, the pipeline's version and the
+   threshold, its sources both rows, its marking the stricter of the two elements'. The recipe's rules
+   still refuse SAME_AS in a template. The two elements must exist, be of one type, the left written
+   from no matched column and the right from at least one (refused at Test and the run).
+7. **Open question 7 answered:** when an analyst undoes a fuzzy match's SAME_AS, the values Map wrote
+   from its matched columns **stay as written, inferred, with the score and the step that inferred
+   them**; nothing is rewritten or deleted (loaded data is never rewritten, decision 5), and nothing is
+   promoted. Confirming the SAME_AS does not confirm them either: each is confirmed by a person, as any
+   inferred element is (rule 5).
+8. **YAML in expert mode:** `GET …/pipeline/yaml` writes the pipeline graph (nodes and lines) as YAML;
+   `PUT …/pipeline/yaml` reads it with `yaml.safe_load`, never runs it, refuses in words what is not a
+   pipeline, and saves it through the canvas save's own function (`_save_pipeline`): the expert
+   right, the graph's rules, the sources' files and the staging gate, in the same words. The YAML is
+   the pipeline's, not the published recipe's; the row template stays Map's.
+9. **Disclosure (decision 16):** the run report, its view (even with the counts withheld: the
+   disclosure is the pipeline's settings, never a row's value), the pipeline run's view, Test and the
+   Runs tab say each expert step: the SQL step's summary and SELECT; the fuzzy match's tables,
+   comparisons, threshold and the SAME_AS it writes, inferred and never a merge.
+10. **Carried from L1.4's review (rule 3):** Test, and the Map and Load Preview, of a pipeline with no
+    staging steps now give nothing to a reader not cleared for every row they read, or to a case not
+    reading the recipe's dataset, as the staged path does. Amendment 12's "recorded, unchanged" is
+    withdrawn.
+
+11. **The orchestrator's independent review (9 November 2026), each fix shown red at its call site**
+    (`L1.5_RED_RECORD.md`, B1–B19):
+    - **A marking is never lowered (the blocker; Map's "tighten, never loosen", the orchestrator's
+      call).** Map judges each row's marking from the cells of its marked columns: the columns the
+      source declares for a part (`defaults.handling_columns`) and those an element's handling binds
+      (`recipe_rules.marked_columns`). Where a pipeline has any, a SQL step runs **row by row**: no
+      join, aggregate, `GROUP BY`, `HAVING`, `INTERSECT` or `EXCEPT`, and each marked column passed
+      through as its own row has it, never rewritten (`* REPLACE`, a constant, an expression),
+      renamed, computed or dropped. The gate refuses what it can see, and the run compares every
+      marked cell with its one input row's. Where none is marked, every row shares the source's
+      marking, and joins and aggregates stay (the exit's own SELECT): that rests on every source node
+      of a pipeline sharing the draft's single handling (a source node carries none of its own; a
+      list's rows are the dataset's). The gate, Check SQL, a drawer's
+      sample, Test, publish and every run read the draft's or the recipe's marked columns; a Map
+      change binding one after a SQL step is saved is refused at the next Test, publish or run, in
+      the same words.
+    - **No row is given another row's values or `_ref`.** Always refused: a window function (`OVER`,
+      `QUALIFY`), a subquery inside an expression (scalar, `IN`, `EXISTS`), `COLUMNS(…)`, more than one
+      grouping set (`GROUPING SETS`, `ROLLUP`, `CUBE`: each set folds rows the others' `_ref`
+      columns do not name; the last look), any table or
+      CTE read more than once in one SELECT (a self-join), a recursive or forward CTE reference (a CTE
+      sees only those declared before it), and a `* REPLACE` or `* RENAME` touching `_ref`; a qualified
+      `EXCLUDE` of `_ref` is a drop. A `_ref…` column is read only as a bare select item, a GROUP BY
+      key or the sole argument of `list`/`array_agg`, never inside an expression (a string function,
+      a struct, a condition, an `ORDER BY`). Each row's token is drawn at random for each run (the
+      second pass: a run-wide nonce with `table#n` let a string function build row 0's), so none can
+      be written by hand or built from another's; an input column named `_ref…` in any case is
+      refused. So each token used is a row's own, and `filtered_out` counts the rows no row names
+      (rule 2).
+    - **A refusal never repeats a value.** DuckDB's message is never passed on (a conversion error
+      and `error()` print a value unquoted): the words are fixed, by the kind of refusal, with the
+      SELECT's line where DuckDB gives one. `error()` is a denied function.
+    - **Off the event loop.** Test stages in a worker thread (`asyncio.to_thread`), as Preview and the
+      run do, so a slow SELECT or Splink stops no other request.
+    - **Bounded output.** At most 1,000,000 rows and 256 MB, counted batch by batch as DuckDB gives
+      them and within the time limit, before any becomes a Python value; past either the step is
+      refused in words and nothing is cut short (rule 2).
+    - **Another dataset's staged Parquet**, by its object-store path or a file path that exists, is
+      refused by the gate by name, and past the gate the sandbox reads no file; a source node naming
+      another dataset's file is refused at save (L1.4's rule, shown red here).
+    - **The typed steps (the orchestrator's ruling):** a Join and a Dedupe carry values under the
+      surviving row's marking, as Amendment 12 accepted, and stand. A Derive's new column computed
+      from a marked column could carry a marked value into an unmarked one: the orchestrator's carry
+      for L1.7 (`CARRIES.md`), with Join, Dedupe, Lookup and the fuzzy match.
+
+**Tests (each shown red first; `process/lanes/studio/L1.5_RED_RECORD.md`).**
+
+| Test | What it proves |
+| --- | --- |
+| `tests/schemas/test_expert_step_schemas.py` | the records; a summary required; a threshold within (0, 1); no undeclared key; the methods are the registry's; the disclosure holds settings only |
+| `tests/ingest/test_sql_transform.py` | the gate and, without it, the sandbox refuse `read_csv`, an `http` URL, `read_parquet` of a URL, a second statement, a dropped `_ref`, one ref for many, another case's or dataset's table, a qualified name, a Python variable; a hidden row is absent (red with no reader); the time and memory limits; no value in a refusal |
+| `tests/ingest/test_fuzzy_match.py` | two nodes and one inferred SAME_AS (red if one node); a matched value inferred with the score (red if asserted); below-threshold rows kept and counted; two thresholds two versions and two counts; Test and the load alike; inferred until a person confirms; the last step; the SAME_AS's elements |
+| `tests/ingest/test_staging_golden.py`, `golden/staging/sql.json`, `fuzzy_match.json` | a golden file per step kind, both expert steps included, every row accounted for |
+| `tests/ingest/test_fuzzy_same_as_live.py` | in ArcadeDB: two nodes, an inferred SAME_AS, still inferred after a second load, asserted only by a person's confirmation; nothing read from another dataset |
+| `tests/services/api/test_studio_expert_routes.py` | the right at save and YAML save; YAML read never run, the same gates; Check SQL behind the right; an uncleared reader given nothing; Test's disclosure; the threshold deployed with the version |
+| `tests/services/api/test_studio_verify_routes.py` | the carry: Test and Preview with no steps withheld (rules 3 and 4) |
+| `tests/ingest/test_phase8_exit.py` | **the phase's exit**: the full pipeline published and run on the run route's path; its report and view disclose both expert steps; every element traced to rows of files that exist; the run's SQL step reads with the runner's principal |
+| `keyboard/ingest-studio.spec.ts` | five new actions by keys (rule 13) |
+| `a11y/every-harness.spec.ts` | five new states in dark, light and GOV.UK |
+
+**Phase 8's exit is met:** the full prototype pipeline runs, and its run report discloses both expert
+steps (`test_phase8_exit.py`; the live walk under the lease named in the lane's report).
+
+**Not built.** DuckDB time and peak memory per SQL step in the metering (phase 10's). The SQL step's
+columns are not offered in the Map editor from the static gate: they come from its live sample, as
+every step's do. A fuzzy match's comparison vector carries its settings, not Splink's per-comparison
+levels.

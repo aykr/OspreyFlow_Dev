@@ -84,9 +84,14 @@ class _Nothing:
     async def record(self, *_: Any, **__: Any) -> None:
         return None
 
+    #: The store methods whose real answer is one record or none, never a list (rule 15: a fake
+    #: answers as the real store does): `TargetModelStore.live` and `draft` (read since L3.1b by
+    #: `target_models.packs_of_case` on every run), and the rule store's `load_checks`.
+    _ONE_OR_NONE = frozenset({"load_checks", "live", "draft"})
+
     def __getattr__(self, name: str) -> Any:
         async def nothing(*_: Any, **__: Any) -> list[Any] | None:
-            return None if name == "load_checks" else []
+            return None if name in self._ONE_OR_NONE else []
 
         return nothing
 

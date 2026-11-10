@@ -1,0 +1,18 @@
+lease studio, stack b, run on the server ospreyflow-test (stack_lease.sh remote), commit b5bdc1f (worktree at 8e445ad, records only above), main 3be89a7, started 14:58:40Z; --continue-on-collection-errors (the server's copy is no git checkout, so test_committed_recipes_pin.py cannot collect there); test_statelessness_clickhouse.py not run (needs stack a)
+Running on ospreyflow-test (stack b, osprey-runs/studio/OspreyFlow_Build/): sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE --continue-on-collection-errors ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest ../OspreyFlow_Build/tests/conformance/graph_port ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py ../OspreyFlow_Build/tests/services/api/test_studio_recipe_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py ../OspreyFlow_Build/tests/services/api/test_recipe_runs.py
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................................ [ 12%]
+...........................................................F............ [ 16%]
+.............................s.......................................... [ 20%]
+....................FFF.......ss........................................ [ 24%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+........ssss........................sss................................. [ 44%]
+........................................................................ [ 48%]
+........................................................................ [ 52%]
+.................................................................Timeout, server 185.154.146.242 not responding.
+exit 255 ended 16:02:05Z
+INTERRUPTED, UNMEASURED: the ssh session to the server dropped at 16:02Z, 52% through; four lanes' live sets on the server at once (b–e).

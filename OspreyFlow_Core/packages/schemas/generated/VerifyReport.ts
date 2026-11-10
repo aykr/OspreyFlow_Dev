@@ -99,6 +99,16 @@ export type Why = string;
 export type ChecksNotJudged = CheckNotJudged[];
 export type ChecksJudged = number;
 export type ModelVersion = number | null;
+export type Step = string;
+export type Kind = "sql" | "fuzzy_match";
+export type Label = string | null;
+export type Summary = string | null;
+export type Select = string | null;
+export type Reads = string[];
+export type Compares = string[];
+export type Threshold = number | null;
+export type SameAs = string[];
+export type ExpertSteps = ExpertStepDisclosure[];
 
 /**
  * The dry run's three outputs (§5) in one response: counts,
@@ -121,6 +131,7 @@ export interface VerifyReport {
   checks_not_judged?: ChecksNotJudged;
   checks_judged?: ChecksJudged;
   model_version?: ModelVersion;
+  expert_steps?: ExpertSteps;
   [k: string]: unknown;
 }
 export interface EntitiesByType {
@@ -351,4 +362,22 @@ export interface CheckNotJudged {
   rule_name: RuleName1;
   why: Why;
   [k: string]: unknown;
+}
+/**
+ * ADR-140 decision 16 and the redesign brief §5.3–5.4: every run report, and Test, says which
+ * expert steps ran and what they were, in words, whether or not its counts are withheld. It is
+ * the pipeline's own configuration, never a value of a row: the SQL step's summary and its
+ * SELECT; the fuzzy match's tables, comparisons and threshold, and that it writes an inferred
+ * `SAME_AS`, never a merge. Its counts are in `staging_steps`, withheld with the others.
+ */
+export interface ExpertStepDisclosure {
+  step: Step;
+  kind: Kind;
+  label?: Label;
+  summary?: Summary;
+  select?: Select;
+  reads?: Reads;
+  compares?: Compares;
+  threshold?: Threshold;
+  same_as?: SameAs;
 }

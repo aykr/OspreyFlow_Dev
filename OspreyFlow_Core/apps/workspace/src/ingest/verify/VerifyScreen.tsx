@@ -28,6 +28,7 @@ import { rowNumber } from "../../inspector/sourceLocator";
 import { OntologyRegistry } from "../../ontology/schema";
 import { createWorkingSet, type WorkingSet } from "../../workingset/store";
 import { alreadyLoadedWords } from "../alreadyLoaded";
+import { ExpertDisclosure } from "../dag/ExpertStepDrawer";
 import { WouldRaisePanel } from "./WouldRaisePanel";
 import { ProfileError, fetchDraft, fetchOntologySchema, runVerify } from "../api";
 
@@ -250,6 +251,13 @@ export function VerifyScreen({ apiBaseUrl,
 
           {/* ADR-133 decision 6, stage (d): beside the rejections, the alerts the sample would
               raise under this pipeline's checks on load — judged as at the load, nothing written. */}
+          {/* ADR-140 decision 16: what each expert step disclosed, as every run report says it. */}
+          {(report.expert_steps ?? []).length > 0 && (
+            <Panel title="Expert steps">
+              <ExpertDisclosure steps={report.expert_steps} title="Expert steps in this test" />
+            </Panel>
+          )}
+
           <Panel title="Alerts this sample would raise">
             <WouldRaisePanel report={report} />
           </Panel>

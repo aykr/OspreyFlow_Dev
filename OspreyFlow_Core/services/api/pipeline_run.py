@@ -59,7 +59,12 @@ from services.api.studio_publish import (
     load_with_rules,
     run_published_recipe,
 )
-from services.api.studio_staging import dataset_reference_lists, source_tables, subscribed_in
+from services.api.studio_staging import (
+    dataset_reference_lists,
+    row_reader,
+    source_tables,
+    subscribed_in,
+)
 from services.api.target_models import TargetModelStore
 from services.extract.candidates import ExtractionCandidate
 from services.extract.recognised import recognised_candidates
@@ -550,6 +555,9 @@ async def _run_staged_branch(
             subscribed=subscribed_in(references),
             load_id=load_id,
             storage=storage,
+            # ADR-140 decision 12: a SQL step reads with the principal of the person the run is
+            # for, so a source row they may not read is absent from its tables.
+            may_read=row_reader(draft, read, principal, scheme),
         )
     except StagingError as refused:
         raise RecipeRuleError(refused.problems) from refused
