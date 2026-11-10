@@ -45,6 +45,16 @@ ROUTE_RIGHTS = {
     # asks publish_pipelines, import edit_pipelines (each route names both).
     "export_dataset_release": "edit_target_model",
     "import_dataset_release": "edit_target_model",
+    # ADR-141 (phase 10): owned externally, the run API, the quota bar and Operations' figures.
+    "mark_pipeline_owned_externally": "schedule_pipelines",
+    "clear_pipeline_owned_externally": "schedule_pipelines",
+    # A service identity's routes: no person's right, since no person calls them; the client's
+    # grant is the pipeline's own (`owned_externally_by`), checked in the route.
+    "start_external_run_route": None,
+    "read_external_run": None,
+    "read_pipeline_quota": "run_pipelines",
+    "operations_runs": "operate_schedules",
+    "set_run_quota": "administer_system",
     "case_datasets_route": None,
     "set_case_datasets_route": "share_case",
     "list_investigations": None,

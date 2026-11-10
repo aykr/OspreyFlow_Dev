@@ -56,9 +56,11 @@ from .load_records import LedgerSink
 from .monitors import MonitorStore
 from .pattern_store import PatternStore
 from .pipeline_run import OnlineGeocode, RecogniserFor, run_published_pipeline
-from .recipe_runs import RecipeRunStore, RunTrigger
+from .recipe_runs import Counted, External, RecipeRunStore, RunTrigger
 from .review import ExtractionCandidateStore
 from .rule_evaluation import RuleGate
+from .run_quotas import QuotaRefused, QuotaStore
+from .run_quotas import judge as judge_quota
 from .screening import ScreeningListStore
 from .strength_influencers import InfluencerStore
 from .studio_map import resolve_source_handling
@@ -124,6 +126,8 @@ class RecipeRunDeps:
     board_items: BoardItemStore | None = None
     datasets: DatasetStore | None = None
     investigations: Any | None = None
+    #: ADR-141 decision 6: the run quotas, judged before every run starts. None: no quota.
+    run_quotas: QuotaStore | None = None
 
     @classmethod
     def from_state(cls, state: Any) -> RecipeRunDeps:
@@ -181,6 +185,7 @@ async def run_recipe_as(
     slot: datetime | None = None,
     source_file: str | None = None,
     refresh: RefreshRead | None = None,
+    external: External | None = None,
 ) -> LoadReport | PipelineRunReport:
     """`refresh`: a source refresh's read of the file (ADR-110 Amendment 6 point 1), its mode and
     watermark column from the source's policy.
@@ -189,7 +194,73 @@ async def run_recipe_as(
     the scheduler both come here, so a scheduled load is judged, published, watched and resolved
     exactly as a manual one, and every run is in the ledger (decision 6) — started before it
     loads, so one that dies with its Conduit shows as never finished rather than as nothing."""
+    run_id, started_at = await begin_run(
+        deps,
+        principal=principal,
+        recipe=recipe,
+        investigation_id=investigation_id,
+        trigger=trigger,
+        slot=slot,
+        source_file=source_file,
+        external=external,
+    )
+    return await continue_run(
+        deps,
+        run_id=run_id,
+        started_at=started_at,
+        principal=principal,
+        recipe=recipe,
+        investigation_id=investigation_id,
+        source_location=source_location,
+        trigger=trigger,
+        refresh=refresh,
+    )
+
+
+async def begin_run(
+    deps: RecipeRunDeps,
+    *,
+    principal: Principal,
+    recipe: StudioRecipeDraft,
+    investigation_id: str,
+    trigger: RunTrigger,
+    slot: datetime | None = None,
+    source_file: str | None = None,
+    external: External | None = None,
+) -> tuple[str, datetime]:
+    """The run's start, before anything is read: its quotas judged (ADR-141 decision 6) — past
+    one, it is recorded *refused* (not counted toward a schedule's pause) and `QuotaRefused` is
+    raised in words — then its ledger row, which claims an external run id once
+    (`ExternalRunRecorded` when it is held already, decision 12)."""
     started_at = datetime.now(UTC)
+    counted = Counted(dataset_id=recipe.dataset_id, owning_unit=recipe.owning_unit)
+    if deps.run_quotas is not None:
+        try:
+            await judge_quota(
+                deps.run_quotas,
+                deps.recipe_runs,
+                dataset_id=recipe.dataset_id,
+                owning_unit=recipe.owning_unit,
+                now=started_at,
+            )
+        except QuotaRefused as refused:
+            await deps.recipe_runs.record_not_run(
+                recipe_id=recipe.recipe_id,
+                recipe_version=recipe.version,
+                investigation_id=investigation_id,
+                trigger=trigger,
+                slot=slot,
+                run_as=principal.id,
+                source=resolve_source_handling(recipe),
+                outcome="refused",
+                failure=str(refused),
+                now=started_at,
+                counts_toward_pause=False,
+                source_file=source_file,
+                counted=counted,
+                external=external,
+            )
+            raise
     run_id = await deps.recipe_runs.start(
         recipe_id=recipe.recipe_id,
         recipe_version=recipe.version,
@@ -200,7 +271,25 @@ async def run_recipe_as(
         source=resolve_source_handling(recipe),
         now=started_at,
         source_file=source_file,
+        counted=counted,
+        external=external,
     )
+    return run_id, started_at
+
+
+async def continue_run(
+    deps: RecipeRunDeps,
+    *,
+    run_id: str,
+    started_at: datetime,
+    principal: Principal,
+    recipe: StudioRecipeDraft,
+    investigation_id: str,
+    source_location: str | None,
+    trigger: RunTrigger,
+    refresh: RefreshRead | None = None,
+) -> LoadReport | PipelineRunReport:
+    """The run `begin_run` started: read, judged, loaded, metered and finished in the ledger."""
     # ADR-127 decision 6: each load's record is appended to this row as its graph transaction
     # commits, so a run that fails after the commit still leaves it.
     sink = LedgerSink(

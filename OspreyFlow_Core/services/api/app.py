@@ -31,7 +31,15 @@ import logging
 import os
 import time
 from collections import Counter
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from dataclasses import replace as dataclass_replace
@@ -385,6 +393,17 @@ from schemas.monitoring import (
     RuleVersion,
     WouldRaise,
 )
+from schemas.operations import (
+    ExternallyOwnedInput,
+    ExternalRunInput,
+    ExternalRunStatus,
+    OperationsRollup,
+    PausedPipeline,
+    QuotaScope,
+    RunQuota,
+    RunQuotaInput,
+    RunQuotaUse,
+)
 from schemas.packs import (
     AddPackItem,
     PackDraft,
@@ -683,6 +702,7 @@ from .export import (
     OverrideRequiredError,
     submit_export,
 )
+from .external_runs import start_external_run, status_for
 from .folder_watch import WatchedFile, describe_watch, validate_watch, waiting_files
 from .held_rows import HeldRowNotFoundError, HeldRowStore
 from .history import (
@@ -813,6 +833,7 @@ from .model_routing import (
 from .monitor_schedule import MonitorScheduleExecutor, monitor_matcher
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
+from .operations_rollup import external_triggers, rollup_rows, scheduler_health
 from .packs import (
     PackExportRefused,
     PackHasWithheldItems,
@@ -882,7 +903,7 @@ from .recipe_run import (
     _rule_gate,
     run_recipe_as,
 )
-from .recipe_runs import RecipeRun, RecipeRunStore, RunTrigger
+from .recipe_runs import External, RecipeRun, RecipeRunStore, RunTrigger
 from .release_notice import read_update_notice
 from .release_version import deployment_version, release_version
 from .report_freshness import ReportFreshness
@@ -919,6 +940,7 @@ from .rules_place import PLACE as RULES_PLACE
 from .rules_place import opens_rules_place, reads_queue_rows, refusal_wait
 from .rules_place import refusal as rules_place_refusal
 from .rules_place import rows_refusal as queue_rows_refusal
+from .run_quotas import PostgresQuotaStore, QuotaRefused, QuotaStore, day_start
 from .run_resources import RECIPES_REPO_ROOT, build_run_resources
 from .run_source import (
     SourceChangedSinceVerifyError,
@@ -953,6 +975,7 @@ from .sentence_rules import (
     run_scheduled_rule,
     strength_context,
 )
+from .service_identity import ServiceIdentityRefused, ServiceIdentityVerifier
 from .site_images import (
     object_key_for,
     read_site_image,
@@ -1166,6 +1189,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     # L3.8: what a person owns that the case lane keeps, which Disable… lists (ADR-145 A4).
     person_ownership = await PostgresOwnershipStore.connect(config.postgres.dsn)
+    # ADR-141 decision 6: the run quotas every run's start judges (`run_quotas.judge`).
+    run_quotas = await PostgresQuotaStore.connect(config.postgres.dsn)
     history = await InvestigationHistoryStore.connect(config.postgres.dsn)
     sites = await SiteStore.connect(config.postgres.dsn)
     judgements_store = await JudgementStore.connect(config.postgres.dsn)
@@ -1281,6 +1306,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.screening_lists = screening_lists
     app.state.kyc_expiries = kyc_expiries
     app.state.recipe_runs = recipe_runs
+    app.state.run_quotas = run_quotas
+    # ADR-141 decision 10: a service identity's sign-in, for the run API alone.
+    app.state.service_identities = ServiceIdentityVerifier(config)
+    # The external runs going on in the background, held so none is collected mid-run.
+    app.state.external_runs = set()
     app.state.judgements_store = judgements_store
     app.state.link_notes = LinkNoteService(link_notes_store, app.state.working_set)
     # ADR-128 decision 3, rule 3: an attachment is shown to a reader only with the title its own
@@ -1552,6 +1582,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await admin_people.close()
         await audit_section.close()
         await promotion_ageing.close()
+        await run_quotas.close()
         await person_ownership.close()
         app.state.ownership = None
         # A closed store must not outlive the app: a request's custom roles are read through it.
@@ -2160,6 +2191,29 @@ KycExpiriesDep = Annotated[KycExpiryStore, Depends(get_kyc_expiries)]
 
 def get_recipe_runs(request: Request) -> RecipeRunStore:
     return request.app.state.recipe_runs  # type: ignore[no-any-return]
+
+
+def get_run_quotas(request: Request) -> QuotaStore | None:
+    return getattr(request.app.state, "run_quotas", None)
+
+
+RunQuotasDep = Annotated[QuotaStore | None, Depends(get_run_quotas)]
+
+
+def get_service_identity(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> str:
+    """The run API's caller (ADR-141 decision 10): the client a service identity's token names,
+    or 401 in words. Never a `Principal`: a service identity reads nothing as itself."""
+    verifier: ServiceIdentityVerifier = request.app.state.service_identities
+    try:
+        return verifier.client_of(credentials.credentials)
+    except ServiceIdentityRefused as refused:
+        raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
+
+
+ServiceIdentityDep = Annotated[str, Depends(get_service_identity)]
 
 
 RecipeRunsDep = Annotated[RecipeRunStore, Depends(get_recipe_runs)]
@@ -3463,6 +3517,12 @@ async def _engine_refused_handler(request: Request, exc: EngineRefused) -> JSONR
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"error": "engine_refused", "detail": str(exc)},
     )
+
+
+@app.exception_handler(QuotaRefused)
+async def _quota_refused_handler(request: Request, exc: QuotaRefused) -> JSONResponse:
+    """ADR-141 decision 6: a run past a quota, refused in words; the ledger has it *refused*."""
+    return JSONResponse(status_code=429, content={"error": "quota_used", "detail": str(exc)})
 
 
 @app.exception_handler(ScheduleRefused)
@@ -8438,9 +8498,7 @@ async def case_gazetteers_route(
     owner's ruling 6): names only, never a count of places (a count would take in places above the
     reader's clearance). Viewer and `investigate`, as the place search is. A case reading a
     composite or nothing is answered with none."""
-    return await _gazetteers_view(
-        await _own_dataset(investigation.id, datasets), datasets, store
-    )
+    return await _gazetteers_view(await _own_dataset(investigation.id, datasets), datasets, store)
 
 
 #: ADR-147 Amendment 2: the words a refused addition is said in.
@@ -12993,6 +13051,14 @@ async def update_studio_recipe_schedule(
     and whoever sets it becomes its owner (decision 3). ADR-120 Amendment 2, decision 2: the
     re-commit carries the row's pins as stored, none included, and a mapped row with no core
     version is saved without one, as the administrator's route does."""
+    if (body.schedule_cron or body.schedule_watch) and await studio_recipes.external_owner(
+        recipe.recipe_id
+    ):
+        # ADR-141 decision 11: a pipeline owned externally has its schedule in the orchestrator.
+        raise HTTPException(
+            status_code=409,
+            detail="the pipeline is owned externally: its orchestrator runs it; nobody sets both",
+        )
     if body.schedule_cron is not None:
         validate_schedule(body.schedule_cron, body.schedule_timezone or DEFAULT_TIMEZONE)
     if body.schedule_watch is not None:
@@ -13170,6 +13236,7 @@ async def run_studio_recipe(
     list_store: ListStoreDep = None,  # type: ignore[assignment]
     rule_lists: RuleListsDep = None,  # type: ignore[assignment]
     rule_reach: RuleReachDep = None,  # type: ignore[assignment]
+    run_quotas: RunQuotasDep = None,
 ) -> LoadReportView | PipelineRunReportView:
     """§8: "Loader: run a published recipe against a file at or below
     their own clearance" — `body.source_location`, when given, is that
@@ -13263,6 +13330,7 @@ async def run_studio_recipe(
             board_items=board_items,
             datasets=datasets,
             investigations=investigations,
+            run_quotas=run_quotas,
         ),
         principal=principal,
         recipe=recipe,
@@ -17267,6 +17335,270 @@ async def refresh_screening_list_route(
                     "message": "the refresh ran but its record could not be read back"},
         )  # fmt: skip
     return own
+
+
+# --- External orchestration and Operations (ADR-141; the redesign's phase 10) --------------------
+
+#: Who may hand a pipeline's schedule to an orchestrator: who may schedule it (ADR-110 decision 3).
+_HANDS_A_SCHEDULE = [Depends(require_right(Right.SCHEDULE_PIPELINES)), NoLoadingInACompositeCase]
+_NO_SUCH_PIPELINE = (
+    "no pipeline this service identity may trigger has that id in that dataset: a pipeline is "
+    "triggered only by the client it is owned externally by"
+)
+
+
+@app.put(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/owned-externally",
+    dependencies=_HANDS_A_SCHEDULE,
+)
+async def mark_pipeline_owned_externally(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+    body: ExternallyOwnedInput,
+) -> ExternallyOwnedInput:
+    """*Owned externally* (ADR-141 decision 11): the pipeline's schedule handed to an orchestrator,
+    triggered by `body.client_id` alone; the person marking it is the owner every external run
+    acts as, in this case (decision 10). Refused in words while it has a schedule of its own, so
+    nobody sets both."""
+    if recipe.status is not StudioRecipeStatus.PUBLISHED:
+        raise HTTPException(
+            status_code=409, detail="only a deployed pipeline can be owned externally"
+        )
+    if recipe.schedule_cron or recipe.schedule_watch:
+        raise HTTPException(
+            status_code=409,
+            detail="the pipeline has a schedule of its own: clear it first, so nobody sets both",
+        )
+    await studio_recipes.set_external_owner(
+        recipe.recipe_id,
+        client_id=body.client_id,
+        owner=principal.id,
+        case=investigation.id,
+        now=datetime.now(UTC),
+    )
+    await audit.record(
+        principal=principal,
+        action="mark_pipeline_owned_externally",
+        resolved_query={"recipe_id": recipe.recipe_id, "client_id": body.client_id},
+        result_cardinality=1,
+    )
+    return body
+
+
+@app.delete(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/owned-externally",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=_HANDS_A_SCHEDULE,
+)
+async def clear_pipeline_owned_externally(
+    investigation: InvestigationEditorDep,
+    recipe: AuthorizedStudioRecipeDep,
+    principal: Annotated[Principal, Depends(require_studio_role(StudioRole.SOURCE_APPROVER))],
+    studio_recipes: StudioRecipesDep,
+    audit: AuditDep,
+) -> None:
+    await studio_recipes.clear_external_owner(recipe.recipe_id)
+    await audit.record(
+        principal=principal,
+        action="clear_pipeline_owned_externally",
+        resolved_query={"recipe_id": recipe.recipe_id},
+        result_cardinality=1,
+    )
+
+
+@app.post("/v1/runs", status_code=status.HTTP_202_ACCEPTED)
+async def start_external_run_route(
+    request: Request,
+    client_id: ServiceIdentityDep,
+    body: ExternalRunInput,
+    studio_recipes: StudioRecipesDep,
+    valkey: ValkeyDep,
+    executor: ScheduleExecutorDep,
+    principal_resolver: PrincipalResolverDep,
+) -> ExternalRunStatus:
+    """ADR-141 decision 9: an orchestrator starts a run of a deployed pipeline, keyed by its own
+    run id (decision 12). The service identity authorises the trigger and nothing more; the run
+    acts as the pipeline's owner (decision 10; `external_runs.py`). A pipeline that is not this
+    client's to trigger is 404, the same answer as one that does not exist."""
+    recipe = await studio_recipes.deployed(body.pipeline_id)
+    owner = await studio_recipes.external_owner(body.pipeline_id) if recipe else None
+    if (
+        recipe is None
+        or owner is None
+        or owner.client_id != client_id
+        or recipe.dataset_id != body.dataset_id
+    ):
+        raise HTTPException(status_code=404, detail=_NO_SUCH_PIPELINE)
+    if body.version != "latest" and body.version != recipe.version:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"the pipeline's deployed version is {recipe.version}, not {body.version}: "
+                "pin the deployed version, or ask for the latest"
+            ),
+        )
+    tasks: set[asyncio.Task[None]] = request.app.state.external_runs
+
+    def spawn(work: Coroutine[Any, Any, None]) -> object:
+        task = asyncio.create_task(work)
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+        return task
+
+    return await start_external_run(
+        deps=RecipeRunDeps.from_state(request.app.state),
+        executor=executor,
+        valkey=valkey,
+        recipe=owner.applied_to(recipe),
+        external=External(run_id=body.external_run_id, triggered_by=client_id),
+        spawn=spawn,
+        resolve_owner=_owner_or_none(principal_resolver),
+    )
+
+
+def _owner_or_none(resolver: PrincipalResolver) -> Callable[[str], Awaitable[Principal | None]]:
+    async def resolve(owner_id: str) -> Principal | None:
+        try:
+            return await resolver.resolve_for_owner_detailed(owner_id)
+        except Exception:  # noqa: BLE001 - an owner who cannot be resolved now sees nothing
+            return None
+
+    return resolve
+
+
+@app.get("/v1/runs/{run_id}")
+async def read_external_run(
+    run_id: str,
+    client_id: ServiceIdentityDep,
+    recipe_runs: RecipeRunsDep,
+    handling_scheme: HandlingSchemeDep,
+    principal_resolver: PrincipalResolverDep,
+) -> ExternalRunStatus:
+    """A run's status, report counts and held rows (ADR-141 decision 9), only for a run this very
+    client triggered, and its counts only as its owner may read them (rule 3)."""
+    run = await recipe_runs.get(run_id)
+    if run is None or run.trigger != "external" or run.triggered_by != client_id:
+        raise HTTPException(
+            status_code=404, detail="no run this service identity triggered has that id"
+        )
+    owner = await _owner_or_none(principal_resolver)(run.run_as)
+    return await status_for(run, owner=owner, scheme=handling_scheme)
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/quota",
+    dependencies=[Depends(require_right(Right.RUN_PIPELINES))],
+)
+async def read_pipeline_quota(
+    investigation: InvestigationViewerDep,
+    recipe: AuthorizedStudioRecipeDep,
+    recipe_runs: RecipeRunsDep,
+    run_quotas: RunQuotasDep,
+) -> RunQuotaUse:
+    """The Runs tab's quota bar (ADR-141 decision 6): the dataset's quota of runs a day and
+    today's runs into it. A count of runs, never of rows, so it says nothing of any marking."""
+    quota = (
+        await run_quotas.get("dataset", recipe.dataset_id)
+        if run_quotas is not None and recipe.dataset_id
+        else None
+    )
+    today = (
+        await recipe_runs.runs_since(
+            since=day_start(datetime.now(UTC)), dataset_id=recipe.dataset_id
+        )
+        if recipe.dataset_id
+        else 0
+    )
+    return RunQuotaUse(quota=quota, runs_today=today)
+
+
+def _units_read(principal: Principal) -> list[str] | None:
+    """Operations' reach (phase 10 step 7): the reader's own unit, unless they administer the
+    system, who reads every unit (`None`)."""
+    if Right.ADMINISTER_SYSTEM in rights_for(principal.roles):
+        return None
+    return [principal.org_unit]
+
+
+@app.get(
+    "/v1/admin/operations/runs", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))]
+)
+async def operations_runs(
+    principal: PrincipalDep,
+    recipe_runs: RecipeRunsDep,
+    studio_recipes: StudioRecipesDep,
+    handling_scheme: HandlingSchemeDep,
+    names: PrincipalNamesDep,
+    run_quotas: RunQuotasDep,
+    days: Annotated[int, Query(ge=1, le=90)] = 7,
+) -> OperationsRollup:
+    """Admin › Running › Operations (ADR-141 decisions 3, 4, 6, 7 and 14): the window's runs by
+    pipeline, dataset, unit and trigger per day; scheduler health; external triggers; the quotas.
+    The reader's unit's alone unless they administer the system, filtered in the ledger's own
+    `WHERE` (rule 3); counts withheld where a run wrote a marking the reader may not view."""
+    units = _units_read(principal)
+    since = day_start(datetime.now(UTC)) - timedelta(days=days - 1)
+    runs = await recipe_runs.window(since=since, units=units)
+    labels: dict[str, str] = {}
+    for recipe_id in {r.recipe_id for r in runs}:
+        try:
+            labels[recipe_id] = (await studio_recipes.get(recipe_id)).label
+        except StudioRecipeNotFoundError:
+            continue
+    paused = [
+        PausedPipeline(
+            pipeline_id=r.recipe_id, pipeline_label=r.label, reason=r.schedule_paused_reason
+        )
+        for r in await studio_recipes.scheduled()
+        if r.schedule_paused and (units is None or r.owning_unit in units)
+    ]
+    named = await names.full_names({r.run_as for r in runs if r.run_as})
+    quotas = [] if run_quotas is None else await run_quotas.all()
+    if units is not None:
+        datasets = {r.dataset_id for r in runs}
+        quotas = [q for q in quotas if (q.scope == "unit" and q.key in units) or q.key in datasets]
+    return OperationsRollup(
+        days=days,
+        rows=rollup_rows(runs, reader=principal, scheme=handling_scheme, labels=labels),
+        scheduler=scheduler_health(runs, paused=paused, names=named),
+        external=external_triggers(
+            runs, reader=principal, scheme=handling_scheme, labels=labels, names=named
+        ),
+        quotas=quotas,
+        units=units
+        if units is not None
+        else sorted({r.owning_unit for r in runs if r.owning_unit}),
+    )
+
+
+@app.put(
+    "/v1/admin/operations/quotas/{scope}/{key}",
+    dependencies=[Depends(require_right(Right.ADMINISTER_SYSTEM))],
+)
+async def set_run_quota(
+    scope: QuotaScope,
+    key: str,
+    body: RunQuotaInput,
+    principal: PrincipalDep,
+    run_quotas: RunQuotasDep,
+    audit: AuditDep,
+) -> RunQuota:
+    """A dataset's or a unit's quota of runs a day (ADR-141 decision 6), set by an administrator of
+    the system (the strict reach: a quota binds every unit's runs into a dataset)."""
+    if run_quotas is None:
+        raise HTTPException(status_code=503, detail="run quotas are not available")
+    quota = RunQuota(scope=scope, key=key, **body.model_dump())
+    await run_quotas.set(quota)
+    await audit.record(
+        principal=principal,
+        action="set_run_quota",
+        resolved_query={"scope": scope, "key": key, "runs_per_day": body.runs_per_day},
+        result_cardinality=1,
+    )
+    return quota
 
 
 @app.get("/v1/admin/schedules", dependencies=[Depends(require_right(Right.OPERATE_SCHEDULES))])
