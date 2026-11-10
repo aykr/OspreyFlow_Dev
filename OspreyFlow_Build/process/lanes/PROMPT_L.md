@@ -15,6 +15,12 @@ touch, and go to the orchestrator first: one that would loosen access control (r
 would admit real data (rule 9), and one that would contradict an accepted ADR. Even then, carry on with
 everything the question does not block.
 
+**This Mac is the owner's** (the owner, 10 November 2026). Never open a desktop app on it (no `open -a`, no
+`osascript … tell application`, no Keynote, PowerPoint, Preview or browser window) and never start Docker: a deck
+agent opened Keynote on the owner's screen, and a local test started Docker Desktop, both on 10 November. Build and
+check files headlessly. `make -k ci` and `make test` run on the test server through `stack_lease.sh offline
+<lane>`; browser tests run there or in this Mac's two slots, each slot granted by the orchestrator.
+
 A `packages/schemas` change rides with your step, in its own commit at the head of the branch, unless the
 orchestrator has said another lane needs it first. Report ready-to-merge once, at the end of the step.
 
