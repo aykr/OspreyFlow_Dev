@@ -17,6 +17,10 @@ What a mistake would do, and the case that catches it:
 - a second home case at a later *Make live*, or owners asked again:
   `test_a_later_make_live_asks_nothing_and_makes_no_second_home_case`;
 - a home case removed while its dataset exists: `test_a_home_case_cannot_be_removed`;
+- a non-member holding `remove_case` told a home case is there (its 409, not the 404 of a case
+  that does not exist; rule 3): `test_a_non_member_holding_remove_case_finds_no_case_home_or_not`;
+- the administrator's safety net removing a home case, or reaching another unit's case:
+  `test_the_administrators_safety_net_removes_a_working_case_but_keeps_a_home_case`;
 - the System setting changed by anyone but an administrator, or unaudited:
   `test_the_owner_setting_is_an_administrators_and_audited`.
 """
@@ -323,9 +327,11 @@ def test_the_administrators_safety_net_removes_a_working_case_but_keeps_a_home_c
     administrator finds neither."""
     _make_live(world, {"people": ["ana-1"]})
     home = world.datasets.homes["ds-a"].investigation_id
+    missing = world.client.delete("/v1/investigations/no-such-case", headers=_as("admin-2"))
     for case in (home, "case-a"):
         other = world.client.delete(f"/v1/investigations/{case}", headers=_as("admin-2"))
         assert other.status_code == 404, other.text
+        assert other.json() == missing.json()
     kept = world.client.delete(f"/v1/investigations/{home}", headers=_as("admin"))
     assert kept.status_code == 409, kept.text
     assert kept.json()["detail"]["error"] == "home_case_kept"
