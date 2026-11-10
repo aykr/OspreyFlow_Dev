@@ -209,8 +209,6 @@ READS_AND_OTHER: tuple[str, ...] = (
     "grading_change",
     # L1.6's refusal and reads: a connector's read refused, a connection tested.
     "connector_read_refused", "test_ingest_connection",
-    # Rules-b's L2.11a (ADR-146 decision 3): a rule's .bpmn or .dmn exported.
-    "export_rule_file",
     "dataset_list_subscriptions", "list_deployment_list_imports", "list_deployment_lists",
     "offered_reference_lists",
     # Rules' L2.10 (ADR-146 Amendment 4): the lead's hand-off and Suppress until…, Raise an alert…,
