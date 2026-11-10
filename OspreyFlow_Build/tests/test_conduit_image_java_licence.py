@@ -17,7 +17,11 @@ DOCKERFILE = (CORE / "services" / "api" / "Dockerfile").read_text(encoding="utf-
 def test_the_image_carries_a_jlinked_java_pinned_by_digest_and_declared() -> None:
     assert re.search(r"^FROM eclipse-temurin:21-jdk@sha256:[0-9a-f]{64} AS java$", DOCKERFILE, re.M)
     assert re.search(r"^RUN jlink\b", DOCKERFILE, re.M)
-    assert "COPY --from=java /opt/jre /opt/java" in DOCKERFILE
+    # By default (ADR-148 decision 12): the jlinked stage is the one the image copies from.
+    assert re.search(r"^ARG CONDUIT_JAVA=included$", DOCKERFILE, re.M)
+    assert re.search(r"^FROM java AS java-included$", DOCKERFILE, re.M)
+    assert re.search(r"^FROM java-\$\{CONDUIT_JAVA\} AS java-chosen$", DOCKERFILE, re.M)
+    assert "COPY --from=java-chosen /opt/jre /opt/java" in DOCKERFILE
     assert 'LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"' in (
         DOCKERFILE
     )
@@ -32,3 +36,15 @@ def test_the_maps_file_s_folder_is_made_for_the_conduit_s_user() -> None:
         "mkdir -p /run/osprey/map-settings && chown osprey:osprey /run/osprey/map-settings"
         in DOCKERFILE
     )
+
+
+def test_the_cloud_platform_s_build_carries_no_java() -> None:
+    """ADR-148 decision 12: `CONDUIT_JAVA=omitted` copies an empty folder from a stage that is not
+    Java's, so the runtime and its stage are never in that image, and the image says which."""
+    omitted = DOCKERFILE.split("FROM python:3.12-slim AS java-omitted", 1)[1].split("\nFROM ", 1)[0]
+    assert omitted.strip() == "RUN mkdir -p /opt/jre"
+    assert 'LABEL org.ospreyflow.runtime.java.included="${CONDUIT_JAVA}"' in DOCKERFILE
+    # The only stages are the default's and the omission's.
+    assert set(re.findall(r"^FROM (\S+) AS java-(?:included|omitted)$", DOCKERFILE, re.M)) == {
+        "java", "python:3.12-slim"
+    }

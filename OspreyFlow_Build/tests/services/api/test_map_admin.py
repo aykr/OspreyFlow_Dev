@@ -411,6 +411,33 @@ async def test_a_build_with_no_java_or_no_jar_is_refused_before_anything_is_down
     assert asked == []
 
 
+async def test_on_a_cloud_platform_the_build_says_it_is_made_off_the_platform(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-148 decision 12: the `cloud-platform` profile's Conduit is built without Java, and its
+    Build says, in words, where the basemap is made instead, and fetches nothing."""
+    monkeypatch.setenv("OSPREY_PROFILE", "cloud-platform")
+    w = World(tmp_path)
+    asked: list[str] = []
+
+    def downloader(region: str, dest: Path) -> Path:
+        asked.append(region)
+        return dest
+
+    async def load_places(extract: Path) -> tuple[int, int, int]:
+        return (0, 0, 0)
+
+    w.admin._java = lambda _name: None  # noqa: SLF001 - the profile's image has none
+    state = w.admin.basemap()
+    assert not state.builder_ready
+    assert "built off the platform" in state.builder_state
+    assert "ospreyflow map build" in state.builder_state
+    with pytest.raises(MapAdminRefused, match="built off the platform"):
+        await build_basemap(w.admin, by="a", region="rutland", load_places=load_places,
+                            downloader=downloader, tiles_root=w.tiles_root)  # fmt: skip
+    assert asked == []
+
+
 # --- from the lane's own review -----------------------------------------------------------------
 
 

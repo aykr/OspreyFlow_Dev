@@ -8,6 +8,11 @@
 # and the analyst notices nothing" — nothing in this image or its startup
 # sequence holds session state; every request re-derives what it needs
 # from ArcadeDB, Valkey and Postgres.
+#
+# ADR-148 decision 12: `--build-arg CONDUIT_JAVA=omitted` builds it without the Java runtime below,
+# for the `cloud-platform` profile (`ospreyflow images push` passes it); the stage is then never
+# pulled. Every other build takes the default, `included`.
+ARG CONDUIT_JAVA=included
 FROM python:3.12-slim AS builder
 
 RUN pip install --no-cache-dir uv==0.5.14
@@ -51,7 +56,13 @@ RUN jlink \
       --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
       --output /opt/jre
 
+FROM java AS java-included
+FROM python:3.12-slim AS java-omitted
+RUN mkdir -p /opt/jre
+FROM java-${CONDUIT_JAVA} AS java-chosen
+
 FROM python:3.12-slim
+ARG CONDUIT_JAVA
 
 # Base-image OS packages lag the upstream image's own last-published point
 # release; picking up current Debian security patches at build time is
@@ -64,7 +75,10 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 # Amendment 17). `tests/test_connectors_are_carried_into_the_image.py` fails if `git` is installed
 # again, and `make licence-check` names it as an offender.
 
-COPY --from=java /opt/jre /opt/java
+COPY --from=java-chosen /opt/jre /opt/java
+# Whether this build carries the runtime the two labels below declare (`omitted`: /opt/java is
+# empty, and the labels describe the runtime this Dockerfile adds by default).
+LABEL org.ospreyflow.runtime.java.included="${CONDUIT_JAVA}"
 LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
 LABEL org.ospreyflow.runtime.java.version="21.0.13+9"
 
