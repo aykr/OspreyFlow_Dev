@@ -25,6 +25,9 @@ class IngressSettings(_Strict):
     allow_list_annotation: str = Field(min_length=1)
     #: Where the controller's pods run, which the namespace's ingress policy admits.
     controller_namespace: str = Field(min_length=1)
+    #: The name the platform's own certificate covers (`*.apps.example.org`: one label deep), where
+    #: its guide gives it; a host it does not cover then needs `cloud_platform.tls_secret`.
+    wildcard: str | None = Field(default=None, pattern=r"^\*\.[a-z0-9.-]+$")
 
 
 class StorageSettings(_Strict):

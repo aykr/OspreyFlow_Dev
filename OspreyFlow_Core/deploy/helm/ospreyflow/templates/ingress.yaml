@@ -29,16 +29,24 @@ spec:
     - host: {{ .host }}
       http:
         paths:
-          - path: /
+          {{- range (.paths | default (list (dict "path" "/" "service" .service "port" .port))) }}
+          - path: {{ .path }}
             pathType: Prefix
             backend:
               service:
                 name: {{ .service }}
                 port:
                   number: {{ .port }}
+          {{- end }}
     {{- end }}
+{{- $backends := dict }}
+{{- range .rules }}
+{{- range (.paths | default (list (dict "service" .service "port" .port))) }}
+{{- $_ := set $backends .service (toString .port) }}
+{{- end }}
+{{- end }}
 ---
-# What the ingress serves, reached from the platform's controller alone.
+# What the ingress serves (each path's service), reached from the platform's controller alone.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -51,8 +59,8 @@ spec:
       - key: app.kubernetes.io/name
         operator: In
         values:
-          {{- range .rules }}
-          - {{ .service }}
+          {{- range $service, $port := $backends }}
+          - {{ $service }}
           {{- end }}
   policyTypes: ["Ingress"]
   ingress:
@@ -61,8 +69,8 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: {{ .controllerNamespace }}
       ports:
-        {{- range .rules }}
-        - { protocol: TCP, port: {{ .port }} }
+        {{- range $port := ($backends | values | uniq | sortAlpha) }}
+        - { protocol: TCP, port: {{ $port }} }
         {{- end }}
 {{- end }}
 {{- end }}

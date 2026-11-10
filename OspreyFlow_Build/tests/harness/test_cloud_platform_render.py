@@ -433,6 +433,49 @@ def test_the_front_door_is_the_platform_s_ingress() -> None:
 # ---- the configuration ---------------------------------------------------------------------------
 
 
+def test_the_sign_in_page_s_govuk_assets_come_from_the_glass_on_its_own_host() -> None:
+    """Caddy sends `id.<host>/assets/govuk/*` to the workspace when the brand is GOV.UK (ADR-132
+    Amendment 2: same-origin on the sign-in page); the platform's ingress must route it too, or the
+    sign-in page loses its stylesheet and fonts."""
+    rules = {r["host"]: r for r in _values(_config("development"))["ingress"]["rules"]}
+    assert rules["id.ospreyflow-dev.apps.example.org"]["paths"] == [
+        {"path": "/", "service": "keycloak", "port": 8080}
+    ]
+    govuk = _config("development", appearance={"brand": "govuk"})
+    rules = {r["host"]: r for r in _values(govuk)["ingress"]["rules"]}
+    assert rules["id.ospreyflow-dev.apps.example.org"]["paths"] == [
+        {"path": "/assets/govuk", "service": "workspace", "port": 8080},
+        {"path": "/", "service": "keycloak", "port": 8080},
+    ]
+    assert rules["ospreyflow-dev.apps.example.org"]["paths"] == [
+        {"path": "/", "service": "workspace", "port": 8080}
+    ]
+
+
+def test_a_certificate_secret_is_named_or_the_platform_s_is_used() -> None:
+    assert "tlsSecret" not in _values(_config("development"))["ingress"]
+    named = _config("development", cloud_platform={"tls_secret": "ospreyflow-tls"})
+    assert _values(named)["ingress"]["tlsSecret"] == "ospreyflow-tls"
+
+
+def test_a_host_the_platform_s_wildcard_does_not_cover_needs_a_certificate_named(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A platform's default certificate is a wildcard one label deep: `id.` and `bi.` below the
+    deployment's own name are two, so the browser refuses them unless a certificate is named."""
+    import harness.cloud_platform as cp
+
+    platform = load_platform("client")
+    covering = platform.model_copy(
+        update={"ingress": platform.ingress.model_copy(update={"wildcard": "*.apps.example.org"})}
+    )
+    monkeypatch.setattr(cp, "load_platform", lambda _name: covering)
+    with pytest.raises(CloudPlatformNotRenderable, match="id.ospreyflow-dev.apps.example.org"):
+        _artefacts(_config("development"))
+    named = _config("development", cloud_platform={"tls_secret": "ospreyflow-tls"})
+    assert _values(named)["ingress"]["tlsSecret"] == "ospreyflow-tls"
+
+
 def test_the_settings_belong_to_the_profile_alone() -> None:
     with pytest.raises(ValidationError, match="only meaningful at profile: cloud-platform"):
         OspreyConfig.model_validate({"cloud_platform": {"namespace": "x"}})

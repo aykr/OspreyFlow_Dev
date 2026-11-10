@@ -397,6 +397,11 @@ def egress_policy(config: OspreyConfig, platform: PlatformSettings) -> dict[str,
     }
 
 
+def _covered(host: str, wildcard: str) -> bool:
+    head, _, rest = host.partition(".")
+    return bool(head) and rest == wildcard.removeprefix("*.")
+
+
 def _ingress(config: OspreyConfig, platform: PlatformSettings, names: set[str]) -> dict[str, Any]:
     from harness.site import sites
 
@@ -408,13 +413,29 @@ def _ingress(config: OspreyConfig, platform: PlatformSettings, names: set[str]) 
     for site, service, port in DOORS:
         if service in names:
             host = getattr(where, site).removeprefix("https://").split("/")[0].split(":")[0]
-            rules.append({"host": host, "service": service, "port": port})
+            paths = [{"path": "/", "service": service, "port": port}]
+            if site == "identity" and config.appearance.brand == "govuk":
+                # As Caddy does (`harness.site`; ADR-132 Amendment 2): the sign-in page's GOV.UK
+                # stylesheet and fonts from the Glass, on the sign-in page's own name.
+                paths.insert(0, {"path": "/assets/govuk", "service": "workspace", "port": 8080})
+            rules.append({"host": host, "service": service, "port": port, "paths": paths})
+    tls_secret = _cp(config).tls_secret
+    wildcard = platform.ingress.wildcard
+    if wildcard and not tls_secret:
+        uncovered = [r["host"] for r in rules if not _covered(r["host"], wildcard)]
+        if uncovered:
+            raise CloudPlatformNotRenderable(
+                f"the platform's certificate covers {wildcard}, one name deep, and not "
+                + ", ".join(uncovered)
+                + ": name a certificate that does under cloud_platform.tls_secret"
+            )
     return {
         "enabled": True,
         "className": platform.ingress.class_name,
         "annotations": annotations,
         "rules": rules,
         "controllerNamespace": platform.ingress.controller_namespace,
+        **({"tlsSecret": tls_secret} if tls_secret else {}),
     }
 
 

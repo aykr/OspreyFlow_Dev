@@ -75,6 +75,32 @@ def test_the_render_is_valid_kubernetes(rendered: tuple[dict[str, Any], str]) ->
     assert re.search(r"Invalid: 0, Errors: 0", done.stdout), done.stdout
 
 
+def test_the_ingress_routes_each_path_and_admits_each_path_s_service(tmp_path: Path) -> None:
+    """Helm's own Ingress for a GOV.UK deployment: `id.<host>/assets/govuk` to the workspace before
+    `/` to Keycloak (as Caddy routes it), the named certificate, and the controller admitted to
+    both services; the values alone cannot show the template reads them."""
+    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    raw["appearance"] = {"brand": "govuk"}
+    raw["cloud_platform"]["tls_secret"] = "ospreyflow-tls"
+    config = tmp_path / "govuk.yaml"
+    config.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    values, _ = render_values(config)
+    docs = helm_template(values)
+    ingress = next(d for d in docs if d["kind"] == "Ingress")
+    assert ingress["spec"]["tls"][0]["secretName"] == "ospreyflow-tls"
+    rules = {r["host"]: r["http"]["paths"] for r in ingress["spec"]["rules"]}
+    identity = [(p["path"], p["backend"]["service"]["name"])
+                for p in rules["id.ospreyflow-dev.apps.example.org"]]  # fmt: skip
+    assert identity == [("/assets/govuk", "workspace"), ("/", "keycloak")]
+    policy = next(
+        d for d in docs
+        if d["kind"] == "NetworkPolicy" and d["metadata"]["name"] == "ospreyflow-from-ingress"
+    )  # fmt: skip
+    admitted = policy["spec"]["podSelector"]["matchExpressions"][0]["values"]
+    assert set(admitted) == {"workspace", "keycloak"}
+    assert {p["port"] for p in policy["spec"]["ingress"][0]["ports"]} == {8080}
+
+
 def test_our_dockerfiles_pass() -> None:
     assert check_dockerfiles(our_dockerfiles()) == []
 

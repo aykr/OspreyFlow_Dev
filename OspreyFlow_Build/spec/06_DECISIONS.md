@@ -32059,7 +32059,13 @@ Superset.
    and container security contexts, a service account (the S3 role's, IRSA), a grace period (ArcadeDB
    120 s), a PodDisruptionBudget for each StatefulSet (one copy down), Services never `LoadBalancer`
    behind an ingress, the shared claim's access mode, and Calico's two policies. The cluster's manifests
-   are unchanged.
+   are unchanged (`p7_renders_unchanged.py --helm` compares Helm's own output for the cluster's values).
+   **The Ingress routes as Caddy does**: under the GOV.UK brand, `id.<host>/assets/govuk` goes to the
+   workspace before `/` to Keycloak (ADR-132 Amendment 2), and the controller is admitted to each path's
+   service. **TLS** is the platform's certificate unless `cloud_platform.tls_secret` names one; a
+   platform settings file may name its certificate's wildcard (`ingress.wildcard`, one name deep), and a
+   host it does not cover (`id.` and `bi.` below the deployment's own name are two deep) is then refused
+   without a named certificate. The client's file names none until its team give it.
 6. **Egress** (decision 7): Calico's `ospreyflow-allow-egress` (order 100: the cluster's DNS, the
    namespace's own pods, the platform's managed networks, each enabled host's networks) before
    `ospreyflow-deny-egress` (order 200: every pod, egress, deny), and the chart's open-egress
@@ -32076,7 +32082,10 @@ Superset.
    refused at this profile; P10's Entra ID adds its host.
 7. **Images** (decision 8): `ospreyflow images push --registry` follows the render's `images.yaml`: ours
    built from the checkout and pushed, the third-party ones copied by digest
-   (`docker buildx imagetools create`), so the digest the values pin is the source's. Ours are pinned by the
+   (`docker buildx imagetools create`), so the digest the values pin is the source's. Ours are built
+   for the platform's nodes (`--platform`, default `linux/amd64`, so an arm64 Mac does not push arm64);
+   a test's fake registry refuses as ECR does (a repository the Terraform did not make; anything before
+   signing in), and every target is one the rendered `ecr.tf` makes. Ours are pinned by the
    digest the registry gives for its copy; until they are pushed the render is refused unless unpinned is
    asked for. **No Java** (decision 12, building to the recommended answer of question 3): the Conduit's
    Dockerfile takes `--build-arg CONDUIT_JAVA=omitted` (the default stays `included`; the Java stage is
