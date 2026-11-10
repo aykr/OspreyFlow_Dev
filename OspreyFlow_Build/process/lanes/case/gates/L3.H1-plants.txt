@@ -1,0 +1,15 @@
+## the shared read-set rule keeping a borrowed layer for anyone (scope_to_case's caller)
+plant in services/api/dataset_scope.py; -k no_level_on_the_original; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_unconverted_case_layer.py::test_a_branch_member_with_no_level_on_the_original_reads_none_of_its_layer
+1 failed, 7 deselected in 0.88s
+E       AssertionError: assert '01M72TF6Y4VGAW3ZA8Y23GHJND' not in ((['member', '01M72TF6Y4VGAW3ZA8Y23GHJND']))
+E        +  where ['member', '01M72TF6Y4VGAW3ZA8Y23GHJND'] = Principal(id='branch-only', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=['member', '01M72TF6Y4VGAW3ZA8Y23GHJND']).datasets
+
+## the shared read-set rule keeping a borrowed layer for anyone (the drawn watches' caller)
+plant in services/api/dataset_scope.py; -k borrowed_layer; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_borrowed_layer_is_read_only_for_an_owner_holding_a_level_on_its_case
+1 failed, 18 deselected, 1 warning in 1.61s
+E       AssertionError: assert '01M72TF8VVGW8T1TQSB6H56AXZ' not in ['src', '01M72TF8VVGW8T1TQSB6H56AXZ']
+
+## restored
+27 passed, 1 warning in 1.72s

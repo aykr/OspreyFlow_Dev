@@ -248,6 +248,17 @@ async def refuse_correcting_a_drawn_node(
 HoldsALevel = Callable[[Principal, str], Awaitable[bool]]
 
 
+def readable_of_case(
+    datasets: Sequence[str], borrowed: str | None, *, holds_the_original: bool
+) -> list[str]:
+    """The one read-set rule (rule 3), shared by `scope_to_case` and the drawn watches' run
+    (`drawn_watches.case_read_set`), so the two cannot drift: a case's read set, less the
+    original case's layer it borrows read-only unless the reader holds a level on the original."""
+    if borrowed is not None and borrowed in datasets and not holds_the_original:
+        return [d for d in datasets if d != borrowed]
+    return list(datasets)
+
+
 async def scope_to_case(
     principal: Principal,
     investigation_id: str,
@@ -269,12 +280,12 @@ async def scope_to_case(
     borrowed = await store.read_only_layer_of(investigation_id) if datasets and not layer else None
     if borrowed is not None and borrowed in datasets:
         original = await store.case_of_layer(borrowed)
-        if (
-            holds_a_level is None
-            or original is None
-            or not await holds_a_level(principal, original)
-        ):
-            datasets = [d for d in datasets if d != borrowed]
+        holds = (
+            holds_a_level is not None
+            and original is not None
+            and await holds_a_level(principal, original)
+        )
+        datasets = readable_of_case(datasets, borrowed, holds_the_original=holds)
     scoped = principal.model_copy(update={"datasets": datasets})
     set_case_datasets(datasets, layer=layer, scope=(investigation_id, store, scoped))
     if borrowed is not None:

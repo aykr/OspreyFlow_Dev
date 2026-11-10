@@ -49,6 +49,7 @@ from schemas.domain import NOT_SAME_AS, SAME_AS, Alert, AlertMode, Handling, Nod
 from .alerts import AlertStore
 from .board_store import BoardItemStore
 from .boards import resembles
+from .dataset_scope import readable_of_case
 from .investigations import AccessLevel, InsufficientAccessError, InvestigationNotFoundError
 
 
@@ -130,8 +131,8 @@ async def case_read_set(
         borrowed = await datasets.read_only_layer_of(case_id)
         if borrowed is not None and borrowed in read:
             original = await datasets.case_of_layer(borrowed)
-            if original is None or not await holds_a_level(owner, original):
-                read = [d for d in read if d != borrowed]
+            holds = original is not None and await holds_a_level(owner, original)
+            return readable_of_case(read, borrowed, holds_the_original=holds)
     return list(read)
 
 
