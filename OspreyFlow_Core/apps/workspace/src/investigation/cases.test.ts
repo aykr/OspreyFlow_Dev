@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
-import { caseIsOpenable, caseUrl, createCase, listCases, openCase, openCaseView, removeCase } from "./cases";
+import { caseIsOpenable, caseUrl, createCase, listCases, openCase, openCaseView, removeCase, setCaseDatasets } from "./cases";
 
 const fetchMock = vi.fn();
 
@@ -129,6 +129,12 @@ describe("removing a case", () => {
     await expect(removeCase("http://api", "tok", "c1")).rejects.toThrow(/permission/i);
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404 })));
     await expect(removeCase("http://api", "tok", "c1")).rejects.toThrow(/not found|already/i);
+    // L3.H1: a dataset's home case is refused in the Conduit's own words, never a bare 409.
+    const kept = { detail: { error: "home_case_kept", message: "this is its dataset's home case, which holds the dataset's reports, alerts and promotion reviews, so it is kept while the dataset exists" } };
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 409, json: async () => kept })));
+    await expect(removeCase("http://api", "tok", "c1")).rejects.toThrow(
+      "This case cannot be removed: this is its dataset's home case, which holds the dataset's reports, alerts and promotion reviews, so it is kept while the dataset exists.",
+    );
   });
 
   it("forgets the case if it was the one remembered for this tab", async () => {
@@ -166,5 +172,15 @@ describe("caseIsOpenable", () => {
   it("is true when the server cannot be reached", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))));
     expect(await caseIsOpenable("http://test.invalid", "tok", "inv-1")).toBe(true);
+  });
+});
+
+describe("changing what a case reads (L3.H1)", () => {
+  it("refuses a dataset's home case in the Conduit's own words", async () => {
+    const kept = { detail: { error: "home_case_kept", message: "this is its dataset's home case, which holds the dataset's reports, alerts and promotion reviews, so it keeps reading its dataset while the dataset exists" } };
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 409, json: async () => kept })));
+    await expect(setCaseDatasets("http://api", "tok", "home-1", ["ds-b"])).rejects.toThrow(
+      "This case's dataset cannot be changed: this is its dataset's home case, which holds the dataset's reports, alerts and promotion reviews, so it keeps reading its dataset while the dataset exists.",
+    );
   });
 });

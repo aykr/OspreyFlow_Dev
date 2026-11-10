@@ -1,0 +1,12 @@
+## the load result never saying the drawn-watch count (PublishScreen.tsx line removed), then restored
+     × is said in the load result beside the counts 1072ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  1 failed | 2 passed (3)
+
+## a home case's refusal said as a bare 409 (both 409 branches removed from src/investigation/cases.ts), then restored
+     × says plainly when the server refuses, and does not pretend it worked 4ms
+     × refuses a dataset's home case in the Conduit's own words 1ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 19 passed (21)
+restored:
+      Tests  26 passed (26)

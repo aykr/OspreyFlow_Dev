@@ -1,0 +1,65 @@
+## the shared read-set rule keeping a borrowed layer for anyone (scope_to_case's caller)
+plant in services/api/dataset_scope.py; -k no_level_on_the_original; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_unconverted_case_layer.py::test_a_branch_member_with_no_level_on_the_original_reads_none_of_its_layer
+1 failed, 7 deselected in 1.06s
+E       AssertionError: assert '01M72VEX4ACN8WZT2YG35GHG2N' not in ((['member', '01M72VEX4ACN8WZT2YG35GHG2N']))
+E        +  where ['member', '01M72VEX4ACN8WZT2YG35GHG2N'] = Principal(id='branch-only', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=['member', '01M72VEX4ACN8WZT2YG35GHG2N']).datasets
+
+## the shared read-set rule keeping a borrowed layer for anyone (the drawn watches' caller)
+plant in services/api/dataset_scope.py; -k borrowed_layer; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_borrowed_layer_is_read_only_for_an_owner_holding_a_level_on_its_case
+1 failed, 21 deselected, 1 warning in 1.76s
+E       AssertionError: assert '01M72VEZA4FRBFJRF468RCQWM2' not in ['src', '01M72VEZA4FRBFJRF468RCQWM2']
+
+## a dataset's home case removed like any other
+plant in services/api/app.py; -k home_case_cannot_be_removed; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_home_cases.py::test_a_home_case_cannot_be_removed
+1 failed, 15 deselected, 1 warning in 1.80s
+E       AssertionError: 
+E       assert 204 == 409
+E        +  where 204 = <Response [204 No Content]>.status_code
+
+## every owner's drawn-watch alerts counted for the loader
+plant in services/api/drawn_watches.py; -k counts_only_the_drawn_watch_alerts; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_runs_report_counts_only_the_drawn_watch_alerts_raised_for_its_own_principal
+1 failed, 21 deselected, 1 warning in 1.63s
+E       assert 2 == 1
+
+## the run's count never put on its report
+plant in services/api/recipe_run.py; -k dataset_it_loaded_into; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into
+1 failed, 21 deselected, 1 warning in 1.51s
+E       AssertionError: assert 0 == 2
+E        +  where 0 = LoadReport(load_id='load-7', recipe_id='r', recipe_version=1, rows_read=0, rows_deduplicated=0, rows_already_loaded=0,...read=0, rows_staged=None, parquet_bytes=None, object_store_bytes=0, graph_writes=0), staging_steps=[], expert_steps=[]).drawn_watch_alerts
+
+## the loader's count lost when another owner's watch fails
+plant in services/api/recipe_run.py; -k never_changes_the_loaders_count; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_another_owners_failing_watch_never_changes_the_loaders_count
+1 failed, 21 deselected, 1 warning in 1.55s
+E       assert 0 == 1
+
+## the count taken only once a watch has run whole (lost to a later failure)
+plant in services/api/drawn_watches.py; -k counts_only_the_drawn_watch_alerts or never_changes_the_loaders_count; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_a_runs_report_counts_only_the_drawn_watch_alerts_raised_for_its_own_principal
+FAILED ../OspreyFlow_Build/tests/services/api/test_drawn_watch_alerts.py::test_another_owners_failing_watch_never_changes_the_loaders_count
+2 failed, 20 deselected, 1 warning in 1.57s
+E       assert 0 == 1
+E       assert 0 == 1
+
+## a home case moved off its dataset
+plant in services/api/app.py; -k never_moved_off_its_dataset; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_home_case_kept.py::test_a_home_case_is_never_moved_off_its_dataset
+1 failed, 1 warning in 1.63s
+E       AssertionError: [{"id":"ds-b","name":"Visits","owning_unit":"unit-1","created_at":"2026-01-01T00:00:00Z","created_by":"eng-1","egress":"none","kind":"source","members":[],"layer_of":null,"highest_marking":null,"promotion_policy":"author_promotes"}]
+E       assert 200 == 409
+E        +  where 200 = <Response [200 OK]>.status_code
+
+## the shared rule's level check skipped (a borrowed layer read with no level on its case)
+plant in services/api/dataset_scope.py; -k no_level_on_the_original; exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_unconverted_case_layer.py::test_a_branch_member_with_no_level_on_the_original_reads_none_of_its_layer
+1 failed, 7 deselected in 0.86s
+E       AssertionError: assert '01M72VFDSVNFTXCHV1PN43527C' not in ((['member', '01M72VFDSVNFTXCHV1PN43527C']))
+E        +  where ['member', '01M72VFDSVNFTXCHV1PN43527C'] = Principal(id='branch-only', clearance='OFFICIAL', org_unit='unit-1', receivable_handling_codes=[], roles=[], datasets=['member', '01M72VFDSVNFTXCHV1PN43527C']).datasets
+
+## restored
+47 passed, 1 warning in 2.28s

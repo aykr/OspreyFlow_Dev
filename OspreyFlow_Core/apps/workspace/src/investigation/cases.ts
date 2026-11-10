@@ -110,6 +110,7 @@ export async function setCaseDatasets(
   );
   if (response.status === 403) throw new Error("Only the case's Author can change what it reads.");
   if (response.status === 422) throw new Error("That dataset is not one this case can read.");
+  if (response.status === 409) throw new Error(await refusalWords(response, "This case's dataset cannot be changed"));
   if (!response.ok) throw new Error(`Could not change what this case reads (${response.status}).`);
   return (await response.json()) as Dataset[];
 }
@@ -205,6 +206,19 @@ export async function createCase(
   return (await response.json()) as { id: string; name: string; domains?: DomainPack[] };
 }
 
+/** A refusal in the Conduit's own words (L3.H1: a dataset's home case is kept, `home_case_kept`),
+ * after `lead`: "This case cannot be removed: this is its dataset's home case, …". */
+async function refusalWords(response: Response, lead: string): Promise<string> {
+  try {
+    const body = (await response.json()) as { detail?: { message?: string } };
+    const said = body.detail?.message;
+    if (typeof said === "string" && said) return `${lead}: ${said}.`;
+  } catch {
+    /* no words sent: the lead alone */
+  }
+  return `${lead}.`;
+}
+
 /** A soft remove: the case leaves every list and answers "not found", and nothing is deleted from
  * the database or the graph (ADR-052 Amendment 7). An Author may; so may an administrator of the
  * case's own unit. The Conduit decides; this only asks. */
@@ -222,6 +236,9 @@ export async function removeCase(
   }
   if (response.status === 404) {
     throw new Error("That case was not found. It may already have been removed.");
+  }
+  if (response.status === 409) {
+    throw new Error(await refusalWords(response, "This case cannot be removed"));
   }
   if (!response.ok) {
     throw new Error(`The case could not be removed (${response.status}).`);
