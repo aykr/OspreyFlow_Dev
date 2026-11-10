@@ -29977,6 +29977,45 @@ from about 20 hours to about 13.
    `test_an_acquire_while_every_stack_is_held_is_refused_and_names_every_holder` and the heartbeat's and
    launcher's cases for the nine lanes, each red first against the two-stack, six-lane tables.
 
+### ADR-142, Amendment 5 (10 November 2026) — a lane's live check is a selection by its change; the full live set runs nightly on main
+
+Status: accepted 10 November 2026, on the owner's word ("yes go ahead with all the steps", brief T1) and the
+orchestrator's ruling on admin's plan. ADR-142 and its earlier amendments stand except where this says so.
+
+**Why.** A lane's pre-merge live check ran either a list the lane picked by hand from what it thought its change
+reached, or the whole live set (291 files). The whole set took hours; studio's L1.7 list ran 2½ hours on stack f. A
+hand-picked list could leave out a test whose run imports the changed module through a conftest, an import inside a
+function or a module named in a string.
+
+1. **The live check is a selection.** A lane's live check before ready-to-merge is
+   `OspreyFlow_Build/scripts/stack_lease.sh live <lane>`. It runs, on the lane's leased stack, the live test files that
+   `OspreyFlow_Build/tools/live_select.py` selects for the lane's change against main
+   (`git diff --name-only --no-renames <merge-base>`, plus untracked files). A lane may still add files by hand (`--`
+   passes pytest arguments), never take them away.
+2. **What a change selects.** For each changed path, the first of:
+   - a rule in `OspreyFlow_Build/tools/live_map.tsv` (`none`, `all` or test paths, each with its reason), for the paths
+     imports cannot see;
+   - for a Python file, every live test file whose run imports it (its own imports, its package's and conftests', in
+     turn, including imports inside functions and modules named in a string or an f-string);
+   - otherwise the full set.
+
+   A `+` rule adds tests to what the other two give, for a live test that reads Python as text or loads it by glob.
+   A rule naming no live file is refused.
+3. **Never nothing.**
+   - `tests/services/api/test_route_rights.py` is selected for every change, so a selection is never empty.
+   - An empty selection is refused before anything is sent.
+   - A path no rule covers selects the full set.
+   - A renamed or removed Python file selects the full set: `--no-renames` gives a rename as its old path, which no
+     longer exists.
+4. **The full set nightly.** `stack_lease.sh live <lane> --all` runs every live file. The orchestrator runs it on main
+   each night, under its own lease, and a red there is a carry for the lane whose merge it follows.
+5. **Recorded as measured.** Over main's last 18 lane merges, a merge's own diff selected 184.5 of 291 live files on
+   average (63%). 11 needed the full set, because they changed modules nearly every live test imports
+   (`schemas/domain.py`, `ports/graph.py`). The script is `process/lanes/admin/t1p3_measure.py`.
+
+**Not decided here.** Which live tests need a store at all is T1 part 2's `pytest.mark.store`, which replaces the
+Makefile's `--ignore` list as the live set. Running them in parallel is part 4's.
+
 ### ADR-146, Amendment 2 (8 November 2026) — Rules and Monitoring as built in L2.9: the place's gate and the five routes it shares (three reads, two writes); an alert's address; the jump replaced; the Rule author's queue read, as the owner ruled
 
 Status: built by the rules lane in L2.9 (ADR-145 Amendment 4 decision 1; ADR-146 decisions 2 and 6), with

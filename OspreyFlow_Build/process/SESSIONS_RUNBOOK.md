@@ -179,6 +179,23 @@ OspreyFlow_Build/scripts/stack_lease.sh down studio
 OspreyFlow_Build/scripts/stack_lease.sh release studio
 ```
 
+**A lane's live check before ready-to-merge is a selection by its change** (ADR-142 Amendment 5):
+
+```
+OspreyFlow_Build/scripts/stack_lease.sh live studio              # the live files the lane's diff against main can reach
+OspreyFlow_Build/scripts/stack_lease.sh live studio -- -k ledger # the same, with pytest arguments
+OspreyFlow_Build/scripts/stack_lease.sh live studio --all        # every live file: the nightly run on main
+```
+
+It runs on the lane's leased stack, through `remote`, the files `OspreyFlow_Build/tools/live_select.py` selects:
+- every live test file whose run imports a changed Python file;
+- a rule in `OspreyFlow_Build/tools/live_map.tsv` for the paths imports cannot see;
+- the full set for a path no rule covers, or for a renamed or removed file;
+- `test_route_rights.py` always.
+
+`--why` in the selector says what each path chose. Add a rule to the map only for a path whose reach you can name,
+with its reason; a rule naming no live file is refused.
+
 `acquire` refuses while another lane holds the lease and says who, for what and since when. `release`
 refuses while the stack is still up. Your own deployment on 8080 and 2480 stays untouched: the port guard
 already refuses those ports in tests.
