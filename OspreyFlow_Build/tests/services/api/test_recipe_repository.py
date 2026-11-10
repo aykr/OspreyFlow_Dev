@@ -833,3 +833,21 @@ async def test_a_new_recipe_refused_is_not_left_on_the_volume(
     assert not (repo / "recipes" / "beta.yaml").exists(), "the refused recipe's file is left"
     assert _git(repo, "status", "--porcelain") == ""
     assert _git(repo, "ls-files").split() == ["recipes/alpha.yaml"]
+
+
+@needs_git
+async def test_an_aside_holding_more_than_a_git_directory_is_kept(tmp_path: Path) -> None:
+    """The carry from L1.7a's final review: the sweep removes only what a first use makes, an
+    aside holding one `.git` and nothing else. One of that shape holding anything more is not
+    ours, however old, and is kept."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    stranger = repo / ".git-init-q1w2e3r4"
+    (stranger / ".git").mkdir(parents=True)
+    (stranger / "notes.txt").write_text("an operator's\n")
+    old = time.time() - 3600
+    os.utime(stranger, (old, old))
+
+    await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert (stranger / "notes.txt").exists(), "an aside holding more than .git was swept"
