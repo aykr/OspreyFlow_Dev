@@ -522,14 +522,21 @@ async def test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says(
     and the like) or when the index is opened: dulwich's only way to them is refused here."""
     from dulwich.config import StackedConfig
 
+    read: list[str] = []
+
     def never(*args: object, **kwargs: object) -> object:
+        read.append("config")
         raise AssertionError("the publish read the user's or the system's git config")
 
     monkeypatch.setattr(StackedConfig, "default", classmethod(never))
     monkeypatch.setattr(StackedConfig, "default_backends", classmethod(never))
     repo = tmp_path / "repo"
-    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
-    await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+    try:
+        await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+    finally:
+        # Asked even when a publish raised, so the failure names the read, not the wrapped error.
+        assert read == [], "the publish read the user's or the system's git config"
 
     assert _git(repo, "symbolic-ref", "HEAD").strip() == "refs/heads/main"
     assert _git(repo, "log", "--format=%s").splitlines() == [
