@@ -1,4 +1,4 @@
-# head 0963ad7; plant: no serialisation: neither the thread lock nor the publish flock taken
+# head 748c071; plant: no serialisation: neither the thread lock nor the publish flock taken
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_concurrent_publishes_each_commit_their_own_bytes, test_the_index_is_read_and_written_under_a_lock_another_process_honours; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -38,14 +38,16 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_holding_more_than_a_git_directory_is_kept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to
-PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_leaves_the_file_rather_than_removing_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_is_refused_before_the_write
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipes_file_in_head_counts_as_holding_no_recipe
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_concurrent_publishes_each_commit_their_own_bytes - services.api.studio_publish.GitCommitError: committing 'recipes/alpha.yaml' failed (FileNotFoundError)
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: outside the lock: ['write', 'index read', 'index', 'commit', 'swap']
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_linked_publish_lock_is_refused - FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2797/test_a_linked_publish_lock_is_0/repo/.git/osprey-publish.lock'
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_linked_publish_lock_is_refused - FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2992/test_a_linked_publish_lock_is_0/repo/.git/osprey-publish.lock'
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_held_off_too_long_is_refused_not_hung - Failed: DID NOT RAISE GitCommitError
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait - AssertionError: [GitCommitError("committing 'recipes/alpha.yaml' failed (FileLocked)"), 'recipes/alpha.yaml']
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait - AssertionError: [GitCommitError("committing 'recipes/alpha.yaml' failed (FileNotFoundError)"), 'recipes/alpha.yaml']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits - AssertionError: committed after 0.00 s, without waiting for the lock
-6 failed, 41 passed in 6.56s
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock - AssertionError: the first-use sweep ran with (lock, flock file) (False, False)
+7 failed, 42 passed in 6.46s

@@ -1,4 +1,4 @@
-# head 0963ad7; plant: the commit never written: `if not unchanged:` -> `if False:`
+# head 748c071; plant: the commit never written: `if not unchanged:` -> `if False:`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 # must fail: test_publish_writes_a_commit_real_git_reads, test_a_second_publish_keeps_the_first_in_the_history, test_the_file_is_committed_at_the_path_the_registry_row_will_name; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api
@@ -14,6 +14,7 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_holding_more_than_a_git_directory_is_kept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipes_file_in_head_counts_as_holding_no_recipe
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_in_the_repository_is_the_bytes_given
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_write_and_commit_recipe_goes_through_the_same_commit
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s', '--', 'recipes/alpha.yaml']' returned non-zero exit status 128.
@@ -48,10 +49,11 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to - Failed: DID NOT RAISE GitCommitError
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_leaves_the_file_rather_than_removing_it - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', '-c', 'user.name=Op', '-c', 'user.email=op@localhost', 'tag', '-a', '-m', 'a tag', 'v1']' returned non-zero exit status 128.
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too - FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2789/test_a_failure_after_the_renam0/repo/recipes/alpha.yaml'
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_is_refused_before_the_write - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', '-c', 'user.name=Op', '-c', 'user.email=op@localhost', 'tag', '-a', '-m', 'a tag', 'v1']' returned non-zero exit status 128.
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written - Failed: DID NOT RAISE GitCommitError
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too - FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2986/test_a_failure_after_the_renam0/repo/recipes/alpha.yaml'
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_is_committed_at_the_path_the_registry_row_will_name - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_committing_the_same_bytes_again_is_not_an_error - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_changed_bytes_are_a_second_commit - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_a_failed_commit_is_an_error_not_a_quiet_success - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
-38 failed, 15 passed in 9.72s
+39 failed, 16 passed in 9.46s
