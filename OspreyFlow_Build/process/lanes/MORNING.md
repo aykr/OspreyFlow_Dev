@@ -109,6 +109,12 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    start-up as well as the tests (one code path, rule 15). No restore on a refusal: main's own partial-apply
    semantics, completed by the next idempotent apply (a restore could drop another replica's type). Measured: a fresh
    schema 15.8 s to 0.2 s; the whole graph conformance suite passes. **To overrule:** say "tests only".
+15. **For your information: `osprey-small` on the test server is safe from the lanes' builds** (platform-b checked,
+   read-only). Every image it runs is pinned by digest, so no lane's build can change what it starts. Two things to
+   know: (a) its own images are kept only because its containers use them, so no `docker image prune` on that
+   server, and do not remove those containers, or the next `up` must pull from ghcr.io; (b) its ingest image
+   (`ghcr.io/aykr/ingest@sha256:52f8c292…`, the batch profile) is not on the server at all, so an ingest job there
+   would pull it from ghcr.io and needs registry access. Nothing to decide unless you plan an ingest on it.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
