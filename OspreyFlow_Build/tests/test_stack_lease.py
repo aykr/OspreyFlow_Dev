@@ -667,7 +667,18 @@ def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease,
     assert "Wall time:" in start and "no stack, no lease" in start, start
 
 
-def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code(lease, tmp_path: Path) -> None:
+# `ps -o ppid=` right-aligns the pid on Linux ("runner  192907" on the owner's server, 10 November 2026)
+# and not on macOS, so the case is run both ways: as ps prints it here, and padded as the server prints it.
+_RUNNER = {
+    "as ps prints it": 'echo "runner $(ps -o ppid= -p $PPID)"',
+    "padded, as on the server": 'printf "runner %10s\\n" "$(ps -o ppid= -p $PPID)"',
+}
+
+
+@pytest.mark.parametrize("runner", list(_RUNNER))
+def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code(
+    lease, tmp_path: Path, runner: str
+) -> None:
     """The start call exactly as ssh received it (after this machine's own quoting), run as the host runs it, with
     HOME a folder here: red if a lost backslash expands $? or $$ on this machine, or the line goes missing."""
     lease("acquire", "studio", "a run")
@@ -689,7 +700,7 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
     for tool in ("ssh", "setsid"):
         (bin_dir / tool).chmod(0o755)
     wt = _lane_worktree(tmp_path)
-    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "sh", "-c", 'echo hello; echo "runner $(ps -o ppid= -p $PPID)"; exit 7')
+    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "sh", "-c", f"echo hello; {_RUNNER[runner]}; exit 7")
     assert ran.returncode == 0, ran.stderr
     runs = home / "osprey-runs" / "case.meta" / "runs"
     run = next(p for p in runs.iterdir() if p.name != "last")
@@ -701,7 +712,8 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
     assert (run / "wall").read_text().strip().isdigit()
     lines = (run / "log").read_text().splitlines()
     # The pid file holds the host's own shell, the one running cmd.sh (what follow's tail --pid waits on).
-    assert lines[1] == f"runner {(run / 'pid').read_text().strip()}", lines
+    # By field, not by the exact line: how wide ps prints a pid is the platform's, not the script's.
+    assert lines[1].split() == ["runner", (run / "pid").read_text().strip()], lines
     assert lines[0] == "hello", lines
     assert lines[-1].startswith("Wall time: ") and "exit 7 (stack b, the lease case took at 20" in lines[-1], lines
     assert "set-up before it" in lines[-1], lines
