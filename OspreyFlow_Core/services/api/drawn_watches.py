@@ -49,8 +49,7 @@ from schemas.domain import NOT_SAME_AS, SAME_AS, Alert, AlertMode, Handling, Nod
 from .alerts import AlertStore
 from .board_store import BoardItemStore
 from .boards import resembles
-from .dataset_scope import HoldsALevel, case_reads
-from .investigations import AccessLevel, InsufficientAccessError, InvestigationNotFoundError
+from .dataset_scope import HoldsALevel, case_reads, holds_a_level_in
 
 
 @dataclass(frozen=True)
@@ -103,17 +102,6 @@ def raise_into(store: AlertStore) -> Callable[[DrawnWatchMatch], Awaitable[None]
         await store.save(alert, handlings=handlings)
 
     return raise_alert
-
-
-def holds_a_level_in(investigations: Any) -> HoldsALevel:
-    async def holds(principal: Principal, case_id: str) -> bool:
-        try:
-            await investigations.get_authorized(case_id, principal, need=AccessLevel.VIEWER)
-        except (InvestigationNotFoundError, InsufficientAccessError):
-            return False
-        return True
-
-    return holds
 
 
 async def case_read_set(

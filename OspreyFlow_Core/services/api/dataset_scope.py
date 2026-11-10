@@ -64,6 +64,7 @@ from .datasets import (
     TouchesTheOriginalsWorkError,
     reads_dataset_names,
 )
+from .investigations import AccessLevel, InsufficientAccessError, InvestigationNotFoundError
 
 _CASE_DATASETS: ContextVar[tuple[str, ...] | None] = ContextVar("case_datasets", default=None)
 _CASE_LAYER: ContextVar[str | None] = ContextVar("case_layer", default=None)
@@ -248,6 +249,23 @@ async def refuse_correcting_a_drawn_node(
 
 #: Whether a principal holds any level on a case (its Viewer check, answered as a yes or no).
 HoldsALevel = Callable[[Principal, str], Awaitable[bool]]
+
+
+def holds_a_level_in(investigations: Any) -> HoldsALevel:
+    """Whether a principal holds any level on a case, by the case's own Viewer check: what a case
+    made from another and not yet converted asks before its reader reads its original's layer
+    (`scope_to_case`, and the drawn watches' `case_read_set`: one check, never a copy, L3.H2).
+    Given as a store or a getter, the store is looked up only when such a case asks."""
+
+    async def holds(principal: Principal, investigation_id: str) -> bool:
+        store = investigations() if callable(investigations) else investigations
+        try:
+            await store.get_authorized(investigation_id, principal, need=AccessLevel.VIEWER)
+        except (InvestigationNotFoundError, InsufficientAccessError):
+            return False
+        return True
+
+    return holds
 
 
 def readable_of_case(
@@ -728,6 +746,7 @@ def stamping(
 
 
 __all__: Sequence[str] = (
+    "holds_a_level_in",
     "BulkDatasetStampingGraph",
     "DatasetRegistry",
     "UnknownDatasetError",
