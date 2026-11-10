@@ -27,3 +27,7 @@ screens, which L3.4 and L1.x build) and the boards' Alerts panel mount (L3.3). B
 | Patch | Owner | What | Its test, red first |
 | --- | --- | --- | --- |
 | `registry-L2.11a.patch` | shared (`keyboard/actionRegistry.ts`) | `RULE_STANDARDS_ACTIONS` (3 ids): *Show as BPMN* opened, then closed by Escape and by *Close*, with focus back on the button each time. It goes in with the merge itself, since `keyboard/rule-standards.spec.ts` imports it | each id's case in `rule-standards.spec.ts`, red with its handler removed (l2.11a/RED_RECORD §4) |
+| `audit-L2.11a.patch` | admin (`services/api/audit_section.py`) | `export_rule_file` classified in `READS_AND_OTHER`. **The branch needs it at merge:** `test_audit_kinds.py` is red without it (it finds every action the Conduit writes) and green with it (6) | `test_audit_kinds.py`, red at the branch head, green with the patch applied |
+| `every-harness-L2.11a.patch` | shared (`a11y/every-harness.spec.ts`) | `EXTRA_STATES` for `rule-standards-harness.html`: the drawing open, and a stored file it does not draw | the axe scan of those two states in dark, light and GOV.UK |
+
+All three apply at the branch head (`git apply --check`).

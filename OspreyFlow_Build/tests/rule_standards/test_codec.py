@@ -348,3 +348,87 @@ def test_the_workspace_fixture_is_the_codecs_own_output() -> None:
         "the workspace's BPMN fixture is not what the codec writes; rewrite it with "
         "OSPREY_WRITE_FIXTURES=1"
     )
+
+
+def test_a_bare_document_type_declaration_is_refused() -> None:
+    # No entity: only `forbid_dtd` refuses this one (an entity is refused by defusedxml anyway).
+    bpmn, dmn = _files()
+    planted = bpmn.replace("<bpmn:definitions ", "<!DOCTYPE definitions><bpmn:definitions ", 1)
+    with pytest.raises(MalformedRuleFile, match="declaration"):
+        from_files(planted.encode(), dmn.encode())
+
+
+def test_a_name_with_a_tab_or_a_line_break_comes_back_the_same() -> None:
+    rule = _rule("the least", name="Visits\tafter\nhours\r")
+    bpmn, dmn = _files(rule)
+    assert from_files(bpmn.encode(), dmn.encode()).rule == rule
+
+
+@pytest.mark.parametrize("value", [1e-05, 1.5e20, -0.0, 12345678.125])
+def test_a_number_is_a_feel_literal_and_comes_back_the_same(value: float) -> None:
+    sentence = RuleSentence.model_validate(
+        {"subject": "Account", "conditions": [{"op": "above", "property": "balance", "value": value}]}
+    )
+    rule = SentenceRuleInput(name="n", sentence=sentence)
+    bpmn, dmn = _files(rule)
+    (cell,) = re.findall(r'<dmn:inputEntry id="rule_1_input_1"><dmn:text>([^<]*)</dmn:text>', dmn)
+    assert re.fullmatch(r"&gt; -?\d+(\.\d+)?", cell), cell
+    assert from_files(bpmn.encode(), dmn.encode()).rule == rule
+
+
+def test_a_number_a_table_cannot_hold_is_refused_at_export() -> None:
+    sentence = RuleSentence.model_validate(
+        {"subject": "Account", "conditions": [{"op": "below", "property": "balance", "value": "inf"}]}
+    )
+    with pytest.raises(ValueError, match="not a number"):
+        to_dmn(SentenceRuleInput(name="n", sentence=sentence))
+
+
+def test_a_time_column_is_typed_as_dmn_names_it() -> None:
+    _, dmn = _files()
+    assert 'typeRef="date and time"' in dmn and "dateTime" not in dmn
+
+
+def test_an_element_out_of_its_place_is_refused_by_name() -> None:
+    bpmn, dmn = _files()
+    in_the_drawing = _plant(bpmn, '<bpmndi:BPMNPlane id="plane" bpmnElement="rule">', '<bpmn:endEvent id="x"/>')
+    with pytest.raises(UnsupportedElements) as refused:
+        from_files(in_the_drawing, dmn.encode())
+    assert refused.value.names == ["bpmn:endEvent (inside bpmndi:BPMNPlane)"]
+    stray = _plant(bpmn, "<bpmn:extensionElements>", '<osprey:raise severity="low" team="case" scope="this_case"/>')
+    with pytest.raises(UnsupportedElements) as refused:
+        from_files(stray, dmn.encode())
+    assert refused.value.names == ["osprey:raise (inside bpmn:process extensionElements)"]
+
+
+def test_a_second_output_is_refused() -> None:
+    bpmn, dmn = _files()
+    planted = _plant(dmn, '<dmn:output id="output" name="raise" typeRef="boolean"/>',
+                     '<dmn:output id="output_2" name="also" typeRef="boolean"/>')
+    with pytest.raises(MalformedRuleFile, match="one output"):
+        from_files(bpmn.encode(), planted)
+
+
+def test_an_attribute_the_rule_would_drop_is_refused_by_name() -> None:
+    bpmn, dmn = _files(_rule("on a hotlist"))
+    linked = dmn.replace('<osprey:relationship kind="on_hotlist"/>',
+                         '<osprey:relationship kind="on_hotlist" linkType="KNOWS"/>', 1)
+    assert linked != dmn
+    with pytest.raises(UnsupportedElements) as refused:
+        from_files(bpmn.encode(), linked.encode())
+    assert refused.value.names == ["osprey:linkType (on osprey:relationship)"]
+    bpmn, dmn = _files(_rule("a rarity"))
+    scaled = dmn.replace('kind="shared_attribute_rarity"', 'kind="shared_attribute_rarity" scale="client"', 1)
+    assert scaled != dmn
+    with pytest.raises(UnsupportedElements) as refused:
+        from_files(bpmn.encode(), scaled.encode())
+    assert refused.value.names == ["osprey:scale (on osprey:strength)"]
+
+
+@pytest.mark.skipif("team_id" in RuleSentence.model_fields, reason="the sentence names a team since L2.10")
+def test_a_team_is_refused_while_the_sentence_cannot_name_one() -> None:
+    bpmn, dmn = _files()
+    planted = bpmn.replace("<osprey:raise ", '<osprey:raise teamId="role-7" ', 1)
+    with pytest.raises(UnsupportedElements) as refused:
+        from_files(planted.encode(), dmn.encode())
+    assert refused.value.names == ["osprey:teamId (on osprey:raise)"]

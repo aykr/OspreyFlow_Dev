@@ -544,9 +544,9 @@ def test_every_right_guards_at_least_one_route() -> None:
     `draw_on_boards` guards the boards' routes (L3.3); `read_audit` guards Admin › Audit (L2.6)."""
     not_yet = {"revert_loads",
                "export_override",
-               # ADR-112 Amendment 5: arrives with its own step's routes (Rules and Monitoring).
-               # `merge_datasets` guards the drawn-dataset merge's four routes since L3.9.
-               "author_rules",
+               # ADR-112 Amendment 5's rights came with their steps' routes: `merge_datasets`
+               # guards the drawn-dataset merge's four routes since L3.9, `author_rules` the rule
+               # import since L2.11a.
                # Superseded at L3.5 by `propose_types` (ADR-112 Amendment 4); its removal from
                # the rights and the role screens is the orchestrator's (case-b's report).
                "propose_link_type"}  # fmt: skip

@@ -30,14 +30,24 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from decimal import Decimal
+from typing import Any, get_args
 from xml.etree.ElementTree import Element, ParseError
 
 import defusedxml.ElementTree as safe_xml
 from defusedxml import DefusedXmlException
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
-from schemas.sentences import SentenceRuleInput
+from schemas.sentences import (
+    AreaPoint,
+    DrawnArea,
+    RuleSchedule,
+    RuleSentence,
+    SentenceFrequency,
+    SentenceRelationship,
+    SentenceRuleInput,
+    SentenceStrength,
+)
 
 BPMN = "http://www.omg.org/spec/BPMN/20100524/MODEL"
 BPMNDI = "http://www.omg.org/spec/BPMN/20100524/DI"
@@ -101,6 +111,50 @@ _ALLOWED: dict[str, frozenset[str]] = {
 }
 _ALLOWED_ROOT = {"bpmn": "bpmn:definitions", "dmn": "dmn:definitions"}
 
+#: Where each element may stand: its parent, or for an extension, the element whose
+#: `extensionElements` holds it (`owner>extensionElements`). Anything elsewhere is refused by name,
+#: so an element OspreyFlow reads in one place is never carried, unread, in another.
+_PLACED: dict[str, frozenset[str]] = {
+    name: frozenset(parents)
+    for name, parents in {
+        "bpmn:process": ("bpmn:definitions",),
+        "bpmn:extensionElements": ("bpmn:process", "bpmn:businessRuleTask", "bpmn:endEvent"),
+        "bpmn:startEvent": ("bpmn:process",),
+        "bpmn:businessRuleTask": ("bpmn:process",),
+        "bpmn:endEvent": ("bpmn:process",),
+        "bpmn:sequenceFlow": ("bpmn:process",),
+        "bpmn:incoming": ("bpmn:businessRuleTask", "bpmn:endEvent"),
+        "bpmn:outgoing": ("bpmn:startEvent", "bpmn:businessRuleTask"),
+        "bpmndi:BPMNDiagram": ("bpmn:definitions",),
+        "bpmndi:BPMNPlane": ("bpmndi:BPMNDiagram",),
+        "bpmndi:BPMNShape": ("bpmndi:BPMNPlane",),
+        "bpmndi:BPMNEdge": ("bpmndi:BPMNPlane",),
+        "dc:Bounds": ("bpmndi:BPMNShape",),
+        "di:waypoint": ("bpmndi:BPMNEdge",),
+        "dmn:decision": ("dmn:definitions",),
+        "dmn:extensionElements": ("dmn:decision", "dmn:input"),
+        "dmn:decisionTable": ("dmn:decision",),
+        "dmn:input": ("dmn:decisionTable",),
+        "dmn:output": ("dmn:decisionTable",),
+        "dmn:rule": ("dmn:decisionTable",),
+        "dmn:inputExpression": ("dmn:input",),
+        "dmn:inputEntry": ("dmn:rule",),
+        "dmn:outputEntry": ("dmn:rule",),
+        "dmn:text": ("dmn:inputExpression", "dmn:inputEntry", "dmn:outputEntry"),
+        "osprey:rule": ("bpmn:process>extensionElements",),
+        "osprey:when": ("bpmn:process>extensionElements",),
+        "osprey:schedule": ("osprey:when",),
+        "osprey:limits": ("bpmn:businessRuleTask>extensionElements",),
+        "osprey:raise": ("bpmn:endEvent>extensionElements",),
+        "osprey:subject": ("dmn:decision>extensionElements",),
+        "osprey:relationship": ("dmn:decision>extensionElements",),
+        "osprey:frequency": ("dmn:decision>extensionElements",),
+        "osprey:strength": ("dmn:decision>extensionElements",),
+        "osprey:area": ("dmn:input>extensionElements", "osprey:relationship"),
+        "osprey:point": ("osprey:area",),
+    }.items()
+}
+
 
 class UnsupportedElements(Exception):
     """An import holding elements or attributes OspreyFlow does not run, each named."""
@@ -130,9 +184,11 @@ class RuleFile:
 
 def _attr(value: object) -> str:
     text = str(value)
+    # A tab, line feed or carriage return written bare in an attribute is read back as a space.
     return (
         text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-    )
+        .replace("\t", "&#9;").replace("\n", "&#10;").replace("\r", "&#13;")
+    )  # fmt: skip
 
 
 def _text(value: str) -> str:
@@ -168,6 +224,13 @@ def _rule_dict(rule: SentenceRuleInput) -> dict[str, Any]:
     return rule.model_dump(mode="python")
 
 
+def _feel_number(value: float) -> str:
+    """A FEEL numeric literal: digits and a point, never an exponent (`1e-05` is not FEEL)."""
+    if value != value or value in (float("inf"), float("-inf")):
+        raise ValueError(f"{value} is not a number a decision table can hold")
+    return format(Decimal(repr(value)), "f")
+
+
 def _feel_string(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
@@ -184,16 +247,16 @@ def _cell(condition: Mapping[str, Any]) -> tuple[str, str]:
     if op == "one_of":
         return ",".join(_feel_string(v) for v in condition["values"]), "string"
     if op == "above":
-        return f"> {condition['value']!r}", "number"
+        return f"> {_feel_number(condition['value'])}", "number"
     if op == "below":
-        return f"< {condition['value']!r}", "number"
+        return f"< {_feel_number(condition['value'])}", "number"
     if op == "within_time":
         start, end = condition["start"], condition["end"]
         if start is not None and end is not None:
-            return f"[{_feel_time(start)}..{_feel_time(end)}]", "dateTime"
+            return f"[{_feel_time(start)}..{_feel_time(end)}]", "date and time"
         if start is not None:
-            return f">= {_feel_time(start)}", "dateTime"
-        return f"<= {_feel_time(end)}", "dateTime"
+            return f">= {_feel_time(start)}", "date and time"
+        return f"<= {_feel_time(end)}", "date and time"
     return "-", "string"  # within_area: the area is the column's own osprey:area
 
 
@@ -340,12 +403,20 @@ def _parse(data: bytes, kind: str) -> Element:
 
 def _unsupported(root: Element) -> list[str]:
     found: list[str] = []
+    parents = {child: parent for parent in root.iter() for child in parent}
     for element in root.iter():
         name = _qualified(element.tag)
         allowed = _ALLOWED.get(name)
         if allowed is None:
             found.append(name)
             continue
+        parent = parents.get(element)
+        if parent is not None:
+            where = _qualified(parent.tag)
+            if where.endswith(":extensionElements") and parent in parents:
+                where = f"{_qualified(parents[parent].tag)}>extensionElements"
+            if where not in _PLACED.get(name, frozenset()):
+                found.append(f"{name} (inside {where.replace('>', ' ')})")
         for attribute in element.attrib:
             attr = _qualified(attribute)
             if attr not in allowed:
@@ -364,18 +435,37 @@ def _one(element: Element, name: str, what: str, file: str) -> Element:
     return found[0]
 
 
-def _fields(element: Element) -> dict[str, str]:
-    return {_snake(_qualified(k).removeprefix("osprey:")): v for k, v in element.attrib.items()}
+def _variant(union: Any, kind: str | None) -> type[BaseModel] | None:
+    """The member of a discriminated union whose `kind` is `kind`, or `None` for no such kind
+    (then the model's own validation refuses it, in words)."""
+    for member in get_args(get_args(union)[0]):
+        if member.model_fields["kind"].default == kind:
+            return member  # type: ignore[no-any-return]
+    return None
+
+
+def _fields(element: Element, model: type[BaseModel] | None = None) -> dict[str, str]:
+    """An `osprey:` element's attributes as the model's fields. An attribute the model has no
+    field for is refused by name: the model would ignore it, and the rule would come back without
+    what the file said (a team named by a schema that has no team yet, a link type on a hotlist)."""
+    fields = {_snake(_qualified(k).removeprefix("osprey:")): v for k, v in element.attrib.items()}
+    if model is not None:
+        unread = [k for k in fields if k not in model.model_fields]
+        if unread:
+            name = _qualified(element.tag)
+            raise UnsupportedElements([f"osprey:{_camel(k)} (on {name})" for k in unread])
+    return fields
 
 
 def _read_area(element: Element, file: str) -> dict[str, Any]:
     area = _one(element, "osprey:area", "one drawn area", file)
-    return {**_fields(area), "points": [_fields(p) for p in _children(area, "osprey:point")]}
+    points = [_fields(p, AreaPoint) for p in _children(area, "osprey:point")]
+    return {**_fields(area, DrawnArea), "points": points}
 
 
 _STRINGS = re.compile(r'"(?:[^"\\]|\\.)*"(?:,"(?:[^"\\]|\\.)*")*')
 _STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
-_NUMBER = re.compile(r"([<>]) (-?\d+(?:\.\d+)?(?:e[-+]?\d+)?)")
+_NUMBER = re.compile(r"([<>]) (-?\d+(?:\.\d+)?)")
 _TIME = r'date and time\("([^"]+)"\)'
 _RANGE = re.compile(rf"\[{_TIME}\.\.{_TIME}\]")
 _FROM = re.compile(rf">= {_TIME}")
@@ -441,15 +531,17 @@ def _read_bpmn(root: Element) -> tuple[str, str, dict[str, Any], dict[str, str],
             "The .bpmn file names no dataset: a rule always works on one declared dataset"
         )
     when_el = _one(extensions, "osprey:when", "one osprey:when", "bpmn")
-    when: dict[str, Any] = _fields(when_el)
+    when: dict[str, Any] = _fields(when_el, RuleSentence)
     schedules = _children(when_el, "osprey:schedule")
     if len(schedules) > 1:
         raise MalformedRuleFile("The rule's osprey:when holds more than one schedule")
-    when["schedule"] = _fields(schedules[0]) if schedules else None
+    when["schedule"] = _fields(schedules[0], RuleSchedule) if schedules else None
     task_ext = _one(task, "bpmn:extensionElements", "the task's extensions", "bpmn")
-    limits = _fields(_one(task_ext, "osprey:limits", "one osprey:limits", "bpmn"))
+    limits = _fields(
+        _one(task_ext, "osprey:limits", "one osprey:limits", "bpmn"), SentenceRuleInput
+    )
     end_ext = _one(end, "bpmn:extensionElements", "the end event's extensions", "bpmn")
-    then = _fields(_one(end_ext, "osprey:raise", "one osprey:raise", "bpmn"))
+    then = _fields(_one(end_ext, "osprey:raise", "one osprey:raise", "bpmn"), RuleSentence)
     decision_ref = task.get(f"{{{OSPREY}}}decisionRef") or ""
     return process.get("name") or "", dataset, {**when, **then}, limits, decision_ref
 
@@ -473,7 +565,10 @@ def _read_dmn(root: Element, decision_ref: str) -> tuple[str, dict[str, Any]]:
         if len(found) > 1:
             raise MalformedRuleFile(f"The decision holds more than one osprey:{part}")
         if found:
-            sentence[part] = _fields(found[0])
+            unions = {"relationship": SentenceRelationship, "frequency": SentenceFrequency,
+                      "strength": SentenceStrength}  # fmt: skip
+            model = _variant(unions[part], found[0].get("kind"))
+            sentence[part] = _fields(found[0], model)
             if _children(found[0], "osprey:area"):
                 sentence[part]["area"] = _read_area(found[0], "dmn")
     table = _one(decision, "dmn:decisionTable", "one decision table", "dmn")
@@ -484,6 +579,10 @@ def _read_dmn(root: Element, decision_ref: str) -> tuple[str, dict[str, Any]]:
     cells = _children(rows[0], "dmn:inputEntry")
     if len(cells) != len(inputs):
         raise MalformedRuleFile("The decision table's rule does not fill every column")
+    if len(_children(table, "dmn:output")) != 1:
+        raise MalformedRuleFile(
+            "A rule's decision table has one output, whether to raise the alert"
+        )
     outputs = [_children(o, "dmn:text") for o in _children(rows[0], "dmn:outputEntry")]
     if len(outputs) != 1 or [t.text for t in outputs[0]] != ["true"]:
         raise MalformedRuleFile(

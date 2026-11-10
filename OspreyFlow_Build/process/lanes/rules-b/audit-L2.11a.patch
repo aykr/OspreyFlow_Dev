@@ -1,0 +1,13 @@
+diff --git a/OspreyFlow_Core/services/api/audit_section.py b/OspreyFlow_Core/services/api/audit_section.py
+index 28f6abb..4d745d2 100644
+--- a/OspreyFlow_Core/services/api/audit_section.py
++++ b/OspreyFlow_Core/services/api/audit_section.py
+@@ -205,6 +205,8 @@ READS_AND_OTHER: tuple[str, ...] = (
+     "grading_change",
+     # L1.6's refusal and reads: a connector's read refused, a connection tested.
+     "connector_read_refused", "test_ingest_connection",
++    # Rules-b's L2.11a (ADR-146 decision 3): a rule's .bpmn or .dmn exported.
++    "export_rule_file",
+     "dataset_list_subscriptions", "list_deployment_list_imports", "list_deployment_lists",
+     "offered_reference_lists",
+     "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",

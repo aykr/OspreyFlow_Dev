@@ -93,6 +93,25 @@ describe("ShowAsBpmn", () => {
     expect(screen.queryByRole("img")).toBeNull();
   });
 
+  it("takes Escape for itself, so the editor around it does not act on it too", () => {
+    let editorHeard = 0;
+    const editor = (e: KeyboardEvent) => {
+      if (e.key === "Escape") editorHeard += 1;
+    };
+    document.addEventListener("keydown", editor);
+    try {
+      render(<ShowAsBpmn bpmnXml={BPMN} />);
+      fireEvent.click(screen.getByRole("button", { name: "Show as BPMN" }));
+      fireEvent.keyDown(screen.getByRole("button", { name: "Close" }), {
+        key: "Escape",
+      });
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(editorHeard).toBe(0);
+    } finally {
+      document.removeEventListener("keydown", editor);
+    }
+  });
+
   it("gives focus back to the button when it closes, by Escape or by Close", () => {
     render(<ShowAsBpmn bpmnXml={BPMN} />);
     const button = screen.getByRole("button", { name: "Show as BPMN" });

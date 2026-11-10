@@ -1,0 +1,196 @@
+# Live run at e81e8a2 (on main f82f35c), lease rules-b on stack d (server, remote), 08:51:06Z–08:55:18Z, 10 November 2026
+# The live set, then the reach plant (a malformed first plant: it dropped the clause but kept its argument, so it was red for the wrong reason, asyncpg's argument count; not counted)
+Running on ospreyflow-test (stack d, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b.meta/runs/20261110T085242Z/log: sh process/lanes/rules-b/l2.11a/live_run.sh
+## the live set
+...F.................................................................... [ 23%]
+........................................................................ [ 47%]
+........................................................................ [ 71%]
+........................................................................ [ 95%]
+..............                                                           [100%]
+=================================== FAILURES ===================================
+__________________ test_every_right_guards_at_least_one_route __________________
+
+    def test_every_right_guards_at_least_one_route() -> None:
+        """A right no route checks is a right stated and exercised by nothing (rule 12) — except the
+        two the Conduit has no route for yet: people, dashboards and data feeds arrive with the Admin
+        area (ADR-110 Amendment 1, ADR-112); reverting a load has no route (spec 09 §6). Screening
+        lists gained theirs with ADR-133 stage (c); the domain model's editor, its routes in L3.1b. A
+        promotion's reviewer (`review_promotions`, ADR-112 Amendment 4) is held today only to count a
+        dataset's approvers in Admin › Datasets and guards the promotion's review (L3.4).
+        `manage_models` (ADR-112 Amendment 7) guards *Admin › Models*' routes (platform's P1).
+        `draw_on_boards` guards the boards' routes (L3.3); `read_audit` guards Admin › Audit (L2.6)."""
+        not_yet = {"revert_loads",
+                   "export_override",
+                   # ADR-112 Amendments 4 and 5: each arrives with its own step's routes (the
+                   # drawn-dataset merge, Rules and Monitoring).
+                   "merge_datasets", "author_rules",
+                   # Superseded at L3.5 by `propose_types` (ADR-112 Amendment 4); its removal from
+                   # the rights and the role screens is the orchestrator's (case-b's report).
+                   "propose_link_type"}  # fmt: skip
+        guarded = {r for r in ROUTE_RIGHTS.values() if r}
+>       assert {r.value for r in Right} - guarded == not_yet
+E       AssertionError: assert {'export_over...revert_loads'} == {'author_rule...revert_loads'}
+E         
+E         Extra items in the right set:
+E         'author_rules'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_route_rights.py:540: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_rule_standards_routes.py::test_a_file_over_the_cap_is_refused_before_it_is_read
+  /root/osprey-runs/rules-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/rule_standards_routes.py:96: StarletteDeprecationWarning: 'HTTP_413_REQUEST_ENTITY_TOO_LARGE' is deprecated. Use 'HTTP_413_CONTENT_TOO_LARGE' instead.
+    bpmn_bytes = await _read_capped(bpmn, "bpmn")
+
+tests/services/api/test_rule_standards_routes.py::test_an_imported_rule_naming_an_undeclared_property_is_refused_in_words
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route
+1 failed, 301 passed, 3 warnings in 133.89s (0:02:13)
+EXIT 1
+## plant: get_listed's reach dropped from its WHERE (server copy only)
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+_____________ test_export_reads_through_the_real_rules_lists_reach _____________
+
+world = {'case': '01M72AP158W4TWDXCQC254C75E', 'own': '01M72AP18DZM8BRWZD5CSDPBRX', 'other': '01M72AP18PQ10DB6HM62ZM6X5A', 'hidden': '01M72AP18VEQ5W22KXS2S5Y8MX'}
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x773795cc8e10>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x773795cc8190>)
+
+    def test_export_reads_through_the_real_rules_lists_reach(
+        world: dict[str, str], keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        base = f"/v1/investigations/{world['case']}/rules"
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            viewer = _as(key, VIEWER, ["analyst"])
+>           own = client.get(f"{base}/{world['own']}/export.bpmn", headers=viewer)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_rule_standards_routes_live.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_client.py:1053: in get
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:518: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:928: in send
+    raise exc
+.venv/lib/python3.12/site-packages/httpx/_client.py:922: in send
+    response.read()
+.venv/lib/python3.12/site-packages/httpx/_models.py:881: in read
+    self._content = b"".join(self.iter_bytes())
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_models.py:897: in iter_bytes
+    for raw_bytes in self.iter_raw():
+.venv/lib/python3.12/site-packages/httpx/_models.py:951: in iter_raw
+    for raw_stream_bytes in self.stream:
+.venv/lib/python3.12/site-packages/httpx/_client.py:153: in __iter__
+    for chunk in self._stream:
+.venv/lib/python3.12/site-packages/starlette/testclient.py:384: in iter_body
+    exit_stack.close()
+/usr/lib/python3.12/contextlib.py:618: in close
+    self.__exit__(None, None, None)
+/usr/lib/python3.12/contextlib.py:610: in __exit__
+    raise exc_details[1]
+/usr/lib/python3.12/contextlib.py:595: in __exit__
+    if cb(*exc_details):
+       ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:399: in close_app
+    raise exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:366: in run_app
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:745: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:372: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:14254: in export_rule_standard_file
+    rule = await typology_rules.get_listed(rule_id, investigation.id, principal)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/typology_rules.py:339: in get_listed
+    row = await conn.fetchrow(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:775: in fetchrow
+    data = await self._execute(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:1904: in _execute
+    result, _ = await self.__execute(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2003: in __execute
+    result, stmt = await self._do_execute(
+.venv/lib/python3.12/site-packages/asyncpg/connection.py:2066: in _do_execute
+    result = await executor(stmt, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+asyncpg/protocol/protocol.pyx:176: in bind_execute
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   asyncpg.exceptions._base.InterfaceError: the server expects 2 arguments for this query, 3 were passed
+E   HINT:  Check the query against the passed list of arguments.
+
+asyncpg/protocol/prepared_stmt.pyx:149: InterfaceError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 08:55:10] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_rule_standards_routes_live.py::test_export_reads_through_the_real_rules_lists_reach
+1 failed, 1 passed, 1 warning in 12.42s
+PLANT EXIT 1 (red expected)
+restored

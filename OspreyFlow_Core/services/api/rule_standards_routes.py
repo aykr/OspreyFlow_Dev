@@ -8,32 +8,36 @@ see is the same 404 as a missing one. Only a rule written in the form is stored 
 a template rule, or a rule that names no dataset (one for the whole deployment, until
 `scripts.migrate_rules_to_datasets` makes it one per dataset), is refused in words.
 
-**Import** reads the two files and returns the rule they hold for the editor to open as a draft;
-it writes nothing and reads no stored rule, so it can say nothing of any rule the importer may not
-see. Each file is capped (`MAX_RULE_FILE_BYTES`) and refused over it before it is parsed. The
-declared dataset must be one the importer reads in this case: any other, whether it exists or not,
-is the one `dataset_not_found` (rule 3, no existence leak); the case's own analyst layer is not a
-dataset a rule declares. The rule's names are then checked
-against the model as a sentence's are (`check_sentence`).
+**Import** reads the two files, sent as their text, and returns the rule they hold and the dataset
+it declares, for the editor to open as a draft; it writes nothing and reads no stored rule, so it
+can say nothing of any rule the importer may not see. The body is capped as it streams
+(`MAX_RULE_BODY_BYTES`), and each file (`RULE_FILE_MAX_CHARS`) before it is parsed. The declared
+dataset must be the case's own, a source or a composite (never its analyst layer, a layer it
+borrows, or a drawn dataset): any other, whether it exists or not, is the app's one
+`dataset_not_found` (rule 3, no existence leak). The rule's names are then checked against the
+model as a sentence's are (`check_sentence`).
 """
 
 from __future__ import annotations
 
+import json
 import re
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import HTTPException, Request
 from fastapi.responses import Response
+from pydantic import ValidationError
 
 from rule_standards import MalformedRuleFile, UnsupportedElements, from_files, to_bpmn, to_dmn
-from schemas.domain import OntologySchema, Principal, TypologyRule
+from schemas.domain import OntologySchema, TypologyRule
+from schemas.rule_standards import RULE_FILE_MAX_CHARS, ImportedRule, RuleFilesUpload
 from schemas.sentences import SentenceRuleInput, SentenceRuleParams
 
-from .dataset_scope import analyst_layer
+from .datasets import COMPOSITE, SOURCE, DatasetStore, UnknownDatasetEgressError
 from .rule_sentences import check_sentence
 
-#: The most bytes one rule file may hold. The files OspreyFlow writes are a few kilobytes; a
-#: drawn area of sixty-four corners stays well under this.
-MAX_RULE_FILE_BYTES = 256 * 1024
+#: The most bytes the import's body may hold: both files at their cap, with room for JSON's own
+#: escaping. Over it, nothing past the cap is read.
+MAX_RULE_BODY_BYTES = 4 * 2 * RULE_FILE_MAX_CHARS
 
 _MEDIA = {"bpmn": "application/xml", "dmn": "application/xml"}
 
@@ -69,7 +73,16 @@ def export_rule_file(rule: TypologyRule, kind: str) -> Response:
         budget_ms=rule.budget_ms,
         max_matches=rule.params.max_matches,
     )
-    xml = to_bpmn(as_written, dataset_id=rule.dataset_id) if kind == "bpmn" else to_dmn(as_written)
+    try:
+        xml = (
+            to_bpmn(as_written, dataset_id=rule.dataset_id)
+            if kind == "bpmn"
+            else to_dmn(as_written)
+        )
+    except ValueError as exc:
+        raise _refused(
+            422, "rule_cannot_be_stored", f"This rule cannot be written as DMN: {exc}."
+        ) from None
     return Response(
         content=xml,
         media_type=_MEDIA[kind],
@@ -77,32 +90,77 @@ def export_rule_file(rule: TypologyRule, kind: str) -> Response:
     )
 
 
-async def _read_capped(upload: UploadFile, kind: str) -> bytes:
-    data = await upload.read(MAX_RULE_FILE_BYTES + 1)
-    if len(data) > MAX_RULE_FILE_BYTES:
-        raise _refused(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            "rule_file_too_large",
-            f"The .{kind} file is over {MAX_RULE_FILE_BYTES // 1024} KB, more than any rule "
-            "file needs; it was not read.",
-        )
-    return data
+class _TooLarge(Exception):
+    pass
+
+
+async def _read_body(request: Request) -> bytes:
+    """The request's body, read no further than the cap: a declared length over it is refused
+    before anything is read, and a body that runs past it is refused as it streams, so nothing
+    over the cap is ever held or spooled."""
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > MAX_RULE_BODY_BYTES:
+        raise _TooLarge
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_RULE_BODY_BYTES:
+            raise _TooLarge
+    return bytes(body)
+
+
+def _too_large(what: str) -> HTTPException:
+    return _refused(
+        413,
+        "rule_file_too_large",
+        f"{what} is over {RULE_FILE_MAX_CHARS // 1024} KB, more than any rule file needs; it was "
+        "not read.",
+    )
 
 
 async def import_rule_files(
-    bpmn: UploadFile, dmn: UploadFile, *, principal: Principal, ontology: OntologySchema
-) -> SentenceRuleInput:
-    """The rule the two files hold, checked, written nowhere."""
-    bpmn_bytes = await _read_capped(bpmn, "bpmn")
-    dmn_bytes = await _read_capped(dmn, "dmn")
+    request: Request,
+    *,
+    investigation_id: str,
+    datasets: DatasetStore,
+    ontology: OntologySchema,
+) -> ImportedRule:
+    """The rule the two files hold and the dataset it declares, checked, written nowhere."""
     try:
-        held = from_files(bpmn_bytes, dmn_bytes)
+        body = await _read_body(request)
+    except _TooLarge:
+        raise _too_large("The upload") from None
+    try:
+        sent = json.loads(body)
+    except ValueError:
+        raise _refused(
+            422, "rule_file_refused", "The upload is not the two files as JSON."
+        ) from None
+    for kind in ("bpmn", "dmn"):
+        text = sent.get(kind) if isinstance(sent, dict) else None
+        if isinstance(text, str) and len(text) > RULE_FILE_MAX_CHARS:
+            raise _too_large(f"The .{kind} file")
+    try:
+        files = RuleFilesUpload.model_validate(sent)
+    except ValidationError:
+        raise _refused(
+            422, "rule_file_refused", "The upload needs both files, the .bpmn and the .dmn."
+        ) from None
+    try:
+        held = from_files(files.bpmn.encode(), files.dmn.encode())
     except UnsupportedElements as exc:
         raise _refused(422, "rule_file_unsupported", f"{exc}.", unsupported=exc.names) from None
     except MalformedRuleFile as exc:
         raise _refused(422, "rule_file_refused", f"{exc}.") from None
-    readable = principal.datasets or []
-    if held.dataset_id not in readable or held.dataset_id == analyst_layer():
-        raise HTTPException(status_code=404, detail={"error": "dataset_not_found"})
+    # The declared dataset is the case's own, a source or a composite: never its analyst layer, a
+    # layer it borrows, or a drawn dataset (on which no rule runs until it is merged). Any other,
+    # whether it exists or not, is the app's one missing dataset (rule 3).
+    declarable = {
+        d.id
+        for d in await datasets.chosen_of_case(investigation_id)
+        if d.kind in (SOURCE, COMPOSITE)
+    }
+    if held.dataset_id not in declarable:
+        raise UnknownDatasetEgressError(held.dataset_id)
     check_sentence(held.rule.sentence, ontology)
-    return held.rule
+    return ImportedRule(rule=held.rule, dataset_id=held.dataset_id)

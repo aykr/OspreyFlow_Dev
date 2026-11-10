@@ -18,12 +18,15 @@ async function press(page: Page, target: Locator, key = "Enter") {
   await page.keyboard.press(key);
 }
 
-test("Show as BPMN opens the rule's drawing by keyboard, and it is read", async ({
+test("Show as BPMN is reached by Tab, opens the rule's drawing by keyboard, and it is read", async ({
   page,
 }) => {
   await page.goto("/keyboard/rule-standards-harness.html");
   const button = page.getByRole("button", { name: "Show as BPMN" });
-  await press(page, button);
+  // Reached from the top of the page by Tab alone: it is the page's first control.
+  await page.keyboard.press("Tab");
+  await expect(button).toBeFocused();
+  await page.keyboard.press("Enter");
   const dialog = page.getByRole("dialog", {
     name: "Visits to listed people as BPMN 2.0",
   });

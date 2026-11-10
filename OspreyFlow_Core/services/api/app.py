@@ -425,6 +425,7 @@ from schemas.rights import (
     RightsResponse,
     rights_for,
 )
+from schemas.rule_standards import ImportedRule
 from schemas.screening import (
     ScreeningLists,
     ScreeningListsOverview,
@@ -14806,16 +14807,18 @@ async def export_rule_standard_file(
     ],
 )
 async def import_rule_standard_files(
+    request: Request,
     investigation: InvestigationAuthorDep,
-    principal: PrincipalDep,
+    datasets: DatasetsDep,
     ontology: OntologyDep,
-    bpmn: Annotated[UploadFile, File()],
-    dmn: Annotated[UploadFile, File()],
-) -> SentenceRuleInput:
-    """The rule a `.bpmn` and a `.dmn` hold, for the editor to open as a draft; nothing is
-    written. Anything OspreyFlow does not run is refused by name; a dataset the importer does not
-    read in this case is `dataset_not_found`, whether or not it exists."""
-    return await import_rule_files(bpmn, dmn, principal=principal, ontology=ontology)
+) -> ImportedRule:
+    """The rule a `.bpmn` and a `.dmn` hold (sent as their text, `RuleFilesUpload`) and the
+    dataset it declares, for the editor to open as a draft; nothing is written. The body is capped
+    as it is read. Anything OspreyFlow does not run is refused by name; a dataset that is not the
+    case's own source or composite is `dataset_not_found`, whether or not it exists."""
+    return await import_rule_files(
+        request, investigation_id=investigation.id, datasets=datasets, ontology=ontology
+    )
 
 
 # --- rules written as sentences, and their preview (ADR-133 decisions 1 and 3, stage (b)) -------

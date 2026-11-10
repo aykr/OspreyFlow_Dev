@@ -4,7 +4,7 @@ Each plant was made in the code under test, at the call site the import route us
 bytes `to_bpmn`/`to_dmn` really wrote, with one element or attribute added), run, and then restored
 (`diff` clean). The runs were offline on closed ports, with no lease.
 
-## §1 The codec (`packages/rule_standards/codec.py`; `tests/rule_standards/test_codec.py`, 33 cases)
+## §1 The codec (`packages/rule_standards/codec.py`; `tests/rule_standards/test_codec.py`, 33 cases at first; 48 collected after §5, 46 run and 2 skipped by schema)
 
 | Plant | Red |
 | --- | --- |
@@ -37,7 +37,20 @@ should have, and proves nothing, so it is not counted. The "no cap" plant is the
 
 ## §3 The live file (`tests/ingest/test_rule_standards_routes_live.py`)
 
-Run under the lease. Its figures are in `gates/<sha>.live.txt`.
+Lease rules-b on stack d (server, remote), 10 November 2026. Two runs: `gates/e81e8a2.live.txt` (08:51–08:55Z)
+and `gates/e81e8a2.live-2.txt` (08:56–08:59Z).
+- **The set** (the live file, `test_route_rights.py`, `tests/ingest/test_typology_rule_routes.py`,
+  `test_rule_maker_checker_routes.py`, `test_rule_schedule.py`, `test_audit_section_store.py`, and the
+  offline route and level tables): 301 passed, 1 failed. The failure was
+  `test_every_right_guards_at_least_one_route`: `author_rules` is now guarded (the import), so it came off
+  the table's not-yet list. That is the table working. On the re-run, `test_route_rights.py` passed (4).
+- **The first reach plant was malformed and is not counted.** It dropped `{reach}` but left its argument,
+  so asyncpg refused the query's argument count. It was red for the wrong reason (rule 15).
+- **The second reach plant** dropped both the clause and its argument in `get_listed`, on the server's copy
+  only, and was restored (`cmp`). `test_export_reads_through_the_real_rules_lists_reach` went red: the
+  hidden rule's DMN was served with a 200.
+- The live file has changed since (§5: a JSON body, the declared dataset returned, the case's layer, a
+  real dataset read by another case), so it needs a second leased run (§6, at the gates).
 
 ## §4 *Show as BPMN* (`src/alerts/ruleStandards/`; `ShowAsBpmn.test.tsx`, 5 cases)
 
@@ -55,3 +68,24 @@ A first flows plant removed only `flows.size !== 2`, so the other two checks sti
 flow. It passed, and is not counted.
 
 The keyboard spec's reds (each id's handler removed) are recorded with the Playwright run.
+
+## §5 The lane-reviewer's round (findings 2, 3, 5, 6, 9, 10, 11, 13 and 15; each red by a plant, then restored)
+
+| Plant | Red |
+| --- | --- |
+| every kind in the case declarable (the source/composite check gone) | the layer, borrowed-layer and drawn cases (3) |
+| the declared dataset not returned | `test_an_exported_rule_imports_back_to_the_same_rule` |
+| no streamed body cap | `test_a_body_over_the_cap_is_refused_as_it_streams` |
+| no declared-length check | `test_a_declared_length_over_the_cap_is_refused_before_the_body_is_read` (see note) |
+| `forbid_dtd=False` | `test_a_bare_document_type_declaration_is_refused` |
+| tab and line breaks not escaped | `test_a_name_with_a_tab_or_a_line_break_comes_back_the_same` |
+| numbers written by `repr` | the `1e-05` and `1.5e+20` cases |
+| places not checked | `test_an_element_out_of_its_place_is_refused_by_name` |
+| an attribute the model drops let through | `test_an_attribute_the_rule_would_drop_is_refused_by_name`, `test_a_team_is_refused_while_the_sentence_cannot_name_one` |
+| a second output let through | `test_a_second_output_is_refused` |
+| `dateTime` for the time column's type | `test_a_time_column_is_typed_as_dmn_names_it` |
+| Escape not kept from the editor (`stopImmediatePropagation` gone) | `takes Escape for itself, so the editor around it does not act on it too` |
+
+Note on the declared-length check: its first test also streamed the body, so the streamed cap caught it
+and the plant stayed green, which is rule 15's fallthrough. The case that counts now makes reading the
+body itself an error.

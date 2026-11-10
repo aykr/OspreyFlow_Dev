@@ -13,7 +13,10 @@ What a mistake would do, and the case that catches it:
 - import reachable without `author_rules` or the Author level: `test_import_needs_author_rules_and_the_author_level`;
 - a dataset outside the case told apart from one that does not exist:
   `test_a_dataset_outside_the_case_is_refused_as_a_missing_one`;
-- a file read past the cap: `test_a_file_over_the_cap_is_refused_before_it_is_read`;
+- a file read past the cap: `test_a_file_over_the_cap_is_refused_before_it_is_read`, and a body:
+  `test_a_body_over_the_cap_is_refused_as_it_streams`;
+- the case's layer, a borrowed layer or a drawn dataset declared:
+  `test_a_layer_or_a_drawn_dataset_in_the_case_is_not_a_dataset_a_rule_declares`;
 - an import that writes, or names an element it refused vaguely: `test_an_unsupported_file_is_refused_by_name_and_nothing_is_written`.
 """
 
@@ -30,6 +33,7 @@ from services.api import rule_standards_routes
 from services.api.app import (
     app,
     get_audit,
+    get_datasets,
     get_investigations,
     get_ontology,
     get_principal,
@@ -41,9 +45,11 @@ from services.api.investigations import (
     Investigation,
     InvestigationNotFoundError,
 )
+from services.api.datasets import Dataset
 from services.api.typology_rules import TypologyRuleNotFoundError
 
 from schemas.domain import Principal, TypologyRule
+from schemas.rule_standards import RULE_FILE_MAX_CHARS
 from schemas.sentences import RuleSentence, SentenceRuleInput, SentenceRuleParams
 from tests.services.api.test_rule_sentences import ONTOLOGY
 
@@ -131,6 +137,32 @@ class _Rules:
         return refuse
 
 
+class _Datasets:
+    """The real store's `chosen_of_case`: the case's own chosen dataset (with its kind), and none
+    of another case's. Its layer, a layer it borrows and a drawn dataset are in the case's read set
+    but are not a dataset a rule declares; each is listed here as the real store would hold it."""
+
+    def __init__(self) -> None:
+        def made(did: str, kind: str, **more: Any) -> Dataset:
+            return Dataset(id=did, name=did, owning_unit="unit-1", created_by="a",
+                           created_at=datetime(2026, 1, 1, tzinfo=UTC), kind=kind, **more)  # fmt: skip
+
+        self.chosen = {CASE.id: [made(DATASET, "source")], OTHER_CASE: [made(HIDDEN_DATASET, "source")]}
+        self.kinds = {"layer-of-case-s": "analyst_layer", "borrowed-layer": "analyst_layer", "drawn-1": "drawn"}
+
+    async def chosen_of_case(self, investigation_id: str) -> list[Dataset]:
+        return list(self.chosen.get(investigation_id, []))
+
+    def choose(self, did: str) -> None:
+        """Give the case a dataset of one of the other kinds, as a store holding it would."""
+        kind = self.kinds[did]
+        extra = {"layer_of": CASE.id} if kind == "analyst_layer" else {}
+        self.chosen[CASE.id].append(
+            Dataset(id=did, name=did, owning_unit="unit-1", created_by="a",
+                    created_at=datetime(2026, 1, 1, tzinfo=UTC), kind=kind, **extra)  # type: ignore[arg-type]
+        )  # fmt: skip
+
+
 class _Audit:
     def __init__(self) -> None:
         self.entries: list[dict[str, Any]] = []
@@ -141,10 +173,11 @@ class _Audit:
 
 @pytest.fixture
 def world() -> Iterator[dict[str, Any]]:
-    things: dict[str, Any] = {"rules": _Rules(), "audit": _Audit()}
+    things: dict[str, Any] = {"rules": _Rules(), "audit": _Audit(), "datasets": _Datasets()}
     app.dependency_overrides.update({
         get_investigations: _Cases, get_ontology: lambda: ONTOLOGY,
         get_typology_rules: lambda: things["rules"], get_audit: lambda: things["audit"],
+        get_datasets: lambda: things["datasets"],
     })  # fmt: skip
     yield things
     app.dependency_overrides.clear()
@@ -161,7 +194,10 @@ def _files(dataset: str = DATASET, rule: SentenceRuleInput | None = None) -> tup
 
 
 def _import(who: Principal, bpmn: str | bytes, dmn: str | bytes) -> Any:
-    return _as(who).post(f"{BASE}/import", files={"bpmn": ("r.bpmn", bpmn), "dmn": ("r.dmn", dmn)})
+    def text(f: str | bytes) -> str:
+        return f.decode() if isinstance(f, bytes) else f
+
+    return _as(who).post(f"{BASE}/import", json={"bpmn": text(bpmn), "dmn": text(dmn)})
 
 
 def test_export_gives_the_two_files_of_the_rule_and_is_audited(world: dict[str, Any]) -> None:
@@ -182,7 +218,8 @@ def test_an_exported_rule_imports_back_to_the_same_rule(world: dict[str, Any]) -
     back = _import(RULE_AUTHOR, bpmn, dmn)
     assert back.status_code == 200, back.text
     rule = world["rules"].rules["r-1"]
-    assert SentenceRuleInput.model_validate(back.json()) == SentenceRuleInput(
+    assert back.json()["dataset_id"] == rule.dataset_id
+    assert SentenceRuleInput.model_validate(back.json()["rule"]) == SentenceRuleInput(
         name=rule.name,
         sentence=rule.params.sentence,
         budget_ms=rule.budget_ms,
@@ -234,13 +271,22 @@ def test_import_needs_author_rules_and_the_author_level(world: dict[str, Any]) -
 
 
 def test_a_dataset_outside_the_case_is_refused_as_a_missing_one(world: dict[str, Any]) -> None:
-    hidden = _import(RULE_AUTHOR, *_files(HIDDEN_DATASET))
+    hidden = _import(RULE_AUTHOR, *_files(HIDDEN_DATASET))  # another case's, which exists
     nowhere = _import(RULE_AUTHOR, *_files("ds-that-does-not-exist"))
     assert hidden.status_code == 404
     assert (hidden.status_code, hidden.json()) == (nowhere.status_code, nowhere.json())
-    assert hidden.json() == {"detail": {"error": "dataset_not_found"}}
-    outside = _import(_who("au", "analyst", "rule_author", datasets=[]), *_files())
-    assert outside.status_code == 404
+    assert hidden.json() == {"error": "dataset_not_found", "detail": "There is no such dataset."}
+
+
+@pytest.mark.parametrize("dataset", ["layer-of-case-s", "borrowed-layer", "drawn-1"])
+def test_a_layer_or_a_drawn_dataset_in_the_case_is_not_a_dataset_a_rule_declares(
+    world: dict[str, Any], dataset: str
+) -> None:
+    world["datasets"].choose(dataset)
+    refused = _import(RULE_AUTHOR, *_files(dataset))
+    nowhere = _import(RULE_AUTHOR, *_files("ds-that-does-not-exist"))
+    assert (refused.status_code, refused.json()) == (nowhere.status_code, nowhere.json())
+    assert _import(RULE_AUTHOR, *_files()).status_code == 200
 
 
 def test_a_file_over_the_cap_is_refused_before_it_is_read(
@@ -252,13 +298,43 @@ def test_a_file_over_the_cap_is_refused_before_it_is_read(
     monkeypatch.setattr(
         rule_standards_routes, "from_files", lambda b, d: read.append(b) or real(b, d)
     )
-    padded = bpmn + " " * (rule_standards_routes.MAX_RULE_FILE_BYTES - len(bpmn) + 1)
-    refused = _import(RULE_AUTHOR, padded, dmn)
+    cap = RULE_FILE_MAX_CHARS
+    refused = _import(RULE_AUTHOR, bpmn + " " * (cap - len(bpmn) + 1), dmn)
     assert refused.status_code == 413 and refused.json()["detail"]["error"] == "rule_file_too_large"
-    assert "256 KB" in refused.json()["detail"]["detail"]
+    assert refused.json()["detail"]["detail"].startswith("The .bpmn file is over 256 KB")
     assert read == []
-    at_the_cap = bpmn + " " * (rule_standards_routes.MAX_RULE_FILE_BYTES - len(bpmn))
-    assert _import(RULE_AUTHOR, at_the_cap, dmn).status_code == 200
+    assert _import(RULE_AUTHOR, bpmn + " " * (cap - len(bpmn)), dmn).status_code == 200
+
+
+def test_a_body_over_the_cap_is_refused_as_it_streams(
+    world: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no declared length (a chunked body) and with one, a body past the cap is refused."""
+    monkeypatch.setattr(rule_standards_routes, "MAX_RULE_BODY_BYTES", 1000)
+
+    def chunks() -> Iterator[bytes]:
+        for _ in range(100):
+            yield b" " * 100
+
+    refused = _as(RULE_AUTHOR).post(f"{BASE}/import", content=chunks(),
+                                    headers={"content-type": "application/json"})  # fmt: skip
+    assert refused.status_code == 413 and refused.json()["detail"]["detail"].startswith("The upload is over")
+
+
+def test_a_declared_length_over_the_cap_is_refused_before_the_body_is_read(
+    world: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from starlette.requests import Request
+
+    monkeypatch.setattr(rule_standards_routes, "MAX_RULE_BODY_BYTES", 1000)
+
+    def never(self: Request) -> Any:
+        raise AssertionError("the body was read")
+
+    monkeypatch.setattr(Request, "stream", never)
+    declared = _as(RULE_AUTHOR).post(f"{BASE}/import", content=b" " * 1001,
+                                     headers={"content-type": "application/json"})  # fmt: skip
+    assert declared.status_code == 413
 
 
 def test_an_unsupported_file_is_refused_by_name_and_nothing_is_written(
@@ -274,7 +350,7 @@ def test_an_unsupported_file_is_refused_by_name_and_nothing_is_written(
     assert refused.json()["detail"]["error"] == "rule_file_unsupported"
     assert refused.json()["detail"]["unsupported"] == ["bpmn:exclusiveGateway"]
     assert "bpmn:exclusiveGateway" in refused.json()["detail"]["detail"]
-    malformed = _import(RULE_AUTHOR, b"<nope", dmn)
+    malformed = _import(RULE_AUTHOR, "<nope", dmn)
     assert (
         malformed.status_code == 422 and malformed.json()["detail"]["error"] == "rule_file_refused"
     )

@@ -22,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from rule_standards import to_bpmn, to_dmn
 from services.api.config import PostgresConfig
+from services.api.datasets import PostgresDatasetStore
 from services.api.investigations import AccessLevel, InvestigationStore
 from services.api.typology_rules import TypologyRuleStore
 
@@ -33,6 +34,8 @@ from tests.services.api.case_dataset import dataset_for, give_case_its_dataset
 AUTHOR = Principal(id="rule-standards-author", clearance="OFFICIAL", org_unit="unit-1",
                    roles=["analyst", "rule_author"])  # fmt: skip
 VIEWER = "rule-standards-viewer"
+#: Another unit's analyst, whose case reads another real dataset (`dataset_for(OTHER)`).
+OTHER = Principal(id="rule-standards-other", clearance="OFFICIAL", org_unit="unit-2")
 SENTENCE = RuleSentence.model_validate({"subject": "Person"})
 
 
@@ -64,16 +67,22 @@ async def _world() -> dict[str, str]:
     rules = await TypologyRuleStore.connect(PostgresConfig.from_env().dsn)
     try:
         mine = await cases.create(AUTHOR, name="Rule standards case")
-        other = await cases.create(Principal(id="someone-else", clearance="OFFICIAL", org_unit="unit-1"),
-                                   name="Another case")  # fmt: skip
+        other = await cases.create(OTHER, name="Another case")
         await give_case_its_dataset(mine.id, AUTHOR)
-        await give_case_its_dataset(other.id, AUTHOR)
+        await give_case_its_dataset(other.id, OTHER)
         await cases.set_grant(mine.id, VIEWER, AccessLevel.VIEWER, by=AUTHOR)
         spec = TypologyRuleInput(name="Every person", params=SentenceRuleParams(pattern_id="p", sentence=SENTENCE))
         in_case = AUTHOR.model_copy(update={"datasets": [dataset_for(AUTHOR)]})
         hidden = AUTHOR.model_copy(update={"datasets": ["rule-standards-dataset-not-read"]})
+        store = await PostgresDatasetStore.connect(PostgresConfig.from_env().dsn)
+        try:
+            layer = await store.layer_of_case(mine.id)
+        finally:
+            await store.close()
+        assert layer is not None, "a case given its dataset has its analyst layer"
         return {
             "case": mine.id,
+            "layer": layer,
             "own": (await rules.create(in_case, mine.id, spec)).id,
             "other": (await rules.create(in_case, other.id, spec)).id,
             "hidden": (await rules.create(hidden, mine.id, spec)).id,
@@ -117,7 +126,8 @@ def test_export_reads_through_the_real_rules_lists_reach(
         assert missing.status_code == 404
         for rid in (world["other"], world["hidden"]):
             refused = client.get(f"{base}/{rid}/export.dmn", headers=viewer)
-            assert (refused.status_code, refused.json()) == (missing.status_code, missing.json())
+            assert refused.status_code == missing.status_code, rid
+            assert refused.json() == missing.json(), rid
 
 
 def test_import_takes_only_a_dataset_the_case_reads(
@@ -128,18 +138,23 @@ def test_import_takes_only_a_dataset_the_case_reads(
     rule = SentenceRuleInput(name="Every person", sentence=SENTENCE)
     from services.api.app import app
 
-    def files(dataset: str) -> dict[str, tuple[str, str]]:
-        return {"bpmn": ("r.bpmn", to_bpmn(rule, dataset_id=dataset)), "dmn": ("r.dmn", to_dmn(rule))}
+    def files(dataset: str) -> dict[str, str]:
+        return {"bpmn": to_bpmn(rule, dataset_id=dataset), "dmn": to_dmn(rule)}
 
     with TestClient(app) as client:
         author = _as(key, AUTHOR.id, AUTHOR.roles)
-        taken = client.post(f"{base}/import", headers=author, files=files(dataset_for(AUTHOR)))
+        taken = client.post(f"{base}/import", headers=author, json=files(dataset_for(AUTHOR)))
         assert taken.status_code == 200, taken.text
-        assert SentenceRuleInput.model_validate(taken.json()) == rule
-        unread = client.post(f"{base}/import", headers=author, files=files("rule-standards-dataset-not-read"))
-        nowhere = client.post(f"{base}/import", headers=author, files=files("no-such-dataset-anywhere"))
+        assert taken.json()["dataset_id"] == dataset_for(AUTHOR)
+        assert SentenceRuleInput.model_validate(taken.json()["rule"]) == rule
+        # Another case's dataset, which exists and is read there, is refused as one that does not.
+        unread = client.post(f"{base}/import", headers=author, json=files(dataset_for(OTHER)))
+        nowhere = client.post(f"{base}/import", headers=author, json=files("no-such-dataset-anywhere"))
         assert unread.status_code == 404
+        # The case's own analyst layer, in its read set, is not a dataset a rule declares.
+        layer = client.post(f"{base}/import", headers=author, json=files(world["layer"]))
+        assert (layer.status_code, layer.json()) == (nowhere.status_code, nowhere.json())
         assert (unread.status_code, unread.json()) == (nowhere.status_code, nowhere.json())
         viewer = client.post(f"{base}/import", headers=_as(key, VIEWER, ["analyst", "rule_author"]),
-                             files=files(dataset_for(AUTHOR)))  # fmt: skip
+                             json=files(dataset_for(AUTHOR)))  # fmt: skip
         assert viewer.status_code == 403

@@ -124,7 +124,10 @@ function BpmnDialog({
   useLayoutEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // Taken first, in the capture phase, and kept: the editor around it has an Escape of its
+        // own, which must not also run while the drawing is open.
         e.preventDefault();
+        e.stopImmediatePropagation();
         onCloseRef.current();
       }
     };
@@ -137,11 +140,11 @@ function BpmnDialog({
         ref.current.querySelector<HTMLElement>("button")?.focus();
       }
     };
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
     document.addEventListener("focusin", onFocusIn);
     ref.current?.querySelector<HTMLElement>("button")?.focus();
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
       document.removeEventListener("focusin", onFocusIn);
     };
   }, []);
@@ -172,9 +175,8 @@ function BpmnDialog({
       {drawing ? (
         <>
           <p className="show-as-bpmn__why">
-            Read-only. This is how the rule is stored: a process of three
-            elements, with its conditions in a DMN decision table. Export gives
-            both files.
+            Read-only. The rule in BPMN 2.0: a process of three elements, with
+            its conditions in a DMN decision table. Export gives both files.
           </p>
           <Drawing drawing={drawing} />
           <ol
