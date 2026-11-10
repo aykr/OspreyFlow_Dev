@@ -1,6 +1,8 @@
 // A vitest reporter that ends each run with its slowest tests (admin's T1 part 1), as pytest's --durations=30
 // does for the Python suites, so every log names where its time went. It prints only; it never changes a result.
-// Used by apps/workspace's and apps/harness's vitest.config.ts beside the default reporter.
+// Used by apps/workspace's vitest.config.ts and vitest.integration.config.ts, and apps/harness's, beside the default
+// reporter.
+import type { Reporter, TestModule } from "vitest/node";
 
 interface CaseLike {
   readonly fullName: string;
@@ -10,6 +12,11 @@ interface ModuleLike {
   readonly relativeModuleId: string;
   readonly children: { allTests(): Iterable<CaseLike> };
 }
+
+// vitest's own TestModule must have the shape slowestLines reads, so a change to vitest's reporter API fails
+// typecheck here rather than leaving the reporter to print nothing (the lane-reviewer's finding 5).
+const vitestModulesFit: (m: TestModule) => ModuleLike = (m) => m;
+void vitestModulesFit;
 
 export const SLOWEST = 30;
 
@@ -28,8 +35,8 @@ export function slowestLines(modules: readonly ModuleLike[], n: number): string[
   return [head, ...kept.map(([ms, name]) => `${String(Math.round(ms)).padStart(6)} ms  ${name}`)];
 }
 
-export default class SlowestReporter {
-  onTestRunEnd(modules: readonly ModuleLike[]): void {
+export default class SlowestReporter implements Reporter {
+  onTestRunEnd(modules: ReadonlyArray<TestModule>): void {
     const lines = slowestLines(modules, SLOWEST);
     if (lines.length > 0) process.stdout.write(`\n${lines.join("\n")}\n`);
   }

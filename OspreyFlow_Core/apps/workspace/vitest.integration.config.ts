@@ -1,5 +1,7 @@
 import { defineConfig } from "vitest/config";
 
+import SlowestReporter from "./src/testing/slowestReporter";
+
 // A separate config, not an `--exclude` CLI override of `vitest.config.ts`
 // — vitest's CLI `--exclude` *adds to* the configured `exclude` array
 // rather than replacing it, so there is no CLI-only way to un-exclude
@@ -10,6 +12,8 @@ import { defineConfig } from "vitest/config";
 // module docstring.
 export default defineConfig({
   test: {
+    // Every run ends with its 30 slowest tests (admin's T1 part 1), as pytest's --durations=30 does.
+    reporters: ["default", new SlowestReporter()],
     environment: "node",
     include: ["src/**/*.integration.test.ts"],
   },

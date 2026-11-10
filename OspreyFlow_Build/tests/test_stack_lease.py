@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -646,8 +647,9 @@ def test_a_remote_run_lists_its_30_slowest_tests_and_logs_its_wall_time_with_its
     export = next(l for l in text.splitlines() if l.startswith("stdin export "))
     assert "PYTEST_ADDOPTS=--durations=30" in export, export
     start = _started(text)
-    assert "Wall time:" in start and "stack b" in start and "stack-b.lease" in start, start
-    assert "/wall" in start, start  # the seconds kept beside the log, for a table
+    assert "Wall time:" in start and "stack b, the lease case took at 20" in start, start
+    assert "/wall" in start and "set-up before it" in start, start  # the seconds kept beside the log, for a table
+    assert "cp osprey-runs/case.meta/lease/stack-b.lease/info osprey-runs/case.meta/runs/" in text, text  # kept with the run
 
 
 def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease, tmp_path: Path) -> None:
@@ -665,17 +667,42 @@ def test_an_offline_run_lists_its_30_slowest_tests_and_logs_its_wall_time(lease,
     assert "Wall time:" in start and "no stack, no lease" in start, start
 
 
-def test_the_wall_time_line_runs_and_keeps_the_command_s_own_exit_code(tmp_path: Path) -> None:
-    """The start line's own bash, run here as the host would run it (red if it loses the exit code or the line)."""
-    text = SCRIPT.read_text()
-    template = next(l for l in text.splitlines() if "nohup setsid bash -c" in l)
-    body = template.split("bash -c '", 1)[1].rsplit("' > ", 1)[0]
-    run = tmp_path / "run"
-    run.mkdir()
-    (run / "cmd.sh").write_text("echo hello; exit 7\n")
-    body = body.replace("\\$", "$").replace('\\"', '"').replace("$run", str(run))
-    body = body.replace("$where", "stack b, lease stack-b.lease")
-    out = subprocess.run(["bash", "-c", body], capture_output=True, text=True)
-    assert "hello" in out.stdout and "Wall time: " in out.stdout and "exit 7" in out.stdout, out
-    assert (run / "exit").read_text().strip() == "7"
+def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_code(lease, tmp_path: Path) -> None:
+    """The start call exactly as ssh received it (after this machine's own quoting), run as the host runs it, with
+    HOME a folder here: red if a lost backslash expands $? or $$ on this machine, or the line goes missing."""
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    log = _remote_tools(tmp_path)
+    home = tmp_path / "home"
+    (home / "osprey-runs" / "case" / "OspreyFlow_Build").mkdir(parents=True)
+    (home / "osprey-runs" / "case.meta" / "lease" / "stack-b.lease").mkdir(parents=True)
+    (home / "osprey-runs" / "case.meta" / "lease" / "stack-b.lease" / "info").write_text("holder=case\n")
+    bin_dir = tmp_path / "bin"
+    # The recording ssh, which also runs the start call (the one holding nohup setsid) on its own stdin, as the
+    # host would; setsid is stood in for here, since macOS has none.
+    (bin_dir / "ssh").write_text(
+        f'#!/bin/bash\necho "ssh $*" >> "{log}"\nin="$(cat)"\nprintf "%s\\n" "$in" | sed "s/^/stdin /" >> "{log}"\n'
+        f'for a; do last="$a"; done\n'
+        f'case "$last" in *"nohup setsid"*) cd "{home}" && printf "%s\\n" "$in" | HOME="{home}" bash -c "$last";; esac\nexit 0\n'
+    )
+    (bin_dir / "setsid").write_text('#!/bin/sh\nexec "$@"\n')
+    for tool in ("ssh", "setsid"):
+        (bin_dir / tool).chmod(0o755)
+    wt = _lane_worktree(tmp_path)
+    ran = _remote(lease, tmp_path, wt / "OspreyFlow_Build", "case", "--", "sh", "-c", 'echo hello; echo "runner $(ps -o ppid= -p $PPID)"; exit 7')
+    assert ran.returncode == 0, ran.stderr
+    runs = home / "osprey-runs" / "case.meta" / "runs"
+    run = next(p for p in runs.iterdir() if p.name != "last")
+    for _ in range(100):
+        if (run / "exit").exists():
+            break
+        time.sleep(0.05)
+    assert (run / "exit").read_text().strip() == "7", (run / "log").read_text()
     assert (run / "wall").read_text().strip().isdigit()
+    lines = (run / "log").read_text().splitlines()
+    # The pid file holds the host's own shell, the one running cmd.sh (what follow's tail --pid waits on).
+    assert lines[1] == f"runner {(run / 'pid').read_text().strip()}", lines
+    assert lines[0] == "hello", lines
+    assert lines[-1].startswith("Wall time: ") and "exit 7 (stack b, the lease case took at 20" in lines[-1], lines
+    assert "set-up before it" in lines[-1], lines
+    assert (run / "lease").read_text() == "holder=case\n"
