@@ -291,7 +291,7 @@ const CONTRAST_FINDINGS: Record<string, ListedFindings> = Object.fromEntries([
       `map-view-harness.html${state ? ` ${state}` : ""} (${variant})`,
       {
         "main > div > div > div:nth-child(2)": {
-          text: "Harness tiles ©", ratio: "unmeasurable", reason: "over or under canvas", owner: "platform",
+          text: "Harness tiles ©", ratio: "unmeasurable", reason: "over or under canvas.sigma-mouse", owner: "platform",
         },
       },
     ]),
@@ -390,12 +390,16 @@ test("the scan found the harness pages", () => {
   expect(pages.length).toBeGreaterThan(30);
 });
 
+// Every look's title, as each test below is named, so a listed finding under a mistyped title fails.
+const TITLES = new Set<string>();
+
 for (const name of pages) {
   const variants = ["dark", "light", ...(appliesBrand(name) ? ["govuk"] : [])] as const;
   for (const state of ["", ...(EXTRA_STATES[name] ?? [])]) {
     for (const variant of variants) {
       const query = [state, variant === "govuk" ? "brand=govuk" : ""].filter(Boolean).join("&");
       const title = `${name}${state ? ` ${state}` : ""} (${variant})`;
+      TITLES.add(title);
       test(`${title} has no automated WCAG 2.2 A or AA violations`, async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
         await page.goto(`/keyboard/${name}${query ? `?${query}` : ""}`);
@@ -429,3 +433,7 @@ for (const name of pages) {
     });
   }
 }
+
+test("every listed contrast finding names a look this file scans", () => {
+  expect(Object.keys(CONTRAST_FINDINGS).filter((title) => !TITLES.has(title))).toEqual([]);
+});

@@ -10,9 +10,9 @@
 // text. `src/color/textContrast.ts` judges it, in Node, unit-tested at every boundary. It fails
 // closed: an element painted under or over the text that is not the node or an ancestor (map tiles
 // under a chip, a picture), a filter or blend, a colour it cannot read, a node in a frame or shadow
-// root are offenders, never passes. Its limits: a foreign element with `pointer-events: none` is left
-// out by `elementsFromPoint` (only the node and its ancestors are lifted for the probe), and the probe
-// samples three points on the text, not every pixel.
+// root are offenders, never passes. Its limit: the probe samples points across the text (left, middle
+// and right of up to five line boxes), not every pixel; axe's own "partly covered" fails closed where
+// the points miss it.
 import type { Page } from "@playwright/test";
 
 import {
@@ -27,7 +27,7 @@ import {
 export interface AxeIncomplete {
   incomplete: {
     id: string;
-    nodes: { target: unknown[]; any?: { data?: unknown }[] }[];
+    nodes: { target: unknown[]; any?: { data?: unknown; relatedNodes?: { target: unknown[] }[] }[] }[];
   }[];
 }
 
@@ -38,6 +38,8 @@ interface Asked {
   selector: string | null;
   unreadable: string | null;
   axeReason: string | null;
+  /** The elements axe names as covering the node (`relatedNodes`), as selectors. */
+  related: string[];
 }
 
 async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
@@ -46,19 +48,36 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     const name = (e: Element) =>
       `${e.tagName.toLowerCase()}${e.classList.length ? `.${e.classList[0]}` : ""}`;
     const transparent = (css: string) => /^rgba\(0, 0, 0, 0\)$|^transparent$/.test(css);
+    const pseudoPaints = (e: Element, pseudo: string) => {
+      const p = getComputedStyle(e, pseudo);
+      const shows = p.content !== "none" && p.content !== "normal";
+      return shows && (!transparent(p.backgroundColor) || p.backgroundImage !== "none");
+    };
+    // A foreign element that changes what is seen at the text: a replaced element, a background, a
+    // painted `::before`/`::after`, or a filter or blend.
     const painted = (e: Element) => {
       const s = getComputedStyle(e);
-      return REPLACED.has(e.tagName.toUpperCase()) || !transparent(s.backgroundColor) || s.backgroundImage !== "none";
+      return (
+        REPLACED.has(e.tagName.toUpperCase()) || !transparent(s.backgroundColor) || s.backgroundImage !== "none" ||
+        s.filter !== "none" || s.backdropFilter !== "none" || s.mixBlendMode !== "normal" ||
+        pseudoPaints(e, "::before") || pseudoPaints(e, "::after")
+      );
     };
+    // An ancestor hides what lies beneath it only when its own background is opaque and neither it
+    // nor anything above it is translucent (an opacity lets the group's underlay through).
     const opaque = (e: Element) => {
       const bg = getComputedStyle(e).backgroundColor;
-      return /^rgb\(/.test(bg) || /^color\(srgb [^/]*\)$/.test(bg);
+      if (!(/^rgb\(/.test(bg) || /^color\(srgb [^/]*\)$/.test(bg))) return false;
+      for (let at: Element | null = e; at; at = at.parentElement) {
+        if (getComputedStyle(at).opacity !== "1") return false;
+      }
+      return true;
     };
     const blank = (unreadable: string, selector: string, axeReason: string | null) => ({
       selector, unreadable, text: "", color: "", fontSize: "", fontWeight: "", chain: [],
-      overlappedBy: null, axeReason,
+      overlappedBy: null, clippedBy: null, axeReason,
     });
-    return nodes.map(({ selector, unreadable, axeReason }) => {
+    return nodes.map(({ selector, unreadable, axeReason, related }) => {
       if (unreadable || !selector) return blank(unreadable ?? "no selector", selector ?? "?", axeReason);
       let el: HTMLElement | null = null;
       try {
@@ -67,58 +86,84 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         // An invalid selector: unreadable below.
       }
       if (!el) return blank("not found to measure", selector, axeReason);
+      // The text's own boxes, scrolled into view, and points across each: its left, middle and right
+      // at mid-height, for up to five line boxes.
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const boxes = () => {
+        const found = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+        return found.length ? found : [el.getBoundingClientRect()];
+      };
+      let rects = boxes();
+      const inView = (r: DOMRect) => r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
+      if (!rects.every(inView)) {
+        el.scrollIntoView({ block: "center", inline: "center" });
+        rects = boxes();
+      }
+      // Where axe saw part of the text covered, a denser grid: five across and three down each box.
+      const partly = axeReason === "elmPartiallyObscured" || axeReason === "elmPartiallyObscuring";
+      const across = partly ? [0, 0.25, 0.5, 0.75, 1] : [0, 0.5, 1];
+      const down = partly ? [0.2, 0.5, 0.8] : [0.5];
+      const points = rects.slice(0, 5).flatMap((r) => {
+        const inset = Math.min(2, r.width / 4);
+        return down.flatMap((v) =>
+          across.map((u) => [r.left + inset + (r.width - 2 * inset) * u, r.top + r.height * v] as const),
+        );
+      });
+      // What axe says covers part of the text: the text itself or an ancestor is a clip (a truncated
+      // name, a cell past its scrolling box, a button past the viewport's edge), whose visible part
+      // stands on its own surfaces; anything else is an overlay, unmeasurable. With nothing named,
+      // the judgement fails it closed.
+      let clippedBy: string | null = null;
+      let coveredBy: string | null = null;
+      if (partly) {
+        for (const sel of related) {
+          let rel: Element | null = null;
+          try {
+            rel = document.querySelector(sel);
+          } catch {
+            // An unreadable selector: treated as a foreign cover below.
+          }
+          if (rel && (rel === el || rel.contains(el))) clippedBy ??= name(rel);
+          else coveredBy ??= rel ? name(rel) : sel;
+        }
+      }
       const chain = [];
       for (let at: Element | null = el; at; at = at.parentElement) {
         const s = getComputedStyle(at);
         let paintedPseudo: string | null = null;
         for (const pseudo of ["::before", "::after"]) {
-          const p = getComputedStyle(at, pseudo);
-          const shows = p.content !== "none" && p.content !== "normal";
-          const paints = !transparent(p.backgroundColor) || p.backgroundImage !== "none";
           // Laid over the box (absolute or fixed), so it may lie under the text; an inline one sits
           // beside it, as a bullet does. axe's own `pseudoContent` reason fails it either way.
-          if (shows && paints && /absolute|fixed/.test(p.position)) paintedPseudo = pseudo;
+          if (pseudoPaints(at, pseudo) && /absolute|fixed/.test(getComputedStyle(at, pseudo).position)) {
+            paintedPseudo = pseudo;
+          }
         }
+        const box = at.getBoundingClientRect();
+        const covers = points.every(([x, y]) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom);
         chain.push({
           name: name(at), backgroundColor: s.backgroundColor, backgroundImage: s.backgroundImage,
           opacity: s.opacity, filter: s.filter, backdropFilter: s.backdropFilter,
-          mixBlendMode: s.mixBlendMode, paintedPseudo,
+          mixBlendMode: s.mixBlendMode, paintedPseudo, covers,
         });
       }
-      if (axeReason === "pseudoContent" && !chain.some((l) => l.paintedPseudo)) {
+      if (axeReason === "pseudoContent" && !chain.some((l) => l.paintedPseudo) && chain[0]) {
         chain[0].paintedPseudo = "::before or ::after (axe: pseudoContent)";
       }
-      // Under and over the text: from the top of the stack at points on it, every element until an
-      // ancestor with an opaque background; anything painted that is neither the node, inside it,
-      // nor an ancestor is a surface the walk up the tree cannot see.
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      let rects = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
-      if (!rects.length) rects = [el.getBoundingClientRect()];
-      const inView = (r: DOMRect) => r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth;
-      if (!rects.every(inView)) {
-        el.scrollIntoView({ block: "center", inline: "center" });
-        rects = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
-        if (!rects.length) rects = [el.getBoundingClientRect()];
-      }
-      let overlappedBy: string | null = null;
-      const points = [rects[0], rects[Math.floor(rects.length / 2)], rects[rects.length - 1]].map(
-        (r) => [r.left + r.width / 2, r.top + r.height / 2] as const,
-      );
-      // `elementsFromPoint` leaves out an element with `pointer-events: none` (the map's chip is one),
-      // which would hide whether a foreign element lies over the text or under it: the node and its
-      // ancestors take pointer events for the probe, and their own inline values are put back.
-      const lifted: [HTMLElement, string, string][] = [];
-      for (let at: HTMLElement | null = el; at; at = at.parentElement) {
-        lifted.push([at, at.style.getPropertyValue("pointer-events"), at.style.getPropertyPriority("pointer-events")]);
-        at.style.setProperty("pointer-events", "auto", "important");
-      }
+      // Under and over the text: at each point, from the top of the stack, every element until an
+      // opaque ancestor; anything painted that is neither the node, inside it, nor an ancestor is a
+      // surface the walk up the tree cannot see. `elementsFromPoint` leaves out whatever has
+      // `pointer-events: none` (the map's chip, an overlay laid over the page), so for the probe every
+      // element takes pointer events, by a style sheet removed straight after.
+      let overlappedBy: string | null = coveredBy;
+      const lift = document.createElement("style");
+      lift.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
+      document.head.append(lift);
       try {
         for (const [x, y] of points) {
           if (overlappedBy) break;
           for (const e of document.elementsFromPoint(x, y)) {
             if (e === el || e.contains(el)) {
-              // The node or an ancestor: an opaque one hides whatever lies beneath it.
               if (opaque(e)) break;
               continue;
             }
@@ -130,14 +175,11 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
           }
         }
       } finally {
-        for (const [at, value, priority] of lifted) {
-          if (value) at.style.setProperty("pointer-events", value, priority);
-          else at.style.removeProperty("pointer-events");
-        }
+        lift.remove();
       }
       const style = getComputedStyle(el);
       return {
-        selector, unreadable: null, axeReason, chain, overlappedBy,
+        selector, unreadable: null, axeReason, chain, overlappedBy, clippedBy,
         text: (el.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 40),
         color: style.color, fontSize: style.fontSize, fontWeight: style.fontWeight,
       };
@@ -153,12 +195,18 @@ export async function judgeUndecided(page: Page, results: AxeIncomplete): Promis
       rule.nodes.map((node) => {
         const data = node.any?.[0]?.data as { messageKey?: string } | undefined;
         const axeReason = data?.messageKey ?? null;
+        const related = (node.any?.[0]?.relatedNodes ?? []).map((r) => r.target.map(String).join(" >>> "));
         const [only] = node.target;
         // A frame's or a shadow root's node: axe's target is a path, never one selector here.
         if (node.target.length !== 1 || typeof only !== "string") {
-          return { selector: JSON.stringify(node.target), unreadable: "a node in a frame or a shadow root", axeReason };
+          return {
+            selector: JSON.stringify(node.target),
+            unreadable: "a node in a frame or a shadow root",
+            axeReason,
+            related,
+          };
         }
-        return { selector: only, unreadable: null, axeReason };
+        return { selector: only, unreadable: null, axeReason, related };
       }),
     );
   return (await read(page, asked)).map(judge);

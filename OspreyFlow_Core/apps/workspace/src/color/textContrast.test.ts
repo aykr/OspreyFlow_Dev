@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   excuses,
   gradientColours,
+  gradientSurfaces,
   judge,
   needFor,
   parseColour,
@@ -35,6 +36,7 @@ function layer(more: Partial<Layer> = {}): Layer {
     backdropFilter: "none",
     mixBlendMode: "normal",
     paintedPseudo: null,
+    covers: true,
     ...more,
   };
 }
@@ -49,6 +51,7 @@ function sample(more: Partial<Sample> = {}): Sample {
     fontWeight: "400",
     chain: [layer(), layer({ name: "body", backgroundColor: WHITE })],
     overlappedBy: null,
+    clippedBy: null,
     axeReason: null,
     ...more,
   };
@@ -86,6 +89,17 @@ describe("the colours Chrome writes", () => {
     expect(red.slice(0, 3).map(Math.round)).toEqual([255, 0, 0]);
   });
 
+  it("reads a `none` component or alpha as unread, never as NaN that passes", () => {
+    for (const css of ["oklch(0.5 0 none)", "oklab(none 0 0)", "rgb(0 0 0 / none)", "color(srgb none 0 0)"]) {
+      expect(parseColour(css), css).toBeNull();
+    }
+    const missing = judge(sample({ color: "oklch(0.5 0 none)" }));
+    expect(missing.ratio).toBeNull();
+    expect(missing.why).toMatch(/unread colour/);
+    const underNone = judge(sample({ chain: [layer({ backgroundColor: "rgb(255 255 255 / none)" })] }));
+    expect(underNone.why).toMatch(/unread background colour/);
+  });
+
   it("reads nothing it does not know, so the caller fails it", () => {
     for (const css of ["lab(50 20 30)", "lch(50 20 30)", "color(display-p3 1 0 0)", "currentcolor", "hsl(0 0% 0%)"]) {
       expect(parseColour(css), css).toBeNull();
@@ -101,11 +115,36 @@ describe("gradients", () => {
     expect(gradientColours(grid)).toHaveLength(4);
   });
 
-  it("measures the text on a gradient's darkest stop, so a stop the colour of the text fails", () => {
+  it("measures the text on every stop, so a stop the colour of the text fails", () => {
     const on = (image: string) =>
       judge(sample({ color: "rgb(0, 0, 0)", chain: [layer({ backgroundColor: WHITE, backgroundImage: image })] }));
     expect(on("linear-gradient(rgb(250, 250, 250) 1px, rgba(0, 0, 0, 0) 1px)").why).toBe("");
     expect(on("linear-gradient(oklab(0 0 0) 1px, rgba(0, 0, 0, 0) 1px)").why).toMatch(/^1\.00:1/);
+  });
+
+  it("measures the colours between two stops, so a smooth gradient straddling the text fails", () => {
+    // Black text: white and mid grey both pass 4.5:1, but the gradient passes through no darker
+    // than grey; text in rgb(118) is 4.54:1 on white and ~1:1 midway on a white-to-black gradient.
+    const text = "rgb(118, 118, 118)";
+    const ends = judge(sample({ color: text, chain: [layer({ backgroundColor: WHITE })] }));
+    expect(ends.why).toBe("");
+    const smooth = judge(
+      sample({
+        color: text,
+        chain: [layer({ backgroundColor: WHITE, backgroundImage: "linear-gradient(rgb(255, 255, 255), rgb(0, 0, 0))" })],
+      }),
+    );
+    expect(smooth.ratio as number).toBeLessThan(1.2);
+  });
+
+  it("composites stacked layers where they cross, as the canvas grid's lines do", () => {
+    const line = parseColour("rgba(0, 0, 0, 0.4)") as Rgba;
+    const grid = "linear-gradient(rgba(0, 0, 0, 0.4) 1px, rgba(0, 0, 0, 0) 1px), linear-gradient(90deg, rgba(0, 0, 0, 0.4) 1px, rgba(0, 0, 0, 0) 1px)";
+    const surfaces = gradientSurfaces(grid, [255, 255, 255, 1]) as Rgba[];
+    // One line over white is 60% white; two crossing lines 36% white (64% covered).
+    const darkest = Math.min(...surfaces.map((c) => c[0]));
+    expect(line[3]).toBe(0.4);
+    expect(darkest).toBeCloseTo(255 * 0.36, 3);
   });
 
   it("fails a stop it cannot read, and a picture, rather than dropping them", () => {
@@ -140,6 +179,30 @@ describe("what lies under the text", () => {
     expect(faded.why).toMatch(/< 4\.5:1/);
   });
 
+  it("measures a text axe calls partly obscured only when an overflow clip explains it", () => {
+    const clipped = judge(sample({ axeReason: "elmPartiallyObscured", clippedBy: "div.app-header__account" }));
+    expect(clipped.ratio).not.toBeNull();
+    expect(clipped.why).toBe("");
+    const unexplained = judge(sample({ axeReason: "elmPartiallyObscured" }));
+    expect(unexplained.ratio).toBeNull();
+    expect(unexplained.why).toMatch(/partly covered/);
+  });
+
+  it("lays nothing under the text from an ancestor whose box is not under it", () => {
+    // Black text inside a black box that does not reach the text, over a white page: measured on white.
+    const outside = judge(
+      sample({
+        color: "rgb(0, 0, 0)",
+        chain: [layer({ backgroundColor: "rgb(0, 0, 0)", covers: false }), layer({ backgroundColor: WHITE })],
+      }),
+    );
+    expect(outside.why).toBe("");
+    const inside = judge(
+      sample({ color: "rgb(0, 0, 0)", chain: [layer({ backgroundColor: "rgb(0, 0, 0)" }), layer({ backgroundColor: WHITE })] }),
+    );
+    expect(inside.why).toMatch(/^1\.00:1/);
+  });
+
   it("fails an overlapped node, a painted pseudo-element, a filter and a blend as unmeasurable", () => {
     const cases: [Partial<Sample>, RegExp][] = [
       [{ overlappedBy: "canvas.maplibregl-canvas", axeReason: "bgOverlap" }, /over or under canvas.*axe: bgOverlap/],
@@ -150,6 +213,8 @@ describe("what lies under the text", () => {
       [{ unreadable: "a node in a shadow root" }, /shadow root/],
       [{ color: "currentcolor" }, /unread colour/],
       [{ chain: [layer({ backgroundColor: "lab(50 0 0)" })] }, /unread background colour/],
+      [{ axeReason: "elmPartiallyObscured" }, /partly covered.*axe: elmPartiallyObscured/],
+      [{ axeReason: "elmPartiallyObscuring" }, /partly covered/],
     ];
     for (const [more, why] of cases) {
       const j = judge(sample({ color: "rgb(0, 0, 0)", ...more }));
@@ -169,10 +234,17 @@ describe("a listed finding", () => {
     expect(excuses(undefined, found)).toBe(false);
   });
 
-  it("excuses an unmeasurable one only while it gives the same reason", () => {
-    const over = judge(sample({ overlappedBy: "canvas.maplibregl-canvas" }));
-    const listed = { text: "Words", ratio: "unmeasurable" as const, reason: "over or under canvas", owner: "platform" };
+  it("excuses an unmeasurable one only while it gives exactly the same reason", () => {
+    const over = judge(sample({ overlappedBy: "canvas.maplibregl-canvas", axeReason: "imgNode" }));
+    const listed = {
+      text: "Words",
+      ratio: "unmeasurable" as const,
+      reason: "over or under canvas.maplibregl-canvas",
+      owner: "platform",
+    };
     expect(excuses(listed, over)).toBe(true);
+    expect(excuses({ ...listed, reason: "over or under canvas" }, over)).toBe(false);
+    expect(excuses(listed, judge(sample({ overlappedBy: "canvas.other" })))).toBe(false);
     expect(excuses(listed, judge(sample({ chain: [layer({ filter: "blur(1px)" })] })))).toBe(false);
     expect(excuses(listed, found)).toBe(false);
   });
