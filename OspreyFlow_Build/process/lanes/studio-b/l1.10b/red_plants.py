@@ -73,7 +73,7 @@ PLANTS = [
      [(SEEDS, '        case_name="Operation Ledger (synthetic demo)",\n        highest_marking="OFFICIAL",\n',
        '        case_name="Operation Ledger (synthetic demo)",\n')],
      [PACKS], ["test_every_pack_declares_its_highest_marking"], "assert {'ledger'} == set()"),
-    ("pid-secret", "the Prison Intelligence plan marks its rows SECRET",
+    ("plan-secret", "the Prison Intelligence plan marks its rows SECRET",
      [(PID_PLAN, '    classification: str = "OFFICIAL"\n', '    classification: str = "SECRET"\n')],
      [PACKS], ["test_prison_intelligences_declaration_holds_for_every_write"],
      "AboveTheDeploymentCeiling"),
