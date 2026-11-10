@@ -1,0 +1,8 @@
+# keyboard at 1712cad (default port 5185): needs-you.spec.ts, L2.7's own spec on the changed harness
+[2/6] keyboard/needs-you.spec.ts:40:1 › an overdue promotion opens Operations, and a dataset's proposals its Model tab, by keyboard
+[3/6] keyboard/needs-you.spec.ts:55:1 › the Studio's reminder opens 1 Model · n proposed by keyboard, its tip read with it
+[4/6] keyboard/needs-you.spec.ts:69:1 › a Needs you request opens the Studio on its dataset's Model tab, and not on another's
+[5/6] keyboard/needs-you.spec.ts:87:1 › what you answer for opens where to act, its why read with each line, by keyboard
+[6/6] keyboard/needs-you.spec.ts:113:1 › every registered Needs you action has its own proving test case above
+  6 passed (2.0s)
+# exit 0

@@ -1,0 +1,24 @@
+# head 1712cad: the hand-resolved harness rights line planted back to main's (revert_loads alone), studio-tips.spec.ts must go red; then restored
+1
+  3 passed (1.4s)
+## restored
+  3 passed (1.4s)
+
+## the same plant against ingest-studio.spec.ts and needs-you.spec.ts (studio-tips.spec.ts above does not drive the granted actions, so it stayed green)
+1
+  1) keyboard/ingest-studio.spec.ts:61:1 › a day's run report opens from its cell by keyboard, and its held rows from it 
+  2) keyboard/ingest-studio.spec.ts:78:1 › a deployed pipeline is run from Runs by keyboard ────────
+  3) keyboard/ingest-studio.spec.ts:94:1 › a paused watch is resumed from Runs, and the runs read again, by keyboard 
+  4) keyboard/ingest-studio.spec.ts:109:1 › Add files opens on Sources by keyboard ─────────────────
+    Error: expect(locator).toBeVisible() failed
+  5) keyboard/ingest-studio.spec.ts:117:1 › a source is registered by keyboard, through every step ─
+  6) keyboard/ingest-studio.spec.ts:141:1 › a source's governance is edited by keyboard, and says which pipelines need attention 
+  7) keyboard/ingest-studio.spec.ts:154:1 › a source's refresh is set to read only rows past a watermark, by keyboard 
+  8) keyboard/ingest-studio.spec.ts:174:1 › a source's refresh is paused with why and resumed, by keyboard 
+    Error: expect(locator).toBeVisible() failed
+  9) keyboard/ingest-studio.spec.ts:218:1 › a file is registered as a source and used in a new pipeline by keyboard, asking no marking there 
+  10) keyboard/ingest-studio.spec.ts:264:1 › a draft is deployed as its version by keyboard, without running 
+    Error: expect(locator).toBeVisible() failed
+  11) keyboard/ingest-studio.spec.ts:276:1 › a draft is deployed and run at once by keyboard ───────
+## restored
+  57 passed (36.5s)
