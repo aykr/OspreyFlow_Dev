@@ -29,6 +29,8 @@ ONE_OF_MAX = 20
 AREA_POINTS_MAX = 64
 #: How far back a preview reads (ADR-133 decision 3: "the last 90 days").
 PREVIEW_DAYS = 90
+#: ADR-146 decision 3: *Test* runs a draft over the dataset's last 30 days.
+RULE_TEST_DAYS = 30
 #: The most examples a preview shows (decision 3: "showing up to five").
 PREVIEW_EXAMPLES = 5
 
@@ -242,8 +244,9 @@ SentenceSeverity = Literal["low", "medium", "high"]
 #: which changes nobody's reading (gap map Q5 (B): "my team" means the named team only, so the
 #: builder offers the named teams now and keeps `my_team` only for the rules saved with it).
 SentenceTeam = Literal["case", "my_team", "team"]
-#: As data loads (before or after commit), or on a schedule (ADR-133 decision 1, stage (d)).
-SentenceRuns = Literal["pre_commit", "post_commit", "schedule"]
+#: As data loads (before or after commit), or on a schedule (ADR-133 decision 1, stage (d)), or when
+#: a screening list it reads refreshes (ADR-146 decision 3, *When*).
+SentenceRuns = Literal["pre_commit", "post_commit", "schedule", "list_refresh"]
 #: How often a scheduled rule runs (decision 1: "daily or weekly").
 RuleCadence = Literal["daily", "weekly"]
 #: The days a weekly rule may run on, Monday first, as the schedule says them.
@@ -311,6 +314,15 @@ class RuleSentence(BaseModel):
                 "a rule for the whole deployment is judged within each case as its data loads; a "
                 "schedule runs within one case, so a scheduled rule is for this case or for you"
             )
+        if self.runs == "list_refresh" and (
+            self.relationship is None or self.relationship.kind != "on_screening_list"
+        ):
+            raise ValueError(
+                "a rule that runs when a screening list refreshes reads one: its subject is on a "
+                "screening list"
+            )
+        if self.runs == "list_refresh" and self.scope == "deployment":
+            raise ValueError("a rule for the whole deployment is converted per dataset")
         if self.on_hit == "hold" and self.runs != "pre_commit":
             raise ValueError("only a rule that runs before commit can hold its rows")
         if (
@@ -362,6 +374,9 @@ class SentenceRuleInput(BaseModel):
 
     name: str = Field(min_length=1, max_length=120)
     sentence: RuleSentence
+    #: ADR-146 decision 3: the declared dataset, one dataset or one composite, chosen first and
+    #: never changed. Required to save a draft (L2.11); the older routes' saves name none.
+    dataset_id: str | None = Field(default=None, min_length=1, max_length=120)
     budget_ms: int = Field(default=5000, ge=100, le=60000)
     max_matches: int = Field(default=200, ge=1, le=1000)
 

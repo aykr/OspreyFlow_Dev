@@ -234,12 +234,13 @@ export type Scope = "dataset" | "case";
 export type Severity = "low" | "medium" | "high";
 export type Team = "case" | "my_team" | "team";
 export type TeamId = string | null;
-export type Runs = "pre_commit" | "post_commit" | "schedule";
+export type Runs = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type OnHit = "load" | "hold";
 export type Scope1 = "just_me" | "this_case" | "deployment";
 export type Every = "daily" | "weekly";
 export type Hour = number;
 export type Weekday = number | null;
+export type DatasetId = string | null;
 export type BudgetMs = number;
 export type MaxMatches = number;
 
@@ -250,6 +251,7 @@ export type MaxMatches = number;
 export interface SentenceRuleInput {
   name: Name;
   sentence: RuleSentence;
+  dataset_id?: DatasetId;
   budget_ms?: BudgetMs;
   max_matches?: MaxMatches;
   [k: string]: unknown;

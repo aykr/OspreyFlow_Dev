@@ -273,7 +273,7 @@ export type Scope = "dataset" | "case";
 export type Severity = "low" | "medium" | "high";
 export type Team = "case" | "my_team" | "team";
 export type TeamId = string | null;
-export type Runs = "pre_commit" | "post_commit" | "schedule";
+export type Runs = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type OnHit = "load" | "hold";
 export type Scope1 = "just_me" | "this_case" | "deployment";
 export type Every = "daily" | "weekly";
@@ -300,7 +300,7 @@ export type BaselineDays = number;
 export type Factor = number;
 export type MinRecent = number;
 export type Measure = "count" | "amount";
-export type Trigger = "pre_commit" | "post_commit" | "schedule";
+export type Trigger = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type BudgetMs = number;
 
 /**

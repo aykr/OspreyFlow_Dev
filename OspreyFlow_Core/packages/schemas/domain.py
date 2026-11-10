@@ -1057,10 +1057,12 @@ TypologyName = Literal[
 #: the load (a hit loads with its alert; a failure holds the rows); `post_commit` runs on the
 #: change stream after the load commits, best-effort.
 #: ADR-133 stage (d): a rule written as a sentence may also run on a schedule, never at a load.
-RuleTrigger = Literal["pre_commit", "post_commit", "schedule"]
+#: ADR-146 decision 3 (*When*, L2.11): or when a screening list it reads refreshes.
+RuleTrigger = Literal["pre_commit", "post_commit", "schedule", "list_refresh"]
 #: ADR-133 decision 7, stage (d): a whole-deployment rule is `pending` until a second person
-#: approves it, and runs only once `active`.
-RuleStatus = Literal["pending", "active", "retired"]
+#: approves it, and runs only once `active`. ADR-146 decision 3 (L2.11): a rule saved and never yet
+#: made live is a `draft`, and never runs.
+RuleStatus = Literal["draft", "pending", "active", "retired"]
 #: What a change to a rule did: deployed it, changed it, or retired it (decision 7's maker–checker).
 RuleChangeAction = Literal["deploy", "change", "retire"]
 #: ADR-133 decision 7, stage (d): `closing` is a high-severity alert someone has proposed to close,

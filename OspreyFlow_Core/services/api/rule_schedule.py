@@ -99,6 +99,11 @@ def schedule_view(
         raise ValueError("this rule runs as data loads, not on a schedule")
     said = schedule_words(schedule)
     newest_first = sorted(runs, key=lambda r: (r.slot, r.ran_at), reverse=True)
+    if rule.status == "draft":
+        return RuleScheduleView(
+            rule_id=rule.id, schedule=said, state="draft",
+            words="A draft: it runs on this schedule once it is made live.", runs=newest_first,
+        )  # fmt: skip
     if rule.status == "pending":
         return RuleScheduleView(
             rule_id=rule.id, schedule=said, state="waiting_for_approval",
