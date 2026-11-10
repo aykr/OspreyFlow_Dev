@@ -38,7 +38,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
@@ -79,6 +79,12 @@ class PendingPromotion:
     #: The dataset's highest marking (ADR-145 decision 8), when it has one: a recipient must be
     #: cleared to it, since the alert names the dataset.
     dataset_marking: str | None = None
+    #: The highest marking among the items the promotion carries, as L3.4's record holds it: a
+    #: recipient must be cleared to it too, since the Studio's list hides an item marked above its
+    #: reader whatever the dataset's own marking (an unmarked dataset, or one lowered while the
+    #: promotion waits; CARRIES row 46, L2.7). `None` only when no item is marked. **Required**,
+    #: with no default: `None` clears everyone, so a store leaving it out must fail, not widen.
+    items_marking: str | None = field(kw_only=True)
 
 
 class WaitingPromotions(Protocol):
@@ -164,11 +170,17 @@ def may_review(
 ) -> bool:
     """Amendment 4 decision 11's people for one waiting promotion, all of the dataset's unit: one
     of the dataset's Authors (its home case's, `authors`) whose rights hold `review_promotions`, or
-    an administrator (`administer_system`); and, where the dataset has a highest marking, only one
-    cleared to it. The unit is asked of an Author too: the case recognises an Author grant only for
-    a person of its own unit (`get_authorized`'s `owning_unit`), and a grant outlives a move. The
-    Operations read lists a promotion to these people alone, and the alert goes to them."""
-    if org_unit != p.dataset_unit or not cleared_to(clearance, p.dataset_marking, scheme):
+    an administrator (`administer_system`); and only one cleared to the dataset's highest marking
+    and to the highest marking of the items it carries. The unit is asked of an Author too: the
+    case recognises an Author grant only for a person of its own unit (`get_authorized`'s
+    `owning_unit`), and a grant outlives a move. The Operations read lists a promotion to these
+    people alone, and the alert goes to them."""
+    if org_unit != p.dataset_unit:
+        return False
+    if not (
+        cleared_to(clearance, p.dataset_marking, scheme)
+        and cleared_to(clearance, p.items_marking, scheme)
+    ):
         return False
     rights = rights_for(list(roles), custom)
     if person_id in set(authors) and Right.REVIEW_PROMOTIONS in rights:
@@ -422,6 +434,10 @@ def _kept_promotion(row: Mapping[str, object]) -> PendingPromotion:
         dataset_unit=str(row["dataset_unit"]), proposed_by=str(row["proposed_by"]),
         proposed_at=row["proposed_at"],  # type: ignore[arg-type]
         dataset_marking=row["dataset_marking"],  # type: ignore[arg-type]
+        # Not kept with the alert: a read asks the seam for the promotion as it stands now, with
+        # its items' marking (`app.my_needs_you_route`'s `still`); a promotion the seam no longer
+        # lists is served to no one.
+        items_marking=None,
     )  # fmt: skip
 
 
@@ -454,5 +470,12 @@ class InMemoryAgeingStore:
         return [
             PromotionOverdueNotice(**a.model_dump(include=set(_NOTICE_FIELDS)))
             for a in self.raised.values()
-            if person in a.recipients and person in await still(self.kept[a.promotion_id])
+            if person in a.recipients and person in await still(_as_kept(self.kept[a.promotion_id]))
         ]  # fmt: skip
+
+
+def _as_kept(p: PendingPromotion) -> PendingPromotion:
+    """The promotion as `PromotionAgeingStore` keeps it with an alert (`_kept_promotion`): its
+    items' marking is not kept, so the in-memory store is never looser than the real one (rule 15:
+    a reader must ask the seam for it, as the route does)."""
+    return replace(p, items_marking=None)

@@ -204,7 +204,7 @@ async def test_an_overdue_alert_is_raised_once_by_the_database(world: SimpleName
     assert await world.ageing.alerts_for("ana-a", _both) == []
 
 
-_PROMOTION = PendingPromotion(promotion_id="p1", load_id="load-1", dataset_id="ds-a",
+_PROMOTION = PendingPromotion(items_marking=None, promotion_id="p1", load_id="load-1", dataset_id="ds-a",
                               dataset_name="Prison records", dataset_unit="unit-a",
                               proposed_by="ana-a", proposed_at=datetime(2026, 11, 2, tzinfo=UTC),
                               dataset_marking="SECRET")  # fmt: skip

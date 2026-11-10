@@ -550,6 +550,20 @@ async def test_an_accepted_type_lost_from_the_draft_is_said_and_may_be_added_aga
     assert draft is not None and [e.name for e in draft.extensions] == ["BRIBED"]
 
 
+async def test_the_open_count_is_the_model_tabs_to_decide_and_a_number_alone() -> None:
+    """L2.7 (*Needs you*): `open_proposal_count` counts what the Model tab says is still to decide,
+    pending or accepted and lost from the model, and answers a number, never a proposal. Red with
+    an accepted one in the draft counted."""
+    service, _, models, _ = await _service()
+    p = await _propose(service)
+    assert await service.open_proposal_count("ds-1") == 1
+    await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="Useful")
+    assert await service.open_proposal_count("ds-1") == 0
+    await models.discard_draft("ds-1")
+    assert await service.open_proposal_count("ds-1") == 1
+    assert await service.open_proposal_count("ds-other") == 0
+
+
 async def test_a_merged_proposal_is_still_offered_in_its_own_case_before_live() -> None:
     service, store, _, _ = await _service()
     first = await _propose(service)

@@ -15,6 +15,7 @@ import type {
   SignInDelivery,
 } from "../../../../../packages/schemas/generated";
 import { PLACE_NAME, placesFor } from "../../shell/places";
+import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
 import { Button, Input, Select } from "../../design/primitives";
 import {
   disablePlan,
@@ -405,7 +406,7 @@ function PersonRow({
               <br />
               <span className="label">{placesWords(person.roles ?? [], ctx)}</span>
               <br />
-              <span className="label">{levelWords(levels)}</span>
+              <span className="label" aria-describedby={LEVELS_TIP_ID}>{levelWords(levels)}</span>
             </>
           )}
         </td>
@@ -414,6 +415,7 @@ function PersonRow({
             <input
               type="checkbox"
               aria-label={`${role.label} for ${person.username}`}
+              aria-describedby={roleTip(role.id) ? roleTipId(role.id) : undefined}
               checked={chosen.has(role.id)}
               onChange={(e) => {
                 const next = new Set(chosen);
@@ -441,7 +443,7 @@ function PersonRow({
               {c.team ? `${c.name} (team)` : c.name}
             </label>
           ))}
-          {others.length ? others.join(", ") : ctx.custom.length ? null : "—"}
+          {others.length ? others.map(grantWords).join(", ") : ctx.custom.length ? null : "—"}
         </td>
         <td>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)" }}>
@@ -905,6 +907,7 @@ export function People({ api }: { api: AdminApi }) {
         </p>
       )}
       {ctx.rows && <WithoutAuthor api={api} rows={ctx.rows} people={people} onNamed={readContext} />}
+      <RoleAndLevelTips roles={ROLES} />
       <table className="table" aria-label="People and their roles">
         <thead>
           <tr>

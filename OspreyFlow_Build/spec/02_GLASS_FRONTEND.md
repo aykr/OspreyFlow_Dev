@@ -1007,19 +1007,18 @@ direction, who proposed it and when, never the case (rule 3), with **Add <type> 
 each asking *Why? (required)* (Ctrl/⌘+Enter decides, Escape cancels and focus goes back to the button;
 the outcome takes focus). To a holder not cleared for the case's marking (ADR-143 Amendment 4's *Open*,
 the strict reading meanwhile) a row says only *A proposed link type above your clearance*, with no words,
-tag or decision, and is left out of the count. Admin's *Proposed types* offers no decision on a proposal that names a
-dataset, saying it is decided on that dataset's Model tab. The tab's count, the reminder above the
-Studio's other tabs and the *Needs you* entry (ADR-090 Amendment 4) are Admin's L2.7. A refusal is said in the Conduit's words; to a person the routes refuse the block
+tag or decision, and is left out of the count. The tab reads *1 Model · n proposed*, n being the
+proposals this person may read and decide in this dataset; a reminder with its tip shows above the
+Studio's other tabs; and the top bar's *Needs you* lists them (ADR-090 Amendment 4, ADR-145 decision 11;
+L2.7), all three from `GET /v1/me/needs-you` (spec 03), which says nothing of a dataset whose proposals
+the reader is not cleared to read. A refusal is said in the Conduit's words; to a person the routes refuse the block
 is not drawn. Under the GOV.UK brand it is a summary list with tags, GOV.UK buttons and a textarea with an
 error summary. Keyboard: `keyboard/model-proposals.spec.ts` (`MODEL_PROPOSALS_ACTIONS`); axe in dark,
-light and GOV.UK with the form open and its error shown. **A holder of `manage_ontology`** (an
-administrator) still has **Proposed types** as a section of the Admin place, under *Data*, for the
-proposals made before ADR-099 Amendment 3 that name no dataset (its removal is Admin's next step,
-ADR-090 Amendment 5): their own unit's
-proposals, each with its name, ID, ends, proposer, case and reason, to **Promote…** (Direct or
-Probabilistic, no default, and a new ID when the server says the name is taken by a type its links do
-not fit), **Reject…**, or once promoted **Retire…**, each with a reason. Reachable by keyboard
-throughout (`keyboard/link-change.spec.ts`, `keyboard/proposed-types.spec.ts`). A proposal is not yet
+light and GOV.UK with the form open and its error shown. **Admin has no *Proposed types* section**
+since L2.7 (ADR-090 Amendments 4 and 5). The proposals that name no dataset (those made before ADR-099
+Amendment 3 among them) keep their administrator's routes (`/v1/admin/link-types`, behind
+`manage_ontology`; ADR-143 decision 5), with no screen of their own; the list holds no proposal that
+names a dataset, in the store's own query. A proposal is not yet
 withdrawn from the Glass: the route exists (spec 03 §3.4) and the form does not offer it.
 
 ### 3.1g Two more layouts: a force-directed tree and clustered bubbles (ADR-083)
@@ -1446,6 +1445,28 @@ it; *Ways of working* four habits. Every figure comes from the route its place a
 case, counted as the reader — Home adds no read path; a case that refuses (403) is left out, one that
 fails is said. *The Glass* goes to *Choose a case*, *Ingest Studio* to *Choose the case to load into*,
 *Admin* to the Admin place with no case; the mark returns to Home from anywhere.
+
+**What you can do, and what you answer for** (ADR-145 Amendment 4 decision 12; L2.7;
+`home/answersFor.ts`, `home/AnswersForSection.tsx`) is worked out from the person's own reads alone:
+their rights, their roles, their case list and `GET /v1/me/needs-you`. It holds four things:
+- the places their rights open;
+- what they can do, by place, in `help/roles.ts`'s words, each with *Why can I do this?* naming their own
+  role that gives it (or "a right given to you alone", or "a role your administrator made");
+- their level in each case;
+- what they answer for, with what waits. That is: *Author of* each case they author; each promotion
+  overdue to them (opening Admin › Operations for a holder of `operate_schedules`); and each dataset's
+  proposed link types to decide (opening that dataset's Model tab). A dataset whose proposals they may not
+  read is not mentioned.
+
+**Not drawn yet, for want of a source Home may read** (said nowhere rather than invented):
+- a level given "through" a team, which the case list does not carry;
+- the *Lead of*, *Covering as lead until* and *Owner of watches* lines;
+- a waiting count on an *Author of* line;
+- for an Author who does not hold `operate_schedules`, a place to act on an overdue promotion. Its review
+  is L3.4's promotion screen.
+
+Each is to be added when its read exists: a team-level case listing, a reader's team and lead read, a
+reader's watches read, and L3.4's review route.
 
 **The Admin area (ADR-110 Amendment 1, ADR-112).** The deployment's administration inside the
 running system, behind the same sign-in — *Admin* in the place switcher or Home's *Admin* card, a place

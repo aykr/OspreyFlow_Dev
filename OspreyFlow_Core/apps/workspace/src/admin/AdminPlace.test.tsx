@@ -111,17 +111,17 @@ describe("the Admin area", () => {
   });
 });
 
-// ADR-145 decision 1: Proposed types left the Glass's rail and is an Admin section, under Data, behind its right.
-describe("Proposed types in the Admin area", () => {
-  it("is a section only for a holder of manage_ontology, and opens the proposals there", async () => {
-    serve((path) => (path === "link-types" ? json(200, []) : null));
-    place(["administer_system"]);
-    expect(screen.queryByRole("button", { name: "Proposed types" })).toBeNull();
-    cleanup();
-    place(["manage_ontology"]);
-    fireEvent.click(screen.getByRole("button", { name: "Proposed types" }));
-    fireEvent.click(screen.getByRole("button", { name: "Review proposed types" }));
-    expect(await screen.findByRole("dialog")).toBeTruthy();
+// ADR-090 Amendment 4 (as Amendment 5 timed it, L2.7): proposed types are decided on the Studio's Model
+// tab of their dataset, so Admin has no Proposed types section, for a holder of manage_ontology or any
+// other right, and nothing in Admin asks for the proposals.
+describe("Proposed types are not in the Admin area", () => {
+  it("is no section, even for a holder of manage_ontology with every other right", () => {
+    const sent = serve();
+    place(["manage_ontology", "manage_people", "manage_dashboards", "administer_system", "operate_schedules", "read_audit"]);
+    const nav = screen.getByRole("navigation", { name: "Admin sections" });
+    expect(within(nav).queryByRole("button", { name: "Proposed types" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Review proposed types" })).toBeNull();
+    expect(sent.some(({ path }) => path.includes("link-types"))).toBe(false);
   });
 });
 
@@ -593,5 +593,18 @@ describe("people: join a refused organisation arrival", () => {
     await screen.findByText("Demo Analyst");
     expect(screen.queryByRole("region", { name: "Refused organisation sign-ins" })).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("Roles, teams and Authors from Admin (ADR-145 Amendment 4 decision 12)", () => {
+  it("opens the one help page and comes back to Admin", () => {
+    serve();
+    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
+    fireEvent.click(screen.getByRole("button", { name: "Roles, teams and Authors" }));
+    expect(screen.getByRole("heading", { level: 2, name: "Roles, teams and Authors" })).toBeTruthy();
+    const back = screen.getByRole("button", { name: "← Back to Admin" });
+    expect(document.activeElement).toBe(back);
+    fireEvent.click(back);
+    expect(screen.getByRole("navigation", { name: "Admin sections" })).toBeTruthy();
   });
 });

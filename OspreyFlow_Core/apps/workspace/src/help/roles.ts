@@ -97,9 +97,18 @@ export const RIGHT_WORDS: Partial<Record<Right, string>> = {
   manage_models: "Choose the models and their keys.",
 };
 
+/** A right whose id is not its name on screen: the screens say "domain model", the code keeps
+ * `TargetModel` (ADR-140 Amendment 9 decision 1; L1.8). `rightNames.test.ts` holds every right's name
+ * to the screens' words. */
+const RIGHT_NAMES: Partial<Record<Right, string>> = {
+  edit_target_model: "Edit domain model",
+};
+
 /** A right's name in words: `review_promotions` reads "Review promotions". Admin's labels take it from
  * here (`admin-tips.patch` makes `admin/sections/Roles.tsx`'s `rightWords` this function). */
 export function rightName(right: string): string {
+  const named = RIGHT_NAMES[right as Right];
+  if (named) return named;
   const words = right.replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -123,5 +132,31 @@ export const TEAM_WORDS = {
   authors: "A dataset's Authors answer for it: they are the Authors of its home case. Owning is not acting: reviewing a promotion or accepting a type also needs that right.",
   through: (team: string) => `through ${team}`,
 } as const;
+
+const RECORDED_RIGHTS = (BY_ROLE as { roles: Record<string, { rights?: string[] }> }).roles;
+
+/** The roles that hold `right`, by name, read from `shell/placesByRole.json` (the record
+ * `test_place_routes.py` holds to the routes, never copied here): each built-in role these words name
+ * (`ROLE_WORDS`), never one said by its id (the Studio's older roles, which ADR-112 folded into the Data
+ * Engineer, are not offered), and never the Super user preset, which is given as three roles. A custom
+ * role is an administrator's, and not named here. */
+export function rolesHolding(right: Right): string[] {
+  return Object.entries(RECORDED_RIGHTS)
+    .filter(([key, role]) => key !== "super" && key in SAID_ROLES && role.rights?.includes(right))
+    .map(([key]) => SAID_ROLES[key]!.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/** Why a person cannot take an action, and which roles can (decision 12 as the owner ruled it on
+ * 9 November 2026, ADR-145 Amendment 7: the roles that hold the right, never the people, so no one
+ * learns who holds a right). */
+export function whyNotByRole(right: Right): string {
+  const need = `You need ${rightName(right)}`;
+  const roles = rolesHolding(right);
+  if (roles.length === 0) return `${need}; no built-in role has it. Ask an administrator.`;
+  if (roles.length === 1) return `${need}; the ${roles[0]!} role has it. Ask an administrator to give it to you.`;
+  const named = `${roles.slice(0, -1).join(", ")} and ${roles.at(-1)!}`;
+  return `${need}; the ${named} roles have it. Ask an administrator to give you one.`;
+}
 
 export const HELP_TITLE = "Roles, teams and Authors";

@@ -1,0 +1,25 @@
+# Live at b85a1b6 (rebased onto main e76cef9), stack f on the owner's server, admin lease "L2.7 round 2-3 live set at b85a1b6, f's leftover rows", run by stack_lease.sh remote, 9 Nov 2026 ~21:30Z; the stack brought down and the lease released after.
+# 1. f's leftover test_link_type_store rows (proposed_by analyst-1, units 1 and 2, proposed 2026-10-05 09:00), and only those: 16 found, DELETE 16, 0 left.
+# 2. The live set: test_route_rights.py, test_link_type_store.py (every case over its own schema now), test_promotion_sweep_live.py (its teardown), test_audit_section_store.py, test_person_ownership_store.py, connectors/test_sql_connector_live.py, and test_needs_you.py, test_waiting_promotions_contract.py, test_promotion_ageing.py, test_admin_sections.py, test_admin_connection_fields.py, test_link_type_routes.py, test_analyst_link_types.py: 183 passed.
+# 3. What the set leaves: counted before and after it, on the same lease: the sweep's alerts, datasets and home cases (2, 2, 2: earlier runs', left untouched as only the rows above were to be deleted) and analyst-1's proposals (0) the same after as before, so neither live file left a row. The teardown was not planted away (a plant would leave rows to clean).
+
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261109T212819Z/log: sh -c cd ../OspreyFlow_Core && PYTHONPATH=.:packages .venv/bin/python scripts/zz_admin_rows_tmp.py delete && PYTHONPATH=.:packages .venv/bin/python scripts/zz_admin_rows_tmp.py before
+leftover test_link_type_store rows found: 16
+deleted: DELETE 16
+left after: 0
+before sweep rows: alerts 2 datasets 2 home_cases 2 link_type_proposals of analyst-1 0
+
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261109T212843Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_link_type_store.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_audit_section_store.py ../OspreyFlow_Build/tests/services/api/test_person_ownership_store.py ../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py ../OspreyFlow_Build/tests/services/api/test_needs_you.py ../OspreyFlow_Build/tests/services/api/test_waiting_promotions_contract.py ../OspreyFlow_Build/tests/services/api/test_promotion_ageing.py ../OspreyFlow_Build/tests/services/api/test_admin_sections.py ../OspreyFlow_Build/tests/services/api/test_admin_connection_fields.py ../OspreyFlow_Build/tests/services/api/test_link_type_routes.py ../OspreyFlow_Build/tests/services/api/test_analyst_link_types.py
+........................................................................ [ 39%]
+........................................................................ [ 78%]
+.......................................                                  [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+183 passed, 1 warning in 81.21s (0:01:21)
+
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261109T213026Z/log: sh -c cd ../OspreyFlow_Core && PYTHONPATH=.:packages .venv/bin/python scripts/zz_admin_rows_tmp.py after
+after sweep rows: alerts 2 datasets 2 home_cases 2 link_type_proposals of analyst-1 0

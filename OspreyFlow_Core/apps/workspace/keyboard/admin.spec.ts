@@ -149,10 +149,22 @@ async function serve(page: Page, opts: { owns?: boolean } = {}): Promise<string[
                          detail: "Only one of the dataset's Authors may merge a removed case's layer into it. Its Authors: eng-1." });  // prettier-ignore
     if (path === "settings/dataset-owners" && request.method() === "PUT") return json(200, request.postDataJSON());
     if (path === "settings/dataset-owners") return json(200, { owners_may_be: "people_and_teams" });
+    // L2.7: Policies' Grading scheme, read-only.
+    if (path === "/v1/grading-scheme")
+      return json(200, { scheme: "admiralty", source: ["A", "B", "C", "D", "E", "F"], intelligence: ["1", "2", "3", "4", "5", "6"], handling: ["P", "C"] });
     // ADR-140 Amendment 4: the Connections tab.
-    if (path === "connections" && request.method() === "POST")
-      return json(201, { id: "c2", kind: "files", name: "Second folder", created_by: "admin-1", created_at: "" });
-    if (path === "connections") return json(200, [{ id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "" }]);
+    if (path === "connections" && request.method() === "POST") {
+      const sent = request.postDataJSON() as { kind: string; name: string };
+      return json(201, { ...sent, id: "c2", created_by: "admin-1", created_at: "" });
+    }
+    // L2.7 (ADR-140 Amendment 13): an API connection, its Test connection answered in words.
+    if (path === "connections/c-api/test" && request.method() === "POST")
+      return json(200, { ok: true, words: "The host is allowed and the secret is set." });
+    if (path === "connections") return json(200, [
+      { id: "files", kind: "files", name: "Files: the ingest root", created_by: "system", created_at: "" },
+      { id: "c-api", kind: "api", name: "Telco lookup (synthetic)", created_by: "admin-1", created_at: "", datasets: ["enron"],
+        settings: { kind: "api", base_url: "https://telco.example", auth: "bearer", secret: "TELCO", pagination: "none" } },
+    ]); // prettier-ignore
     if (path === "schedules") return json(200, [SCHEDULE]);
     if (path === "schedules/feed/pause") return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1" });
     if (path === "schedules/feed/resume") return json(200, SCHEDULE);
@@ -479,12 +491,97 @@ test("a connection is named by keyboard", async ({ page }) => {
   await page.goto("/keyboard/admin-harness.html?rights=administer_system");
   await open(page, "Connections");
   await expect(page.getByText("Files: the ingest root")).toBeVisible();
-  await page.getByRole("textbox", { name: "New Files connection" }).focus();
+  await page.getByRole("textbox", { name: "Connection name" }).focus();
   await page.keyboard.type("Second folder");
   await press(page, "Name the connection");
   await expect(page.getByText("Named Second folder.")).toBeVisible();
   expect(asked).toContain("POST connections");
   registerCovered(REGISTRY, "name-a-connection-by-keyboard");
+});
+
+// L2.7 (ADR-140 Amendments 13 and 15; rule 13): a SQL connection named with its fields by keyboard,
+// its secret by name, and a JSON connection bound to its dataset.
+test("a SQL and a JSON connection are named with their fields by keyboard", async ({ page }) => {
+  await serve(page);
+  const sent = sentTo(page, "POST", "/v1/admin/connections");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "Connections");
+  await page.getByLabel("Kind").selectOption("sql");
+  const type = async (name: string, text: string, clear = false) => {
+    await page.getByRole("textbox", { name, exact: true }).focus();
+    if (clear) await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type(text);
+  };
+  await type("Connection name", "Client replica (synthetic)");
+  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.keyboard.press("Space");
+  await type("Host", "replica.client.example");
+  await type("Database", "nomis");
+  await type("Read-only login", "osprey_reader");
+  await type("Secret's name (the login's password)", "NOMIS_REPLICA");
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Client replica (synthetic).")).toBeVisible();
+  registerCovered(REGISTRY, "name-a-sql-connection-by-keyboard");
+  await page.getByLabel("Kind").selectOption("json");
+  await type("Connection name", "Exports (synthetic)");
+  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.keyboard.press("Space");
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Exports (synthetic).")).toBeVisible();
+  expect(sent).toEqual([
+    { kind: "sql", name: "Client replica (synthetic)", datasets: ["enron"],
+      settings: { kind: "sql", host: "replica.client.example", port: 5432, database: "nomis", user: "osprey_reader",
+                  secret: "NOMIS_REPLICA", tls: "verify-full", schemas: ["public"] } },
+    { kind: "json", name: "Exports (synthetic)", datasets: ["enron"], settings: { kind: "json" } },
+  ]); // prettier-ignore
+  registerCovered(REGISTRY, "name-a-json-connection-by-keyboard");
+});
+
+// L2.7 (ADR-145 decision 12, ADR-143 Amendment 6; rule 13): the grading scheme read, and its change
+// command, the dry run's, copied by keyboard; nothing on the page changes the scheme.
+test("the grading scheme is read and its change command copied by keyboard", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const asked = await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "Grading scheme");
+  await expect(page.getByRole("table", { name: "The grades of admiralty" })).toContainText("A, B, C, D, E, F");
+  await press(page, "Copy the grading change command");
+  await expect(page.getByText("Copied. Run it in a terminal on the machine OspreyFlow runs on, the dry run first.")).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("ospreyflow grading change --to <scheme> --mapping <file> --dry-run");
+  expect(asked.filter((a) => !a.startsWith("GET "))).toEqual([]);
+  registerCovered(REGISTRY, "copy-the-grading-change-command-by-keyboard");
+});
+
+// L2.7 (ADR-140 Amendments 13 and 15; rule 13): an API connection's fields filled by keyboard, its
+// dataset ticked by Space, its secret by name with the tip read with it; then Test connection.
+test("an API connection is named with its fields, and a connection tested, by keyboard", async ({ page }) => {
+  const asked = await serve(page);
+  const sent = sentTo(page, "POST", "/v1/admin/connections");
+  await page.goto("/keyboard/admin-harness.html?rights=administer_system");
+  await open(page, "Connections");
+  await page.getByLabel("Kind").selectOption("api"); // a native select, as the other walkthroughs drive one
+  await page.getByRole("textbox", { name: "Connection name" }).focus();
+  await page.keyboard.type("Carrier API (synthetic)");
+  await page.getByRole("checkbox", { name: "Enron corpus" }).focus();
+  await page.keyboard.press("Space");
+  const base = page.getByRole("textbox", { name: "Base URL" });
+  await base.focus();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("https://carrier.example");
+  await page.getByLabel("Sign-in").selectOption("bearer");
+  const secret = page.getByRole("textbox", { name: "Secret's name (the token)" });
+  await secret.focus();
+  await expect(secret).toHaveAccessibleDescription(/never the password or token itself/);
+  await page.keyboard.type("CARRIER_API");
+  await press(page, "Name the connection");
+  await expect(page.getByText("Named Carrier API (synthetic).")).toBeVisible();
+  expect(sent).toEqual([{ kind: "api", name: "Carrier API (synthetic)", datasets: ["enron"],
+                          settings: { kind: "api", base_url: "https://carrier.example", auth: "bearer", secret: "CARRIER_API", pagination: "none" } }]); // prettier-ignore
+  registerCovered(REGISTRY, "name-an-api-connection-by-keyboard");
+  await press(page, "Test connection: Telco lookup (synthetic)");
+  await expect(page.getByRole("status").filter({ hasText: "The host is allowed" })).toBeVisible();
+  expect(asked).toContain("POST connections/c-api/test");
+  registerCovered(REGISTRY, "test-a-connection-by-keyboard");
 });
 
 // ADR-145 decision 5 (rule 13): the side list is walked by Tab and a section opened by Enter; focus
@@ -609,6 +706,25 @@ test("a custom role is made by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "make-a-custom-role-by-keyboard");
 });
 
+// ADR-145 Amendment 4 decision 12 (L2.12): each right's tip is read with its box when it takes focus,
+// and the one help page opens from Admin and is left, by keyboard.
+test("a right's tip is read with its box, and Roles, teams and Authors is opened and left, by keyboard", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await open(page, "Roles");
+  await press(page, "New role");
+  const box = page.getByLabel("Review promotions");
+  await box.focus();
+  await expect(box).toHaveAccessibleDescription("Review items proposed for a dataset.");
+  registerCovered(REGISTRY, "read-a-rights-tip-by-keyboard");
+  await press(page, "Roles, teams and Authors");
+  await expect(page.getByRole("heading", { level: 2, name: "Roles, teams and Authors" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "← Back to Admin" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("navigation", { name: "Admin sections" })).toBeVisible();
+  registerCovered(REGISTRY, "open-and-leave-roles-teams-and-authors-from-admin-by-keyboard");
+});
+
 test("a custom role's versions are shown by keyboard", async ({ page }) => {
   const asked = await serve(page);
   await page.goto("/keyboard/admin-harness.html?rights=manage_people");
@@ -730,6 +846,31 @@ test("when promotions are overdue is set in Operations by keyboard", async ({ pa
   expect((await sent).postDataJSON()).toEqual({ alert_after_days: 4 });
   expect(asked).toContain("PUT settings/promotion-alert-days");
   registerCovered(REGISTRY, "set-when-promotions-are-overdue-by-keyboard");
+});
+
+// L2.7 (ADR-145 Amendment 4 decision 12; rule 13): the tips of People, Roles and Datasets, each read
+// with the control it explains as that control takes focus, in roles' names and never people.
+test("a role's, a team lead's and a dataset's Authors' tips are read with their controls by keyboard", async ({ page }) => {
+  await serve(page);
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people,administer_system");
+  await open(page, "People and roles");
+  const box = page.getByRole("checkbox", { name: "Data Engineer for osprey-demo-analyst" });
+  await box.focus();
+  await expect(box).toBeFocused();
+  await expect(box).toHaveAccessibleDescription(/reviews promotions into a dataset/);
+  registerCovered(REGISTRY, "read-a-roles-tip-by-keyboard");
+  await open(page, "Roles");
+  await press(page, "Team for Intel desk");
+  const lead = page.getByRole("combobox", { name: "Lead of Intel" });
+  await lead.focus();
+  await expect(lead).toHaveAccessibleDescription(/A team's lead may give a team alert to a named member/);
+  await expect(lead).not.toHaveAccessibleDescription(/Demo Analyst|Bea Engineer/);
+  registerCovered(REGISTRY, "read-a-teams-lead-tip-by-keyboard");
+  await details(page);
+  const owner = page.getByRole("button", { name: "Change owner of Enron corpus" });
+  await owner.focus();
+  await expect(owner).toHaveAccessibleDescription(/A dataset's Authors answer for it/);
+  registerCovered(REGISTRY, "read-a-datasets-authors-tip-by-keyboard");
 });
 
 test("every registered Admin action has its own proving test case above", () => {

@@ -169,6 +169,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   // report with its revert command, and the held rows opened from it (Pipelines is the default).
   "ingest-studio-harness.html": [
     "tab=model", "tab=sources", "tab=runs", "tab=runs&cell=1", "tab=runs&cell=1&held=1",
+    // L2.7: the Model tab's count and the reminder above the other tabs.
+    "proposed=1",
     // ADR-140 Amendment 4: the register wizard's governance step, a source's page, and a source
     // chosen in a pipeline.
     "tab=sources&register=1", "tab=sources&source=1", "tab=sources&source=1&edit=1", "pipeline=source",
@@ -188,6 +190,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   ],
   // ADR-140 Amendment 4: the Connections section, served by the page itself. ADR-145 decision 5:
   // every section in the side list, a coming placeholder open.
+  // L2.7 (ADR-145 decision 11): Needs you drawn open, its entries and their tips; the Studio with
+  // two proposed link types, its Model tab's count and the reminder above the other tabs.
+  "needs-you-harness.html": ["open=1"],
   "admin-harness.html": [
     "open=connections&rights=administer_system",
     "rights=manage_people,manage_dashboards,operate_schedules,administer_system,manage_ontology,read_audit&open=Uploads%20(coming)",
@@ -211,6 +216,10 @@ const EXTRA_STATES: Record<string, string[]> = {
     "rights=read_audit,read_rule_audit&serve=audit",
     "rights=read_audit,read_rule_audit&serve=audit&show=rules",
     "rights=operate_schedules&serve=operations",
+    // L2.7: Policies' Grading scheme, read-only with its command; Connections with an API connection
+    // listed and the form's SQL fields drawn.
+    "rights=administer_system&serve=policies&open=Grading%20scheme",
+    "rights=administer_system&serve=connections&open=Connections&show=sql",
   ],
 };
 

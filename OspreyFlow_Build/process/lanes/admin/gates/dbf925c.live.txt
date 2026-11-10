@@ -1,0 +1,11 @@
+# Live at dbf925c (on main 0f05ec2, case's L3.4 merged), stack f on the owner's server, admin lease "L2.7 on L3.4 live set at dbf925c", one detached run by stack_lease.sh remote, 9 Nov 2026 ~23:15Z; the stack brought down and the lease released after.
+# test_promotion_store.py (11), test_promotion_sweep_live.py (2), test_route_rights.py (4), test_link_type_store.py (8): 25 passed, each file's count as it collects.
+Running on ospreyflow-test (stack f, osprey-runs/admin/OspreyFlow_Build/), logged at osprey-runs/admin.meta/runs/20261109T224859Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:cacheprovider ../OspreyFlow_Build/tests/services/api/test_promotion_store.py ../OspreyFlow_Build/tests/services/api/test_promotion_sweep_live.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_link_type_store.py
+.........................                                                [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/admin/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+25 passed, 1 warning in 38.39s

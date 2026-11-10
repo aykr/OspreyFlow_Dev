@@ -12,6 +12,7 @@ import type {
   LayerDryRun,
 } from "../../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../../design/primitives";
+import { AUTHORS_TIP_ID, TIPS } from "../tips";
 import {
   changeDatasetOwners,
   datasetAuthors,
@@ -290,9 +291,8 @@ function Authors({
   return (
     <div style={{ display: "grid", gap: "var(--sp-6)" }}>
       <h5 style={{ margin: 0 }}>Authors</h5>
-      <p className="label" style={{ margin: 0 }}>
-        The people who answer for this dataset: the Authors of its home case. Owning is not acting: reviewing a
-        promotion still needs Review promotions.
+      <p id={`${AUTHORS_TIP_ID}-${dataset.id}`} className="label" style={{ margin: 0 }}>
+        {TIPS.authors}
       </p>
       {!authors.has_home_case ? (
         <p style={{ margin: 0 }}>Not live yet: who answers for it is asked at its first Make live.</p>
@@ -308,7 +308,7 @@ function Authors({
           </ul>
           {!editing && (
             <div>
-              <Button aria-label={`Change owner of ${dataset.name}`} onClick={begin}>
+              <Button aria-label={`Change owner of ${dataset.name}`} aria-describedby={`${AUTHORS_TIP_ID}-${dataset.id}`} onClick={begin}>
                 Change owner…
               </Button>
             </div>

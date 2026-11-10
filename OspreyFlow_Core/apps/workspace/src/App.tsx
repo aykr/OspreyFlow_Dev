@@ -44,6 +44,9 @@ import {
   type CrossFilterStore,
   type CrossFilterStoreState,
 } from "./crossfilter/store";
+import { NeedsYou } from "./admin/needsYou/NeedsYou";
+import { AnswersForSection } from "./home/AnswersForSection";
+import { requestOpening, takeOpening } from "./admin/needsYou/openings";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
 import { LeftRail } from "./shell/LeftRail";
@@ -95,7 +98,8 @@ import { CaseSettings } from "./investigation/CaseSettings";
 import { CaseBrief } from "./investigation/CaseBrief";
 import type { AttachmentKind } from "./investigation/briefApi";
 import { placeOf, revealPanel } from "./investigation/openAttachment";
-import { caseIsOpenable, openCase, openCaseView } from "./investigation/cases";
+import { caseIsOpenable, listCases, openCase, openCaseView } from "./investigation/cases";
+import { caseForDataset } from "./ingest/studio/datasets";
 import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import { ViewLensBanner } from "./views/ViewLensBanner";
@@ -1414,8 +1418,62 @@ export function App() {
       />
     ) : null;
 
-  const account =
-    !isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null;
+  // ADR-145 decision 11 (A2), L2.7: *Needs you*, before the account wherever the account is shown. An
+  // overdue promotion opens Admin › Operations for a reader who holds `operate_schedules`; proposed
+  // link types open the Studio's Model tab on their dataset, through a case of the reader's that
+  // loads into it (`ingest/studio/datasets.ts`), as the Studio's own switcher does.
+  const openModelFor = async (datasetId: string): Promise<void> => {
+    requestOpening({ kind: "studio", tab: "model", datasetId });
+    let cases;
+    try {
+      cases = await listCases(API_BASE_URL, bearerToken ?? "");
+    } catch {
+      takeOpening("studio");
+      throw new Error("Your cases could not be read, so the Studio was not opened. Try again.");
+    }
+    const caseId = caseForDataset(cases, datasetId, investigationId);
+    if (!caseId) {
+      takeOpening("studio"); // no case of theirs loads into it now: nothing to open
+      throw new Error("None of your cases loads into that dataset now, so the Studio cannot open on it.");
+    }
+    if (caseId === investigationId) {
+      setStartChoice(null);
+      setView("ingest");
+    } else {
+      openCase(caseId, "ingest");
+    }
+  };
+  const openOperations = () => {
+    requestOpening({ kind: "admin", section: "operations" });
+    setStartChoice("admin");
+  };
+  // ADR-145 Amendment 4 decision 12 (L2.7): Home's *What you can do, and what you answer for*.
+  const answers =
+    bearerToken && rights ? (
+      <AnswersForSection
+        apiBaseUrl={API_BASE_URL}
+        bearerToken={bearerToken}
+        rights={rights}
+        roles={principal?.roles ?? []}
+        onOpenCase={(id) => openCase(id)}
+        onOpenModel={rights.has("accept_types") ? openModelFor : undefined}
+        onOpenOperations={rights.has("operate_schedules") ? openOperations : undefined}
+      />
+    ) : null;
+  const needsYou = bearerToken ? (
+    <NeedsYou
+      apiBaseUrl={API_BASE_URL}
+      bearerToken={bearerToken}
+      onOpenModel={rights?.has("accept_types") ? openModelFor : undefined}
+      onOpenOperations={rights?.has("operate_schedules") ? openOperations : undefined}
+    />
+  ) : null;
+  const account = (
+    <>
+      {needsYou}
+      {!isDevBypass && principal ? <AccountMenu principal={principal} onSignOut={() => void signOut()} /> : null}
+    </>
+  );
   const startScreenShown =
     isDevBypass || bearerToken
       ? startScreen({
@@ -1443,6 +1501,7 @@ export function App() {
           openRules: () => setView("alerts"),
           openAlert: (alertId) => navigate(alertPath(alertId)),
           openCaseOnRules: (id) => openRulesOnCase(id),
+          answers,
           openAlertJourney: (alert, to) =>
             startJourney({ to, caseId: alert.caseId, alertId: alert.alertId, title: alert.title, rule: alert.rule, weeks: weeksFor(alert.at) }),
         })
@@ -1590,6 +1649,7 @@ export function App() {
         }
         account={
           <>
+            {needsYou}
             {!isDevBypass && principal && (
               // `06_DECISIONS.md` ADR-050: the principal's identity and clearance are shown in the
               // chrome, informationally only. ADR-065 folds the subject, unit and Sign out behind one

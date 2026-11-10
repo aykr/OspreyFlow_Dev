@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 import type { BuiltInRole, CustomRole, CustomRoleVersion, RolesCatalogue, Team } from "../../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../../design/primitives";
 import { changeRole, createRole, listRoles, makeTeam, roleVersions, setTeamCover, setTeamLead, type AdminApi } from "../api";
+import { rightName, rightSays } from "../../help/roles";
+import { LEAD_TIP_ID, TEAM_TIP_ID, TIPS, Tip, roleName, roleTip, roleTipId } from "../tips";
 
 /** The rights grouped as the places they work in (decision 7); a right named in no group is still
  * offered, under *Other*, so no right is ever left out of the form. */
@@ -37,11 +39,9 @@ export const RIGHT_GROUPS: { label: string; rights: string[] }[] = [
   },
 ];
 
-/** A right's name in words: `review_promotions` reads "Review promotions". */
-export const rightWords = (right: string) => {
-  const words = right.replace(/_/g, " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
-};
+/** A right's name in words: `review_promotions` reads "Review promotions" — from the one set of words
+ * (`help/roles.ts`, ADR-145 Amendment 4 decision 12). */
+export const rightWords = rightName;
 
 /** Every right offered, by group, with any the groups do not name under *Other*. */
 export function groupsFor(all: string[]): { label: string; rights: string[] }[] {
@@ -93,10 +93,14 @@ function RoleForm({
           <legend className="label">{group.label}</legend>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)" }}>
             {group.rights.map((right) => (
-              <label key={right} className="label">
+              <span key={right} style={{ display: "grid" }}>
+              <label className="label">
                 <input
                   type="checkbox"
                   aria-label={rightWords(right)}
+                  // ADR-145 Amendment 4 decision 12: every right's tip, from the one source, read with
+                  // the box when it takes focus.
+                  aria-describedby={`right-tip-${right}`}
                   checked={chosen.has(right)}
                   onChange={(e) => {
                     const next = new Set(chosen);
@@ -107,6 +111,10 @@ function RoleForm({
                 />{" "}
                 {rightWords(right)}
               </label>
+              <span id={`right-tip-${right}`} className="label">
+                {rightSays(right)}
+              </span>
+              </span>
             ))}
           </div>
         </fieldset>
@@ -146,10 +154,12 @@ function TeamEditor({ api, role, onSaved }: { api: AdminApi; role: CustomRole; o
         A team is this role's holders. It can hold a level in a case and own a dataset; its mailbox is a contact, never a
         sign-in.
       </p>
+      <Tip id={`${TEAM_TIP_ID}-${role.id}`}>{TIPS.team}</Tip>
+      <Tip id={`${LEAD_TIP_ID}-${role.id}`}>{TIPS.lead}</Tip>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "end" }}>
         <label className="label">
           Team name
-          <Input aria-label={`Team name for ${role.name}`} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          <Input aria-label={`Team name for ${role.name}`} aria-describedby={`${TEAM_TIP_ID}-${role.id}`} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
         </label>
         <label className="label">
           Team mailbox
@@ -170,7 +180,7 @@ function TeamEditor({ api, role, onSaved }: { api: AdminApi; role: CustomRole; o
           <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "end" }}>
             <label className="label">
               Lead
-              <Select aria-label={`Lead of ${team.display_name}`} value={lead} onChange={(e) => setLead(e.target.value)}>
+              <Select aria-label={`Lead of ${team.display_name}`} aria-describedby={`${LEAD_TIP_ID}-${role.id}`} value={lead} onChange={(e) => setLead(e.target.value)}>
                 <option value="">Choose a member</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -188,7 +198,7 @@ function TeamEditor({ api, role, onSaved }: { api: AdminApi; role: CustomRole; o
             </Button>
             <label className="label">
               Cover
-              <Select aria-label={`Cover for ${team.display_name}`} value={cover} onChange={(e) => setCover(e.target.value)}>
+              <Select aria-label={`Cover for ${team.display_name}`} aria-describedby={`${LEAD_TIP_ID}-${role.id}`} value={cover} onChange={(e) => setCover(e.target.value)}>
                 <option value="">No cover</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -265,13 +275,18 @@ export function Roles({ api }: { api: AdminApi }) {
                 {role.gives?.length ? (
                   <>
                     <br />
-                    <span className="label">{`A preset: gives ${role.gives.join(", ")} together`}</span>
+                    <span className="label">{`A preset: gives ${role.gives.map(roleName).join(", ")} together`}</span>
                   </>
                 ) : null}
+                {roleTip(role.id) && <Tip id={`builtin-${roleTipId(role.id)}`}>{roleTip(role.id)}</Tip>}
               </td>
               <td className="label">{role.rights.map(rightWords).join(", ")}</td>
               <td>
-                <Button aria-label={`Copy ${role.label} into a new role`} onClick={() => copy(role, role.label)}>
+                <Button
+                  aria-label={`Copy ${role.label} into a new role`}
+                  aria-describedby={roleTip(role.id) ? `builtin-${roleTipId(role.id)}` : undefined}
+                  onClick={() => copy(role, role.label)}
+                >
                   Copy
                 </Button>
               </td>
@@ -279,6 +294,7 @@ export function Roles({ api }: { api: AdminApi }) {
           ))}
         </tbody>
       </table>
+      <Tip id="custom-team-tip">{`A custom role is a set of rights you choose, given to people as a role is. ${TIPS.team}`}</Tip>
       <table className="table" aria-label="Custom roles">
         <thead>
           <tr>
@@ -329,7 +345,7 @@ export function Roles({ api }: { api: AdminApi }) {
                   >
                     Versions
                   </Button>
-                  <Button aria-label={`Team for ${role.name}`} aria-expanded={teamOf === role.id} onClick={() => setTeamOf(teamOf === role.id ? null : role.id)}>
+                  <Button aria-label={`Team for ${role.name}`} aria-describedby="custom-team-tip" aria-expanded={teamOf === role.id} onClick={() => setTeamOf(teamOf === role.id ? null : role.id)}>
                     Team
                   </Button>
                 </div>

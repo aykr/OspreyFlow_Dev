@@ -37,7 +37,7 @@ from schemas.admin import PersonAccount
 from schemas.domain import Principal
 
 SENT = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
-P = PendingPromotion(promotion_id="p1", load_id="load-7", dataset_id="ds-a",
+P = PendingPromotion(items_marking=None, promotion_id="p1", load_id="load-7", dataset_id="ds-a",
                      dataset_name="Prison records", dataset_unit="unit-1", proposed_by="ana-1",
                      proposed_at=SENT)  # fmt: skip
 
@@ -119,6 +119,23 @@ def test_the_alert_goes_to_reviewers_and_the_units_administrators() -> None:
     authors = ["ana-1", "eng-1", "eng-2", "ana-2", "cus-1"]
     got = recipients_of(P, authors, people, {"rv": [Right.REVIEW_PROMOTIONS]})
     assert got == ["adm-1", "cus-1", "eng-1"]
+
+
+def test_no_recipient_below_the_items_marking_on_an_unmarked_dataset() -> None:
+    """CARRIES row 46, at the raise: an item marked SECRET in a promotion into an unmarked dataset
+    is alerted to no one below SECRET, Author or administrator. Red with the items' marking left
+    out of `may_review`."""
+    from dataclasses import replace
+
+    from ontology.handling import HandlingScheme
+
+    scheme = HandlingScheme(name="t", classification=["OFFICIAL", "SECRET"], handling_codes={},
+                            action_codes={}, sanitisation_codes={})  # fmt: skip
+    item = replace(P, items_marking="SECRET")
+    people = [_account("rev-1", ["data_engineer"]), _account("adm-1", ["osprey-admin"]),
+              _account("rev-low", ["data_engineer"], clearance="OFFICIAL"),
+              _account("adm-low", ["osprey-admin"], clearance="OFFICIAL")]  # fmt: skip
+    assert recipients_of(item, ["rev-1", "rev-low"], people, scheme=scheme) == ["adm-1", "rev-1"]
 
 
 def test_age_and_overdue_as_operations_lists_them() -> None:

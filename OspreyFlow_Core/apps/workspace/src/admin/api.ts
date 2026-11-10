@@ -1,10 +1,12 @@
 // The Admin area's calls (`06_DECISIONS.md` ADR-110 Amendment 1, ADR-112): people's roles,
 // dashboard identities and the system's health, all through the Conduit — never the identity
 // provider directly. Shapes are the generated ones.
+import { whyNotByRole, type Right } from "../help/roles";
 import type {
   AccessInput,
   AdminPeopleRows,
   AuditSectionPage,
+  ConnectionTest,
   OperationsAgeing,
   PromotionAlertSetting,
   CustomRole,
@@ -76,6 +78,11 @@ async function failure(response: Response): Promise<Error> {
   // ADR-145 Amendment 5: roles, teams, case levels and Disable…, refused in the Conduit's words.
   if (typeof detail === "object" && detail !== null && typeof (detail as { message?: unknown }).message === "string")
     return new Error((detail as { message: string }).message);
+  // ADR-145 Amendment 4 decision 12 (L2.7): a right refused says which roles hold it, never who.
+  if (typeof detail === "object" && detail !== null && (detail as { error?: string }).error === "right_required") {
+    const right = (detail as { right?: unknown }).right;
+    if (typeof right === "string") return new Error(`Not done. ${whyNotByRole(right as Right)}`);
+  }
   if (response.status === 403) return new Error("Your account does not hold the right for this.");
   return new Error(`The Admin area could not complete that (${response.status}).`);
 }
@@ -123,6 +130,9 @@ export const listDemoPacks = (api: AdminApi) => call<DemoPackStatus[]>(api, "dem
 export const systemStatus = (api: AdminApi) => call<SystemStatus>(api, "system");
 // ADR-136 decision 2: each dataset's egress, set by an administrator, audited by the Conduit.
 export const listDatasets = (api: AdminApi) => call<AdminDataset[]>(api, "datasets");
+// ADR-140 Amendment 13 (L2.7): *Test connection*, in words; nothing read is answered.
+export const testConnection = (api: AdminApi, connectionId: string) =>
+  call<ConnectionTest>(api, `connections/${encodeURIComponent(connectionId)}/test`, { method: "POST" });
 export const setDatasetEgress = (api: AdminApi, datasetId: string, egress: AdminDataset["egress"]) =>
   call<AdminDataset>(api, `datasets/${encodeURIComponent(datasetId)}/egress`, {
     method: "PUT",
