@@ -33366,8 +33366,10 @@ and each one is checked against the merger's "land" message in `process/lanes/me
 
 ### ADR-148, Amendment 3 (10 November 2026) — the ceiling's carries as built (L1.10b)
 
-Status: accepted. Written in the studio-b lane at step L1.10b, with the orchestrator's acceptance of 10 November
-of points 1 and 3. It closes three of Amendment 2's carries: the other demo packs' declarations, a refused staged
+Status: accepted. Written in the studio-b lane at step L1.10b. The orchestrator accepted points 1 and 3 as first
+built on 10 November. Both then changed by the orchestrator's own review findings of the same day: public judged
+by what it stages rather than declared, and Test's strict option (its finding 1, "keep it"). The merge confirms
+them as written here. It closes three of Amendment 2's carries: the other demo packs' declarations, a refused staged
 run's working tables, and Test not judging the ceiling.
 
 1. **Every demo pack declares its highest marking, each proved against what it writes, but public, judged by
@@ -33421,6 +33423,10 @@ run's working tables, and Test not judging the ceiling.
    - Verify's withheld guards (rules 3 and 4) stay first and unchanged, on both paths: a case not reading the
      dataset, and a reader not cleared for the sample, get the guard's words, never the ceiling's. The words name
      the deployment's limit, never a row's content.
+   - On a staged pipeline the clearance guard reads the sources' raw rows. The rows the ceiling then judges are
+     the last step's, which can hold a Lookup's list rows. Those are the dataset's own, read by whoever reads
+     the dataset, which the route's dataset guard has already judged (`studio_staging.row_reader`). So the
+     ceiling's words tell such a reader nothing the guards keep from them.
 
 **Tests** (each red first, `process/lanes/studio-b/l1.10b/red_plants.py`):
 - **Point 1:** `tests/test_seed_internal_ceiling.py`:
