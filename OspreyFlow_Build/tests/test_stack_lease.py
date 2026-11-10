@@ -718,3 +718,99 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
     assert lines[-1].startswith("Wall time: ") and "exit 7 (stack b, the lease case took at 20" in lines[-1], lines
     assert "set-up before it" in lines[-1], lines
     assert (run / "lease").read_text() == "holder=case\n"
+
+
+
+# --- live: the lane's live tests selected by its change (admin's T1 part 3, 10 November 2026) ----------------
+
+
+def _live(lease, tmp_path: Path, cwd: Path, picks: str, *args: str, fails: bool = False) -> subprocess.CompletedProcess[str]:
+    """`stack_lease.sh live` with the selector stood in for by a script printing `picks` (one path a line), or
+    failing as the real one does (a message on stderr, exit 1)."""
+    lease("status")
+    selector = tmp_path / "select.sh"
+    if fails:
+        selector.write_text("#!/bin/sh\necho 'live_map.tsv line 3: names no live test file' >&2\nexit 1\n")
+    else:
+        selector.write_text(f"#!/bin/sh\necho \"selector $*\" >> \"{tmp_path}/selector.log\"\nprintf '%s' '{picks}'\n")
+    selector.chmod(0o755)
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"), "OSPREY_LIVE_SELECT": str(selector),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    return subprocess.run(["bash", str(SCRIPT), "live", *args], cwd=cwd, env=env, capture_output=True, text=True)
+
+
+def _executing_host(tmp_path: Path) -> Path:
+    """The recording ssh, running the start call as the host would (HOME a folder here), with a stand-in pytest in
+    the copy's venv that writes the arguments it was given, one a line."""
+    log = _remote_tools(tmp_path)
+    home = tmp_path / "home"
+    (home / "osprey-runs" / "case" / "OspreyFlow_Build").mkdir(parents=True)
+    venv = home / "osprey-runs" / "case" / "OspreyFlow_Core" / ".venv" / "bin"
+    venv.mkdir(parents=True)
+    (venv / "pytest").write_text(f'#!/bin/sh\npwd > "{tmp_path}/pytest.cwd"\nprintf "%s\\n" "$@" > "{tmp_path}/pytest.argv"\n')
+    (venv / "pytest").chmod(0o755)
+    bin_dir = tmp_path / "bin"
+    (bin_dir / "ssh").write_text(
+        f'#!/bin/bash\necho "ssh $*" >> "{log}"\nin="$(cat)"\nprintf "%s\\n" "$in" | sed "s/^/stdin /" >> "{log}"\n'
+        f'for a; do last="$a"; done\n'
+        f'case "$last" in *"nohup setsid"*) cd "{home}" && printf "%s\\n" "$in" | HOME="{home}" bash -c "$last";; esac\nexit 0\n'
+    )
+    (bin_dir / "setsid").write_text('#!/bin/sh\nexec "$@"\n')
+    for tool in ("ssh", "setsid"):
+        (bin_dir / tool).chmod(0o755)
+    return home
+
+
+def _wait_for(path: Path) -> None:
+    for _ in range(100):
+        if path.exists():
+            return
+        time.sleep(0.05)
+
+
+def test_live_runs_exactly_the_selection_from_the_core_folder_with_extra_arguments(lease, tmp_path: Path) -> None:
+    """At the real call site: the start call run as the host runs it, so the quoting is the shell's own (a lost
+    `$0` placeholder would swallow the first file, and a lost "$@" the extra arguments)."""
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")  # stack b, on the server
+    _executing_host(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    picks = "tests/services/api/test_route_rights.py\ntests/conformance/graph_port/test_suite.py\n"
+    ran = _live(lease, tmp_path, wt / "OspreyFlow_Core", picks, "case", "--", "-k", "not slow")
+    assert ran.returncode == 0, ran.stderr
+    _wait_for(tmp_path / "pytest.argv")
+    argv = (tmp_path / "pytest.argv").read_text().splitlines()
+    assert argv == [
+        "-c", "../OspreyFlow_Build/pytest.ini", "-q", "-rfE",
+        "../OspreyFlow_Build/tests/services/api/test_route_rights.py",
+        "../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py",
+        "-k", "not slow",
+    ], argv  # fmt: skip
+    assert (tmp_path / "pytest.cwd").read_text().strip().endswith("osprey-runs/case/OspreyFlow_Core")
+    assert "2 live test files" in ran.stderr, ran.stderr
+
+
+def test_live_all_and_base_are_passed_to_the_selector(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    assert _live(lease, tmp_path, wt, "tests/services/api/test_route_rights.py\n", "case", "--all").returncode == 0
+    assert _live(lease, tmp_path, wt, "tests/services/api/test_route_rights.py\n", "case", "--base", "lane/x").returncode == 0
+    said = (tmp_path / "selector.log").read_text().splitlines()
+    assert said == ["selector --all --why", "selector --base lane/x --why"], said
+
+
+def test_live_refuses_a_failed_or_empty_selection_and_a_lane_holding_no_stack(lease, tmp_path: Path) -> None:
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    none = _live(lease, tmp_path, wt, "tests/services/api/test_route_rights.py\n", "case")
+    assert none.returncode == 1 and "holds no stack" in none.stderr
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    empty = _live(lease, tmp_path, wt, "", "case")
+    assert empty.returncode == 1 and "empty" in empty.stderr, empty.stderr
+    failed = _live(lease, tmp_path, wt, "", "case", fails=True)
+    assert failed.returncode == 1 and "names no live test file" in failed.stderr
+    assert "The selection failed" in failed.stderr, failed.stderr  # not the empty-selection refusal
+    assert not log.exists() or "rsync" not in log.read_text()  # nothing sent
