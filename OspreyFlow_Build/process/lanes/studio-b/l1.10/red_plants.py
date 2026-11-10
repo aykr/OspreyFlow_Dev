@@ -152,7 +152,7 @@ PLANTS = [
     ("upload-said-as-a-load", "an upload refused in a load's words",
      [(APP, "        raise AboveTheDeploymentCeiling(ceiling.marking, \"import\")\n",
        "        raise AboveTheDeploymentCeiling(ceiling.marking)  # PLANT\n")], [UPLOADS],
-     ["test_a_document_above_the_ceiling_is_refused_before_anything_is_stored"], "not added"),
+     ["test_a_document_above_the_ceiling_is_refused_before_anything_is_stored"], "This load would write rows"),
     ("correction-backstop-removed", "a correction's new element not judged against the ceiling",
      [(SCOPE, (CORRECTION_LINE, 2), None)], [BACKSTOP],
      ["test_a_correction_above_the_ceiling_never_reaches_the_store"], "DID NOT RAISE"),
