@@ -754,6 +754,16 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
         server=server_plan(answers) if own_server else None,
         gpu=_gpu_of(answers, _product_config(ctx.product)),
     )  # fmt: skip
+    if not args.cloud and args.mode != "enterprise":
+        # ADR-114 Amendment 38 decision 8: the folder these answers name, before anything is
+        # written: one inside the checkout refused, one a sync client copies warned of.
+        made = osprey_config(answers, _product_config(ctx.product))
+        name = ctx.target.name if ctx.target.named else deployment_name_of(made)
+        # Judged by the home `load_answers` read `~` from.
+        checks = [
+            *checks,
+            *backups_checks(ctx.probes, ctx.product, [(name, made)], home=Path.home()),
+        ]
     if not _print_checks(checks):
         print("Nothing was installed. Fix the above and run ospreyflow install again.")
         return 1

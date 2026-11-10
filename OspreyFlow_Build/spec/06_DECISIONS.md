@@ -31049,7 +31049,8 @@ Platform-b took a recommended option for each and built it, and the orchestrator
    cannot tell one checkout's set from another's. Recording it in the manifest is left for later.
 8. **The macOS sync roots are checked on macOS only; a `OneDrive` folder on any system** (one is
    synced wherever it is seen, for example under `/mnt/c/Users/…` in WSL). `doctor --config
-   <answers>` checks the answers' own folder, so the warning comes before the install.
+   <answers>` checks the answers' own folder, so the warning comes before the install; and the install runs the same
+   checks on its answers' folder before it writes anything, refusing one inside the checkout.
 9. **The update and the runbook name the folder the backup writes to** (two gaps older than
    Amendment 37, fixed with it at the orchestrator's request, 10 November 2026). `ospreyflow
    update`'s own backup, and its rollback's restore, pass `harness.backup` and `harness.restore`
@@ -31078,7 +31079,7 @@ Platform-b took a recommended option for each and built it, and the orchestrator
 | the doctor and the backup apply one folder rule, and its copies of the backup's rules are the backup's | `tests/cli/test_doctor.py::test_the_doctor_and_the_backup_agree_on_the_folder`, `::test_the_doctors_mirrors_of_the_backups_rules_are_the_backups_own` |
 | a relative folder is the product's; no checkout is named where there is none; a named deployment's unreadable settings are said | `tests/cli/test_doctor.py::test_a_backups_folder_inside_the_checkout_fails_the_doctor`, `::test_off_a_checkout_the_doctor_calls_no_folder_inside_one`, `::test_a_named_deployments_unreadable_settings_are_said_not_raised` |
 | the guided page never offers the placeholder; Review names the fallback | `apps/harness/src/screens/InstallScreens.test.tsx` (FoldersScreen, ReviewScreen) |
-| sync roots, links and case; the answers' folder before the install | `tests/cli/test_doctor.py::test_doctor_warns_a_backups_folder_a_sync_client_copies`, `::test_a_plain_backups_folder_or_one_reached_through_a_link_is_judged_by_where_it_is`, `::test_the_doctor_warns_of_the_answers_backups_folder_before_the_install` |
+| sync roots, links and case; the answers' folder before the install | `tests/cli/test_doctor.py::test_doctor_warns_a_backups_folder_a_sync_client_copies`, `::test_a_plain_backups_folder_or_one_reached_through_a_link_is_judged_by_where_it_is`, `::test_the_doctor_warns_of_the_answers_backups_folder_before_the_install`; `tests/cli/test_install.py::test_the_install_checks_the_backups_folder_before_anything_is_written` |
 | a set not all readable is said to be at least its size, with sudo | `tests/cli/test_doctor.py::test_a_set_the_doctor_cannot_read_all_of_is_said_to_be_at_least_its_size` |
 | the update names a named deployment to the backup and restore, and the checkout's own by nothing, from the checkout's settings; the runbook gives the set's folder as written, never the placeholder | `tests/harness/test_update_apply.py::test_an_updates_backup_and_restore_name_a_named_deployment_to_the_harness`, `::test_an_updates_backup_is_never_written_inside_the_checkout`; `tests/harness/test_render.py::test_the_runbook_names_the_folder_backups_are_written_to_not_the_placeholder` |
 

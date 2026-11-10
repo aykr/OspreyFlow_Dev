@@ -31,3 +31,4 @@ Amendments 37 and 38 give.
 - guide carry: NOT_YET_IN_THE_GUIDE emptied -> test_every_answers_file_setting_is_in_the_guide[folders-*] red in both guides ('folders.backups is not in …'); restored
 - gate (server make test at 5079bed): a server's setting left out read as no folder, its spelt-out default as its folder -> webapp_screens round trip [small] red (RUNBOOK.md differed); new every_profile case and doctor agree[raw8] red without each half of the fix; backup.py's docstring named the Build folder -> test_core_stands_alone red, reworded
 - independent review (1): new_set_folder writing the unexpanded ~ -> tilde case red (set under cwd/~); main passing it unexpanded -> its second half red
+- independent review (5): install without the backups checks -> install_checks_the_backups_folder red (the install went on); the test run before the fix
