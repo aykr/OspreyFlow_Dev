@@ -135,6 +135,19 @@ def test_nothing_the_conduit_image_carries_execs_git() -> None:
     )
 
 
+def test_the_conduit_image_does_not_install_git() -> None:
+    """`git` is GPL-2.0-only and nothing the image carries execs it (the test above), so it is
+    not installed (the owner's ruling of 9 November 2026: it leaves the image, and the licence
+    gate stops admitting it)."""
+    dockerfile = (REPO_ROOT / "services" / "api" / "Dockerfile").read_text(encoding="utf-8")
+    installed = " ".join(
+        line.strip() for line in dockerfile.splitlines() if "apt-get install" in line
+    )
+    assert "git" not in installed.split(), (
+        f"services/api/Dockerfile installs `git` again: {installed!r}"
+    )
+
+
 def test_the_conduit_image_carries_every_product_file_a_route_loads_at_runtime() -> None:
     """**The third instance of one class — round 13cdc.**
 

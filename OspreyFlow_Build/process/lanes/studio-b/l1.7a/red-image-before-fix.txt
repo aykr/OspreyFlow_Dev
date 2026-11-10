@@ -1,0 +1,38 @@
+# head 22b931d (rebased on main 6379dd1), git still in the Conduit's image and the gate's AWAITING_OWNER entry: the inverted gate tests and the image test, red first
+PASSED tests/licence_check/test_runtime_licences.py::test_the_recorded_classpath_exception_passes_for_java
+PASSED tests/licence_check/test_runtime_licences.py::test_any_other_gpl_java_is_refused[GPL-2.0-only]
+PASSED tests/licence_check/test_runtime_licences.py::test_any_other_gpl_java_is_refused[GPL-2.0]
+PASSED tests/licence_check/test_runtime_licences.py::test_any_other_gpl_java_is_refused[GPL-3.0-only WITH Classpath-exception-2.0]
+PASSED tests/licence_check/test_runtime_licences.py::test_any_other_gpl_java_is_refused[GPL-2.0-only WITH GCC-exception-3.1]
+PASSED tests/licence_check/test_runtime_licences.py::test_any_other_gpl_java_is_refused[AGPL-3.0-only]
+PASSED tests/licence_check/test_runtime_licences.py::test_any_other_gpl_java_is_refused[GPL-2.0-only WITH Classpath-exception-2.0 AND GPL-3.0]
+PASSED tests/licence_check/test_runtime_licences.py::test_the_exception_is_for_the_recorded_runtime_alone
+PASSED tests/licence_check/test_runtime_licences.py::test_a_java_runtime_the_image_does_not_declare_is_refused[FROM eclipse-temurin:21-jre AS java]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_java_runtime_the_image_does_not_declare_is_refused[RUN jlink --add-modules java.base --output /opt/jre]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_java_runtime_the_image_does_not_declare_is_refused[COPY --from=other /opt/java /opt/java]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_java_runtime_the_image_does_not_declare_is_refused[RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_java_runtime_the_image_does_not_declare_is_refused[RUN apt-get install -y default-jre]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_java_runtime_the_image_does_not_declare_is_refused[RUN apk add --no-cache openjdk21]
+PASSED tests/licence_check/test_runtime_licences.py::test_an_image_with_no_java_is_not_flagged
+PASSED tests/licence_check/test_runtime_licences.py::test_a_permissive_runtime_passes_as_the_allowlist_does
+PASSED tests/licence_check/test_runtime_licences.py::test_the_real_dockerfiles_pass_and_the_conduit_declares_its_java
+PASSED tests/licence_check/test_runtime_licences.py::test_a_declared_runtime_is_read_however_its_label_is_written[single-quoted]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_declared_runtime_is_read_however_its_label_is_written[unquoted]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_declared_runtime_is_read_however_its_label_is_written[among-others]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_declared_runtime_is_read_however_its_label_is_written[continued]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_declared_runtime_is_read_however_its_label_is_written[legacy-form]
+PASSED tests/licence_check/test_runtime_licences.py::test_a_declared_runtime_is_read_however_its_label_is_written[lower-case]
+PASSED tests/licence_check/test_runtime_licences.py::test_git_installed_and_undeclared_is_refused
+PASSED tests/licence_check/test_runtime_licences.py::test_a_runtime_put_to_the_owner_is_named_as_awaiting_never_passed_silently
+PASSED tests/test_connectors_are_carried_into_the_image.py::test_the_repository_has_connector_profiles_to_carry
+PASSED tests/test_connectors_are_carried_into_the_image.py::test_the_conduit_image_carries_the_connector_profiles
+PASSED tests/test_connectors_are_carried_into_the_image.py::test_the_git_scan_finds_the_call_the_conduit_used_to_make
+PASSED tests/test_connectors_are_carried_into_the_image.py::test_nothing_the_conduit_image_carries_execs_git
+PASSED tests/test_connectors_are_carried_into_the_image.py::test_the_conduit_image_carries_every_product_file_a_route_loads_at_runtime
+PASSED tests/test_connectors_are_carried_into_the_image.py::test_no_conduit_module_loads_a_path_under_tests
+FAILED tests/licence_check/test_runtime_licences.py::test_the_conduit_carries_no_git_and_nothing_awaits_the_owner - assert {('services/a...om the image'} == {}
+FAILED tests/licence_check/test_runtime_licences.py::test_git_planted_in_the_real_conduit_dockerfile_is_an_offender[installed] - AssertionError: assert [] == [('services/a...'undeclared')]
+FAILED tests/licence_check/test_runtime_licences.py::test_git_planted_in_the_real_conduit_dockerfile_is_an_offender[installed-and-declared] - AssertionError: assert [] == [('services/a...PL-2.0-only')]
+FAILED tests/licence_check/test_runtime_licences.py::test_every_run_says_nothing_awaits_the_owner - AssertionError: assert 'NOT YET PASSED' not in 'licence-che...the image)\n'
+FAILED tests/test_connectors_are_carried_into_the_image.py::test_the_conduit_image_does_not_install_git - AssertionError: services/api/Dockerfile installs `git` again: 'RUN apt-get update && apt-get install -y --no-install-recommends git \\'
+5 failed, 31 passed in 1.18s

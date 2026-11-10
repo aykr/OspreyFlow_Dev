@@ -12,7 +12,6 @@ Dockerfiles pass.
 from __future__ import annotations
 
 import pytest
-
 from tools import licence_check
 from tools.licence_check import (
     find_runtime_offenders,
@@ -129,38 +128,80 @@ def test_git_installed_and_undeclared_is_refused() -> None:
     assert find_runtime_offenders({"api": GIT.replace("git curl", "gitk-viewer curl")}) == []
 
 
-def test_git_declared_is_named_as_awaiting_the_owner_never_passed_silently(
+CONDUIT = "services/api/Dockerfile"
+
+
+def _real_conduit() -> str:
+    return (licence_check.CORE / CONDUIT).read_text(encoding="utf-8")
+
+
+def test_a_runtime_put_to_the_owner_is_named_as_awaiting_never_passed_silently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The awaiting mechanism itself (kept for a later ruling, though nothing awaits now): an
+    entry names its runtime on every run instead of failing it, pinned to that image and licence;
+    without the entry it is an offender like any GPL runtime."""
     declared = GIT + 'LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"\n'
-    conduit = "services/api/Dockerfile"
-    assert find_runtime_offenders({conduit: declared}) == []
-    assert find_runtimes_awaiting_owner({conduit: declared}) == [(conduit, "git", "GPL-2.0-only")]
+    monkeypatch.setattr(
+        licence_check, "AWAITING_OWNER", {(CONDUIT, "git", "GPL-2.0-only"): "a ruling awaited"}
+    )
+    assert find_runtime_offenders({CONDUIT: declared}) == []
+    assert find_runtimes_awaiting_owner({CONDUIT: declared}) == [(CONDUIT, "git", "GPL-2.0-only")]
     # Pinned: in another image, or under another licence, it is an offender as usual.
     assert find_runtime_offenders({"other": declared}) == [("other", "git", "GPL-2.0-only")]
     agpl = declared.replace("GPL-2.0-only", "AGPL-3.0-only")
-    assert find_runtime_offenders({conduit: agpl}) == [(conduit, "git", "AGPL-3.0-only")]
-    # Without the owner's question on record, it is an offender like any GPL runtime.
+    assert find_runtime_offenders({CONDUIT: agpl}) == [(CONDUIT, "git", "AGPL-3.0-only")]
     monkeypatch.setattr(licence_check, "AWAITING_OWNER", {})
-    assert find_runtime_offenders({conduit: declared}) == [(conduit, "git", "GPL-2.0-only")]
+    assert find_runtime_offenders({CONDUIT: declared}) == [(CONDUIT, "git", "GPL-2.0-only")]
 
 
-def test_the_conduit_declares_its_git_and_the_tree_names_it_awaiting() -> None:
-    assert ("services/api/Dockerfile", "git", "GPL-2.0-only") in find_runtimes_awaiting_owner()
+def test_the_conduit_carries_no_git_and_nothing_awaits_the_owner() -> None:
+    """The owner's ruling of 9 November 2026 carried out (L1.7a): the Conduit commits with dulwich,
+    so its image installs no `git`, declares none, and the gate admits it under no entry. The pass
+    is git absent and nothing awaiting."""
+    assert licence_check.AWAITING_OWNER == {}
+    assert find_runtimes_awaiting_owner() == []
+    conduit = _real_conduit()
+    assert "git" not in licence_check.declared_runtimes(conduit)
+    assert (
+        licence_check._GIT_IN_IMAGE.search("\n".join(licence_check._instructions(conduit))) is None
+    )
+    assert find_runtime_offenders() == []
 
 
-def test_every_run_names_what_awaits_the_owner(
+@pytest.mark.parametrize(
+    "plant",
+    [
+        "RUN apt-get update && apt-get install -y --no-install-recommends git \\\n"
+        "    && rm -rf /var/lib/apt/lists/*\n",
+        "RUN apt-get update && apt-get install -y --no-install-recommends git \\\n"
+        "    && rm -rf /var/lib/apt/lists/*\n"
+        'LABEL org.ospreyflow.runtime.git.licence="GPL-2.0-only"\n',
+    ],
+    ids=["installed", "installed-and-declared"],
+)
+def test_git_planted_in_the_real_conduit_dockerfile_is_an_offender(plant: str) -> None:
+    """Rule 15, at the gate's real call site: `git` put back into the Conduit's own Dockerfile
+    text, after its Java runtime is copied in, is named, whether or not it is declared."""
+    conduit = _real_conduit()
+    anchor = "COPY --from=java /opt/jre /opt/java\n"
+    assert conduit.count(anchor) == 1
+    planted = conduit.replace(anchor, plant + anchor)
+    expected = "undeclared" if "LABEL" not in plant else "GPL-2.0-only"
+    assert find_runtime_offenders({CONDUIT: planted}) == [(CONDUIT, "git", expected)]
+    assert find_runtimes_awaiting_owner({CONDUIT: planted}) == []
+
+
+def test_every_run_says_nothing_awaits_the_owner(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Named on every run, never silently passed: `main()` says it, and its summary counts it."""
+    """`main()` over the real tree: nothing named as not yet passed, and its summary counts none."""
     monkeypatch.setattr(licence_check, "run_pip_licenses", lambda _path: [])
     monkeypatch.setattr(licence_check, "find_data_licence_offenders", lambda: [])
     monkeypatch.setattr(licence_check, "find_own_licence_violations", lambda: [])
     monkeypatch.setattr("sys.argv", ["licence_check"])
     assert licence_check.main() == 0
     said = capsys.readouterr()
-    assert "NOT YET PASSED: services/api/Dockerfile carries 'git'" in said.err
-    # The owner's ruling and its carry, said on every run (the orchestrator's review of round 3).
-    assert "the owner's ruling of 9 November 2026: replaced by dulwich" in said.err
-    assert "studio-b's carry in L1.7a" in said.err
-    assert "1 image runtime(s) not yet passed" in said.out
+    assert "NOT YET PASSED" not in said.err
+    assert "'git'" not in said.err
+    assert "0 image runtime(s) not yet passed" in said.out
