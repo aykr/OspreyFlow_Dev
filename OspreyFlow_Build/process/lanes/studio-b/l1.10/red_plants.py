@@ -168,6 +168,32 @@ PLANTS = [
      [(CYBER, "        handling=node.handling,",
        "        handling=node.handling.model_copy(update={\"classification\": \"SECRET\"}),")],
      [PACKS], ["test_cyber_intrusions_declaration_holds_for_every_write"], None),
+    ("bound-floor-unjudged", "a bound element's default floor judged nowhere: skipped in the fixed "
+     "check, and an empty cell adds nothing",
+     [(CEILING, "        # A bound element's literal holds no classification, so its floor is the "
+                "defaults'.\n",
+       "        if \"classification\" in handling_bindings(element.handling):  # PLANT\n"
+       "            continue\n"),
+      (CEILING, "        found.add(default)\n        column = handling_bindings(element.handling)"
+                ".get(\"classification\")\n",
+       "        column = handling_bindings(element.handling).get(\"classification\")\n"
+       "        if column is None:  # PLANT\n            found.add(default)\n")],
+     [LOADS], ["test_an_empty_cell_takes_the_element_s_default_and_is_judged_by_it",
+               "test_a_bound_element_s_default_above_the_ceiling_is_refused_before_any_staging"],
+     "DID NOT RAISE"),
+    ("condition-key-dropped", "a condition's column left out of the key rows are judged once by",
+     [(CEILING, "        if element.when is not None:\n            columns.add(element.when.field)\n",
+       "")], [LOADS],
+     ["test_a_condition_s_column_keeps_rows_apart_when_judged_once_per_combination"],
+     "DID NOT RAISE"),
+    ("missing-keyed-as-empty", "a missing column keyed as an empty one",
+     [(CEILING, "        key = tuple((c in row, row.get(c)) for c in ordered)\n",
+       "        key = tuple((True, row.get(c)) for c in ordered)  # PLANT\n")], [LOADS],
+     ["test_a_missing_column_is_not_read_as_an_empty_one"], "DID NOT RAISE"),
+    ("undeclared-said-to-hold", "an undeclared pack told it holds data up to the scheme's highest",
+     [(SEEDS, "            if spec.highest_marking is not None\n", "            if True  # PLANT\n")],
+     [PACKS], ["test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest"],
+     "declares no highest marking"),
 ]
 
 
