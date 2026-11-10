@@ -30,3 +30,10 @@
 .map-controls__places { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow-y: auto; }
 .map-controls__places .btn { width: 100%; justify-content: flex-start; min-height: 24px; }
 .map-controls__note { margin: 0; color: var(--text-secondary); font-size: var(--fs-11); line-height: var(--lh-11); }
+/* P6: the case's gazetteers, beside the search. The heading resets the browser's h3 margins and
+   size to the legend's. */
+.map-controls__gazetteers { display: flex; flex-direction: column; gap: var(--sp-4); }
+.map-controls__gazetteers h3 { margin: 0; }
+.map-controls__gazetteer-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-4); max-height: 160px; overflow-y: auto; }
+.map-controls__gazetteer-list .map-controls__row { justify-content: space-between; align-items: center; }
+.map-controls__state { color: var(--text-secondary); }
