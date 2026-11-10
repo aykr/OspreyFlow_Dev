@@ -22,8 +22,9 @@ For each whole-deployment rule not yet retired, oldest first:
    second run, once the home case is made, converts it.
 
 5. **Each copy has its own drawn pattern,** the original's latest definition saved again in the
-   copy's dataset, as its owner: a run reads a rule's pattern within the rule's dataset, so a shared one
-   would be unreadable to every copy but one. A rule whose pattern cannot be read is left whole.
+   copy's dataset, as its owner: a run reads a rule's pattern within the rule's dataset, so a
+   shared one would be unreadable to every copy but one. A rule whose pattern cannot be read is
+   left whole.
 
 Each rule is converted in one transaction, so a failure part-way leaves it whole-deployment and
 untouched. The rule is read again, locked, inside it: the Conduit may keep running, and a rule
