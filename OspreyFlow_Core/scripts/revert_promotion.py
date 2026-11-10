@@ -8,7 +8,8 @@ dataset back from exactly those elements, in one transaction, so each is in the 
 again, as it was before; records the promotion `reverted`; clears its board items' `promoted_at`;
 audits it under `--reverted-by`; and clears the Conduit's kept results (`cache:*` in the shared
 Valkey), since what was counted included the promoted elements. Nothing is deleted. A drawn
-dataset's merge (L3.9) is undone whole: its matches' `SAME_AS` withdrawn in the same transaction,
+dataset's merge (L3.9) is undone whole: its matches' `SAME_AS`, and its retyped copies with their
+links and `SAME_AS` back (Amendment 7), withdrawn in the same transaction,
 then its case back on its drawing and the views it made boards again (ADR-143 Amendment 2 decision
 7, reverted).
 
@@ -96,6 +97,14 @@ async def revert_promotion(
     # A drawn merge's own matches rest on its nodes, and go with it.
     matched = await store.matches_of(record.id) if drawn_merge else []
     own_matches = {r.edge_id for r in matched if r.edge_id}
+    # Its retyped copies (Amendment 7) go with it too: their links and `SAME_AS` are its own, and
+    # a link written since onto a copy refuses the revert as one onto a promoted node does.
+    copies = await store.copies_of(record.id) if drawn_merge else []
+    copy_nodes = [c.written_id for c in copies if c.kind == "node" and c.written_id]
+    own_matches |= {c.written_id for c in copies if c.kind == "link" and c.written_id}
+    own_matches |= {c.same_as_id for c in copies if c.same_as_id}
+    # A drawn link that went in as a copy stays drawn, resting where it was drawn.
+    own_matches |= {c.original for c in copies if c.kind == "link"}
     held = await items.in_case(record.case_id)
     own_drawing = {
         i.element_id for i in held
@@ -109,7 +118,7 @@ async def revert_promotion(
         # that names it (`test_unfiltered_node_lookup_confined.py`). Read inside the revert's own
         # transaction, so the check and the writes are one view of the graph (the independent
         # review of L3.4, item 4).
-        resting = await graph.live_edges_touching(list(record.node_ids), tx=tx)
+        resting = await graph.live_edges_touching([*record.node_ids, *copy_nodes], tx=tx)
         others = set(resting) - set(record.edge_ids) - own_drawing - own_matches
         if others:
             raise PromotionRefused(

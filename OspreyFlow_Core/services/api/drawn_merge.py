@@ -37,26 +37,32 @@ see has none. Drawing again opens a new board, into the case's layer.
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from conduit_common.identity import new_edge_id
+from conduit_common.identity import new_edge_id, new_id
 from ontology.handling import merge_handling
+from ontology.validation import validate_properties
 from schemas.case_views import ViewAnnotation
 from schemas.domain import (
     SAME_AS,
+    Edge,
+    EdgeTypeDef,
     EdgeWrite,
     Handling,
     Node,
+    NodeWrite,
     Principal,
     Provenance,
     ProvenanceState,
     SourceRef,
 )
 from schemas.promotions import (
+    DetailItem,
     DrawnMergeDryRun,
     DrawnMergeInput,
     DrawnMergeSheet,
@@ -64,21 +70,29 @@ from schemas.promotions import (
     MergeMatch,
     MergeTarget,
     MergeTargets,
+    TargetType,
+    TypeChoice,
     TypeMapping,
 )
 
 from .board_store import BoardItemStore
+from .boards import _accepts
 from .case_views import CaseViewStore, StoredCaseView
 from .datasets import DRAWN, SOURCE, Dataset, DrawnAlreadyMerged, DrawnMerged
 from .evidence_brief import display_name
-from .promotion_store import MergeMatchRow, PromotionRecord
-from .promotions import PromotionRefused, Promotions, _Read, is_gazetteer
+from .promotion_store import CopyRow, MergeMatchRow, PromotionRecord
+from .promotions import PromotionRefused, Promotions, _detail, _kind, _Read, is_gazetteer
 from .rule_evaluation import handling_readable
 
 logger = logging.getLogger(__name__)
 
 #: What a merge's `SAME_AS` names as its maker, in the resolver's `model_version` place.
 MATCH_MODEL_VERSION = "drawn_merge"
+#: What a retyped copy's `SAME_AS` back to its drawn original names as its maker (Amendment 7).
+RETYPE_MODEL_VERSION = "drawn_merge_retype"
+#: Each drawn (kind, type): the target's type it goes in as (`None`: left out) and, retyped,
+#: each drawn property's place in it (`None`: not carried).
+_Chosen = dict[tuple[str, str], tuple[str | None, dict[str, str | None]]]
 _NOT_A_TARGET = "No dataset of that id may take this drawing from you."
 
 
@@ -164,10 +178,209 @@ class DrawnMerges:
         reads = await self.promotions._seen(case_id, None, read)
         return [r for r in reads if r.item.dataset_id == drawn.id]
 
+    async def _names(self, case_id: str, read: Principal) -> dict[str, str]:
+        """Each link storage label the drawing may use, and the name it reads as (a case's own
+        proposal is stored as `NAME__<proposal>`, never shown: rule 7)."""
+        return await self.promotions._link_names(case_id, read)
+
+    @staticmethod
+    def _drawn_type(read: _Read, names: Mapping[str, str]) -> str:
+        assert read.element is not None
+        name = read.element.type
+        return names.get(name, name) if read.item.kind == "link" else name
+
+    async def _target_types(self, target: Dataset) -> list[TargetType]:
+        """The target's live model: every type a drawn type may be mapped onto, as a Studio load's
+        Map step maps onto the domain model (the owner's ruling; Amendment 7)."""
+        boards = self.promotions.boards
+        out: list[TargetType] = []
+        for name in await boards.dataset_node_types(target.id):
+            entity = boards.ontology.entity_type(name)
+            if entity is not None:
+                out.append(TargetType(
+                    kind="node", name=name,
+                    properties=list(dict.fromkeys(
+                        [*entity.identifiers, *(p.name for p in entity.properties)])),
+                    required=[p.name for p in entity.properties if p.required],
+                ))  # fmt: skip
+        for name in await boards.dataset_link_types(target.id):
+            edge = boards.ontology.edge_type(name)
+            if edge is not None:
+                out.append(TargetType(
+                    kind="link", name=name, properties=[p.name for p in edge.properties],
+                    required=[p.name for p in edge.properties if p.required],
+                ))  # fmt: skip
+        return out
+
+    def _chosen(
+        self,
+        reads: Sequence[_Read],
+        names: Mapping[str, str],
+        target: Dataset,
+        target_types: Sequence[TargetType],
+        choices: Sequence[TypeChoice],
+    ) -> _Chosen:
+        """Each drawn type the merger reads, and the type it goes in as with its properties'
+        places: as chosen, else the same name when the target's model holds it, else none. A
+        choice for a drawn type the merger does not read changes nothing (it tells nothing either).
+        Refused whole (422) for a type outside the target's model or a property outside the
+        chosen type: nothing is guessed."""
+        offered: dict[tuple[str, str], TargetType] = {(t.kind, t.name): t for t in target_types}
+        given: dict[tuple[str, str], TypeChoice] = {(c.kind, c.drawn_type): c for c in choices}
+        drawn_props: dict[tuple[str, str], set[str]] = {}
+        for read in reads:
+            if read.item.kind in ("node", "link") and read.element is not None:
+                key = (read.item.kind, self._drawn_type(read, names))
+                drawn_props.setdefault(key, set()).update(read.element.properties)
+        out: _Chosen = {}
+        for pair in sorted(drawn_props):
+            kind, drawn_type = pair
+            choice = given.get(pair)
+            to = choice.target_type if choice is not None else (
+                drawn_type if pair in offered else None
+            )  # fmt: skip
+            if to is not None and (kind, to) not in offered:
+                raise PromotionRefused(
+                    "not_a_type",
+                    f"{to} is not a {'link ' if kind == 'link' else ''}type of {target.name}'s "
+                    "model: choose from Map again.",
+                    status=422,
+                )
+            places: dict[str, str | None] = {}
+            if to is not None and to != drawn_type:
+                allowed = offered[(kind, to)].properties
+                asked = {p.drawn_property: p.target_property for p in choice.properties} if (
+                    choice is not None
+                ) else {}  # fmt: skip
+                for prop in sorted(drawn_props[pair]):
+                    place = asked.get(prop, prop if prop in allowed else None)
+                    if place is not None and place not in allowed:
+                        raise PromotionRefused(
+                            "not_a_property",
+                            f"{to} has no property {place}: choose from Map again.",
+                            status=422,
+                        )
+                    places[prop] = place
+                taken = [v for v in places.values() if v is not None]
+                if len(taken) != len(set(taken)):
+                    raise PromotionRefused(
+                        "not_a_property",
+                        f"Two drawn properties go into one property of {to}: choose one.",
+                        status=422,
+                    )
+            out[pair] = (to, places)
+        return out
+
+    def _as_types(
+        self, reads: Sequence[_Read], names: Mapping[str, str], chosen: _Chosen
+    ) -> dict[str, str | None]:
+        """Each element mapped elsewhere than its own type: the type it goes in as, or `None`,
+        left out at Map. One mapped to its own type is not listed (it goes as L3.4's promotion)."""
+        out: dict[str, str | None] = {}
+        for read in reads:
+            if read.item.kind not in ("node", "link") or read.element is None:
+                continue
+            drawn_type = self._drawn_type(read, names)
+            to, _ = chosen[(read.item.kind, drawn_type)]
+            if to is None or to != drawn_type:
+                out[read.element.id] = to
+        return out
+
+    @staticmethod
+    def _carried(element: Node | Edge, places: Mapping[str, str | None]) -> dict[str, Any]:
+        return {
+            place: value
+            for prop, value in element.properties.items()
+            if (place := places.get(prop)) is not None
+        }
+
+    async def _retyped_problems(
+        self,
+        reads: Sequence[_Read],
+        names: Mapping[str, str],
+        chosen: _Chosen,
+        as_types: Mapping[str, str | None],
+        read: Principal,
+    ) -> dict[str, list[tuple[str, str]]]:
+        """What a copy would break (Amendment 7): its properties as mapped checked against its new
+        type, as a load's are, and a link's ends against what its type joins."""
+        ontology = self.promotions.boards.ontology
+        out: dict[str, list[tuple[str, str]]] = {}
+        node_type = {
+            r.element.id: as_types.get(r.element.id) or r.element.type
+            for r in reads if r.item.kind == "node" and r.element is not None
+        }  # fmt: skip
+        loaded = sorted({
+            end for r in reads if r.item.kind == "link"
+            for end in (r.item.source, r.item.target) if end and end not in node_type
+        })  # fmt: skip
+        if loaded:
+            node_type |= {
+                n.id: n.type for n in await self.promotions.boards.graph.get_nodes(loaded, read)
+            }
+        copied = {i for i, t in as_types.items() if t is not None}
+        for r in reads:
+            element = r.element
+            if element is None or r.item.kind not in ("node", "link"):
+                continue
+            retyped = element.id in copied
+            if (
+                r.item.kind == "link"
+                and not retyped
+                and not ({r.item.source, r.item.target} & copied)
+            ):
+                continue
+            if r.item.kind == "node" and not retyped:
+                continue
+            to = as_types.get(element.id) or self._drawn_type(r, names)
+            _, places = chosen[(r.item.kind, self._drawn_type(r, names))]
+            props = self._carried(element, places) if retyped else dict(element.properties)
+            problems: list[tuple[str, str]] = []
+            held = ontology.entity_type(to) if r.item.kind == "node" else ontology.edge_type(to)
+            # Its properties checked when it is retyped (as a load's are): one kept as its own type
+            # is the drawn item as it was drawn, and checked as drawing checked it.
+            if held is not None and retyped:
+                try:
+                    validate_properties(held, props)
+                except Exception as invalid:
+                    problems.append(("types", f"Mapped onto {to}: {invalid}."))
+            if isinstance(held, EdgeTypeDef):
+                ends = (node_type.get(r.item.source or ""), node_type.get(r.item.target or ""))
+                if not (
+                    ends[0] and ends[1] and _accepts(held.from_types, ends[0])
+                    and _accepts(held.to_types, ends[1])
+                ):  # fmt: skip
+                    problems.append((
+                        "types",
+                        f"A {to} link runs from {', '.join(held.from_types)} to "
+                        f"{', '.join(held.to_types)}, not from {ends[0]} to {ends[1]}: map it "
+                        "onto a link type that joins them.",
+                    ))  # fmt: skip
+            if problems:
+                out[r.item.item_id] = problems
+        return out
+
     async def _matches(
-        self, reads: Sequence[_Read], drawn: Dataset, target: Dataset, reader: Principal
+        self,
+        reads: Sequence[_Read],
+        drawn: Dataset,
+        target: Dataset,
+        reader: Principal,
+        chosen: _Chosen,
+        as_types: Mapping[str, str | None],
     ) -> tuple[list[tuple[Node, Node, float, str]], bool]:
-        nodes = [r.element for r in reads if r.item.kind == "node" and isinstance(r.element, Node)]
+        nodes: list[Node] = []
+        for r in reads:
+            if r.item.kind != "node" or not isinstance(r.element, Node):
+                continue
+            if r.element.id not in as_types:
+                nodes.append(r.element)
+            elif (to := as_types[r.element.id]) is not None:
+                # A retyped node is looked for as what it goes in as (Amendment 7).
+                _, places = chosen[("node", r.element.type)]
+                nodes.append(r.element.model_copy(
+                    update={"type": to, "properties": self._carried(r.element, places)}
+                ))  # fmt: skip
         if not nodes:
             return [], False
         # Rule 3 and 7: candidates through the target alone, so nothing of another dataset, and
@@ -177,7 +390,7 @@ class DrawnMerges:
             reader.model_copy(update={"datasets": [target.id]}),
             self._read_as(reader, drawn, target),
         )
-        by_id = {n.id: n for n in nodes}
+        by_id = {r.element.id: r.element for r in reads if isinstance(r.element, Node)}
         return [
             (by_id[s.drawn], s.loaded, s.score, s.why)
             for s in found.suggestions
@@ -186,29 +399,36 @@ class DrawnMerges:
 
     @staticmethod
     def _mapping(
-        reads: Sequence[_Read], problems: dict[str, list[tuple[str, str]]], target: Dataset
+        reads: Sequence[_Read],
+        names: Mapping[str, str],
+        chosen: _Chosen,
+        target: Dataset,
+        target_types: Sequence[TargetType],
     ) -> list[TypeMapping]:
         counts: dict[tuple[str, str], int] = {}
-        refused: dict[tuple[str, str], str] = {}
+        props: dict[tuple[str, str], set[str]] = {}
         for read in reads:
             if read.item.kind not in ("node", "link") or read.element is None:
                 continue
-            key = (read.item.kind, read.element.type)
+            key = (read.item.kind, DrawnMerges._drawn_type(read, names))
             counts[key] = counts.get(key, 0) + 1
-            why = next((w for c, w in problems[read.item.item_id] if c == "types"), None)
-            if why is not None:
-                refused[key] = (
-                    f"{why} Its items are left out and stay on the drawing; propose the type on "
-                    f"{target.name}'s Model tab to merge them later."
-                )
-        return [
-            TypeMapping(
+            props.setdefault(key, set()).update(read.element.properties)
+        rows = []
+        for (kind, name), n in sorted(counts.items()):
+            to, _ = chosen[(kind, name)]
+            rows.append(TypeMapping(
                 kind=kind,  # type: ignore[arg-type]
-                drawn_type=name, target_type=None if (kind, name) in refused else name,
-                items=n, why_not=refused.get((kind, name)),
-            )
-            for (kind, name), n in sorted(counts.items())
-        ]  # fmt: skip
+                drawn_type=name, target_type=to, items=n,
+                why_not=None if to is not None else (
+                    f"{name} is not a {'link ' if kind == 'link' else ''}type of {target.name}'s "
+                    f"model. Map it onto one of its types, or its items are left out and stay on "
+                    f"the drawing; propose the type on {target.name}'s Model tab to merge them "
+                    "later."
+                ),
+                choices=[t.name for t in target_types if t.kind == kind],
+                drawn_properties=sorted(props[(kind, name)]),
+            ))  # fmt: skip
+        return rows
 
     async def sheet(
         self, drawn: Dataset, case_id: str, target: Dataset, reader: Principal
@@ -216,14 +436,20 @@ class DrawnMerges:
         promotions = self.promotions
         read = self._read_as(reader, drawn, target)
         reads = await self._reads(drawn, case_id, read)
+        names = await self._names(case_id, read)
+        target_types = await self._target_types(target)
+        chosen = self._chosen(reads, names, target, target_types, ())
+        as_types = self._as_types(reads, names, chosen)
         problems = await promotions._problems(
-            reads, target, case_id, read, into_its_own_dataset=False
+            reads, target, case_id, read, into_its_own_dataset=False, as_types=as_types
         )
-        matches, more = await self._matches(reads, drawn, target, reader)
+        matches, more = await self._matches(reads, drawn, target, reader, chosen, as_types)
         return DrawnMergeSheet(
             drawn_dataset_id=drawn.id, drawn_name=drawn.name, target_dataset_id=target.id,
             target_name=target.name, highest_marking=promotions.highest(target),
-            policy=target.promotion_policy, mapping=self._mapping(reads, problems, target),
+            policy=target.promotion_policy,
+            mapping=self._mapping(reads, names, chosen, target, target_types),
+            target_types=target_types,
             matches=[
                 MergeMatch(
                     drawn=d.id,
@@ -244,22 +470,73 @@ class DrawnMerges:
     async def _plan(
         self, drawn: Dataset, case_id: str, target: Dataset, body: DrawnMergeInput,
         reader: Principal,
-    ) -> tuple[list[_Read], list[LeftOut], list[MergeMatchRow]]:  # fmt: skip
-        """Every check again, here (the sheet may have been bypassed): the items as a promotion's
-        are planned, and each chosen match must be one offered now, of a drawn node that goes."""
+    ) -> tuple[list[_Read], list[LeftOut], list[MergeMatchRow], list[CopyRow]]:  # fmt: skip
+        """Every check again, here (the sheet may have been bypassed): the mapping, the items as a
+        promotion's are planned, the copies of what is retyped, and each chosen match must be one
+        offered now, of a drawn node that goes. Only what the merger reads is ever copied: every
+        copy is built from an element read through them (the orchestrator's condition)."""
         promotions = self.promotions
         read = self._read_as(reader, drawn, target)
         reads = await self._reads(drawn, case_id, read)
+        names = await self._names(case_id, read)
+        chosen = self._chosen(reads, names, target, await self._target_types(target), body.mapping)
+        as_types = self._as_types(reads, names, chosen)
+        # Left out at Map, with its reason (the owner's ruling): never refused for it.
+        unmapped = [
+            r for r in reads if r.element is not None and r.element.id in as_types
+            and as_types[r.element.id] is None
+        ]  # fmt: skip
+        gone = {r.item.item_id for r in unmapped}
+        mapped = [r for r in reads if r.item.item_id not in gone]
         problems = await promotions._problems(
-            reads, target, case_id, read, into_its_own_dataset=False
+            mapped, target, case_id, read, into_its_own_dataset=False, as_types=as_types
         )
-        goes, left = await promotions._plan(
-            reads, problems, list(dict.fromkeys(body.item_ids)), target, read
-        )
+        for item_id, more in (
+            await self._retyped_problems(mapped, names, chosen, as_types, read)
+        ).items():
+            problems[item_id] = [*problems[item_id], *more]
+        ticked = [i for i in dict.fromkeys(body.item_ids) if i not in gone]
+        goes, left = await promotions._plan(mapped, problems, ticked, target, read)
+        left = [
+            *(LeftOut(item_id=r.item.item_id, label=promotions._label(r),
+                      why=f"Its type, {self._drawn_type(r, names)}, goes into no type of "
+                          f"{target.name} (Map): it stays on the drawing, read-only.")
+              for r in unmapped),
+            *left,
+        ]  # fmt: skip
+        copied = {
+            r.item.element_id for r in goes
+            if r.item.kind == "node" and as_types.get(r.item.element_id) is not None
+        }  # fmt: skip
+        # A picture or a board's Same or Not the same on a retyped node is not carried: the
+        # copy is another element, and its decision is made again there.
+        kept: list[_Read] = []
+        for r in goes:
+            if r.item.kind in ("picture", "match") and ({r.item.source, r.item.target} & copied):
+                left.append(LeftOut(
+                    item_id=r.item.item_id, label=promotions._label(r),
+                    why="Its drawn item goes in as another type, as a new item: "
+                        + ("the picture stays on the drawing." if r.item.kind == "picture"
+                           else "decide Same or Not the same again on the new item."),
+                ))  # fmt: skip
+            else:
+                kept.append(r)
+        goes = kept
+        copies = [
+            self._copy(r, names, chosen, as_types)
+            for r in goes
+            if r.item.element_id in copied
+            or (r.item.kind == "link" and (
+                as_types.get(r.item.element_id) is not None
+                or {r.item.source, r.item.target} & copied
+            ))
+        ]  # fmt: skip
         going = {r.item.element_id for r in goes if r.item.kind == "node"}
         offered = {
             (d.id, n.id): score
-            for d, n, score, _ in (await self._matches(reads, drawn, target, reader))[0]
+            for d, n, score, _ in (
+                await self._matches(mapped, drawn, target, reader, chosen, as_types)
+            )[0]
         }
         picks = list(dict.fromkeys((p.drawn, p.loaded) for p in body.matches))
         # Both ends as the merger reads them (the drawing and the target, nothing else).
@@ -297,7 +574,37 @@ class DrawnMerges:
                 MergeMatchRow(drawn=d.id, loaded=n.id, score=score,
                               handling=stricter.model_dump_json())
             )  # fmt: skip
-        return goes, left, rows
+        return goes, left, rows, copies
+
+    def _copy(
+        self,
+        read: _Read,
+        names: Mapping[str, str],
+        chosen: _Chosen,
+        as_types: Mapping[str, str | None],
+    ) -> CopyRow:
+        """A retyped item's copy, from its element as the merger read it: its handling its
+        original's (never lower: the orchestrator's condition), its provenance its original's (it
+        stays drawn, with its grading and source)."""
+        element = read.element
+        assert element is not None
+        retyped = as_types.get(element.id)
+        _, places = chosen[(read.item.kind, self._drawn_type(read, names))]
+        return CopyRow(
+            kind="node" if read.item.kind == "node" else "link",
+            original=element.id,
+            type=retyped or element.type,
+            properties=json.dumps(
+                self._carried(element, places) if retyped else element.properties,
+                sort_keys=True,
+                default=str,
+            ),
+            handling=element.handling.model_dump_json(),
+            provenance=element.provenance.model_dump_json(),
+            original_properties=json.dumps(element.properties, sort_keys=True, default=str),
+            source=read.item.source if read.item.kind == "link" else None,
+            target=read.item.target if read.item.kind == "link" else None,
+        )
 
     async def dry_run(
         self, drawn: Dataset, case_id: str, target: Dataset, body: DrawnMergeInput,
@@ -305,12 +612,12 @@ class DrawnMerges:
     ) -> DrawnMergeDryRun:  # fmt: skip
         """Step 3: nothing written, and only what the merger may see counted (an item above them
         is not read, so not counted, and not named in what is left out)."""
-        goes, left, rows = await self._plan(drawn, case_id, target, body, reader)
+        goes, left, rows, copies = await self._plan(drawn, case_id, target, body, reader)
         return DrawnMergeDryRun(
             target_dataset_id=target.id,
             nodes=sum(1 for r in goes if r.item.kind == "node"),
             links=sum(1 for r in goes if r.item.kind != "node"),
-            matches=len(rows), left_out=left,
+            matches=len(rows), retyped=len(copies), left_out=left,
             recorded_as=self.promotions._recorded_as(target, "drawn_merge"),
         )  # fmt: skip
 
@@ -325,13 +632,13 @@ class DrawnMerges:
                 "A merge of this drawing is waiting for review: it is decided first.",
                 status=409,
             )
-        goes, left, rows = await self._plan(drawn, case_id, target, body, reader)
+        goes, left, rows, copies = await self._plan(drawn, case_id, target, body, reader)
         markings = [Handling.model_validate_json(r.handling).classification for r in rows]
-        # The record and its matches in one store write (the second review, item 13).
+        # The record, its matches and its copies in one store write (the second review, item 13).
         record = await promotions._record(
             trigger="drawn_merge", case_id=case_id, board_id=None, dataset=target,
             layer_id=drawn.id, proposer=reader, goes=goes, left=left, extra_markings=markings,
-            matches=rows,
+            matches=rows, copies=copies,
         )  # fmt: skip
         if promotions.commits_at_once(target):
             return await promotions._commit(record, by=None)
@@ -350,43 +657,107 @@ class MergeCommit:
     items: BoardItemStore
     scheme: Any
     _written: dict[str, list[str]] = field(default_factory=dict)
+    _copies: dict[str, list[tuple[str, str | None]]] = field(default_factory=dict)
+
+    @staticmethod
+    def _inferred(record: PromotionRecord, about: str, score: float, now: datetime) -> Provenance:
+        # Rule 5: proposed, never confirmed by the merge; a person confirms it.
+        return Provenance(
+            state=ProvenanceState.INFERRED,
+            sources=[SourceRef(document_id=f"drawn-merge:{record.load_id}:{about}",
+                               locator=record.proposed_by, excerpt_hash="")],
+            first_seen=now,
+            extraction_confidence=score,
+        )  # fmt: skip
 
     async def writes(self, record: PromotionRecord, tx: Any) -> None:
+        """In the load's own transaction: each retyped item written as a new element of its mapped
+        type in the target (Amendment 7), each node's with an inferred `SAME_AS` back to its drawn
+        original, in the drawn dataset, where both are read (rules 5 and 6); then the chosen
+        matches, from a retyped node's copy."""
+        copies = await self.promotions_store.copies_of(record.id)
         rows = await self.promotions_store.matches_of(record.id)
-        if not rows:
+        if not copies and not rows:
             return
         now = datetime.now(UTC)
-        writes = [
-            EdgeWrite(
-                id=new_edge_id(),
-                type=SAME_AS,
-                source=r.drawn,
-                target=r.loaded,
-                properties={"score": r.score, "model_version": MATCH_MODEL_VERSION},
-                # Rule 5: proposed, never confirmed by the merge; a person confirms it.
-                provenance=Provenance(
-                    state=ProvenanceState.INFERRED,
-                    sources=[
-                        SourceRef(
-                            document_id=f"drawn-merge:{record.load_id}:{r.drawn}:{r.loaded}",
-                            locator=record.proposed_by,
-                            excerpt_hash="",
-                        )
-                    ],
-                    first_seen=now,
-                    extraction_confidence=r.score,
-                ),
-                handling=Handling.model_validate_json(r.handling),
-                created_by=record.proposed_by,
-                created_at=now,
-                # Written with the load, so read as the load's (the lane review, item 12).
-                load_id=record.load_id,
-                # ADR-099: the datasets both ends are in once the load lands: the target.
-                datasets=[record.dataset_id],
-            )
-            for r in rows
-        ]
-        self._written[record.id] = list(await self.graph.upsert_edges(writes, tx))
+        nodes = [c for c in copies if c.kind == "node"]
+        written_nodes = list(await self.graph.upsert_nodes(
+            [
+                NodeWrite(
+                    id=new_id(), type=c.type, properties=json.loads(c.properties),
+                    provenance=Provenance.model_validate_json(c.provenance),
+                    handling=Handling.model_validate_json(c.handling),
+                    created_by=record.proposed_by, created_at=now, load_id=record.load_id,
+                    datasets=[record.dataset_id],
+                )
+                for c in nodes
+            ],
+            tx,
+        )) if nodes else []  # fmt: skip
+        copy_of = {c.original: w for c, w in zip(nodes, written_nodes)}
+        links = [c for c in copies if c.kind == "link"]
+        edges = (
+            [
+                EdgeWrite(
+                    id=new_edge_id(),
+                    type=c.type,
+                    source=copy_of.get(c.source or "", c.source or ""),
+                    target=copy_of.get(c.target or "", c.target or ""),
+                    properties=json.loads(c.properties),
+                    provenance=Provenance.model_validate_json(c.provenance),
+                    handling=Handling.model_validate_json(c.handling),
+                    created_by=record.proposed_by,
+                    created_at=now,
+                    load_id=record.load_id,
+                    datasets=[record.dataset_id],
+                )
+                for c in links
+            ]
+            + [
+                EdgeWrite(
+                    id=new_edge_id(),
+                    type=SAME_AS,
+                    source=copy_of[c.original],
+                    target=c.original,
+                    properties={"score": 1.0, "model_version": RETYPE_MODEL_VERSION},
+                    provenance=self._inferred(record, f"{c.original}:retyped", 1.0, now),
+                    handling=Handling.model_validate_json(c.handling),
+                    created_by=record.proposed_by,
+                    created_at=now,
+                    load_id=record.load_id,
+                    # Where both its ends are: the copy is in the target, its original in the drawing.
+                    datasets=[record.layer_id],
+                )
+                for c in nodes
+            ]
+            + [
+                EdgeWrite(
+                    id=new_edge_id(),
+                    type=SAME_AS,
+                    source=copy_of.get(r.drawn, r.drawn),
+                    target=r.loaded,
+                    properties={"score": r.score, "model_version": MATCH_MODEL_VERSION},
+                    provenance=self._inferred(record, f"{r.drawn}:{r.loaded}", r.score, now),
+                    handling=Handling.model_validate_json(r.handling),
+                    created_by=record.proposed_by,
+                    created_at=now,
+                    # Written with the load, so read as the load's (the lane review, item 12).
+                    load_id=record.load_id,
+                    # ADR-099: the datasets both ends are in once the load lands: the target.
+                    datasets=[record.dataset_id],
+                )
+                for r in rows
+            ]
+        )
+        written_edges = list(await self.graph.upsert_edges(edges, tx)) if edges else []
+        link_ids = written_edges[: len(links)]
+        same_as = written_edges[len(links) : len(links) + len(nodes)]
+        by_copy = dict(zip([c.original for c in links], link_ids)) | {
+            c.original: w for c, w in zip(nodes, written_nodes)
+        }
+        back = dict(zip([c.original for c in nodes], same_as))
+        self._written[record.id] = written_edges[len(links) + len(nodes) :]
+        self._copies[record.id] = [(by_copy[c.original], back.get(c.original)) for c in copies]
 
     async def recheck(self, record: PromotionRecord, reviewer: Principal) -> str | None:
         """At an approval, each match as the reviewer reads it now (the second review, item 1):
@@ -396,6 +767,26 @@ class MergeCommit:
         read (withdrawn, raised, or out of the target), its marking moved, or the target's highest
         lowered below it (rejected, never left waiting); `None` otherwise."""
         rows = await self.promotions_store.matches_of(record.id)
+        read = reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
+        # Each retyped item's original as it was chosen (Amendment 7): one edited since (its
+        # properties, its marking) would be copied as it no longer is.
+        copies = await self.promotions_store.copies_of(record.id)
+        if copies:
+            node_ids = [c.original for c in copies if c.kind == "node"]
+            edge_ids = [c.original for c in copies if c.kind == "link"]
+            now: dict[str, Node | Edge] = {
+                n.id: n for n in await self.graph.get_nodes(node_ids, read)
+            }
+            if edge_ids:
+                now |= {e.id: e for e in await self.graph.get_edges(edge_ids, read)}
+            for c in copies:
+                held = now.get(c.original)
+                if held is None:  # withdrawn or raised since (an unseen item is 403 before this)
+                    return "changed"
+                if held.handling != Handling.model_validate_json(c.handling) or json.loads(
+                    json.dumps(held.properties, sort_keys=True, default=str)
+                ) != json.loads(c.original_properties):
+                    return "changed"
         if not rows:
             return None
         if not all(
@@ -403,7 +794,6 @@ class MergeCommit:
             for r in rows
         ):
             return "unseen"
-        read = reviewer.model_copy(update={"datasets": [record.dataset_id, record.layer_id]})
         ids = sorted({x for r in rows for x in (r.drawn, r.loaded)})
         nodes = {n.id: n for n in await self.graph.get_nodes(ids, read)}
         if any(i not in nodes for i in ids):
@@ -429,6 +819,9 @@ class MergeCommit:
         written = self._written.pop(record.id, [])
         if written:
             await self.promotions_store.set_match_edges(record.id, written)
+        copies = self._copies.pop(record.id, [])
+        if copies:
+            await self.promotions_store.set_copy_ids(record.id, copies)
         await self.datasets.merge_drawn(
             DrawnMerged(
                 dataset_id=record.layer_id, into=record.dataset_id, load_id=record.load_id,
@@ -492,11 +885,50 @@ class MergeCommit:
         ]  # fmt: skip
         return shown, len(shown) != len(rows)
 
+    async def as_types(self, record: PromotionRecord) -> dict[str, str | None]:
+        """Each retyped item's original and the type it goes in as, for the approval's checks."""
+        return {c.original: c.type for c in await self.promotions_store.copies_of(record.id)}
+
+    async def copies_shown(
+        self, record: PromotionRecord, reviewer: Principal
+    ) -> tuple[list[DetailItem], bool]:
+        """A reviewer's *Details* of the retyped items, each read through their own handling:
+        while it waits, the original ("goes in as"), in the drawing and the target; once committed,
+        the copy, in the target alone; afterwards nothing (rule 3)."""
+        copies = await self.promotions_store.copies_of(record.id)
+        if not copies or record.status not in ("awaiting_review", "committed"):
+            return [], False
+        waiting = record.status == "awaiting_review"
+        read = reviewer.model_copy(update={
+            "datasets": [record.dataset_id, record.layer_id] if waiting else [record.dataset_id]
+        })  # fmt: skip
+        ids = [(c, c.original if waiting else c.written_id) for c in copies]
+        node_ids = [i for c, i in ids if c.kind == "node" and i]
+        edge_ids = [i for c, i in ids if c.kind == "link" and i]
+        nodes = await self.graph.get_nodes(node_ids, read) if node_ids else []
+        edges = await self.graph.get_edges(edge_ids, read) if edge_ids else []
+        as_type = {i: c.type for c, i in ids if i}
+        shown = [
+            _detail(n, "node").model_copy(update={"goes_in_as": as_type[n.id] if waiting else None})
+            for n in nodes
+        ] + [
+            _detail(e, _kind(e)).model_copy(
+                update={"goes_in_as": as_type[e.id] if waiting else None}
+            )
+            for e in edges
+        ]
+        return shown, len(shown) != len(copies)
+
     async def undo_writes(self, record: PromotionRecord, tx: Any) -> None:
-        """The revert's: the merge's matches withdrawn with it (never deleted)."""
+        """The revert's: the merge's matches, its copies and their `SAME_AS` withdrawn with it
+        (never deleted), as a load's are."""
         edges = [r.edge_id for r in await self.promotions_store.matches_of(record.id) if r.edge_id]
-        if edges:
-            await self.graph.withdraw_elements([], edges, record.load_id, tx)
+        copies = await self.promotions_store.copies_of(record.id)
+        nodes = [c.written_id for c in copies if c.kind == "node" and c.written_id]
+        edges += [c.written_id for c in copies if c.kind == "link" and c.written_id]
+        edges += [c.same_as_id for c in copies if c.same_as_id]
+        if nodes or edges:
+            await self.graph.withdraw_elements(nodes, edges, record.load_id, tx)
 
     async def undo(self, record: PromotionRecord) -> None:
         """The revert's, after its graph commit: the case back on its drawing, its views boards."""
@@ -559,4 +991,10 @@ async def view_annotations(
     return out
 
 
-__all__: Sequence[str] = ("DrawnMerges", "MergeCommit", "view_annotations", "MATCH_MODEL_VERSION")
+__all__: Sequence[str] = (
+    "DrawnMerges",
+    "MergeCommit",
+    "view_annotations",
+    "MATCH_MODEL_VERSION",
+    "RETYPE_MODEL_VERSION",
+)

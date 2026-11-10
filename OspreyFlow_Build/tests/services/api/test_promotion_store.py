@@ -267,6 +267,56 @@ async def test_a_drawn_merge_and_its_matches_read_back_whole(
     assert await store.waiting_from_layer("drawn-1") == [record]
 
 
+async def test_a_drawn_merges_copies_are_written_with_it_and_read_back_whole(
+    store: PostgresPromotionStore,
+) -> None:
+    """ADR-143 Amendment 7: a retyped item's copy, in the record's own transaction, read back as
+    written (its JSON compared as JSON: JSONB keeps no key order), its ids set once, alike."""
+    import json
+
+    from services.api.promotion_store import CopyRow
+
+    record = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-2")
+    copies = [
+        CopyRow(kind="node", original="d1", type="Organisation", properties='{"name": "X"}',
+                handling='{"classification": "SECRET"}', provenance='{"state": "asserted"}',
+                original_properties='{"name": "X", "category": "assault"}'),
+        CopyRow(kind="link", original="l1", type="MEMBER_OF", properties="{}",
+                handling='{"classification": "OFFICIAL"}', provenance='{"state": "asserted"}',
+                original_properties="{}", source="p1", target="d1"),
+    ]  # fmt: skip
+    await store.add(record, copies=copies)
+    held = await store.copies_of(record.id)
+    assert [(c.kind, c.original, c.type, c.source, c.target, c.written_id) for c in held] == [
+        ("node", "d1", "Organisation", None, None, None),
+        ("link", "l1", "MEMBER_OF", "p1", "d1", None),
+    ]  # fmt: skip
+    for wrote, read in zip(copies, held):
+        for name in ("properties", "handling", "provenance", "original_properties"):
+            assert json.loads(getattr(read, name)) == json.loads(getattr(wrote, name))
+    assert await store.copies_of(_record().id) == []
+    with pytest.raises(ValueError):
+        await store.set_copy_ids(record.id, [("w1", "s1")])
+    await store.set_copy_ids(record.id, [("w1", "s1"), ("w2", None)])
+    assert [(c.written_id, c.same_as_id) for c in await store.copies_of(record.id)] == [
+        ("w1", "s1"), ("w2", None),
+    ]  # fmt: skip
+
+
+async def test_a_record_whose_copies_are_refused_is_not_written_either(
+    store: PostgresPromotionStore,
+) -> None:
+    """One transaction: a copy the table refuses (a kind it does not take) leaves no record."""
+    from services.api.promotion_store import CopyRow
+
+    record = _record(trigger="drawn_merge", board_id=None, layer_id="drawn-3")
+    bad = CopyRow(kind="picture", original="d1", type="X", properties="{}", handling="{}",
+                  provenance="{}", original_properties="{}")  # fmt: skip
+    with pytest.raises(asyncpg.CheckViolationError):
+        await store.add(record, copies=[bad])
+    assert await store.get(record.id) is None
+
+
 async def test_an_old_trigger_check_is_widened_once_to_take_drawn_merge(
     store: PostgresPromotionStore,
 ) -> None:

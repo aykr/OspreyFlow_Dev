@@ -578,9 +578,14 @@ def test_a_drawn_type_the_target_lacks_is_left_out_and_said(
     assert row["target_type"] is None and "Incident is not a type of Prison intel" in row["why_not"]
     person = [m for m in sheet["mapping"] if m["drawn_type"] == "Person"]
     assert person and person[0]["target_type"] == "Person"
+    # The owner's ruling (Amendment 7): a type mapped onto none is left out with its reason, the
+    # rest merged; never refused for it.
     answer = _step(mw, "merge", "dana", item_ids=[*_ids(drawn), incident["item_id"]])
-    assert _said(answer) == (422, "check_failed")
-    _nothing_written(mw, incident["element_id"])
+    assert answer.status_code == 201, answer.text
+    (why,) = [x["why"] for x in answer.json()["left_out"] if x["item_id"] == incident["item_id"]]
+    assert "Its type, Incident, goes into no type of Prison intel (Map)" in why
+    assert mw.graph.node(incident["element_id"]).datasets == [mw.drawn]
+    assert "src" in mw.graph.node(drawn.mercer["element_id"]).datasets
 
 
 def test_a_link_is_checked_against_the_targets_model_whatever_the_drawings_proposals_say(
@@ -605,8 +610,12 @@ def test_a_link_is_checked_against_the_targets_model_whatever_the_drawings_propo
     assert cell.status_code == 201, cell.text
     monkeypatch.setattr(app_state(), "link_types", _LinkTypes(None), raising=False)
     monkeypatch.setattr(Promotions, "model_check_applies", lambda self, name, refusals: False)
-    (link,) = [i for i in _sheet_for(mw, "dana")["items"] if i["item_id"] == cell.json()["item_id"]]
-    assert link["problems"] == ["SHARED_CELL_WITH is not a link type of Prison intel's model."]
+    # The owner's ruling (Amendment 7): what the target's model lacks is mapped onto none, and
+    # said at Map; never proposed as itself because the drawing's proposals answer for it.
+    sheet = _sheet_for(mw, "dana")
+    (row,) = [m for m in sheet["mapping"] if m["drawn_type"] == "SHARED_CELL_WITH"]
+    assert row["target_type"] is None
+    assert "SHARED_CELL_WITH is not a link type of Prison intel's model" in row["why_not"]
 
 
 def app_state() -> Any:
@@ -745,7 +754,7 @@ def test_a_merged_view_counts_nothing_a_reader_may_not_see(mw: SimpleNamespace) 
 # --- the second review's findings --------------------------------------------------------------
 
 
-def test_a_link_the_targets_model_lacks_refuses_the_merge_itself(
+def test_a_link_the_targets_model_lacks_is_left_out_by_the_merge_itself(
     mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Item 4 at the merge's own write path (`DrawnMerges._plan`), not the sheet's alone."""
@@ -766,9 +775,23 @@ def test_a_link_the_targets_model_lacks_refuses_the_merge_itself(
     monkeypatch.setattr(app_state(), "link_types", _LinkTypes(None), raising=False)
     monkeypatch.setattr(Promotions, "model_check_applies", lambda self, name, refusals: False)
     ticked = [mercer["item_id"], tall["item_id"], cell.json()["item_id"]]
+    # Asked for by name, it is refused: the target's model does not hold it.
+    again = _step(
+        mw,
+        "dry_run",
+        "dana",
+        item_ids=ticked,
+        mapping=[
+            {"kind": "link", "drawn_type": "SHARED_CELL_WITH", "target_type": "SHARED_CELL_WITH"}
+        ],
+    )
+    assert _said(again) == (422, "not_a_type"), again.text
     answer = _step(mw, "merge", "dana", item_ids=ticked)
-    assert _said(answer) == (422, "check_failed"), answer.text
-    _nothing_written(mw, mercer["element_id"])
+    assert answer.status_code == 201, answer.text
+    (why,) = [x["why"] for x in answer.json()["left_out"] if x["item_id"] == ticked[2]]
+    assert "Its type, SHARED_CELL_WITH, goes into no type of Prison intel (Map)" in why
+    held = next(e for e in mw.graph.edges() if e.id == cell.json()["element_id"])
+    assert held.datasets == [mw.drawn]
 
 
 def test_an_approval_checks_each_link_against_the_targets_model_again(
@@ -915,3 +938,346 @@ def test_boards_a_failed_view_step_left_promote_nothing_of_the_drawing(
     sheet = _as("alice").get(f"/v1/investigations/{mw.home}/boards/{mw.board}/promotion-sheet")
     assert sheet.status_code == 200, sheet.text
     assert sheet.json()["items"] == []
+
+
+# --- the owner's ruling: a drawn type mapped onto any of the target's types (Amendment 7) ------
+
+#: The incident goes in as an Organisation, its name carried; its ROLE_IN link as a MEMBER_OF.
+RETYPE = [
+    {"kind": "node", "drawn_type": "Incident", "target_type": "Organisation",
+     "properties": [{"drawn_property": "name", "target_property": "name"},
+                    {"drawn_property": "category", "target_property": None}]},
+    {"kind": "link", "drawn_type": "ROLE_IN", "target_type": "MEMBER_OF", "properties": []},
+]  # fmt: skip
+
+
+def _incident_model(mw: SimpleNamespace) -> None:
+    """The drawing's model NIEM (its starter pack); `src`'s every pack."""
+    real = mw.models.live
+
+    async def live(dataset_id: str) -> Any:
+        if dataset_id == "src":
+            return SimpleNamespace(packs=["niem", "fibo", "stix"])
+        if dataset_id == mw.drawn:
+            return SimpleNamespace(packs=["niem"])
+        return await real(dataset_id)
+
+    mw.models.live = live
+
+
+def _incident(mw: SimpleNamespace, **over: Any) -> SimpleNamespace:
+    """A drawn Mercer (a Person, which goes as itself), a drawn incident, and Mercer's role in it.
+    The drawing's model is NIEM; `src`'s holds every pack."""
+    _incident_model(mw)
+    mercer = _draw(mw, label="Mercer", properties={"family_name": "Mercer"})
+    fight = _draw(mw, type="Incident", label="Night fight",
+                  properties={"name": "Night fight", "category": "assault"}, **over)  # fmt: skip
+    role = _as("alice").post(
+        f"/v1/investigations/{mw.home}/boards/{mw.board}/links",
+        json={"type": "ROLE_IN", "label": "took part", "marking": "OFFICIAL", "grading": GRADE,
+              "source_note": "Wing log", "source": mercer["element_id"],
+              "target": fight["element_id"]},
+    )  # fmt: skip
+    assert role.status_code == 201, role.text
+    return SimpleNamespace(mercer=mercer, fight=fight, role=role.json(),
+                           ids=[mercer["item_id"], fight["item_id"], role.json()["item_id"]])  # fmt: skip
+
+
+def _copy_of(mw: SimpleNamespace, original: str) -> Any:
+    (back,) = [
+        e for e in mw.graph.edges()
+        if e.type == SAME_AS and e.target == original
+        and e.properties.get("model_version") == "drawn_merge_retype"
+    ]  # fmt: skip
+    return back, mw.graph.node(back.source)
+
+
+def test_the_sheet_offers_every_type_of_the_targets_model_to_map_onto(mw: SimpleNamespace) -> None:
+    _incident(mw)
+    sheet = _sheet_for(mw, "dana")
+    (row,) = [m for m in sheet["mapping"] if m["drawn_type"] == "Incident"]
+    assert {"Organisation", "Person", "Incident"} <= set(row["choices"])
+    assert row["target_type"] == "Incident"  # the same name, proposed while the target has it
+    assert row["drawn_properties"] == ["category", "name"]
+    (org,) = [
+        t for t in sheet["target_types"] if (t["kind"], t["name"]) == ("node", "Organisation")
+    ]
+    assert "name" in org["properties"] and "org_ref" in org["properties"]
+    (link,) = [m for m in sheet["mapping"] if m["drawn_type"] == "ROLE_IN"]
+    assert "MEMBER_OF" in link["choices"]
+
+
+def test_a_retyped_item_goes_in_as_a_new_element_of_its_mapped_type_with_an_inferred_same_as_back(
+    mw: SimpleNamespace,
+) -> None:
+    """The owner's ruling: the merge maps each drawn type onto a type of the target's model and
+    writes the items as the mapped types: new elements, as a load writes them, with their
+    provenance and an inferred `SAME_AS` back to the drawn original (rules 5 and 6); a type mapped
+    onto itself still goes as the same element (L3.4)."""
+    drawn = _incident(mw)
+    answer = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    assert answer.status_code == 201, answer.text
+    body = answer.json()
+    assert (body["status"], body["nodes"], body["links"]) == ("committed", 2, 1)
+    original = mw.graph.node(drawn.fight["element_id"])
+    # The original stays in the drawing alone, unchanged; Mercer, a Person, gains the target.
+    assert original.datasets == [mw.drawn] and original.type == "Incident"
+    assert mw.graph.node(drawn.mercer["element_id"]).datasets == sorted([mw.drawn, "src"])
+    back, copy = _copy_of(mw, original.id)
+    assert (copy.type, copy.properties, copy.datasets) == ("Organisation", {"name": "Night fight"},
+                                                           ["src"])  # fmt: skip
+    assert copy.provenance.drawn is not None and copy.provenance.drawn.label == "Night fight"
+    assert copy.audit.load_id == body["load_id"]
+    # Rule 5: inferred, a person confirms it; rule 6: two nodes, never one.
+    assert back.provenance.state == ProvenanceState.INFERRED and back.datasets == [mw.drawn]
+    assert back.audit.load_id == body["load_id"]
+    (member,) = [e for e in mw.graph.edges() if e.type == "MEMBER_OF"]
+    assert (member.source, member.target, member.datasets) == (
+        drawn.mercer["element_id"], copy.id, ["src"],
+    )  # fmt: skip
+    role = next(e for e in mw.graph.edges() if e.id == drawn.role["element_id"])
+    assert role.datasets == [mw.drawn]  # the drawn link stays drawn, read-only
+    record = mw.store.records[body["id"]]
+    assert set(record.node_ids) == {drawn.mercer["element_id"]} and record.edge_ids == ()
+    assert [(c.original, c.written_id) for c in mw.store.copies[body["id"]]] == [
+        (original.id, copy.id), (role.id, member.id),
+    ]  # fmt: skip
+
+
+def test_a_copy_is_never_marked_below_its_original(mw: SimpleNamespace) -> None:
+    """The orchestrator's condition: a copy keeps its original's handling, never lower."""
+    mw.datasets.datasets["src"] = mw.datasets.datasets["src"].model_copy(
+        update={"highest_marking": "SECRET"}
+    )
+    drawn = _incident(mw, marking="SECRET")
+    answer = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    assert answer.status_code == 201, answer.text
+    back, copy = _copy_of(mw, drawn.fight["element_id"])
+    original = mw.graph.node(drawn.fight["element_id"])
+    assert copy.handling == original.handling and copy.handling.classification == "SECRET"
+    assert back.handling.classification == "SECRET"
+    assert mw.store.records[answer.json()["id"]].marking == "SECRET"
+
+
+def test_only_an_original_the_merger_reads_is_copied(mw: SimpleNamespace) -> None:
+    """The orchestrator's condition, and rule 3: Erin (OFFICIAL) may not read a SECRET incident, so
+    it is not copied, counted or named, and its id is answered as one that does not exist."""
+    mw.datasets.datasets["src"] = mw.datasets.datasets["src"].model_copy(
+        update={"highest_marking": "SECRET"}
+    )
+    drawn = _three(mw)
+    _incident_model(mw)
+    hidden = _draw(mw, type="Incident", label="Courier run", marking="SECRET",
+                   properties={"name": "Courier run"})  # fmt: skip
+    dry = _step(mw, "dry_run", "erin", item_ids=_ids(drawn), mapping=RETYPE)
+    assert dry.status_code == 200, dry.text
+    assert (dry.json()["nodes"], dry.json()["retyped"]) == (2, 0)
+    assert "Courier" not in json.dumps(dry.json())
+    named = _step(mw, "merge", "erin", item_ids=[hidden["item_id"]], mapping=RETYPE)
+    unknown = _step(mw, "merge", "erin", item_ids=["no-such-item"], mapping=RETYPE)
+    assert (named.status_code, named.json()) == (unknown.status_code, unknown.json())
+    answer = _step(mw, "merge", "erin", item_ids=_ids(drawn), mapping=RETYPE)
+    assert answer.status_code == 201, answer.text
+    assert not [n for n in mw.graph._graph_nodes.values() if n.type == "Organisation"]
+    assert mw.store.copies.get(answer.json()["id"], []) == []
+
+
+@pytest.mark.parametrize(
+    ("mapping", "code"),
+    [
+        ([{"kind": "node", "drawn_type": "Incident", "target_type": "NoSuchType"}], "not_a_type"),
+        ([{"kind": "link", "drawn_type": "ROLE_IN", "target_type": "Organisation"}], "not_a_type"),
+        ([{"kind": "node", "drawn_type": "Incident", "target_type": "Organisation",
+           "properties": [{"drawn_property": "name", "target_property": "nickname"}]}],
+         "not_a_property"),
+        ([{"kind": "node", "drawn_type": "Incident", "target_type": "Organisation",
+           "properties": [{"drawn_property": "name", "target_property": "name"},
+                          {"drawn_property": "category", "target_property": "name"}]}],
+         "not_a_property"),
+    ],
+)  # fmt: skip
+@pytest.mark.parametrize("step", ["dry_run", "merge"])
+def test_a_mapping_outside_the_targets_model_is_refused_with_nothing_written(
+    mw: SimpleNamespace, mapping: list[dict[str, Any]], code: str, step: str
+) -> None:
+    drawn = _incident(mw)
+    answer = _step(mw, step, "dana", item_ids=drawn.ids, mapping=mapping)
+    assert _said(answer) == (422, code), answer.text
+    _nothing_written(mw, drawn.mercer["element_id"], drawn.fight["element_id"])
+
+
+@pytest.mark.parametrize(
+    ("mapping", "words"),
+    [
+        # An Establishment requires a name and a reference: the incident carries no reference.
+        ([{"kind": "node", "drawn_type": "Incident", "target_type": "Establishment",
+           "properties": [{"drawn_property": "name", "target_property": "name"}]}],
+         "Mapped onto Establishment"),
+        # Its ROLE_IN kept, its incident an Organisation: a ROLE_IN does not join them.
+        ([RETYPE[0]], "A ROLE_IN link runs from Person, Organisation to Event, Incident"),
+    ],
+)  # fmt: skip
+def test_a_copy_that_breaks_its_new_types_rules_is_refused_with_nothing_written(
+    mw: SimpleNamespace, mapping: list[dict[str, Any]], words: str
+) -> None:
+    drawn = _incident(mw)
+    # The node's own rule asked alone (its link not ticked), the link's with it.
+    ticked = drawn.ids if mapping[0]["target_type"] == "Organisation" else drawn.ids[:2]
+    answer = _step(mw, "merge", "dana", item_ids=ticked, mapping=mapping)
+    assert _said(answer) == (422, "check_failed"), answer.text
+    assert words in answer.json()["detail"]
+    _nothing_written(mw, drawn.mercer["element_id"], drawn.fight["element_id"])
+
+
+def test_a_type_mapped_onto_none_is_left_out_by_choice_with_its_reason(mw: SimpleNamespace) -> None:
+    drawn = _incident(mw)
+    leave = [{"kind": "node", "drawn_type": "Incident", "target_type": None}]
+    answer = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=leave)
+    assert answer.status_code == 201, answer.text
+    why = {x["item_id"]: x["why"] for x in answer.json()["left_out"]}
+    assert "goes into no type of Prison intel (Map)" in why[drawn.fight["item_id"]]
+    assert "One of its ends will not be in the dataset" in why[drawn.role["item_id"]]
+    assert mw.graph.node(drawn.fight["element_id"]).datasets == [mw.drawn]
+
+
+def test_a_match_on_a_retyped_node_is_looked_for_as_its_new_type_and_written_from_its_copy(
+    mw: SimpleNamespace,
+) -> None:
+    loaded = _loaded("o-loaded").model_copy(
+        update={"type": "Organisation", "properties": {"name": "Night fight"}}
+    )
+    mw.graph._graph_nodes["o-loaded"] = loaded
+    drawn = _incident(mw)
+    as_drawn = _sheet_for(mw, "dana")["matches"]
+    assert "o-loaded" not in {m["loaded"] for m in as_drawn}  # an Incident is no Organisation
+    pick = [{"drawn": drawn.fight["element_id"], "loaded": "o-loaded"}]
+    answer = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE, matches=pick)
+    assert answer.status_code == 201, answer.text
+    _, copy = _copy_of(mw, drawn.fight["element_id"])
+    (same,) = [e for e in mw.graph.edges()
+               if e.type == SAME_AS and e.properties.get("model_version") == "drawn_merge"]  # fmt: skip
+    assert (same.source, same.target, same.datasets) == (copy.id, "o-loaded", ["src"])
+    assert same.provenance.state == ProvenanceState.INFERRED
+
+
+def test_a_picture_of_a_retyped_node_is_left_out_with_its_reason(mw: SimpleNamespace) -> None:
+    """A Person retyped as an Organisation: its picture rests on the drawn original, so it stays."""
+    tall = _draw(mw)
+    uploaded = _as("alice").put(
+        f"/v1/investigations/{mw.home}/boards/{mw.board}/nodes/{tall['element_id']}/picture",
+        params={"name": "tall.png", "marking": "OFFICIAL", "source_note": "Gate camera"},
+        content=b"\x89PNG drawn",
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    (picture,) = [i for i in _sheet_for(mw, "dana")["items"] if i["kind"] == "picture"]
+    as_org = [{"kind": "node", "drawn_type": "Person", "target_type": "Organisation",
+               "properties": [{"drawn_property": "family_name", "target_property": "name"}]}]  # fmt: skip
+    answer = _step(mw, "merge", "dana", item_ids=[tall["item_id"]], mapping=as_org)
+    assert answer.status_code == 201, answer.text
+    why = {x["item_id"]: x["why"] for x in answer.json()["left_out"]}
+    assert "the picture stays on the drawing" in why.get(picture["item_id"], "")
+    assert not [e for e in mw.graph.edges() if e.type == "DEPICTS" and "src" in e.datasets]
+    _, copy = _copy_of(mw, tall["element_id"])
+    assert (copy.type, copy.properties) == ("Organisation", {"name": "Tall"})
+
+
+def test_a_reviewer_reads_each_copy_while_it_waits_and_once_committed(mw: SimpleNamespace) -> None:
+    _second_person(mw)
+    drawn = _incident(mw)
+    sent = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    assert sent.status_code == 201, sent.text
+    details = _as("erin").get(f"/v1/datasets/src/promotions/{sent.json()['id']}").json()
+    goes = {i["element_id"]: i.get("goes_in_as") for i in details["items"]}
+    assert goes == {
+        drawn.fight["element_id"]: "Organisation", drawn.role["element_id"]: "MEMBER_OF",
+        drawn.mercer["element_id"]: None,
+    }  # fmt: skip
+    assert (details["promotion"]["nodes"], details["promotion"]["links"]) == (2, 1)
+    listed = _as("erin").get("/v1/datasets/src/promotions").json()["promotions"]
+    assert [(p["nodes"], p["links"]) for p in listed if p["id"] == sent.json()["id"]] == [(2, 1)]
+    decided = _as("erin").post(
+        f"/v1/datasets/src/promotions/{sent.json()['id']}/decision", json={"approve": True}
+    )
+    assert decided.status_code == 200, decided.text
+    _, copy = _copy_of(mw, drawn.fight["element_id"])
+    after = _as("erin").get(f"/v1/datasets/src/promotions/{sent.json()['id']}").json()
+    assert copy.id in {i["element_id"] for i in after["items"]} and after["withheld"] is False
+
+
+def test_a_waiting_merge_whose_original_changed_is_rejected(mw: SimpleNamespace) -> None:
+    """An original edited after it was chosen would be copied as it no longer is: rejected at the
+    approval (Amendment 5 decision 6), never left waiting, nothing written."""
+    _second_person(mw)
+    drawn = _incident(mw)
+    sent = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    edited = _as("alice").patch(
+        f"/v1/investigations/{mw.home}/board-items/{drawn.fight['item_id']}",
+        json={"properties": {"name": "Day fight", "category": "assault"}},
+    )
+    assert edited.status_code == 200, edited.text
+    decided = _as("erin").post(
+        f"/v1/datasets/src/promotions/{sent.json()['id']}/decision", json={"approve": True}
+    )
+    assert _said(decided) == (409, "items_changed"), decided.text
+    assert mw.store.records[sent.json()["id"]].status == "rejected"
+    assert not [n for n in mw.graph._graph_nodes.values() if n.type == "Organisation"]
+
+
+def test_a_waiting_merge_whose_mapped_type_left_the_targets_model_is_rejected(
+    mw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _second_person(mw)
+    drawn = _incident(mw)
+    sent = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE)
+    assert sent.status_code == 201, sent.text
+    real = Boards.dataset_node_types
+
+    async def without_organisation(self: Boards, dataset_id: str) -> list[str]:
+        return [t for t in await real(self, dataset_id) if t != "Organisation"]
+
+    monkeypatch.setattr(Boards, "dataset_node_types", without_organisation)
+    decided = _as("erin").post(
+        f"/v1/datasets/src/promotions/{sent.json()['id']}/decision", json={"approve": True}
+    )
+    assert _said(decided) == (409, "items_changed"), decided.text
+    assert "Organisation is not a type of Prison intel" in decided.json()["detail"]
+    assert mw.store.records[sent.json()["id"]].status == "rejected"
+
+
+async def test_reverting_a_retyped_merge_withdraws_its_copies_their_links_and_same_as(
+    mw: SimpleNamespace,
+) -> None:
+    from scripts.revert_promotion import revert_promotion
+    from services.api.promotions import PromotionRefused
+
+    from schemas.domain import EdgeWrite, Provenance, SourceRef
+
+    drawn = _incident(mw)
+    body = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE).json()
+    boards, merge = _merge_commit(mw)
+    record = mw.store.records[body["id"]]
+    back, copy = _copy_of(mw, drawn.fight["element_id"])
+    # A link written since onto the copy refuses the revert, as one onto a promoted node does.
+    tx = await mw.graph.begin_transaction()
+    later = EdgeWrite(
+        id="later", type="MEMBER_OF", source="p-loaded", target=copy.id, properties={},
+        provenance=Provenance(
+            state=ProvenanceState.ASSERTED, first_seen=datetime.now(UTC),
+            sources=[SourceRef(document_id="later-load", locator="", excerpt_hash="")],
+        ),
+        handling=copy.handling, created_by="eng", created_at=datetime.now(UTC),
+        datasets=["src"],
+    )  # fmt: skip
+    (later_id,) = await mw.graph.upsert_edges([later], tx)
+    await mw.graph.commit_transaction(tx)
+    with pytest.raises(PromotionRefused) as refused:
+        await revert_promotion(record, boards.graph, mw.store, boards.items, merge)
+    assert refused.value.code == "links_rest_on_it"
+    mw.graph._graph_edges = [e for e in mw.graph._graph_edges if e.id != later_id]
+
+    await revert_promotion(record, boards.graph, mw.store, boards.items, merge)
+    (member,) = [e for e in mw.graph.edges() if e.type == "MEMBER_OF"]
+    assert mw.graph.node(copy.id).audit.reverted and member.audit.reverted
+    assert next(e for e in mw.graph.edges() if e.id == back.id).audit.reverted
+    assert mw.graph.node(drawn.fight["element_id"]).datasets == [mw.drawn]
+    assert not mw.graph.node(drawn.fight["element_id"]).audit.reverted

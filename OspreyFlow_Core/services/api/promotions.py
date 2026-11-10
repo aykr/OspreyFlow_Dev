@@ -39,7 +39,7 @@ online revert: the owner settled ADR-143 open question 2 as (a), the operator co
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -119,6 +119,10 @@ class _MergeCommit(Protocol):
     async def shown(
         self, record: PromotionRecord, reviewer: Principal
     ) -> tuple[list[Any], bool]: ...
+    async def as_types(self, record: PromotionRecord) -> dict[str, str | None]: ...
+    async def copies_shown(
+        self, record: PromotionRecord, reviewer: Principal
+    ) -> tuple[list[DetailItem], bool]: ...
 
 
 @dataclass(frozen=True)
@@ -230,11 +234,15 @@ class Promotions:
         reader: Principal,
         *,
         into_its_own_dataset: bool = True,
+        as_types: Mapping[str, str | None] | None = None,
     ) -> dict[str, list[tuple[str, str]]]:
         """Every check each item fails, as (check, words) (decision 8's checks; `CHECKS`).
         `into_its_own_dataset` is false for a drawn dataset merged into another (L3.9): the case's
         own proposals answer for the drawing's model, not the target's, so every link is checked
-        against the target's model whatever they say (the lane review, item 4)."""
+        against the target's model whatever they say (the lane review, item 4). `as_types` is a
+        drawn merge's mapping (Amendment 7): each element's type checked as the type it goes in
+        as; `None`, left out by the mapping, so not checked here (the mapping says why)."""
+        mapped = as_types or {}
         highest = self.highest(dataset)
         # C14 against the dataset the items go into: the case's own for a promotion and a layer
         # merge (which reads it), the target's for a drawn dataset merged into another (L3.9).
@@ -243,11 +251,17 @@ class Promotions:
         # (`<NAME>__<proposal>`, decision 9) and asked of `promotion_refusals` by the name it reads
         # as, which is what that service answers by (found through the real service, L3.4).
         reads_as = await self._link_names(case_id, reader)
+
+        def type_of(element: Node | Edge) -> str | None:
+            return mapped.get(element.id, element.type)
+
         link_names = sorted(
             {
-                reads_as.get(r.element.type, r.element.type)
+                reads_as.get(name, name)
                 for r in reads
-                if r.item.kind == "link" and r.element is not None
+                if r.item.kind == "link"
+                and r.element is not None
+                and (name := type_of(r.element)) is not None
             }
         )
         refusals: dict[str, str | None] = {}
@@ -276,12 +290,11 @@ class Promotions:
                         f"The picture is marked {doc_marking}, above {dataset.name}'s highest "
                         f"allowed marking, {highest}.",
                     ))  # fmt: skip
-            if read.item.kind == "node" and element.type not in node_types:
-                problems.append(
-                    ("types", f"{element.type} is not a type of {dataset.name}'s model.")
-                )
-            if read.item.kind == "link":
-                name = reads_as.get(element.type, element.type)
+            as_type = type_of(element)
+            if read.item.kind == "node" and as_type is not None and as_type not in node_types:
+                problems.append(("types", f"{as_type} is not a type of {dataset.name}'s model."))
+            if read.item.kind == "link" and as_type is not None:
+                name = reads_as.get(as_type, as_type)
                 why = refusals.get(name)
                 if why is not None:
                     problems.append(("types", why))
@@ -509,14 +522,23 @@ class Promotions:
         grant_id: str | None = None,
         extra_markings: Sequence[str] = (),
         matches: Sequence[Any] = (),
+        copies: Sequence[Any] = (),
     ) -> PromotionRecord:
         if not goes:
             raise PromotionRefused(
                 "nothing_goes", "Nothing ticked can be promoted: see what was left out and why.",
                 status=422,
             )  # fmt: skip
-        node_ids = [r.item.element_id for r in goes if r.item.kind == "node"]
-        edge_ids = [r.item.element_id for r in goes if r.item.kind != "node"]
+        # A drawn merge's retyped items are written as copies, never promoted (Amendment 7).
+        copied = {c.original for c in copies}
+        node_ids = [
+            r.item.element_id for r in goes
+            if r.item.kind == "node" and r.item.element_id not in copied
+        ]  # fmt: skip
+        edge_ids = [
+            r.item.element_id for r in goes
+            if r.item.kind != "node" and r.item.element_id not in copied
+        ]  # fmt: skip
         # A picture's Document goes with its DEPICTS link.
         node_ids += [r.item.source for r in goes if r.item.kind == "picture" and r.item.source]
         markings = [r.element.handling.classification for r in goes if r.element is not None]
@@ -537,7 +559,7 @@ class Promotions:
             edge_ids=tuple(edge_ids), item_ids=tuple(r.item.item_id for r in goes),
             left_out=tuple((x.item_id, x.label, x.why) for x in left), grant_id=grant_id,
         )  # fmt: skip
-        await self.store.add(record, matches=matches)
+        await self.store.add(record, matches=matches, copies=copies)
         return record
 
     async def promote(
@@ -824,6 +846,14 @@ class Promotions:
                     sum(1 for n in set(r.node_ids) if n in nodes),
                     sum(1 for e in r.edge_ids if e in edges),
                 )
+                if r.trigger == "drawn_merge" and self.merges is not None:
+                    # Its retyped items, as *Details* shows them to this reader (Amendment 7).
+                    copies, _ = await self.merges.copies_shown(r, reader)
+                    n, e = out[r.id]
+                    out[r.id] = (
+                        n + sum(1 for c in copies if c.kind == "node"),
+                        e + sum(1 for c in copies if c.kind != "node"),
+                    )
         return out
 
     async def details(self, record: PromotionRecord, reviewer: Principal) -> PromotionDetails:
@@ -842,7 +872,14 @@ class Promotions:
         if read and record.trigger == "drawn_merge" and self.merges is not None:
             # A drawn merge's matches are approved with it, so the reviewer reads them too.
             matches, unseen = await self.merges.shown(record, reviewer)
-            withheld = withheld or unseen
+            # Its retyped items too, each read through the reviewer (Amendment 7).
+            copies, copies_unseen = await self.merges.copies_shown(record, reviewer)
+            items += copies
+            withheld = withheld or unseen or copies_unseen
+            promotion = promotion.model_copy(update={
+                "nodes": promotion.nodes + sum(1 for c in copies if c.kind == "node"),
+                "links": promotion.links + sum(1 for c in copies if c.kind != "node"),
+            })  # fmt: skip
         return PromotionDetails(
             promotion=promotion, items=items, withheld=withheld, matches=matches
         )
@@ -906,9 +943,14 @@ class Promotions:
                 status=403,
             )
         reads = [r for r in reads if r.element is not None]
+        as_types = (
+            await self.merges.as_types(record)
+            if record.trigger == "drawn_merge" and self.merges is not None
+            else None
+        )
         problems = await self._problems(
             reads, held, record.case_id, reader,
-            into_its_own_dataset=record.trigger != "drawn_merge",
+            into_its_own_dataset=record.trigger != "drawn_merge", as_types=as_types,
         )  # fmt: skip
         failing = [(r, problems[r.item.item_id][0][1]) for r in reads if problems[r.item.item_id]]
         # A drawn dataset's merge: each chosen match too, as the reviewer reads it now, once every
@@ -980,6 +1022,15 @@ class Promotions:
         case_name = (
             await self._case_name(record.case_id) if show_case else "a case reading this dataset"
         )
+        if counts is None:
+            # As recorded: a drawn merge's retyped copies counted with what it promotes.
+            copies = (
+                await self.store.copies_of(record.id) if record.trigger == "drawn_merge" else []
+            )
+            counts = (
+                len(record.node_ids) + sum(1 for c in copies if c.kind == "node"),
+                len(record.edge_ids) + sum(1 for c in copies if c.kind != "node"),
+            )
         return Promotion(
             id=record.id, load_id=record.load_id, trigger=record.trigger,
             dataset_id=record.dataset_id,
@@ -994,8 +1045,7 @@ class Promotions:
             reviewed_by_name=names.get(record.reviewed_by, record.reviewed_by)
             if record.reviewed_by else None,
             reviewed_at=record.reviewed_at, reason=record.reason if show_case else None,
-            nodes=counts[0] if counts else len(record.node_ids),
-            links=counts[1] if counts else len(record.edge_ids),
+            nodes=counts[0], links=counts[1],
             left_out=[LeftOut(item_id=i, label=lab, why=why) for i, lab, why in record.left_out]
             if reader.id == record.proposed_by else [],
             revert_command=REVERT_COMMAND.format(load_id=record.load_id)
