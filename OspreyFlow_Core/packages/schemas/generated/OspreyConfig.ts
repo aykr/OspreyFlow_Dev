@@ -3,7 +3,7 @@
 /**
  * Default: local-lite. Which kind of deployment: one machine (local-lite), a cloud server on managed services or a server of your own with every store in a container (small), or a cluster.
  */
-export type Profile = "local-lite" | "small" | "cluster";
+export type Profile = "local-lite" | "small" | "cluster" | "cloud-platform";
 /**
  * Default: arcadedb. The graph store.
  */
@@ -161,6 +161,34 @@ export type StorageClass = string | null;
  * Required for a cluster: the storage class of the one volume every Conduit shares (ReadWriteMany) — EFS on AWS, Azure Files on Azure
  */
 export type SharedStorageClass = string | null;
+/**
+ * Default: client. The platform's settings file, by name
+ */
+export type Platform = string;
+/**
+ * The namespace the platform's team created for the deployment (required)
+ */
+export type Namespace1 = string | null;
+/**
+ * Default: development — one copy of each store; production runs the cluster's copies (ArcadeDB 3, ClickHouse 2, Keeper 3)
+ */
+export type Environment = "development" | "production";
+/**
+ * Where every image is pulled from (required): the namespace's ECR, as `ospreyflow images push --registry` copied them there
+ */
+export type Registry = string | null;
+/**
+ * The networks (CIDR) the platform's ingress admits; empty: every address
+ */
+export type AllowFrom = string[];
+/**
+ * Default: none — the platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's names (its id. and bi. names among them), where the platform's wildcard does not cover them
+ */
+export type TlsSecret = string | null;
+/**
+ * The hosts a SQL or API connection may reach, each with its networks in egress_nets: rendered as both the namespace's egress and the Conduit's own allow-list (OSPREY_CONNECTOR_EGRESS), so the two never disagree
+ */
+export type ConnectorHosts = string[];
 /**
  * Default: false. Publish the Conduit's own port on the host in addition to the workspace's. Not needed to use the deployment — the workspace proxies /v1 — and turning it on widens the exposed surface by a whole tier. For an operator debugging the Conduit directly, or a second client that is not the Glass.
  */
@@ -499,6 +527,10 @@ export interface OspreyConfig {
   models?: ModelsConfig;
   governance?: GovernanceConfig;
   cluster?: ClusterConfig;
+  /**
+   * Default: none — only at profile: cloud-platform (ADR-148)
+   */
+  cloud_platform?: CloudPlatformConfig | null;
   network?: NetworkConfig;
   /**
    * Default: none declared
@@ -648,6 +680,29 @@ export interface ClusterHost {
   name: Name1;
   address: Address;
   roles?: Roles1;
+}
+/**
+ * ADR-148: only meaningful at `profile: cloud-platform`. What is this deployment's own (its
+ * namespace, its environment, its registry, who may reach it, where its enabled hosts are); what
+ * is the platform's (ingress class and annotations, storage class, egress policy kind, its
+ * secrets' names) is in the platform's settings file, `harness/cloud_platform/platforms/
+ * <platform>.yaml`, so another shared platform is a new file, not a new profile.
+ */
+export interface CloudPlatformConfig {
+  platform?: Platform;
+  namespace?: Namespace1;
+  environment?: Environment;
+  registry?: Registry;
+  allow_from?: AllowFrom;
+  egress_nets?: EgressNets;
+  tls_secret?: TlsSecret;
+  connector_hosts?: ConnectorHosts;
+}
+/**
+ * For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render
+ */
+export interface EgressNets {
+  [k: string]: string[];
 }
 /**
  * What this deployment publishes to its host.

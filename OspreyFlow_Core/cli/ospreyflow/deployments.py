@@ -119,7 +119,7 @@ def remember(env: Mapping[str, str], name: str) -> None:
 
 #: `schemas.deployment.Profile`'s values (held to them by a test, as this command runs before the
 #: product's Python): the checkout's own deployment's name, and so its backups subfolder.
-PROFILE_NAMES = ("local-lite", "small", "cluster")
+PROFILE_NAMES = ("local-lite", "small", "cluster", "cloud-platform")
 
 
 def check_name(name: str) -> None:
