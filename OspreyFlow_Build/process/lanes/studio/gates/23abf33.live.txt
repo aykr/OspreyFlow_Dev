@@ -1,0 +1,167 @@
+# live set rerun at 23abf33 (rebased onto main 26646cf), lease studio, stack f (ospreyflow-test), 2026-11-10 11:41Z
+Running on ospreyflow-test (stack f, osprey-runs/studio/OspreyFlow_Build/), logged at osprey-runs/studio.meta/runs/20261110T114139Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rfE -p no:randomly ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py ../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py ../OspreyFlow_Build/tests/services/api/test_external_runs_live.py ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py
+.......................................................F.                [100%]
+=================================== FAILURES ===================================
+____________________ test_phase8_exit_criterion_end_to_end _____________________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x7bf8cc995cf0>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x7bf8cc994ed0>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-377/test_phase8_exit_criterion_end0')
+git_repo = PosixPath('/tmp/pytest-of-root/pytest-377/test_phase8_exit_criterion_end0/repo')
+
+    def test_phase8_exit_criterion_end_to_end(
+        api_env: None,
+        keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+        tmp_path: Path,
+        git_repo: Path,
+    ) -> None:
+        import asyncio
+    
+        private_key, _ = keypair
+        import time as _time
+    
+        # A one-hour expiry, not the default 300s (`tests/conftest.py::default_claims`) — this
+        # walkthrough's own real ArcadeDB/Postgres round trips run measurably longer than that,
+        # confirmed directly (a real run's own token expired mid-test at the B14 jump call before
+        # this fix, `401 signature has expired`, not assumed).
+        # An analyst who loads too: since ADR-112 a `loader` alone holds no `create_case`, and B14's
+        # address asks for the queue's read and Rules and Monitoring (ADR-146 Amendment 2).
+        headers = _bearer(private_key, roles=["analyst", "loader"], exp=int(_time.time()) + 3600)
+    
+        from services.api.app import app
+    
+        # === Scenario B ===============================================================================
+    
+        # B1-B3
+        cdr_ids = asyncio.run(_ingest_cdr_fixture(tmp_path))
+    
+        async def _build_b_graph() -> dict[str, object]:
+            client, graph = await _graph_client()
+            try:
+                # B4-B7: two cohorts, one on the shared CDR endpoint, one on a shared handle.
+                cohort_1_person_ids = await _seed_cohort(
+                    graph, shared_endpoint_id=cdr_ids["b_party_endpoint_id"], prefix="c1"
+                )
+                cohort_2_person_ids, handle_id = await _seed_handle_cohort(graph, prefix="c2")
+    
+                # B8/B11: Endpoint carries no resolution config (this module's own docstring, point
+                # 2) — the handle-to-endpoint link is a deterministic, asserted SAME_AS at score 1.0
+                # (ADR-024's own pattern), exactly B11's own shape — the corrected B8 disposition
+                # (`spec/08_ACCEPTANCE_SCENARIOS.md`) says this is what the edge actually is, not a
+                # stand-in for something else.
+    
+                # B9/B10: the real Person pair — see this file's own helper docstring for why neither
+                # cohort above can serve this, and why this pair is provably the same generator's own
+                # output.
+                b9_a_id, b9_b_id, b9_cluster_id, b9_score = await _seed_and_resolve_b9_b10_person_pair(
+                    graph, scheme=load_uk_le_scheme()
+                )
+    
+                # B15: the seizure record's device/SIM legs.
+                seizure_ids = await _write_seizure_device_legs(graph)
+    
+                return {
+                    "cohort_1_person_ids": cohort_1_person_ids,
+                    "cohort_2_person_ids": cohort_2_person_ids,
+                    "handle_id": handle_id,
+                    "b9_a_id": b9_a_id,
+                    "b9_b_id": b9_b_id,
+                    "b9_cluster_id": b9_cluster_id,
+                    "b9_score": b9_score,
+                    **seizure_ids,
+                }
+            finally:
+                await client.aclose()
+    
+        b_graph = asyncio.run(_build_b_graph())
+    
+        with TestClient(app) as client:
+            investigation_b = client.post("/v1/investigations", headers=headers, json=new_case())
+            assert investigation_b.status_code == 201, investigation_b.text
+            inv_b_id = investigation_b.json()["id"]
+    
+            async def _fetch(node_id: str) -> dict:
+                _client, graph = await _graph_client()
+                try:
+                    node = await graph.get_node(node_id, PRINCIPAL)
+                    assert node is not None
+                    return node.model_dump(mode="json")
+                finally:
+                    await _client.aclose()
+    
+            # === B4: seed the four first-cohort Person entities, no edges between them.
+            cohort_1_nodes = [asyncio.run(_fetch(pid)) for pid in b_graph["cohort_1_person_ids"]]
+            seeded_b4 = client.post(
+                f"/v1/investigations/{inv_b_id}/seed",
+                headers=headers,
+                json={"nodes": cohort_1_nodes, "edges": []},
+            )
+            assert seeded_b4.status_code == 200, seeded_b4.text
+>           assert len(seeded_b4.json()["delta"]["nodes"]) == 4
+E           assert 0 == 4
+E            +  where 0 = len([])
+
+../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py:768: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 11:55:17] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  splink.linker:linker.py:971 
+ -- WARNING --
+You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+Comparison: 'family_name':
+    m values not fully trained
+Comparison: 'family_name':
+    u values not fully trained
+Comparison: 'given_names':
+    m values not fully trained
+Comparison: 'given_names':
+    u values not fully trained
+Comparison: 'date_of_birth':
+    m values not fully trained
+Comparison: 'date_of_birth':
+    u values not fully trained
+The 'probability_two_random_records_match' setting has been set to the default value (0.0001). 
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+46.45s call     tests/ingest/test_kyc_rules.py::test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node
+43.69s call     tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+40.30s call     tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+40.13s call     tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+37.86s call     tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record
+37.66s call     tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py::test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds
+37.19s call     tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+37.00s call     tests/ingest/test_kyc_rules.py::test_a_shared_phone_is_flagged_at_the_count
+35.27s call     tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+34.75s call     tests/ingest/test_kyc_rules.py::test_an_expired_document_verifies_no_one
+34.74s call     tests/ingest/test_kyc_rules.py::test_an_owner_below_the_threshold_is_not_screened
+34.68s call     tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py::test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+34.64s call     tests/ingest/test_kyc_rules.py::test_a_document_the_reader_cannot_see_verifies_no_one_for_them
+34.58s call     tests/ingest/test_kyc_rules.py::test_a_link_reverted_between_the_judgement_and_the_raise_leaves_one_alert_without_its_node_and_the_sweep_goes_on
+34.53s call     tests/ingest/test_kyc_rules.py::test_a_valid_document_raises_nothing
+34.18s call     tests/ingest/test_kyc_rules.py::test_a_document_that_lapses_is_caught_by_the_daily_sweep_once
+33.14s call     tests/ingest/test_kyc_rules.py::test_the_gate_runs_after_commit_too
+32.11s call     tests/ingest/test_kyc_rules.py::test_a_customer_the_deployer_cannot_read_is_not_judged
+29.46s call     tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+19.31s call     tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset
+18.22s call     tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none
+8.63s call     tests/ingest/test_typology_rule_routes.py::test_the_queue_is_read_at_viewer_and_triaged_at_editor
+7.09s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+6.43s call     tests/ingest/test_typology_rule_routes.py::test_ownership_is_traced_at_viewer_and_drawn_at_editor
+6.33s call     tests/ingest/test_typology_rule_routes.py::test_the_kyc_status_is_read_at_viewer_and_only_of_a_customer
+6.12s call     tests/ingest/test_typology_rule_routes.py::test_neighbourhood_risk_is_read_at_viewer
+5.45s call     tests/ingest/test_typology_rule_routes.py::test_only_an_author_deploys_and_retires_a_rule
+5.40s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+4.70s call     tests/ingest/test_typology_rule_routes.py::test_a_rejection_needs_a_reason_and_an_author
+4.63s call     tests/ingest/test_typology_rule_routes.py::test_held_rows_are_listed_at_editor_and_only_at_the_readers_marking
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+1 failed, 56 passed, 1 warning in 824.72s (0:13:44)
+Wall time: 826 s, exit 1 (stack f, the lease studio took at 2026-11-10T07:41:06Z; set-up before it 27 s)
