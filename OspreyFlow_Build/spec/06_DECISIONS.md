@@ -25339,6 +25339,73 @@ A new Admin screen with roll-ups, a metering column set on the run report, a har
 run API, a provider package to publish and sign, and the CLI verb. The owner chose thin clients over
 exporting the engine so that none of OspreyFlow's guarantees has to be re-implemented outside it.
 
+### ADR-141, Amendment 1 (10 November 2026) — Phase 10 as built (L1.7): quotas, the run API, Owned externally, Operations' figures
+
+Status: built in Lane 1's L1.7 (studio), recorded for review; the lane's decisions are logged in
+`process/lanes/studio/REPORT.md` for the owner to overrule. Answers open questions 1 and 2, and says
+what of decisions 1–14 is built and what is left.
+
+1. **Open question 1, the grant (the strict option): per pipeline, given by marking it *Owned
+   externally*.** `PUT …/ingest/recipes/{id}/owned-externally` names the one OIDC client that may
+   trigger the pipeline; it needs `schedule_pipelines` and the source approver's studio role, as a
+   schedule does, and the person who marks it is the owner every external run acts as, in the case
+   it is marked in (decisions 10 and 11). It is kept by pipeline (`studio_external_owners`), so a new
+   deployed version stays owned externally; it is refused while the pipeline has a schedule or a
+   watch of its own, and a schedule is refused while it is owned externally (nobody sets both). No
+   new right: the client is the grant.
+2. **Open question 2, the quotas:** a dataset's or a unit's runs a day, no default (no quota is no
+   limit), set by `administer_system` (a quota binds every unit's runs into a dataset). A quota
+   refusal **does not** count toward ADR-110's three refusals that pause a schedule: it says nothing
+   about the owner. It is judged in `begin_run`, the start every trigger's run passes (manual,
+   schedule, watch, source refresh, external), and counted again under a transaction lock per
+   dataset and unit as the run's ledger row is written, so two runs cannot both take a quota's last
+   run. The budget alert is recorded once per quota and day at `alert_at_share` (80%) and shown on
+   Operations; its delivery to each administrator's *Needs you* is admin's, left.
+3. **The run API (decision 9).** `POST /v1/runs` (dataset, pipeline, a deployed version or
+   `latest`, the external run id) and `GET /v1/runs/{run_id}`, for a service identity only: a token
+   verified against the realm's JWKS, audience and issuer, whose `azp` names the client and whose
+   `preferred_username` is Keycloak's `service-account-<client>`; a person's token is 403 on both,
+   and a service identity's is 401 on every other route (it carries no clearance or unit). A
+   pipeline not owned externally by that client, in another dataset, or absent is one 404; a pin that
+   is not the deployed version is 409 in words. The run acts as the owner through the scheduler's own
+   checks (token exchange; `schedule_pipelines`, Editor of the case, cleared for the source) and the
+   loader's role (`run_pipelines`), each refusal recorded *refused* with the trigger `external`, the
+   external run id and the client. The read gives counts and held rows only where the owner may view
+   every marking the run wrote, a refusal's words with the owner's account id put as "the pipeline's
+   owner", and a failure only as fixed words. The external run id is held once by a partial unique
+   index on `(recipe_id, external_run_id)` over every run that started; a refused trigger loaded
+   nothing and may be retried. **Not yet measured against a real Keycloak** (rule 15): the claims
+   above are Keycloak 26's documented ones, and the orchestrator's client needs an audience mapper
+   naming the Conduit, as a person's token does.
+4. **Operations (decisions 1, 3, 4, 7, 14).** `GET /v1/admin/operations/runs?days=` (`operate_schedules`):
+   the window's runs by day, pipeline, unit and trigger, with outcomes and wall time to every reader
+   and counts only where the reader may view each marking the day's runs wrote; scheduler health
+   (skipped, missed, refused by reason, paused, running); external triggers with the client and the
+   owner by name; the quotas and budget alerts. The reader's unit's alone unless they administer the
+   system, each read in its store's `WHERE`. No account id is served, even inside the ledger's words.
+5. **Releases and the pipeline package (decision 8).** ADR-140 Amendment 9 decision 4's dataset
+   release (the YAML bundle, `release.schema.json`, `ospreyflow release export|import --dry-run`)
+   is the package built: it carries the pipelines with the domain model they were deployed against,
+   so an import lands the model as the dataset's draft beside them rather than refusing a model the
+   dataset lacks (the redesign's step 6, read so). A per-pipeline zip from the Pipelines tab is not
+   built.
+6. **The thin clients (decision 9).** `ospreyflow run <dataset> <pipeline> --version N|latest
+   --external-run-id ID [--wait] [--fail-on held|rejections>N%]`, by client credentials; exit 2
+   when `--fail-on` is met or the counts are withheld (never a pass on counts it could not see). The
+   Runs tab generates an Airflow DAG running that command, keyed by Airflow's own run id.
+
+**Left, each named:** rows-per-run and staged-bytes quotas (judged mid-run); the deployment-wide
+concurrency limit; storage (decision 5); the trend (decision 3); DuckDB time and memory per SQL step
+and model calls per Extract step (decision 2); the provider package, signed and published, and the
+Prefect and Dagster wrappers; the budget alert in *Needs you*; the Keycloak measurement above; and
+the phase's exit run (a generated DAG against the dev stack) under the lease.
+
+**Tests:** `tests/services/api/test_external_run_routes.py`, `test_external_runs_live.py`,
+`test_service_identity_and_rollup.py`, `tests/cli/test_conduit_client.py`; the release's
+`tests/ingest/test_release_bundle.py`, `tests/services/api/test_studio_release_routes.py`,
+`tests/schemas/test_release_schema.py`; each guard red at its call site in
+`process/lanes/studio/L1.7_RED_RECORD.md`.
+
 ### ADR-006, Amendment 1 (5 November 2026) — a fuzzy-match staging step may decide a match at ingest, recorded as inferred
 
 Status: accepted 5 November 2026, under ADR-140 (the owner's rulings R5 of 4 November and R13 of 5
