@@ -1039,7 +1039,7 @@ come from the standard library's `zoneinfo`.
 dependency, `urllib3`, MIT), commits a published recipe to the repository on the recipe volume
 (`09_INGEST_STUDIO.md` §6) as a library inside the Conduit's process. It is not pure Python: its wheels
 carry optional compiled extensions (cp312 among them), under the same licence. The `git` binary
-(GPL-2.0-only), which the Conduit's image carried from round 13bf for that commit alone, leaves the image.
+(GPL-2.0-only), which the Conduit's image carried for that commit alone, leaves the image.
 `git` was admitted by the image gate's AWAITING_OWNER entry, never by `make licence-check`'s package lists,
 which hold Python and Node packages; that entry goes with the binary.
 
