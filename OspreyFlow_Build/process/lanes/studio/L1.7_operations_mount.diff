@@ -1,3 +1,17 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
+index 7514cf1..6d3281e 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/admin.spec.ts
+@@ -874,7 +874,8 @@ test("when promotions are overdue is set in Operations by keyboard", async ({ pa
+   const sent = page.waitForRequest((r) => r.url().endsWith("/settings/promotion-alert-days") && r.method() === "PUT");
+   await press(page, "Save when promotions are overdue");
+   expect((await sent).postDataJSON()).toEqual({ alert_after_days: 4 });
+-  expect(asked).toContain("PUT settings/promotion-alert-days");
++  // The request is seen as it leaves; the harness records it as it answers, so wait for that.
++  await expect.poll(() => asked).toContain("PUT settings/promotion-alert-days");
+   registerCovered(REGISTRY, "set-when-promotions-are-overdue-by-keyboard");
+ });
+ 
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/Schedules.test.tsx b/OspreyFlow_Core/apps/workspace/src/admin/Schedules.test.tsx
 index 64fa561..7bcc364 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/Schedules.test.tsx
@@ -14,7 +28,7 @@ index 64fa561..7bcc364 100644
        if (path === "schedules/feed/pause")
          return json(200, { ...SCHEDULE, paused: true, paused_reason: "paused by admin-1", next_run: null });
 diff --git a/OspreyFlow_Core/apps/workspace/src/admin/sections/Operations.tsx b/OspreyFlow_Core/apps/workspace/src/admin/sections/Operations.tsx
-index 7a2d6ba..022d2af 100644
+index 7a2d6ba..097c11b 100644
 --- a/OspreyFlow_Core/apps/workspace/src/admin/sections/Operations.tsx
 +++ b/OspreyFlow_Core/apps/workspace/src/admin/sections/Operations.tsx
 @@ -8,6 +8,7 @@ import type { OperationsAgeing } from "../../../../../packages/schemas/generated
