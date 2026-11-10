@@ -1,0 +1,48 @@
+
+> @ospreyflow/harness@0.0.0 test:a11y
+> playwright test --config a11y/playwright.config.ts
+
+[WebServer] INFO:     Started server process [14065]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:7219 (Press CTRL+C to quit)
+
+Running 34 tests using 2 workers
+
+  ✓   2 a11y/a11y.spec.ts:36:5 › dark theme Profile screen has no automated wcag2aa violations (692ms)
+  ✓   1 a11y/install-page.spec.ts:55:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations (760ms)
+  ✓   3 a11y/a11y.spec.ts:36:5 › dark theme Components screen has no automated wcag2aa violations (434ms)
+  ✓   4 a11y/install-page.spec.ts:55:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (457ms)
+  ✓   5 a11y/a11y.spec.ts:36:5 › dark theme Models screen has no automated wcag2aa violations (414ms)
+  ✓   6 a11y/install-page.spec.ts:55:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (471ms)
+  ✓   7 a11y/a11y.spec.ts:36:5 › dark theme Governance screen has no automated wcag2aa violations (421ms)
+  ✓   8 a11y/install-page.spec.ts:55:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (473ms)
+  ✓   9 a11y/a11y.spec.ts:36:5 › dark theme Geospatial screen has no automated wcag2aa violations (426ms)
+  ✓  10 a11y/install-page.spec.ts:55:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (459ms)
+  ✓  11 a11y/a11y.spec.ts:36:5 › dark theme Preflight screen has no automated wcag2aa violations (431ms)
+  ✓  12 a11y/install-page.spec.ts:55:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (457ms)
+  ✓  13 a11y/a11y.spec.ts:36:5 › light theme Profile screen has no automated wcag2aa violations (385ms)
+  ✓  14 a11y/install-page.spec.ts:55:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (467ms)
+  ✓  15 a11y/a11y.spec.ts:36:5 › light theme Components screen has no automated wcag2aa violations (416ms)
+  ✓  16 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (460ms)
+  ✓  17 a11y/a11y.spec.ts:36:5 › light theme Models screen has no automated wcag2aa violations (394ms)
+  ✓  19 a11y/a11y.spec.ts:36:5 › light theme Governance screen has no automated wcag2aa violations (420ms)
+  ✓  18 a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (442ms)
+  ✓  20 a11y/a11y.spec.ts:36:5 › light theme Geospatial screen has no automated wcag2aa violations (402ms)
+  ✓  21 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (435ms)
+  ✓  22 a11y/a11y.spec.ts:36:5 › light theme Preflight screen has no automated wcag2aa violations (420ms)
+  ✓  23 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (447ms)
+  ✓  24 a11y/install-page.spec.ts:55:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (435ms)
+  ✓  25 a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (445ms)
+  ✓  26 a11y/install-page.spec.ts:55:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (452ms)
+  ✓  27 a11y/install-page.spec.ts:55:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (444ms)
+  ✓  28 a11y/install-page.spec.ts:55:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (455ms)
+  ✓  29 a11y/install-page.spec.ts:55:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (432ms)
+  ✓  30 a11y/install-page.spec.ts:55:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (451ms)
+  ✓  31 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (452ms)
+  ✓  32 a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (429ms)
+  ✓  33 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (414ms)
+  ✓  34 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (424ms)
+
+  34 passed (13.4s)
+exit 0
