@@ -125,6 +125,11 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    work for whoever adds them. (b) A rule runs as its author, who must hold `author_rules` or `deploy_rules` (the
    right to have written it), on every run path; its reach stays its declared dataset alone. Before, a Rule author's
    live rule ran at a load but never on a schedule. **To overrule:** say "(a) case-wide at once" or "(b) …".
+18. **Run counts across units (studio's L1.7 review).** A dataset's "runs today" counted every unit's runs into
+   it, and the number reached unit-scoped readers: the quota bar, a refusal's words (to the external service too),
+   the budget alert. **Chosen, on the strict reading:** only a holder of `administer_system` sees the number;
+   everyone else is told the quota is used, without a count. Recorded in ADR-141 Amendment 1. **To overrule:** say
+   "show the count".
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
