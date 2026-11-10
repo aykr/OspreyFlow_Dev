@@ -161,7 +161,7 @@ recovery use; map provider keys follow the same rule.
 | P9 | **Running it on the platform** (ADR-148 decisions 5, 13): the backup CronJob to S3 (ArcadeDB `BACKUP DATABASE`, ClickHouse `BACKUP … TO S3`), encrypted; a restore rehearsed and timed; ArcadeDB's graceful stop; Prometheus alerts for volume use, memory and a copy down; the volume-expansion procedure written; the recovery runbook's `cloud-platform` section with measured times | M | Backup and restore round trip on kind/k3d with an S3 stand-in, red first on a broken restore; a drained node keeps the graph answering (one copy down at a time). **Live (later):** the restore rehearsed in `ospreyflow-dev` |
 | P10 | **Sign-in claims from Entra ID** (ADR-148 decision 9): the claims `principal_auth` builds from (clearance, organisational unit, handling codes) mapped by settings, from a named claim or an Entra group table; one construction path kept; Keycloak not rendered on this profile | M | Access tests with tokens shaped as Entra's (extension attributes; groups; both missing → refused, never defaulted to cleared); the existing `principal_auth` cases unchanged; an unmapped group grants nothing |
 | P11 | *(Held until the client asks for AI)* **Bedrock as a model engine** in *Admin › Models* (ADR-135 Amendment 4, to reserve then): LiteLLM's Bedrock provider authenticated by the namespace's IAM role, no key; London region only; each job's model from a closed list | M | The P1/P2 tests on a Bedrock engine against a recorded fixture; no key stored; egress allow list gains Bedrock only when the engine is enabled |
-| P6 | *(after P9, ADR-148's merge order)* The case's gazetteer panel beside place search: add and remove a gazetteer (ruling 6) in the Glass, by keyboard | S | a keyboard case and registry id, red first; axe in three themes |
+| P6 | *(by platform-b after P5b, 10 November, so the demo does not wait on ADR-148's chain)* The case's gazetteer panel beside place search: add and remove a gazetteer (ruling 6) in the Glass, by keyboard | S | a keyboard case and registry id, red first; axe in three themes |
 
 **Added 9 November 2026 (ADR-148, the owner's client decision: hosting on the UK public sector client's Cloud Platform).** P7–P11 come after P5 and before P6 (P6 moves after P9). Everything is built and proven without the client's namespaces, on a local kind or k3d cluster set up to the platform's rules (the deny-egress policy, no ReadWriteMany storage class); the *live on the platform* lines wait for the client's access and are recorded later, so a step merges on its local exit. P11 is held until the client asks for AI. The Dockerfiles' `USER` line (numeric UID 10001) touches files other lanes own: P7 makes it first, as a shared commit, as schema commits are.
 
@@ -208,6 +208,13 @@ Follows merges, never runs ahead of them for the guides:
   pipeline DAG.
 - **D2c, the Cloud Platform deployment guide** (ADR-148, 9 November 2026; after P7–P10): the namespace and resource pull requests, the secrets each component reads, images to ECR, the egress list, Entra's claims, backups and restore, the volume-expansion and upgrade runbooks for ArcadeDB and ClickHouse; the architecture page shared with the client kept in step. Size M.
   Exit: every command in the guide run on kind/k3d; link and provenance gates green.
+
+## Two tracks (10 November 2026)
+
+**Track A, demo-ready:** L2.7, L1.5, P5, D2a, L2.10, L1.7a, P5b, L2.5b, L3.9, P6 (platform-b), L3.6, L1.7, L2.11,
+then D2b with captures from a deployment built from `main` on the owner's test server (a separate named deployment,
+never `osprey-small`). **Track B, the client's install (ADR-148):** P7, L1.10, P8, P9, P10, L1.9, D2c; P11 held.
+Track B's live exits wait for the client's access. Neither track waits on the other; P6 moved to platform-b for that.
 
 ## File ownership
 
@@ -333,7 +340,7 @@ the lane records each one in `REPORT.md`.
     commit immediately before the merge that builds it, as with a registry id.
 17. L2.8c before L2.9 (the rules lane's first step, on the journal L2.8b left).
 18. L2.7's Home section is built by agreement with rules, which owns Home; rules is told first.
-19. ADR-148 (the owner's client decision, 9 November 2026): P7 → P8 (after the owner's two rulings on ADR-148's questions 1 and 2) → P9 → P10 → D2c. L1.10 any time; L1.9 after P7 (it needs the profile's egress list). P11 only on the owner's word. P6 after P9.
+19. ADR-148 (the owner's client decision, 9 November 2026): P7 → P8 (after the owner's two rulings on ADR-148's questions 1 and 2) → P9 → P10 → D2c. L1.10 any time; L1.9 after P7 (it needs the profile's egress list). P11 only on the owner's word. P6 by platform-b after P5b (10 November: moved off the client chain so the demo track does not wait on it).
 20. P7's numeric-UID change to every `Dockerfile`'s `USER` line is a shared commit, made first and alone, as schema commits are; every lane rebases past it.
 21. `make cp-policy-check`'s Makefile target and `ci.yml` job are the owner's files: P7 writes them as `process/lanes/platform/P7_ci_makefile.diff` for the owner to apply, as L1.1's diff was.
 

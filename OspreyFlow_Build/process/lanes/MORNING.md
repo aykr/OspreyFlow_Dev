@@ -37,6 +37,14 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
    withdraws the copies, their links and their SAME_AS. A picture, or a Same/Not-the-same decision, on a retyped item
    is left out with its reason. **Why:** an element cannot change its class, and keeping unchanged items as the same
    element keeps L3.4's revert. **Recorded:** ADR-143 Amendment 7 (case writes it). **To overrule:** say which part.
+4. **The work split into two tracks, and P6 moved to platform-b** (your request, 10 November: group the work for a
+   demo-ready version and carve out the client's install). Track A (demo-ready) and Track B (ADR-148's
+   client steps) are in the build plan's new "Two tracks" section. **Chose:** to move P6, the gazetteer panel, from
+   after P9 (your client record's order) to platform-b after P5b. **Why:** the demo needs P6, and otherwise it would
+   wait two days on the client chain. **To overrule:** say "P6 after P9".
+5. **The demo deployment for screenshots** (D2b needs one, and Docker is off on this Mac). **Chose:** a separate named
+   deployment built from `main` on your test server, never touching `osprey-small`. **To overrule:** say where
+   instead.
 
 ## Restart, 8 November afternoon: O-six (six lanes), on your records of today
 
