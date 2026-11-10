@@ -2441,6 +2441,35 @@ _STUDIO_ROLE_RIGHT: dict[StudioRole, Right] = {
 }
 
 
+#: The built-in roles as a person reads them (Admin › Roles' catalogue, and the Studio's refusals).
+BUILT_IN_ROLE_LABELS = {
+    "analyst": "Analyst",
+    "data_engineer": "Data Engineer",
+    "osprey-admin": "Admin",
+    "reports_viewer": "Reports Viewer",
+    "rule_author": "Rule author",
+}
+_STUDIO_ACTION_WORDS: dict[StudioRole, str] = {
+    StudioRole.SOURCE_AUTHOR: "edit pipelines",
+    StudioRole.SOURCE_APPROVER: "deploy pipelines",
+    StudioRole.LOADER: "run pipelines",
+}
+
+
+def studio_role_refusal(role: StudioRole) -> str:
+    """A missing studio role in words (CARRIES row 40; ADR-145 Amendment 4 decision 12, the owner's
+    ruling (c)): the action, and the roles that hold its right, never the role's id or a person."""
+    right = _STUDIO_ROLE_RIGHT[role]
+    holders = [BUILT_IN_ROLE_LABELS[r] for r, rights in ROLE_RIGHTS.items() if right in rights]
+    if right in rights_for(SUPER_USER_PRESET):
+        holders.append("Super user")
+    held = " or ".join(holders) if holders else "no built-in role"
+    return (
+        f"You may not {_STUDIO_ACTION_WORDS[role]} here. It is held by the {held} role, or by a "
+        "custom role an administrator gives it to; ask an administrator in Admin › Roles."
+    )
+
+
 def require_studio_role(role: StudioRole) -> Any:
     """Ingest Studio action authorisation (`09_INGEST_STUDIO.md` §8) — a
     dependency factory rather than a bare dependency, since which role a
@@ -2457,7 +2486,7 @@ def require_studio_role(role: StudioRole) -> Any:
         if _STUDIO_ROLE_RIGHT[role] not in rights_for(principal.roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"principal lacks required studio role: {role.value}",
+                detail=studio_role_refusal(role),
             )
         return principal
 
@@ -16184,13 +16213,7 @@ def _today() -> date:
 
 
 def _built_in_roles() -> list[BuiltInRole]:
-    labels = {
-        "analyst": "Analyst",
-        "data_engineer": "Data Engineer",
-        "osprey-admin": "Admin",
-        "reports_viewer": "Reports Viewer",
-        "rule_author": "Rule author",
-    }
+    labels = BUILT_IN_ROLE_LABELS
     roles = [
         BuiltInRole(id=i, label=labels[i], rights=sorted(r, key=lambda x: x.value))
         for i, r in ROLE_RIGHTS.items()
