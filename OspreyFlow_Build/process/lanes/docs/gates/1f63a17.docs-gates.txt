@@ -1,0 +1,25 @@
+# docs gates at 1f63a17 on main 769d065
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/docs/OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
+doc-citations-check: 2251 file(s) scanned, every cited path exists.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/docs/OspreyFlow_Build .venv/bin/python -m tools.product_tree_link_check
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/docs/OspreyFlow_Build .venv/bin/python -m tools.provenance_annotation_check
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/docs/OspreyFlow_Build .venv/bin/python -m tools.demo_guide_check
+demo-guide-check: 12 registered demo(s), all documented.
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/docs/OspreyFlow_Build .venv/bin/python -m tools.no_branches_check
+no-branches-check: 1519 files, no branch named.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c /Users/ayankar/dev/osprey-wt/docs/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/docs/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items
+
+../OspreyFlow_Build/tests/test_no_branches_check.py ............         [100%]
+
+============================== 12 passed in 0.84s ==============================
+MAKE_EXIT=0
