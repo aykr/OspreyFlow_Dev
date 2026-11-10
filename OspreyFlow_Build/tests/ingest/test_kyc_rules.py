@@ -25,7 +25,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import duckdb
 import pytest
@@ -97,12 +97,31 @@ async def stores() -> AsyncIterator[dict[str, Any]]:
     }
     list_name, entries = parse_list(yaml.safe_load(SYNTHETIC_LIST.read_text()), use="local_development")
     await made["screening"].replace_list(list_name, entries)
+    made["list_name"] = list_name
     cfg = ValkeyConfig.from_env()
     made["valkey"] = Valkey(host=cfg.host, port=cfg.port, db=cfg.db)
     yield made
     for key in ("rules", "held", "alerts", "audit", "screening"):
         await made[key].close()
     await made["valkey"].aclose()
+
+
+class _OwnList:
+    """The real screening store, read for this file's own list alone (the orchestrator's ruling of
+    10 November 2026, after main went red on stack c). The gate screens against every list the
+    store holds, as a deployment does, and the stores are shared: `test_screening_refresh.py`
+    refreshes a "Synthetic list" naming the same synthetic people (Elena Petrova, Priya Nair), and
+    the lane stacks keep every earlier run's rows (`down` and `up` stop and start the same
+    containers). With both lists present each listed owner matched twice: four alerts, not two,
+    and every `owner_listed` doubled. Each test's graph is its own (`arcadedb_adapter` makes a fresh
+    database), so the list is the one store this file shares. Nothing else is filtered, and nothing
+    is stood in for: every entry is the store's own."""
+
+    def __init__(self, store: ScreeningListStore, list_name: str) -> None:
+        self._store, self._name = store, list_name
+
+    async def entries(self, entity_type: str) -> list[Any]:
+        return [e for e in await self._store.entries(entity_type) if e.list_name == self._name]
 
 
 def _gate(stores: dict[str, Any], graph: Any, rules: list[Any], case: str, loader: Principal = OFFICER) -> RuleGate:
@@ -117,7 +136,9 @@ def _gate(stores: dict[str, Any], graph: Any, rules: list[Any], case: str, loade
         rules=rules, investigation_id=case, graph=graph, analytics=AnalyticsDuckDBAdapter(con, SCHEME),
         scheme=SCHEME, alert_store=stores["alerts"], audit=stores["audit"], valkey=stores["valkey"],
         principal_for_owner=principal_for_owner, loader=loader, held_store=stores["held"],
-        screening=stores["screening"], compute=ComputeRustworkxAdapter(),
+        # `entries` is all the gate reads of the store (`kyc_rules`), which `_OwnList` answers.
+        screening=cast(ScreeningListStore, _OwnList(stores["screening"], stores["list_name"])),
+        compute=ComputeRustworkxAdapter(),
     )  # fmt: skip
 
 
