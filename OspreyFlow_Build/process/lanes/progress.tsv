@@ -21,7 +21,7 @@ glass	L2.3	M	done	The case screen's first lightening
 glass	L2.4	M	done	Admin regrouped into sections (part 1)
 admin	L2.4p2	L	done	Datasets' columns, Authors, linked cases, promotion policy; System's owners setting
 admin	L2.5	L	done	People and roles; custom roles; Rule author; teams and leads; Disable (what is owned today)
-admin	L2.5b	S	building	Disable…'s full transfer list, from case's ownership route (after L3.8)
+admin	L2.5b	S	done dcd3bff	Disable…'s full transfer list, from case's ownership route (after L3.8)
 admin	L2.6	M	done	Operations' promotions and ageing; Audit
 admin	L2.7	M	done 673285b	Needs you; the Model tab's count; Home's What you can do
 glass	L2.8	S	done	Alerts: G2, G3 and G9 fixed (access first)
