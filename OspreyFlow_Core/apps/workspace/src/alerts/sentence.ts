@@ -67,7 +67,8 @@ export interface SentenceDraft {
    * before teams, kept only for the rules saved with it (gap map Q5 (B)). */
   team: "case" | "my_team" | "team";
   teamId?: string;
-  runs: "pre_commit" | "post_commit" | "schedule";
+  /** ADR-146 decision 3: or when a screening list it reads refreshes (the rule editor's). */
+  runs: "pre_commit" | "post_commit" | "schedule" | "list_refresh";
   onHit: "load" | "hold";
   scope: Scope;
   /** ADR-133 stage (d): a scheduled rule's cadence, its hour (Europe/London) and, weekly, its day. */

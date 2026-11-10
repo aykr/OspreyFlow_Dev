@@ -313,6 +313,7 @@ export type Version = number;
 export type PendingAction = ("deploy" | "change" | "retire") | null;
 export type PendingBy = string | null;
 export type PendingVersion = number | null;
+export type PendingMakeLive = boolean;
 export type PendingByName = string | null;
 
 /**
@@ -340,6 +341,7 @@ export interface TypologyRule {
   pending_action?: PendingAction;
   pending_by?: PendingBy;
   pending_version?: PendingVersion;
+  pending_make_live?: PendingMakeLive;
   pending_by_name?: PendingByName;
   [k: string]: unknown;
 }

@@ -55,3 +55,13 @@ the real run leaves no whole-deployment rule, and a second run changes nothing.
 `test_the_teams_a_rule_may_go_to_list_members_to_the_lead_alone` now also asserts the deployer is told how many
 of each team hold the case (2 and 1), with no one named. Red with the count taken from the lead-only list
 (`member_count=len(members)`): 1 failed.
+
+## §5 The Glass editor (`alerts/RuleEditor.tsx`, the builder's editor mode), offline
+
+`alerts/RuleEditor.test.tsx`: 6 passed, then one plant at a time, red only in its own case.
+1. **The deployment's ontology offered** (the builder reads `/v1/ontology` in editor mode): red,
+   "offers the conditions from the dataset's live model, never another dataset's or the deployment's".
+2. ***Make live* before a test** (enabled on `busy` alone): red, "saves a draft on its dataset, and makes it live
+   only once tested".
+3. **The team named without its count:** red, "says where its alerts go before saving, with how many of the
+   team hold the case".

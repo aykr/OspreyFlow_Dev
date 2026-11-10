@@ -21,8 +21,11 @@ import type {
   QueuedAlert,
   RaiseAlertInput,
   RuleAuditPage,
+  RuleDatasetOffer,
+  RuleTestResult,
   RuleScheduleView,
   RuleVersion,
+  SentenceRuleInput,
   ScreeningLists,
   ScreeningListsOverview,
   ScreeningListStatus,
@@ -230,6 +233,30 @@ export const previewRule = (a: AlertsApi, sentence: RuleSentence) =>
 
 export const deploySentence = (a: AlertsApi, name: string, sentence: RuleSentence) =>
   call<TypologyRule>(caseUrl(a.apiBaseUrl, a.investigationId, "rules/sentence"), a.bearerToken, "Deploying the rule", { method: "POST", body: { name, sentence } });
+
+// --- the rule editor: a declared dataset, draft, Test and Make live (ADR-146 decision 3) ----------
+
+/** The datasets a new rule may watch: the case's own sources and composites, each with its live
+ * model's types and links, the lists it may read, and whether *Make live* waits for a second person. */
+export const listRuleDatasets = (a: AlertsApi) =>
+  call<RuleDatasetOffer[]>(caseUrl(a.apiBaseUrl, a.investigationId, "rules/datasets"), a.bearerToken, "Reading the datasets a rule may watch");
+
+/** A rule's draft saved: a new rule (no `ruleId`) or the one draft of an existing rule again. */
+export const saveRuleDraft = (a: AlertsApi, body: SentenceRuleInput, ruleId?: string) =>
+  ruleId
+    ? call<TypologyRule>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/draft`), a.bearerToken, "Saving the draft", { method: "PUT", body })
+    : call<TypologyRule>(caseUrl(a.apiBaseUrl, a.investigationId, "rules/drafts"), a.bearerToken, "Saving the draft", { method: "POST", body });
+
+export const readRuleDraft = (a: AlertsApi, ruleId: string) =>
+  call<RuleVersion | null>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/draft`), a.bearerToken, "Reading the draft");
+
+/** *Test*: the draft run over its dataset's last 30 days, as the person testing. */
+export const testRuleDraft = (a: AlertsApi, ruleId: string) =>
+  call<RuleTestResult>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/test`), a.bearerToken, "Testing the draft", { method: "POST" });
+
+/** *Make live*: at once, or waiting for a second person where the dataset's policy asks. */
+export const makeRuleLive = (a: AlertsApi, ruleId: string) =>
+  call<TypologyRule>(caseUrl(a.apiBaseUrl, a.investigationId, `rules/${encodeURIComponent(ruleId)}/make-live`), a.bearerToken, "Making the rule live", { method: "POST" });
 
 // --- screening lists as managed sources (ADR-133 decision 4, stage (c)) ---------------------------
 

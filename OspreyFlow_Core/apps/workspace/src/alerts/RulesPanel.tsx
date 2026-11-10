@@ -17,6 +17,7 @@ import { listPatterns } from "../patterns/api";
 import { deployRule, listRules, retireRule, type AlertsApi } from "./api";
 import { money, ruleTypologyLabel, when } from "./names";
 import { RuleApproval, RuleHistory, RuleSchedule } from "./RuleChanges";
+import { RuleEditor } from "./RuleEditor";
 import { SentenceBuilder } from "./SentenceBuilder";
 import { scheduleWords, sentenceSummary } from "./sentence";
 import { TEMPLATES, type RuleTemplate } from "./templates";
@@ -284,6 +285,9 @@ export function runsWords(rule: TypologyRule): string {
 export function statusWords(rule: TypologyRule): string {
   if (rule.status === "retired") return `retired ${rule.retired_at ? when(rule.retired_at) : ""}`.trim();
   if (rule.status === "pending") return "not running: waiting for a second person's approval";
+  // ADR-146 decision 3: saved and never yet made live, or asked to go live and waiting.
+  if (rule.status === "draft")
+    return rule.pending_action ? "a draft, waiting for a second person's approval to go live" : "a draft: not live";
   return `active${(rule.version ?? 1) > 1 ? `, version ${rule.version}` : ""}`;
 }
 
@@ -363,7 +367,9 @@ export function RulesPanel(props: RulesPanelProps) {
               <RuleApproval
                 {...props}
                 rule={rule}
-                canApprove={author && (props.isAdministrator ?? false) && rule.pending_by !== props.accountId}
+                // ADR-146 decision 3: a draft asked to go live under its dataset's second-person
+                // policy is another Author's to approve; a whole-deployment change, the administrator's.
+                canApprove={author && ((props.isAdministrator ?? false) || (rule.pending_make_live ?? false)) && rule.pending_by !== props.accountId}
                 onDone={(words) => {
                   setSaid(words);
                   reload();
@@ -396,6 +402,15 @@ export function RulesPanel(props: RulesPanelProps) {
           </li>
         ))}
       </ul>
+      <RuleEditor
+        {...props}
+        patterns={patterns}
+        canMakeLive
+        onChanged={(words) => {
+          setSaid(words);
+          reload();
+        }}
+      />
       <SentenceBuilder
         {...props}
         isAdministrator={props.isAdministrator ?? false}

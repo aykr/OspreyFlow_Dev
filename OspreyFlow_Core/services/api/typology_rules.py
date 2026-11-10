@@ -138,7 +138,8 @@ _COLUMNS = (
 _READ = (
     "id, investigation_id, owner_id, name, params, trigger, budget_ms, status, created_at, "
     "retired_at, dataset_id, version, "
-    "(SELECT row_to_json(p) FROM (SELECT action, proposed_by, version "
+    "(SELECT row_to_json(p) FROM (SELECT action, proposed_by, version, "
+    "tested_at IS NOT NULL AS make_live "
     "FROM typology_rule_versions v "
     "WHERE v.rule_id = typology_rules.id AND v.status = 'pending') p) AS pending"
 )
@@ -223,6 +224,7 @@ def _row_to_rule(row: asyncpg.Record) -> TypologyRule:
         pending_action=pending["action"] if pending else None,
         pending_by=pending["proposed_by"] if pending else None,
         pending_version=pending["version"] if pending else None,
+        pending_make_live=bool(pending.get("make_live")) if pending else False,
     )
 
 
