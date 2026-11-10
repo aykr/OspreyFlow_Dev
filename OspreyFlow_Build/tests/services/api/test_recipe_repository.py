@@ -518,8 +518,8 @@ async def test_a_rival_making_the_repository_first_is_joined_not_refused(
 async def test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Neither the user's nor the system's git config is read, at first use (`init.defaultBranch`
-    and the like) or when the index is opened: dulwich's only way to them is refused here."""
+    """Neither the user's nor the system's git config is read, at first use (the first ref a
+    user's config names) or when the index is opened: dulwich's only way to them is refused."""
     from dulwich.config import StackedConfig
 
     read: list[str] = []

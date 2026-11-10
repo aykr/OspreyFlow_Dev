@@ -303,7 +303,7 @@ def _open_repository(repo_root: Path) -> Repo:
     made beside the root's own, its `HEAD` already naming `refs/heads/main`, and renamed into
     place in one step. If another process's lands first, the rename fails and that repository is
     opened instead, so neither publish is refused and none lands on a ref `HEAD` then leaves. The
-    user's and the system's git config are not read for it (`init.defaultBranch` and the like).
+    user's and the system's git config are not read for it (such as the first ref it names).
 
     The repository's own config is read when it is opened (its format, `core.bare` and
     `core.worktree`); one that is bare or names a worktree other than `repo_root` is refused, so
