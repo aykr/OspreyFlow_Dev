@@ -44,6 +44,7 @@ from .alerts import AlertStore
 from .analytics_store import Close, open_analytics
 from .audit import AuditWriter
 from .auth import PrincipalResolver
+from .board_store import PostgresBoardItemStore
 from .cache import CachedQuery
 from .config import ApiConfig
 from .dataset_scope import DatasetStampingGraph, stamping
@@ -117,6 +118,8 @@ class RunResources:
     principal_resolver: PrincipalResolver
     #: ADR-139: installation-wide and case link-strength influencers.
     influencers: InfluencerStore
+    #: L3.6: the drawn watches a load is run against (ADR-143 Amendment 2 decision 8).
+    board_items: PostgresBoardItemStore
     recipe_repo_root: Path = RECIPES_REPO_ROOT
 
     @property
@@ -125,6 +128,11 @@ class RunResources:
         command-line load matches watches as the Conduit's own loads do (the L2.10 gate's finding,
         `test_run_resources.py`, which first stood this path's fail-closed gap in the open)."""
         return owner_reaches_dataset_in(self.datasets_store, self.investigations)
+
+    @property
+    def datasets(self) -> PostgresDatasetStore:
+        """The run's name for the datasets store (`RecipeRunDeps.datasets`)."""
+        return self.datasets_store
 
     def run_deps(self) -> RecipeRunDeps:
         """The dependencies of `run_recipe_as`, over the objects held here."""
@@ -158,6 +166,8 @@ class RunResources:
             staging_storage=self.staging_storage,
             list_store=self.list_store,
             watch_reach=self.watch_reach,
+            board_items=self.board_items,
+            datasets=self.datasets_store,
         )
 
     async def close(self) -> None:
@@ -180,6 +190,7 @@ class RunResources:
         await self.investigations.close()
         await self.target_models.close()
         await self.list_store.close()
+        await self.board_items.close()
         await self.principal_resolver.aclose()
         await self.close_analytics()
 
@@ -230,6 +241,8 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     )
     staging_storage = ObjectStorageConfig.from_env()
     list_store = await PostgresListStore.connect(config.postgres.dsn)
+    # L3.6: a command-line load runs the drawn watches on its dataset, as the Conduit's do.
+    board_items = await PostgresBoardItemStore.connect(config.postgres.dsn)
     # ADR-099 Amendment 6: no write names a dataset the registry does not hold.
     cast(DatasetStampingGraph, graph).check_against(datasets_store)
 
@@ -296,4 +309,5 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         compute=compute,
         jobs=jobs,
         principal_resolver=principal_resolver,
+        board_items=board_items,
     )

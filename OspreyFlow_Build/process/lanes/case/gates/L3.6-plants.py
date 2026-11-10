@@ -74,6 +74,14 @@ PLANTS = [
    "services/api/app.py",
    "            board_items=board_items,\n            datasets=datasets,\n",
    "", "../OspreyFlow_Build/tests/services/api/test_recipe_run_path.py", "manual_run"),
+  ("a command-line load not handed the drawn watches",
+   "services/api/run_resources.py",
+   "            board_items=self.board_items,\n            datasets=self.datasets_store,\n",
+   "", "../OspreyFlow_Build/tests/services/api/test_run_resources.py", "run_dependencies_are_the_stores"),
+  ("a command-line load's board store left open",
+   "services/api/run_resources.py",
+   "        await self.board_items.close()\n",
+   "", "../OspreyFlow_Build/tests/services/api/test_run_resources.py", "closing_closes"),
 ]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 out = []
