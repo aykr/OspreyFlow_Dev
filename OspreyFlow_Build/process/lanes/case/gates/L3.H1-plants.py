@@ -17,6 +17,12 @@ PLANTS = [
    "    if borrowed is not None and borrowed in datasets and not holds_the_original:",
    "    if False:",
    T + "test_drawn_watch_alerts.py", "borrowed_layer"),
+  # Part 2: a home case kept (built by 3609f74, before this step; shown red here, rule 15).
+  ("a dataset's home case removed like any other",
+   "services/api/app.py",
+   "    if await datasets.dataset_of_home_case(investigation.id) is not None:\n        raise HTTPException(",
+   "    if False:\n        raise HTTPException(",
+   T + "test_home_cases.py", "home_case_cannot_be_removed"),
 ]
 env = dict(os.environ, ARCADEDB_HTTP_PORT="59991", POSTGRES_PORT="59992", POSTGRES_PASSWORD="throwaway", VALKEY_PORT="59993", CLICKHOUSE_HTTP_PORT="59994")
 env.pop("OSPREY_LANE", None)
