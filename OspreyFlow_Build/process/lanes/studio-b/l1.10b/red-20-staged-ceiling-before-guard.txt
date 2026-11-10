@@ -1,4 +1,4 @@
-# head e4fdc56; plant: a staged Test judges the ceiling before its clearance guard
+# head a3e3ea3; plant: a staged Test judges the ceiling before its clearance guard
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py
 # must fail: test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
@@ -10,4 +10,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py:
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_without_steps
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline - assert "This load would write rows marked above this deployment's highest marking, OFFICIAL, so nothing was loaded. Mark the source no higher than OFFICIAL, or load it into a deployment cleared to hold it." not in ["This load would write rows m...
-1 failed, 8 passed, 1 warning in 3.70s
+1 failed, 8 passed, 1 warning in 3.69s

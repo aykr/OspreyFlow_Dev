@@ -30,6 +30,7 @@ HMP = CORE / "packages/demo_fixtures/hmp_network.py"
 HMP_EVENTS = CORE / "packages/demo_fixtures/hmp.py"
 CORP = CORE / "packages/demo_fixtures/fixture_corp.py"
 ENRON = CORE / "scripts/seed_enron.py"
+CATALOGUE = CORE / "services/ingest/staging_catalogue.py"
 TABLES = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py"
 PACKS = "../OspreyFlow_Build/tests/test_seed_internal_ceiling.py"
 VERIFYING = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py"
@@ -172,6 +173,11 @@ PLANTS = [
        '    if False:  # PLANT\n')],
      [LIVE], ["test_a_refused_staged_load_leaves_no_step_table_in_the_object_store",
               "test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store"], None),
+    ("join-meets-none", "the control's Join meets no owner, so the join guard is never reached (a left join keeps every booking)",
+     [(CATALOGUE, "        matches = index.get(key, []) if key is not None else []\n",
+       "        matches = []  # PLANT\n")],
+     [TABLES], ["test_a_staged_run_within_the_ceiling_keeps_its_step_tables"],
+     "the join met no marked owner"),
 ]
 
 

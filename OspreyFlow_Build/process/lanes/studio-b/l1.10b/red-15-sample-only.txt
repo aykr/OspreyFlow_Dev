@@ -1,4 +1,4 @@
-# head e4fdc56; plant: Verify judges only its sample, not the whole file
+# head a3e3ea3; plant: Verify judges only its sample, not the whole file
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py
 # must fail: test_test_judges_every_row_of_the_file_not_only_its_sample; for the reason 'AssertionError: {"rows_read":'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
@@ -10,4 +10,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py:
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample - AssertionError: {"rows_read":10000,"rows_deduplicated":0,"rows_already_loaded":0,"sample_is_whole_source":false,"values_masked":false,"entities_by_type":{"Endpoint":{"created":10000,"referenced":0}},"edges_by_type":{},"rejections":[],"nodes":[{"id":"01M73...
-1 failed, 8 passed, 1 warning in 4.31s
+1 failed, 8 passed, 1 warning in 4.35s
