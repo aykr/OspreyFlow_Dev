@@ -273,3 +273,80 @@ def test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused() ->
         ceiling_module.refuse_fixed_markings_above_the_ceiling(
             recipe.model_copy(update={"row_template": template}), ceiling
         )
+
+
+def _bound_recipe(*, default: str, when: bool = False) -> Any:
+    """Every element's classification read from `cls`, with `default` as its floor (so no element
+    is fixed and only the floor can decide), the first person (with `when`) written only when `go`
+    is `yes`."""
+    from schemas.ingest import RecipeCondition
+    from tests.ingest.test_load_record_created_and_merged import _recipe
+
+    recipe = _recipe()
+    bound = {"classification": {"field": "cls"}}
+    others = {"classification": {"field": "cls_others"}}
+    entities = [
+        e.model_copy(update={"handling": bound if i == 0 else others})
+        for i, e in enumerate(recipe.row_template.entities)
+    ]
+    if when:
+        condition = RecipeCondition(field="go", equals="yes")
+        entities[0] = entities[0].model_copy(update={"when": condition})
+    edges = [e.model_copy(update={"handling": others}) for e in recipe.row_template.edges]
+    template = recipe.row_template.model_copy(update={"entities": entities, "edges": edges})
+    defaults = recipe.defaults.model_copy(
+        update={"handling": {**recipe.defaults.handling, "classification": default}}
+    )
+    return recipe.model_copy(update={"row_template": template, "defaults": defaults})
+
+
+def test_an_empty_cell_takes_the_element_s_default_and_is_judged_by_it() -> None:
+    """A bound element whose default is above the ceiling writes an empty-celled row at that
+    default (`row_handling_override`), so it is refused (the re-review of L1.10, item 1)."""
+    from tests.ingest.test_load_record_created_and_merged import _row
+
+    ceiling = DeploymentCeiling(marking="OFFICIAL", scheme=SCHEME)
+    recipe = _bound_recipe(default="OFFICIAL-SENSITIVE")
+    with pytest.raises(AboveTheDeploymentCeiling):
+        ceiling_module.refuse_rows_above_the_ceiling(
+            recipe, [{**_row("SYN-1", "SYN-2", 1), "cls": "", "cls_others": ""}], ceiling
+        )
+
+
+def test_a_condition_s_column_keeps_rows_apart_when_judged_once_per_combination() -> None:
+    """Rows are judged once per distinct combination of the columns their marking depends on, the
+    condition's included: a SECRET row whose element is skipped must not stand for one whose
+    element is written (the re-review of L1.10, item 2)."""
+    from tests.ingest.test_load_record_created_and_merged import _row
+
+    ceiling = DeploymentCeiling(marking="OFFICIAL-SENSITIVE", scheme=SCHEME)
+    recipe = _bound_recipe(default="OFFICIAL", when=True)
+    skipped = {**_row("SYN-1", "SYN-2", 1), "cls": "SECRET", "cls_others": "", "go": "no"}
+    written = {**_row("SYN-3", "SYN-4", 2), "cls": "SECRET", "cls_others": "", "go": "yes"}
+    with pytest.raises(AboveTheDeploymentCeiling):
+        ceiling_module.refuse_rows_above_the_ceiling(recipe, [skipped, written], ceiling)
+    ceiling_module.refuse_rows_above_the_ceiling(recipe, [skipped], ceiling)
+
+
+def test_a_bound_element_s_default_above_the_ceiling_is_refused_before_any_staging() -> None:
+    """The default a bound element falls back to is a floor no column lowers, so a staged pipeline
+    is refused for it before its step tables (the re-review of L1.10, minor 4)."""
+    ceiling = DeploymentCeiling(marking="OFFICIAL", scheme=SCHEME)
+    with pytest.raises(AboveTheDeploymentCeiling):
+        ceiling_module.refuse_fixed_markings_above_the_ceiling(
+            _bound_recipe(default="OFFICIAL-SENSITIVE"), ceiling
+        )
+
+
+def test_a_missing_column_is_not_read_as_an_empty_one() -> None:
+    """Judged once per combination, a row without the classification column must not be taken
+    for an earlier row whose cell is empty (the re-review of L1.10, minor 5)."""
+    from tests.ingest.test_load_record_created_and_merged import _row
+
+    ceiling = DeploymentCeiling(marking="OFFICIAL-SENSITIVE", scheme=SCHEME)
+    recipe = _bound_recipe(default="OFFICIAL")
+    empty = {**_row("SYN-1", "SYN-2", 1), "cls": None, "cls_others": ""}
+    missing = {**_row("SYN-3", "SYN-4", 2), "cls_others": ""}
+    with pytest.raises(AboveTheDeploymentCeiling) as raised:
+        ceiling_module.refuse_rows_above_the_ceiling(recipe, [empty, missing], ceiling)  # type: ignore[list-item]
+    assert "cannot be read" in str(raised.value)

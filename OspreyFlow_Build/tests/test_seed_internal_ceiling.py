@@ -78,8 +78,9 @@ def test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest(repo: Pa
     for name in undeclared:
         if name in ("public", "enron"):  # these need their own arguments or data first
             continue
-        with pytest.raises(SeedRefused):
+        with pytest.raises(SeedRefused) as raised:
             _seed(repo, name, Runner())
+        assert "declares no highest marking" in str(raised.value), name
 
 
 def test_cyber_intrusions_declaration_holds_for_every_write() -> None:
