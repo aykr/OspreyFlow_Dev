@@ -21,8 +21,13 @@ CEILING = CORE / "services/ingest/ceiling.py"
 PIPELINE = CORE / "services/api/pipeline_run.py"
 APP = CORE / "services/api/app.py"
 SITE = CORE / "harness/site.py"
+SCOPE = CORE / "services/api/dataset_scope.py"
+SEEDS = CORE / "scripts/seed_internal.py"
 LOADS = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py"
 UPLOADS = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py"
+BACKSTOP = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_backstop.py"
+PACKS = "../OspreyFlow_Build/tests/test_seed_internal_ceiling.py"
+BACKSTOP_LINE = "        refuse_writes_above_the_ceiling(stamped)  # ADR-148 decision 10, the backstop\n"
 
 CHECK_COMMENT = (
     "    # ADR-148 decision 10: the deployment's marking ceiling, judged over every row before raw\n"
@@ -97,6 +102,20 @@ PLANTS = [
     ("picture-check-removed", "an entity's picture's marking not judged against the ceiling",
      [(APP, *_upload(PIC_NAME))], [UPLOADS],
      ["test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored"], None),
+    ("backstop-removed", "the stamping graph's writes not judged against the ceiling",
+     [(SCOPE, None, None)], [BACKSTOP],
+     ["test_a_node_above_the_ceiling_never_reaches_the_store",
+      "test_a_link_above_the_ceiling_never_reaches_the_store",
+      "test_a_bulk_load_above_the_ceiling_never_reaches_the_store"], "DID NOT RAISE"),
+    ("pack-refusal-removed", "a demo pack's declared highest not judged before its seed",
+     [(SEEDS, "        _refuse_a_pack_above_the_ceiling(dataset, spec, directory)\n",
+       "        pass  # PLANT\n")], [PACKS],
+     ["test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts",
+      "test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest"], "DID NOT RAISE"),
+    ("undeclared-pack-passes", "a pack that declares nothing read as the scheme's lowest",
+     [(SEEDS, "    held = spec.highest_marking or scheme.classification[-1]\n",
+       "    held = spec.highest_marking or scheme.classification[0]  # PLANT\n")], [PACKS],
+     ["test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts"], "DID NOT RAISE"),
 ]
 
 
@@ -119,11 +138,17 @@ def main() -> int:
     head = subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"], cwd=CORE, capture_output=True, text=True
     ).stdout.strip()
-    originals = {path: path.read_bytes() for path in {ENGINE, CEILING, PIPELINE, APP, SITE}}
+    originals = {
+        path: path.read_bytes() for path in {ENGINE, CEILING, PIPELINE, APP, SITE, SCOPE, SEEDS}
+    }
     missed: list[tuple[str, str]] = []
     for n, (slug, what, edits, files, must_fail, reason) in enumerate(PLANTS, start=1):
         texts = {path: data.decode() for path, data in originals.items()}
         for path, old, new in edits:
+            if old is None:  # every backstop line in the file, removed
+                assert texts[path].count(BACKSTOP_LINE) == 3, (slug, path.name)
+                texts[path] = texts[path].replace(BACKSTOP_LINE, "")
+                continue
             assert texts[path].count(old) == 1, (slug, path.name, old)
             texts[path] = texts[path].replace(old, new)
         try:
@@ -151,7 +176,9 @@ def main() -> int:
         )
     for path, data in originals.items():
         assert path.read_bytes() == data, path
-    (HERE / "green.txt").write_text(f"# head {head}; no plant\n{run([LOADS, UPLOADS])}\n")
+    (HERE / "green.txt").write_text(
+        f"# head {head}; no plant\n{run([LOADS, UPLOADS, BACKSTOP, PACKS])}\n"
+    )
     print("missed:", missed or "none")
     return 1 if missed else 0
 
