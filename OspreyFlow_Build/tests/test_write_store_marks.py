@@ -28,16 +28,17 @@ SHAPES = {
     ),
     "an_empty_list": "import pytest\n\npytestmark: list = []\n\n\ndef test_a():\n    pass\n",
     "already_marked": "import pytest\n\npytestmark = [pytest.mark.store]\n\n\ndef test_a():\n    pass\n",
+    "a_tuple": "import pytest\n\npytestmark = (pytest.mark.usefixtures('x'),)\n\n\n@pytest.fixture\ndef x():\n    return 1\n\n\ndef test_a():\n    pass\n",
+    "non_ascii_before_the_mark": "import pytest\n\npytestmark = pytest.mark.filterwarnings('ignore:caf\u00e9 \u2014 x')\n\n\ndef test_a():\n    pass\n",
 }
 
 
-def _collect(path: Path, *args: str) -> str:
-    ran = subprocess.run(
+def _collect(path: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider", "-c", os.devnull,
          "--rootdir", str(path.parent), "-W", "ignore::pytest.PytestUnknownMarkWarning", *args, str(path)],
         capture_output=True, text=True, cwd=path.parent,
     )  # fmt: skip
-    return ran.stdout
 
 
 @pytest.mark.parametrize("shape", list(SHAPES))
@@ -51,11 +52,21 @@ def test_each_shape_is_marked_once_keeps_its_own_marks_and_pytest_selects_it(tmp
     compile(once, shape, "exec")
     path = tmp_path / f"test_{shape}.py"
     path.write_text(once)
-    assert "test_a" in _collect(path, "-m", "store"), once
-    assert "no tests collected" in _collect(path, "-m", "not store") or "deselected" in _collect(path, "-m", "not store")
+    # By node id and exit code: a file pytest cannot import also prints its name, which holds "test_a" for five shapes.
+    selected = _collect(path, "-m", "store")
+    assert selected.returncode == 0 and f"{path.name}::test_a" in selected.stdout, selected.stdout
+    unselected = _collect(path, "-m", "not store")
+    assert unselected.returncode == 5 and "::test_a" not in unselected.stdout, unselected.stdout  # 5: none collected
     for kept in ("usefixtures('x')", "filterwarnings('ignore')"):
         if kept in source:
             assert kept in once, once
+
+
+def test_a_pytestmark_that_is_a_bare_name_is_refused_not_guessed() -> None:
+    from tools.write_store_marks import UnmarkableError
+
+    with pytest.raises(UnmarkableError, match="MARKS"):
+        marked("import pytest\n\nMARKS = [pytest.mark.usefixtures('x')]\npytestmark = MARKS\n")
 
 
 def test_check_names_each_unmarked_file_and_writing_marks_them(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

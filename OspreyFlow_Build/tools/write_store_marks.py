@@ -18,10 +18,15 @@ from __future__ import annotations
 
 import argparse
 import ast
+import io
 import sys
 from pathlib import Path
 
 MARK = "pytest.mark.store"
+
+
+class UnmarkableError(ValueError):
+    """A `pytestmark` this script cannot extend without guessing what it holds (a bare name, a call result)."""
 BUILD = Path(__file__).resolve().parents[1]
 
 
@@ -56,7 +61,7 @@ def marked(source: str) -> str:
     if is_marked(source):
         return source
     tree = ast.parse(source)
-    lines = source.splitlines(keepends=True)
+    lines = io.StringIO(source, newline="").readlines()  # line breaks as Python's own tokenizer counts them
     node = _pytestmark(tree)
     if node is not None and node.value is not None:
         value = node.value
@@ -71,8 +76,12 @@ def marked(source: str) -> str:
                 new = f"{body}{'' if body.endswith(',') else ','}\n    {MARK},\n]"
             else:
                 new = f"{body}{' ' if body.endswith(',') else ', '}{MARK}]"
-        else:
+        elif isinstance(value, ast.Tuple):
+            new = f"[*{old}, {MARK}]"
+        elif isinstance(value, (ast.Call, ast.Attribute)):
             new = f"[{old}, {MARK}]"
+        else:
+            raise UnmarkableError(f"pytestmark = {old}: mark this file by hand, since what {old} holds is not known here")
         return source[:start] + new + source[end:]
     has_pytest = any(
         isinstance(n, ast.Import) and any(a.name == "pytest" and a.asname is None for a in n.names) for n in tree.body
@@ -105,19 +114,26 @@ def main(argv: list[str] | None = None) -> int:
         from tools.live_select import Repo
 
         files = Repo().live_set()
-    missing, written = [], []
+    missing: list[str] = []
+    changes: dict[Path, str] = {}
     for rel in files:
         path = BUILD / rel
-        source = path.read_text(encoding="utf-8")
+        source = path.read_bytes().decode("utf-8")  # bytes, so line endings are kept as they are
         if is_marked(source):
             continue
         if args.check:
             missing.append(rel)
             continue
-        new = marked(source)
-        ast.parse(new)  # never write a file Python cannot read
-        path.write_text(new, encoding="utf-8")
-        written.append(rel)
+        try:
+            new = marked(source)
+            ast.parse(new)
+        except (UnmarkableError, SyntaxError) as exc:
+            print(f"{rel}: {exc}; nothing was written", file=sys.stderr)
+            return 2
+        changes[path] = new
+    for path, new in changes.items():  # only once every file has been marked and read back
+        path.write_bytes(new.encode("utf-8"))
+    written = list(changes)
     if args.check:
         for rel in missing:
             print(f"not marked store: {rel}")

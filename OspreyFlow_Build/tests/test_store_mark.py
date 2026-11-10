@@ -60,6 +60,22 @@ def test_unmarked_and_swallowed():
     except BaseException:
         pass  # a client that hides every error: the report still sees the connection
 
+@pytest.fixture
+def reaches_arcadedb_at_teardown():
+    yield
+    with pytest.raises(Exception):
+        _arcadedb()
+
+def test_unmarked_whose_fixture_reaches_a_store_at_teardown(reaches_arcadedb_at_teardown):
+    pass
+
+def test_unmarked_clickhouse_by_connect_ex():
+    s = socket.socket()
+    try:
+        assert s.connect_ex(("127.0.0.1", 59994)) != 0  # closed: the attempt is what counts
+    finally:
+        s.close()
+
 @pytest.mark.store
 def test_marked():
     with pytest.raises(Exception):
@@ -78,7 +94,10 @@ def listener_port():
     return int(os.environ["T1_LISTENER"])
 '''
 
-UNMARKED = ["test_unmarked_arcadedb", "test_unmarked_postgres", "test_unmarked_valkey", "test_unmarked_and_swallowed"]
+UNMARKED = [
+    "test_unmarked_arcadedb", "test_unmarked_postgres", "test_unmarked_valkey", "test_unmarked_and_swallowed",
+    "test_unmarked_whose_fixture_reaches_a_store_at_teardown", "test_unmarked_clickhouse_by_connect_ex",
+]  # fmt: skip
 
 
 @pytest.fixture(scope="module")
@@ -118,7 +137,8 @@ def test_report_mode_names_every_unmarked_store_test_and_fails_nothing(tmp_path:
     assert reached["test_unmarked_arcadedb"] == ["ArcadeDB on port 59991"]
     assert reached["test_unmarked_postgres"] == ["Postgres on port 59992"]
     assert reached["test_unmarked_valkey"] == ["Valkey on port 59993"]
-    assert "4 unmarked test(s) reached a store" in ran.stdout
+    assert reached["test_unmarked_clickhouse_by_connect_ex"] == ["ClickHouse on port 59994"]
+    assert "6 unmarked test(s) reached a store" in ran.stdout
 
 
 def test_fail_mode_fails_each_unmarked_store_test_even_one_that_swallows_the_error(
@@ -138,11 +158,26 @@ def test_a_bad_mode_stops_the_run(tmp_path: Path, listener: int) -> None:
     assert ran.returncode != 0 and "OSPREY_STORE_MARK must be report or fail" in ran.stdout + ran.stderr
 
 
-def test_the_store_ports_are_the_run_s_settings_and_the_object_store_s() -> None:
+def test_the_store_ports_are_the_run_s_settings_or_the_code_s_defaults() -> None:
+    """CI's offline job pins no port: the defaults the code falls back to are watched then."""
     from tests.store_mark import store_ports
 
-    ports = store_ports({"ARCADEDB_HTTP_PORT": "2492", "POSTGRES_PORT": "55434", "MINIO_ENDPOINT": "localhost:9002"})
-    assert ports == {2492: "ArcadeDB", 55434: "Postgres", 9002: "the object store"}
+    assert store_ports({"ARCADEDB_HTTP_PORT": "2492", "POSTGRES_PORT": "55434"}) == {
+        2492: "ArcadeDB", 55434: "Postgres", 6379: "Valkey", 8123: "ClickHouse"
+    }  # fmt: skip
+    assert store_ports({}) == {2480: "ArcadeDB", 5433: "Postgres", 6379: "Valkey", 8123: "ClickHouse"}
+
+
+def test_a_clean_run_still_writes_its_report_so_no_stale_list_survives(tmp_path: Path) -> None:
+    (tmp_path / "test_clean.py").write_text("def test_x():\n    pass\n")
+    report = tmp_path / "report.json"
+    report.write_text('{"stale::test": ["ArcadeDB on port 1"]}')
+    env = {**{k: v for k, v in os.environ.items() if k not in ("OSPREY_LANE", "PYTEST_ADDOPTS", "OSPREY_STORE_MARK")},
+           "OSPREY_STORE_MARK_REPORT": str(report), "PYTHONPATH": str(BUILD)}
+    subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "tests.store_mark", "-p", "no:cacheprovider",
+                    "-c", os.devnull, "--rootdir", str(tmp_path), str(tmp_path / "test_clean.py")],
+                   cwd=tmp_path, env=env, capture_output=True, text=True, check=True)  # fmt: skip
+    assert json.loads(report.read_text()) == {}
 
 
 def test_the_suite_s_own_conftest_loads_it(pytestconfig: pytest.Config) -> None:
