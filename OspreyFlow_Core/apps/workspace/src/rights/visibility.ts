@@ -107,3 +107,15 @@ export function canReadPublished(rights: Rights): boolean {
 export function canExportPacks(rights: Rights): boolean {
   return has(rights, "export");
 }
+
+/** ADR-146 decision 4: *Watch for this* and *Save as a watch*, made in the Glass and kept in Rules
+ * and Monitoring, whose gate the routes ask for: offered to whom the place is offered and who keeps
+ * watches. */
+export function canKeepWatches(rights: Rights): boolean {
+  return has(rights, "keep_watches") && (rights === null || placesFor(rights).includes("rules"));
+}
+
+/** ADR-146 decision 7: *Raise an alert…*, a Glass action of whoever investigates the case. */
+export function canRaiseAlerts(rights: Rights): boolean {
+  return has(rights, "investigate");
+}

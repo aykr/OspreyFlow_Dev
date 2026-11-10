@@ -6,7 +6,8 @@ An alert is counted for a reader only when all of these hold, each in the query:
 
 - **its audience**, as the one queue reads it (`services/api/alerts.py` `queue_scope`): a
   typology alert is its case's; a hotlist or monitor alert is its owner's, and its owner's team's
-  when shared;
+  when shared; a rule's alert routed to a named team (`routed`, ADR-146 decision 8) its case's
+  team members' alone (the home case's Authors read it in the queue, not in trends);
 - **the reader's datasets** (ADR-099, `reach_clause`): an alert of another dataset is not in the
   case's world, one naming none stays in reach;
 - **its handlings are known**, so an alert kept before they were is counted for no one;
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 from schemas.analytics import AlertTrendRequest
 from schemas.domain import Principal
+from schemas.rights import teams_of
 
 from .access_filter import AccessFilter, SqlPredicate
 
@@ -50,12 +52,24 @@ def alert_predicate(
     if req.window.valid_to is not None:
         clauses.append("raised_at <= ?")
         params.append(req.window.valid_to)
+    # ADR-146 decision 8: a rule's alert routed to a named team is its case's, for the team's
+    # members alone (`team` holds the team's role id; the reader's teams are the custom roles their
+    # token carries now), never its deployer's as an owner.
+    teams = teams_of(principal.roles)
+    routed = (
+        f"OR (audience = 'routed' AND investigation_scope = ? "
+        f"AND team IN ({','.join('?' for _ in teams)}))"
+        if teams
+        else ""
+    )
     clauses.append(
         "((audience = 'case' AND investigation_scope = ?) "
-        "OR (audience <> 'case' AND owner_id = ?) "
-        "OR (audience = 'team' AND team = ?))"
+        "OR (audience IN ('team', 'owner') AND owner_id = ?) "
+        f"OR (audience = 'team' AND team = ?) {routed})"
     )
     params += [req.investigation_scope, principal.id, principal.org_unit]
+    if teams:
+        params += [req.investigation_scope, *teams]
     if principal.datasets is not None:
         if principal.datasets:
             marks = ",".join("?" for _ in principal.datasets)

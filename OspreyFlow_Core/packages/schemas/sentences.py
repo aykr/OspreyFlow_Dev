@@ -237,8 +237,11 @@ SentenceStrength = Annotated[StrengthReaches | RarityReaches, Field(discriminato
 
 
 SentenceSeverity = Literal["low", "medium", "high"]
-#: Who the alert goes to: the case's queue, or labelled for the author's own team within it.
-SentenceTeam = Literal["case", "my_team"]
+#: Who the alert goes to: the case's queue; a named team (ADR-146 decision 8: only the team's
+#: members, and the home case's Authors, see it); or `my_team`, the label written before teams,
+#: which changes nobody's reading (gap map Q5 (B): "my team" means the named team only, so the
+#: builder offers the named teams now and keeps `my_team` only for the rules saved with it).
+SentenceTeam = Literal["case", "my_team", "team"]
 #: As data loads (before or after commit), or on a schedule (ADR-133 decision 1, stage (d)).
 SentenceRuns = Literal["pre_commit", "post_commit", "schedule"]
 #: How often a scheduled rule runs (decision 1: "daily or weekly").
@@ -287,6 +290,8 @@ class RuleSentence(BaseModel):
     strength: SentenceStrength | None = None
     severity: SentenceSeverity = "medium"
     team: SentenceTeam = "case"
+    #: ADR-146 decision 8: the named team's role id (ADR-112 Amendment 5), for `team` only.
+    team_id: str | None = Field(default=None, min_length=1, max_length=120)
     runs: SentenceRuns = "post_commit"
     on_hit: SentenceOnHit = "load"
     scope: SentenceScope = "this_case"
@@ -321,6 +326,8 @@ class RuleSentence(BaseModel):
                 "strength and rarity are read from the stored graph, so a rule that names one "
                 "runs after commit or on a schedule"
             )
+        if (self.team == "team") != (self.team_id is not None):
+            raise ValueError("an alert that goes to a team names the team, and only then")
         if self.scope == "just_me":
             if self.team != "case":
                 raise ValueError("a rule just for you raises its alerts for you alone")

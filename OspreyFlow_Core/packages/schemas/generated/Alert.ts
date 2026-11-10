@@ -27,6 +27,10 @@ export type CloseProposedBy = string | null;
 export type CloseProposedAt = string | null;
 export type Severity = ("low" | "medium" | "high") | null;
 export type Team = string | null;
+export type RoutedTeam = string | null;
+export type SuppressedUntil = string | null;
+export type SuppressReason = string | null;
+export type SuppressedBy = string | null;
 
 /**
  * A persisted alert row — `06_DECISIONS.md` ADR-038/039, Phase 7 Stage 6a's own foundation.
@@ -71,6 +75,10 @@ export interface Alert {
   close_proposed_at?: CloseProposedAt;
   severity?: Severity;
   team?: Team;
+  routed_team?: RoutedTeam;
+  suppressed_until?: SuppressedUntil;
+  suppress_reason?: SuppressReason;
+  suppressed_by?: SuppressedBy;
   [k: string]: unknown;
 }
 export interface Interval {

@@ -138,6 +138,8 @@ import { journeyWords, startJourney, takeJourney, weeksFor, type AlertJourney } 
 import { useAlertBadges } from "./reports/alertBadges";
 import {
   canDownloadFeed,
+  canKeepWatches,
+  canRaiseAlerts,
   landingView,
   railEntries,
   showsInspector,
@@ -2241,6 +2243,11 @@ export function App() {
                           ? { apiBaseUrl: API_BASE_URL, bearerToken, investigationId }
                           : undefined
                       }
+                      watch={
+                        investigationId && canKeepWatches(rights)
+                          ? { apiBaseUrl: API_BASE_URL, bearerToken, investigationId }
+                          : undefined
+                      }
                       sharedContacts={
                         ontologySchema
                           ? {
@@ -2353,6 +2360,8 @@ export function App() {
                             investigationId={investigationId}
                             schema={ontologySchema}
                             selectedNodeIds={selectedNodeIds}
+                            canKeepWatches={canKeepWatches(rights)}
+                            canRaiseAlerts={canRaiseAlerts(rights)}
                           />
                         ),
                       },

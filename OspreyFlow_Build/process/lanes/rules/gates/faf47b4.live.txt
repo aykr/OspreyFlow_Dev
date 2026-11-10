@@ -1,0 +1,237 @@
+# L2.10's live run: the rules lease, stack a, at faf47b4 (tree 2c2cc7573935951767cb1415bfcde4bead80690a, rebased on main at 451a648), start 2026-11-09T06:07:07Z
+# Files: ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_monitoring_routes.py ../OspreyFlow_Build/tests/services/api/test_monitoring_settings.py ../OspreyFlow_Build/tests/services/api/test_monitoring_dashboard.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_pack_store.py ../OspreyFlow_Build/tests/services/api/test_pack_store_query.py ../OspreyFlow_Build/tests/services/api/test_pack_export.py ../OspreyFlow_Build/tests/services/api/test_alert_view_explains_live.py ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py ../OspreyFlow_Build/tests/services/api/test_alert_facts.py ../OspreyFlow_Build/tests/services/api/test_case_queue_reads.py ../OspreyFlow_Build/tests/services/api/test_alert_close_approval.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_monitors.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_hotlists.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_change_stream.py ../OspreyFlow_Build/tests/services/api/test_reports.py ../OspreyFlow_Build/tests/services/api/test_report_freshness.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_trend_store.py ../OspreyFlow_Build/tests/services/api/test_watch_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_risk.py ../OspreyFlow_Build/tests/ingest/test_revert_load.py ../OspreyFlow_Build/tests/services/api/test_entity_pictures.py ../OspreyFlow_Build/tests/services/api/test_link_changes_store.py ../OspreyFlow_Build/tests/services/api/test_link_changes_withheld_live.py ../OspreyFlow_Build/tests/scenarios/test_phase3_working_set.py 
+........................................................................ [ 13%]
+..........................F............................................. [ 27%]
+........................................................................ [ 41%]
+........................................................................ [ 55%]
+.............................................................F.......... [ 69%]
+.....................F.................................................. [ 83%]
+........................................................................ [ 97%]
+...........                                                              [100%]
+=================================== FAILURES ===================================
+_ test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum _
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x30a337670>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x30a335010>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x3034f2630>
+
+    def test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum(
+        api_env: None, keypair: tuple, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from services.api import rules_place
+        from services.api.app import app
+    
+        private_key, _ = keypair
+        me, them = f"addr-{new_id()}", f"addr-other-{new_id()}"
+        reader = {"Authorization": f"Bearer {sign_token(private_key, default_claims(sub=me))}"}
+        other = {"Authorization": f"Bearer {sign_token(private_key, default_claims(sub=them))}"}
+        with TestClient(app) as client:
+            made = [client.post("/v1/investigations", headers=h, json=new_case()) for h in (reader, other)]
+            assert [m.status_code for m in made] == [201, 201], [m.text for m in made]
+            case, other_case = (m.json()["id"] for m in made)
+            ids = client.portal.call(_seed, app, case, other_case, me)  # type: ignore[union-attr]
+    
+            # Through the real `get_principal` and `case_of`: the alert, in its own case, with its node.
+            opened = client.get(f"/v1/alerts/{ids['readable']}", headers=reader)
+            assert opened.status_code == 200, opened.text
+            assert opened.json()["investigation_id"] == case
+            assert len(opened.json()["explanation"]["nodes"]) == 1, opened.json()
+    
+            # Refused alike: the same status and the same bytes.
+            missing = client.get(f"/v1/alerts/no-such-alert-{new_id()}", headers=reader)
+            answers = {
+                "hidden": client.get(f"/v1/alerts/{ids['hidden']}", headers=reader),
+                "elsewhere": client.get(f"/v1/alerts/{ids['elsewhere']}", headers=reader),
+            }
+            assert missing.status_code == 404 and "alert_not_found" in missing.text, missing.text
+            for name, refused in answers.items():
+                assert (refused.status_code, refused.content) == (404, missing.content), (name, refused.text)
+    
+            paths = {"missing": f"/v1/alerts/no-such-alert-{new_id()}", "elsewhere": f"/v1/alerts/{ids['elsewhere']}",
+                     "hidden": f"/v1/alerts/{ids['hidden']}"}  # fmt: skip
+            # The reads alone, the wait switched off; then as served.
+            monkeypatch.setattr(rules_place, "sleep", _no_wait)
+            raw = {name: _times(client, path, reader) for name, path in paths.items()}
+            monkeypatch.undo()
+            held = {name: _times(client, path, reader) for name, path in paths.items()}
+    
+        q = rules_place.ADDRESS_REFUSAL_QUANTUM
+        lines = [f"quantum {q * 1000:.0f} ms; {N} timed requests each, after 3 to warm"]
+        lines += ["without the wait:"] + [f"  {_line(k, v)}" for k, v in raw.items()]
+        lines += ["with the wait:"] + [f"  {_line(k, v)}" for k, v in held.items()]
+        out = os.environ.get("OSPREY_ADDRESS_TIMING_OUT")
+        if out:
+            with open(out, "a") as f:
+                f.write("\n".join(lines) + "\n")
+        # Every refusal's work fits in one quantum, so each is answered on the first.
+>       assert max(max(v) for v in raw.values()) < q, lines
+E       AssertionError: ['quantum 250 ms; 15 timed requests each, after 3 to warm', 'without the wait:', '  missing: n=15 median=46.6 ms q1=25...s q1=46.3 q3=111.4 max=175.3', '  hidden: n=15 median=1415.3 ms q1=1213.1 q3=1590.8 max=1877.4', 'with the wait:', ...]
+E       assert 1.8774344578851014 < 0.25
+E        +  where 1.8774344578851014 = max(<generator object test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum.<locals>.<genexpr> at 0x1057c7850>)
+
+../OspreyFlow_Build/tests/services/api/test_alert_address_live.py:154: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 06:09:54] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 82 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TT239EETHNH8R54QQQ48RH: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6Y1QG23AZF0MYY1JPPNK22W: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6Y1QG2KJGARYPXG4VK19SAB: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TSZKTBGTXYFX0SRPJ1XA9X: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TT236P2Q6565S05745C69R: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YHTDW5XG132B3YF19C4D9F: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YHTHGF9XDMTVKTQQCCYY8Q: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TSZQP3ATJGN6YMZCHD9GPN: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6W0N205KFJMYN4G1X4JQR5A: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6VY1K5CF7EEWBSZX9VKM71W: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6Y1QG064H6GMGE736RATX3G: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6Y1QG11H56CWT34P16M2MK6: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6WDT89D3V53T18R6Q7N74GT: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TSZX6KDMVT8E6DGGZYSHK8: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6Y1QG22Y03Y8FBVKGY0K7GF: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TT2386CD8WW89A9YQRAGP9: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TSZSMF9DY5XAJGKEY9SZY2: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6W6SJGADBTNJQHWKTQCMZHC: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TT00ZZ14RWHR5J89N6VY5P: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YHTAZGB404QY4SZX1G6YD7: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YC6ZDJ7XKMAP8GS0V5KPVF: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TT238VNR2KQJ0RD834JYC8: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6WAZ2VJ1EQEQDR24VVZGJA1: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YHT6KMA0AFEK9XMMB0ZP4E: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TSZVE5EQGXH48M9XTZQ6S5: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6W06BNYHYRH8FHP20VW3WJC: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6W3DFDB40DVESC6KS0W13W7: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YAWAK9Q7EE14KYM1C4J67E: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TT238W38M1X9SVS1SS8DHS: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TSF6XVBZWGNP0GBPX3MYXS: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6VYSPFB98WVHMVYDD45MAMP: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TTQCRT8TQ982KTSP7ZAX8K: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6W3PWYYC42KD3V8V9P674E4: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6Y1QG1HDF0VTNVBFE9SN8ET: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TSZNTFEQBR1BMS369CJWA9: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6W9WSCPN3BVPZDHAZ0X02AW: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YHSZYYFB03QXSCH25ETGXM: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YHT3AJ5V15BD1YR64ER7MK: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YH2DHCZXHBZR7XJNRF8WG8: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6W0WXRMVQC1MBXHY2QVCV8X: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6TT237KY5YB2FEQMTMVRV2X: the identity provider could not be reached
+WARNING  services.api.monitor_schedule:monitor_schedule.py:91 watch 01M6YHTSRZHDMAM40MJRN07AE3: the identity provider could not be reached
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x30b5eaed0>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x30b5eb8f0>, 'audit': <services.api.audit.AuditWriter object at 0x30b3de3c0>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+            petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+            nair = next(a for a in alerts if "Nair" in (a.words or ""))
+    
+            closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                   disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+            why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
+            matches = [e for e in why.edges if e.type == "SAME_AS"]
+            assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
+>           assert matches[0].provenance.state is ProvenanceState.ASSERTED
+E           AssertionError: assert <ProvenanceState.INFERRED: 'inferred'> is <ProvenanceState.ASSERTED: 'asserted'>
+E            +  where <ProvenanceState.INFERRED: 'inferred'> = Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...datetime.datetime(2026, 11, 9, 6, 27, 1, 942171, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None).state
+E            +    where Provenance(state=<ProvenanceState.INFERRED: 'inferred'>, sources=[SourceRef(document_id='Synthetic consolidated list (...datetime.datetime(2026, 11, 9, 6, 27, 1, 942171, tzinfo=TzInfo(0)), last_confirmed=None, confirmed_by=None, drawn=None) = Edge(id='01M6ZFT7P378KYK0AJXCXPMR5G', type='SAME_AS', source='01M6ZFT1H1EKC37K9P2GV7FETN', target='01M6ZFT7NP56Z4X1403...seded_by=None, load_id=None, recipe_id=None, recipe_version=None, reverted=False, withdrawn_by_load=None), datasets=[]).provenance
+E            +  and   <ProvenanceState.ASSERTED: 'asserted'> = ProvenanceState.ASSERTED
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:478: AssertionError
+____ test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert ____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x30dea5310>, 'held': <services.api.held_rows.HeldR...ces.api.alerts.AlertStore object at 0x169d3e630>, 'audit': <services.api.audit.AuditWriter object at 0x30de7a8d0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x30ddd2780>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x16a7f1340>
+
+    async def test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Item 6, the hard part. The graph commits the confirmed match and then the Postgres repoint
+        fails (here, on purpose, once). The close is refused; the repoint is recorded, so the very next
+        read settles it from the graph's own stored states: the second alert is listed to the cleared
+        reader citing the new revision, the record is cleared, and the OFFICIAL teammate, who may not
+        read the match, is still not given it (the settle changes which revision is cited, nothing a
+        reader is answered). Red with no record (the repoint inside the triage write, as in L2.8): the
+        second alert was gone from the queue for every reader."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            first, second, link = await _two_alerts_on_one_secret_match(stores, graph, case)
+            real = stores["alerts"].apply_repoints
+            failed: list[bool] = []
+    
+            async def fails_once(pairs: Any) -> list[str]:
+                if pairs and not failed:
+                    failed.append(True)
+                    raise ConnectionError("Postgres went away between the two stores")
+                return await real(pairs)
+    
+            monkeypatch.setattr(stores["alerts"], "apply_repoints", fails_once)
+            with pytest.raises(ConnectionError):
+                await alert_queue.dispose(stores["alerts"], graph, analytics, case, first.id, SECRET_LOADER,
+                                          disposition="true_positive", reason="matches")  # fmt: skip
+            (now,) = await graph.get_edges([e.id for e in await graph.edges_among(first.referent_node_ids, SECRET_LOADER)
+                                            if e.type == "SAME_AS"], SECRET_LOADER)  # fmt: skip
+            assert now.id != link, "the graph committed the confirmed revision"
+            queued = {q.alert.id: q.alert for q in await alert_queue.queue(stores["alerts"], graph, analytics,
+                                                                             case, SECRET_LOADER)}  # fmt: skip
+            assert second.id in queued and queued[second.id].edge_ids == [now.id]
+>           assert await _pending(stores, link) == []
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:600: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:548: in _pending
+    pairs.extend((old, new) for old, new in links if old in old_links)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <list_iterator object at 0x30f97d090>
+
+>   pairs.extend((old, new) for old, new in links if old in old_links)
+                                ^^^^^^^^
+E   ValueError: too many values to unpack (expected 2)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:548: ValueError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_pack_export.py::test_an_item_needing_its_originator_needs_a_justification_and_a_reference
+tests/services/api/test_pack_export.py::test_an_item_needing_its_originator_needs_a_justification_and_a_reference
+  /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_alert_address_live.py::test_the_address_answers_through_the_real_stores_and_refuses_alike_on_one_quantum
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_failure_between_the_graph_commit_and_the_repoint_hides_no_alert
+3 failed, 512 passed, 3 warnings in 2825.29s (0:47:05)
+# exit 1 end 2026-11-09T06:54:15Z
+
+# Retaken alone, the rules lease, stack a, start 2026-11-09T06:56:44Z, nothing else running on this machine's tests:
+## 1. the evidence file whole, with _pending reading a pair's first two (the journal's triples, D3)
+......................................                                   [100%]
+38 passed in 549.74s (0:09:09)
+## 2. plant: AlertStore._close_record a no-op (the record kept after the settle applied it)
+            failed: list[bool] = []
+                if pairs and not failed:
+                    failed.append(True)
+E           AssertionError: assert [('01M6ZJ1R5C...TB62HN20AE6')] == []
+## 3. plant removed
+1 passed in 14.32s
+## 4. the address timing case alone
+1 passed, 1 warning in 28.97s
+# end 2026-11-09T07:06:52Z

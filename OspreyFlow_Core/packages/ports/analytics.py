@@ -52,6 +52,28 @@ class TrendLimitExceeded(Exception):
         self.cap_kind, self.cap, self.would_be = cap_kind, cap, would_be
 
 
+#: Past this, a total of declared amounts is refused (ADR-133 Amendment 10): a decimal of 38 digits,
+#: 9 after the point, holds less than 10^29, and a total is checked short of it.
+AMOUNT_TOTAL_LIMIT = 10**28
+
+
+class AmountTotalOutOfRange(Exception):
+    """A frequency's or an activity's total of a declared amount at or past `AMOUNT_TOTAL_LIMIT`
+    (ADR-133 Amendment 10, rule 2): refused whole on every adapter, never wrapped or cut."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "a total of the declared amount reaches 10^28, past what is counted exactly; nothing "
+            "is answered"
+        )
+
+
+def refuse_an_amount_total_out_of_range(*totals: float | None) -> None:
+    """Raises `AmountTotalOutOfRange` if any total reaches the limit (in either direction)."""
+    if any(t is not None and abs(t) >= AMOUNT_TOTAL_LIMIT for t in totals):
+        raise AmountTotalOutOfRange
+
+
 class AnalyticsPort(Protocol):
     async def histogram(self, req: HistogramRequest, principal: Principal) -> Histogram: ...
     async def geo_bins(self, req: GeoBinRequest, principal: Principal) -> list[GeoBin]: ...

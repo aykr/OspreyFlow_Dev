@@ -74,6 +74,19 @@ const QUEUE = [
     alert: { ...base, id: "a-own", rule_id: "hotlist:hl-2", referent_node_ids: ["n4"], created_at: hoursAgo(80), status: "open", assignee: null },
     summary: "A hotlisted identifier appeared: OKAFOR, Callum", kind: "hotlist", severity: "high", audience: "owner", team: null,
   },
+  // ADR-146 decision 8 and Amendment 1 (L2.10): a rule's alert routed to a team, suppressed by its
+  // lead, opened by the lead (`?open=a-team`); and one taken back by a revert (G12).
+  {
+    alert: { ...base, id: "a-team", rule_id: "typology:r-daily", typology: "sentence", referent_node_ids: ["n4"], created_at: hoursAgo(50), status: "open", assignee: null,
+      routed_team: "team-7", suppressed_until: "2026-12-01", suppress_reason: "A known pattern, reviewed weekly", suppressed_by: "analyst-1",
+      words: "OKAFOR, Callum is a listed person", trigger: "post_commit", alert_node_id: null },
+    summary: "OKAFOR, Callum is a listed person", kind: "typology", severity: "medium", audience: "team", team: "team-7", team_name: "Prison intel", suppressed: true,
+  },
+  {
+    alert: { ...base, id: "a-back", rule_id: "typology:r1", typology: "structuring", referent_node_ids: ["n1"], created_at: hoursAgo(90), status: "closed", assignee: null, disposition: null,
+      words: "3 movements under the threshold", trigger: "pre_commit", alert_node_id: null },
+    summary: "3 movements under the threshold", kind: "typology", severity: "medium", audience: "case", team: null,
+  },
 ];  // prettier-ignore
 
 const HOTLISTS = {
@@ -218,7 +231,12 @@ function answer(path: string, search: URLSearchParams): unknown {
   const row = QUEUE.find((r) => local === `alert-queue/${r.alert.id}`);
   if (row) {
     const nodes = row.alert.referent_node_ids.map((id) => ENTITIES[id as keyof typeof ENTITIES]);
-    return { ...row, nodes, edges: [], transactions: [] };
+    // ADR-146: what fired a watch alert, and the lead's tools on the team's own alert.
+    const fired = row.kind === "hotlist" || row.kind === "monitor"
+      ? { fired_on: nodes.map((n) => ({ type: n.type, label: "A matched item", files: [{ name: "pid_seized_comms_batch2.csv", row: 3 }], more_files: 0 })) }
+      : {};  // prettier-ignore
+    const lead = row.alert.id === "a-team" ? { lead: true, team_name: "Prison intel", suppressed: true } : {};
+    return { ...row, nodes, edges: [], transactions: [], ...fired, ...lead };
   }
   if (local === "alert-assignees") return [{ id: "analyst-1", name: "Ana Lyst" }, { id: "analyst-2", name: "Priya Shah" }];
   if (local === "rules") return STAGE_D ? [WIDE_RULE, SCHEDULED_RULE, SENTENCE_RULE] : [SENTENCE_RULE];
@@ -230,16 +248,13 @@ function answer(path: string, search: URLSearchParams): unknown {
   if (local === "patterns") return { patterns: [{ id: "sp1", pattern_id: "pat-1", version: 1, name: "Phone shared by two people", owner_id: "analyst-1", created_at: hoursAgo(500), definition: { nodes: [], edges: [] } }] };
   if (local === "hotlists") return HOTLISTS;
   if (local === "monitors") return { monitors: [{ id: "mo-1", pattern_id: "pat-1", owner_id: "analyst-1", status: "active", created_at: hoursAgo(500) }] };
-  // The alert inbox, beside the queue until L2.10 merges it (ADR-146 decision 1).
-  if (local === "alerts")
-    return {
-      alerts: [{
-        id: "w-1", rule_id: "hotlist:hl-1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
-        evidence_available: true, investigation_id: "inv-1", created_at: hoursAgo(30),
-        hotlist: { identifier: "07700 900918", kept_as_written: false, review_date: "2027-01-31" },
-        fired_on: [{ type: "Endpoint", label: "+447700900918", files: [{ name: "pid_seized_comms_batch2.csv", row: 3 }], more_files: 0 }],
-      }],
-    };  // prettier-ignore
+  // ADR-146 decisions 5 and 8 (L2.10): the inventory and the teams a rule may go to.
+  if (local === "alert-sources")
+    return { sources: [
+      { id: "r-daily", rule_id: "typology:r-daily", name: "Listed people", source: "rule", kind: "rule", maker: "analyst-1", maker_name: "Ana Lyst", owner: "Prison intel", state: "live", alerts_30_days: 4, not_of_interest: 0.25, last_fired_at: hoursAgo(30), suppressed: [{ alert_id: "a1", until: "2026-12-01", reason: "A known pattern", by: "analyst-1" }] },
+      { id: "hl-1", rule_id: "hotlist:hl-1", name: "Hotlist 07700 900918", source: "watch", kind: "hotlist", maker: "analyst-1", owner: "analyst-1", state: "live", expires_on: "2027-01-31", alerts_30_days: 1, suppressed: [] },
+    ] };  // prettier-ignore
+  if (local === "alert-teams") return [{ role_id: "team-7", display_name: "Prison intel", lead: true, members: ["analyst-2"] }];
   return null;
 }
 

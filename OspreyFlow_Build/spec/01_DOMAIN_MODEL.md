@@ -2730,6 +2730,46 @@ a pattern (its advanced view) and read back from one; neither writes anything, a
 sentence is a route of its own. `03_CONDUIT_MIDDLEWARE.md` has the routes: the audience in §3.8,
 assignment and sentences in §3.8a.
 
+### 11.2 One queue, teams, raised alerts and what raises them (ADR-146 Amendment 4, L2.10)
+
+```python
+# On Alert: routed_team (a team's role id: its members and the home case's Authors alone read it,
+# in the queue's query); suppressed_until, suppress_reason, suppressed_by (Suppress until…).
+# AlertKind gains "analyst": rule_id analyst:case:<case> or analyst:dataset:<dataset>.
+class AlertHotlist(BaseModel):       # what fired it: the hotlist's entry, to its owner alone
+    identifier: str; kept_as_written: bool; review_date: date
+class FiredFile(BaseModel):          # one source file of a matched node, its row or counts
+    name: str; row: int | None; rows: int | None; records: int | None
+class FiredOn(BaseModel):            # a matched node, its files (at most five) or sources withheld
+    type: str; label: str; files: list[FiredFile]; more_files: int; sources_withheld: bool
+class AlertSuppressInput(BaseModel): # the lead's or cover's: a day at most 90 days ahead, a reason
+    until: date; reason: str
+class RaiseAlertInput(BaseModel):    # Raise an alert…: to the case, or the case's dataset
+    title: str; severity: AlertSeverity; reason: str; to: Literal["case", "dataset"]
+    dataset_id: str | None; node_ids: list[NodeId]; edge_ids: list[EdgeId]; found_by: str | None
+class AlertTeam(BaseModel):          # a team a rule may route to; its members to its lead alone
+    role_id: str; display_name: str; lead: bool; members: list[str]
+    member_names: dict[str, str]   # ADR-106: the members served, by name, at read time
+class SuppressedAlert(BaseModel):    # beside its rule or watch in What raises alerts
+    alert_id: str; until: date; reason: str; by: str; by_name: str | None   # ADR-106, read time
+class AlertSource(BaseModel):        # one row of What raises alerts, counted from the reader's queue
+    id: str; rule_id: str; name: str; source: Literal["rule", "watch"]; kind: AlertSourceKind
+    maker: str; maker_name: str | None; dataset_id: str | None
+    owner: str; owner_name: str | None   # a person's id or a team's; by name at read time (ADR-106)
+    state: Literal["draft", "live", "stopped"]; expires_on: date | None
+    last_fired_at: datetime | None; alerts_30_days: int; not_of_interest: float | None
+    suppressed: list[SuppressedAlert]
+class AlertSources(BaseModel):
+    sources: list[AlertSource]
+class MonitorScheduleInput(BaseModel):  # a watched pattern's own schedule (G16); Monitor carries it
+    every: Literal["daily", "weekly", "never"]; hour: int; weekday: int | None
+```
+
+A routed alert writes no `Alert` node: the node would carry its words to every member who may read
+its markings. A suppressed alert stays open and is counted open; its suppression ends by itself after
+its day. A dataset alert is raised into the dataset's home case, in the queue of every case reading the
+dataset, and closed by the home case's Authors alone. `03_CONDUIT_MIDDLEWARE.md` §3.8 has the routes.
+
 ## 12. Connections and registered sources (ADR-140 decision 7, Amendment 4)
 
 A **connection** is where sources are read from, owned by the deployment's administrators

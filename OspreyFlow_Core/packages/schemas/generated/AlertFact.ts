@@ -2,7 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type AlertId = string;
 export type InvestigationScope = string | null;
-export type Kind = "typology" | "hotlist" | "monitor";
+export type Kind = "typology" | "hotlist" | "monitor" | "analyst";
 export type Rule = string;
 export type Typology = string | null;
 export type Severity = "high" | "medium" | "low";
@@ -10,7 +10,7 @@ export type Outcome =
   "open" | "claimed" | "true_positive" | "false_positive" | "duplicate" | "no_further_action" | "referred" | "closed";
 export type RaisedAt = string;
 export type OwnerId = string;
-export type Audience = "case" | "team" | "owner";
+export type Audience = "case" | "team" | "owner" | "routed";
 export type Team = string | null;
 export type DatasetId = string | null;
 export type Handlings = Handling[] | null;

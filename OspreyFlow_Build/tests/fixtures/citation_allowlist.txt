@@ -34,3 +34,7 @@ tools/no_branches_check.py
 apps/workspace/src/help/roles.ts
 
 deploy/helm/ospreyflow/templates/ingress.yaml  # ADR-148 decision 2: the chart's optional Ingress, created by platform's P7 (process/BUILD_PLAN_PARALLEL_LANES.md's ownership row names it first); remove when P7 merges
+
+# Removed by L2.10 (ADR-146 decision 1, Amendment 4): the Watches inbox merged into the one queue.
+# The alerts gap map records the code as it stood at 83ff99e and stays as written.
+apps/workspace/src/watches/AlertInbox.tsx

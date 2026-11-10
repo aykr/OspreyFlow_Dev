@@ -26,7 +26,7 @@ from typing import Any
 import pytest
 from services.api import alert_queue
 from services.api.alerts import QueueRow
-from services.api.watch_routes import alert_to_view
+from services.api.watch_routes import with_what_fired_it
 
 from conduit_common.identity import new_id
 from schemas.analytics import EventListRequest, EventListResult, EventRecord
@@ -302,8 +302,6 @@ async def test_a_shared_alert_raised_elsewhere_gives_none_of_that_cases_transact
 
     with pytest.raises(AlertNotFoundError):
         await alert_queue.explain(TeamQueue([alert]), graph, analytics, CASE, "elsewhere", READER)  # type: ignore[arg-type]
-    view = await alert_to_view(alert, READER, graph, analytics, case=CASE)  # type: ignore[arg-type]
-    assert view.evidence_available is False and view.words is None
 
 
 async def test_the_canvas_draws_a_cited_link_whose_other_end_the_alert_does_not_name() -> None:
@@ -324,7 +322,7 @@ async def test_the_case_queue_inherits_the_check() -> None:
     assert [q.alert.id for q in queued] == ["v1", "v2"]
 
 
-# ---- G3: the inbox -------------------------------------------------------------------------------
+# ---- G3, after the inbox (ADR-146 decision 1, L2.10) ---------------------------------------------
 
 WORDED = _alert(
     "worded", nodes=["n-a", "n-b"], edges=["e-secret"], events=["t-1"],
@@ -333,37 +331,59 @@ WORDED = _alert(
 )  # fmt: skip
 
 
+def test_the_inbox_is_gone() -> None:
+    """ADR-146's test: "the inbox route is gone (404)". Neither the inbox's list nor its one alert
+    is a route of the app, so either answers 404 and nothing reads alerts but the one queue."""
+    from services.api.app import app
+
+    paths = {getattr(r, "path", "") for r in app.routes}
+    assert "/v1/investigations/{investigation_id}/alerts" not in paths
+    assert "/v1/investigations/{investigation_id}/alerts/{alert_id}" not in paths
+
+
 @pytest.mark.parametrize("hidden_id", ["e-secret", "t-1", "n-b"])
-async def test_the_inbox_withholds_a_worded_alert_s_words_with_its_evidence(hidden_id: str) -> None:
-    """A worded typology alert, read through the inbox as a principal who may not see one of its
-    link, transaction or node: no words and no referents. Red with the words returned as stored."""
+async def test_a_worded_alert_over_hidden_evidence_is_not_explained_at_all(hidden_id: str) -> None:
+    """What the inbox withheld word by word (G3), the one queue withholds whole: a worded alert any
+    of whose link, transaction or node the reader may not see is not explained, so neither its
+    words nor *what fired it* reach them. Red with the explanation's evidence check removed."""
+    from services.api.alerts import AlertNotFoundError
+
     alert = WORDED.model_copy(
         update={"edge_ids": ["e-secret"] if hidden_id == "e-secret" else ["e-1"]}
     )
     _, graph, analytics, _ = _world({hidden_id}, [alert])
-    view = await alert_to_view(alert, READER, graph, analytics, case=CASE)  # type: ignore[arg-type]
-    assert view.evidence_available is False
-    assert view.words is None
-    assert view.referent_node_ids == []
-    assert view.fired_on is None
+    with pytest.raises(AlertNotFoundError):
+        await alert_queue.explain(TriageStore([alert]), graph, analytics, CASE, "worded", READER)  # type: ignore[arg-type]
 
 
-async def test_the_inbox_shows_the_words_when_every_piece_of_evidence_is_readable() -> None:
-    alert = WORDED.model_copy(update={"edge_ids": ["e-1"]})
-    _, graph, analytics, _ = _world(set(), [alert])
-    view = await alert_to_view(alert, READER, graph, analytics, case=CASE)  # type: ignore[arg-type]
-    assert view.evidence_available is True
-    assert view.words == WORDED.words
+async def test_what_fired_it_is_said_only_of_what_the_explanation_holds() -> None:
+    """*What fired it* (ADR-130 decision 1, on the queue since the inbox went) names each matched
+    node's files from the explanation already served whole, and reads nothing else; a hotlist's
+    entry is told to its owner alone (its store's own check)."""
+    from schemas.domain import AlertExplanation, Hotlist
 
+    node = _node("n-a")
+    hotlist_alert = Alert(id="h", rule_id="hotlist:h1", owner_id=READER.id, mode=AlertMode.FULL,
+                          referent_node_ids=["n-a"], created_at=NOW)  # fmt: skip
 
-async def test_a_notify_stub_has_no_evidence_to_withhold() -> None:
-    stub = Alert(
-        id=new_id(), rule_id="hotlist:h1", owner_id="o", mode=AlertMode.NOTIFY_STUB, created_at=NOW
-    )
-    _, graph, analytics, recorder = _world(set(), [stub])
-    view = await alert_to_view(stub, READER, graph, analytics, case=CASE)  # type: ignore[arg-type]
-    assert view.evidence_available is True
-    assert recorder.calls == []
+    class Hotlists:
+        async def get_authorized(self, hotlist_id: str, principal: Principal) -> Hotlist:
+            from services.api.hotlists import HotlistNotFoundError
+
+            if principal.id != READER.id:
+                raise HotlistNotFoundError(hotlist_id)
+            return Hotlist(id=hotlist_id, identifier="+447700900310", owner_id=READER.id,
+                           review_date=NOW.date(), created_at=NOW)  # fmt: skip
+
+    explained = AlertExplanation(alert=hotlist_alert, summary="s", nodes=[node], kind="hotlist")
+    owner = await with_what_fired_it(explained, READER, Hotlists())
+    assert owner.hotlist is not None and owner.hotlist.identifier == "+447700900310"
+    assert [f.type for f in owner.fired_on or []] == [node.type]
+    other = await with_what_fired_it(explained, READER.model_copy(update={"id": "other"}), Hotlists())
+    assert other.hotlist is None, "another reader is not told the hotlist's entry"
+    typology = await with_what_fired_it(
+        explained.model_copy(update={"kind": "typology"}), READER, Hotlists())
+    assert typology.fired_on is None, "a rule's alert says what it found in its own words"
 
 
 # ---- the triage paths and the canvas: refused exactly as a missing alert ----------------------------

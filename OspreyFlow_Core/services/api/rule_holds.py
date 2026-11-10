@@ -30,6 +30,7 @@ from .alerts import (
     settle_repoints,
 )
 from .audit import AuditWriter
+from .kyc_sweep import FAILED_WORDS_WITHOUT_COUNTS
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .studio_publish import LoadSink, load_with_rules, post_commit_notes
 
@@ -50,6 +51,9 @@ def _old_firing(entry: RuleAuditEntry) -> bool:
 #: The entries about one alert: checked by what that alert cites now, not what it cited when the
 #: entry was written, since a repoint (ADR-109 Amendment 10) moves an alert onto a link's successor.
 _ABOUT_AN_ALERT = ("rule_fired", "alert_node_withheld")
+# The entries that count what a rule found, and the fields that hold those counts.
+_COUNTS_A_RULES_FINDINGS = ("rule_evaluated", "rule_evaluation_failed")
+_UNJUDGED = ("documents_not_judged", "words_without_counts")
 
 
 async def readable_rule_audit(
@@ -82,11 +86,14 @@ async def readable_rule_audit(
     # Amendment 12 point 10, `raiser_read_admits`), so a correction lowering what it cites does
     # not let the audit tell the words the queue refuses.
     admitted = await raiser_reads_admitting(alerts, list(current.values()), reader)
+    # ADR-146 decision 8 (L2.10, the lane-reviewer's finding): a firing's words are a routed alert's
+    # words, read by its team's members and the home case's Authors alone, in the store's query.
+    routed = await alerts.routed_readable(about, reader) if about else set()
 
     def cites(entry: RuleAuditEntry) -> tuple[list[str], list[str], list[str]] | None:
         if entry.action in _ABOUT_AN_ALERT and "alert_id" in entry.detail:
             alert = current.get(str(entry.detail["alert_id"]))
-            if alert is None or alert.id not in admitted:
+            if alert is None or alert.id not in admitted or alert.id not in routed:
                 return None
             return evidence_node_ids(alert), list(alert.edge_ids), list(alert.event_ids)
         return _ids(entry, "node_ids"), _ids(entry, "edge_ids"), _ids(entry, "event_ids")
@@ -114,7 +121,18 @@ async def readable_rule_audit(
             entry = entry.model_copy(
                 update={"detail": {k: v for k, v in entry.detail.items() if k != "words"}}
             )
-        if entry.action == "rule_evaluated" and str(entry.detail.get("rule_id")) in unseen_rules:
+        hidden = str(entry.detail.get("rule_id")) in unseen_rules
+        if entry.action == "rule_evaluation_failed":
+            # Rule 7: the documents a sweep could not judge are counted across every customer the
+            # rule screens, not the reader's, so no reader is given that number, in a field or in
+            # words, whichever firings they see (the orchestrator's re-review of L2.10).
+            detail = {k: v for k, v in entry.detail.items() if k not in _UNJUDGED}
+            detail["words"] = str(
+                entry.detail.get("words_without_counts", FAILED_WORDS_WITHOUT_COUNTS)
+            )
+            entry = entry.model_copy(update={"detail": detail})
+        if entry.action in _COUNTS_A_RULES_FINDINGS and hidden:
+            # Rule 7: no count of what a hidden firing found, in a field or as cardinality.
             entry = entry.model_copy(update={
                 "detail": {**{k: v for k, v in entry.detail.items() if k != "findings"},
                            "findings_withheld": True},

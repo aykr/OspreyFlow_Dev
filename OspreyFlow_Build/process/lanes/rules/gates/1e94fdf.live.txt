@@ -1,0 +1,84 @@
+# L2.10's live record at 1e94fdf after the orchestrator's review: the plants, then the delta. The rules lease, stack c, by stack_lease.sh remote; base main at 3be89a7.
+== plant: failed_counts_shown (services/api/rule_holds.py)
+        (failed,) = [e for e in outside.entries if e.action == "rule_evaluation_failed"]
+>       assert failed.detail.get("findings_withheld") is True and failed.result_cardinality == 0
+E       AssertionError: assert (None is True)
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_routed_alerts_firing_is_withheld_from_the_rule_audit_outside_its_team
+1 failed, 18 deselected in 20.75s
+== plant: purge_unwired (services/api/app.py)
+E           AssertionError: assert False
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_the_running_conduit_gives_the_alert_store_the_working_set_a_settle_purges_through
+1 failed, 12 deselected, 1 warning in 7.77s
+== plant: ch_cut_not_rounded (packages/adapters/analytics_clickhouse/adapter.py)
+E       assert 1.123456789 == 1.12345679
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+        are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
+        from ports.analytics import AmountTotalOutOfRange
+            with pytest.raises(AmountTotalOutOfRange):
+            with pytest.raises(AmountTotalOutOfRange):
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+        are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
+        from ports.analytics import AmountTotalOutOfRange
+            with pytest.raises(AmountTotalOutOfRange):
+            with pytest.raises(AmountTotalOutOfRange):
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-analytics_clickhouse]
+4 failed, 262 deselected in 2.96s
+== plant: ch_overflow_unrefused (packages/adapters/analytics_clickhouse/adapter.py)
+        are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
+        from ports.analytics import AmountTotalOutOfRange
+>           with pytest.raises(AmountTotalOutOfRange):
+E           Failed: DID NOT RAISE AmountTotalOutOfRange
+        are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
+        from ports.analytics import AmountTotalOutOfRange
+>           with pytest.raises(AmountTotalOutOfRange):
+E           Failed: DID NOT RAISE AmountTotalOutOfRange
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-analytics_clickhouse]
+2 failed, 264 deselected in 1.36s
+== plant: ch_rows_frame (packages/adapters/analytics_clickhouse/adapter.py)
+E       assert 6 == 4
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_events_at_one_instant_together[analytics_clickhouse]
+1 failed, 265 deselected in 1.07s
+== the delta at 1e94fdf, start 2026-11-09T21:45:01Z
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+        are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
+        from ports.analytics import AmountTotalOutOfRange
+            with pytest.raises(AmountTotalOutOfRange):
+            with pytest.raises(AmountTotalOutOfRange):
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+        are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
+        from ports.analytics import AmountTotalOutOfRange
+            with pytest.raises(AmountTotalOutOfRange):
+            with pytest.raises(AmountTotalOutOfRange):
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_counts_the_window_and_the_days_before_it[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[1-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_total_past_the_decimals_range_is_refused_never_wrapped[-1-analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_says_the_first_movement_in_the_window_and_the_last_before_it[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_a_movement_at_the_windows_start_is_in_the_window_not_before_it[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_counts_an_account_at_either_end_and_each_event_once[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_an_event_the_rules_author_may_not_see_is_not_activity[analytics_clickhouse]
+FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_activity_counts_only_this_case_and_the_link_types_named[analytics_clickhouse]
+9 failed, 317 passed, 1 warning in 1010.08s (0:16:50)
+# end 2026-11-09T22:02:04Z
+# Classification (rules):
+# - The five plants are each red at their real call site, for their own reason: the failure's counts shown (findings_withheld
+#   absent); the purge unwired (no working set); the cut not rounded (1.123456789 == 1.12345679); the overflow unrefused
+#   (DID NOT RAISE); a ROWS frame (6 == 4).
+# - The delta's 9 failures were a real defect of 1e94fdf's own, in every ClickHouse activity case: sumIf over amounts none of
+#   which is present is NULL, and the refusal's float() raised on it. The ch_cut_not_rounded plant's activity and overflow
+#   lines are the same defect. Fixed at bb4466d; its delta, the analytics suite whole, is in gates/bb4466d.live.txt (266 passed).
+# - The delta's other 317 passed: test_typology_rules (item 1), test_typology_rule_routes (item 4 and the signed-token team
+#   case), test_alert_close_approval, test_kyc_rules and test_route_rights whole, and every DuckDB and frequency case.
+# - Lease rules, stack c, 21:43Z to 22:05Z, then down and released.

@@ -101,11 +101,12 @@ describe("Rules and Monitoring", () => {
     await waitFor(() => expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Alerts", "What raises alerts"]));
   });
 
-  it("keeps the alert inbox beside the queue, and the hotlists and watched patterns with the rules", async () => {
-    // Until L2.10 merges the inbox into the one queue (ADR-146 decision 1).
+  it("is one queue: the inbox is gone, and the hotlists and watched patterns are kept with the rules", async () => {
+    // ADR-146 decision 1 (L2.10): the Watches inbox merged into the one queue.
     serve("viewer");
     place();
-    expect(await screen.findByRole("heading", { name: "Alert inbox" })).toBeTruthy();
+    await screen.findByRole("button", { name: alertName("High", "Hotlist") });
+    expect(screen.queryByRole("heading", { name: "Alert inbox" })).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "What raises alerts" }));
     expect(await screen.findByRole("heading", { name: /Hotlists/ })).toBeTruthy();
   });
@@ -136,6 +137,20 @@ describe("Rules and Monitoring", () => {
     await waitFor(() => expect(calls).toContain("GET alert-queue?status=active&kind=hotlist&severity=high"));
     fireEvent.change(screen.getByRole("combobox", { name: "Show which alerts" }), { target: { value: "closed" } });
     await waitFor(() => expect(calls).toContain("GET alert-queue?status=closed&kind=hotlist&severity=high"));
+  });
+
+  it("filters Mine, Team, Unassigned and Older than N days on the server, All holding the suppressed (ADR-146)", async () => {
+    const calls = serve("viewer");
+    place();
+    await screen.findByRole("button", { name: alertName("High", "Hotlist") });
+    for (const show of ["mine", "team", "unassigned"]) {
+      fireEvent.change(screen.getByRole("combobox", { name: "Whose alerts" }), { target: { value: show } });
+      await waitFor(() => expect(calls).toContain(`GET alert-queue?status=active&show=${show}`));
+    }
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Older than, in days" }), { target: { value: "7" } });
+    await waitFor(() => expect(calls).toContain("GET alert-queue?status=active&show=unassigned&older_than_days=7"));
+    fireEvent.change(screen.getByRole("combobox", { name: "Whose alerts" }), { target: { value: "all" } });
+    await waitFor(() => expect(calls).toContain("GET alert-queue?status=active&older_than_days=7"));
   });
 
   it("gives a case alert to a member, by name, and a shared one only to be claimed", async () => {

@@ -1,48 +1,32 @@
-// Watch-panels keyboard harness — a new surface needing its own equivalent of `keyboard.spec.ts`:
-// hotlists/monitors/the alert inbox are the fourth keyboard-driven surface
-// (`keyboard/harness.tsx`'s own `CANVAS_ACTIONS`, `metrics-panel-harness.tsx`'s own
-// `METRICS_PANEL_ACTIONS`, `query-builder-harness.tsx`'s own `QUERY_BUILDER_ACTIONS`), so it gets
-// its own harness rather than folding into any of them. Renders `HotlistPanel`, `MonitorPanel` and
-// `AlertInbox` together, the same shape they are mounted together under `App.tsx`'s `"watches"`
-// view. `POST/GET /v1/hotlists`, `POST/GET /v1/monitors`, `GET /v1/patterns` and `GET /v1/alerts`
-// are intercepted by `watch-panels.spec.ts` via `page.route` — the
-// same "real network call, mocked at the transport, not the component" shape
-// `query-builder.spec.ts` already uses.
-//
-// `AlertInbox`'s own `onOpenAlert` callback (ADR-146 decision 6: the alert opened at its address;
-// `App.tsx` pushes it) is exposed as `window.__WATCH_HARNESS__` so a spec case can prove the callback
-// actually fires with the real alert id, the same
-// `window.__KEYBOARD__` shape `keyboard/harness.tsx` already uses for `GlassCanvas`'s own
-// focus/selection callbacks.
+// Watch-panels keyboard harness — its own surface (`CLAUDE.md` rule 13): the hotlists and watched
+// patterns kept in Rules and Monitoring (`HotlistPanel`, `MonitorPanel` with each watch's own
+// schedule, ADR-146 decision 4), and what the Glass makes for them (`GlassWatchActions`: *Watch for
+// this*, *Save as a watch*, *Raise an alert…*, decisions 4 and 7). The Watches inbox went in L2.10
+// (one queue). Every call is intercepted by `watch-panels.spec.ts` at the transport.
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
-import { AlertInbox } from "../src/watches/AlertInbox";
 import { HotlistPanel } from "../src/watches/HotlistPanel";
 import { MonitorPanel } from "../src/watches/MonitorPanel";
+import { RaiseAlert, SaveAsWatch, WatchForThis } from "../src/watches/GlassWatchActions";
+import { applyHarnessBrand } from "./brandHarness";
 
-declare global {
-  interface Window {
-    __WATCH_HARNESS__?: { openedAlertId: string | null };
-  }
-}
+// `?brand=govuk`: the GOV.UK brand, so axe scans these in dark, light and GOV.UK.
+await applyHarnessBrand();
 
-window.__WATCH_HARNESS__ = { openedAlertId: null };
+const API = { apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "inv-1" };
 
 function Harness() {
   return (
     <div style={{ width: 480, display: "flex", flexDirection: "column", gap: 16 }}>
-      <HotlistPanel apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="inv-1" />
-      <MonitorPanel apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="inv-1" />
-      <AlertInbox
-        apiBaseUrl="http://keyboard-test.invalid"
-        bearerToken="unused"
-        investigationId="inv-1"
-        onOpenAlert={(alertId) => {
-          window.__WATCH_HARNESS__!.openedAlertId = alertId;
-        }}
-      />
+      <HotlistPanel {...API} />
+      <MonitorPanel {...API} />
+      <section aria-label="Made in the Glass" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <WatchForThis {...API} node={{ id: "n1", properties: { value_normalised: "+447700900918" } }} />
+        <SaveAsWatch {...API} patternId="pat-1" />
+        <RaiseAlert {...API} nodeIds={["n1", "n2"]} foundBy="the query 'two people at one address'" />
+      </section>
     </div>
   );
 }

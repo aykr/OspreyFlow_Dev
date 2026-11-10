@@ -43,7 +43,7 @@ from .audit import AuditWriter
 from .auth import PrincipalResolver
 from .change_stream import ChangeStreamEntry, ChangeStreamWriter, touched_node_ids
 from .config import ApiConfig
-from .evaluation import evaluate_hotlists_for_entry, evaluate_monitors_for_entry
+from .evaluation import DatasetReach, evaluate_hotlists_for_entry, evaluate_monitors_for_entry
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
 from .jobs import JobQueue
@@ -62,6 +62,7 @@ from .studio_map import resolve_source_handling
 from .studio_publish import LoadSink, run_published_recipe
 from .target_models import TargetModelStore
 from .typology_rules import TypologyRuleStore
+from .watch_reach import owner_reaches_dataset_in
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,10 @@ class RecipeRunDeps:
     #: ADR-140 Amendment 13: the deployment-wide lists and each dataset's subscriptions. None: a
     #: staged run reads the dataset's own lists alone.
     list_store: ListStore | None = None
+    #: L2.10 review item 4: whether a watch's owner still reaches its dataset
+    #: (`watch_reach.owner_reaches_dataset_in`). None: a watch with a dataset is not matched (fail
+    #: closed). `from_state` always builds it from the state's own stores.
+    watch_reach: DatasetReach | None = None
 
     @classmethod
     def from_state(cls, state: Any) -> RecipeRunDeps:
@@ -114,6 +119,14 @@ class RecipeRunDeps:
             # An optional dependency (default None) the state does not hold is left None.
             optional = f.default is None
             values[f.name] = getattr(state, name, None) if optional else getattr(state, name)
+        if values.get("watch_reach") is None:
+            # L2.10 review round: the scheduled and folder-watched runs come this way. The check is
+            # built from the state's own stores, which every running Conduit holds, never from a
+            # field the state would have to be given (none is, so it would always be absent).
+            values["watch_reach"] = owner_reaches_dataset_in(
+                lambda: getattr(state, "datasets", None),
+                lambda: getattr(state, "investigations", None),
+            )
         return cls(**values)
 
 
@@ -326,6 +339,7 @@ async def _execute_recipe_run(
             action_on_failure="watch_evaluation_failed",
             error_context={"load_id": load_id},
             principal_resolver=deps.principal_resolver,
+            watch_reach=deps.watch_reach,
         )
     await deps.audit.record(
         principal=principal,
@@ -440,6 +454,7 @@ async def _evaluate_watches_best_effort(
     action_on_failure: str,
     principal_resolver: PrincipalResolver,
     error_context: dict[str, Any] | None = None,
+    watch_reach: DatasetReach | None = None,
 ) -> None:
     """Shared by every producer route wired to synchronous evaluation this stage
     (`run_studio_recipe`, `link_resolution_route`) — the identical `principal_for_owner` and the
@@ -468,6 +483,7 @@ async def _evaluate_watches_best_effort(
             valkey=valkey,
             principal_for_owner=_principal_for_owner,
             policy=config.hotlist_alert_policy,
+            reaches_dataset=watch_reach,
         )
         await evaluate_monitors_for_entry(
             entry,
@@ -478,6 +494,7 @@ async def _evaluate_watches_best_effort(
             audit=audit,
             valkey=valkey,
             principal_for_owner=_principal_for_owner,
+            reaches_dataset=watch_reach,
         )
     except Exception as exc:  # noqa: BLE001 - a best-effort side channel, see this function's
         # own docstring: must never fail the caller's own already-succeeded primary operation.

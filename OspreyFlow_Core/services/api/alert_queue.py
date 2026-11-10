@@ -23,7 +23,8 @@ the alert and leaves the node `inferred` — a suggestion nobody confirmed, whic
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
+from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from services.extract.writer import confirm_edge, confirm_node
@@ -33,6 +34,7 @@ from ports.analytics import AnalyticsPort
 from ports.graph import GraphPort
 from schemas.analytics import EventFilter, EventListRequest, EventRecord
 from schemas.domain import (
+    SUPPRESS_DAYS_MAX,
     Alert,
     AlertExplanation,
     AlertMode,
@@ -50,6 +52,7 @@ from .alerts import (
     AlertStore,
     AlertTriageConflict,
     QueueRow,
+    QueueShow,
     evidence_node_ids,
     purge_copies,
     raiser_reads_admitting,
@@ -85,6 +88,9 @@ def node_name(node: Node) -> str:
 def summary_of(alert: Alert, nodes: dict[str, Node]) -> str:
     """The finding in words, each entity named as the reader sees it, not by its id. A hotlist or
     monitor alert has no words of its own; it is said from what it found."""
+    if alert.rule_id.startswith("analyst:"):
+        named = ", ".join(node_name(nodes[i]) for i in alert.referent_node_ids if i in nodes)
+        return f"{alert.words or 'Raised by an analyst'}: {named}" if named else (alert.words or "")
     if alert.words is None and alert.typology is None:
         named = ", ".join(node_name(nodes[i]) for i in alert.referent_node_ids if i in nodes)
         if alert.rule_id.startswith("hotlist:"):
@@ -99,14 +105,23 @@ def summary_of(alert: Alert, nodes: dict[str, Node]) -> str:
     return words
 
 
-def _queued(row: QueueRow, summary: str) -> QueuedAlert:
+def suppressed_today(alert: Alert, today: date | None = None) -> bool:
+    """ADR-146 Amendment 1: suppressed through its last day, and never after, with no action."""
+    until = alert.suppressed_until
+    return until is not None and until >= (today or datetime.now(UTC).date())
+
+
+def _queued(row: QueueRow, summary: str, *, lead_of: Collection[str] = ()) -> QueuedAlert:
+    routed = row.alert.routed_team
     return QueuedAlert(
         alert=row.alert,
         summary=summary,
         kind=row.kind,
         severity=row.severity,
         audience=row.audience,
-        team=row.alert.team if row.audience == "team" else None,
+        team=routed if routed is not None else (row.alert.team if row.audience == "team" else None),
+        suppressed=suppressed_today(row.alert),
+        lead=routed is not None and routed in lead_of,
     )
 
 
@@ -120,6 +135,9 @@ async def monitoring_queue(
     kinds: Sequence[str] | None = None,
     severities: Sequence[str] | None = None,
     statuses: Sequence[str] | None = None,
+    show: QueueShow | None = None,
+    older_than_days: int | None = None,
+    lead_of: Collection[str] = (),
 ) -> list[QueuedAlert]:
     """ADR-133 decision 5: the one queue, as `reader` may see it. Which rows is the query's answer
     (`AlertStore.list_queue`, rule 3); everything they cite (nodes, links and transactions, ADR-146
@@ -132,8 +150,9 @@ async def monitoring_queue(
     agree."""
     await settle_repoints(store, graph)
     rows = await store.list_queue(
-        investigation_id, reader, kinds=kinds, severities=severities, statuses=statuses
-    )
+        investigation_id, reader, kinds=kinds, severities=severities, statuses=statuses,
+        show=show, older_than_days=older_than_days,
+    )  # fmt: skip
     readable = await read_evidence(
         [row.alert for row in rows], reader, graph, analytics, scope=lambda _: investigation_id
     )
@@ -143,7 +162,8 @@ async def monitoring_queue(
         if not readable.whole(row.alert) or row.alert.id not in admitted:
             continue
         ids = evidence_node_ids(row.alert)
-        shown.append(_queued(row, summary_of(row.alert, {i: readable.nodes[i] for i in ids})))
+        named = {i: readable.nodes[i] for i in ids}
+        shown.append(_queued(row, summary_of(row.alert, named), lead_of=lead_of))
     return shown
 
 
@@ -278,7 +298,9 @@ async def explain_with_evidence(
         kind=row.kind,
         severity=row.severity,
         audience=row.audience,
-        team=alert.team if row.audience == "team" else None,
+        # A routed alert's team is the one it was routed to (ADR-146 decision 8), not the unit
+        # its owner shares a watch with (the L2.10 review's item 9).
+        team=(alert.routed_team or alert.team) if row.audience == "team" else None,
     )
     return explanation, cited_events
 
@@ -358,7 +380,23 @@ async def release(
 
 class CloseRefused(Exception):
     """ADR-133 decision 7: the person who proposed closing a high-severity alert cannot approve
-    it."""
+    it. ADR-146 decision 7: a dataset alert is closed by its home case's Authors alone."""
+
+
+#: Whether the closer is an Author of the alert's own case (a dataset alert's home case).
+CloserCheck = Callable[[Alert], Awaitable[bool]]
+
+
+class NotTheHomeCasesAuthor(CloseRefused):
+    """ADR-146 decision 7: a dataset alert is closed by its home case's Authors alone; refused as
+    `not_the_home_cases_author` wherever a close is decided (dispose and approve alike)."""
+
+
+async def _refuse_a_dataset_alert_closer(alert: Alert, closer: CloserCheck | None) -> None:
+    if alert.rule_id.startswith("analyst:dataset:") and (closer is None or not await closer(alert)):
+        raise NotTheHomeCasesAuthor(
+            "Only the Authors of the dataset's home case close a dataset alert."
+        )
 
 
 def needs_second_person(row: QueueRow) -> bool:
@@ -380,12 +418,14 @@ async def dispose(
     disposition: str,
     reason: str,
     working_set: WorkingSetService | None = None,
+    closer: CloserCheck | None = None,
 ) -> Alert:
     """Closes the alert with its disposition and reason — or, for a high-severity alert a second
     person may read, proposes the close: the alert waits as `closing`, its disposition and reason
     kept, until another member approves it (`approve_close`)."""
     row, nodes = await _visible_row(store, graph, analytics, alert_id, investigation_id, member)
     alert = row.alert
+    await _refuse_a_dataset_alert_closer(alert, closer)
     if alert.status in ("closed", "closing"):
         raise AlertTriageConflict(alert_id)
     if needs_second_person(row):
@@ -409,10 +449,12 @@ async def approve_close(
     member: Principal,
     *,
     working_set: WorkingSetService | None = None,
+    closer: CloserCheck | None = None,
 ) -> Alert:
     """The second person approves a proposed close: the alert closes with the proposer's
     disposition and reason, decided by `member`, the proposer kept beside it."""
     alert, nodes = await _visible_alert(store, graph, analytics, alert_id, investigation_id, member)
+    await _refuse_a_dataset_alert_closer(alert, closer)
     if alert.status != "closing" or alert.disposition is None or alert.close_proposed_by is None:
         raise AlertTriageConflict(alert_id)
     if alert.close_proposed_by == member.id:
@@ -547,6 +589,8 @@ async def assign(
     *,
     assignee: str,
     allowed: set[str],
+    lead_of: Collection[str] = (),
+    team_members: Mapping[str, set[str]] | None = None,
 ) -> Alert:
     """ADR-133 stage (a): give an open or claimed alert to one member of the case. `allowed` is the
     route's answer to who may be given work in this case (its Editors and Authors). Only a case
@@ -556,6 +600,27 @@ async def assign(
     row, _ = await _visible_row(store, graph, analytics, alert_id, investigation_id, member)
     if row.alert.status == "closed":
         raise AlertTriageConflict(alert_id)
+    routed = row.alert.routed_team
+    if routed is not None and assignee != member.id:
+        # ADR-146 decision 8 and Amendment 1: the team's lead (or cover) gives one of the team's
+        # alerts to a named member of the team who holds the case, and no one else gives it.
+        if routed not in lead_of:
+            raise AssignmentRefused(
+                "Only the team's lead, or its cover, gives one of the team's alerts to a member."
+            )
+        if assignee not in (team_members or {}).get(routed, set()):
+            raise AssignmentRefused(
+                "That person is not a member of the team who can work on this case's alerts."
+            )
+        return await store.set_queue_triage(
+            alert_id, investigation_id, member, expect_status=["open", "claimed"],
+            status="claimed", assignee=assignee,
+        )  # fmt: skip
+    if routed is not None:
+        return await store.set_queue_triage(
+            alert_id, investigation_id, member, expect_status=["open", "claimed"],
+            status="claimed", assignee=member.id,
+        )  # fmt: skip
     if assignee not in allowed:
         raise AssignmentRefused("That person is not a member of this case who can work on alerts.")
     if row.audience != "case" and assignee != member.id:
@@ -569,7 +634,46 @@ async def assign(
     )  # fmt: skip
 
 
+class SuppressRefused(Exception):
+    """*Suppress until…* refused, in words (ADR-146 Amendment 1)."""
+
+
+async def suppress(
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    alert_id: str,
+    member: Principal,
+    *,
+    until: date,
+    reason: str,
+    lead_of: Collection[str],
+    today: date | None = None,
+) -> Alert:
+    """ADR-146 Amendment 1: the team's lead, or its cover while the cover lasts, suppresses one of
+    the team's alerts until a day at most 90 days ahead, with a reason. Refused for anyone else,
+    a member of the team included, and for an alert routed to no team (it has no lead)."""
+    row, _ = await _visible_row(store, graph, analytics, alert_id, investigation_id, member)
+    routed = row.alert.routed_team
+    if routed is None or routed not in lead_of:
+        raise SuppressRefused("Only the team's lead, or its cover, suppresses one of its alerts.")
+    now = today or datetime.now(UTC).date()
+    if until < now:
+        raise SuppressRefused("A suppression ends today or later.")
+    if until > now + timedelta(days=SUPPRESS_DAYS_MAX):
+        raise SuppressRefused(f"A suppression ends at most {SUPPRESS_DAYS_MAX} days ahead.")
+    if row.alert.status == "closed":
+        raise AlertTriageConflict(alert_id)
+    return await store.set_suppression(
+        alert_id, investigation_id, member, until=until, reason=reason
+    )
+
+
 __all__ = [
+    "SuppressRefused",
+    "suppress",
+    "suppressed_today",
     "AssignmentRefused",
     "CloseRefused",
     "approve_close",

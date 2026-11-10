@@ -150,8 +150,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-133 stage (c): the Lists tab, as a reader and as whoever may load lists after a refresh
   // (its refreshes, a failure in words, the subscribe form), and an AML template filling the form.
   "monitoring-harness.html": [
-    // The owner's answer of 1 November 2026: the Watches tab, now the only way to the hotlists,
-    // the monitors and the alert inbox (the rail's Watches entry is gone).
+    // *What raises alerts*: the inventory (ADR-146 decision 5), the hotlists and the watched patterns
+    // with their schedules (the alert inbox went in L2.10).
     "tab=watches",
     "tab=rules&sentence=preview",
     // ADR-139 decision 8: a sentence on connection strength.
@@ -173,6 +173,10 @@ const EXTRA_STATES: Record<string, string[]> = {
     // closing reasons, step 7b), and a KYC screening alert opened (a close match to a listed party).
     "open=a-hot",
     "open=a-kyc",
+    // ADR-146 (L2.10): a routed, suppressed alert opened by its team's lead (the lead's tools), the
+    // queue showing every alert (the suppressed and the taken back marked apart), and the inventory
+    // is `tab=watches`.
+    "open=a-team",
     // ADR-146 decision 2: Rules and Monitoring's Held rows and Changes, and an address the reader may
     // not see.
     "tab=held",

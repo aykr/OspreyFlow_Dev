@@ -120,9 +120,23 @@ async def stores():  # type: ignore[no-untyped-def]
     dsn = PostgresConfig.from_env().dsn
     hotlists = await HotlistStore.connect(dsn)
     alerts = await AlertStore.connect(dsn)
-    yield hotlists, alerts
-    await alerts.close()
-    await hotlists.close()
+    # Prompt L (9 November 2026): every live test removes what it writes to a shared stack, in
+    # teardown, even when it fails. The alerts each test saves are recorded and deleted after it.
+    saved: list[str] = []
+    save = alerts.save
+
+    async def recording(alert: Alert, **kwargs: Any) -> None:
+        saved.append(alert.id)
+        await save(alert, **kwargs)
+
+    alerts.save = recording  # type: ignore[method-assign]
+    try:
+        yield hotlists, alerts
+    finally:
+        async with alerts._pool.acquire() as conn:  # noqa: SLF001 - the test's own clean-up
+            await conn.execute("DELETE FROM alerts WHERE id = ANY($1::text[])", saved)
+        await alerts.close()
+        await hotlists.close()
 
 
 def _alert(rule_id: str, owner: Principal, **fields: object) -> Alert:
@@ -301,6 +315,155 @@ async def test_a_scheduled_runs_notice_is_never_queued(stores: Any) -> None:
     assert await _queued_ids(alerts, "c", owner) == []
 
 
+# --- ADR-146 decision 8: an alert routed to a named team (a rule 3 read, tests first) -------------
+
+
+def _routed(case: str, deployer: Principal, team: str, **fields: object) -> Alert:
+    return _alert(
+        f"typology:r-{new_id()}", deployer, investigation_id=case, typology="sentence",
+        words="a routed finding", referent_node_ids=["n-1"], routed_team=team, **fields,
+    )  # fmt: skip
+
+
+def _answering(authors: dict[str, list[str]]) -> Any:
+    """The store's `answers_for` as the app gives it: of the reader's datasets, those whose home
+    case they are an Author of (here, a table)."""
+
+    async def answers_for(principal: Principal) -> list[str]:
+        return [d for d in authors.get(principal.id, []) if d in (principal.datasets or [])]
+
+    return answers_for
+
+
+async def test_a_team_routed_alert_reaches_only_its_members_and_the_home_cases_authors(
+    stores: Any,
+) -> None:
+    """Only the team's members, and the Authors of the home case of the alert's dataset, read a
+    routed alert: not another member of the case, nor the rule's own deployer outside the team
+    (ADR-146 decision 8; its test "only a team's members and the home case's Authors see a
+    team-routed alert"). Red with the routed check removed from `queue_scope`, and with the Authors'
+    clause reading every dataset rather than those the reader answers for."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    deployer, outsider, author = _person(), _person(), _person()
+    member = _person(roles=[f"role:{team}"])
+    alerts.answers_for = _answering({author.id: ["ds-1"]})
+    try:
+        routed = _routed(case, deployer, team)
+        plain = _alert("typology:r1", deployer, investigation_id=case, typology="structuring",
+                       referent_node_ids=["n-1"])  # fmt: skip
+        for a in (routed, plain):
+            await alerts.save(a)
+
+        assert set(await _queued_ids(alerts, case, member)) == {routed.id, plain.id}
+        assert set(await _queued_ids(alerts, case, author)) == {routed.id, plain.id}
+        assert await _queued_ids(alerts, case, outsider) == [plain.id]
+        assert await _queued_ids(alerts, case, deployer) == [plain.id], "its deployer is no reader"
+        for reader in (outsider, deployer):
+            with pytest.raises(AlertNotFoundError):
+                await alerts.get_queue_alert(routed.id, case, reader)
+        row = await alerts.get_queue_alert(routed.id, case, member)
+        assert (row.audience, row.alert.routed_team) == ("team", team)
+        # The Authors' clause reads the alert's dataset alone: an Author of another dataset's home
+        # case does not read it.
+        alerts.answers_for = _answering({author.id: ["ds-2"]})
+        other = author.model_copy(update={"datasets": ["ds-1", "ds-2"]})
+        assert await _queued_ids(alerts, case, other) == [plain.id]
+    finally:
+        alerts.answers_for = None
+
+
+async def test_a_member_leaving_the_team_no_longer_reads_its_routed_alert(stores: Any) -> None:
+    """Membership is read from the request's own token, never kept: the same person without the
+    team's role reads nothing routed to it (ADR-112 Amendment 5 decision 3)."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    member = _person(roles=[f"role:{team}"])
+    routed = _routed(case, _person(), team)
+    await alerts.save(routed)
+    assert await _queued_ids(alerts, case, member) == [routed.id]
+    left = member.model_copy(update={"roles": []})
+    assert await _queued_ids(alerts, case, left) == []
+    other_team = member.model_copy(update={"roles": [f"role:team-{new_id()}"]})
+    assert await _queued_ids(alerts, case, other_team) == []
+
+
+async def test_a_routed_alert_is_shown_to_a_member_only_where_they_may_read_its_evidence(
+    stores: Any,
+) -> None:
+    """Routing narrows who may read an alert; it never widens what they may read: a member of the
+    team who may not see a node the alert names is not given it (rule 3, ADR-146 decision 10)."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    member = _person(roles=[f"role:{team}"])
+    routed = _routed(case, _person(), team)
+    await alerts.save(routed)
+    hidden = await alert_queue.monitoring_queue(
+        alerts, _Graph(GRAPH_NAMES, hidden={"n-1"}), NO_TRANSACTIONS, case, member)  # fmt: skip
+    assert hidden == []
+
+
+async def test_without_an_answer_for_its_datasets_a_routed_alert_reaches_its_team_alone(
+    stores: Any,
+) -> None:
+    """A store given no `answers_for` shows a routed alert to the team alone (fail closed)."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    routed = _routed(case, _person(), team)
+    await alerts.save(routed)
+    alerts.answers_for = None
+    assert await _queued_ids(alerts, case, _person()) == []
+
+
+async def test_the_filters_mine_team_unassigned_and_older_are_in_the_query(stores: Any) -> None:
+    """ADR-146 decision 2 and Amendment 1: *Mine*, *Team* and *Unassigned* each leave out an alert
+    suppressed today, and *All* holds it; *Older than N days* keeps the older alone. Red with the
+    suppressed clause removed, and with `show` ignored."""
+    _, alerts = stores
+    case, team = new_id(), f"team-{new_id()}"
+    me = _person(roles=[f"role:{team}"])
+    today = date(2026, 11, 9)
+    now = datetime.now(UTC)
+    mine = _routed(case, _person(), team, assignee=me.id, status="claimed", created_at=now)
+    quiet = _routed(case, _person(), team, suppressed_until=today, suppress_reason="known",
+                    created_at=now)
+    old = _alert("typology:r1", _person(), investigation_id=case, typology="structuring",
+                 referent_node_ids=["n-1"], created_at=datetime.now(UTC) - timedelta(days=20))  # fmt: skip
+    for a in (mine, quiet, old):
+        await alerts.save(a)
+
+    async def ids(**kw: Any) -> set[str]:
+        return {r.alert.id for r in await alerts.list_queue(case, me, **{"today": today, **kw})}
+
+    assert await ids(show="mine") == {mine.id}
+    assert await ids(show="team") == {mine.id}, "the team's alerts, the suppressed one left out"
+    assert await ids(show="unassigned") == {old.id}
+    assert await ids(show="all") == {mine.id, quiet.id, old.id}
+    assert await ids() == {mine.id, quiet.id, old.id}, "no filter named leaves nothing out"
+    assert await ids(older_than_days=7) == {old.id}
+    assert await ids(show="team", today=today + timedelta(days=1)) == {mine.id, quiet.id}, (
+        "a suppression ends by itself after its day")
+
+
+async def test_a_dataset_alert_is_in_every_case_reading_its_dataset_and_no_other(stores: Any) -> None:
+    """ADR-146 decision 7: an analyst's alert to the dataset is raised into its home case and is in
+    the queue of every case reading the dataset; a case reading another dataset is not given it, nor
+    a reader outside any case. Red with the dataset clause admitting nothing (the alert is then in
+    its home case alone); what keeps it from a case on another dataset is the reach clause every
+    kind shares, so a plant widening this clause alone stays green (rule 15, recorded)."""
+    _, alerts = stores
+    home, elsewhere = new_id(), new_id()
+    raised = _alert(f"analyst:dataset:ds-1", _person(), investigation_id=home, dataset_id="ds-1",
+                    words="Two at one flat", referent_node_ids=["n-1"])  # fmt: skip
+    await alerts.save(raised)
+    reader = _person()
+    assert raised.id in await _queued_ids(alerts, elsewhere, reader)
+    assert raised.id in await _queued_ids(alerts, home, reader)
+    other = reader.model_copy(update={"datasets": ["ds-2"]})
+    assert raised.id not in await _queued_ids(alerts, elsewhere, other)
+    assert raised.id not in await _queued_ids(alerts, elsewhere, reader.model_copy(update={"datasets": []}))
+
+
 # --- severity, and the filters -----------------------------------------------------------------
 
 
@@ -462,3 +625,120 @@ async def test_the_queue_reads_on_a_fresh_database_with_the_alert_store_alone() 
     finally:
         await conn.execute(f"DROP SCHEMA {schema} CASCADE")
         await conn.close()
+
+
+# --- What raises alerts (`GET …/alert-sources`), through the route ----------------------------
+
+
+class _Names:
+    """The ADR-106 directory: records the ids it is asked for, and knows only its own accounts."""
+
+    def __init__(self, known: dict[str, str]) -> None:
+        self.known, self.asked = known, []  # type: ignore[var-annotated]
+
+    async def display_names(self, ids: Any) -> dict[str, str]:
+        self.asked.extend(ids)
+        return {i: self.known[i] for i in ids if i in self.known}
+
+
+class _NoAudit:
+    async def record(self, **_: Any) -> None:
+        return None
+
+
+async def test_what_raises_alerts_lists_only_the_readers_watches_and_counts_only_what_they_may_see(
+    stores: Any,
+) -> None:
+    """The orchestrator's L2.10 review, item 1 (rule 4), through `read_alert_sources` over the real
+    alert, hotlist, monitor and pattern stores: another person's watch is not listed, nor its owner
+    looked up (ADR-106 decision 3); a rule routed to a team counts its alerts for the team's members
+    and 0 for anyone else in the case; an alert any of whose evidence the reader may not read is not
+    counted. Item 3: each person is served by name. Red with `HotlistStore.list_authorized`'s owner
+    clause read as `$1::text IS NOT NULL` (the other analyst's hotlist listed, its owner asked
+    for); with `_routed_sql`'s first clause read as `true` (the routed rule counted 2 for the
+    non-member); and with the route counting from `list_queue`'s rows rather than the reader's
+    queue (the hidden alert counted)."""
+    from types import SimpleNamespace
+
+    from services.api.app import read_alert_sources
+    from services.api.monitors import MonitorStore
+    from services.api.pattern_store import PatternStore
+
+    from schemas.domain import PatternEdge, PatternNode, PatternQuery, TypologyRule
+    from schemas.sentences import RuleSentence, SentenceRuleParams
+
+    hotlists, alerts = stores
+    dsn = PostgresConfig.from_env().dsn
+    monitors, patterns = await MonitorStore.connect(dsn), await PatternStore.connect(dsn)
+    case, team = new_id(), f"team-{new_id()}"
+    member, outsider, other = _person(roles=[f"role:{team}"]), _person(), _person()
+    alerts.answers_for = _answering({})
+    made: dict[str, list[str]] = {"hotlists": [], "monitors": [], "patterns": []}
+    try:
+        mine = await _hotlist(hotlists, member, "only_me")
+        theirs = await _hotlist(hotlists, other, "team")
+        made["hotlists"] += [mine, theirs]
+        definition = PatternQuery(nodes=[PatternNode(var="p", entity_type="Person"),
+                                         PatternNode(var="e", entity_type="Endpoint")],
+                                  edges=[PatternEdge(edge_type="USES", from_var="p", to_var="e")])  # fmt: skip
+        their_pattern = await patterns.save(other, pattern_id=None, name=f"Theirs {new_id()}", definition=definition)
+        made["patterns"].append(their_pattern.pattern_id)
+        made["monitors"].append((await monitors.create(other, pattern_id=their_pattern.pattern_id)).id)
+
+        def rule(rid: str, sentence: dict[str, Any]) -> TypologyRule:
+            return TypologyRule(id=rid, investigation_id=case, owner_id=member.id, name=rid,
+                                created_at=NOW, trigger="post_commit", dataset_id="ds-1",
+                                params=SentenceRuleParams(pattern_id="p",
+                                                          sentence=RuleSentence.model_validate(sentence)))  # fmt: skip
+
+        routed_rule = rule(f"routed-{new_id()}", {"subject": "Person", "team": "team", "team_id": team})
+        plain_rule = rule(f"plain-{new_id()}", {"subject": "Person"})
+        recent = datetime.now(UTC) - timedelta(hours=1)
+        for _ in range(2):
+            await alerts.save(_routed(case, member, team).model_copy(
+                update={"rule_id": f"typology:{routed_rule.id}", "created_at": recent}))
+        await alerts.save(_alert(f"typology:{plain_rule.id}", member, investigation_id=case, typology="sentence",
+                                 referent_node_ids=["n-1"], created_at=recent))  # fmt: skip
+        await alerts.save(_alert(f"typology:{plain_rule.id}", member, investigation_id=case, typology="sentence",
+                                 referent_node_ids=["n-secret"], created_at=recent))  # fmt: skip
+
+        class _Rules:
+            async def list_for_case(self, investigation_id: str, principal: Principal) -> list[TypologyRule]:
+                return [routed_rule, plain_rule]
+
+        class _OneTeam:
+            async def team(self, role_id: str, today: date) -> Any:
+                return SimpleNamespace(display_name="Prison intel") if role_id == team else None
+
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(custom_roles=_OneTeam())))
+        graph = _Graph({**GRAPH_NAMES, "n-secret": "Hidden"}, hidden={"n-secret"})
+
+        async def read(reader: Principal) -> tuple[dict[str, Any], _Names]:
+            names = _Names({member.id: "Mo Member", other.id: "Oli Other"})
+            served = await read_alert_sources(
+                request, SimpleNamespace(id=case), reader, graph, NO_TRANSACTIONS, alerts, _Rules(),  # type: ignore[arg-type]
+                hotlists, monitors, patterns, names, _NoAudit(),  # type: ignore[arg-type]
+            )
+            return {s.id: s for s in served.sources}, names
+
+        by_id, names = await read(member)
+        assert set(by_id) == {routed_rule.id, plain_rule.id, mine}, "another's hotlist and watch are not listed"
+        assert by_id[routed_rule.id].alerts_30_days == 2
+        assert by_id[plain_rule.id].alerts_30_days == 1, "the alert citing a hidden node is not counted"
+        assert other.id not in names.asked, "the hidden watch's owner is never looked up"
+        assert (by_id[mine].maker_name, by_id[mine].owner_name) == ("Mo Member", "Mo Member")
+        assert by_id[routed_rule.id].owner_name == "Prison intel"
+
+        by_id, _ = await read(outsider)
+        assert by_id[routed_rule.id].alerts_30_days == 0 and by_id[routed_rule.id].last_fired_at is None
+        assert by_id[plain_rule.id].alerts_30_days == 1
+    finally:
+        alerts.answers_for = None
+        async with hotlists._pool.acquire() as conn:  # noqa: SLF001 - the test's own clean-up
+            await conn.execute("DELETE FROM hotlists WHERE id = ANY($1::text[])", made["hotlists"])
+        async with monitors._pool.acquire() as conn:  # noqa: SLF001
+            await conn.execute("DELETE FROM monitors WHERE id = ANY($1::text[])", made["monitors"])
+        async with patterns._pool.acquire() as conn:  # noqa: SLF001
+            await conn.execute("DELETE FROM saved_patterns WHERE pattern_id = ANY($1::text[])", made["patterns"])
+        await monitors.close()
+        await patterns.close()

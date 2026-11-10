@@ -1034,6 +1034,13 @@ async def test_a_monitor_does_not_fire_on_a_match_created_by_resolution_with_no_
 # --- ADR-099 Amendment 3: a watch raises an alert only on data of its dataset -----------------
 
 
+async def _reaches_all(owner: Principal, dataset_id: str) -> bool:
+    """The owner still reaches the watch's dataset (ADR-146 Amendment 4 point 7): these cases are
+    about the dataset's boundary, not the owner's reach, which `test_team_lead_and_watches.py` and
+    `test_evaluation_touched_nodes.py` prove."""
+    return True
+
+
 async def test_a_hotlist_fires_only_on_its_datasets_data_and_the_alert_is_that_datasets(
     hotlist_store, alert_store, audit, valkey
 ) -> None:
@@ -1067,6 +1074,7 @@ async def test_a_hotlist_fires_only_on_its_datasets_data_and_the_alert_is_that_d
                 valkey=valkey,
                 principal_for_owner=_principal_for,
                 policy="strict",
+                reaches_dataset=_reaches_all,
             )
             return [a for a in alerts if a.rule_id == f"hotlist:{hotlist.id}"]
 
@@ -1112,6 +1120,7 @@ async def test_a_monitor_matches_only_within_its_dataset(
             audit=audit,
             valkey=valkey,
             principal_for_owner=_principal_for,
+            reaches_dataset=_reaches_all,
         )
         assert [a for a in alerts if a.rule_id == f"monitor:{monitor.id}"] == []
 
@@ -1143,6 +1152,7 @@ async def test_a_monitor_matches_only_within_its_dataset(
             audit=audit,
             valkey=valkey,
             principal_for_owner=_principal_for,
+            reaches_dataset=_reaches_all,
         )
         (alert,) = [a for a in alerts if a.rule_id == f"monitor:{monitor.id}"]
         assert alert.dataset_id == "fixture-corp"

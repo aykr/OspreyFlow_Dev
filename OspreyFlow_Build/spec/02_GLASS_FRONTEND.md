@@ -508,7 +508,7 @@ missing one, which the place says in one sentence for both ("There is no alert a
 can see.") with *← Back to the queue*. An alert of another case is opened by the reload every case switch
 is, the address kept (`alerts/address.ts`); an address opened while signed out is kept in the tab's
 session storage over the sign-in round trip, which returns to the root. Opening an alert in the queue,
-on Home's *Needs your attention* or from the inbox's *Open the alert* gives it its address; Back leaves
+on Home's *Needs your attention* or from the queue gives it its address (the inbox went in L2.10); Back leaves
 it. Home's alert rows open the alert for whoever Rules and Monitoring is offered to; for someone it is
 not (a Reports Viewer) a row offers *Open in its case* and *Open the dashboard*, never the alert (ADR-145
 Amendment 4 decision 10; the journey is under the case's *Figures*). An address followed
@@ -1242,6 +1242,24 @@ judged again but never held again, or an Author rejects them with a reason — `
 §6) and **Audit** (an Author, or the
 unit's administrator: the rule audit, fifty entries at a time, the total said). Every action has
 its case in `keyboard/alerts.spec.ts`, under its own registry `ALERTS_ACTIONS` (rule 13).
+
+**One queue, its filters, teams and what the Glass makes (ADR-146 Amendment 4, L2.10).** The Watches
+inbox is gone: every alert is in the one queue, and a watch alert's detail says *what fired it* (the
+hotlist's entry, to its owner, and each matched item's files and rows). The queue's filters are *Whose
+alerts* (*All, suppressed included*, the default; *Mine*; *My teams'*; *Unassigned*) and *Older than, in
+days*, each the server's. A rule's *Alert goes to* names a team ("Prison intel only"), whose alerts its
+members and the home case's Authors alone read, and each row says so; a suppressed alert reads
+"Suppressed until ‹day›: ‹reason›" and one taken back by a revert "Taken back: the load that raised it
+was reverted". To a team's lead (or cover) an alert of the team offers *As the team's lead*: *Give to the
+member* and *Suppress until…* (a day at most 90 days ahead and a reason). *What raises alerts* opens on
+*Every rule and watch* (name, maker, source, dataset, owner, draft or live, expiry, last fired, alerts in
+30 days, the share not of interest; a filter on each column; what is suppressed beside its rule), then
+the rules, the hotlists and the watched patterns, each pattern with its own schedule (daily at 06:00
+and as data loads, weekly, or only as data loads). In the Glass, *Watch for this* (the Inspector, on an
+entity carrying an identifier), *Save as a watch* (the query builder, on a saved pattern) and *Raise an
+alert…* (the query builder, on the selected items: title, severity, why, and *This case* or *The
+dataset*, refused in the Conduit's words for a drawn item). Each has its case in
+`keyboard/alerts.spec.ts` or `keyboard/watch-panels.spec.ts` (rule 13).
 
 **Ultimate beneficial ownership: the *Ownership* place (ADR-109 phase C).** After *Alerts* on the
 left rail. An organisation or account is found by name (the case's own suggest), and traced: a line

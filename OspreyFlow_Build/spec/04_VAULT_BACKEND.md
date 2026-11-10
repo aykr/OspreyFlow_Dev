@@ -327,7 +327,11 @@ refused whole, counted from what the reader sees. Both adapters run one predicat
 the most events and the largest total of a declared amount in any span of D days (ends included)
 within the window, and the first event ever up to the window's end; an event to itself counted once;
 an event the principal may not see adds nothing and is never a first, and a node reached only through
-hidden events is absent — the access step in the query, as every read's.
+hidden events is absent — the access step in the query, as every read's. A span is exact to the microsecond
+the store holds, at any length up to the 366 days allowed. Its declared amounts, and `account_activity`'s, are
+read as ADR-133 Amendment 10 says: each rounded to 9 places and summed as a decimal (0.1 and 0.2 make 0.3) on
+every adapter; one past 10^29, inf or nan is no amount, its event still counted; a total of 10^28 or more is
+refused whole (`AmountTotalOutOfRange`), never wrapped or cut.
 `account_activity` (ADR-133 decision 2, stage (c)): for named accounts at either end of an event,
 the events and the total of a declared amount within the window (ends included) and in the D days
 before its start, the first event in the window and the last before it however long before; an

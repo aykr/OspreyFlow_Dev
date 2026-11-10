@@ -493,14 +493,14 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       const url = String(input).split("?")[0]!;
       if (url.endsWith("/v1/me/rights")) return json({ rights: ["investigate", "keep_watches", "triage_alerts", "read_alert_queue"] });
       if (url.endsWith("/v1/investigations")) return json([{ id: "inv-1", name: "A", level: "editor", created_at: "", created_by: "" }]);
-      if (url.endsWith("/inv-1/alerts")) {
-        return json({
-          alerts: [{ id: "a1", rule_id: "hotlist:h1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
-                     evidence_available: true, investigation_id: "inv-2", created_at: "2026-10-10T09:00:00Z",
-                     fired_on: [{ type: "Person", label: "A", files: [], more_files: 0, sources_withheld: false }] }],
-        }); // prettier-ignore
+      // Since L2.10 the one queue (the inbox is gone): a hotlist alert raised in another case.
+      if (url.endsWith("/inv-1/alert-queue")) {
+        return json([{
+          alert: { id: "a1", rule_id: "hotlist:h1", owner_id: "analyst-1", mode: "full", referent_node_ids: ["n1"],
+                   investigation_id: "inv-2", created_at: "2026-10-10T09:00:00Z", status: "open" },
+          summary: "A hotlisted identifier appeared: A", kind: "hotlist", severity: "high", audience: "owner",
+        }]); // prettier-ignore
       }
-      if (url.endsWith("/inv-1/alert-queue")) return json([]);
       if (url.endsWith("/v1/alerts/a1")) return json({ investigation_id: "inv-2", explanation: { alert: { id: "a1" } } });
       return new Promise<Response>(() => undefined);
     });
@@ -509,7 +509,7 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
     try {
       render(<App />);
       fireEvent.click(await rulesPlace());
-      fireEvent.click(await screen.findByRole("button", { name: "Open the alert" }));
+      fireEvent.click(await screen.findByRole("button", { name: /Open alert:/ }));
       expect(window.location.pathname).toBe("/alerts/a1");
       Reflect.deleteProperty(window, "location");
       (window as { location: unknown }).location = { ...realLocation, pathname: "/alerts/a1", assign: (url: string | URL) => went.push(String(url)) };

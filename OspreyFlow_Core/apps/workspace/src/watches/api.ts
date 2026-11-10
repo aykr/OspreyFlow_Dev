@@ -1,72 +1,14 @@
-// Fetch wrappers for `POST`/`GET .../hotlists`, `POST`/`GET .../monitors` and `GET /v1/alerts`
+// Fetch wrappers for `POST`/`GET .../hotlists` and `POST`/`GET .../monitors` (the inbox's `GET .../alerts` went in L2.10: one queue, ADR-146 decision 1)
 // (`services/api/watch_routes.py`) — mirrors `patterns/api.ts`'s own conventions (Bearer auth, throw
 // on a non-`ok` response). The jump's case of its own went in L2.9 (ADR-146 decision 6).
 //
-// **`AlertView` is hand-mirrored here, not imported from
-// `packages/schemas/generated/`.** Checked directly against `packages/schemas/generate_ts.py`
-// before writing this: its own model list is `schemas.{analytics,compute,domain,ingest,model,
-// profile,provider_profile}` only — `services/api/watch_routes.py`, where `AlertView` lives, is
-// outside that scope, by construction, since it is no `packages/schemas` module at all.
-// `Hotlist`/`Monitor` *are* generated (`schemas.domain.ALL_MODELS`) and imported below rather than
-// redeclared — a disclosed gap, rather than left
-// silently hand-mirrored with no note — a future edit to either Python shape has nothing to make
-// this file's own copy drift-check the way `Hotlist`/`Monitor` already do.
-import type { Hotlist, Monitor } from "../../../../packages/schemas/generated";
+// `Hotlist`, `Monitor` and the schedule's input are the generated shapes.
+import type { Hotlist, Monitor, MonitorScheduleInput } from "../../../../packages/schemas/generated";
 
 /** ADR-133 ruling 3: whom a hotlist's alerts reach. */
 export type HotlistAudience = NonNullable<Hotlist["audience"]>;
 
-export type AlertMode = "full" | "notify_stub";
 
-/** Mirrors `services/api/watch_routes.py::AlertView` field-for-field. */
-export interface AlertView {
-  id: string;
-  rule_id: string;
-  owner_id: string;
-  mode: AlertMode;
-  referent_node_ids: string[];
-  evidence_available: boolean;
-  investigation_id: string | null;
-  created_at: string;
-  /** ADR-110 Amendment 3: the alert in words; a scheduled run's notice is nothing else. */
-  words?: string | null;
-  /** ADR-130 decision 1: the hotlist behind a `hotlist:` rule, present only to its owner. */
-  hotlist?: AlertHotlist | null;
-  /** ADR-130 decision 1: what fired it, present only when the evidence is available to the reader. */
-  fired_on?: FiredOn[] | null;
-}
-
-/** Mirrors `services/api/watch_routes.py::AlertHotlist`. */
-export interface AlertHotlist {
-  /** As typed, else as stored. */
-  identifier: string;
-  kept_as_written: boolean;
-  /** An ISO date, `YYYY-MM-DD`. */
-  review_date: string;
-}
-
-/** Mirrors `services/api/watch_routes.py::FiredFile`: one `row`, how many `rows`, or how many
- * `records` where the locators are not of the form "row N" (ADR-130 Amendment 1). */
-export interface FiredFile {
-  name: string;
-  row?: number | null;
-  rows?: number | null;
-  records?: number | null;
-}
-
-/** Mirrors `services/api/watch_routes.py::FiredOn`: at most five files, `more_files` the rest. */
-export interface FiredOn {
-  type: string;
-  label: string;
-  files: FiredFile[];
-  more_files: number;
-  /** ADR-130 Amendment 1: true when the node's sources are in data the case does not read; its
-   * `files` are then empty and its type and label are all that is said. */
-  sources_withheld?: boolean;
-}
-
-/** ADR-110 decision 10: a notice that a scheduled run failed or was refused, not a match. */
-export const isScheduleNotice = (alert: AlertView) => alert.rule_id.startsWith("schedule:");
 
 
 /** ADR-099 Amendment 3: watches and their alerts are the dataset's, asked of the case. */
@@ -194,16 +136,21 @@ export async function listMonitors(
   return body.monitors;
 }
 
-export async function listAlerts(
+
+
+/** ADR-146 decision 4 (G16): a watched pattern's own schedule, set by its owner. */
+export async function setMonitorSchedule(
   apiBaseUrl: string,
   bearerToken: string,
   investigationId: string,
-): Promise<AlertView[]> {
-  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/alerts`, { headers: authHeaders(bearerToken) });
-  if (!response.ok) {
-    throw new Error(`GET .../alerts failed: ${response.status}`);
-  }
-  const body = (await response.json()) as { alerts: AlertView[] };
-  return body.alerts;
+  monitorId: string,
+  schedule: MonitorScheduleInput,
+): Promise<Monitor> {
+  const response = await fetch(`${caseUrl(apiBaseUrl, investigationId)}/monitors/${encodeURIComponent(monitorId)}/schedule`, {
+    method: "PUT",
+    headers: { ...authHeaders(bearerToken), "Content-Type": "application/json" },
+    body: JSON.stringify(schedule),
+  });
+  if (!response.ok) throw await refusal(response, "Setting the watch's schedule");
+  return (await response.json()) as Monitor;
 }
-

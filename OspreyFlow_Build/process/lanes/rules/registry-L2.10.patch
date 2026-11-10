@@ -1,0 +1,46 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 4e64076..ea53feb 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -251,7 +251,7 @@ export const QUERY_BUILDER_ACTIONS = defineActionRegistry("QUERY_BUILDER_ACTIONS
+ ] as const);
+ 
+ /**
+- * Hotlists/monitors/the alert inbox — Phase 7 Stage 6c Part 2, the fourth keyboard-driven surface
++ * Hotlists and monitors (the alert inbox went in L2.10) — Phase 7 Stage 6c Part 2, the fourth keyboard-driven surface
+  * (`keyboard/watch-panels-harness.tsx`'s own docstring has the reasoning for a separate
+  * harness/spec pair). Every native `Input`/`Select`'s own Tab-reachability needs no case here, the
+  * same exemption `QUERY_BUILDER_ACTIONS`'s own docstring already establishes — only an action with
+@@ -265,7 +265,12 @@ export const WATCH_PANEL_ACTIONS = defineActionRegistry("WATCH_PANEL_ACTIONS", [
+   "choose-a-new-hotlists-audience-by-keyboard",
+   "change-a-hotlists-audience-by-keyboard",
+   "submit-create-monitor",
+-  "open-an-inbox-alert-at-its-address",
++  // ADR-146 decisions 4 and 7 (L2.10): a watch's own schedule, and what the Glass makes; the inbox's
++  // own action went with it.
++  "set-a-watched-patterns-schedule-by-keyboard",
++  "watch-for-an-entity-by-keyboard",
++  "save-a-pattern-as-a-watch-by-keyboard",
++  "raise-an-alert-by-keyboard",
+ ] as const);
+ 
+ /**
+@@ -567,10 +572,16 @@ export const ALERTS_ACTIONS = defineActionRegistry("ALERTS_ACTIONS", [
+   "show-an-alert-on-the-canvas-by-keyboard",
+   "close-an-alert-with-a-reason-by-keyboard",
+   // The owner's answer of 1 November 2026: the closing reason, one of a closed list of five; and
+-  // the watches, kept with the rules in Rules and Monitoring (ADR-146), and an inbox alert opened.
++  // the watches, kept with the rules in Rules and Monitoring (ADR-146; the inbox went in L2.10).
+   "choose-a-closing-reason-by-keyboard",
+-  "reach-the-watches-and-alert-inbox-by-keyboard",
++  "reach-the-watches-kept-with-the-rules-by-keyboard",
+   "filter-the-queue-by-keyboard",
++  // ADR-146 decision 2's filters, Amendment 1's lead tools and decision 5's inventory (L2.10).
++  "filter-the-queue-by-whose-and-age-by-keyboard",
++  "give-a-team-alert-to-a-member-by-keyboard",
++  "suppress-a-team-alert-by-keyboard",
++  "filter-what-raises-alerts-by-keyboard",
++  "send-a-rules-alerts-to-a-named-team-by-keyboard",
+   "deploy-a-rule-by-keyboard",
+   "retire-a-rule-by-keyboard",
+   "release-held-rows-by-keyboard",

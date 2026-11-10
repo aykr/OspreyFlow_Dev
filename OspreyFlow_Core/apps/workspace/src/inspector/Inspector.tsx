@@ -29,6 +29,7 @@ import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
 import { endName } from "./LinkDetails";
 import { isInternalReference, propertyLabel } from "./propertyNames";
 import type { HandlingScheme } from "../ingest/api";
+import { WatchForThis, type GlassApi } from "../watches/GlassWatchActions";
 
 function isResolutionLink(type: string): boolean {
   return type === "SAME_AS" || type === "NOT_SAME_AS";
@@ -78,6 +79,9 @@ export interface InspectorProps {
   sharedContacts?: Omit<SharedContactsProps, "node">;
   /** ADR-109 phase E: the selected entity's neighbourhood risk, on demand. Absent: not offered. */
   neighbourhoodRisk?: Omit<NeighbourhoodRiskProps, "node">;
+  /** ADR-146 decision 4: *Watch for this* on an entity that carries an identifier. Absent: not
+   * offered. */
+  watch?: GlassApi;
   /** ADR-105: the entity's own picture. Absent: not offered. */
   picture?: EntityPictureProps;
   /** Rises when a node's menu chose *Set picture…* (ADR-105 Amendment 1): the Picture part opens.
@@ -141,6 +145,7 @@ export function Inspector({
   visualFor,
   sharedContacts,
   neighbourhoodRisk,
+  watch,
   picture,
   openPictureSignal,
 }: InspectorProps) {
@@ -223,6 +228,7 @@ export function Inspector({
         visualFor={visualFor}
         sharedContacts={sharedContacts}
         neighbourhoodRisk={neighbourhoodRisk}
+        watch={watch}
         picture={picture}
         openPictureSignal={openPictureSignal}
       />
@@ -486,6 +492,7 @@ function NodeView({
   visualFor,
   sharedContacts,
   neighbourhoodRisk,
+  watch,
   picture,
   openPictureSignal,
 }: {
@@ -495,6 +502,7 @@ function NodeView({
   visualFor?: InspectorProps["visualFor"];
   sharedContacts?: InspectorProps["sharedContacts"];
   neighbourhoodRisk?: InspectorProps["neighbourhoodRisk"];
+  watch?: InspectorProps["watch"];
   picture?: InspectorProps["picture"];
   openPictureSignal?: number;
 }) {
@@ -614,6 +622,7 @@ function NodeView({
       {node &&
         neighbourhoodRisk &&
         section("risk", "Neighbourhood risk", <NeighbourhoodRisk {...neighbourhoodRisk} node={node} />)}
+      {node && watch && <WatchForThis {...watch} node={node} />}
       {node &&
         section(
           "provenance",

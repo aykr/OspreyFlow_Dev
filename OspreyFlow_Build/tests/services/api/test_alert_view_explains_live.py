@@ -11,7 +11,6 @@ import pytest
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
 from services.api.hotlists import HotlistStore
-from services.api.watch_routes import alert_to_view
 
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_id
@@ -27,7 +26,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
-from tests.services.api.no_transactions import NO_TRANSACTIONS
+from tests.services.api.test_alert_view_explains import _view
 
 # Ids of this run's own: the stores are shared with other suites, whose rows a fixed id would
 # meet (a stranger's "empty" list once held 220 other tests' alerts).
@@ -98,7 +97,7 @@ async def test_the_owner_sees_the_hotlist_and_what_fired_it_and_a_stranger_the_h
         )  # fmt: skip
         await alerts.save(alert)
 
-        mine = await alert_to_view(alert, OWNER, graph, NO_TRANSACTIONS, hotlists, case="inbox-case")
+        mine = await _view(alert, OWNER, graph, hotlists)
         assert mine.hotlist is not None and mine.hotlist.identifier == "07700 900918"
         assert mine.hotlist.review_date == date(2027, 1, 31)
         assert mine.fired_on is not None
@@ -108,7 +107,7 @@ async def test_the_owner_sees_the_hotlist_and_what_fired_it_and_a_stranger_the_h
         # Another analyst's list never holds it (as before), and reading the hotlist as them is
         # refused by the real store, so nothing of it reaches a view built for them.
         assert await alerts.list_authorized(STRANGER) == []
-        theirs = await alert_to_view(alert, STRANGER, graph, NO_TRANSACTIONS, hotlists, case="inbox-case")
+        theirs = await _view(alert, STRANGER, graph, hotlists)
         assert theirs.hotlist is None
 
         # Revoke: the node becomes unreadable to the owner; no fired_on, nothing about it.
@@ -116,9 +115,8 @@ async def test_the_owner_sees_the_hotlist_and_what_fired_it_and_a_stranger_the_h
         hidden = _endpoint(owning_unit="unit-2", classification="SECRET")  # still in DATASET
         await graph.supersede_node(node_id, hidden, tx)
         await graph.commit_transaction(tx)
-        revoked = await alert_to_view(alert, OWNER, graph, NO_TRANSACTIONS, hotlists, case="inbox-case")
-        assert revoked.evidence_available is False and revoked.fired_on is None
-        assert "pid_" not in revoked.model_dump_json()
+        revoked = await _view(alert, OWNER, graph, hotlists)
+        assert revoked is None, "the queue refuses the alert whole, so nothing of what fired it is said"
 
 
 async def test_a_node_in_two_datasets_has_its_sources_withheld_from_a_case_of_one(stores) -> None:
@@ -136,11 +134,11 @@ async def test_a_node_in_two_datasets_has_its_sources_withheld_from_a_case_of_on
             referent_node_ids=[node_id], created_at=datetime.now(UTC),
         )  # fmt: skip
 
-        one = await alert_to_view(alert, OWNER, graph, NO_TRANSACTIONS, hotlists, case="inbox-case")
+        one = await _view(alert, OWNER, graph, hotlists)
         assert one.fired_on is not None
         assert one.fired_on[0].sources_withheld is True and one.fired_on[0].files == []
         assert "pid_" not in one.model_dump_json()
 
-        named = await alert_to_view(alert, both, graph, NO_TRANSACTIONS, hotlists, case="inbox-case")
+        named = await _view(alert, both, graph, hotlists)
         assert named.fired_on is not None and named.fired_on[0].sources_withheld is False
         assert named.fired_on[0].files[0].name == "pid_seized_comms_batch2.csv"
