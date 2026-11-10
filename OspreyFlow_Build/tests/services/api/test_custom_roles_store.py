@@ -24,11 +24,14 @@ import asyncpg
 import pytest
 from services.api.admin_people import AdminPeopleStore, DisableRefused, recipients
 from services.api.audit import AuditWriter
+from services.api.board_store import PostgresBoardItemStore
+from services.api.case_views import PostgresCaseViewStore
 from services.api.config import PostgresConfig
 from services.api.custom_roles import CustomRoleStore, RoleRefused
 from services.api.datasets import PostgresDatasetStore
 from services.api.hotlists import HotlistStore
 from services.api.investigations import AccessLevel, InvestigationNotFoundError, InvestigationStore
+from services.api.link_type_store import LinkTypeProposalStore
 from services.api.monitors import MonitorStore
 from services.api.pattern_store import PatternStore
 from services.api.screening import ScreeningListStore
@@ -63,6 +66,9 @@ async def world() -> AsyncIterator[SimpleNamespace]:
         await HotlistStore.connect(dsn), await MonitorStore.connect(dsn),
         await PatternStore.connect(dsn), await TypologyRuleStore.connect(dsn),
         await ScreeningListStore.connect(dsn), await StudioRecipeStore.connect(dsn),
+        # L2.5b: the plan reads L3.8's kinds, so the case lane's tables are made by their stores.
+        await PostgresCaseViewStore.connect(dsn), await PostgresBoardItemStore.connect(dsn),
+        await LinkTypeProposalStore.connect(dsn),
         await AuditWriter.connect(dsn),
     ]  # fmt: skip
     roles = await CustomRoleStore.connect(dsn)
