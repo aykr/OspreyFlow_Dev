@@ -1,4 +1,4 @@
-# head 22ff1e3; plant: the index never written: `index.write()` -> `pass`
+# head 5806e30; plant: the index never written: `index.write()` -> `pass`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 # must fail: test_publish_writes_a_commit_real_git_reads, test_the_file_is_committed_at_the_path_the_registry_row_will_name; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_republishing_identical_bytes_makes_no_commit
@@ -20,6 +20,8 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_holding_more_than_a_git_directory_is_kept
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_in_the_repository_is_the_bytes_given
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_committing_the_same_bytes_again_is_not_an_error
 PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_changed_bytes_are_a_second_commit
@@ -45,5 +47,6 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link] - AssertionError: assert 'D  recipes/a...?? recipes/\n' == ''
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[commondir] - AssertionError: assert 'D  recipes/a...?? recipes/\n' == ''
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept - AssertionError: assert 'D  recipes/a...?? recipes/\n' == ''
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume - AssertionError: assert 'D  recipes/a...?? recipes/\n' == ''
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_is_committed_at_the_path_the_registry_row_will_name - AssertionError: assert [] == ['recipes/r-one.yaml']
-21 failed, 24 passed in 9.04s
+22 failed, 26 passed in 9.48s

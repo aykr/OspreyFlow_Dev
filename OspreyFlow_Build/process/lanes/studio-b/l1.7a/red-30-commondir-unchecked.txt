@@ -1,4 +1,4 @@
-# head 22ff1e3; plant: the `.git` lstat asked, its common directory not: a linked worktree's layout
+# head 5806e30; plant: the `.git` lstat asked, its common directory not: a linked worktree's layout
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_git_directory_that_is_not_the_root_s_own_is_refused[commondir]; for the reason 'DID NOT RAISE'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -39,5 +39,8 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_pu
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_holding_more_than_a_git_directory_is_kept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[commondir] - Failed: DID NOT RAISE GitCommitError
-1 failed, 38 passed in 8.93s
+1 failed, 41 passed in 9.55s

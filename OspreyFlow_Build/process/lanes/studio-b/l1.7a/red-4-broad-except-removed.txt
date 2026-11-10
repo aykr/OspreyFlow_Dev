@@ -1,4 +1,4 @@
-# head 22ff1e3; plant: a dulwich or filesystem failure left untyped: `except Exception` -> `except ZeroDivisionError`
+# head 5806e30; plant: a dulwich or filesystem failure left untyped: `except Exception` -> `except ZeroDivisionError`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_failed_write_is_a_typed_error_not_a_bare_500; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -38,6 +38,9 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_pu
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_holding_more_than_a_git_directory_is_kept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - OSError: index.lock is held
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500 - OSError: [Errno 5] Input/output error: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2567/test_a_failed_write_is_a_typed0/repo/.git/objects'
-2 failed, 37 passed in 8.44s
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500 - OSError: [Errno 5] Input/output error: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2643/test_a_failed_write_is_a_typed0/repo/.git/objects'
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume - OSError: [Errno 28] No space left on device
+3 failed, 39 passed in 9.23s

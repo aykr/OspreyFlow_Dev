@@ -1,4 +1,4 @@
-# head 22ff1e3; plant: the id's pattern not asked, dulwich's path check kept: the ids that check alone lets through (`a/b`, `..` as `recipes/...yaml`, `.hidden`, ``); the `..`, `.git` and `../..` elements it refuses itself stay refused
+# head 5806e30; plant: the id's pattern not asked, dulwich's path check kept: the ids that check alone lets through (`a/b`, `..` as `recipes/...yaml`, `.hidden`, ``); the `..`, `.git` and `../..` elements it refuses itself stay refused
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_recipe_id_that_is_not_one_file_name_is_refused[a/b], test_a_recipe_id_that_is_not_one_file_name_is_refused[..], test_a_recipe_id_that_is_not_one_file_name_is_refused[.hidden], test_a_recipe_id_that_is_not_one_file_name_is_refused[]; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -36,8 +36,11 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_pu
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_waits_for_a_lock_held_briefly_then_commits
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_holding_more_than_a_git_directory_is_kept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[a/b] - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[..] - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[.hidden] - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[] - Failed: DID NOT RAISE GitCommitError
-4 failed, 35 passed in 8.88s
+4 failed, 38 passed in 9.33s
