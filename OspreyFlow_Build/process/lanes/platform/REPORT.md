@@ -1,83 +1,91 @@
-# Platform lane · P5 · report (9 November 2026, the owner's map rulings 1, 6 and 8)
+# Platform lane · P7 · report (10 November 2026, the `cloud-platform` profile, ADR-148) — NOT READY TO MERGE
 
-P5 (ADR-147 Amendment 2). Reviews:
+P7 is in progress. The shared UID change merged alone (`fdd717d`, proofs in `gates/p7_uid_proof.7a89a87.log`).
+The rest is on `lane/platform` above main `aec1f41`, with schemas at the head (the brief's rule, agreed by the
+orchestrator). The lane-reviewer's 18 points are below, each marked fixed or open. `HANDOFF.md` says what the
+next session does first. Nothing of this session is still running: the kind cluster is down, with 0 containers
+and 0 images left on the test server.
 
-- the lane's own;
-- the orchestrator's independent review and its ruling (d): a removal deletes no copy;
-- the lane's own, twice;
-- **the orchestrator's review sending P5 back (round 3)**;
-- **the lane's own review of round 3**, which sent it back again (defects 1–14), all answered;
-- **the orchestrator's re-review** (items 1, 3, 5–8 confirmed), whose four items and minors are answered here.
+## Exit criteria
 
-Every fix is shown red at its call site in `P5_RED_RECORD.md`. Plants that proved nothing are recorded there and not counted. The session resumed after compaction and found no `HANDOFF.md`. **Head: this commit's, the code gated at `d9b0818`, rebased onto main `15d0d24`.**
+| Criterion | State | Evidence |
+| --- | --- | --- |
+| `make cp-policy-check` green on the render | Met at `2e9afaa` (chart since changed; re-run) | `tools.cp_policy_check`: 0 violations, both fixtures; 67 passed on the server, with `test_helm_chart` and `test_cluster_render` |
+| …red on each planted fault | **Partly**: reviewer point 2 | `tests/cp_policy_check/test_cp_policy_check.py`; no `P7_RED_RECORD.md` yet |
+| ArcadeDB, ClickHouse, Keeper start as 10001 | Met, in Docker and on kind | `gates/p7_stores_uid_proof.2026-11-10.log`, `gates/p7_kind_check.677d473.log` |
+| Acceptance scenarios on kind/k3d | **Not met** | The Conduit exits (no `OIDC_JWKS_URL`); the workspace image could not build (Docker Hub 429 on `node:22-slim`) |
+| `local-lite`, `small`, `cluster` renders unchanged but the UIDs | Met for values and lock (the one intended difference is the `_Pins` fix) | `gates/p7_renders_unchanged.py` against main: 0 differences. The Helm output is untested (point 7) |
+| A friction row | Written | `process/friction/2026-11-10-platform-p7-cloud-platform.md` (and the shared commit's row) |
 
-## The brief
+On kind (`gates/p7_kind.sh`; Calico from quay.io, no ReadWriteMany class, an ingress controller):
 
-- **Ruling 1, Java in the Conduit:**
-  - jlinked Temurin **21.0.13+9**, October 2026's update, pinned by its index digest (`services/api/Dockerfile`). It was repinned from 21.0.12.1+1, which the new version gate refused.
-  - The register's one Classpath exception is in `spec/00` §7, proved by `licence-check`'s image leg (`test_runtime_licences.py`, each refusal red).
-  - Built on the test server (amd64): the **image is 1.86 GB** (1,858,960,446 bytes at `dc11181`), of which **`/opt/java` is 62 MB**. planetiler v0.10.2's `--help` **exits 0** under the image's Java.
-  - **trivy does not see a jlinked runtime.** The same image from Temurin 21.0.1 (2023, with known CVEs) scans clean, exit 0, as the current one does. trivy names no package of the runtime.
-  - In its place, **`tools/java_runtime_check.py`**, which fails closed: anything it cannot read is a refusal in words. Every branch is red offline, through `main` and the fetch's own code.
-    - `--image`: the Dockerfile's `org.ospreyflow.runtime.java.version` label must match the built image's `/opt/java/release` `JAVA_VERSION` and its `java -version` build. **This is CI's step** in the `trivy-image-api` job, after its build (**`P5_ci.diff`**, the owner's file). Its own command (`uv run`) on the server: exit 1 over a Temurin 21.0.1 image, exit 0 over the current one.
-    - `--current`: the Java stage's pinned digest must be the one `eclipse-temurin:21-jdk` resolves to on Docker Hub now. **The orchestrator's call, over Adoptium's release list:** the tag moves only once an image exists to repin to. So CI is never red for days with nothing to take, and an old commit re-run is red only if its pin is no longer the tag's. On the server: exit 0 on the committed pin, exit 1 on the previous digest. It runs in Build's `make ci` after `core-check` (**`JAVA_RUNTIME_CI.diff`**), never in Core's Makefile, which stands alone. The first draft's line there broke `test_core_stands_alone` and was withdrawn.
-    - The image is now built as CI's job builds it, without `--pull`: Docker Hub answered `--pull`'s manifest request with 429 on the server.
-  - `java.desktop`'s ten bundled native libraries are registered for the NOTICE (`spec/00` §7), from the image's own notices.
-- **Ruling 6, copies in the case's dataset** (`services/api/case_gazetteers.py`, `PUT`/`DELETE /v1/datasets/{dataset}/gazetteers/{gazetteer}`):
-  - Copies are matched on `Provenance.gazetteer`, the dataset id of the copy's own unit's gazetteer.
-  - Only a place the gazetteer's dataset holds alone is copied.
-  - The addition is audited before the copy. *Admin › Audit* files both actions under *Datasets*, as main's census requires. Only the dataset's id is shown, and a test pins it (`test_a_gazetteer_s_addition_shows_its_dataset_alone`).
-  - **Every read path withholds a copy's identifiers:**
-    - five are red live with their fix removed: `get_node`, `get_nodes` (the seed, node detail at the route), search, suggest by name, and expansion;
-    - every deserialiser call in the adapter's whole package is held structurally to its own caller's principal, through a module or not. An import under another name, or a deserialiser handed on as a value, is refused (`test_every_read_withholds_by_its_principal.py`). Red at each of the ten remaining call sites in turn, and at an aliased import.
-  - A retracted copy stays a copy, withheld, with its identifiers kept.
-  - Ruling (d) stands in place of the brief's removal clause.
-- **Ruling 8, the unit a build setting:**
-  - *Admin › Maps*, both command-line builds and **the set-up console** (its Geospatial screen's "Unit that holds the place names") take the unit.
-  - The console takes any unit the Conduit can name (`org_unit`'s 1 to 60 characters), and refuses only none, an option or a control character. A null counts as none.
-  - Its fake runner refuses with the Conduit's own parser, and refuses an unknown unit in the Conduit's own words (`UNKNOWN_UNIT`), which the screen shows.
-  - **A fresh install builds its first basemap from *Admin › Maps*.** With no case or dataset yet, the command line and the console refuse every unit, and *Admin › Maps* admits the administrator's own (recorded in the ADR, pinned by a test). If the console must build first, a tiles-only build is the likely next step.
-  - The builder's words in *Admin › Maps* name `--unit`.
-- **`git`:** the owner ruled for (b): dulwich, under Apache-2.0, as studio-b's carry in L1.7a, and then `git` leaves the image. Until then every `licence-check` run names it as **not yet passed**, with that ruling and carry (asserted). This is in the ADR, `spec/00` §7 and the Dockerfile.
+- the stores are Ready as 10001 on `gp2-expand` ReadWriteOnce claims, with PDBs;
+- the Calico deny and allow policies are applied: the internet is refused, the managed stand-ins and the namespace's pods are reached;
+- the worker and ner run as 10001; the Conduit runs as 10001 with no Java;
+- Keycloak builds itself and initialises its schema on the RDS stand-in, given group 0 as a supplementary group.
 
-## Gates (`gates/README.md`, round 3 and the re-review)
+## Defects the cluster found, each fixed red-first
 
-- **`make -k ci`** at `d9b0818`: **green but this machine's Docker socket** (the eight image scans, `opentofu-check` and `chart-check`; Docker Desktop is off here). The harness axe run passed, the Geospatial screen in dark and light.
-- **`make test`**, on the server through `stack_lease.sh offline`, at `d9b0818`: **9774 passed, 2 failed, none the branch's** (the server's GPU preflight case and the Valkey offline pin). test-js: workspace 2814 passed, 1 failed (the Matrix first-frame timing under load, as at every gate; alone it passes); harness 47 passed.
-- **Live**, platform lease on **stack e** through `stack_lease.sh remote`, detached, 21:57–22:12 UTC at `dc11181` (code identical to `d9b0818`), on main `15d0d24` (`gates/dc11181.*`):
-  - `test_route_rights.py` and both case-gazetteer live files: **15 passed**;
-  - the image check: CI's step and `--current`, red and green (above); planetiler `--help` exit 0; trivy exit 0 over both images;
-  - `PORT_CONTRACT.diff`'s case green; red with the guard's copy clause dropped, and at the page's `more=True` with the case's earlier checks removed.
-  - Released at 22:12.
-- Before that, on stack d: the read-path plants, the delta set (372 passed), the retract test.
+- **Calico policy names.** Calico 3.28+ stores a default-tier policy as `default.<name>`, so a Helm upgrade could not patch ours. They are now named with their tier.
+- **The gateway's master key.** Our Secret dropped it while the Conduit still names it. The new test `test_every_key_a_pod_names_in_our_secret_is_in_it` covers this.
+- **OpenSearch.** A pod named a secret for an OpenSearch address nothing reads, so it could not start. The variable is dropped; the domain stays in the Terraform.
+- **Keycloak.** Its image is built for group 0, and it cannot build itself as 10001:10001.
+- **`_Pins` double digests** (`ref@sha256:…@sha256:…`). Fixed in its own commit, with the pin test anchored at both ends.
 
-## Left, for the orchestrator
+## Decisions taken (for the owner to overrule)
 
-- The Glass control for a gazetteer (P6).
-- The case's dataset picker still offers a gazetteer as a composite (a carry to case).
-- The image's source offer and NOTICE (a release step; the register names what it carries).
-- The admin guide's `--unit` line (a carry to docs).
-- A region of 100,000 places copies in over twenty minutes (a background job is the likely next step).
-- `MAP_PATH` is defined in both `harness/geospatial.py` and `cli/ospreyflow/maps.py`. Neither imports the other, so it is left as it is.
-- trivy 0.76.2 is out (the gates pin 0.76.1).
-- studio-b's `L1.7a_git_leaves_image.diff` is to be applied when dulwich lands (after studio-b's L1.7a merges), not before. Until then `git` stays declared.
+1. **Shared folders before P8:** one ReadWriteOnce claim, its mounters co-scheduled on one node by pod affinity. Accepted by the orchestrator; a CARRIES row is on P8.
+2. **Terraform:** plain AWS/Kubernetes resources in the environments repository's shape, not the platform's modules, whose sources would name the client in this repository.
+3. **Egress by networks:** Calico's open-source policy matches networks, not names, so every enabled host names its networks in `cloud_platform.egress_nets`. One without is refused at render.
+4. **No baked docker group in the harness image:** run with `--group-add` instead.
+5. **No pod is given an OpenSearch address** until the index leg reads one.
+6. **Keycloak gets supplementary group 0** on this profile, not a thin image (it leaves in P10).
+7. **Java via a build argument** (`CONDUIT_JAVA=omitted`), not a second Dockerfile (ADR-148 question 3, the recommended answer).
 
-## Requests
+## The reviewer's 18 points
 
-- **Apply at merge:**
-  - `P5_ci.diff`, for the owner (`ci.yml` is theirs): the `trivy-image-api` job's `setup-uv` and `java_runtime_check --image ospreyflow/api:ci` step, after the build.
-  - `JAVA_RUNTIME_CI.diff`: Build's `java-runtime-check` target (`--image … --current`), in `ci` after `core-check`. It needs Docker and the network, as the image scans do.
-  - `PORT_CONTRACT.diff`: `ports/graph.py`'s docstrings and the conformance case `test_a_gazetteer_copy_matches_a_case_reader_on_its_name_alone`, now with a page's `more`. It applies clean and was proved live.
-- **Ratify outside the lane's map:**
-  - `services/api/app.py`'s `PUT`/`DELETE` gazetteer routes;
-  - `packages/schemas/mapconfig.py` and `generated/CaseGazetteer*.ts`;
-  - `services/api/map_admin.py`;
-  - `services/api/Dockerfile`;
-  - `services/api/audit_section.py`, `test_audit_kinds.py` and `test_audit_section_routes.py` (admin's census: the two actions, the dataset's id alone shown);
-  - `harness/geospatial.py`, `harness/webapp.py` and `apps/harness` (the Geospatial screen, its client and test);
-  - `OspreyFlow_Core/DEMO_GUIDE.md`;
-  - `tools/licence_check.py` and the new `tools/java_runtime_check.py`;
-  - and, as before: `packages/ontology/handling.py`, `packages/adapters/graph_arcadedb/builders.py`, `packages/schemas/{domain,merge}.py`, `test_route_rights.py`, `test_investigation_levels.py`, spec 00, 03 and 06, and `placesByRole.json`.
-- **Mark ADR-147 Amendment 2 written** in `ADR_RESERVATIONS.md`.
+- **Open: the exit evidence and red record (1, 2).**
+  - 1: the exit evidence. Partly answered by the logs now in `gates/`; the acceptance run is still open.
+  - 2: `P7_RED_RECORD.md`, with each policy-check branch red on its own fault: `allowPrivilegeEscalation`, the capabilities, a container port and a Service port separately, and a StatefulSet's RWX claim template.
+- **Disputed (3):** schemas at the branch head, per the brief.
+- **Open: egress (4).** Mail, organisation sign-in and connector hosts are missing, and `OSPREY_CONNECTOR_EGRESS` has no route in. The client's S3 gateway endpoint is a prefix list, not the VPC CIDR, and IRSA's STS call needs a route too. The list is read from `osprey.yaml`, not from Admin's runtime settings (L1.9).
+- **Open: the Ingress (5).** It lacks Caddy's `id.<host>/assets/govuk` route, and has no TLS secret setting; the `id.`/`bi.` hosts sit two levels below the platform's wildcard.
+- **Open: unproven images (6).**
+  - LiteLLM and the postgres init containers are not shown starting as 10001 with every capability dropped.
+  - The stores' proof lacks `--cap-drop ALL` and `no-new-privileges`.
+  - Keycloak is now shown on kind.
+- **Open: ownership and the chart's output (7).**
+  - The chart templates outside `ingress.yaml` are edited; that needs the orchestrator's acceptance.
+  - No test holds the cluster's Helm output unchanged (`p7_renders_unchanged.py --helm` was promised and not built).
+  - The rendered pods' shared-claim affinity is untested.
+- **Open: `images push` (8).** No fake registry models a refusal. The by-digest copy never ran against a real registry. There is no `--platform` (an arm64 Mac would push arm64).
+- **Open: the stand-ins (9).** The kind stand-ins are more permissive than RDS: a superuser, and TLS not forced. The kind S3-key and CA patches bypass the rendered IRSA and TLS paths, and `report-sync` is unpatched.
+- **Open: tests (10, 11).**
+  - 10: the image-pin test is end-anchored.
+  - 11: the readers test leaves out init containers, Keycloak and LiteLLM, and the Amendment's "no other" is untrue for them. `READERS`/IRSA name `ingest`, which this profile never renders.
+- **Open: minors (12–18).**
+  - 12: the Java-less build is never built in a test, and its image keeps the Java labels.
+  - 13: Calico's CRDs are not schema-checked.
+  - 14: spec/05 is silent on the profile, and the reservation row still says reserved.
+  - 15: duplications (`OURS`, `in_kind_registry`, `_egress_hosts`, `_refuse`).
+  - 16: renderer edges (`plan.setdefault`, an empty `:sha256-` tag, any non-zero UID accepted, global bucket names).
+  - 17: wording.
+  - 18: `tofu init` in the check needs the network.
+- **New, from the cluster:** the Conduit and the workers need the non-secret settings `harness.apply` writes for a cluster (`OIDC_JWKS_URL`, the issuer, …). This profile renders none of them; they belong in its ConfigMap.
 
-**Questions:** none. **Running:** nothing; no stack held.
+## Commits (main..HEAD)
+
+`65091cd` harness · `be0639a` chart · `0a925d2` policy check · `8dc5084` images push · `12017bd` Java arg and
+Maps' words · `e3950ff` render comparison · `0001f7b` `_Pins` fix · `0c1ec85` stores proof · `0c88235` OpenSearch,
+kind file, format · `0d36f5b` ADR-148 Am 1 and kind scripts · `f572a88` schemas · `79e3d0c` Calico names ·
+`2f21d20` gateway key · `677d473` Keycloak group. The next session moves the schemas commit back to the head.
+
+## Requests to the orchestrator
+
+- Accept, or reassign, the chart template edits beyond `ingress.yaml`.
+- Apply `P7_ci_makefile.diff` once the red record is in.
+- The reservation row for ADR-148 Am 1 to say written, at merge.
+
+## Gates
+
+`make -k ci` and `make test` have not been run for P7: they wait for the open points.
