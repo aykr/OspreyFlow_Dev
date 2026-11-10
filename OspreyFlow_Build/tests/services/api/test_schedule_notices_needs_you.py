@@ -21,20 +21,19 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from services.api.alerts import AlertStore
-from services.api.config import PostgresConfig
-from services.api.scheduler import schedule_notice
-
 from conduit_common.identity import new_id
 from schemas.domain import Alert, AlertMode, Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
+from services.api.alerts import AlertStore
+from services.api.config import PostgresConfig
+from services.api.scheduler import schedule_notice
 
 NOW = datetime(2026, 11, 10, 21, 0, tzinfo=UTC)
 SINCE = NOW - timedelta(days=7)
 
 
 def _recipe(owner: str) -> StudioRecipeDraft:
-    return StudioRecipeDraft(  # type: ignore[call-arg]
+    return StudioRecipeDraft(
         recipe_id=new_id(), version=1, status=StudioRecipeStatus.PUBLISHED, label="Daily export",
         handling={}, owning_unit="unit-1", created_by=owner, created_at=NOW, ready_for_profile=True,
         schedule_cron="0 6 * * *", schedule_owner=owner, schedule_case=new_id(),
@@ -54,22 +53,32 @@ async def world() -> AsyncIterator[tuple[AlertStore, list[str]]]:
     finally:
         if written:
             async with store._pool.acquire() as conn:
-                await conn.execute("DELETE FROM alerts WHERE id = ANY($1::text[])", written)
+                await conn.execute(
+                    "DELETE FROM alerts WHERE id = ANY($1::text[])", written
+                )
         await store.close()
 
 
-async def _notice(store: AlertStore, written: list[str], owner: str, at: datetime) -> Alert:
-    notice = schedule_notice(owner, _recipe(owner), f"The scheduled run of Daily export failed {at}", at)
+async def _notice(
+    store: AlertStore, written: list[str], owner: str, at: datetime
+) -> Alert:
+    notice = schedule_notice(
+        owner, _recipe(owner), f"The scheduled run of Daily export failed {at}", at
+    )
     await store.save(notice)
     written.append(notice.id)
     return notice
 
 
-async def test_only_the_owner_reads_or_counts_a_notice(world: tuple[AlertStore, list[str]]) -> None:
+async def test_only_the_owner_reads_or_counts_a_notice(
+    world: tuple[AlertStore, list[str]],
+) -> None:
     store, written = world
     owner = f"owner-{new_id()}"
     mine = await _notice(store, written, owner, NOW - timedelta(hours=1))
-    listed, total = await store.list_schedule_notices(_person(owner, ["data_engineer"]), since=SINCE)
+    listed, total = await store.list_schedule_notices(
+        _person(owner, ["data_engineer"]), since=SINCE
+    )
     assert [n.id for n in listed] == [mine.id] and total == 1
     # Someone else, an administrator and a team lead, each a real principal's shape: no notice of
     # the owner's, and none counted, so nothing of it is known by its number either (rule 3).
@@ -80,10 +89,14 @@ async def test_only_the_owner_reads_or_counts_a_notice(world: tuple[AlertStore, 
     ):
         theirs, counted = await store.list_schedule_notices(other, since=SINCE)
         assert all(n.owner_id == other.id for n in theirs), (other.roles, theirs)
-        assert mine.id not in {n.id for n in theirs} and counted == len(theirs), other.roles
+        assert mine.id not in {n.id for n in theirs} and counted == len(theirs), (
+            other.roles
+        )
 
 
-async def test_a_notice_is_any_schedule_alert_and_nothing_else(world: tuple[AlertStore, list[str]]) -> None:
+async def test_a_notice_is_any_schedule_alert_and_nothing_else(
+    world: tuple[AlertStore, list[str]],
+) -> None:
     store, written = world
     owner = f"owner-{new_id()}"
     # One written before this amendment, exactly as the scheduler wrote it then (`schedule:<id>`,
@@ -95,26 +108,41 @@ async def test_a_notice_is_any_schedule_alert_and_nothing_else(world: tuple[Aler
                        typology="structuring", words="A rule's alert")  # fmt: skip
     await store.save(rule_alert)
     written.append(rule_alert.id)
-    listed, total = await store.list_schedule_notices(_person(owner, ["analyst"]), since=SINCE)
+    listed, total = await store.list_schedule_notices(
+        _person(owner, ["analyst"]), since=SINCE
+    )
     assert [n.id for n in listed] == [before.id] and total == 1
 
 
-async def test_the_window_and_the_status_bound_it(world: tuple[AlertStore, list[str]]) -> None:
+async def test_the_window_and_the_status_bound_it(
+    world: tuple[AlertStore, list[str]],
+) -> None:
     store, written = world
     owner = f"owner-{new_id()}"
     await _notice(store, written, owner, NOW - timedelta(days=8))
     closed = await _notice(store, written, owner, NOW - timedelta(hours=3))
     async with store._pool.acquire() as conn:
-        await conn.execute("UPDATE alerts SET status = 'closed' WHERE id = $1", closed.id)
+        await conn.execute(
+            "UPDATE alerts SET status = 'closed' WHERE id = $1", closed.id
+        )
     fresh = await _notice(store, written, owner, NOW - timedelta(hours=2))
-    listed, total = await store.list_schedule_notices(_person(owner, ["analyst"]), since=SINCE)
+    listed, total = await store.list_schedule_notices(
+        _person(owner, ["analyst"]), since=SINCE
+    )
     assert [n.id for n in listed] == [fresh.id] and total == 1
 
 
-async def test_more_than_the_limit_is_said_by_the_total(world: tuple[AlertStore, list[str]]) -> None:
+async def test_more_than_the_limit_is_said_by_the_total(
+    world: tuple[AlertStore, list[str]],
+) -> None:
     store, written = world
     owner = f"owner-{new_id()}"
-    made = [await _notice(store, written, owner, NOW - timedelta(minutes=m)) for m in range(5)]
-    listed, total = await store.list_schedule_notices(_person(owner, ["analyst"]), since=SINCE, limit=3)
+    made = [
+        await _notice(store, written, owner, NOW - timedelta(minutes=m))
+        for m in range(5)
+    ]
+    listed, total = await store.list_schedule_notices(
+        _person(owner, ["analyst"]), since=SINCE, limit=3
+    )
     assert [n.id for n in listed] == [n.id for n in made[:3]]  # newest first
     assert total == 5

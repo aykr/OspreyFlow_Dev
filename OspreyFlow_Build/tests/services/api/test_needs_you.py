@@ -22,7 +22,8 @@ What a mistake would do, and the case that catches it (each shown red at its cal
   waits): `test_an_item_marked_above_a_reviewer_on_an_unmarked_dataset_is_not_served_to_them`,
   `test_a_dataset_lowered_while_the_promotion_waits_widens_nothing` (CARRIES row 46);
 - a scheduled load's notice (ADR-110 Amendment 19) served to someone other than its owner, or the
-  route asking the store for anyone but the reader: `test_a_schedule_notice_is_served_to_its_owner_alone`
+  route asking the store for anyone but the reader:
+  `test_a_schedule_notice_is_served_to_its_owner_alone`
   (the store's own owner filter, in its SQL, is proven live in `test_schedule_notices_needs_you.py`;
   the stand-in here answers as that query does).
 """
@@ -36,16 +37,15 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from ontology.handling import HandlingScheme
+from schemas.admin import PersonAccount, PromotionOverdueAlert
+from schemas.dataset_model import HomeCase
+from schemas.domain import Alert, AlertMode, Principal
 from services.api.app import app
 from services.api.datasets import Dataset
 from services.api.investigations import AccessLevel, Investigation
 from services.api.link_types import ModelProposalView
 from services.api.promotion_ageing import InMemoryAgeingStore, PendingPromotion
-
-from ontology.handling import HandlingScheme
-from schemas.admin import PersonAccount, PromotionOverdueAlert
-from schemas.dataset_model import HomeCase
-from schemas.domain import Alert, AlertMode, Principal
 
 T0 = datetime(2026, 11, 1, 9, 0, tzinfo=UTC)
 SCHEME = HandlingScheme(name="t", classification=["OFFICIAL", "SECRET", "TOP SECRET"],
@@ -388,7 +388,6 @@ def test_the_people_are_read_once_a_read(world: SimpleNamespace) -> None:
     """The recipients of every stored alert are asked from one read of the people (the top bar
     reads every minute)."""
     import asyncio
-
     from dataclasses import replace
 
     asyncio.run(_raise(world, ["rev-1"]))
