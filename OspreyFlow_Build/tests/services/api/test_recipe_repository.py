@@ -433,7 +433,7 @@ async def test_the_index_is_read_and_written_under_a_lock_another_process_honour
     commit (and the index's read and the swap on `HEAD`) all hold an exclusive `flock` on the
     repository's publish lock, so the Prison
     Intelligence seed beside a running Conduit cannot lose the other's index entry. Probed from a
-    second open of the lock file, as another process would take it, at each of the three."""
+    second open of the lock file, as another process would take it, at each of the five."""
     import fcntl
 
     from dulwich.index import Index
@@ -450,10 +450,10 @@ async def test_the_index_is_read_and_written_under_a_lock_another_process_honour
             try:
                 fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                held[where] = True
+                held[where] = held.get(where, True)
             else:
                 fcntl.flock(other, fcntl.LOCK_UN)
-                held[where] = False
+                held[where] = False  # once outside the lock is enough to fail
 
     def wrap(where: str, real: Any) -> Any:
         def probed(*args: object, **kwargs: object) -> object:
@@ -642,12 +642,13 @@ async def test_a_temporary_file_a_crash_left_is_swept(tmp_path: Path) -> None:
 
 
 @needs_git
-@pytest.mark.parametrize("how", ["gitfile", "link"])
+@pytest.mark.parametrize("how", ["gitfile", "link", "commondir"])
 async def test_a_git_directory_that_is_not_the_root_s_own_is_refused(
     tmp_path: Path, how: str
 ) -> None:
-    """A `.git` file naming another repository's directory, or a link at `.git`, is refused (the
-    lane review's round 3, item 2): the index, the objects, the lock and `HEAD` written would be
+    """A `.git` file naming another repository's directory, a link at `.git`, or a `.git`
+    directory whose `commondir` names another's (a linked worktree's layout) is refused (the lane
+    review's rounds 3 and 4): the index, the objects, the lock and `HEAD` written would be
     another repository's. That repository is left as it was."""
     other = tmp_path / "other"
     await commit_recipe_file("alpha", b"other's\n", version=1, repo_root=other)
@@ -656,8 +657,12 @@ async def test_a_git_directory_that_is_not_the_root_s_own_is_refused(
     root.mkdir()
     if how == "gitfile":
         (root / ".git").write_text(f"gitdir: {other / '.git'}\n")
-    else:
+    elif how == "link":
         (root / ".git").symlink_to(other / ".git", target_is_directory=True)
+    else:  # a linked worktree's layout: a real directory whose objects and refs are another's
+        (root / ".git" / "objects").mkdir(parents=True)
+        (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+        (root / ".git" / "commondir").write_text(f"{other / '.git'}\n")
 
     with pytest.raises(GitCommitError):
         await commit_recipe_file("alpha", b"ours\n", version=2, repo_root=root)
@@ -671,20 +676,18 @@ async def test_publishes_queued_behind_a_held_lock_share_one_wait(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The wait has one limit for both locks (the lane review's round 3, item 3): with the
-    `flock` held elsewhere, two publishes queued in this process are both refused within about
-    one wait, not one after the other, so queued publishes cannot each hold a worker thread for
-    a further wait."""
+    `flock` held elsewhere, two publishes queued in this process both wait the one limit and are
+    both refused within it, not one after the other, so queued publishes cannot each hold a worker
+    thread for a further wait. Measured with a 2 s wait: about 2 s here, about 4 s for one wait
+    each, so a loaded host has about a second either side."""
     import fcntl
-    import threading
 
-    wait = 1.0
+    wait = 2.0
     repo = tmp_path / "repo"
     await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
     monkeypatch.setattr(studio_publish, "PUBLISH_LOCK_WAIT_SECONDS", wait)
     other = (repo / ".git" / studio_publish.PUBLISH_LOCK_NAME).open("a")
     fcntl.flock(other, fcntl.LOCK_EX)
-    release = threading.Timer(6.0, lambda: (fcntl.flock(other, fcntl.LOCK_UN), other.close()))
-    release.start()
     try:
         started = time.monotonic()
         outcomes = await asyncio.gather(
@@ -694,9 +697,39 @@ async def test_publishes_queued_behind_a_held_lock_share_one_wait(
         )
         elapsed = time.monotonic() - started
     finally:
+        fcntl.flock(other, fcntl.LOCK_UN)
+        other.close()
+    assert all(
+        isinstance(outcome, GitCommitError) and "another publish" in str(outcome)
+        for outcome in outcomes
+    ), outcomes
+    assert elapsed >= 0.9 * wait, f"refused after {elapsed:.2f} s, without waiting"
+    assert elapsed < 1.5 * wait, f"the second publish waited {elapsed:.2f} s, a second wait"
+
+
+async def test_a_publish_waits_for_a_lock_held_briefly_then_commits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The wait itself (rule 12, the lane review's round 4, item 2): the seed holding the `flock`
+    for a moment does not refuse a publish; it waits, then commits."""
+    import fcntl
+    import threading
+
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    monkeypatch.setattr(studio_publish, "PUBLISH_LOCK_WAIT_SECONDS", 5.0)
+    other = (repo / ".git" / studio_publish.PUBLISH_LOCK_NAME).open("a")
+    fcntl.flock(other, fcntl.LOCK_EX)
+    release = threading.Timer(0.3, lambda: (fcntl.flock(other, fcntl.LOCK_UN), other.close()))
+    release.start()
+    try:
+        started = time.monotonic()
+        await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+        elapsed = time.monotonic() - started
+    finally:
         release.join()
-    assert all(isinstance(outcome, GitCommitError) for outcome in outcomes), outcomes
-    assert elapsed < 1.6 * wait, f"the second publish waited {elapsed:.2f} s, a second wait"
+    assert elapsed >= 0.25, f"committed after {elapsed:.2f} s, without waiting for the lock"
+    assert (repo / "recipes" / "alpha.yaml").read_bytes() == b"version: 2\n"
 
 
 @needs_git
@@ -706,13 +739,41 @@ async def test_an_aside_directory_a_crashed_first_use_left_is_swept(tmp_path: Pa
     it as an embedded repository (the lane review's round 3, minor)."""
     root = tmp_path / "fresh"
     root.mkdir()
-    stale = root / ".git-init-crashed"
+    stale = root / ".git-init-k3v_9xq2"  # the shape `tempfile.mkdtemp` makes
     (stale / ".git").mkdir(parents=True)
+    kept = root / ".git-init-the-operators-own"  # not that shape: never swept
+    kept.mkdir()
     old = time.time() - 3600
     os.utime(stale, (old, old))
+    os.utime(kept, (old, old))
 
     await commit_recipe_file("alpha", b"id: alpha\n", version=1, repo_root=root)
 
     assert not stale.exists(), "the crashed first use's aside directory is still there"
-    assert sorted(p.name for p in root.iterdir()) == [".git", "recipes"]
+    assert kept.exists()
+    assert sorted(p.name for p in root.iterdir()) == [
+        ".git",
+        ".git-init-the-operators-own",
+        "recipes",
+    ]
     assert _git(root, "status", "--porcelain") == ""
+
+
+@needs_git
+async def test_an_aside_directory_left_after_the_repository_exists_is_swept(tmp_path: Path) -> None:
+    """A crash after the rename, or a restart within the ten minutes, leaves an aside directory
+    beside an existing repository; any later publish sweeps it under the lock once it is stale
+    (the lane review's round 4, minor 3)."""
+    repo = tmp_path / "repo"
+    await commit_recipe_file("alpha", b"version: 1\n", version=1, repo_root=repo)
+    stale = repo / ".git-init-a1b2c3d4"
+    (stale / ".git" / "objects").mkdir(parents=True)
+    old = time.time() - 3600
+    os.utime(stale, (old, old))
+    young = repo / ".git-init-e5f6g7h8"  # a live first use's, as far as anyone can tell
+    young.mkdir()
+
+    await commit_recipe_file("alpha", b"version: 2\n", version=2, repo_root=repo)
+
+    assert not stale.exists(), "the aside directory left beside the repository is still there"
+    assert young.exists()
