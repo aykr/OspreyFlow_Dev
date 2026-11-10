@@ -962,33 +962,35 @@ def test_an_open_cases_layer_is_never_deleted_from_the_studio(pw: SimpleNamespac
 
 
 def test_a_reports_viewer_who_is_an_author_writes_nothing_to_a_removed_cases_layer(
-    pw: SimpleNamespace,
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ADR-112 (a Reports Viewer is refused every write) and ADR-146 decision 10 (read-only): one
     of the dataset's Authors holding only `reports_viewer` opens no merge, merges, cancels, deletes
     nor runs the delete's dry run (403 `right_required`, before anything is read or granted). The
     round 2 review's item 2, the owner's ruling of 9 November 2026: ADR-112 stands."""
-    PEOPLE["vic"] = Principal(id="vic", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"])
+    # Set for this test alone and restored after, so `test_drawn_merge.py`'s own Vic (a data
+    # engineer) is never removed by it, whichever file runs first.
+    monkeypatch.setitem(
+        PEOPLE, "vic",
+        Principal(id="vic", clearance="SECRET", org_unit=UNIT, roles=["reports_viewer"]),
+    )  # fmt: skip
     pw.cases.grants[HOME]["vic"] = AccessLevel.AUTHOR
-    try:
-        first, _ = _removed_with_items(pw)
-        for method, path in (
-            ("post", f"/v1/datasets/src/removed-cases/{K}/merge-sheet"),
-            ("post", f"/v1/datasets/src/removed-cases/{K}/delete/dry-run"),
-            ("delete", f"/v1/datasets/src/removed-cases/{K}/layer"),
-            ("post", "/v1/datasets/src/layer-merges/any-grant"),
-            ("delete", "/v1/datasets/src/layer-merges/any-grant"),
-        ):
-            kwargs = {"json": {"item_ids": []}} if method == "post" and "layer-merges" in path else {}
-            answer = getattr(_as("vic"), method)(path, **kwargs)
-            assert answer.status_code == 403, (method, path, answer.text)
-            # Refused for the right itself, not by a later check (rule 15: a non-existent grant would answer
-            # 403 no_open_grant with or without the right; the orchestrator's merge, round 3's minor 1).
-            assert answer.json()["detail"]["error"] == "right_required", (method, path, answer.text)
-        assert not pw.store.grants
-        assert not pw.graph.node(first["element_id"]).audit.reverted
-    finally:
-        del PEOPLE["vic"]
+    first, _ = _removed_with_items(pw)
+    for method, path in (
+        ("post", f"/v1/datasets/src/removed-cases/{K}/merge-sheet"),
+        ("post", f"/v1/datasets/src/removed-cases/{K}/delete/dry-run"),
+        ("delete", f"/v1/datasets/src/removed-cases/{K}/layer"),
+        ("post", "/v1/datasets/src/layer-merges/any-grant"),
+        ("delete", "/v1/datasets/src/layer-merges/any-grant"),
+    ):
+        kwargs = {"json": {"item_ids": []}} if method == "post" and "layer-merges" in path else {}
+        answer = getattr(_as("vic"), method)(path, **kwargs)
+        assert answer.status_code == 403, (method, path, answer.text)
+        # Refused for the right itself, not by a later check (rule 15: a non-existent grant would answer
+        # 403 no_open_grant with or without the right; the orchestrator's merge, round 3's minor 1).
+        assert answer.json()["detail"]["error"] == "right_required", (method, path, answer.text)
+    assert not pw.store.grants
+    assert not pw.graph.node(first["element_id"]).audit.reverted
 
 
 def _composite(pw: SimpleNamespace, case: str) -> None:

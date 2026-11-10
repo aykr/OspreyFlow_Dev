@@ -616,6 +616,7 @@ class DrawnMerges:
         } if picks else {}  # fmt: skip
         rows: list[MergeMatchRow] = []
         scheme, highest = promotions.boards.scheme, promotions.highest(target)
+        ceiling = promotions.ceiling()
         for pick in picks:
             if (
                 pick not in offered
@@ -636,6 +637,14 @@ class DrawnMerges:
                     "check_failed",
                     f"A match would be marked {stricter.classification}, above {target.name}'s "
                     f"highest allowed marking, {highest}.",
+                    status=422,
+                )
+            over = promotions.above_the_ceiling(stricter.classification, ceiling)
+            if over is not None:
+                # ADR-148 decision 10: a match is written, so it is judged as a write is.
+                raise PromotionRefused(
+                    "check_failed",
+                    f"A match would be marked {stricter.classification}, {over}",
                     status=422,
                 )
             rows.append(
