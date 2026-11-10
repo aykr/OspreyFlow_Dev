@@ -3,9 +3,14 @@ import { useState } from "react";
 import { errorMessage } from "../api/client";
 import type { OspreyConfig } from "../api/types";
 
-// What the schema ships for these two: paths inside the Conduit's container, which mean nothing on
-// a person's computer, so a folder under their own home is suggested in their place.
-const SHIPPED = { ingest: "/var/lib/osprey/ingest", tiles: "/var/lib/osprey/tiles" };
+// What the schema ships for these: paths inside the Conduit's container, which mean nothing on a
+// person's computer, so a folder under their own home is suggested in their place. The backups one
+// is also the placeholder `ospreyflow backup` reads as no folder named (ADR-114 Amendment 37).
+const SHIPPED = {
+  ingest: "/var/lib/osprey/ingest",
+  tiles: "/var/lib/osprey/tiles",
+  backups: "/var/lib/osprey/backups",
+};
 
 export function FoldersScreen({
   config,
@@ -22,15 +27,30 @@ export function FoldersScreen({
     !value || value === shipped ? (home ? `${home}/OspreyFlow/${name}` : shipped) : value;
   const [ingest, setIngest] = useState(suggest(current?.ingest, SHIPPED.ingest, "ingest"));
   const [tiles, setTiles] = useState(suggest(current?.tiles, SHIPPED.tiles, "basemap"));
+  // With no home folder to suggest beneath, blank rather than the placeholder: a backup reads both
+  // as no folder named (ADR-114 Amendment 38) and writes to ~/OspreyFlow/backups, saying so.
+  const backupsSuggested = suggest(current?.backups, SHIPPED.backups, "backups");
+  const [backups, setBackups] = useState(backupsSuggested === SHIPPED.backups ? "" : backupsSuggested);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
+    // ADR-114 Amendment 38 decision 1, as `ospreyflow install` refuses it: the schema's
+    // placeholder is a folder only on Small on a server of your own, where Amendment 33 wrote.
+    const ownServer =
+      config.profile === "small" && !Object.values(config.external ?? {}).some((service) => service != null);
+    if (!ownServer && backups.trim().replace(/\/+$/, "") === SHIPPED.backups) {
+      setError(
+        `${SHIPPED.backups} is the settings' placeholder, a folder only on Small on a server of your own: ` +
+          "name a folder on this machine for backups, for example ~/OspreyFlow/backups.",
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       await onSave({
-        components: { ...config.components, storage: { ...config.components?.storage, ingest, tiles } },
+        components: { ...config.components, storage: { ...config.components?.storage, ingest, tiles, backups } },
       });
     } catch (exc) {
       setError(errorMessage(exc));
@@ -64,6 +84,20 @@ export function FoldersScreen({
       />
       <p id="folder-tiles-help" className="help">
         On this computer. Where a built basemap lives. Give the full path, from /.
+      </p>
+      <label htmlFor="folder-backups">Backups folder</label>
+      <input
+        id="folder-backups"
+        className="input"
+        value={backups}
+        onChange={(event) => setBackups(event.target.value)}
+        aria-describedby="folder-backups-help"
+      />
+      <p id="folder-backups-help" className="help">
+        On this computer, outside the OspreyFlow folder. Where ospreyflow backup writes, each
+        deployment&rsquo;s backups in a subfolder of its own. A backup holds all of the
+        deployment&rsquo;s data, so choose a folder that is not synced to a cloud drive. Give the
+        full path, from /.
       </p>
       {error && <p role="alert">{error}</p>}
       <button type="button" className="btn btn--primary" onClick={handleSave} disabled={saving}>

@@ -463,3 +463,58 @@ def test_joining_by_email_takes_only_true_or_false(tmp_path: Path, value: object
            "sign_in": {"organisation": {**ORGANISATION, "trust_email": value}}}  # fmt: skip
     with pytest.raises(AnswersRefused, match="trust_email is true or false"):
         load_answers(raw, packs=PACKS, home=tmp_path)
+
+
+# ---- ADR-114 Amendment 37 decision 1: every install names its backups folder at setup ----------
+
+
+def test_folders_backups_is_read_for_every_profile(tmp_path: Path) -> None:
+    """`folders.backups` reaches `components.storage.backups` on lite and on Small on a server of
+    your own (written relative to `~`, absolute in the file), and on a cloud install too when it is
+    given. With none, lite and a server get `~/OspreyFlow/backups`, never the schema's
+    `/var/lib/osprey/backups` placeholder, which `ospreyflow backup` would fall back from."""
+    lite = _config({"mode": "lite", "folders": {"backups": "~/Backups/osprey"}}, tmp_path)
+    assert lite.components.storage.backups == str(tmp_path / "Backups" / "osprey")
+    server = _config({"mode": "small", "server": SERVER,
+                      "folders": {"backups": "/srv/backups"}}, tmp_path)  # fmt: skip
+    assert server.components.storage.backups == "/srv/backups"
+    cloud = {"mode": "small", "external": {"postgres": {"host": "db.example.org"}},
+             "cloud": {"provider": "aws", "region": "eu-west-2", "domain": "osprey.example.org"}}
+    given = _config({**cloud, "folders": {"backups": "/srv/cloud-backups"}}, tmp_path)
+    assert given.components.storage.backups == "/srv/cloud-backups"
+    # A cloud's server is built elsewhere: with none given, the base's own setting stays.
+    assert load_answers(cloud, packs=PACKS, home=tmp_path).backups is None
+    default = tmp_path / "OspreyFlow" / "backups"
+    assert _config({"mode": "lite"}, tmp_path).components.storage.backups == str(default)
+    assert _config({"mode": "small", "server": SERVER}, tmp_path).components.storage.backups == str(
+        default
+    )
+
+
+def test_server_backups_and_folders_backups_differing_is_refused(tmp_path: Path) -> None:
+    """`server.backups` (Amendment 33) is still read, as the same setting: the same folder given
+    both ways is accepted, and two different folders are refused, naming both."""
+    same = _config({"mode": "small", "server": {**SERVER, "backups": "/srv/b"},
+                    "folders": {"backups": "/srv/b/"}}, tmp_path)  # fmt: skip
+    assert same.components.storage.backups == "/srv/b"
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers({"mode": "small", "server": {**SERVER, "backups": "/srv/one"},
+                      "folders": {"backups": "/srv/two"}}, packs=PACKS, home=tmp_path)  # fmt: skip
+    said = str(refused.value)
+    assert "/srv/one" in said and "/srv/two" in said
+    assert "server.backups" in said and "folders.backups" in said
+
+
+def test_the_schemas_placeholder_named_as_the_backups_folder_is_refused_off_a_server(
+    tmp_path: Path,
+) -> None:
+    """`/var/lib/osprey/backups` is the schema's placeholder, which `ospreyflow backup` reads as
+    no folder named off a server of your own (ADR-114 Amendment 38); naming it at setup would be
+    silently set aside, so it is refused in words. On a server it is a folder like any other."""
+    with pytest.raises(AnswersRefused) as refused:
+        load_answers({"mode": "lite", "folders": {"backups": "/var/lib/osprey/backups"}},
+                     packs=PACKS, home=tmp_path)  # fmt: skip
+    assert "/var/lib/osprey/backups" in str(refused.value) and "placeholder" in str(refused.value)
+    server = _config({"mode": "small", "server": {**SERVER, "backups": "/var/lib/osprey/backups"}},
+                     tmp_path)  # fmt: skip
+    assert server.components.storage.backups == "/var/lib/osprey/backups"

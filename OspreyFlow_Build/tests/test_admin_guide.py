@@ -58,12 +58,21 @@ def test_every_command_and_install_flag_is_in_the_guide(name: str) -> None:
     assert not missing, f"the guide never mentions: {', '.join(missing)}"
 
 
+#: Answers-file settings whose guide text is a carry to the docs lane, not yet in the guide.
+#: `folders.backups` (ADR-114 Amendment 37): platform-b's P5b carry,
+#: `process/lanes/platform-b/CARRY-admin-guide-13.md` section 6. Docs removes the entry in the
+#: change that adds the text, so this case is red without the text and green with it.
+NOT_YET_IN_THE_GUIDE = {"folders.backups"}
+
+
 @each_guide
 @pytest.mark.parametrize("key", sorted(_TOP))
 def test_every_answers_file_setting_is_in_the_guide(name: str, key: str) -> None:
     GUIDE = GUIDES[name]
     keys = [key] if key not in _SECTIONS else [f"{key}.{child}" for child in _SECTIONS[key]]
     for setting in keys:
+        if setting in NOT_YET_IN_THE_GUIDE:
+            continue
         assert f"`{setting}`" in GUIDE or f"{setting}`" in GUIDE, f"{setting} is not in {name}"
 
 

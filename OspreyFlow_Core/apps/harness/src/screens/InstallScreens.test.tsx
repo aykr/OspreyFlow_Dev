@@ -175,15 +175,34 @@ describe("DemoPacksScreen with a starter (ADR-138)", () => {
 });
 
 describe("FoldersScreen", () => {
-  it("saves the ingest and basemap folders as the storage settings", async () => {
+  it("saves the ingest, basemap and backups folders as the storage settings", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<FoldersScreen config={{ components: { storage: { data: "/d" } } }} onSave={onSave} />);
     fireEvent.change(screen.getByLabelText("Ingest folder"), { target: { value: "/srv/in" } });
     fireEvent.change(screen.getByLabelText("Basemap folder"), { target: { value: "/srv/map" } });
+    // ADR-114 Amendment 37 decision 1: setup asks where backups go, the guided page included.
+    fireEvent.change(screen.getByLabelText("Backups folder"), { target: { value: "/srv/bk" } });
     fireEvent.click(screen.getByRole("button", { name: "Save folders" }));
     expect(onSave).toHaveBeenCalledWith({
-      components: { storage: { data: "/d", ingest: "/srv/in", tiles: "/srv/map" } },
+      components: { storage: { data: "/d", ingest: "/srv/in", tiles: "/srv/map", backups: "/srv/bk" } },
     });
+  });
+
+  it("refuses the schema's backups placeholder off a server of your own, as the command does", async () => {
+    // ADR-114 Amendment 38 decision 1 (independent review): nobody off a server chose it, so a
+    // choice of it is refused with the reason rather than set aside without a word.
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<FoldersScreen config={{ components: { storage: {} } }} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Backups folder"), { target: { value: "/var/lib/osprey/backups/" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save folders" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/placeholder.*~\/OspreyFlow\/backups/);
+    expect(onSave).not.toHaveBeenCalled();
+    cleanup();
+    // On Small on a server of your own it is that server's folder (Amendment 33), so it is saved.
+    render(<FoldersScreen config={{ profile: "small", components: { storage: {} } }} onSave={onSave} />);
+    fireEvent.change(screen.getByLabelText("Backups folder"), { target: { value: "/var/lib/osprey/backups" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save folders" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
   });
 
   it("suggests folders under the person's home in place of the container paths the schema ships", () => {
@@ -196,6 +215,24 @@ describe("FoldersScreen", () => {
     );
     expect((screen.getByLabelText("Ingest folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/ingest");
     expect((screen.getByLabelText("Basemap folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/basemap");
+    // The schema's backups placeholder is a folder nobody chose: `~/OspreyFlow/backups` in its place.
+    expect((screen.getByLabelText("Backups folder") as HTMLInputElement).value).toBe("/u/ada/OspreyFlow/backups");
+  });
+
+  it("never offers the schema's backups placeholder, even with no home folder to suggest beneath", () => {
+    render(<FoldersScreen config={{ components: { storage: { backups: "/var/lib/osprey/backups" } } }} onSave={vi.fn()} />);
+    // Blank is no folder named: the backup then writes to ~/OspreyFlow/backups and says so.
+    expect((screen.getByLabelText("Backups folder") as HTMLInputElement).value).toBe("");
+  });
+
+  it("says the backups folder is outside the checkout, one subfolder per deployment, and holds the data", () => {
+    render(<FoldersScreen config={{ components: { storage: { backups: "/srv/bk" } } }} onSave={vi.fn()} home="/u/ada" />);
+    const field = screen.getByLabelText("Backups folder") as HTMLInputElement;
+    expect(field.value).toBe("/srv/bk");
+    const help = document.getElementById(field.getAttribute("aria-describedby") ?? "")?.textContent ?? "";
+    expect(help).toMatch(/outside the OspreyFlow folder/);
+    expect(help).toMatch(/subfolder/);
+    expect(help).toMatch(/synced/);
   });
 
   it("keeps a folder the person's own configuration already names", () => {
@@ -269,7 +306,7 @@ describe("ReviewScreen", () => {
     render(
       <ReviewScreen
         state={state({ answers })}
-        config={{ components: { storage: { ingest: "/in", tiles: "/tiles" } } }}
+        config={{ components: { storage: { ingest: "/in", tiles: "/tiles", backups: "/bk" } } }}
         onInstall={onInstall}
         onSaveAnswers={vi.fn()}
       />,
@@ -278,9 +315,23 @@ describe("ReviewScreen", () => {
     expect(client.getInstallDoctor).toHaveBeenCalled();
     expect(screen.getByText(/Mode: Lite/)).toBeTruthy();
     expect(screen.getByText(/Demo packs: HMP/)).toBeTruthy();
+    expect(screen.getByText("Backups folder: /bk")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Save answers" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Install" }));
     expect(onInstall).toHaveBeenCalled();
+  });
+
+  it("says a backups folder never chosen goes to ~/OspreyFlow/backups, not the placeholder", async () => {
+    render(
+      <ReviewScreen
+        state={state({ answers: { mode: "lite" as const } })}
+        config={{ components: { storage: { backups: "/var/lib/osprey/backups" } } }}
+        onInstall={vi.fn()}
+        onSaveAnswers={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("Docker is installed.")).toBeTruthy());
+    expect(screen.getByText("Backups folder: not chosen (backups go to ~/OspreyFlow/backups)")).toBeTruthy();
   });
 
   it("offers Save answers and the B6 sentence for Small, and no Install", async () => {

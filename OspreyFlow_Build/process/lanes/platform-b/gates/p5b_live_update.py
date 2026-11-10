@@ -1,0 +1,295 @@
+"""P5b's one live run (the orchestrator's grant, 10 November 2026): ADR-114 Amendment 38 decision 9 on
+a real named deployment. Run from `OspreyFlow_Core` on the test server, under platform-b's lease:
+
+    PYTHONPATH=.:packages:cli .venv/bin/python ../OspreyFlow_Build/process/lanes/platform-b/gates/p5b_live_update.py
+
+1. `ospreyflow install --mode lite --name osprey-p5b-test` into a throwaway home folder, seeded with
+   the synthetic `fixture-corp` (rule 9: in-repo, synthetic). The backups folder is a throwaway one.
+2. With the Conduit stopped, a snapshot of the graph store, then `update.real_host(...).backup()`.
+   The set must land in `<backups folder>/osprey-p5b-test/`, and the harness must be named the
+   deployment's own `osprey.yaml` and folder.
+3. A forced failure's rollback: `update._roll_back`, as `update.main` calls it on a failed step. It runs
+   `down -v` on this deployment's project, starts it again, restores the set with `real_host`'s
+   restore and checks that it runs. The `git checkout` of the old commit is NOT EXERCISED: it passes
+   through, because the copy on the server holds no `.git`; P5b does not change that step.
+4. A second snapshot, which must equal the first.
+
+Teardown always runs: `down -v` on `osprey-p5b-test` only, then the throwaway folders are removed.
+It touches nothing else: not osprey-small, not osprey-test-*, not a leased stack's containers.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+import yaml
+
+NAME = "osprey-p5b-test"
+CORE = Path.cwd()
+
+
+def say(line: str) -> None:
+    print(f"p5b-live: {line}", flush=True)
+
+
+def run(argv: list[str], env: dict[str, str]) -> None:
+    say("$ " + " ".join(argv))
+    done = subprocess.run(argv, env=env, cwd=CORE, check=False)
+    if done.returncode != 0:
+        raise SystemExit(f"p5b-live: FAILED ({done.returncode}): {' '.join(argv)}")
+
+
+def docker_state() -> tuple[set[str], set[str]]:
+    """Every container (by name) and every volume on this machine, for the before-and-after record."""
+    names = subprocess.run(["docker", "ps", "-a", "--format", "{{.Names}}"],
+                           capture_output=True, text=True, check=True).stdout.split()  # fmt: skip
+    volumes = subprocess.run(["docker", "volume", "ls", "-q"],
+                             capture_output=True, text=True, check=True).stdout.split()  # fmt: skip
+    return set(names), set(volumes)
+
+
+def image_tags() -> set[str]:
+    out = subprocess.run(["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
+                         capture_output=True, text=True, check=True).stdout.split()  # fmt: skip
+    return {t for t in out if not t.endswith(":<none>")}
+
+
+class OwnTags:
+    """The image tags this run creates, recorded by name at the moment each is made, and removed
+    by those names alone. Never a before-and-after difference of the machine's tags: on a shared
+    server another lane builds while this runs (10 November 2026, such a difference deleted three
+    of its images)."""
+
+    def __init__(self, docker: list[str] | None = None, runner=subprocess.run) -> None:  # noqa: ANN001
+        self.docker = docker or ["docker"]
+        self.runner = runner
+        self.made: list[str] = []
+
+    def tag(self, source: str, target: str, *, existed: bool) -> None:
+        """`docker tag source target`; recorded only if `target` named nothing before."""
+        self.runner([*self.docker, "tag", source, target], check=True)
+        if not existed:
+            self.made.append(target)
+
+    def built(self, image: str, *, existed: bool) -> None:
+        """An image the run's own `compose build` tagged; recorded only if new."""
+        if not existed:
+            self.made.append(image)
+
+    def remove(self) -> list[str]:
+        names = list(dict.fromkeys(self.made))
+        if names:
+            self.runner([*self.docker, "rmi", *names], check=False)
+        return names
+
+
+def ours(name: str) -> bool:
+    return name.startswith("osprey-p5b-")
+
+
+def guarded(argv: list[str], home: Path) -> list[str]:
+    """The orchestrator's guard 1: a compose command that removes anything names this project, with
+    -p, and a compose file under the throwaway home whose own name is this project; else refused."""
+    if argv[:2] != ["docker", "compose"] or not {"down", "rm"} & set(argv):
+        return argv
+    files = [Path(argv[i + 1]) for i, a in enumerate(argv) if a == "-f"]
+    if not files or not all(f.resolve().is_relative_to(home.resolve()) for f in files):
+        raise SystemExit(f"p5b-live: REFUSED, a compose file outside the throwaway home: {argv}")
+    for f in files:
+        named = yaml.safe_load(f.read_text()).get("name")
+        if named != NAME:
+            raise SystemExit(f"p5b-live: REFUSED, {f} is the project {named!r}, not {NAME}")
+    if "-p" in argv:
+        if argv[argv.index("-p") + 1] != NAME:
+            raise SystemExit(f"p5b-live: REFUSED, another project: {argv}")
+        return argv
+    return ["docker", "compose", "-p", NAME, *argv[2:]]
+
+
+#: The orchestrator's decision, 10 November 2026: the driver is not run again until the owed live
+#: proof's CARRIES row is closed. `OwnTags` removes `osprey/*:local` by a name any lane's build may
+#: share, an existing tag (`osprey/superset:local`) was left pointing at this run's build, and the
+#: after-check never failed on tags. The carry names what the next run needs: unique run names or an
+#: image-ID-checked `rmi`, the old IDs put back, and an after-check that fails on tags.
+REFUSAL = (
+    "p5b-live: REFUSED: not to be run until CARRIES' owed-proof row is closed: OwnTags removes by "
+    "shared name"
+)
+
+
+def main() -> int:
+    print(REFUSAL, file=sys.stderr)
+    return 2
+
+
+def _the_run_as_it_was() -> int:
+    """The run as attempted on 10 November (gates/live-attempts.txt); kept for the owed proof, and
+    reached by nothing."""
+    scratch = Path(tempfile.mkdtemp(prefix="osprey-p5b-"))
+    home = scratch / "home"
+    backups = scratch / "backups"
+    home.mkdir()
+    real_home = os.environ["HOME"]
+    os.environ.pop("COMPOSE_PROJECT_NAME", None)  # guard 1: no project from the environment
+    containers_before, volumes_before = docker_state()
+    tags_before = image_tags()
+    say(f"docker before: {len(tags_before)} image tags: {' '.join(sorted(tags_before))}")
+    say(f"docker before: {len(containers_before)} containers: {' '.join(sorted(containers_before))}")
+    say(f"docker before: {len(volumes_before)} volumes: {' '.join(sorted(volumes_before))}")
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "DOCKER_CONFIG": os.environ.get("DOCKER_CONFIG", f"{real_home}/.docker"),
+        "OSPREYFLOW_HOME": str(CORE),
+        "PYTHONPATH": ".:packages:cli",
+    }
+    directory = home / ".ospreyflow" / "deployments" / NAME
+    compose = ["docker", "compose", "-p", NAME, "-f", str(directory / "compose.yaml")]
+    python = str(CORE / ".venv" / "bin" / "python")
+    ok = False
+    # The image tags this run itself creates, by name. Teardown removes these and nothing else:
+    # 10 November, a cleanup by "every tag new since the start" deleted three images another lane
+    # built on this server while the run was going.
+    own_tags = OwnTags()
+    try:
+        # A defect older than P5b, routed to the orchestrator: the preflight resolves the published
+        # `${OSPREY_ARCADEDB_PORT:-2480}` against the process environment, not the deployment's
+        # own deployment.env, so a named install fails wherever 2480 is held (osprey-small holds
+        # it here). The driver puts the port the install will choose into the environment itself,
+        # chosen as the install chooses it, and checks the install chose the same.
+        import socket
+
+        sys.path[:0] = [str(CORE / "cli")]
+        from ospreyflow.deployments import FIRST_GRAPH_PORT, next_free_port
+
+        def port_free(port: int) -> bool:
+            with socket.socket() as probe:
+                return probe.connect_ex(("127.0.0.1", port)) != 0
+
+        graph = next_free_port(FIRST_GRAPH_PORT, (), port_free)
+        env["OSPREY_ARCADEDB_PORT"] = str(graph)
+        say(f"OSPREY_ARCADEDB_PORT={graph} (the preflight's environment; see above)")
+        answers = scratch / "answers.yaml"
+        answers.write_text(yaml.safe_dump({
+            "mode": "lite",
+            "folders": {"backups": str(backups), "ingest": str(scratch / "ingest"),
+                        "tiles": str(scratch / "tiles")},
+            "demo_packs": [],
+        }))  # fmt: skip
+        install = [python, "-m", "ospreyflow", "install", "--mode", "lite", "--name", NAME,
+                   "--config", str(answers), "--yes", "--no-demo-accounts"]  # fmt: skip
+        say("$ " + " ".join(install))
+        installed = subprocess.run(install, env=env, cwd=CORE, check=False).returncode == 0
+        config = directory / "osprey.yaml"
+        seed_argv = [python, "-m", "harness.apply", "--config", str(config), "--out-root",
+                     str(directory.parent), "--seed", "fixture-corp"]  # fmt: skip
+        if not installed:
+            # Docker Hub's pull limit (429) on this server stops `apply`'s `build --pull`, and the
+            # workspace's node base image is not cached here. The install wrote and rendered the
+            # deployment before its build; so the workspace image osprey-small runs is tagged for
+            # it (osprey-small runs by image ID, so a tag changes nothing of its), the rest are built
+            # from the cached bases without --pull, and apply runs again with --no-build.
+            assert (directory / "compose.yaml").is_file(), "the install failed before rendering"
+            say("the install's build failed (Docker Hub's pull limit): building without --pull")
+            rendered = yaml.safe_load((directory / "compose.yaml").read_text())
+            built = [n for n, v in rendered["services"].items() if "build" in v]
+            workspace = subprocess.run(
+                ["docker", "inspect", "--format", "{{.Image}}", "osprey-small-workspace-1"],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            target = rendered["services"]["workspace"]["image"]
+            say(f"$ docker tag {workspace} {target}")
+            own_tags.tag(workspace, target, existed=target in image_tags())
+            others = [n for n in built if n != "workspace"]
+            existed = image_tags()
+            news = [rendered["services"][n]["image"] for n in others]
+            run([*compose, "--env-file", str(directory / "deployment.env"), "build", *others], env)
+            for image in news:
+                own_tags.built(image, existed=image in existed)
+            seed_argv.append("--no-build")
+        stored = yaml.safe_load(config.read_text())["components"]["storage"]["backups"]
+        assert stored == str(backups), stored
+        chosen = yaml.safe_load(config.read_text())["deployment"]["graph_port"]
+        assert chosen == graph, f"the install chose {chosen}, the environment says {graph}"
+        run(seed_argv, env)
+        run([*compose, "stop", "api"], env)
+
+        os.environ.update(env)  # the harness reads HOME for its fallback folder
+        sys.path[:0] = [str(CORE), str(CORE / "packages")]
+        from harness import update
+        from harness.compare import take_snapshot
+
+        before = take_snapshot(directory / "compose.yaml")
+        assert before.total_records > 0, (
+            "fixture-corp seeded nothing: the comparison would be vacuous"
+        )
+        say(f"before: {before.total_records} records")
+        host = update.real_host(directory, CORE)
+        made = host.backup()
+        say(f"the update's backup: {made}")
+        assert made.parent == backups / NAME, made
+        assert not (CORE / "backups").exists() and not (CORE / "~").exists()
+
+        def passing_git(argv: object) -> tuple[int, str]:
+            seq = list(argv)  # type: ignore[call-overload]
+            if seq and seq[0] == "git":
+                say("$ " + " ".join(seq) + "   (NOT EXERCISED: no .git in the server's copy)")
+                return 0, ""
+            seq = guarded(seq, home)
+            say("$ " + " ".join(seq))
+            return host.run(seq)
+
+        forced = dataclasses.replace(host, run=passing_git)
+        point = update._keep_rollback_point(directory, "p5b-before", "HEAD")
+        say("forced failure: rolling back as update.main does on a failed step")
+        code = update._roll_back(forced, directory, CORE, point, "HEAD", made, "p5b-before")
+        assert code == 1, f"the rollback did not finish (exit {code})"
+        run([*compose, "stop", "api"], env)
+        after = take_snapshot(directory / "compose.yaml")
+        differences = after.differences_from(before)
+        assert not differences, differences
+        say(f"after the rollback's restore: {after.total_records} records, no differences")
+        ok = True
+    finally:
+        say("teardown: down -v on " + NAME + " only, then the throwaway folders")
+        if (directory / "compose.yaml").is_file():
+            envfile = ["--env-file", str(directory / "deployment.env")]
+            down = guarded([*compose, *envfile, "down", "-v", "--remove-orphans"], home)
+            say("$ " + " ".join(down))
+            subprocess.run(down, env=env, cwd=CORE, check=False)
+        left = subprocess.run(["docker", "volume", "ls", "-q", "--filter", f"name={NAME}"],
+                              capture_output=True, text=True, check=False).stdout.split()  # fmt: skip
+        left = [v for v in left if ours(v)]
+        if left:
+            subprocess.run(["docker", "volume", "rm", *left], check=False)
+        shutil.rmtree(scratch, ignore_errors=True)
+        removed = own_tags.remove()
+        say(f"image tags this run made, removed by name: {removed or 'none'}")
+        still = subprocess.run(["docker", "ps", "-aq", "--filter", f"name={NAME}"],
+                               capture_output=True, text=True, check=False).stdout.split()  # fmt: skip
+        say(f"teardown done: containers left {len(still)}, volumes left {len(left)} (removed)")
+        containers_after, volumes_after = docker_state()
+        say(f"docker after: {len(containers_after)} containers: {' '.join(sorted(containers_after))}")
+        say(f"docker after: {len(volumes_after)} volumes: {' '.join(sorted(volumes_after))}")
+        # Guard 2: nothing outside osprey-p5b-* changed, and nothing of ours is left.
+        others = {x for x in containers_before ^ containers_after if not ours(x)}
+        others |= {x for x in volumes_before ^ volumes_after if not ours(x)}
+        left_ours = {x for x in containers_after | volumes_after if ours(x)}
+        say(f"changed outside osprey-p5b-*: {sorted(others) or 'nothing'}")
+        say(f"osprey-p5b-* left: {sorted(left_ours) or 'nothing'}")
+        tags_after = image_tags()
+        say(f"image tags changed: {sorted(tags_before ^ tags_after) or 'nothing'}")
+        if others or left_ours:
+            ok = False
+    say("PASSED" if ok else "FAILED")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

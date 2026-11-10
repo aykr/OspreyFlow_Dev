@@ -626,18 +626,28 @@ def _subprocess(argv: Sequence[str], cwd: Path | None = None) -> tuple[int, str]
     return done.returncode, (done.stdout + done.stderr).strip()
 
 
-def _backup_root(directory: Path, repo: Path) -> Path:
-    """Where the update's backup is written: on Small on a server of your own, the folder
-    `server.backups` named (ADR-114 Amendment 33 decision 5), read from the deployment's own
-    `osprey.yaml` copy; elsewhere the checkout's `backups/`."""
-    copy = directory / "osprey.yaml"
-    if copy.is_file():
-        from schemas.deployment import OspreyConfig, self_contained_small
+def _settings(directory: Path, repo: Path) -> tuple[Path, list[str]]:
+    """The `osprey.yaml` `harness.backup` and `harness.restore` read for this deployment, and the
+    arguments that name it to them (ADR-114 Amendment 38 decision 9), as `ospreyflow backup` and
+    `restore` do: none for the checkout's own (rendered under `deploy/generated/`, read from the
+    checkout's `osprey.yaml`); a deployment kept by name (ADR-138), its own `osprey.yaml` and the
+    folder it is rendered under."""
+    if directory.parent.resolve() == (repo / "deploy" / "generated").resolve():
+        return repo / "osprey.yaml", []
+    config = directory / "osprey.yaml"
+    return config, ["--config", str(config), "--generated-root", str(directory.parent)]
 
-        config = OspreyConfig.model_validate(yaml.safe_load(copy.read_text(encoding="utf-8")) or {})
-        if self_contained_small(config):
-            return Path(config.components.storage.backups)
-    return repo / "backups"
+
+def _backup_root(directory: Path, config_path: Path) -> tuple[Path, str | None]:
+    """Where the update's backup is written: `harness.backup.default_out_root` for the settings
+    the backup reads and the deployment's folder's name (ADR-114 Amendment 37), so never inside
+    the checkout, which `harness.backup` refuses; and the backup's notice when those settings name
+    no folder (decision 2), which an explicit `--out-root` keeps the backup itself from saying."""
+    from harness.backup import backups_folder, default_out_root
+    from harness.render import load_config
+
+    config = load_config(config_path)
+    return default_out_root(config, directory.name), backups_folder(config)[1]
 
 
 def real_host(
@@ -648,10 +658,14 @@ def real_host(
     def run(argv: Sequence[str]) -> tuple[int, str]:
         return _subprocess(argv, cwd=repo)
 
+    config_path, pointed = _settings(directory, repo)
+
     def backup() -> Path:
-        root = _backup_root(directory, repo)
+        root, notice = _backup_root(directory, config_path)
+        if notice:
+            print(f"ospreyflow: {notice}", file=sys.stderr)
         before = set(root.iterdir()) if root.is_dir() else set()
-        _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name,
+        _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name, *pointed,
                        "--out-root", str(root)], "back up every store")  # fmt: skip
         made = sorted(set(root.iterdir()) - before) if root.is_dir() else []
         if not made:
@@ -660,7 +674,7 @@ def real_host(
 
     def restore(path: Path) -> None:
         _ok_real(run, [*python, "-m", "harness.restore", str(path), "--profile", directory.name,
-                       "--yes"], "restore the backup")  # fmt: skip
+                       *pointed, "--yes"], "restore the backup")  # fmt: skip
 
     def files() -> dict[str, bool]:
         said = _ok_real(

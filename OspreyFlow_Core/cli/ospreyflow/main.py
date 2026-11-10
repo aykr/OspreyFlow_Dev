@@ -49,6 +49,8 @@ from .doctor import (
     Probes,
     ServerPlan,
     SystemProbes,
+    backups_checks,
+    deployment_name_of,
     format_check,
     gpu_checks,
     gpu_plan,
@@ -402,15 +404,21 @@ def _print_checks(checks: list[Check]) -> bool:
     return all(check.ok for check in checks)
 
 
-def _doctor(args: argparse.Namespace, probes: Probes, product: Path) -> int:
+def _doctor(
+    args: argparse.Namespace, probes: Probes, product: Path, env: Mapping[str, str]
+) -> int:
     server = None
     base = _product_config(product)
+    made: Mapping[str, Any] = base
     gpu = gpu_plan(base)
     if args.config is not None:
         raw = _file_or_default_answers(args)
-        answers = load_answers(raw, packs=[str(p) for p in raw.get("demo_packs") or ()])
+        home = Path(env["HOME"]) if env.get("HOME") else None
+        answers = load_answers(raw, packs=[str(p) for p in raw.get("demo_packs") or ()], home=home)
         server = server_plan(answers)
         gpu = _gpu_of(answers, base)
+        # ADR-114 Amendment 37: the backups folder these answers name, before the install.
+        made = osprey_config(answers, base)
     ok = _print_checks(
         run_doctor(
             args.mode, probes, product=product, cloud=args.cloud, server=server, gpu=gpu,
@@ -420,8 +428,34 @@ def _doctor(args: argparse.Namespace, probes: Probes, product: Path) -> int:
             # ADR-135 Amendment 2 decision 9: an installed deployment's model keys, as it says.
             model_states=getattr(probes, "model_key_states", lambda: None)(),
         )
+        + _backups_checks(probes, product, made, env)
     )  # fmt: skip
     return 0 if ok else 1
+
+
+def _backups_checks(
+    probes: Probes, product: Path, base: Mapping[str, object], env: Mapping[str, str]
+) -> list[Check]:
+    """ADR-114 Amendment 37 decisions 4 and 5, for the checkout's deployment and each one kept by
+    name (ADR-138): sets left behind, and a backups folder a sync client copies."""
+    deployments: list[tuple[str, Mapping[str, object]]] = []
+    if base:
+        deployments.append((deployment_name_of(base), base))
+    unread: list[Check] = []
+    for name in named.named(env):
+        try:
+            own = read_config(named.named_target(env, name).folder)
+        except (OSError, yaml.YAMLError) as failed:
+            unread.append(Check(
+                "backups-unread", True,
+                f"The deployment {name}'s osprey.yaml could not be read, so its backups were not "
+                f"checked ({type(failed).__name__})",
+                f"fix {named.named_target(env, name).folder / 'osprey.yaml'}", warn=True,
+            ))  # fmt: skip
+            continue
+        deployments.append((deployment_name_of(own), own))
+    home = Path(env["HOME"]) if env.get("HOME") else Path.home()
+    return unread + backups_checks(probes, product, deployments, home=home)
 
 
 def _product_config(product: Path) -> dict[str, object]:
@@ -495,6 +529,9 @@ def _prompted_answers(
         raw["folders"] = {
             "ingest": ctx.ask("Folder the Ingest Studio lists", "~/OspreyFlow/ingest"),
             "tiles": ctx.ask("Folder for the basemap", "~/OspreyFlow/basemap"),
+            # ADR-114 Amendment 37 decision 1: outside the checkout; each deployment's sets in
+            # a subfolder of their own.
+            "backups": ctx.ask("Folder for backups", "~/OspreyFlow/backups"),
         }
     else:
         raw["cloud"] = {
@@ -717,6 +754,16 @@ def _install(args: argparse.Namespace, ctx: _Context) -> int:
         server=server_plan(answers) if own_server else None,
         gpu=_gpu_of(answers, _product_config(ctx.product)),
     )  # fmt: skip
+    if not args.cloud and args.mode != "enterprise":
+        # ADR-114 Amendment 38 decision 8: the folder these answers name, before anything is
+        # written: one inside the checkout refused, one a sync client copies warned of.
+        made = osprey_config(answers, _product_config(ctx.product))
+        name = ctx.target.name if ctx.target.named else deployment_name_of(made)
+        # Judged by the home `load_answers` read `~` from.
+        checks = [
+            *checks,
+            *backups_checks(ctx.probes, ctx.product, [(name, made)], home=Path.home()),
+        ]
     if not _print_checks(checks):
         print("Nothing was installed. Fix the above and run ospreyflow install again.")
         return 1
@@ -1527,7 +1574,7 @@ def main(
             compose(directory) if (directory / "compose.yaml").is_file() else None
         )
         if args.verb == "doctor":
-            return _doctor(args, real_probes, product)
+            return _doctor(args, real_probes, product, env)
         ctx = _Context(
             product,
             env,
@@ -1553,10 +1600,9 @@ def main(
         if args.verb in ("backup", "restore"):
             module = f"harness.{args.verb}"
             # ADR-138: a deployment kept by name is named to the harness by its own osprey.yaml and
-            # rendered folder; its backups are kept in its own folder, never mixed with another's.
+            # rendered folder. Its sets go to its own subfolder of its backups folder, which the
+            # harness reads there (ADR-114 Amendment 37 decision 3), never mixed with another's.
             pointed = ctx.named_args("--generated-root")
-            if target.named and args.verb == "backup" and "--out-root" not in passthrough:
-                pointed += ["--out-root", str(target.folder / "backups")]
             return ctx.run([*ctx.python, "-m", module, *pointed, *passthrough], cwd=product)
         return _dispatch(args, ctx)
     except (CommandRefused, AnswersRefused) as refusal:
