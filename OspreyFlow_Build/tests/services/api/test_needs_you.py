@@ -196,8 +196,11 @@ class _Waiting:
 
 class _Notices:
     """`AlertStore.list_schedule_notices` as its query answers (`test_schedule_notices_needs_you.py`
-    holds the real one to it): the asking principal's own open `schedule:` alerts since `since`,
-    newest first, at most `limit`, and their total. Anyone else's is neither listed nor counted."""
+    holds the real one to it, red by plants in the SQL): the asking principal's own open
+    `schedule:` alerts with no typology since `since`, newest first, at most `limit`, and their
+    total; by owner alone, with no dataset reach (the orchestrator's ruling). It refuses what the
+    query refuses: another's, a closed one, a typed one and one older than `since` are neither
+    listed nor counted."""
 
     def __init__(self) -> None:
         self.held: list[Alert] = []
@@ -209,7 +212,7 @@ class _Notices:
         self.asked.append(principal.id)
         mine = sorted(
             (a for a in self.held if a.owner_id == principal.id and a.rule_id.startswith("schedule:")
-             and a.created_at >= since),
+             and a.typology is None and a.status == "open" and a.created_at >= since),
             key=lambda a: a.created_at, reverse=True,
         )  # fmt: skip
         return mine[:limit], len(mine)
@@ -421,11 +424,41 @@ def test_a_schedule_notice_is_served_to_its_owner_alone(world: SimpleNamespace) 
               words="The scheduled run of Daily export was refused: the file was not there.")
     )  # fmt: skip
     mine = _read(world, "eng-1")
-    assert mine["schedule_notices"] == [
-        {"notice_id": "nt-1", "recipe_id": "SYN-recipe-1", "raised_at": mine["schedule_notices"][0]["raised_at"],
-         "words": "The scheduled run of Daily export was refused: the file was not there."}
-    ] and mine["schedule_notices_total"] == 1  # fmt: skip
+    (served,) = mine["schedule_notices"]
+    assert datetime.fromisoformat(served.pop("raised_at")) == world.alerts_store.held[0].created_at
+    assert served == {"notice_id": "nt-1", "recipe_id": "SYN-recipe-1",
+                      "words": "The scheduled run of Daily export was refused: the file was not there."}
+    assert mine["schedule_notices_total"] == 1  # fmt: skip
     for other in ("rev-1", "adm-1"):
         theirs = _read(world, other)
         assert theirs["schedule_notices"] == [] and theirs["schedule_notices_total"] == 0
     assert world.alerts_store.asked == ["eng-1", "rev-1", "adm-1"]
+
+
+def _notices(world: SimpleNamespace, owner: str, ages: list[timedelta]) -> list[Alert]:
+    now = datetime.now(UTC)
+    made = [
+        Alert(id=f"nt-{owner}-{i}", rule_id=f"schedule:SYN-recipe-{i}", owner_id=owner,
+              mode=AlertMode.FULL, referent_node_ids=[], investigation_id="case-a",
+              created_at=now - age, words=f"Notice {i}.")
+        for i, age in enumerate(ages)
+    ]  # fmt: skip
+    world.alerts_store.held.extend(made)
+    return made
+
+
+def test_twenty_newest_notices_are_listed_and_the_true_total_said(world: SimpleNamespace) -> None:
+    """Rule 2: past twenty, the twenty newest are listed and the total says how many there are, so
+    the Glass says the rest rather than cutting them (ADR-110 Amendment 19 point 4)."""
+    made = _notices(world, "eng-1", [timedelta(minutes=m) for m in range(23)])
+    mine = _read(world, "eng-1")
+    assert [n["notice_id"] for n in mine["schedule_notices"]] == [n.id for n in made[:20]]
+    assert mine["schedule_notices_total"] == 23
+
+
+def test_a_notice_older_than_seven_days_is_neither_listed_nor_counted(world: SimpleNamespace) -> None:
+    """Amendment 19 point 4: the window is seven days, asked of the store as `since`."""
+    fresh, _ = _notices(world, "eng-1", [timedelta(days=6, hours=23), timedelta(days=8)])
+    mine = _read(world, "eng-1")
+    assert [n["notice_id"] for n in mine["schedule_notices"]] == [fresh.id]
+    assert mine["schedule_notices_total"] == 1

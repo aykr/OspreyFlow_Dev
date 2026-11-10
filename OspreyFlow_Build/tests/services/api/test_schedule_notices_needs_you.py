@@ -1,22 +1,30 @@
-"""ADR-110 Amendment 19: a scheduled load's notice reaches its owner in *Needs you*, read by owner in
-the query itself (rule 3), against the throwaway Postgres, through the real `schedule_notice` and
-`AlertStore.list_schedule_notices`. Every notice this file writes is its own owner's, under ids made
-here, and is removed in teardown even when a case fails (the database is shared).
+"""ADR-110 Amendment 19: a scheduled load's notice reaches its owner in *Needs you*, read and counted
+by owner alone, in the query itself (rules 3 and 4; the orchestrator's ruling of 10 November 2026:
+the owner, with no dataset reach). Against the throwaway Postgres, through the real `schedule_notice`
+and `AlertStore.list_schedule_notices`, with each reader made as the route makes it
+(`dataset_scope.outside_any_case`, so `datasets=[]`). Every notice this file writes is its own
+owner's, under ids made here, and is removed in teardown even when a case fails (the database is
+shared).
 
-What a mistake would do, and the case that catches it (each shown red at its call site,
-`process/lanes/rules/hyg/3-schedule-notices-red.txt`):
+What a mistake would do, and the case that catches it (each shown red by a plant in the query,
+under the rules lease: `process/lanes/rules/hyg/3-schedule-notices-red.txt`):
 
-- another person's notice served, or counted, to someone else, an administrator or a team lead
-  among them (the owner filter dropped from the query, or applied after it, or the total counted
-  over every owner): `test_only_the_owner_reads_or_counts_a_notice`;
-- a notice written before the fix (`schedule:<recipe>`, no typology) left out, or an alert of
-  another kind served as a notice: `test_a_notice_is_any_schedule_alert_and_nothing_else`;
-- a notice older than the window, or closed, served: `test_the_window_and_the_status_bound_it`;
-- more notices than the limit cut without saying so: `test_more_than_the_limit_is_said_by_the_total`.
+- another person's notice served, or counted, to someone else, an administrator, the owner's team
+  lead or an unknown principal (the owner filter dropped from the list or the total):
+  `test_only_the_owner_reads_or_counts_a_notice`;
+- a notice hidden once `scripts.stamp_datasets` placed it in its case's dataset (a dataset reach
+  applied to a reader outside any case): `test_a_stamped_notice_and_an_unstamped_one_are_both_served`;
+- a notice written before the amendment left out, or a rule's alert served as a notice (the prefix
+  or `typology IS NULL` dropped): `test_a_notice_is_any_schedule_alert_and_nothing_else`;
+- a notice older than the window, or closed, served (either filter dropped):
+  `test_the_window_and_the_status_bound_it`;
+- more notices than the limit cut without saying so (the total taken after the limit):
+  `test_more_than_the_limit_is_said_by_the_total`.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
@@ -26,7 +34,14 @@ from schemas.domain import Alert, AlertMode, Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
+from services.api.dataset_scope import outside_any_case
 from services.api.scheduler import schedule_notice
+
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("OSPREY_LANE")
+    and not os.environ.get("OSPREY_TEST_ARCADEDB_CONTAINER"),
+    reason="needs a leased lane stack (OSPREY_LANE and its pinned ports), or CI's live job",
+)
 
 NOW = datetime(2026, 11, 10, 21, 0, tzinfo=UTC)
 SINCE = NOW - timedelta(days=7)
@@ -40,8 +55,11 @@ def _recipe(owner: str) -> StudioRecipeDraft:
     )  # fmt: skip
 
 
-def _person(pid: str, roles: list[str]) -> Principal:
-    return Principal(id=pid, clearance="SECRET", org_unit="unit-1", roles=roles)
+def _reader(pid: str, roles: list[str]) -> Principal:
+    """A reader as `/v1/me/needs-you` makes one: outside any case, so `datasets=[]`."""
+    return outside_any_case(
+        Principal(id=pid, clearance="SECRET", org_unit="unit-1", roles=roles)
+    )
 
 
 @pytest.fixture
@@ -60,11 +78,20 @@ async def world() -> AsyncIterator[tuple[AlertStore, list[str]]]:
 
 
 async def _notice(
-    store: AlertStore, written: list[str], owner: str, at: datetime
+    store: AlertStore,
+    written: list[str],
+    owner: str,
+    at: datetime,
+    *,
+    dataset: str | None = None,
 ) -> Alert:
     notice = schedule_notice(
-        owner, _recipe(owner), f"The scheduled run of Daily export failed {at}", at
+        owner, _recipe(owner), "The scheduled run of Daily export failed.", at
     )
+    if (
+        dataset is not None
+    ):  # as `scripts.stamp_datasets` places an alert in its case's dataset
+        notice = notice.model_copy(update={"dataset_id": dataset})
     await store.save(notice)
     written.append(notice.id)
     return notice
@@ -76,22 +103,42 @@ async def test_only_the_owner_reads_or_counts_a_notice(
     store, written = world
     owner = f"owner-{new_id()}"
     mine = await _notice(store, written, owner, NOW - timedelta(hours=1))
-    listed, total = await store.list_schedule_notices(
-        _person(owner, ["data_engineer"]), since=SINCE
+    stamped = await _notice(
+        store, written, owner, NOW - timedelta(hours=2), dataset=new_id()
     )
-    assert [n.id for n in listed] == [mine.id] and total == 1
-    # Someone else, an administrator and a team lead, each a real principal's shape: no notice of
-    # the owner's, and none counted, so nothing of it is known by its number either (rule 3).
+    listed, total = await store.list_schedule_notices(
+        _reader(owner, ["data_engineer"]), since=SINCE
+    )
+    assert [n.id for n in listed] == [mine.id, stamped.id] and total == 2
+    # Someone else, an administrator, the owner's team lead and a principal the deployment has
+    # never seen: each reads none of the owner's notices and counts none (rule 3: nothing of them
+    # is known by its number either). Each is new here, so has none of its own.
     for other in (
-        _person(f"other-{new_id()}", ["data_engineer"]),
-        _person(f"admin-{new_id()}", ["osprey-admin", "analyst"]),
-        _person(f"lead-{new_id()}", ["analyst", "team_lead"]),
+        _reader(f"other-{new_id()}", ["data_engineer"]),
+        _reader(f"admin-{new_id()}", ["osprey-admin", "analyst"]),
+        _reader(f"lead-{new_id()}", ["analyst", "team_lead"]),
+        _reader(f"unknown-{new_id()}", []),
     ):
-        theirs, counted = await store.list_schedule_notices(other, since=SINCE)
-        assert all(n.owner_id == other.id for n in theirs), (other.roles, theirs)
-        assert mine.id not in {n.id for n in theirs} and counted == len(theirs), (
+        assert await store.list_schedule_notices(other, since=SINCE) == ([], 0), (
             other.roles
         )
+
+
+async def test_a_stamped_notice_and_an_unstamped_one_are_both_served(
+    world: tuple[AlertStore, list[str]],
+) -> None:
+    """The ruling: a notice is read by owner alone, never by dataset reach. A reader outside any
+    case reaches no dataset (`datasets=[]`), so a reach would hide every notice once stamped."""
+    store, written = world
+    owner = f"owner-{new_id()}"
+    unstamped = await _notice(store, written, owner, NOW - timedelta(hours=1))
+    stamped = await _notice(
+        store, written, owner, NOW - timedelta(hours=2), dataset=f"ds-{new_id()}"
+    )
+    listed, total = await store.list_schedule_notices(
+        _reader(owner, ["analyst"]), since=SINCE
+    )
+    assert {n.id for n in listed} == {unstamped.id, stamped.id} and total == 2
 
 
 async def test_a_notice_is_any_schedule_alert_and_nothing_else(
@@ -99,17 +146,20 @@ async def test_a_notice_is_any_schedule_alert_and_nothing_else(
 ) -> None:
     store, written = world
     owner = f"owner-{new_id()}"
-    # One written before this amendment, exactly as the scheduler wrote it then (`schedule:<id>`,
-    # no typology, no referent): the same shape, so it is served.
+    # Written before this amendment, exactly as the scheduler wrote it then (`schedule:<id>`, no
+    # typology, no referent): the same shape, so it is served.
     before = await _notice(store, written, owner, NOW - timedelta(days=2))
-    # An alert of the owner's that is no notice: a rule's, with a typology.
     rule_alert = Alert(id=new_id(), rule_id=f"rule-{new_id()}", owner_id=owner, mode=AlertMode.FULL,
                        referent_node_ids=["n-1"], investigation_id=new_id(), created_at=NOW,
                        typology="structuring", words="A rule's alert")  # fmt: skip
-    await store.save(rule_alert)
-    written.append(rule_alert.id)
+    typed = Alert(id=new_id(), rule_id=f"schedule:{new_id()}", owner_id=owner, mode=AlertMode.FULL,
+                  referent_node_ids=[], investigation_id=new_id(), created_at=NOW,
+                  typology="structuring", words="Not a notice: it has a typology")  # fmt: skip
+    for alert in (rule_alert, typed):
+        await store.save(alert)
+        written.append(alert.id)
     listed, total = await store.list_schedule_notices(
-        _person(owner, ["analyst"]), since=SINCE
+        _reader(owner, ["analyst"]), since=SINCE
     )
     assert [n.id for n in listed] == [before.id] and total == 1
 
@@ -127,7 +177,7 @@ async def test_the_window_and_the_status_bound_it(
         )
     fresh = await _notice(store, written, owner, NOW - timedelta(hours=2))
     listed, total = await store.list_schedule_notices(
-        _person(owner, ["analyst"]), since=SINCE
+        _reader(owner, ["analyst"]), since=SINCE
     )
     assert [n.id for n in listed] == [fresh.id] and total == 1
 
@@ -142,7 +192,7 @@ async def test_more_than_the_limit_is_said_by_the_total(
         for m in range(5)
     ]
     listed, total = await store.list_schedule_notices(
-        _person(owner, ["analyst"]), since=SINCE, limit=3
+        _reader(owner, ["analyst"]), since=SINCE, limit=3
     )
     assert [n.id for n in listed] == [n.id for n in made[:3]]  # newest first
     assert total == 5
