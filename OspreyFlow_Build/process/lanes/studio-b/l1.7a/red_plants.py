@@ -249,8 +249,8 @@ PLANTS = [
     ("put-back-file-only", "the file put back, its index entry not: the index half alone removed",
      [("            index[path] = index_entry_from_stat(written, Blob.from_string(committed).id)\n",
        "            pass  # PLANT\n")], [REPO_TESTS],
-     ["test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it",
-      "test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to"]),
+     # Not the same-recipe rival's case: the rival's own `git add` staged its bytes already.
+     ["test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it"]),
     ("aside-empty-not-ours", "an empty aside not taken as ours: only a .git-only aside swept",
      [('                ours = sorted(os.listdir(left)) in ([], [".git"])\n',
        '                ours = sorted(os.listdir(left)) in ([".git"],)  # PLANT\n')], [REPO_TESTS],
