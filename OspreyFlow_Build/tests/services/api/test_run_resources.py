@@ -117,6 +117,7 @@ STORES = (
     "InfluencerStore",
     "PostgresTargetModelStore",
     "PostgresListStore",
+    "InvestigationStore",
 )
 
 
@@ -213,6 +214,7 @@ async def test_closing_closes_everything_the_builder_opened(fakes: _Graph) -> No
         resources.recipe_runs,
         resources.extraction_candidates,
         resources.datasets_store,
+        resources.investigations,
         resources.valkey,
         resources.arcadedb_client,
         resources.principal_resolver,

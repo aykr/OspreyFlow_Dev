@@ -1,86 +1,126 @@
-# rules lane · report · L2.9, four places: Rules and Monitoring, /alerts/<id>, the way back (8 November 2026; after three own review rounds and two of the orchestrator's)
+# rules lane · report · L2.10, one queue, watches, team routing, Raise an alert (9 November 2026; resumed twice, regated at 8e8b9ff)
 
-1. **Rulings:**
-   - **The owner's ruling on Q1 (a), relayed by the orchestrator, 8 November:** the *Rule author* gains `read_alert_queue`, since whoever triages must read the queue. ADR-112 Amendment 5 decision 2's list is amended in ADR-146 Amendment 2 point 5. The change is in `rights.py`'s `RULE_AUTHOR`, in the branch's schemas commit. ADR-112 Amendment 5's test "Rule author opens Rules and Monitoring" is a passing test now, no longer an xfail; it is red on the role without the right, and so is `test_rights.py`'s Rule author case. The role is offered Rules and Monitoring and the Glass (whose Home reads the same queue), never the Studio; the orchestrator agreed.
-   - **`needs` kept, the orchestrator agreeing:** it was asked to be dropped as interim. It is not interim: it is ADR-145 Amendment 1's entry-read rule, and the Rule author now passes it. Dropping it would offer the place to a custom role holding `triage_alerts` alone, whose first screen refuses it, and `places.test.tsx` would go red against `placesByRole.json`.
-   - **The orchestrator's ruling (a) on its review's item 4:** the queue's rows go only to whom the place is offered and to the Reports Viewer, who keeps ADR-145 Amendment 4 decision 10's list and has no way into an alert's detail. Any other reader of the queue (the Data Engineer) gets counts. Within accepted ADRs; recorded in Amendment 2 point 3. I stopped item 4 as first written because it contradicted decision 10.
-   - Q2 (a), the orchestrator's settlement: the Data Engineer's and the Administrator's losses are as in ADR-146 Amendment 2 point 2.
-   - Decisions taken:
-     - Held rows are shared with the Studio's Runs.
-     - Connection strength stays in the Glass, under More.
-     - `/rules` is the place's address.
-     - The view is named "From alert: ‹title›".
-     - The address's refusals are equalised in time by a quantum (250 ms), not by identical reads, which no missing id can make (ADR-146 Amendment 2 point 6).
-     - The queue's rows go to the Reports Viewer by its role, not a right, so a custom role copied from it gets counts, the narrower answer.
-2. **The fourth place: met.**
-   - R&M is in the switcher and the GOV.UK header, with the open-alert count. It is offered for `triage_alerts` or `author_rules`, together with the queue's read (`places.json` `needs`).
-   - Every route of the place asks for the place's gate after its own right. The gate asks for the place's `needs` (`read_alert_queue`) as well as an opening right, so the routes refuse exactly whom the place is not offered to. The five exceptions are shared outside it: three reads (the queue's rows and its counts, held rows' list) and two writes (held rows' reject and release).
-   - Its tabs are Alerts, What raises alerts, Held rows and Changes.
-   - Tests: `test_place_routes.py`, red with the gate taken off `deploy_typology_rule`, with the gate open to all, with an unplaced rule route, and (review round 2, item 3) with the gate asking for an opening right alone: a `triage_alerts`-only holder, directly or through a custom role, then reached past their checks at the eight triage routes. Also `places.test.tsx`, `keyboard/shell.spec.ts` and `rules-place.spec.ts`.
-   - The queue's rows (item 4): `test_alert_queue_counts.py`, red with the rows' check removed (the Data Engineer was answered every row, words and all); Home's counts in `homeData.test.ts`, red with the fallback removed.
-3. **Monitoring leaves the Glass: met.** The banner is Case · Boards, and Connection strength moves under More. The count is unchanged at 24 (`App.chrome.test.tsx`).
-4. **`/alerts/<id>`: met.**
-   - `GET /v1/alerts/{id}` scopes the reader to the alert's case before reading. Seven cases a reader may not see answer exactly as a missing alert (`test_alert_address.py`; the reds were re-taken in RED_RECORD §6).
-   - A History-API router; Home's rows open the alert; an address is ignored for whoever the place is not offered to.
-   - **Answered at the same time** (review round 2, blocker 1): every refusal waits to the end of its 250 ms quantum. Red with the wait removed (a fake clock: 2, 2 and 17 ms). Live, under the rules lease on stack c: without the wait, missing 4.5 ms, another case 4.4 ms, hidden 100.8 ms (max 176.6 ms); with it, 253.3, 253.1 and 253.7 ms (`l2.9/address-timing.txt`).
-   - Live through the real app, `get_principal`, `PostgresAlertStore.case_of` and ArcadeDB (`test_alert_address_live.py`, review round 2, blocker 2): the alert answered in its case, and its three refusals alike byte for byte. Hermetic additions: a team-shared alert answered, and a read-only layer answered only to a reader of the original, each red.
-   - B14 is at the alert's address (spec 08), with its refusal in process and over the wire.
-5. **Open the evidence: met.**
-   - It saves a private view of the case and opens L3.2b's lens with *← Back to the alert*, which returns to the same alert, still open.
-   - It saves into the case the alert was read in, refused in words when that is not the case open or the address names another (`evidenceCase`, review round 2, item 6; red with either check removed).
-   - A failure is said on the alert alone. Round 3 found a stale "could not be opened" left over the Glass; it is fixed, with the red first (RED_RECORD §8).
-   - Tests: `App.test.tsx` and `rules-place.spec.ts`, each red.
-6. **Keyboard and axe: met.** Every new action has its case, and its registry id is in `registry-L2.9.patch`. Axe passes in dark, light and GOV.UK.
-7. **Gates at 298315a** (tree eb4bbf855545c5c6817de9aadad2332e17de3fda), rebased on main at 47b0bc4 (after studio's L1.4), offline, with closed ports and `OSPREY_LANE` unset (`gates/298315a.*.txt`):
-   - **`make -k ci`:** every target green except the seven `trivy-image-*` builds, refused by Docker Hub (429 Too Many Requests). Environmental.
-   - **`make test`:** 8,714 passed and 4 failed, all this machine's own, the same set as at 6c5db53 and 570fdf1:
-     - `osprey.yaml` names `osm-local-great-britain`;
-     - the closed-port `VALKEY_PORT` is exported;
-     - `graphify-out/` sits at the root;
-     - the phone fixture needs an object store.
-   - **`test-js`:** 2,717 of 2,718. The miss was the MatrixView first-frame budget, a timing case run under load, untouched here; alone it is green.
-   - **`glass-a11y`:** 573 passed.
-   - **`glass-keyboard`,** with `registry-L2.9.patch` applied uncommitted: 613 passed, 1 skipped and 2 failed, both in studio's `ingest-studio.spec.ts`. One was a 5 s poll under load, the other its coverage case after the worker restarted. Re-taken alone: 46 passed.
-8. **Live (rules lease, stack b, at 298315a, 22:54–22:59Z):** 25 suites, the 18 earlier ones plus every live file the change reaches. 1,597 passed and 4 failed, each explained (`gates/298315a.live.txt`):
-   - P2's two model routes are missing from `ROUTE_RIGHTS` on main (platform has it).
-   - The shared database's leftover rules break the rule list (L2.8d's record).
-   - The Phase 8 in-process walkthrough is red on main before B14: a `loader` token holds no `create_case` (fixed here), then B4 seeds into a case of one dataset (not this step's). B14's address is proven live by `test_alert_address_live.py` instead.
-   - Stage 6c's 250th-node case drew a number from a pool of 100 that an earlier node held. Re-taken alone, it passed and two other ingest cases hit MinIO's `INTERNAL_FAILURE`; B14's own case in that file passed both times. Environmental.
-   - **Not run:** the over-the-wire tier needs a rendered deployment of this branch. The only one is the owner's, which lanes do not rebuild. For the orchestrator, at the merge or on D2's rebuilt deployment.
-9. **Reviews:** three rounds by my own lane-reviewer.
-   - Round 1: 8 must-fix and 4 minor.
-   - Round 2: 4 must-fix and 7 minor.
-   - Round 3: no code must-fix. Its must-fix items were this report and the gates. Minor 3 (the stale problem) is fixed; the "two shared reads" wording and a keyboard case's title are corrected; the rest are in item 13.
-   - The orchestrator's independent review, round 2: 2 blockers, 4 must-fix and 4 minor. All are built here (item 4 as ruled), each red first (RED_RECORD §9). Item 5 (case rebases onto my `App.tsx`) and item 9 (the reservation title) are the orchestrator's.
-10. **Questions for the owner:** **Q3** (ADR-146 Amendment 2 point 6). An alert whose evidence takes longer than one quantum to read is refused on a later quantum, so it alone can still be told apart from a missing id. The measured worst case here is 177 ms against 250 ms. Options:
-    - (a) accept it, recorded; recommended, since it applies only to alerts with unusually large evidence;
-    - (b) cap the evidence an alert may cite, and size the quantum to read the cap;
-    - (c) a larger quantum.
-    Until the owner rules, the guarantee is the one measured, no wider. Found on the way, already on main and not this step's: the queue's own list reads the evidence of every alert in the case, hidden ones included, so its time grows with them.
-11. **Ratify (outside rules' map):**
-    - Case lane: `views/ViewLensBanner.tsx` and `views.css`, and the jump tests removed in `test_case_writes`, `test_case_domains` and `test_drawn_datasets`.
-    - Shell and harness:
-      - `App.tsx`/`App.test.tsx`, `rights/visibility.ts`, `assessment/api.ts`, `watches/AlertInbox.tsx`, `watches/api.ts`.
-      - The keyboard specs and harnesses, and `a11y/every-harness.spec.ts`.
-      - `live/capture-kit.ts`/`pid-capture.spec.ts`; the captures will need retaking.
-    - Conduit and tests:
-      - `app.py`, `history_labels.py`, and `packages/schemas` (`AlertAtAddress`, `AlertQueueCounts` and `rights.py`'s `RULE_AUTHOR`, in their own commit).
-      - `tests/schemas/test_rights.py`, `test_route_rights.py` and `test_investigation_levels.py` (the counts route's rows).
-      - The scenario tests, including the Phase 8 walkthrough's analyst-who-loads token, and the other jump-test lists.
-      - `OspreyFlow_Build/Makefile` and `.github/workflows/ci.yml`, for the new live file.
-    - Spec: 01, 02, 03, 08 and the 06 append.
-12. **Requests:**
-    - Commit `registry-L2.9.patch` at the merge.
-    - Mark ADR-146 Amendment 2 `written`.
-    - Run the over-the-wire tier at the merge, or on D2's rebuilt deployment.
-    - Platform: add P2's `models_admin_limits_route` and `models_admin_usage_route` to `test_route_rights.py`'s `ROUTE_RIGHTS` (passed on by the orchestrator).
-    - Docs lane: the user guide's "Jump into investigation", and the PID captures.
-    - Case lane: the dead `refuse_copying_a_drawn_dataset`/`read_the_same_dataset`.
-13. **Left, minor:**
-    - Some stale jump prose remains in schema docstrings.
-    - The harnesses mirror App's wiring; App.test covers the real wiring.
-    - A superseded `openLens` leaves the address with no lens open (round 3, minor 4).
-    - `PostgresAlertStore.case_of` is reached only by B14's live run (round 3, minor 5).
-    - B14's over-the-wire step checks that the node list is not empty, not that it holds the referents (round 3, minor 6).
-    - The Phase 8 in-process walkthrough is red on main at B4 (one dataset per case); it is not this step's.
-14. **Commits:** main..HEAD, 29 with this one. The `wip(rules)` rewrite was not needed: the paused session left only proper commits, plus an uncommitted `HANDOFF.md` and two partial gate files, all removed. **Still running:** nothing. Every stack is free and the lease is released.
+1. **Team routing, the new rule 3 read: met.** Read in the query, never after it (the queue's list, counts, detail, address and triage writes; a pack's alert item; trends; the rule audit). A routed alert writes no `Alert` node. Red with the check opened at `_routed_sql`: `test_monitoring_queue.py`'s three routing cases and `test_pack_alert_item.py`; trends in the analytics suite; the audit in `test_typology_rules.py` (RED_RECORD §1, §5, §6).
+2. **One queue: met.** The inbox's routes and component are gone, and *what fired it* is on the explanation (`alerts/OneQueue.test.tsx`; `test_alert_view_explains_live.py`). **Filters:** the filter case in `test_monitoring_queue.py`, live. **What raises alerts:** `test_team_lead_and_watches.py`.
+3. **Watches from the Glass, and G16: met.** *Watch for this* and *Save as a watch*, plus a watched pattern's own schedule. The schedule runs as its owner and is confined to its dataset, red when not confined: a Glass-made watch alerted on `n-elsewhere` (`test_team_lead_and_watches.py`).
+4. **The lead's tools: met.** The hand-off, *Suppress until…* and the taken-back marking (`test_team_lead_and_watches.py`, `keyboard/alerts.spec.ts`).
+5. **Raise an alert…: met.** It is refused before anything is written: to a Viewer, for a dataset the case doesn't read, for a layer, where there is no home case, and for a drawn item (`test_raise_an_alert.py`, RED_RECORD §2).
+6. **The carries: met.** The read path's purge (`test_read_path_purge.py`); the KYC sweep is no longer stopped whole (`test_composite_monitors.py`). `model_limit_reached` is on main since P3. The list picker is left to L2.11, as the brief says; main's new carry (the Lists tab, 4389138) is L2.11's too.
+7. **Keyboard, axe, registry: met.** Every new action has its case, red with its handler removed. The registry ids are in `registry-L2.10.patch`. Axe passes in dark, light and GOV.UK.
+8. **Gates at 8e8b9ff** (tree 7992ecf2…, rebased onto main at 3be89a7 after the orchestrator's review; `gates/8e8b9ff.*`, `gates/855899f.test.txt`). Closed ports, `OSPREY_LANE` unset. Main moved again afterwards; I did not rebase again, since the lane had gated.
+   - **`make -k ci`:** green except the eight `trivy-image-*` scans, `opentofu-check` and `chart-check`. Those need Docker, which is off on this Mac by the owner's choice.
+   - **`make test`, on the server** (`stack_lease.sh offline`, at 855899f, code identical to 8e8b9ff): 9,529 passed and 3 failed, each named in the file:
+     - `test_valkey_config`, main's own;
+     - `test_webapp_preflight`'s GPU case, because the server has a GPU;
+     - `test_layout`, tripped by the verb's own folders at the copy's root (since cleared).
+   - **`make test` on this Mac** (8e8b9ff): 24 failed and 30 errors, each named: this machine's usual 4, plus 20 failures and 30 errors that need Docker.
+   - **`test-js`:** 2,762 of 2,763. The miss is the MatrixView first-frame budget, run under load; it was green re-taken alone.
+   - **`glass-a11y`:** 723 passed, every harness in dark, light and GOV.UK.
+   - **`glass-keyboard`** (`registry-L2.10.patch` applied uncommitted): 689 passed. ALERTS_ACTIONS and WATCH_PANEL_ACTIONS are covered whole. Two failures are main's own, `boards.spec.ts:225` and its registry check `:423` (the keyboard harness gave the board no grades), fixed in f6def92 on lane/case and carried in CARRIES.md.
+9. **Live: the rules lease, stack c, on the server** (`stack_lease.sh remote`), at 855899f, 18:54–19:58Z (`gates/855899f.live.txt`).
+   - **Files:** `test_route_rights.py` and the 49 live files the change reaches, now with the analytics suite and `test_typology_rule_routes.py`.
+   - **Result:** 779 passed and 1 failed. `test_kyc_rules`' true positive passes.
+   - **The one failure was a real defect:** rules' `event_frequency` on ClickHouse. ClickHouse 25.8, the version deployed, refuses a RANGE window offset of 2^31 ms or more, so every frequency span past 24.9 days failed. It hadn't run against a real ClickHouse since stack a went off.
+   - **Fixed at 274d114, then 778c4d8,** under its own heading below. The orchestrator ruled that the 779 can stand with the fix's delta. The delta at 778c4d8 (the analytics suite whole, `test_route_rights.py` and the live files that evaluate rules) is `gates/778c4d8.live.txt`: 310 passed, none failed.
+   - **Three earlier attempts are recorded as not counted:**
+     - the first pass's 122 ClickHouse cases, not run because the stack had no ClickHouse then;
+     - a retake orphaned by an ssh drop;
+     - a run whose log the verb's prune deleted, a bug fixed on main at dc0b7cd.
+   - The lease is released and stack c is down.
+10. **Reviews:** two rounds by my own lane-reviewer, and the orchestrator's independent review (b839f81 onward), every finding built and red first (RED_RECORD §5, §8, §9). The ClickHouse fix had two rounds of its own, below.
+**A fix to main's own code: ClickHouse `event_frequency` (ADR-133; first seen on main on 7 November, in MORNING).**
+- **The defect.** ClickHouse 25.8, the version the deployment pins, refuses a RANGE window offset of 2^31 or more. The adapter's span window was in milliseconds, so every frequency condition with a span past 24.9 days failed in a ClickHouse deployment; ADR-133 allows 366 days. No live run had met a real ClickHouse since stack a went off.
+- **First fix (1f04c2c), withdrawn after my lane-reviewer's round.** It was a self-join with two defects: it paired every two events of a subject (n²), and it cut the edge to milliseconds against a microsecond column.
+- **Fix (274d114, then 778c4d8).** Each event's running count, non-null amounts and Decimal sum (a RANGE frame with no offset), less the running figures before `at - INTERVAL N DAY`, by an ASOF JOIN on the `DateTime64` itself. Exact to the microsecond, n log n, with `join_use_nulls = 0` set on the query.
+- **Both adapters now sum a declared amount as Decimal(38,9)** (778c4d8; the DuckDB adapter changes too), so a total a rule compares is the same on each: 0.1 and 0.2 make 0.3. An amount past that is no amount, never 0. Spec 04 says so.
+- **Its case,** at the real call site: a 90-day span with a third event 1 µs either side of the edge, `[±1]`. Red on c's ClickHouse against the old window (refused) and against the self-join (`18.0 == 12.0`); 16 frequency cases green on both adapters.
+- **Its lane-reviewer's second round:** the first round's four items closed. Seven more found, each built and red at its real call site (RED_RECORD §12a):
+  - the access case was blind to the target branch's check: plants added at the far end, red on both adapters with that check removed;
+  - an amount past Decimal128(9) was counted as a present 0;
+  - the edge was pinned from one side only;
+  - ties were exercised by nothing;
+  - `join_use_nulls` was left to the server;
+  - the adapters summed differently;
+  - the records were uncommitted.
+- **The five ClickHouse plants** were red on c, and the DuckDB ones offline.
+- **Records:** RED_RECORD §12 and §12a; `gates/274d114.live.txt` and `gates/778c4d8.live.txt`.
+
+**The orchestrator's independent review at fea68fc: sent back, and built** (RED_RECORD §12b):
+1. **Rule 7.** A sweep failure's counts are withheld from a reader its rule's firings are hidden from, as `rule_evaluated`'s are. Red on c with the withholding removed.
+2. **Re-gated at 1e94fdf:**
+   - `make -k ci` here: green apart from the image, opentofu and chart scans (Docker off);
+   - `make test` on the server: 9,531 passed, and 2 failed, both the host's (valkey_config, which is main's, and the GPU preflight);
+   - test-js: 2,762 of 2,763, the miss the MatrixView timing case.
+3. **`account_activity`.** It reads amounts as decimals on both adapters through one `_decimal_amount`, under ADR-133 Amendment 10:
+   - each amount is rounded to 9 places;
+   - one past 10^29, inf or nan is no amount;
+   - a total of 10^28 or more is refused (`AmountTotalOutOfRange`), never wrapped. DuckDB's plain decimal SUM was found to wrap silently.
+4. **The read-path purge** is proved through the real app. Red on c with the lifespan's line removed.
+5. **Ratification list** updated (item 12).
+6. **The tie case** is four tied events. Red on c with a ROWS frame (`6 == 4`).
+- **Minors:**
+  - approve_close's dataset refusal is `not_the_home_cases_author`;
+  - the team-leave case runs through a real signed token;
+  - one `chooseByTyping`;
+  - one friction row;
+  - the records' base, lease intervals and withdrawn-fix pointer corrected.
+- **Live, the rules lease on stack c:**
+  - The five plants were each red for their own reason. The delta at 1e94fdf passed 317, with 9 failures: a defect of that commit's own, a NULL activity sum read by `float()`.
+  - Fixed at bb4466d. Its delta, the analytics suite whole, passed 266 (`gates/1e94fdf.live.txt`, `gates/bb4466d.live.txt`).
+  - Released and down.
+
+**The orchestrator's re-review at 724d297: sent back, and built at d52fc9f** (RED_RECORD §12c):
+1. **A sweep failure's documents not judged** are counted across every customer the rule screens, so the count and its counted words are withheld from every reader of the rule audit; the words without the number are kept. Red on c by two plants (the count withheld only when a firing is hidden; a digit kept in the words).
+2. **`account_activity`'s own refusal, shown alone:** a total of 1.2 × 10^28 that the decimal holds but the limit refuses. Red with only that call removed, on DuckDB offline and ClickHouse on c.
+3. **Minors:** ClickHouse's activity comment; ADR-133 Amendment 10 point 3 narrowed; a team member leaves from their next token (ADR-146 Amendment 4 point 1, `alert_routing.py`); ruff and mypy on the files changed since `make -k ci` (`gates/d52fc9f.lint.txt`).
+- **Live, the rules lease on stack c:** the three plants red; the delta at d52fc9f passed 289, none failed (`gates/d52fc9f.live.txt`). Released and down.
+- **`glass-keyboard` at 6e90f52** (`registry-L2.10.patch` applied uncommitted, then reverted; the orchestrator's local slot): 689 passed, 1 skipped, 2 failed, both main's own (`boards.spec.ts:225` and `:423`, fixed in f6def92 on lane/case) (`gates/6e90f52.keyboard.txt`).
+
+**Rebased onto today's main and re-gated (the orchestrator's ask, 10 November)** at b40bd93, base main at 6379dd1:
+- **The rebase:** onto 380987e, then again onto 6379dd1, since P5b landed during the first. Five conflicts, each resolved by keeping both sides: app.py's imports, test_place_routes.py (Admin › Audit's row and L2.10's watches and teams rows), the decision log and citation allowlist (both appended), and ADR_RESERVATIONS.md (one row each for ADR-146 Amendment 4 and ADR-133 Amendment 10, both written: the duplicate fixed).
+- **`make test` on the server** at c9c1061 (`gates/c9c1061.test.txt`): 10,200 passed, 12 skipped, 4 failed; test-js 2,900 of 2,901 (the MatrixView first-frame budget under load).
+  - Two failures are the host's: test_valkey_config (main's own) and the GPU preflight.
+  - Two were L2.10 meeting today's main, fixed at b40bd93: five L2.10 audit actions unclassified in main's new audit kinds (added to `audit_section.py` with the other alert actions, ratified by the orchestrator), and the Reports Viewer journey naming the two inbox routes L2.10 removed. Both files pass again (16 passed). The orchestrator ruled that the narrow fix needs no full rerun.
+- **Live, the rules lease on stack c** at b40bd93, 09:17–10:27Z (`gates/b40bd93.live.txt`): test_route_rights and the 48 live files, 801 passed, none failed. Down and released.
+- **`make -k ci`** at b40bd93 (`gates/b40bd93.ci.txt`): green apart from the eight `trivy-image-*` scans, opentofu-check and chart-check, which need Docker (off on this Mac).
+- **`glass-keyboard`** at b40bd93 (`registry-L2.10.patch` applied uncommitted, then reverted; `gates/b40bd93.keyboard.txt`): 731 passed, 1 skipped, none failed. Main's two board failures are gone at this base.
+- **Main moved again** during the re-gate (to 17c202d, 144 commits). Not rebased again, since the lane is gated.
+
+11. **Decisions taken** (Prompt L, for the owner to overrule):
+    - **Trends:** a routed alert is counted for its team's members alone, not the home case's Authors (the narrower answer).
+    - **"My team":** offered only for a rule already saved with it.
+    - **Suppress until…:** at most 90 days ahead; the status is unchanged, so it still counts open.
+    - **Dataset alerts:** closed by the home case's Authors alone.
+    - **A watch's schedule:** daily at 06:00 Europe/London by default.
+    - **Watch for this:** reviewed in 90 days.
+    - **Addresses:** a dataset or schedule alert's address answers 404 outside its own case, until a later step.
+12. **Requests to the orchestrator:**
+    - K11's scheduled-run notices need a home in the Studio's schedules (studio).
+    - *Raise an alert…* on the selection bar and on a question's answer (case and questions).
+    - Apply `registry-L2.10.patch`.
+    - Ratify the files outside rules' map, the schemas commit (9b845e0, d8390a6, e382474) going separately and first at merge:
+      - the Conduit: `investigations.py`, `recipe_run.py`, `run_resources.py`, `packs.py`, `app.py`'s routes;
+      - the analytics adapters and port: `analytics_clickhouse/adapter.py`, `analytics_duckdb/adapter.py` (`event_frequency`, `account_activity`) and `alert_facts.py`; `ports/analytics.py` (`AmountTotalOutOfRange`);
+      - the Glass: `App.tsx`, `App.test.tsx`, `inspector/Inspector.tsx`, `patterns/QueryBuilderPanel.tsx`, `patterns/api.ts`, `rights/visibility.ts`, `reports/packText.ts` (rules-b's area, a one-line alert-item change), `a11y/every-harness.spec.ts`;
+      - spec 01, 02, 03 and 04, and ADR-133 Amendment 10; `citation_allowlist.txt`;
+      - the tests this branch changes (other lanes' among them): tests/conformance/analytics_port/test_suite.py, tests/fixtures/citation_allowlist.txt, tests/ingest/test_alert_evidence_withheld_live.py, tests/ingest/test_kyc_rules.py, tests/ingest/test_typology_rule_routes.py, tests/ingest/test_typology_rules.py, tests/scenarios/ledger_monitoring_support.py, tests/scenarios/pid_monitoring_support.py, tests/scenarios/test_phase7_stage6c_watch_routes.py, tests/services/api/test_alert_evidence_withheld.py, tests/services/api/test_alert_node_marking.py, tests/services/api/test_alert_queue_counts.py, tests/services/api/test_alert_runs_partly_raised.py, tests/services/api/test_alert_view_explains_live.py, tests/services/api/test_alert_view_explains.py, tests/services/api/test_composite_monitors.py, tests/services/api/test_evaluation_touched_nodes.py, tests/services/api/test_evaluation.py, tests/services/api/test_investigation_levels.py, tests/services/api/test_load_records.py, tests/services/api/test_monitoring_queue.py, tests/services/api/test_monitors.py, tests/services/api/test_pack_alert_item.py, tests/services/api/test_place_routes.py, tests/services/api/test_raise_an_alert.py, tests/services/api/test_read_path_purge.py, tests/services/api/test_recipe_run_path.py, tests/services/api/test_revert_closes_alerts.py, tests/services/api/test_route_rights.py, tests/services/api/test_run_resources.py, tests/services/api/test_sentence_rules.py, tests/services/api/test_team_lead_and_watches.py.
+    - The ADR-146 Amendment 4 reservation.
+13. **Questions for the owner:** none open. Q3 was ruled (a), as Amendment 4 point 9.
+14. **Commits** (rebased onto 3be89a7):
+    - schemas: 9b845e0, d8390a6, e382474;
+    - the Conduit: c80fbe9;
+    - the Glass: 93e8786;
+    - keyboard: a214218;
+    - review rounds: 18dc869, then b839f81, 9c11cb8, 396c45b, 7bed439, c98052b and 5c81b0b;
+    - live and test reds: 4eaceff, 01af58e, 38ca288, 8e8b9ff;
+    - spec: 8b73b8c, 3189839, 47327ec, 44c02cd;
+    - ci fixes: 51e5bdd, e1bd6a3, bbe22ba, 148b381;
+    - records: a513b6e, 6263f6b, 7aef8ba;
+    - the gates at 8e8b9ff: aef9bb2, 412f893, 855899f;
+    - the ClickHouse fix: 1f04c2c, then 274d114 and 778c4d8 after two review rounds;
+    - the live and server records: 3b6ed0e, then the deltas at 274d114 and 778c4d8;
+    - the orchestrator's review: 77c5a56 api, 12d5488 analytics, 86366d7 workspace, 1e94fdf records, bb4466d the live run's fix, then the gates and this report;
+    - the re-review: d52fc9f the fixes, 6e90f52 its live records, then the keyboard record and this report;
+    - the rebase onto 6379dd1: b40bd93, L2.10 meeting today's main; then the re-gate's records.
+    - then this report and the friction row.
+15. **Still running:** nothing. The lease on c is released, its stack is down, and no server run is alive.

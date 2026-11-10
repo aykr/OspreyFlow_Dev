@@ -27,6 +27,10 @@ export type CloseProposedBy = string | null;
 export type CloseProposedAt = string | null;
 export type Severity = ("low" | "medium" | "high") | null;
 export type Team = string | null;
+export type RoutedTeam = string | null;
+export type SuppressedUntil = string | null;
+export type SuppressReason = string | null;
+export type SuppressedBy = string | null;
 export type Summary = string;
 export type Type = string;
 export type ProvenanceState = "asserted" | "inferred" | "unresolved";
@@ -93,12 +97,28 @@ export type EventId = string;
 export type OccurredAt = string;
 export type Amount = number | null;
 export type Transactions = ExplainedTransaction[];
-export type Kind = "typology" | "hotlist" | "monitor";
+export type Kind = "typology" | "hotlist" | "monitor" | "analyst";
 export type Severity1 = "low" | "medium" | "high";
 export type Audience = "case" | "team" | "owner";
 export type Team1 = string | null;
 export type CloseProposedByName = string | null;
 export type AssigneeName = string | null;
+export type Identifier = string;
+export type KeptAsWritten = boolean;
+export type ReviewDate1 = string;
+export type FiredOn = FiredOn1[] | null;
+export type Type2 = string;
+export type Label = string;
+export type Name = string;
+export type Row = number | null;
+export type Rows = number | null;
+export type Records = number | null;
+export type Files = FiredFile[];
+export type MoreFiles = number;
+export type SourcesWithheld1 = boolean;
+export type TeamName = string | null;
+export type Suppressed = boolean;
+export type Lead = boolean;
 
 /**
  * What fired an alert, for the reader (ADR-109 phase B): the entities it concerns and its
@@ -118,6 +138,11 @@ export interface AlertExplanation {
   team?: Team1;
   close_proposed_by_name?: CloseProposedByName;
   assignee_name?: AssigneeName;
+  hotlist?: AlertHotlist | null;
+  fired_on?: FiredOn;
+  team_name?: TeamName;
+  suppressed?: Suppressed;
+  lead?: Lead;
   [k: string]: unknown;
 }
 /**
@@ -163,6 +188,10 @@ export interface Alert {
   close_proposed_at?: CloseProposedAt;
   severity?: Severity;
   team?: Team;
+  routed_team?: RoutedTeam;
+  suppressed_until?: SuppressedUntil;
+  suppress_reason?: SuppressReason;
+  suppressed_by?: SuppressedBy;
   [k: string]: unknown;
 }
 export interface Interval {
@@ -317,5 +346,44 @@ export interface ExplainedTransaction {
   target_id: NodeId;
   occurred_at: OccurredAt;
   amount?: Amount;
+  [k: string]: unknown;
+}
+/**
+ * ADR-130 decision 1: the hotlist a `hotlist:` alert came from, read at display time and only
+ * for the hotlist's owner. The identifier is as typed (else as stored).
+ */
+export interface AlertHotlist {
+  identifier: Identifier;
+  kept_as_written: KeptAsWritten;
+  review_date: ReviewDate1;
+  [k: string]: unknown;
+}
+/**
+ * ADR-130 decision 1: what a matched node is, and where it was read from. `files` are in the
+ * order of first appearance, at most five; `more_files` counts the rest.
+ *
+ * ADR-130 Amendment 1: when the node belongs to a dataset the reader's case does not read, its
+ * sources are not said at all: `sources_withheld` is true, `files` is empty and `more_files` 0.
+ */
+export interface FiredOn1 {
+  type: Type2;
+  label: Label;
+  files: Files;
+  more_files: MoreFiles;
+  sources_withheld?: SourcesWithheld1;
+  [k: string]: unknown;
+}
+/**
+ * One source file of a matched node: its name (the final path segment of the document id; two
+ * loads' `calls.csv` are two entries), and what is cited in it. `row` is the single row (its
+ * offset under the header, counted from 0; the Glass shows it counted from 1, ADR-131) when
+ * exactly one `row N` is cited and nothing else; otherwise `rows` counts the distinct `row N`
+ * locators and `records` the distinct locators of any other form (ADR-130 Amendment 1).
+ */
+export interface FiredFile {
+  name: Name;
+  row?: Row;
+  rows?: Rows;
+  records?: Records;
   [k: string]: unknown;
 }

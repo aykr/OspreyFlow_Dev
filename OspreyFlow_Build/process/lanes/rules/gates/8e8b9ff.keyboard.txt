@@ -1,0 +1,104 @@
+# make glass-keyboard offline at 8e8b9ff with registry-L2.10.patch applied uncommitted (actionRegistry.ts, the orchestrator's), start 2026-11-09T13:02:16Z
+npm run test:keyboard --workspace apps/workspace
+
+> @ospreyflow/workspace@0.0.0 test:keyboard
+> playwright test --config keyboard/playwright.config.ts
+
+Error: http://localhost:5185 is already used, make sure that nothing is running on the port/url or set reuseExistingServer:true in config.webServer.
+
+npm error Lifecycle script `test:keyboard` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c playwright test --config keyboard/playwright.config.ts
+make: *** [glass-keyboard] Error 1
+# exit 2 end 2026-11-09T13:02:17Z
+## retake: 5185 was held by another run at 13:02:16Z; start 2026-11-09T13:03:01Z
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace/keyboard/ingest-studio.spec.ts:917:3
+
+    Error Context: test-results/ingest-studio-every-regist-56eba-own-proving-test-case-above/error-context.md
+
+  6) keyboard/watch-panels.spec.ts:335:1 › every registered watch-panel action has its own proving test case above 
+
+    Error: WATCH_PANEL_ACTIONS: keyboard action(s) registered with no proving test case: open-an-inbox-alert-at-its-address
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace/keyboard/watch-panels.spec.ts:336:3
+
+    Error Context: test-results/watch-panels-every-registe-fd708-own-proving-test-case-above/error-context.md
+
+  6 failed
+    keyboard/alerts.spec.ts:677:1 › every registered Alerts action has its own proving test case above 
+    keyboard/boards.spec.ts:225:1 › an item is edited by keyboard ──────────────────────────────────
+    keyboard/boards.spec.ts:423:1 › every registered board action has its own proving test case above 
+    keyboard/ingest-studio.spec.ts:490:1 › the reports pipeline is edited in expert mode by keyboard, and the save carries it 
+    keyboard/ingest-studio.spec.ts:916:1 › every registered Ingest Studio action has its own proving test case above 
+    keyboard/watch-panels.spec.ts:335:1 › every registered watch-panel action has its own proving test case above 
+  1 skipped
+  685 passed (3.1m)
+npm error Lifecycle script `test:keyboard` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c playwright test --config keyboard/playwright.config.ts
+make: *** [glass-keyboard] Error 1
+# exit 2 end 2026-11-09T13:06:07Z
+## retake 2 from the repository root: the first retake's git apply ran in OspreyFlow_Build/ and silently left actionRegistry.ts outside it unpatched (its two registry failures are the inbox ids the patch removes); start 2026-11-09T13:06:29Z
+    > 233 |   await page.getByLabel("Source", { exact: true }).selectOption("A");
+          |                                                    ^
+      234 |   await press(page, "Save the change");
+      235 |   const edit = (await sent(page)).find((s) => s.method === "PATCH");
+      236 |   expect(edit?.path).toBe("/v1/investigations/c1/board-items/i-tall");
+        at /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace/keyboard/boards.spec.ts:233:52
+
+    Error Context: test-results/boards-an-item-is-edited-by-keyboard/error-context.md
+
+  2) keyboard/boards.spec.ts:423:1 › every registered board action has its own proving test case above 
+
+    Error: BOARD_ACTIONS: keyboard action(s) registered with no proving test case: open-a-board-from-the-boards-list-by-keyboard, make-a-blank-board-by-keyboard, make-a-board-from-a-view-by-keyboard, make-a-board-from-the-selection-by-keyboard, share-a-board-with-the-case-by-keyboard, declare-an-item-by-keyboard, declare-an-item-with-a-source-document-by-keyboard, choose-an-items-icon-by-keyboard, inspect-an-item-by-keyboard, move-an-item-by-the-arrow-keys, draw-a-link-from-the-selected-item-by-keyboard, draw-a-link-from-an-items-menu-by-keyboard, edit-an-item-by-keyboard
+
+       at actionRegistry.ts:73
+
+      71 |   const missing = actions.filter((id) => !seen.has(id));
+      72 |   if (missing.length > 0) {
+    > 73 |     throw new Error(
+         |           ^
+      74 |       `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
+      75 |     );
+      76 |   }
+        at assertAllCovered (/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts:73:11)
+        at /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace/keyboard/boards.spec.ts:424:3
+
+    Error Context: test-results/boards-every-registered-bo-c924d-own-proving-test-case-above/error-context.md
+
+  2 failed
+    keyboard/boards.spec.ts:225:1 › an item is edited by keyboard ──────────────────────────────────
+    keyboard/boards.spec.ts:423:1 › every registered board action has its own proving test case above 
+  1 skipped
+  689 passed (3.5m)
+npm error Lifecycle script `test:keyboard` failed with error:
+npm error code 1
+npm error path /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace
+npm error workspace @ospreyflow/workspace@0.0.0
+npm error location /Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Core/apps/workspace
+npm error command failed
+npm error command sh -c playwright test --config keyboard/playwright.config.ts
+make: *** [glass-keyboard] Error 1
+# exit 2 end 2026-11-09T13:10:01Z
+# Classification (rules): with the patch applied, rules' registries (ALERTS_ACTIONS, WATCH_PANEL_ACTIONS) are fully covered. What remains is boards.spec.ts:225, 'an item is edited by keyboard' (a 60 s timeout), plus its registry check, which reads every board id as unproven once that case fails. It failed again with the file run alone. src/boards, boards.spec.ts and boards-harness.tsx are identical to main (git diff main HEAD is empty for them), so this is main's own since L3.7 (case-b), not rules'.
+# Known failures on main (the orchestrator, CARRIES.md at 27dfd67, for case-b's L3.8): keyboard/boards.spec.ts:225 and keyboard/boards.spec.ts:423.
+# Their cause (case, f6def92 on lane/case, reaching main with L3.4; not yet on main): the keyboard harness gave the board no grades, so its Source list stayed empty.

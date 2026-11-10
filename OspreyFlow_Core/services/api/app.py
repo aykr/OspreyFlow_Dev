@@ -242,6 +242,9 @@ from schemas.domain import (
     AlertKind,
     AlertQueueCounts,
     AlertSeverity,
+    AlertSources,
+    AlertSuppressInput,
+    AlertTeam,
     Assumption,
     CompiledSentence,
     Connections,
@@ -263,6 +266,7 @@ from schemas.domain import (
     KycStatus,
     LinkNote,
     Monitor,
+    MonitorScheduleInput,
     NeighbourhoodRisk,
     Node,
     NodeId,
@@ -274,6 +278,7 @@ from schemas.domain import (
     Provenance,
     ProvenanceState,
     QueuedAlert,
+    RaiseAlertInput,
     ReportFigures,
     RuleAuditPage,
     SavedPattern,
@@ -468,7 +473,7 @@ from schemas.trends import (
     TrendOptions,
 )
 
-from . import alert_queue, case_gazetteers, map_places
+from . import alert_queue, alert_sources, case_gazetteers, map_places, raised_alerts, sentence_rules
 from . import audit_section as audit_section_module
 from . import compute_routes as compute_routes_module
 from . import connections as connections_module
@@ -497,10 +502,12 @@ from .add_by_identifiers import (
     resolve_identifiers,
 )
 from .admin_people import OTHER_UNIT, AdminPeopleStore, DisableRefused, recipients
+from .alert_routing import answers_for_datasets, leads_today
 from .alerts import (
     AlertNotFoundError,
     AlertStore,
     AlertTriageConflict,
+    QueueShow,
     purge_remarked_copies,
     raiser_floor,
     supersede_journalled,
@@ -782,6 +789,7 @@ from .model_routing import (
     model_status,
     routes_from_env,
 )
+from .monitor_schedule import MonitorScheduleExecutor, monitor_matcher
 from .monitors import MonitorNotFoundError, MonitorStore
 from .notify import notify_channel, publish_delta
 from .packs import (
@@ -874,7 +882,7 @@ from .review import (
 from .risk import NeighbourhoodTooLarge
 from .rule_evaluation import RULE_AUDIT_ACTIONS, RuleGate
 from .rule_holds import ReleaseRefused, readable_rule_audit, release_held_rows
-from .rule_schedule import RuleScheduleExecutor, schedule_view
+from .rule_schedule import RuleScheduleExecutor, runs_for_reader, schedule_view
 from .rule_sentences import (
     SentenceContext,
     SentenceRefused,
@@ -1037,14 +1045,13 @@ from .typology_rules import (
     TypologyRuleNotFoundError,
     TypologyRuleStore,
 )
+from .watch_reach import DatasetReach, owner_reaches_dataset_in
 from .watch_routes import (
-    AlertList,
-    AlertView,
     CreateHotlistRequest,
     CreateMonitorRequest,
     HotlistList,
     MonitorList,
-    alert_to_view,
+    with_what_fired_it,
 )
 from .worker import JobWorker
 from .worker_main import register_all
@@ -1217,6 +1224,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.hotlists_store = hotlists_store
     app.state.monitors_store = monitors_store
     app.state.alerts_store = alerts_store
+    # ADR-146 decision 8: a routed alert is read by its team and the home case's Authors; the store
+    # asks who answers for which dataset on each read of the queue.
+    alerts_store.answers_for = answers_for_datasets(datasets_store, investigations)
+    # L2.10's carry: a settle on a read path purges the working-set copies it re-marked at once.
+    alerts_store.working_set = app.state.working_set
     # ADR-134 decision 3: the analytics store's alert facts brought into line with the alert store
     # at every start, so alert trends recover from any write the analytics store missed.
     await alerts_store.publish_all_facts()
@@ -1459,10 +1471,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # refresh schedules, each slot as the person who set it — ticking each minute, one replica per
     # slot.
     app.state.monitoring_schedules = _MonitoringSchedules(
-        rules=_rule_schedule_executor(app),
-        lists=_list_schedule_executor(app),
+        rules=_rule_schedule_executor(app), lists=_list_schedule_executor(app),
         deployment_lists=_deployment_list_scheduler(app),
-    )
+        monitors=MonitorScheduleExecutor(
+            monitors=app.state.monitors_store, valkey=app.state.valkey,
+            resolve_owner=_owner_with_custom_roles(
+                app, app.state.principal_resolver.resolve_for_owner_detailed
+            ),
+            match=monitor_matcher(app.state),
+            reaches_dataset=owner_reaches_dataset_in(
+                lambda: app.state.datasets, lambda: app.state.investigations
+            ),
+        ),
+    )  # fmt: skip
     monitoring_task = asyncio.create_task(run_every_minute(app.state.monitoring_schedules))
     # ADR-145 Amendment 4 decision 11 (R7), admin's own job (Amendment 6): *Promotions overdue*,
     # once each at N days, from whatever source `app.state.waiting_promotions` holds at each tick.
@@ -1992,6 +2013,16 @@ def holds_a_level_in(
         return True
 
     return holds
+
+
+def get_watch_reach(request: Request) -> DatasetReach:
+    """`owner_reaches_dataset_in` over this app's stores, for a route whose load runs watches."""
+    return owner_reaches_dataset_in(
+        lambda: request.app.state.datasets, lambda: get_investigations(request)
+    )
+
+
+WatchReachDep = Annotated[DatasetReach, Depends(get_watch_reach)]
 
 
 def get_principal_resolver(request: Request) -> PrincipalResolver:
@@ -5147,6 +5178,7 @@ async def link_resolution_route(
     patterns_store: PatternsStoreDep,
     alerts_store: AlertsStoreDep,
     principal_resolver: PrincipalResolverDep,
+    watch_reach: WatchReachDep,
 ) -> ResolutionOutcome:
     """Phase 7 Stage 6c: a manual link is a `SAME_AS` write that can grow a saved pattern's own
     match set (`06_DECISIONS.md` ADR-037's own change-stream amendment names manual assertion as
@@ -5172,6 +5204,7 @@ async def link_resolution_route(
             investigation_id=investigation.id,
             action_on_failure="watch_evaluation_failed",
             principal_resolver=principal_resolver,
+            watch_reach=watch_reach,
         )
     await audit.record(
         principal=principal,
@@ -7851,57 +7884,38 @@ async def list_monitors_route(
     return MonitorList(monitors=await monitors_store.list_authorized(principal))
 
 
-@app.get(
-    "/v1/investigations/{investigation_id}/alerts",
+@app.put(
+    "/v1/investigations/{investigation_id}/monitors/{monitor_id}/schedule",
     dependencies=[
         Depends(require_right(Right.KEEP_WATCHES)),
         Depends(require_rules_place),
     ],
 )
-async def list_alerts_route(
+async def set_monitor_schedule(
+    monitor_id: str,
+    body: MonitorScheduleInput,
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
-    alerts_store: AlertsStoreDep,
-    graph: GraphDep,
-    hotlists_store: HotlistsStoreDep,
-    analytics: AnalyticsDep,
-) -> AlertList:
-    """The reader's own alerts — those raised to them, by their hotlists, monitors and rules
-    (`owner_id`, in the store's query) — within the case's datasets (ADR-099 Amendment 3, the reach
-    clause), newest first. Not the case's alerts: another member's are not listed here; the case's
-    rule-raised alerts are the one queue's (`/alert-queue`). Corrected by ADR-134 decision 5: this
-    said "the alerts of the case's datasets", which the store never read."""
-    rows = await alerts_store.list_authorized(principal, graph=graph)
-    return AlertList(
-        alerts=[
-            await alert_to_view(
-                a, principal, graph, analytics, hotlists_store, case=investigation.id
-            )
-            for a in rows
-        ]
+    monitors_store: MonitorsStoreDep,
+    audit: AuditDep,
+) -> Monitor:
+    """ADR-146 decision 4 (G16): a watched pattern's own schedule, set by its owner alone: every
+    day or week at a whole hour, or never (as data loads only). Another's watch answers as
+    missing."""
+    monitor = await monitors_store.set_schedule(monitor_id, principal, body)
+    await audit.record(
+        principal=principal,
+        action="monitor_schedule_set",
+        investigation_id=investigation.id,
+        resolved_query={"monitor_id": monitor_id, **body.model_dump()},
+        result_cardinality=1,
     )
+    return monitor
 
 
-@app.get(
-    "/v1/investigations/{investigation_id}/alerts/{alert_id}",
-    dependencies=[
-        Depends(require_right(Right.KEEP_WATCHES)),
-        Depends(require_rules_place),
-    ],
-)
-async def get_alert_route(
-    investigation: InvestigationViewerDep,
-    alert_id: str,
-    principal: PrincipalDep,
-    alerts_store: AlertsStoreDep,
-    graph: GraphDep,
-    hotlists_store: HotlistsStoreDep,
-    analytics: AnalyticsDep,
-) -> AlertView:
-    alert = await alerts_store.get_authorized(alert_id, principal, graph=graph)
-    return await alert_to_view(
-        alert, principal, graph, analytics, hotlists_store, case=investigation.id
-    )
+# ADR-146 decision 1 (L2.10): the Watches inbox, `GET …/alerts` and `GET …/alerts/{id}`, is gone:
+# every alert is in the one queue, and what the inbox alone said (*what fired it*) is on the
+# queue's explanation (`watch_routes.with_what_fired_it`).
 
 
 @app.get(
@@ -12833,6 +12847,7 @@ async def run_studio_recipe(
     kyc_expiries: KycExpiriesDep,
     recipe_runs: RecipeRunsDep,
     studio_recipes: StudioRecipesDep,
+    watch_reach: WatchReachDep,
     influencers: OptionalStrengthInfluencersDep = None,
     models: TargetModelsDep = None,  # type: ignore[assignment]
     staging_storage: StagingStorageDep = None,  # type: ignore[assignment]
@@ -12924,6 +12939,7 @@ async def run_studio_recipe(
             target_models=models,
             staging_storage=staging_storage,
             list_store=list_store,
+            watch_reach=watch_reach,
         ),
         principal=principal,
         recipe=recipe,
@@ -13015,12 +13031,16 @@ class _MonitoringSchedules:
     lists: ListRefreshExecutor
     #: ADR-140 Amendment 13: the Studio's deployment-wide lists, on the same minute.
     deployment_lists: DeploymentListScheduler | None = None
+    #: ADR-146 decision 4 (G16): saved patterns on their own schedule.
+    monitors: MonitorScheduleExecutor | None = None
 
     async def tick(self, now: datetime) -> None:
         await self.rules.tick(now)
         await self.lists.tick(now)
         if self.deployment_lists is not None:
             await self.deployment_lists.tick(now)
+        if self.monitors is not None:
+            await self.monitors.tick(now)
 
 
 def _rule_schedule_executor(application: FastAPI) -> RuleScheduleExecutor:
@@ -13479,6 +13499,7 @@ async def read_alert_queue_counts(
     ],
 )
 async def read_alert_queue(
+    request: Request,
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     graph: GraphDep,
@@ -13491,6 +13512,8 @@ async def read_alert_queue(
     ] = "active",
     kind: Annotated[list[AlertKind] | None, Query()] = None,
     severity: Annotated[list[AlertSeverity] | None, Query()] = None,
+    show: Annotated[QueueShow | None, Query()] = None,
+    older_than_days: Annotated[int | None, Query(ge=1, le=3650)] = None,
 ) -> list[QueuedAlert]:
     """The one alert queue (ADR-133 decision 5 and stage (a)): the case's typology alerts (the case
     team's, ADR-109 ruling 3) and the hotlist and monitor alerts the reader owns or that are shared
@@ -13503,17 +13526,20 @@ async def read_alert_queue(
         "active": ["open", "claimed", "closing"],
         "all": None,
     }.get(status_filter, [status_filter])
+    lead_of = await _leads_today(request, principal)
     rows = await alert_queue.monitoring_queue(
         alerts_store, graph, analytics, investigation.id, principal, statuses=statuses, kinds=kind,
-        severities=severity,
+        severities=severity, show=show, older_than_days=older_than_days, lead_of=lead_of,
     )  # fmt: skip
     await audit.record(
         principal=principal,
         action="read_alert_queue",
         investigation_id=investigation.id,
-        resolved_query={"status": status_filter, "kind": kind, "severity": severity},
+        resolved_query={"status": status_filter, "kind": kind, "severity": severity, "show": show,
+                        "older_than_days": older_than_days},  # fmt: skip
         result_cardinality=len(rows),
     )
+    rows = await _with_team_names(request, rows)
     # ADR-106 Amendment 1: each claimed row's assignee by name, asked for only the assignees of
     # the rows served (step 9e: "Claimed by" named an identity-provider id).
     assignees = sorted({r.alert.assignee for r in rows if r.alert.assignee})
@@ -13574,6 +13600,7 @@ async def _alert_assignee_ids(
     ],
 )
 async def explain_alert(
+    request: Request,
     alert_id: str,
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
@@ -13582,6 +13609,7 @@ async def explain_alert(
     alerts_store: AlertsStoreDep,
     principal_names: PrincipalNamesDep,
     audit: AuditDep,
+    hotlists_store: HotlistsStoreDep,
 ) -> AlertExplanation:
     """What fired the alert: its entities and node, the links and each transaction it cites; and,
     for a close waiting for a second person, who proposed it, and for a claimed alert, who holds
@@ -13590,6 +13618,8 @@ async def explain_alert(
         alerts_store, graph, analytics, investigation.id, alert_id, principal
     )
     explanation = await _named_explanation(explanation, principal_names)
+    explanation = await _with_lead_tools(request, explanation, principal)
+    explanation = await with_what_fired_it(explanation, principal, hotlists_store)
     await audit.record(
         principal=principal,
         action="explain_alert",
@@ -13598,6 +13628,89 @@ async def explain_alert(
         result_cardinality=len(explanation.nodes),
     )
     return explanation
+
+
+def _home_case_author(
+    investigations: InvestigationStore, principal: Principal
+) -> alert_queue.CloserCheck:
+    """ADR-146 decision 7: whether the closer is an Author of the alert's own case, the home case
+    a dataset alert was raised into, read as them in their own unit."""
+
+    async def check(alert: Alert) -> bool:
+        if alert.investigation_id is None:
+            return False
+        level = await investigations.effective_level(alert.investigation_id, principal)
+        return level == AccessLevel.AUTHOR
+
+    return check
+
+
+def close_refusal(refused: alert_queue.CloseRefused) -> HTTPException:
+    """A refused close in words, its code by its reason: a dataset alert closed by someone not an
+    Author of its home case (ADR-146 decision 7) is `not_the_home_cases_author` wherever the close
+    is decided; the proposer approving their own close (ADR-133 decision 7) is `own_change`."""
+    code = (
+        "not_the_home_cases_author"
+        if isinstance(refused, alert_queue.NotTheHomeCasesAuthor)
+        else "own_change"
+    )
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail={"error": code, "message": str(refused)}
+    )
+
+
+async def _leads_today(request: Request, principal: Principal) -> set[str]:
+    """The teams the reader acts as lead of today (ADR-146 Amendment 1): none where no custom-role
+    store is attached."""
+    roles = getattr(request.app.state, "custom_roles", None)
+    if roles is None:
+        return set()
+    return await leads_today(roles, principal, datetime.now(UTC).date())
+
+
+async def _team_names(request: Request, team_ids: Iterable[str]) -> dict[str, str]:
+    roles = getattr(request.app.state, "custom_roles", None)
+    names: dict[str, str] = {}
+    if roles is None:
+        return names
+    today = datetime.now(UTC).date()
+    for team_id in sorted(set(team_ids)):
+        team = await roles.team(team_id, today)
+        if team is not None:
+            names[team_id] = team.display_name
+    return names
+
+
+async def _with_team_names(request: Request, rows: list[QueuedAlert]) -> list[QueuedAlert]:
+    """A routed alert's team by its display name, for the rows served alone."""
+    names = await _team_names(request, [r.alert.routed_team for r in rows if r.alert.routed_team])
+    if not names:
+        return rows
+    return [
+        r.model_copy(update={"team_name": names.get(r.alert.routed_team)})
+        if r.alert.routed_team
+        else r
+        for r in rows
+    ]
+
+
+async def _with_lead_tools(
+    request: Request, explanation: AlertExplanation, principal: Principal
+) -> AlertExplanation:
+    routed = explanation.alert.routed_team
+    if routed is None:
+        return explanation.model_copy(
+            update={"suppressed": alert_queue.suppressed_today(explanation.alert)}
+        )
+    names = await _team_names(request, [routed])
+    return explanation.model_copy(
+        update={
+            "team": routed,
+            "team_name": names.get(routed),
+            "suppressed": alert_queue.suppressed_today(explanation.alert),
+            "lead": routed in await _leads_today(request, principal),
+        }
+    )
 
 
 async def _named_explanation(
@@ -13699,20 +13812,26 @@ async def dispose_alert(
     audit: AuditDep,
     analytics: AnalyticsDep,
     working_set: WorkingSetDep,
+    investigations: InvestigationsDep,
 ) -> Alert:
     """Closes the alert with its disposition and reason. A true positive confirms its node
-    (rule 5's human confirmation); a false positive leaves it `inferred`."""
-    alert = await alert_queue.dispose(
-        alerts_store,
-        graph,
-        analytics,
-        investigation.id,
-        alert_id,
-        principal,
-        disposition=body.disposition,
-        reason=body.reason,
-        working_set=working_set,
-    )
+    (rule 5's human confirmation); a false positive leaves it `inferred`. A dataset alert is closed
+    by its home case's Authors alone (ADR-146 decision 7)."""
+    try:
+        alert = await alert_queue.dispose(
+            alerts_store,
+            graph,
+            analytics,
+            investigation.id,
+            alert_id,
+            principal,
+            disposition=body.disposition,
+            reason=body.reason,
+            working_set=working_set,
+            closer=_home_case_author(investigations, principal),
+        )
+    except alert_queue.CloseRefused as refused:
+        raise close_refusal(refused) from refused
     action = "alert_close_proposed" if alert.status == "closing" else "alert_disposed"
     await _triage_audit(audit, principal, investigation.id, action, alert)
     return alert
@@ -13734,6 +13853,7 @@ async def approve_alert_close(
     audit: AuditDep,
     analytics: AnalyticsDep,
     working_set: WorkingSetDep,
+    investigations: InvestigationsDep,
 ) -> Alert:
     """ADR-133 decision 7, stage (d): a second member approves a proposed close of a high-severity
     alert — never the member who proposed it."""
@@ -13746,12 +13866,10 @@ async def approve_alert_close(
             alert_id,
             principal,
             working_set=working_set,
+            closer=_home_case_author(investigations, principal),
         )
     except alert_queue.CloseRefused as refused:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "own_change", "message": str(refused)},
-        ) from refused
+        raise close_refusal(refused) from refused
     await _triage_audit(audit, principal, investigation.id, "alert_close_approved", alert)
     return alert
 
@@ -13799,6 +13917,7 @@ async def send_back_alert_close(
     ],
 )
 async def assign_alert(
+    request: Request,
     alert_id: str,
     body: AlertAssignInput,
     investigation: InvestigationEditorDep,
@@ -13816,11 +13935,239 @@ async def assign_alert(
     allowed = await _alert_assignee_ids(
         investigations, investigation.id, principal, principal_names
     )
+    # ADR-146 Amendment 1: the lead's hand-off, to a member of a team they lead today.
+    lead_of = await _leads_today(request, principal)
+    members = {
+        team: await _team_members_in_case(request, investigations, investigation.id, team)
+        for team in lead_of
+    }
     alert = await alert_queue.assign(
         alerts_store, graph, analytics, investigation.id, alert_id, principal,
-        assignee=body.assignee, allowed=allowed,
+        assignee=body.assignee, allowed=allowed, lead_of=lead_of, team_members=members,
     )  # fmt: skip
-    await _triage_audit(audit, principal, investigation.id, "alert_assigned", alert)
+    handed_off = alert.routed_team is not None and alert.assignee != principal.id
+    await _triage_audit(
+        audit, principal, investigation.id,
+        "alert_handed_off" if handed_off else "alert_assigned", alert,
+    )  # fmt: skip
+    return alert
+
+
+async def _team_members_in_case(
+    request: Request, investigations: InvestigationStore, investigation_id: str, team_id: str
+) -> set[str]:
+    """Whom a lead may give one of the team's alerts to: the team's enabled members (its role's
+    holders, ADR-145 Amendment 5 point 5, never a service account) who hold the case at Editor or
+    above, in their own name or through the team's own grant."""
+    try:
+        people = await get_identity_admin(request).list_people()
+    except Exception:  # no directory: no one can be told apart, so no one is offered
+        return set()
+    role = f"{CUSTOM_ROLE_PREFIX}{team_id}"
+    holders = {p.id for p in people if role in p.roles and p.enabled and not p.system_account}
+    grants = await investigations.list_grants(investigation_id)
+    team_level = grants.get(f"{TEAM_GRANT_PREFIX}{team_id}")
+    if team_level is not None and team_level.rank >= AccessLevel.EDITOR.rank:
+        return holders
+    editor = AccessLevel.EDITOR.rank
+    return {h for h in holders if (g := grants.get(h)) is not None and g.rank >= editor}
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/alert-queue/{alert_id}/suppress",
+    dependencies=[
+        Depends(require_right(Right.TRIAGE_ALERTS)),
+        Depends(require_rules_place),
+    ],
+)
+async def suppress_alert(
+    request: Request,
+    alert_id: str,
+    body: AlertSuppressInput,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    audit: AuditDep,
+    analytics: AnalyticsDep,
+) -> Alert:
+    """*Suppress until…* (ADR-146 Amendment 1): the team's lead, or its cover while the cover
+    lasts, quiets one of the team's alerts until a day at most 90 days ahead, with a reason,
+    audited. It stays open, in *All*, and counted open everywhere; it ends by itself on its day."""
+    alert = await alert_queue.suppress(
+        alerts_store, graph, analytics, investigation.id, alert_id, principal,
+        until=body.until, reason=body.reason, lead_of=await _leads_today(request, principal),
+    )  # fmt: skip
+    await audit.record(
+        principal=principal,
+        action="alert_suppressed",
+        investigation_id=investigation.id,
+        resolved_query={"alert_id": alert.id, "until": body.until.isoformat(),
+                        "reason": body.reason, "team": alert.routed_team},  # fmt: skip
+        result_cardinality=1,
+    )
+    return alert
+
+
+@app.exception_handler(alert_queue.SuppressRefused)
+async def _suppress_refused_handler(
+    request: Request, exc: alert_queue.SuppressRefused
+) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": "suppress_refused", "detail": str(exc)})
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/alert-teams",
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
+)
+async def read_alert_teams(
+    request: Request,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    investigations: InvestigationsDep,
+    principal_names: PrincipalNamesDep,
+) -> list[AlertTeam]:
+    """The teams a rule's alerts may go to (ADR-146 decision 8), by name, and for each team the
+    reader leads today the members of it who hold this case, whom they may give its alerts to
+    (Amendment 1). Members are listed only to the team's own lead."""
+    roles = getattr(request.app.state, "custom_roles", None)
+    if roles is None:
+        return []
+    today = datetime.now(UTC).date()
+    led = await leads_today(roles, principal, today)
+    # Offered to whoever routes a rule's alerts (`deploy_rules`) and to a lead, for the members of
+    # their own team; a reader who does neither is shown no team (the lane-reviewer's L2.10 note).
+    held = rights_for(principal.roles)
+    if Right.DEPLOY_RULES not in held and Right.AUTHOR_RULES not in held and not led:
+        return []
+    out: list[AlertTeam] = []
+    for team in await roles.teams(today):
+        members: list[str] = []
+        if team.role_id in led:
+            members = sorted(
+                await _team_members_in_case(request, investigations, investigation.id, team.role_id)
+            )
+        out.append(AlertTeam(role_id=team.role_id, display_name=team.display_name,
+                             lead=team.role_id in led, members=members))  # fmt: skip
+    # ADR-106: the members served, by name, asked for those ids alone (the lane-reviewer's round on
+    # the L2.10 fix: a lead's hand-off named people by their identity-provider ids).
+    served = sorted({m for t in out for m in t.members})
+    if served:
+        names = await principal_names.display_names(served)
+        out = [t.model_copy(update={"member_names": {m: names[m] for m in t.members if m in names}})
+               for t in out]  # fmt: skip
+    return out
+
+
+@app.get(
+    "/v1/investigations/{investigation_id}/alert-sources",
+    dependencies=[
+        Depends(require_right(Right.READ_ALERT_QUEUE)),
+        Depends(require_rules_place),
+    ],
+)
+async def read_alert_sources(
+    request: Request,
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    analytics: AnalyticsDep,
+    alerts_store: AlertsStoreDep,
+    typology_rules: TypologyRulesDep,
+    hotlists_store: HotlistsStoreDep,
+    monitors_store: MonitorsStoreDep,
+    patterns_store: PatternsStoreDep,
+    principal_names: PrincipalNamesDep,
+    audit: AuditDep,
+) -> AlertSources:
+    """*What raises alerts* (ADR-146 decision 5): the case's rules and the reader's own watches in
+    one list, each counted from the reader's own queue (rule 7), with the alerts suppressed today
+    beside the rule or watch they quiet (Amendment 1)."""
+    rules = await typology_rules.list_for_case(investigation.id, principal)
+    hotlists = await hotlists_store.list_authorized(principal)
+    monitors = await monitors_store.list_authorized(principal)
+    patterns = {}
+    for monitor in monitors:
+        try:
+            patterns[monitor.pattern_id] = await patterns_store.get_authorized(
+                monitor.pattern_id, principal
+            )
+        except PatternNotFoundError:
+            continue
+    queue = await alert_queue.monitoring_queue(
+        alerts_store, graph, analytics, investigation.id, principal
+    )
+    teams = await _team_names(
+        request, [t for r in rules if (t := sentence_rules.routed_team_of(r)) is not None]
+    )
+    rows = alert_sources.inventory(rules, hotlists, monitors, patterns, queue, teams)
+    # ADR-106 (and its Amendment 1's shape): the people these rows show, by name, asked only for
+    # the ids of the rows served (the L2.10 review's item 3; rule 7).
+    people = alert_sources.people_named(rows)
+    names = await principal_names.display_names(people) if people else {}
+    rows = alert_sources.named(rows, names)
+    await audit.record(
+        principal=principal,
+        action="read_alert_sources",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=len(rows),
+    )
+    return AlertSources(sources=rows)
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/raised-alerts",
+    status_code=201,
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def raise_an_alert(
+    body: RaiseAlertInput,
+    investigation: InvestigationEditorDep,
+    principal: PrincipalDep,
+    graph: GraphDep,
+    alerts_store: AlertsStoreDep,
+    datasets: DatasetsDep,
+    audit: AuditDep,
+) -> Alert:
+    """*Raise an alert…* (ADR-146 decision 7, R4), from query results, a question's answer or the
+    selection bar: to this case (its members see it) or to the case's dataset (raised into its
+    home case, in the queue of every case reading it, closed by the home case's Authors). A case
+    the raiser may not write is refused by the level check (Editor); a dataset the case does not
+    read, a layer, or one with no home case in words; an item the raiser may not read as if it did
+    not exist; and a dataset alert citing an item that is not the dataset's own (a drawn item)
+    is refused at the route, not only in the form (409 `not_the_datasets_own`)."""
+    home: str | None = None
+    readable = True
+    if body.to == "dataset" and body.dataset_id is not None:
+        held = (await datasets.egress_of([body.dataset_id])).get(body.dataset_id)
+        readable = held is not None and held.kind != "analyst_layer"
+        found = await datasets.home_case_of(body.dataset_id) if readable else None
+        home = found.investigation_id if found is not None else None
+    try:
+        alert = await raised_alerts.raise_alert(
+            body, case_id=investigation.id, raiser=principal, graph=graph, store=alerts_store,
+            home_case=home, dataset_is_readable=readable,
+        )  # fmt: skip
+    except raised_alerts.RaisedEvidenceNotFound:
+        raise HTTPException(status_code=404, detail="not_found") from None
+    except raised_alerts.RaiseRefused as refused:
+        raise HTTPException(
+            status_code=409, detail={"code": refused.code, "message": refused.message}
+        ) from None
+    await audit.record(
+        principal=principal,
+        action="alert_raised",
+        investigation_id=investigation.id,
+        resolved_query={
+            "alert_id": alert.id, "to": body.to, "dataset_id": body.dataset_id,
+            "severity": body.severity, "node_ids": alert.referent_node_ids,
+        },  # fmt: skip
+        result_cardinality=1,
+    )
     return alert
 
 
@@ -14324,6 +14671,7 @@ async def reject_rule_change(
 )
 async def change_rule_sentence(
     rule_id: str,
+    request: Request,
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
@@ -14343,6 +14691,7 @@ async def change_rule_sentence(
         raise ReleaseRefused("only a rule written as a sentence is changed here")
     sentence = normalised(body.sentence)
     await _authorize_sentence_scope(sentence, investigation.id, principal, investigations, audit)
+    await _refuse_an_unknown_team(sentence, request)
     if is_deployment_wide(current):
         _require_administrator(principal)
     spec = await _compiled_rule(body, sentence, principal, patterns_store, ontology)
@@ -14412,6 +14761,7 @@ async def read_rule_schedule(
     if rule.trigger != "schedule":
         raise ReleaseRefused("this rule runs as data loads, not on a schedule")
     runs = await typology_rules.rule_runs(rule.id)
+    runs = runs_for_reader(rule, runs, principal)
     await audit.record(principal=principal, action="read_rule_runs",
                        investigation_id=investigation.id, resolved_query={"rule_id": rule_id},
                        result_cardinality=len(runs))  # fmt: skip
@@ -14534,6 +14884,7 @@ async def preview_rule_sentence(
     ],
 )
 async def deploy_rule_sentence(
+    request: Request,
     investigation: InvestigationEditorDep,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
@@ -14552,6 +14903,7 @@ async def deploy_rule_sentence(
     _require_rule_author(principal)
     sentence = normalised(body.sentence)
     await _authorize_sentence_scope(sentence, investigation.id, principal, investigations, audit)
+    await _refuse_an_unknown_team(sentence, request)
     spec = await _compiled_rule(body, sentence, principal, patterns_store, ontology)
     rule = await typology_rules.create(principal, investigation.id, spec)
     await audit.record(
@@ -14563,6 +14915,31 @@ async def deploy_rule_sentence(
         result_cardinality=1,
     )
     return rule
+
+
+class UnknownTeamError(Exception):
+    """A rule's *Alert goes to* names a team that does not exist (ADR-146 decision 8)."""
+
+
+@app.exception_handler(UnknownTeamError)
+async def _unknown_team_handler(request: Request, exc: UnknownTeamError) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "code": "unknown_team",
+            "message": "There is no such team: choose one of the teams listed.",
+        },
+    )
+
+
+async def _refuse_an_unknown_team(sentence: RuleSentence, request: Request) -> None:
+    """ADR-146 decision 8: a rule routed to a team names one that exists now; otherwise its
+    alerts would reach nobody but the home case's Authors."""
+    if sentence.team != "team" or sentence.team_id is None:
+        return
+    roles = getattr(request.app.state, "custom_roles", None)
+    if roles is None or await roles.team(sentence.team_id, datetime.now(UTC).date()) is None:
+        raise UnknownTeamError(sentence.team_id)
 
 
 async def _authorize_sentence_scope(

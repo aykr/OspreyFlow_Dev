@@ -169,6 +169,27 @@ async def test_a_just_me_sentence_alerts_its_author_alone_and_writes_nothing_to_
     assert not [e for e in recorder.audit if e["action"] == "alert_node_withheld"]
 
 
+async def test_a_sentence_routed_to_a_team_names_it_and_writes_no_alert_node() -> None:
+    """ADR-146 decision 8: *Alert goes to* a named team writes the team on the alert, and puts no
+    `Alert` node in the case's graph, which would carry the finding's words to every member who may
+    read its markings, the team's or not (rule 3). Red with the node written as a case rule's."""
+    sentence = RuleSentence.model_validate(
+        {"subject": "Person", **LISTED, "severity": "high", "team": "team", "team_id": "team-7"})
+    graph, recorder = _Graph([_node("p1", "Person", family_name="Okafor", listing="pep")]), _Recorder()
+    await _gate(_rule(sentence), graph, recorder).post_commit([], load_id="load-1", written=[_write("p1")])
+    (alert,) = recorder.alerts  # `_Graph` refuses every write: none was asked for
+    assert (alert.rule_id, alert.typology, alert.routed_team) == ("typology:rule-s", "sentence", "team-7")
+    assert alert.alert_node_id is None
+    assert "for its team alone" in (alert.words or "")
+    assert not [e for e in recorder.audit if e["action"] == "alert_node_withheld"]
+
+
+def test_a_sentence_names_its_team_exactly_when_it_goes_to_a_team() -> None:
+    for wrong in ({"team": "team"}, {"team": "case", "team_id": "team-7"}):
+        with pytest.raises(ValueError, match="names the team"):
+            RuleSentence.model_validate({"subject": "Person", **wrong})
+
+
 async def test_a_hold_sentence_holds_a_hits_rows_and_raises_no_alert() -> None:
     sentence = RuleSentence.model_validate({"subject": "Person", **LISTED, "runs": "pre_commit", "on_hit": "hold"})
     recorder = _Recorder()

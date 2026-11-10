@@ -211,6 +211,10 @@ READS_AND_OTHER: tuple[str, ...] = (
     "connector_read_refused", "test_ingest_connection",
     "dataset_list_subscriptions", "list_deployment_list_imports", "list_deployment_lists",
     "offered_reference_lists",
+    # Rules' L2.10 (ADR-146 Amendment 4): the lead's hand-off and Suppress until…, Raise an alert…,
+    # a watched pattern's own schedule set, What raises alerts read; with the other alert actions.
+    "alert_handed_off", "alert_suppressed", "alert_raised", "monitor_schedule_set",
+    "read_alert_sources",
     "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",
     "alert_assigned", "alert_canvas", "alert_claimed", "alert_close_approved",
     "alert_close_proposed", "alert_close_sent_back", "alert_disposed", "alert_released",

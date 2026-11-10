@@ -27,12 +27,19 @@ export type CloseProposedBy = string | null;
 export type CloseProposedAt = string | null;
 export type Severity = ("low" | "medium" | "high") | null;
 export type Team = string | null;
+export type RoutedTeam = string | null;
+export type SuppressedUntil = string | null;
+export type SuppressReason = string | null;
+export type SuppressedBy = string | null;
 export type Summary = string;
-export type Kind = "typology" | "hotlist" | "monitor";
+export type Kind = "typology" | "hotlist" | "monitor" | "analyst";
 export type Severity1 = "low" | "medium" | "high";
 export type Audience = "case" | "team" | "owner";
 export type Team1 = string | null;
 export type AssigneeName = string | null;
+export type TeamName = string | null;
+export type Suppressed = boolean;
+export type Lead = boolean;
 
 /**
  * One row of the case's alert queue: the alert, and its finding in words with the entities
@@ -46,6 +53,9 @@ export interface QueuedAlert {
   audience?: Audience;
   team?: Team1;
   assignee_name?: AssigneeName;
+  team_name?: TeamName;
+  suppressed?: Suppressed;
+  lead?: Lead;
   [k: string]: unknown;
 }
 /**
@@ -91,6 +101,10 @@ export interface Alert {
   close_proposed_at?: CloseProposedAt;
   severity?: Severity;
   team?: Team;
+  routed_team?: RoutedTeam;
+  suppressed_until?: SuppressedUntil;
+  suppress_reason?: SuppressReason;
+  suppressed_by?: SuppressedBy;
   [k: string]: unknown;
 }
 export interface Interval {

@@ -1,0 +1,8 @@
+# the delta at 1f04c2c (the ClickHouse frequency fix): the analytics suite whole, both adapters, the rules lease, stack c, by stack_lease.sh remote, start 2026-11-09T20:03:04Z
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261109T200314Z/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py
+........................................................................ [ 28%]
+........................................................................ [ 56%]
+........................................................................ [ 85%]
+......................................                                   [100%]
+254 passed in 59.83s
+# exit 0 end 2026-11-09T20:04:15Z

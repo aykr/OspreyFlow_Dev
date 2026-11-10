@@ -7,6 +7,7 @@
 // five; it raises and writes nothing.
 import { useEffect, useMemo, useState } from "react";
 import type {
+  AlertTeam,
   CompiledSentence,
   OntologySchema,
   RulePreview,
@@ -18,6 +19,7 @@ import type { AccessLevel } from "../investigation/cases";
 import {
   compileSentence,
   deploySentence,
+  listAlertTeams,
   previewRule,
   readOntology,
   readSentence,
@@ -206,6 +208,15 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
   const [readFrom, setReadFrom] = useState("");
   const canDeployCase = props.level === "author";
   const canDeploy = canDeployCase || props.level === "editor";
+
+  // ADR-146 decision 8: the teams a rule's alerts may go to, by name.
+  const [teams, setTeams] = useState<AlertTeam[]>([]);
+  useEffect(() => {
+    listAlertTeams(api)
+      .then((found) => setTeams(Array.isArray(found) ? found : []))
+      .catch(() => setTeams([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.apiBaseUrl, props.bearerToken, props.investigationId]);
 
   useEffect(() => {
     readOntology(api)
@@ -586,9 +597,24 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
           {!justMe && (
             <label className="label" style={BLANK}>
               Alert goes to
-              <Select aria-label="Alert goes to (team)" value={draft.team} onChange={(e) => change({ team: e.target.value as SentenceDraft["team"] })}>
+              {/* ADR-146 decision 8: a named team reads the rule's alerts alone, with the home case's
+                  Authors; "my team" is kept only for a rule saved with it (gap map Q5 (B)). */}
+              <Select
+                aria-label="Alert goes to (team)"
+                value={draft.team === "team" ? `team:${draft.teamId ?? ""}` : draft.team}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.startsWith("team:")) change({ team: "team", teamId: v.slice("team:".length) });
+                  else change({ team: v as SentenceDraft["team"], teamId: undefined });
+                }}
+              >
                 <option value="case">the case team</option>
-                <option value="my_team">my team</option>
+                {draft.team === "my_team" && <option value="my_team">my team (as saved)</option>}
+                {teams.map((t) => (
+                  <option key={t.role_id} value={`team:${t.role_id}`}>
+                    {`${t.display_name} only`}
+                  </option>
+                ))}
               </Select>
             </label>
           )}

@@ -22,6 +22,7 @@ import duckdb
 import pytest
 from ulid import ULID
 
+from ports.analytics import AnalyticsPort, TrendLimitExceeded
 from schemas.analytics import (
     BaselineRequest,
     CrossFilterDimension,
@@ -38,11 +39,13 @@ from schemas.analytics import (
     HistogramRequest,
     InheritedEvents,
     SightingRequest,
+    TrendInterval,
+    TrendMeasure,
+    TrendRequest,
+    TrendResult,
     WeekdayHour,
 )
 from schemas.domain import Handling, Interval, Principal
-from ports.analytics import AnalyticsPort, TrendLimitExceeded
-from schemas.analytics import TrendInterval, TrendMeasure, TrendRequest, TrendResult
 from tests.conformance.registry import ANALYTICS_PORT_ADAPTERS, AnalyticsAdapterFactory
 
 pytestmark = pytest.mark.parametrize("factory", ANALYTICS_PORT_ADAPTERS, ids=str)
@@ -2401,6 +2404,28 @@ async def test_an_only_me_hotlist_alert_is_counted_for_its_owner_and_no_one_else
     assert stranger.events == 0
 
 
+async def test_a_team_routed_alert_is_counted_for_the_teams_members_alone(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """ADR-146 decision 8: a rule's alert routed to a named team is counted in its case for the
+    team's members alone (a member is whoever holds the team's role on this request). Not for a
+    member of the case outside the team, not for the rule's deployer as its owner, and not for a
+    team member reading another case. Red with the routed clause read as the case's audience, or
+    with the owner clause left open to `routed`."""
+    routed = _fact(raised_at=_week(0), audience="routed", team="team-1", owner_id="analyst-official")
+    plain = _fact(raised_at=_week(0))
+    member = STRANGER.model_copy(update={"roles": ["role:team-1"]})
+    other_team = STRANGER.model_copy(update={"roles": ["role:team-2"]})
+    in_team, outside, deployer, elsewhere = await _alert_trend(
+        factory, [routed, plain], _alerts(), member, other_team, OFFICIAL, member)
+    assert in_team.events == 2, "a member of the team counts the routed alert in its case"
+    assert outside.events == 1, "a case member outside the team does not"
+    assert deployer.events == 1, "the rule's deployer, outside the team, does not count it as its owner"
+    (other_case,) = await _alert_trend(
+        factory, [routed], AlertTrendRequest(investigation_scope="case-2", window=ALERT_WINDOW), member)
+    assert other_case.events == 0, "a team member counts it only in the case it was raised in"
+
+
 async def test_a_case_alert_is_counted_in_its_own_case_only(factory: AnalyticsAdapterFactory) -> None:
     facts = [_fact(raised_at=_week(0)), _fact(raised_at=_week(0), investigation_scope="case-2")]
     reader, = await _alert_trend(factory, facts, _alerts(), STRANGER)
@@ -2503,6 +2528,64 @@ async def test_frequency_counts_the_most_events_in_any_span_of_the_days_asked(
     assert thirty.nodes["acct-a"].most_in_span == 4
 
 
+@pytest.mark.parametrize(("past_the_edge", "largest"), [(1, 12.0), (-1, 18.0)])
+async def test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_microsecond(
+    factory: AnalyticsAdapterFactory, past_the_edge: int, largest: float,
+) -> None:
+    """A span of more than 2^31 ms (about 24.9 days) is counted, not refused, and its edge is exact.
+
+    ClickHouse refuses a RANGE window offset of 2^31 or more, so the adapter once failed on any span
+    past 24 days (L2.10's live run). A fix by whole seconds or milliseconds would move the edge: the
+    column holds microseconds. Events at day 0 (5) and day 90 (7) are one span of 90 days, ends
+    included. A third (11), one microsecond more than 90 days after day 90, is in no span with it
+    (largest total 12); one microsecond less, it is (18)."""
+    from datetime import timedelta
+
+    off = timedelta(microseconds=500)  # off every second and millisecond, so no grid lands on an edge
+    third = _day(180) + off + timedelta(microseconds=past_the_edge)
+    events = [
+        _event(occurred_at=_day(0) + off, edge_type="TRANSACTED", source_id="acct-a", target_id="acct-b",
+               properties={"amount": 5.0}),
+        _event(occurred_at=_day(90) + off, edge_type="TRANSACTED", source_id="acct-a", target_id="acct-b",
+               properties={"amount": 7.0}),
+        _event(occurred_at=third, edge_type="TRANSACTED", source_id="acct-a", target_id="acct-b",
+               properties={"amount": 11.0}),
+    ]  # fmt: skip
+    wide = Interval(valid_from=FREQ_T0 - timedelta(days=1), valid_to=FREQ_T0 + timedelta(days=200))
+    async with factory.context(events) as adapter:
+        ninety = await adapter.event_frequency(_frequency(90, amount="amount", window=wide), OFFICIAL)
+    assert ninety.nodes["acct-a"].most_in_span == 2  # 0 and 90, the span's far end included
+    assert ninety.nodes["acct-a"].largest_total == largest
+
+
+async def test_frequency_counts_events_at_one_instant_together(factory: AnalyticsAdapterFactory) -> None:
+    """Ties: four events at one instant are each in every span that holds that instant, as a RANGE
+    frame counts its peers, never one at a time in an arbitrary order. The tied four are the one
+    largest span, so an undercount of them fails as an overcount elsewhere does."""
+    events = [_paid(0), _paid(0), _paid(0), _paid(0), _paid(5), _paid(5.5), _paid(6)]
+    async with factory.context(events) as adapter:
+        three = await adapter.event_frequency(_frequency(3), OFFICIAL)
+    assert three.nodes["acct-a"].most_in_span == 4
+
+
+async def test_frequency_sums_amounts_as_decimals_and_skips_one_that_is_not(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """The total a rule compares is the same on every adapter: 0.1 and 0.2 make 0.3, not
+    0.30000000000000004. An amount past a decimal of 38 digits, 9 after the point (1e30, inf), is no
+    amount: the event is counted, its amount is not, and is never read as 0."""
+    async with factory.context([_paid(0, 0.1), _paid(1, 0.2)]) as adapter:
+        tenths = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+    async with factory.context([_paid(0, 1e30), _paid(1, "inf")]) as adapter:  # type: ignore[arg-type]
+        huge = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+    # Past nine places an amount is rounded, on every adapter alike, never cut on one.
+    async with factory.context([_paid(0, 0.1234567896), _paid(1, 1.0000000004)]) as adapter:
+        tenth = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+    assert tenths.nodes["acct-a"].largest_total == 0.3
+    assert tenth.nodes["acct-a"].largest_total == 1.12345679
+    assert (huge.nodes["acct-a"].most_in_span, huge.nodes["acct-a"].largest_total) == (2, None)
+
+
 async def test_frequency_counts_a_subject_at_either_end_and_each_event_once(
     factory: AnalyticsAdapterFactory,
 ) -> None:
@@ -2543,7 +2626,12 @@ async def test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first
     hidden = [_paid(0.5, 50_000, classification="SECRET"),
               _paid(0.7, 50_000, handling_code="R", owning_unit="unit-2", originator="unit-2"),
               _event(occurred_at=datetime(2025, 1, 1, tzinfo=UTC), edge_type="TRANSACTED", source_id="acct-a",
-                     target_id="acct-hidden", classification="SECRET")]  # fmt: skip
+                     target_id="acct-hidden", classification="SECRET"),
+              # The same two shapes with the subject at the far end: the other branch's access step.
+              _event(occurred_at=_day(0.6), edge_type="TRANSACTED", source_id="acct-b", target_id="acct-a",
+                     classification="SECRET", properties={"amount": 50_000}),
+              _event(occurred_at=_day(0.8), edge_type="TRANSACTED", source_id="acct-b", target_id="acct-a",
+                     handling_code="R", owning_unit="unit-2", originator="unit-2", properties={"amount": 50_000})]  # fmt: skip
     events = [_paid(0, 100), _paid(1, 100), *hidden]
     async with factory.context(events) as adapter:
         official = await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
@@ -2551,13 +2639,15 @@ async def test_an_event_the_author_may_not_see_adds_nothing_and_is_never_a_first
         only_hidden = await adapter.event_frequency(_frequency(7, nodes=["acct-hidden"]), OFFICIAL)
     assert (official.nodes["acct-a"].most_in_span, official.nodes["acct-a"].largest_total) == (2, 200.0)
     assert official.nodes["acct-a"].first_at == _day(0)
-    assert cleared.nodes["acct-a"].most_in_span == 3  # the SECRET one, for a reader who may see it
+    assert cleared.nodes["acct-a"].most_in_span == 4  # the two SECRET ones, for a reader who may see them
     assert cleared.nodes["acct-a"].first_at == datetime(2025, 1, 1, tzinfo=UTC)
     assert only_hidden.nodes == {}  # a node reached only through what is hidden is not there at all
 
 
 async def test_frequency_counts_only_this_case_and_the_link_types_named(factory: AnalyticsAdapterFactory) -> None:
     events = [_paid(0), _paid(1, investigation_scope="case-2"),
+              _event(occurred_at=_day(1), edge_type="TRANSACTED", source_id="acct-b", target_id="acct-a",
+                     investigation_scope="case-2"),
               _event(occurred_at=_day(1), edge_type="COMMUNICATED_WITH", source_id="acct-a", target_id="acct-b")]  # fmt: skip
     async with factory.context(events) as adapter:
         transacted = await adapter.event_frequency(_frequency(7), OFFICIAL)
@@ -2619,6 +2709,46 @@ async def test_activity_counts_the_window_and_the_days_before_it(factory: Analyt
     assert (a.recent_count, a.recent_total) == (3, 600.0)
     assert (a.baseline_count, a.baseline_total) == (2, 3_000.0)
     assert plain.nodes["acct-a"].recent_total is None and plain.nodes["acct-a"].baseline_count == 2
+
+
+async def test_activity_sums_amounts_as_decimals_and_skips_one_that_is_not(
+    factory: AnalyticsAdapterFactory,
+) -> None:
+    """As event_frequency's: the totals a rule compares are the same on every adapter (0.1 and 0.2
+    make 0.3, not 0.30000000000000004), and an amount past a decimal of 38 digits, 9 after the point
+    (1e30, inf), is no amount, its event still counted."""
+    events = [_moved(_at(0), 0.1), _moved(_at(1), 0.2),  # in the window
+              _moved(_at(-1), 1e30), _moved(_at(-2), "inf")]  # type: ignore[arg-type]  # fmt: skip
+    async with factory.context(events) as adapter:
+        counted = await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+    a = counted.nodes["acct-a"]
+    assert (a.recent_count, a.recent_total) == (2, 0.3)
+    assert (a.baseline_count, a.baseline_total) == (2, None)
+
+
+@pytest.mark.parametrize("each", [9e28, 6e27])  # past the decimal's range; within it, past the limit
+@pytest.mark.parametrize("sign", [1, -1])
+async def test_a_total_past_the_decimals_range_is_refused_never_wrapped(
+    factory: AnalyticsAdapterFactory, sign: int, each: float
+) -> None:
+    """ADR-133 Amendment 10 (rule 2): two amounts of 9 × 10^28 each fit a decimal of 38 digits, 9
+    after the point; their total does not. A frequency's span and an activity's window holding both
+    are refused (`AmountTotalOutOfRange`) on every adapter, never wrapped (DuckDB's plain SUM of a
+    decimal wraps silently to a negative) and never cut. Either sign. Two of 6 × 10^27 make a total
+    the decimal holds but the limit (10^28) refuses: there the adapter's own check alone refuses it,
+    with no overflow of the store's to do it instead (rule 15)."""
+    from ports.analytics import AmountTotalOutOfRange
+
+    big = sign * each
+    async with factory.context([_paid(0, big), _paid(1, big)]) as adapter:
+        with pytest.raises(AmountTotalOutOfRange):
+            await adapter.event_frequency(_frequency(7, amount="amount"), OFFICIAL)
+    async with factory.context([_moved(_at(0), big), _moved(_at(1), big)]) as adapter:
+        with pytest.raises(AmountTotalOutOfRange):
+            await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
+    async with factory.context([_moved(_at(-1), big), _moved(_at(-2), big)]) as adapter:
+        with pytest.raises(AmountTotalOutOfRange):  # the days before the window too
+            await adapter.account_activity(_activity(28, amount="amount"), OFFICIAL)
 
 
 async def test_activity_says_the_first_movement_in_the_window_and_the_last_before_it(

@@ -139,6 +139,10 @@ async def readable(
     # batched read per kind as the reader, whatever is hidden.
     await settle_repoints(alerts, graph)
     cited = await alerts.cited_by_ids([i.alert.alert_id for i in items if i.alert is not None])
+    # ADR-146 decision 8: an alert routed to a team is its members' and the home case's Authors'
+    # alone, wherever it is shown, a pack included (rule 3, in the store's query).
+    routed = await alerts.routed_readable(list(cited), reader) if cited else set()
+    cited = {i: a for i, a in cited.items() if i in routed}
     evidence = await read_evidence(
         list(cited.values()), reader, graph, analytics, scope=lambda _: case_id
     )

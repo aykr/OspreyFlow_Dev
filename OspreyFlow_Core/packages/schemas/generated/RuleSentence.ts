@@ -231,7 +231,8 @@ export type Kind9 = "shared_attribute_rarity";
 export type Reaches1 = number;
 export type Scope = "dataset" | "case";
 export type Severity = "low" | "medium" | "high";
-export type Team = "case" | "my_team";
+export type Team = "case" | "my_team" | "team";
+export type TeamId = string | null;
 export type Runs = "pre_commit" | "post_commit" | "schedule";
 export type OnHit = "load" | "hold";
 export type Scope1 = "just_me" | "this_case" | "deployment";
@@ -252,6 +253,7 @@ export interface RuleSentence {
   strength?: Strength;
   severity?: Severity;
   team?: Team;
+  team_id?: TeamId;
   runs?: Runs;
   on_hit?: OnHit;
   scope?: Scope1;

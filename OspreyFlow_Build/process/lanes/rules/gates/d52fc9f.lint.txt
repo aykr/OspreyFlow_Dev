@@ -1,0 +1,5 @@
+# ruff check and mypy on the files changed since make -k ci at 1e94fdf (bb4466d, d52fc9f), at d52fc9f, 2026-11-09T22:23:03Z
+## ruff check packages/adapters/analytics_clickhouse/adapter.py packages/adapters/analytics_duckdb/adapter.py packages/ports/analytics.py services/api/rule_holds.py services/api/kyc_sweep.py services/api/alert_routing.py services/api/alert_queue.py services/api/app.py
+All checks passed!
+## mypy packages/adapters/analytics_clickhouse/adapter.py packages/adapters/analytics_duckdb/adapter.py packages/ports/analytics.py services/api/rule_holds.py services/api/kyc_sweep.py services/api/alert_routing.py services/api/alert_queue.py services/api/app.py
+Success: no issues found in 8 source files

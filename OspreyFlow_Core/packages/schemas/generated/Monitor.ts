@@ -6,6 +6,9 @@ export type OwnerId = string;
 export type Status = "active" | "stopped";
 export type CreatedAt = string;
 export type DatasetId = string | null;
+export type Every = "daily" | "weekly" | "never";
+export type Hour = number;
+export type Weekday = number | null;
 
 /**
  * A saved pattern being watched — `02_GLASS_FRONTEND.md` §3.3: "A saved visual query run...
@@ -33,5 +36,8 @@ export interface Monitor {
   status?: Status;
   created_at: CreatedAt;
   dataset_id?: DatasetId;
+  every?: Every;
+  hour?: Hour;
+  weekday?: Weekday;
   [k: string]: unknown;
 }

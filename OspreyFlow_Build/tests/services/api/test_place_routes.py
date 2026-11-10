@@ -61,8 +61,13 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     # ADR-146 Amendment 2: the rule audit left Rules and Monitoring for the Administrator, read in
     # Admin › Audit (L2.6), so its route is Admin's though its path ends in `rules`.
     (r"^/v1/admin/audit(/|$)", frozenset({"admin"}), "Admin › Audit (admin/sections/Audit.tsx)"),
-    (r"/alert-queue|/alert-assignees|/alerts(/|$)|/hotlists|/monitors"
-     r"|/rules(/|$)",
+    # ADR-146 decision 4: a watch is made in the Glass too (*Watch for this*, *Save as a watch*),
+    # and kept with the rules; making one still asks for the place's gate (an analyst holds it).
+    (r"/(hotlists|monitors)$", frozenset({"glass", "rules"}),
+     "Rules and Monitoring's watches; the Glass's Watch for this and Save as a watch "
+     "(watches/GlassWatchActions.tsx)"),
+    (r"/alert-queue|/alert-assignees|/alert-teams|/alert-sources|/alerts(/|$)|/hotlists"
+     r"|/monitors|/rules(/|$)",
      frozenset({"rules"}), "Rules and Monitoring (alerts/, watches/)"),
     (r"^/v1/admin/", frozenset({"admin"}), "the Admin place"),
     (r"^/v1/exports$", frozenset({"admin"}), "the export ledger, Admin's right (ADR-112 A8)"),
@@ -300,6 +305,8 @@ MOVED = {
     # ADR-143 decision 9 (L3.5): the Studio's Model tab decides a dataset's proposed link types.
     "linktypes/ModelProposals.tsx": "ingest",
     "linktypes/modelProposalsApi.ts": "ingest",
+    # ADR-146 decisions 4 and 7: the watches and alerts made from the Glass are drawn in the Glass.
+    "watches/GlassWatchActions.tsx": "glass",
 }
 #: The workspace's path helpers, read as the prefixes they build (`ingest/api.ts`'s `studioCase`,
 #: `ingest/sources/api.ts`'s `dataset`).
@@ -508,7 +515,13 @@ def test_a_check_in_a_route_s_signature_is_read() -> None:
 
 
 def _openers(place: str) -> set[frozenset[str]]:
-    sets = {_checks(r) for r in _entry_routes(place)}
+    # A route behind another place's gate (`place:rules`) is an action offered where that place is
+    # (ADR-146 Amendment 4 point 7: the Glass's *Watch for this* and *Save as a watch*), never a way
+    # into this one, so it opens nothing here.
+    sets = {
+        c for c in (_checks(r) for r in _entry_routes(place))
+        if not any(x.startswith("place:") and x != f"place:{place}" for x in c)
+    }
     return {s for s in sets if not any(o < s for o in sets)}
 
 

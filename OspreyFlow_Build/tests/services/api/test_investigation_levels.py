@@ -177,8 +177,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("GET", P + "/hotlists"): V,
     ("POST", P + "/monitors"): E,
     ("GET", P + "/monitors"): V,
-    ("GET", P + "/alerts"): V,
-    ("GET", P + "/alerts/{alert_id}"): V,
+    # ADR-146 decision 4 (G16): the owner's schedule for their watch, read in a case reading it.
+    ("PUT", P + "/monitors/{monitor_id}/schedule"): V,
     # ADR-099 Amendment 3: the Ingest Studio's recipes and source files are the dataset's.
     ("GET", P + "/ingest/source-files"): V,
     ("POST", P + "/ingest/source-files"): E,
@@ -218,6 +218,10 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     # ADR-133 stage (a): giving an alert to a member, and the members it may be given to, at Editor
     # (who triages); a hotlist's audience is its owner's change, at Editor as making one is.
     ("POST", P + "/alert-queue/{alert_id}/assign"): E,
+    ("POST", P + "/alert-queue/{alert_id}/suppress"): E,  # ADR-146 Amendment 1
+    ("GET", P + "/alert-teams"): V,  # ADR-146 decision 8
+    ("GET", P + "/alert-sources"): V,  # ADR-146 decision 5
+    ("POST", P + "/raised-alerts"): E,  # ADR-146 decision 7: raising writes into the case's queue
     # ADR-133 decision 7, stage (d): approving or sending back a proposed close, at Editor (who
     # triages); `test_alert_close_approval.py` has the second-person rule.
     ("POST", P + "/alert-queue/{alert_id}/approve-close"): E,

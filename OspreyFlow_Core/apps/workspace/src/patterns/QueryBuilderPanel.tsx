@@ -32,6 +32,7 @@ import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { GlobalSearch } from "../search/GlobalSearch";
+import { RaiseAlert, SaveAsWatch } from "../watches/GlassWatchActions";
 import {
   askToSearch,
   fetchPatternPreview,
@@ -70,6 +71,10 @@ export interface QueryBuilderPanelProps {
    * person" in a question refers to. Sent to the Conduit, which resolves them to the ones the
    * analyst may see; the model never receives them. */
   selectedNodeIds?: readonly string[];
+  /** ADR-146 decision 4: *Save as a watch* on a saved pattern, for whom watches are kept. */
+  canKeepWatches?: boolean;
+  /** ADR-146 decision 7: *Raise an alert…* on the selected items the pattern found. */
+  canRaiseAlerts?: boolean;
 }
 
 /** The parts the Query builder folds into (ADR-096). */
@@ -81,6 +86,8 @@ export function QueryBuilderPanel({
   investigationId,
   schema,
   selectedNodeIds = [],
+  canKeepWatches = false,
+  canRaiseAlerts = false,
 }: QueryBuilderPanelProps) {
   const [pattern, setPattern] = useState<PatternBuilderState>(createEmptyPattern());
   const [paletteType, setPaletteType] = useState(schema.entity_types[0]?.name ?? "");
@@ -569,6 +576,18 @@ export function QueryBuilderPanel({
           </Button>
         </div>
         {saveStatus && <p aria-live="polite">{saveStatus}</p>}
+        {canKeepWatches && (
+          <SaveAsWatch apiBaseUrl={apiBaseUrl} bearerToken={bearerToken} investigationId={investigationId} patternId={currentPatternId} />
+        )}
+        {canRaiseAlerts && selectedNodeIds.length > 0 && (
+          <RaiseAlert
+            apiBaseUrl={apiBaseUrl}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            nodeIds={[...selectedNodeIds]}
+            foundBy={patternName ? `the query "${patternName}"` : "a query"}
+          />
+        )}
 
         <div
           role="group"

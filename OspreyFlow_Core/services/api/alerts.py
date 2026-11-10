@@ -37,7 +37,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping, Sequence
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal, Protocol
 
 import asyncpg
@@ -66,6 +66,7 @@ from schemas.domain import (
     NodeWrite,
     Principal,
 )
+from schemas.rights import teams_of
 
 from .audit import AuditWriter
 from .dataset_scope import reach_clause
@@ -116,6 +117,11 @@ ALTER TABLE alerts ADD COLUMN IF NOT EXISTS team TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS handlings TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS close_proposed_by TEXT;
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS close_proposed_at TIMESTAMPTZ;
+-- ADR-146 decision 8: the named team a rule's alert goes to; Amendment 1: *Suppress until…*.
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS routed_team TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppressed_until DATE;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppress_reason TEXT;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS suppressed_by TEXT;
 CREATE INDEX IF NOT EXISTS alerts_investigation_idx ON alerts (investigation_id);
 CREATE INDEX IF NOT EXISTS alerts_owner_id_idx ON alerts (owner_id);
 -- ADR-109 Amendment 10: a write that supersedes links (or an alert's node) alerts may cite keeps
@@ -167,7 +173,7 @@ _COLUMNS = (
     "id, rule_id, owner_id, mode, referent_node_ids, investigation_id, created_at, dataset_id, "
     "typology, words, edge_ids, event_ids, window_json, trigger, alert_node_id, status, assignee, "
     "disposition, disposition_reason, decided_by, decided_at, severity, team, close_proposed_by, "
-    "close_proposed_at"
+    "close_proposed_at, routed_team, suppressed_until, suppress_reason, suppressed_by"
 )
 
 
@@ -198,6 +204,10 @@ def _row_to_alert(row: asyncpg.Record) -> Alert:
         team=row["team"],
         close_proposed_by=row["close_proposed_by"],
         close_proposed_at=row["close_proposed_at"],
+        routed_team=row["routed_team"],
+        suppressed_until=row["suppressed_until"],
+        suppress_reason=row["suppress_reason"],
+        suppressed_by=row["suppressed_by"],
     )
 
 
@@ -211,6 +221,7 @@ DEFAULT_SEVERITY: dict[AlertKind, AlertSeverity] = {
     "typology": "medium",
     "hotlist": "high",
     "monitor": "medium",
+    "analyst": "medium",
 }
 TYPOLOGY_SEVERITY: dict[str, AlertSeverity] = {
     "kyc_screening": "high",
@@ -235,7 +246,8 @@ def _quoted(value: str) -> str:
 _KIND_SQL = (
     "(CASE WHEN typology IS NOT NULL THEN 'typology' "
     "WHEN rule_id LIKE 'hotlist:%' THEN 'hotlist' "
-    "WHEN rule_id LIKE 'monitor:%' THEN 'monitor' END)"
+    "WHEN rule_id LIKE 'monitor:%' THEN 'monitor' "
+    "WHEN rule_id LIKE 'analyst:%' THEN 'analyst' END)"
 )
 _SEVERITY_SQL = (
     "COALESCE(severity, CASE "
@@ -259,12 +271,44 @@ _SHARED_SQL = (
     "WHERE h.id = substr(alerts.rule_id, 9) AND h.audience = 'team'))))"
 )
 _AUDIENCE_SQL = (
-    f"(CASE WHEN typology IS NOT NULL THEN 'case' WHEN {_SHARED_SQL} THEN 'team' ELSE 'owner' END)"
+    "(CASE WHEN routed_team IS NOT NULL THEN 'team' "
+    "WHEN typology IS NOT NULL OR rule_id LIKE 'analyst:%' THEN 'case' "
+    f"WHEN {_SHARED_SQL} THEN 'team' ELSE 'owner' END)"
 )
 
 
+def reader_teams(principal: Principal) -> list[str]:
+    """The teams the reader is in on this request: each custom role (`role:<id>`) their token
+    carries (ADR-145 Amendment 5 point 5), read from the principal every time and never kept, so
+    leaving the role is leaving the team at once."""
+    return teams_of(principal.roles)
+
+
+#: ADR-146 decision 8, a rule 3 read: a typology alert routed to a team is read only by the team's
+#: members (`$teams`, the reader's teams) and the Authors of the home case of the alert's dataset
+#: (`$authored`, the datasets the reader answers for). An alert routed to no team is the case's.
+def _routed_sql(teams: str, authored: str) -> str:
+    return (
+        f"(routed_team IS NULL OR routed_team = ANY({teams}::text[]) "
+        f"OR (dataset_id IS NOT NULL AND dataset_id = ANY({authored}::text[])))"
+    )
+
+
+#: Who answers for which datasets: the reader's datasets whose home case they are an Author of,
+#: in their own name or through a team (ADR-145 Amendment 4 decision 3). Asked once per read by
+#: the store; `None` answers for none, so a store given no answer shows a routed alert to its
+#: team alone (fail closed).
+AnswersFor = Callable[[Principal], Awaitable[Sequence[str]]]
+#: ADR-146 decision 2: the queue's filters (*Older than N days* is a number beside them).
+QueueShow = Literal["mine", "team", "unassigned", "all"]
+
+
 def queue_scope(
-    principal: Principal, investigation_id: str, position: int
+    principal: Principal,
+    investigation_id: str,
+    position: int,
+    *,
+    answers_for: Sequence[str] = (),
 ) -> tuple[str, list[object]]:
     """ADR-133 decision 5, rule 3: which alerts the one queue may hold for `principal`, read in a
     case, as SQL (`AND (...)`, its parameters from `$position`). A typology alert is the case's
@@ -272,16 +316,33 @@ def queue_scope(
     — the people of the owner's organisational unit — when it is shared (`_SHARED_SQL`). The
     dataset reach of the case applies to every kind (ADR-099 Amendment 3). Whether the reader may
     open the case is the route's level check; whether they may read what an alert names is the
-    adapter's answer, read as them afterwards (`alert_queue.monitoring_queue`)."""
-    case, me, unit = (f"${position + i}" for i in range(3))
-    reach, extra = reach_clause(principal, position + 3)
+    adapter's answer, read as them afterwards (`alert_queue.monitoring_queue`).
+
+    ADR-146 decision 8: a typology alert routed to a team is also the team's alone, and the home
+    case's Authors' (`_routed_sql`). Decision 7: an analyst's alert to the case is the case's
+    members'; one to the dataset is in the queue of the home case it was raised into and of every
+    case reading the dataset (`$datasets`, the reader's own, never unlimited)."""
+    case, me, unit, teams, authored, datasets = (f"${position + i}" for i in range(6))
+    reach, extra = reach_clause(principal, position + 6)
+    watch = "typology IS NULL AND rule_id NOT LIKE 'analyst:%'"
     sql = (
         f" AND {_KIND_SQL} IS NOT NULL AND ("
-        f"(typology IS NOT NULL AND investigation_id = {case}) "
-        f"OR (typology IS NULL AND owner_id = {me}) "
-        f"OR (typology IS NULL AND team = {unit} AND {_SHARED_SQL})){reach}"
+        f"(typology IS NOT NULL AND investigation_id = {case} AND {_routed_sql(teams, authored)}) "
+        f"OR (rule_id LIKE 'analyst:case:%' AND investigation_id = {case}) "
+        f"OR (rule_id LIKE 'analyst:dataset:%' AND (investigation_id = {case} "
+        f"OR dataset_id = ANY({datasets}::text[]))) "
+        f"OR ({watch} AND owner_id = {me}) "
+        f"OR ({watch} AND team = {unit} AND {_SHARED_SQL})){reach}"
     )
-    return sql, [investigation_id, principal.id, principal.org_unit, *extra]
+    return sql, [
+        investigation_id,
+        principal.id,
+        principal.org_unit,
+        reader_teams(principal),
+        sorted(set(answers_for)),
+        list(principal.datasets or []),
+        *extra,
+    ]
 
 
 class QueueRow:
@@ -312,12 +373,14 @@ def _row_to_queue_row(row: asyncpg.Record) -> QueueRow:
 _log = logging.getLogger(__name__)
 
 #: ADR-134 decision 3: an alert as the analytics store keeps it for alert trends — its kind,
-#: severity and audience read by the queue's own expressions, so the trend and the queue cannot
-#: disagree about who an alert is for.
+#: severity and audience read by the queue's own expressions. One exception (ADR-146 decision 8):
+#: an alert routed to a team is `team` in the queue but `routed` as a fact (`_row_to_fact`), and
+#: trends count it in its case for the team's members alone, where the queue also shows it to the
+#: home case's Authors — so a trend may count fewer of them than the queue lists, never more.
 _FACT_COLUMNS = (
     f"id, rule_id, owner_id, investigation_id, created_at, dataset_id, typology, status, "
-    f"disposition, team, handlings, {_KIND_SQL} AS kind, {_SEVERITY_SQL} AS severity_read, "
-    f"{_AUDIENCE_SQL} AS audience"
+    f"disposition, team, routed_team, handlings, {_KIND_SQL} AS kind, "
+    f"{_SEVERITY_SQL} AS severity_read, {_AUDIENCE_SQL} AS audience"
 )
 
 FactSink = Callable[[list[AlertFact]], Awaitable[None]]
@@ -333,12 +396,15 @@ def _row_to_fact(row: asyncpg.Record) -> AlertFact:
     kind = row["kind"]
     rule = (
         row["rule_id"]
-        if kind == "typology"
+        if kind in ("typology", "analyst")
         else HOTLISTS_RULE
         if kind == "hotlist"
         else MONITORS_RULE
     )
     raw = row["handlings"]
+    # ADR-146 decision 8: a routed alert is counted for its team's members alone, never its
+    # deployer as an owner (`alert_facts.alert_predicate`).
+    routed = row["routed_team"]
     return AlertFact(
         alert_id=row["id"],
         investigation_scope=row["investigation_id"],
@@ -349,8 +415,8 @@ def _row_to_fact(row: asyncpg.Record) -> AlertFact:
         outcome=_outcome(row["status"], row["disposition"]),  # type: ignore[arg-type]
         raised_at=row["created_at"],
         owner_id=row["owner_id"],
-        audience=row["audience"],
-        team=row["team"],
+        audience="routed" if routed is not None else row["audience"],
+        team=routed if routed is not None else row["team"],
         dataset_id=row["dataset_id"],
         handlings=None if raw is None else [Handling(**h) for h in json.loads(raw)],
     )
@@ -544,6 +610,19 @@ class AlertStore:
         #: The deployment's handling scheme, for re-marking a repointed alert's node: the one
         #: `run_resources.build_run_resources` builds (`load_uk_le_scheme`), unless given.
         self.scheme: HandlingScheme = load_uk_le_scheme()
+        #: ADR-146 decision 8: which of a reader's datasets they answer for (Author of its home
+        #: case), asked on each read of the queue; attached by the app (`answers_for_datasets`).
+        #: Unset, a routed alert reaches its team's members alone.
+        self.answers_for: AnswersFor | None = None
+        #: L2.10's carry: the working-set service, so a settle on a read path purges what it
+        #: re-marked at once (`settle_repoints`); attached by the app. `None` leaves the purge to
+        #: the next working-set read, as before.
+        self.working_set: Any = None
+
+    async def _answers_for(self, principal: Principal) -> Sequence[str]:
+        if self.answers_for is None or not principal.datasets:
+            return ()
+        return await self.answers_for(principal)
 
     @classmethod
     async def connect(cls, dsn: str) -> AlertStore:
@@ -613,7 +692,7 @@ class AlertStore:
             await conn.execute(
                 f"INSERT INTO alerts ({_COLUMNS}, handlings) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, "
-                "$17, $18, $19, $20, $21, $22, $23, $24, $25, $26)",
+                "$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)",
                 alert.id,
                 alert.rule_id,
                 alert.owner_id,
@@ -639,6 +718,10 @@ class AlertStore:
                 alert.team,
                 alert.close_proposed_by,
                 alert.close_proposed_at,
+                alert.routed_team,
+                alert.suppressed_until,
+                alert.suppress_reason,
+                alert.suppressed_by,
                 None
                 if handlings is None
                 else json.dumps([h.model_dump() for h in distinct_handlings(handlings)]),
@@ -703,6 +786,23 @@ class AlertStore:
             )
         return {r["id"]: _row_to_alert(r) for r in rows}
 
+    async def routed_readable(self, alert_ids: Sequence[str], principal: Principal) -> set[str]:
+        """Of these alerts, those whose routing lets `principal` read them (ADR-146 decision 8, in
+        the query): routed to no team, to one of the reader's teams, or of a dataset the reader
+        answers for. For a read that holds an alert apart from the queue (a pack's alert item)."""
+        if not alert_ids:
+            return set()
+        authored = sorted(set(await self._answers_for(principal)))
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id FROM alerts WHERE id = ANY($1::text[]) AND "
+                + _routed_sql("$2", "$3"),
+                sorted(set(alert_ids)),
+                reader_teams(principal),
+                authored,
+            )
+        return {r["id"] for r in rows}
+
     async def get_authorized(
         self, alert_id: str, principal: Principal, *, graph: GraphPort | None = None
     ) -> Alert:
@@ -747,12 +847,16 @@ class AlertStore:
         the reader's dataset reach, newest first, whoever deployed the rule. Whether the reader may
         open the case is the route's level check; whether they may see each alert's evidence is
         the caller's (`evidence_available`, all-or-nothing), before anything is shown or counted."""
-        reach, extra = reach_clause(principal, 2)
+        reach, extra = reach_clause(principal, 4)
+        authored = sorted(set(await self._answers_for(principal)))
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_COLUMNS} FROM alerts WHERE investigation_id = $1 "
-                f"AND typology IS NOT NULL{reach} ORDER BY created_at DESC",
+                f"AND typology IS NOT NULL AND {_routed_sql('$2', '$3')}{reach} "
+                "ORDER BY created_at DESC",
                 investigation_id,
+                reader_teams(principal),
+                authored,
                 *extra,
             )
         return [_row_to_alert(row) for row in rows]
@@ -760,13 +864,16 @@ class AlertStore:
     async def get_case_alert(
         self, alert_id: str, investigation_id: str, principal: Principal
     ) -> Alert:
-        reach, extra = reach_clause(principal, 3)
+        reach, extra = reach_clause(principal, 5)
+        authored = sorted(set(await self._answers_for(principal)))
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 f"SELECT {_COLUMNS} FROM alerts WHERE id = $1 AND investigation_id = $2 "
-                f"AND typology IS NOT NULL{reach}",
+                f"AND typology IS NOT NULL AND {_routed_sql('$3', '$4')}{reach}",
                 alert_id,
                 investigation_id,
+                reader_teams(principal),
+                authored,
                 *extra,
             )
         if row is None:
@@ -781,11 +888,22 @@ class AlertStore:
         kinds: Sequence[str] | None = None,
         severities: Sequence[str] | None = None,
         statuses: Sequence[str] | None = None,
+        show: QueueShow | None = None,
+        older_than_days: int | None = None,
+        today: date | None = None,
     ) -> list[QueueRow]:
         """ADR-133 decision 5: the one queue — every kind the reader may see (`queue_scope`), with
         the kind, severity and status filters applied in the query, most severe first, then the
-        newest. Not cut: the queue is every alert the reader may see (rule 2)."""
-        scope, extra = queue_scope(principal, investigation_id, 1)
+        newest. Not cut: the queue is every alert the reader may see (rule 2).
+
+        ADR-146 decision 2's filters, in the query too: *Mine* (given to the reader), *Team*
+        (routed to one of the reader's teams, or shared with their unit), *Unassigned*, each
+        leaving out an alert suppressed today; *All* holds the suppressed ones too (Amendment 1);
+        `older_than_days` keeps those raised more than that many days ago. Unnamed, nothing is left
+        out, as before."""
+        scope, extra = queue_scope(
+            principal, investigation_id, 1, answers_for=await self._answers_for(principal)
+        )
         params: list[object] = list(extra)
         filters = ""
         for expression, wanted in (
@@ -796,6 +914,26 @@ class AlertStore:
             if wanted is not None:
                 params.append(list(wanted))
                 filters += f" AND {expression} = ANY(${len(params)}::text[])"
+        if show is not None and show != "all":
+            params.append(today or datetime.now(UTC).date())
+            filters += (
+                f" AND NOT (suppressed_until IS NOT NULL AND suppressed_until >= ${len(params)})"
+            )
+            if show == "mine":
+                params.append(principal.id)
+                filters += f" AND assignee = ${len(params)}"
+            elif show == "unassigned":
+                filters += " AND assignee IS NULL"
+            elif show == "team":
+                params.append(reader_teams(principal))
+                params.append(principal.org_unit)
+                filters += (
+                    f" AND (routed_team = ANY(${len(params) - 1}::text[]) "
+                    f"OR (routed_team IS NULL AND team = ${len(params)} AND {_SHARED_SQL}))"
+                )
+        if older_than_days is not None:
+            params.append(datetime.now(UTC) - timedelta(days=older_than_days))
+            filters += f" AND created_at < ${len(params)}"
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_QUEUE_COLUMNS} FROM alerts WHERE true{scope}{filters} "
@@ -820,7 +958,9 @@ class AlertStore:
     ) -> QueueRow:
         """One alert of the queue, by the same scope as the list: an alert outside it is not found,
         whether it exists or not."""
-        scope, extra = queue_scope(principal, investigation_id, 2)
+        scope, extra = queue_scope(
+            principal, investigation_id, 2, answers_for=await self._answers_for(principal)
+        )
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 f"SELECT {_QUEUE_COLUMNS} FROM alerts WHERE id = $1{scope}", alert_id, *extra
@@ -1280,7 +1420,9 @@ class AlertStore:
         would not show them. `close_proposed_by` (ADR-133 decision 7): who proposed closing a
         high-severity alert; kept, with when, while the same person stays named, and cleared with
         `None`."""
-        scope, extra = queue_scope(principal, investigation_id, 10)
+        scope, extra = queue_scope(
+            principal, investigation_id, 10, answers_for=await self._answers_for(principal)
+        )
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "UPDATE alerts SET status = $2, assignee = $3, disposition = $4, "
@@ -1301,6 +1443,36 @@ class AlertStore:
                 alert_node_id,
                 list(expect_status),
                 close_proposed_by,
+                *extra,
+            )
+        if row is None:
+            raise AlertTriageConflict(alert_id)
+        await self.publish_facts([alert_id])
+        return _row_to_alert(row)
+
+    async def set_suppression(
+        self,
+        alert_id: str,
+        investigation_id: str,
+        principal: Principal,
+        *,
+        until: date,
+        reason: str,
+    ) -> Alert:
+        """*Suppress until…* (ADR-146 Amendment 1), in one statement that also holds the alert to
+        the reader's queue scope, as every triage write does. The alert's status is unchanged: a
+        suppressed alert is still open, and counted open."""
+        scope, extra = queue_scope(
+            principal, investigation_id, 5, answers_for=await self._answers_for(principal)
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "UPDATE alerts SET suppressed_until = $2, suppress_reason = $3, suppressed_by = $4 "
+                f"WHERE id = $1 AND status <> 'closed'{scope} RETURNING {_COLUMNS}",
+                alert_id,
+                until,
+                reason,
+                principal.id,
                 *extra,
             )
         if row is None:
@@ -1859,8 +2031,17 @@ async def purge_remarked_copies(alerts: AlertStore, working_set: Any) -> None:
 async def settle_repoints(store: AlertStore, graph: GraphPort) -> None:
     """`AlertStore.settle_pending`, before a read of alerts. Every store the reads are given keeps
     the journal; one without `settle_pending` is refused (`AttributeError`), never passed over, so
-    no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11)."""
+    no read is answered from a store that could not have settled (L2.8c, ADR-109 Amendment 11).
+
+    L2.10's carry: a node the settle re-marked leaves every working set at once, published to the
+    connected canvases (`purge_copies`), when the store is given the working-set service
+    (`AlertStore.working_set`, attached by the app), rather than waiting for the canvas's next
+    synchronisation with its copy at the old marking on screen."""
     await store.settle_pending(graph)
+    # Read from the store's own attributes, never asked of a stand-in that refuses every other ask.
+    working_set = vars(store).get("working_set")
+    if working_set is not None:
+        await purge_remarked_copies(store, working_set)
 
 
 async def evidence_available(

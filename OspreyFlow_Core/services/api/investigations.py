@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from conduit_common.identity import new_id
 from schemas.domain import DomainPack, Principal
-from schemas.rights import CUSTOM_ROLE_PREFIX
+from schemas.rights import teams_of
 
 logger = logging.getLogger(__name__)
 
@@ -103,9 +103,7 @@ TEAM_GRANT_PREFIX = "team:"
 
 def grant_subjects(principal: Principal) -> list[str]:
     """Whom a case's grants may name for this principal: the account, and each team it is in."""
-    teams = [
-        r[len(CUSTOM_ROLE_PREFIX) :] for r in principal.roles if r.startswith(CUSTOM_ROLE_PREFIX)
-    ]
+    teams = teams_of(principal.roles)
     return [principal.id, *(f"{TEAM_GRANT_PREFIX}{t}" for t in teams)]
 
 

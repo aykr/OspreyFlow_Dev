@@ -104,6 +104,14 @@ class World:
         return copy.deepcopy(self)
 
 
+
+async def _owner_reaches(owner: object, dataset_id: str) -> bool:
+    """The hotlist's owner still reaches its dataset (ADR-146 Amendment 4 point 7): the storyline's
+    owner is the case's own member throughout; the reach itself is proven in
+    `test_evaluation_touched_nodes.py` and `test_team_lead_and_watches.py`."""
+    return True
+
+
 async def base_world() -> World:
     """The case as the seed leaves it: September's people, accounts, money and direct writes."""
     graph = LedgerGraph(ONTOLOGY)
@@ -211,6 +219,7 @@ async def load_week(
         valkey=stores.valkey,  # type: ignore[arg-type]
         principal_for_owner=stores.principal_for_owner,
         policy="strict",
+        reaches_dataset=_owner_reaches,
     )
     world.loads.append(load_id)
     return Loaded(report, notes, found)

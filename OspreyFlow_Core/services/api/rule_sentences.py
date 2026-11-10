@@ -499,7 +499,7 @@ def sentence_words(sentence: RuleSentence, ontology: OntologySchema | None = Non
                 f"and the shared-attribute rarity between it and another {sentence.subject} "
                 f"reaches {_number(strength.reaches)} ({where})"
             )
-    team = "my team" if sentence.team == "my_team" else "the case team"
+    team = {"my_team": "my team", "team": "its team alone"}.get(sentence.team, "the case team")
     audience = {"just_me": "me alone", "this_case": team, "deployment": "every case's team"}
     if sentence.runs == "schedule" and sentence.schedule is not None:
         from .rule_schedule import schedule_words

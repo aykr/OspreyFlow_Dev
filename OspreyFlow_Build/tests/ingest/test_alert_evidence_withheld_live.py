@@ -539,13 +539,15 @@ async def _two_alerts_on_one_secret_match(stores: dict[str, Any], graph: Any, ca
 
 async def _pending(stores: dict[str, Any], *old_links: str) -> list[tuple[str, str]]:
     """The repoint pairs this test's records hold for its own links (`alert_repoint_records`): the
-    table is shared with every other run, so only this test's links are read."""
+    table is shared with every other run, so only this test's links are read. A pair is recorded as
+    `(old, new, old_type)` since the journal's last round (D3); its first two are read, whatever
+    another run's record holds."""
     async with stores["alerts"]._pool.acquire() as conn:
         rows = await conn.fetch("SELECT links FROM alert_repoint_records")
     pairs = []
     for row in rows:
         links = __import__("json").loads(row["links"]) if isinstance(row["links"], str) else row["links"]
-        pairs.extend((old, new) for old, new in links if old in old_links)
+        pairs.extend((pair[0], pair[1]) for pair in links if pair[0] in old_links)
     return sorted(pairs)
 
 

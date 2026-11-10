@@ -1,0 +1,29 @@
+# the delta at 274d114 (the ClickHouse frequency fix after review): the analytics suite whole, both adapters, the rules lease, stack c, by stack_lease.sh remote, start 2026-11-09T20:12:32Z
+Running on ospreyflow-test (stack c, osprey-runs/rules/OspreyFlow_Core/), logged at osprey-runs/rules.meta/runs/20261109T201242Z/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py
+........................................................................ [ 28%]
+........................................................................ [ 56%]
+........................................................................ [ 84%]
+........................................                                 [100%]
+256 passed in 62.86s (0:01:02)
+# exit 0 end 2026-11-09T20:13:48Z
+# The reds and the green of the frequency cases on c, before this run:
+#   == plant 1: the RANGE window on milliseconds (8e8b9ff's)
+#   E           	"exception": "Code: 36. DB::Exception: Frame start offset for 'RANGE' frame must be a nonnegative 32-bit integer, '2592000000' of type 'UInt64' given. (BAD_ARGUMENTS) (version 25.8.33.6 (official build))"
+#           ClickHouse refuses a RANGE window offset of 2^31 or more, so the adapter once failed on any span
+#   E           	"exception": "Code: 36. DB::Exception: Frame start offset for 'RANGE' frame must be a nonnegative 32-bit integer, '7776000000' of type 'UInt64' given. (BAD_ARGUMENTS) (version 25.8.33.6 (official build))"
+#           ClickHouse refuses a RANGE window offset of 2^31 or more, so the adapter once failed on any span
+#   E           	"exception": "Code: 36. DB::Exception: Frame start offset for 'RANGE' frame must be a nonnegative 32-bit integer, '7776000000' of type 'UInt64' given. (BAD_ARGUMENTS) (version 25.8.33.6 (official build))"
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_counts_the_most_events_in_any_span_of_the_days_asked[analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_microsecond[1-12.0-analytics_clickhouse]
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_microsecond[-1-18.0-analytics_clickhouse]
+#   3 failed, 13 passed, 240 deselected in 7.82s
+#   == plant 2: the self-join on milliseconds (1f04c2c's)
+#           ClickHouse refuses a RANGE window offset of 2^31 or more, so the adapter once failed on any span
+#   E       assert 18.0 == 12.0
+#   FAILED ../OspreyFlow_Build/tests/conformance/analytics_port/test_suite.py::test_frequency_over_a_span_past_twenty_five_days_keeps_its_edge_to_the_microsecond[1-12.0-analytics_clickhouse]
+#   1 failed, 15 passed, 240 deselected in 3.52s
+#   == the fix (running figures and ASOF JOIN on the DateTime64)
+#   16 passed, 240 deselected in 3.28s
+# Lease and runs (the orchestrator's review: the intervals from the server's own run records, ~/osprey-runs/rules.meta/runs):
+# the rules lease on stack c, taken after the release at 20:05Z. Its runs: the plants and the fix's frequency cases
+# 20:11:27–20:12:08Z, this suite 20:12:42–20:13:47Z. Down and released after it, about 20:14Z. Base: main at 3be89a7.

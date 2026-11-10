@@ -51,6 +51,7 @@ from .datasets import PostgresDatasetStore
 from .explore import EXPLORE_TTL_SECONDS
 from .held_rows import HeldRowStore
 from .hotlists import HotlistStore
+from .investigations import InvestigationStore
 from .jobs import JobQueue
 from .kyc_expiries import KycExpiryStore
 from .media_store import open_media_store
@@ -69,6 +70,7 @@ from .screening import ScreeningListStore
 from .strength_influencers import InfluencerStore
 from .studio_publish import _REPO_ROOT as RECIPES_REPO_ROOT
 from .typology_rules import TypologyRuleStore
+from .watch_reach import DatasetReach, owner_reaches_dataset_in
 
 __all__ = ["RECIPES_REPO_ROOT", "RunResources", "build_run_resources"]
 
@@ -96,6 +98,8 @@ class RunResources:
     recipe_runs: RecipeRunStore
     extraction_candidates: ExtractionCandidateStore
     datasets_store: PostgresDatasetStore
+    #: The cases' levels, which a watch's owner's reach is asked of (ADR-146 Amendment 4 point 7).
+    investigations: InvestigationStore
     #: ADR-140 Amendment 12: a staged pipeline's lists, and where staged rows are kept.
     target_models: PostgresTargetModelStore
     staging_storage: ObjectStorageConfig
@@ -114,6 +118,13 @@ class RunResources:
     #: ADR-139: installation-wide and case link-strength influencers.
     influencers: InfluencerStore
     recipe_repo_root: Path = RECIPES_REPO_ROOT
+
+    @property
+    def watch_reach(self) -> DatasetReach:
+        """Whether a watch's owner still reaches its dataset, over the stores held here: a
+        command-line load matches watches as the Conduit's own loads do (the L2.10 gate's finding,
+        `test_run_resources.py`, which first stood this path's fail-closed gap in the open)."""
+        return owner_reaches_dataset_in(self.datasets_store, self.investigations)
 
     def run_deps(self) -> RecipeRunDeps:
         """The dependencies of `run_recipe_as`, over the objects held here."""
@@ -146,6 +157,7 @@ class RunResources:
             target_models=self.target_models,
             staging_storage=self.staging_storage,
             list_store=self.list_store,
+            watch_reach=self.watch_reach,
         )
 
     async def close(self) -> None:
@@ -165,6 +177,7 @@ class RunResources:
         await self.recipe_runs.close()
         await self.extraction_candidates.close()
         await self.datasets_store.close()
+        await self.investigations.close()
         await self.target_models.close()
         await self.list_store.close()
         await self.principal_resolver.aclose()
@@ -203,6 +216,7 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     extraction_candidates = await ExtractionCandidateStore.connect(config.postgres.dsn)
     # ADR-099: the datasets of each unit and of each case.
     datasets_store = await PostgresDatasetStore.connect(config.postgres.dsn)
+    investigations = await InvestigationStore.connect(config.postgres.dsn)
     # ADR-140 Amendment 12: the datasets' domain models, whose lists a staged pipeline's Lookups
     # read, and the store their rows and the staged Parquet are kept in.
     from ontology.loader import load_default_ontology
@@ -268,6 +282,7 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
         recipe_runs=recipe_runs,
         extraction_candidates=extraction_candidates,
         datasets_store=datasets_store,
+        investigations=investigations,
         target_models=target_models,
         staging_storage=staging_storage,
         list_store=list_store,

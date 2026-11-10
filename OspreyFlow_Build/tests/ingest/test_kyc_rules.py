@@ -450,7 +450,7 @@ async def test_the_gate_the_routes_build_carries_what_the_kyc_and_pattern_rules_
     assert (gate.screening, gate.compute, gate.expiries, gate.patterns) == (screening, compute, expiries, patterns)
 
 
-from services.api.alert_queue import dispose, explain  # noqa: E402
+from services.api.alert_queue import approve_close, dispose, explain  # noqa: E402
 
 
 async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
@@ -459,7 +459,9 @@ async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_fal
     """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
     positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
     asserted, the alert still opens (its cited link follows the new revision), and due diligence
-    says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides)."""
+    says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides).
+    Red with `approve_close` not calling `_close`: the match stayed inferred; and with `_close`
+    confirming a false positive too: Nair's match was asserted."""
     case = f"case-{new_id()}"
     rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
@@ -470,16 +472,28 @@ async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_fal
         petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
         nair = next(a for a in alerts if "Nair" in (a.words or ""))
 
-        closed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
-                               disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        # ADR-133 stage (d): a screening alert is high, so its close is proposed and a second person
+        # approves it; the approval is the close that confirms the match (the orchestrator's L2.10
+        # review, item 7: the test predated the maker-checker and closed it in one step).
+        proposed = await dispose(stores["alerts"], graph, gate.analytics, case, petrov.id, OFFICER,
+                                 disposition="true_positive", reason="Matches the list entry")  # fmt: skip
+        assert proposed.status == "closing"
+        colleague = OFFICER.model_copy(update={"id": "kyc-colleague"})
+        closed = await approve_close(stores["alerts"], graph, gate.analytics, case, petrov.id, colleague)
+        assert closed.status == "closed"
         why = await explain(stores["alerts"], graph, gate.analytics, case, closed.id, OFFICER)
         matches = [e for e in why.edges if e.type == "SAME_AS"]
         assert len(matches) == 1, "the closed alert still opens, citing its confirmed match"
         assert matches[0].provenance.state is ProvenanceState.ASSERTED
-        assert matches[0].provenance.confirmed_by == OFFICER.id
+        assert matches[0].provenance.confirmed_by == colleague.id, "confirmed by whoever closed it"
 
+        # The false positive is closed the same way, proposed and approved, so its match is judged
+        # after a close has really happened (the lane-reviewer's round on the fix: proposed alone,
+        # nothing closed, and the assertion below could not fail).
         await dispose(stores["alerts"], graph, gate.analytics, case, nair.id, OFFICER,
                       disposition="false_positive", reason="A different person")  # fmt: skip
+        not_a_match = await approve_close(stores["alerts"], graph, gate.analytics, case, nair.id, colleague)
+        assert (not_a_match.status, not_a_match.disposition) == ("closed", "false_positive")
         nair_match = [e for e in await graph.edges_among(nair.referent_node_ids, OFFICER) if e.type == "SAME_AS"]
         assert [e.provenance.state for e in nair_match] == [ProvenanceState.INFERRED]
 

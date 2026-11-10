@@ -47,8 +47,10 @@ attempt flips it back, so this reflects the most recent reach, not a one-way tri
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from services.resolve.trigger import service_principal
 from valkey.asyncio import Valkey
@@ -66,6 +68,7 @@ from .change_stream import ChangeStreamEntry
 from .hotlists import HotlistStore
 from .monitors import MonitorStore
 from .pattern_store import PatternNotFoundError, PatternStore
+from .watch_reach import DatasetReach
 
 #: Bounds `services/resolve/trigger.py`'s own `LOCK_TTL_SECONDS`/`PAGE_SIZE` precedent —
 #: conservative and disclosed as a guess, not a measurement, for the identical reason that
@@ -141,6 +144,30 @@ def watched_values(properties: Mapping[str, object]) -> set[str]:
     return found
 
 
+_log = logging.getLogger(__name__)
+
+
+
+async def _within_its_dataset(
+    owner: Principal, dataset_id: str, reaches_dataset: DatasetReach | None, watch: str
+) -> Principal | None:
+    """The owner narrowed to a watch's dataset, or `None` (the watch is not matched) where the owner
+    no longer reaches it, where no check was given (fail closed) or where the check failed. Each
+    is logged: a watch that stops matching never does so silently (L2.10's review, item 4)."""
+    if reaches_dataset is None:
+        _log.warning("watch %s not matched: no dataset reach check was given", watch)
+        return None
+    try:
+        reaches = await reaches_dataset(owner, dataset_id)
+    except Exception:  # noqa: BLE001 - one watch's check never stops the others; it fails closed
+        _log.warning("watch %s not matched: its owner's reach was not read", watch, exc_info=True)
+        return None
+    if not reaches:
+        _log.info("watch %s not matched: its owner no longer reaches its dataset", watch)
+        return None
+    return owner.model_copy(update={"datasets": [dataset_id]})
+
+
 async def evaluate_hotlists_for_entry(
     entry: ChangeStreamEntry,
     *,
@@ -152,6 +179,7 @@ async def evaluate_hotlists_for_entry(
     valkey: Valkey,
     principal_for_owner: Callable[[str], Awaitable[Principal | None]],
     policy: DisclosurePolicy,
+    reaches_dataset: DatasetReach | None = None,
 ) -> list[Alert]:
     """One overlap-guarded evaluation per active hotlist. `principal_for_owner` is supplied by the
     caller, never resolved here — `06_DECISIONS.md` ADR-036's own "resolved fresh, never cached"
@@ -200,9 +228,14 @@ async def evaluate_hotlists_for_entry(
         await hotlist_store.set_status(hotlist.id, "active")
 
         # ADR-099 Amendment 3: a hotlist made in a case watches that case's dataset, and its owner
-        # is shown what it finds as that dataset's reader.
+        # is shown what it finds as that dataset's reader, only while they still reach it.
         if hotlist.dataset_id is not None:
-            recipient = recipient.model_copy(update={"datasets": [hotlist.dataset_id]})
+            narrowed = await _within_its_dataset(
+                recipient, hotlist.dataset_id, reaches_dataset, f"hotlist:{hotlist.id}"
+            )
+            if narrowed is None:
+                continue
+            recipient = narrowed
 
         async def _run(hotlist: Hotlist = hotlist, recipient: Principal = recipient) -> list[Alert]:
             found: list[Alert] = []
@@ -246,8 +279,12 @@ async def evaluate_monitors_for_entry(
     audit: AuditWriter,
     valkey: Valkey,
     principal_for_owner: Callable[[str], Awaitable[Principal | None]],
+    reaches_dataset: DatasetReach | None = None,
 ) -> list[Alert]:
-    """One overlap-guarded evaluation per active monitor. Async since `06_DECISIONS.md` ADR-043
+    """One overlap-guarded evaluation per active monitor. A watch with a dataset is matched only
+    while its owner still reaches that dataset (`reaches_dataset`: a level on a case reading it,
+    asked of the owner's own principal); without the check, such a watch is not matched at all
+    (fail closed, rule 3). Async since `06_DECISIONS.md` ADR-043
     (Phase 8 Stage 1) — see `evaluate_hotlists_for_entry`'s own docstring above for the full
     reasoning, identical here. `policy` is not a parameter here — a
     monitor's own match is always principal-filtered by construction (this module's own docstring
@@ -267,52 +304,96 @@ async def evaluate_monitors_for_entry(
         if recipient is None:
             await monitor_store.set_status(monitor.id, "stopped")
             continue
-        # ADR-099 Amendment 3: the pattern is read, and matched, within the monitor's dataset.
+        # ADR-099 Amendment 3: the pattern is read, and matched, within the monitor's dataset, and
+        # only while its owner still reaches it (L2.10 review item 4): narrowing the owner to the
+        # dataset must never give back one they have lost.
         if monitor.dataset_id is not None:
-            recipient = recipient.model_copy(update={"datasets": [monitor.dataset_id]})
+            narrowed = await _within_its_dataset(
+                recipient, monitor.dataset_id, reaches_dataset, f"monitor:{monitor.id}"
+            )
+            if narrowed is None:
+                continue
+            recipient = narrowed
 
         async def _run(monitor: Monitor = monitor, recipient: Principal = recipient) -> list[Alert]:
-            try:
-                saved = await pattern_store.get_authorized(monitor.pattern_id, recipient)
-            except PatternNotFoundError:
-                # The pattern was deleted, or its owner changed — `PatternStore` has no delete
-                # today, so in practice this is "the owning principal this monitor's own row
-                # names no longer owns the pattern it was created against," ADR-036's own
-                # "the monitor stops" case, extended from principal validity to pattern validity.
-                await monitor_store.set_status(monitor.id, "stopped")
-                return []
-            await monitor_store.set_status(monitor.id, "active")
-            subgraph = await graph.match(saved.definition, recipient)
-            if not subgraph.nodes and not subgraph.edges:
-                return []
-            signature = _match_signature(subgraph)
-            sig_key = f"{_MONITOR_LAST_SIGNATURE_PREFIX}{monitor.id}"
-            last = await valkey.get(sig_key)
-            last_str = last.decode() if isinstance(last, bytes) else last
-            if last_str == signature:
-                return []
-            await valkey.set(sig_key, signature)
-            triggering_ids = [n.id for n in subgraph.nodes]
-            alert = await record_match(
-                graph=graph,
-                alert_store=alert_store,
-                audit=audit,
-                recipient=recipient,
-                rule_id=f"monitor:{monitor.id}",
-                matched_identifier=saved.name,
-                triggering_node_ids=triggering_ids,
-                policy="strict",  # irrelevant here — see this function's own docstring
+            return await match_monitor(
+                monitor, recipient, graph=graph, monitor_store=monitor_store,
+                pattern_store=pattern_store, alert_store=alert_store, audit=audit, valkey=valkey,
                 investigation_id=entry.investigation_id,
-                dataset_id=monitor.dataset_id,
-                # ADR-133 stage (a): a monitor's alert goes to its owner's team in the one queue.
-                team=recipient.org_unit,
-            )
-            return [alert] if alert is not None else []
+            )  # fmt: skip
 
         result = await _with_overlap_guard(f"{_MONITOR_LOCK_PREFIX}{monitor.id}", valkey, _run)
         all_alerts.extend(result.alert_list())
 
     return all_alerts
+
+
+async def match_monitor(
+    monitor: Monitor,
+    recipient: Principal,
+    *,
+    graph: GraphPort,
+    monitor_store: MonitorStore,
+    pattern_store: PatternStore,
+    alert_store: AlertStore,
+    audit: AuditWriter,
+    valkey: Valkey,
+    investigation_id: str | None,
+) -> list[Alert]:
+    """One watched pattern matched as its owner (`recipient`, resolved afresh and confined to the
+    monitor's dataset by the caller), raising an alert for a match unlike the last it raised: what
+    every load's change-stream entry runs, and what its own schedule runs (ADR-146 decision 4,
+    G16; `monitor_schedule.py`)."""
+    try:
+        saved = await pattern_store.get_authorized(monitor.pattern_id, recipient)
+    except PatternNotFoundError:
+        # The pattern was deleted, or its owner changed — `PatternStore` has no delete
+        # today, so in practice this is "the owning principal this monitor's own row
+        # names no longer owns the pattern it was created against," ADR-036's own
+        # "the monitor stops" case, extended from principal validity to pattern validity.
+        await monitor_store.set_status(monitor.id, "stopped")
+        return []
+    await monitor_store.set_status(monitor.id, "active")
+    subgraph = await graph.match(saved.definition, recipient)
+    if not subgraph.nodes and not subgraph.edges:
+        return []
+    signature = _match_signature(subgraph)
+    sig_key = f"{_MONITOR_LAST_SIGNATURE_PREFIX}{monitor.id}"
+    last = await valkey.get(sig_key)
+    last_str = last.decode() if isinstance(last, bytes) else last
+    if last_str == signature:
+        return []
+    await valkey.set(sig_key, signature)
+    triggering_ids = [n.id for n in subgraph.nodes]
+    alert = await record_match(
+        graph=graph,
+        alert_store=alert_store,
+        audit=audit,
+        recipient=recipient,
+        rule_id=f"monitor:{monitor.id}",
+        matched_identifier=saved.name,
+        triggering_node_ids=triggering_ids,
+        policy="strict",  # irrelevant here — see this function's own docstring
+        investigation_id=investigation_id,
+        dataset_id=monitor.dataset_id,
+        # ADR-133 stage (a): a monitor's alert goes to its owner's team in the one queue.
+        team=recipient.org_unit,
+    )
+    return [alert] if alert is not None else []
+
+
+async def match_monitor_guarded(
+    monitor: Monitor, recipient: Principal, **kwargs: Any
+) -> list[Alert]:
+    """`match_monitor` under the monitor's own overlap guard, as each load's evaluation takes it, so
+    a scheduled run and a load's never judge one watch at once."""
+    valkey: Valkey = kwargs["valkey"]
+
+    async def _run() -> list[Alert]:
+        return await match_monitor(monitor, recipient, **kwargs)
+
+    result = await _with_overlap_guard(f"{_MONITOR_LOCK_PREFIX}{monitor.id}", valkey, _run)
+    return result.alert_list()
 
 
 def _match_signature(subgraph: Subgraph) -> str:
@@ -324,8 +405,11 @@ def _match_signature(subgraph: Subgraph) -> str:
 
 __all__ = [
     "LOCK_TTL_SECONDS",
+    "DatasetReach",
     "MAX_TOUCHED_NODES_PER_EVALUATION",
     "EvaluationResult",
     "evaluate_hotlists_for_entry",
     "evaluate_monitors_for_entry",
+    "match_monitor",
+    "match_monitor_guarded",
 ]

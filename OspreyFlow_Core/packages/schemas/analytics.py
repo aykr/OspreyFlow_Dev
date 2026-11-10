@@ -548,11 +548,13 @@ ALL_MODELS = (*ALL_MODELS, TrendRequest, TrendPoint, CountedHandling, TrendResul
 
 # --- Alert trends (`06_DECISIONS.md` ADR-134 decision 3) ------------------------------------------
 
-AlertFactKind = Literal["typology", "hotlist", "monitor"]
+AlertFactKind = Literal["typology", "hotlist", "monitor", "analyst"]
 #: Who may count an alert, as the one queue decides it (`services/api/alerts.py` `queue_scope`): a
 #: typology alert is its case's; a hotlist or monitor alert is its owner's, and its owner's team's
 #: when it is shared with them.
-AlertFactAudience = Literal["case", "team", "owner"]
+#: `routed` (ADR-146 decision 8): a rule's alert routed to a named team, counted in its case for
+#: the team's members alone (`team` holds the team's role id).
+AlertFactAudience = Literal["case", "team", "owner", "routed"]
 #: What an alert trend may split by or filter on: a closed list, never a property name.
 AlertTrendField = Literal["rule", "typology", "severity", "outcome"]
 ALERT_TREND_FIELDS: tuple[AlertTrendField, ...] = ("rule", "typology", "severity", "outcome")

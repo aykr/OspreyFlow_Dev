@@ -8,6 +8,9 @@ import type {
   AlertAtAddress,
   AlertDispositionInput,
   AlertExplanation,
+  AlertSources,
+  AlertSuppressInput,
+  AlertTeam,
   CompiledSentence,
   HeldRow,
   ListSchedule,
@@ -16,6 +19,7 @@ import type {
   RulePreview,
   RuleSentence,
   QueuedAlert,
+  RaiseAlertInput,
   RuleAuditPage,
   RuleScheduleView,
   RuleVersion,
@@ -30,7 +34,9 @@ import type {
 import type { WorkingSetDelta } from "../workingset/models";
 
 export type QueueFilter = "active" | "closed" | "all";
-export type KindFilter = "all" | "typology" | "hotlist" | "monitor";
+export type KindFilter = "all" | "typology" | "hotlist" | "monitor" | "analyst";
+/** ADR-146 decision 2: the queue's filters; *All* holds the suppressed alerts too (Amendment 1). */
+export type QueueShow = "mine" | "team" | "unassigned" | "all";
 export type SeverityFilter = "all" | "high" | "medium" | "low";
 
 /** ADR-133 stage (a): what the queue is asked for. The server filters; the Glass never hides a row
@@ -39,12 +45,18 @@ export interface QueueQuery {
   status: QueueFilter;
   kind?: KindFilter;
   severity?: SeverityFilter;
+  show?: QueueShow;
+  /** *Older than N days*: only those raised more than this many days ago. */
+  olderThanDays?: number | null;
 }
 
 export function queueSearch(query: QueueQuery): string {
   const params = new URLSearchParams({ status: query.status });
   if (query.kind && query.kind !== "all") params.append("kind", query.kind);
   if (query.severity && query.severity !== "all") params.append("severity", query.severity);
+  // *All* is the server's default, suppressed alerts included (ADR-146 Amendment 1).
+  if (query.show && query.show !== "all") params.append("show", query.show);
+  if (query.olderThanDays) params.append("older_than_days", String(query.olderThanDays));
   return params.toString();
 }
 
@@ -94,8 +106,13 @@ async function failure(response: Response, what: string): Promise<Error> {
   if (refusal.error === "rule_change_refused" && typeof refusal.message === "string") {
     return new Error(refusal.message);
   }
-  if (body.error === "assignment_refused" && typeof body.detail === "string") {
+  if ((body.error === "assignment_refused" || body.error === "suppress_refused") && typeof body.detail === "string") {
     return new Error(body.detail);
+  }
+  // ADR-146 decision 7: *Raise an alert…* refused in words, naming only what was asked for.
+  const raised = body.detail as { code?: unknown; message?: unknown } | undefined;
+  if (raised && typeof raised === "object" && typeof raised.code === "string" && typeof raised.message === "string") {
+    return new Error(raised.message);
   }
   if (body.error === "release_refused" && typeof body.detail === "string") {
     return new Error(`${body.detail[0]?.toUpperCase() ?? ""}${body.detail.slice(1)}.`);
@@ -260,6 +277,24 @@ export const ruleRuns = (a: AlertsApi, ruleId: string) =>
 
 export const approveClose = (a: AlertsApi, alertId: string) =>
   call<Alert>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue/${encodeURIComponent(alertId)}/approve-close`), a.bearerToken, "Approving the close", { method: "POST" });
+
+/** ADR-146 Amendment 1: *Suppress until…*, the team lead's. */
+export const suppressAlert = (a: AlertsApi, alertId: string, body: AlertSuppressInput) =>
+  call<Alert>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue/${encodeURIComponent(alertId)}/suppress`), a.bearerToken, "Suppressing the alert", {
+    method: "POST",
+    body,
+  });
+
+/** ADR-146 decision 8: the teams a rule's alerts may go to; to a team's lead, its members here. */
+export const listAlertTeams = (a: AlertsApi) => call<AlertTeam[]>(caseUrl(a.apiBaseUrl, a.investigationId, "alert-teams"), a.bearerToken, "Listing the teams");
+
+/** ADR-146 decision 5: *What raises alerts*. */
+export const listAlertSources = (a: AlertsApi) =>
+  call<AlertSources>(caseUrl(a.apiBaseUrl, a.investigationId, "alert-sources"), a.bearerToken, "Listing what raises alerts");
+
+/** ADR-146 decision 7: *Raise an alert…* to the case or its dataset. */
+export const raiseAlert = (a: AlertsApi, body: RaiseAlertInput) =>
+  call<Alert>(caseUrl(a.apiBaseUrl, a.investigationId, "raised-alerts"), a.bearerToken, "Raising the alert", { method: "POST", body });
 
 export const sendBackClose = (a: AlertsApi, alertId: string, reason: string) =>
   call<Alert>(caseUrl(a.apiBaseUrl, a.investigationId, `alert-queue/${encodeURIComponent(alertId)}/send-back`), a.bearerToken, "Sending the close back", { method: "POST", body: { reason } });
