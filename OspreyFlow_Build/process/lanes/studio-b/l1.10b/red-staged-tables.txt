@@ -1,0 +1,42 @@
+F..                                                                      [100%]
+=================================== FAILURES ===================================
+________ test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table _________
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3714/test_a_staged_run_refused_at_t0')
+store = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3714/test_a_staged_run_refused_at_t0/store')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x131e2ef60>
+
+    async def test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table(
+        tmp_path: Path, store: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
+        draft, repo = await _published(tmp_path, planted="SECRET")
+        graph = ValidatingGraph(ONTOLOGY)
+        with pytest.raises(AboveTheDeploymentCeiling) as refused:
+            await run_published_pipeline(
+                draft, LOADER, graph=graph, ontology=ONTOLOGY, scheme=SCHEME,  # type: ignore[arg-type]
+                load_id="run-r", investigation_scope="case-1", repo_root=repo,
+                recogniser_for=lambda *_: None,  # type: ignore[arg-type,return-value]
+                target_models=_Models([ESTABLISHMENTS.id]),  # type: ignore[arg-type]
+                staging_storage=STORAGE,
+            )  # fmt: skip
+        # The row's refusal, after the step tables were written, not the fixed check before them.
+        assert refused.value.kind == "load"
+        assert "SECRET" not in " ".join(refused.value.problems)
+>       assert _step_tables(store, "run-r") == [], "a refused run left its step tables behind"
+E       AssertionError: a refused run left its step tables behind
+E       assert ['titled.parq...wner.parquet'] == []
+E         
+E         Left contains 3 more items, first extra item: 'titled.parquet'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py:118: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ayankar/dev/osprey-wt/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
+1 failed, 2 passed, 1 warning in 2.00s

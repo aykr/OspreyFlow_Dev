@@ -34,6 +34,8 @@ from schemas.ingest import (
 )
 from schemas.staging import FuzzyMatchStep, SqlStep, StagingStep
 
+from . import staging as _staging
+from .ceiling import AboveTheDeploymentCeiling
 from .engine import DryRunResult, RowKeys, dry_run_recipe, run_recipe
 from .recipe_rules import marked_columns
 from .staging import ObjectStorageConfig
@@ -241,6 +243,15 @@ async def prepare_staged_load(
     )
 
 
+def remove_step_tables(prepared: PreparedStaging, storage: ObjectStorageConfig) -> None:
+    """Remove the step tables a staged load wrote (ADR-148 Amendment 2 decision 2, L1.10b): a load
+    the deployment's ceiling refuses is judged after them, since its rows are the last step's table,
+    and a refused load leaves nothing behind. Only this load's own tables, by the paths it wrote."""
+    fs = _staging.filesystem(storage)
+    for path in prepared.paths.values():
+        fs.delete_file(path)
+
+
 def finish_staged_report(report: LoadReport, prepared: PreparedStaging) -> None:
     """The load report of a staged run: the steps' rejections before Map's, each with its refs;
     the sources' rows as rows read; and each step's counts (Amendment 12)."""
@@ -284,24 +295,28 @@ async def run_staged_recipe(
         storage=storage,
         may_read=may_read,
     )
-    report, events = await run_recipe(
-        recipe,
-        prepared.rows,
-        graph=graph,
-        ontology=ontology,
-        tx=tx,
-        principal=principal,
-        load_id=load_id,
-        investigation_scope=investigation_scope,
-        source=prepared.table.name,
-        storage=storage,
-        scheme=scheme,
-        row_keys=row_keys,
-        written=written,
-        row_refs=prepared.refs,
-        stage_raw=prepared.stage_raw,
-        **engine,
-    )
+    try:
+        report, events = await run_recipe(
+            recipe,
+            prepared.rows,
+            graph=graph,
+            ontology=ontology,
+            tx=tx,
+            principal=principal,
+            load_id=load_id,
+            investigation_scope=investigation_scope,
+            source=prepared.table.name,
+            storage=storage,
+            scheme=scheme,
+            row_keys=row_keys,
+            written=written,
+            row_refs=prepared.refs,
+            stage_raw=prepared.stage_raw,
+            **engine,
+        )
+    except AboveTheDeploymentCeiling:
+        await asyncio.to_thread(remove_step_tables, prepared, storage)
+        raise
     finish_staged_report(report, prepared)
     return StagedLoad(
         report,
