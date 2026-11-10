@@ -17,10 +17,13 @@ copy: it reorders and drops the comments the committed files carry. So the commi
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from dulwich.refs import DiskRefsContainer
 from services.api import studio_publish
 from services.api.studio_publish import (
     GitCommitError,
@@ -34,9 +37,21 @@ from schemas.ingest import Recipe
 
 DATA = b"# a comment a re-serialisation would drop\nid: r-one\nversion: 1\n"
 
+GIT = shutil.which("git")
+#: Skipped only off CI: in CI a missing git fails the test.
+needs_git = pytest.mark.skipif(
+    GIT is None and not os.environ.get("CI"), reason="the host's git reads the history back"
+)
+
 
 def _git(repo: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    """The host's git, with none of the developer's own config (a global hook or signer would
+    otherwise run inside the test)."""
+    assert GIT is not None
+    done = subprocess.run(
+        [GIT, *args], cwd=repo, capture_output=True, text=True, check=True,
+        env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"},
+    )  # fmt: skip
     return done.stdout
 
 
@@ -46,6 +61,7 @@ async def test_the_file_in_the_repository_is_the_bytes_given(tmp_path: Path) -> 
     assert (tmp_path / path).read_bytes() == DATA
 
 
+@needs_git
 async def test_the_file_is_committed_at_the_path_the_registry_row_will_name(
     tmp_path: Path,
 ) -> None:
@@ -55,12 +71,14 @@ async def test_the_file_is_committed_at_the_path_the_registry_row_will_name(
     assert _git(tmp_path, "status", "--porcelain").strip() == ""
 
 
+@needs_git
 async def test_committing_the_same_bytes_again_is_not_an_error(tmp_path: Path) -> None:
     await commit_recipe_file("r-one", DATA, version=1, repo_root=tmp_path)
     await commit_recipe_file("r-one", DATA, version=1, repo_root=tmp_path)
     assert len(_git(tmp_path, "log", "--format=%s").split("\n")) == 2  # one line and the end
 
 
+@needs_git
 async def test_changed_bytes_are_a_second_commit(tmp_path: Path) -> None:
     await commit_recipe_file("r-one", DATA, version=1, repo_root=tmp_path)
     await commit_recipe_file("r-one", DATA + b"label: x\n", version=2, repo_root=tmp_path)
@@ -70,19 +88,23 @@ async def test_changed_bytes_are_a_second_commit(tmp_path: Path) -> None:
     ]
 
 
+@needs_git
 async def test_a_failed_commit_is_an_error_not_a_quiet_success(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real = studio_publish._run_git
+    """Dulwich's own refusal (since the swap from the git binary, the owner's ruling of
+    9 November 2026): the compare-and-swap on the branch fails because it moved under the commit.
+    The publish raises, and the branch is left where it was."""
+    await commit_recipe_file("r-one", DATA, version=1, repo_root=tmp_path)
+    before = _git(tmp_path, "rev-parse", "HEAD")
 
-    async def failing(*args: str, cwd: Path) -> tuple[int, str]:
-        if args[0] == "commit":
-            return 1, "fatal: something else"
-        return await real(*args, cwd=cwd)
+    def moved(self: DiskRefsContainer, *args: object, **kwargs: object) -> bool:
+        return False
 
-    monkeypatch.setattr(studio_publish, "_run_git", failing)
+    monkeypatch.setattr(DiskRefsContainer, "set_if_equals", moved)
     with pytest.raises(GitCommitError):
-        await commit_recipe_file("r-one", DATA, version=1, repo_root=tmp_path)
+        await commit_recipe_file("r-one", DATA + b"label: x\n", version=2, repo_root=tmp_path)
+    assert _git(tmp_path, "rev-parse", "HEAD") == before
 
 
 async def test_write_and_commit_recipe_goes_through_the_same_commit(

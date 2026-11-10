@@ -953,13 +953,12 @@ and AGPL still never pass. A runtime in an image is declared by a `LABEL
 org.ospreyflow.runtime.<name>.licence` in its Dockerfile, which `make licence-check` reads
 (`tools/licence_check.py`'s image leg, `find_runtime_offenders`); a Java stage with no such label
 fails too, as does a distribution's Java package; the labels are read however they are written
-(`tests/licence_check/test_runtime_licences.py`, each refusal shown red). **Not yet passed:**
-`git` (GPL-2.0-only), already in the Conduit's image because the Conduit runs it to publish
-recipes (`09_INGEST_STUDIO.md` §6). **The owner's ruling of 9 November 2026:** the `git` command is
-replaced by dulwich, used under its Apache-2.0 licence (studio-b's carry in L1.7a), and `git` then leaves the
-image, so the gate again refuses every GPL package but the recorded Classpath exception. Until that carry
-lands it is declared by the same label, and `make licence-check` names it on every run with that ruling
-and carry, never passing it silently; an undeclared `git` fails.
+(`tests/licence_check/test_runtime_licences.py`, each refusal shown red). **`git` (GPL-2.0-only)
+has left the Conduit's image.** The owner's ruling of 9 November 2026 replaced the command the
+Conduit ran to publish recipes (`09_INGEST_STUDIO.md` §6) with dulwich, under its Apache-2.0 licence
+(ADR-140 Amendment 17, studio-b's L1.7a). So the gate again refuses every GPL package but the recorded
+Classpath exception, and nothing awaits the owner (`AWAITING_OWNER` is empty). A `git` put back into an
+image fails, declared or not.
 
 **The runtime's bundled native libraries, for the release's NOTICE:** Temurin's `java.desktop`
 module, which the jlinked runtime carries (planetiler draws with it), bundles native libraries under
@@ -1034,6 +1033,15 @@ lock files beside the modules. Nothing of Terraform's BSL-licensed core is used.
 **ADR-110 addition (13 October 2026):** `croniter` 6.2.4 (MIT; its one dependency,
 `python-dateutil`, is already in the set) reads a scheduled recipe's cron expression; time zones
 come from the standard library's `zoneinfo`.
+
+**The owner's ruling of 9 November 2026 (MORNING item 89; ADR-140 Amendment 17) addition:**
+`dulwich` 1.2.21, dual-licensed `Apache-2.0 OR GPL-2.0-or-later` and taken under Apache-2.0 (its one
+dependency, `urllib3`, MIT), commits a published recipe to the repository on the recipe volume
+(`09_INGEST_STUDIO.md` §6) as a library inside the Conduit's process. It is not pure Python: its wheels
+carry optional compiled extensions (cp312 among them), under the same licence. The `git` binary
+(GPL-2.0-only), which the Conduit's image carried for that commit alone, leaves the image.
+`git` was admitted by the image gate's AWAITING_OWNER entry, never by `make licence-check`'s package lists,
+which hold Python and Node packages; that entry goes with the binary.
 
 **ADR-114 decision 13 addition (13 October 2026, Amendment 8):** cosign 2.4.1 (Apache-2.0, Sigstore)
 signs the released images keyless in the user repository's `release.yml` and verifies them before

@@ -1,0 +1,736 @@
+Running on ospreyflow-test (stack d, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b.meta/runs/20261109T223134Z/log: sh process/lanes/studio-b/l1.7a/live_set.sh
+................sss........................ssss...........F.ssssssssssss [ 62%]
+sssssssssssssss..F....FFFFF................                              [100%]
+=================================== FAILURES ===================================
+____________________ test_phase8_exit_criterion_end_to_end _____________________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x7c1f7a0ebe10>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x7c1f7a0eb910>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-214/test_phase8_exit_criterion_end0')
+git_repo = PosixPath('/tmp/pytest-of-root/pytest-214/test_phase8_exit_criterion_end0/repo')
+
+    def test_phase8_exit_criterion_end_to_end(
+        api_env: None,
+        keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+        tmp_path: Path,
+        git_repo: Path,
+    ) -> None:
+        import asyncio
+    
+        private_key, _ = keypair
+        import time as _time
+    
+        # A one-hour expiry, not the default 300s (`tests/conftest.py::default_claims`) — this
+        # walkthrough's own real ArcadeDB/Postgres round trips run measurably longer than that,
+        # confirmed directly (a real run's own token expired mid-test at the B14 jump call before
+        # this fix, `401 signature has expired`, not assumed).
+        # An analyst who loads too: since ADR-112 a `loader` alone holds no `create_case`, and B14's
+        # address asks for the queue's read and Rules and Monitoring (ADR-146 Amendment 2).
+        headers = _bearer(private_key, roles=["analyst", "loader"], exp=int(_time.time()) + 3600)
+    
+        from services.api.app import app
+    
+        # === Scenario B ===============================================================================
+    
+        # B1-B3
+        cdr_ids = asyncio.run(_ingest_cdr_fixture(tmp_path))
+    
+        async def _build_b_graph() -> dict[str, object]:
+            client, graph = await _graph_client()
+            try:
+                # B4-B7: two cohorts, one on the shared CDR endpoint, one on a shared handle.
+                cohort_1_person_ids = await _seed_cohort(
+                    graph, shared_endpoint_id=cdr_ids["b_party_endpoint_id"], prefix="c1"
+                )
+                cohort_2_person_ids, handle_id = await _seed_handle_cohort(graph, prefix="c2")
+    
+                # B8/B11: Endpoint carries no resolution config (this module's own docstring, point
+                # 2) — the handle-to-endpoint link is a deterministic, asserted SAME_AS at score 1.0
+                # (ADR-024's own pattern), exactly B11's own shape — the corrected B8 disposition
+                # (`spec/08_ACCEPTANCE_SCENARIOS.md`) says this is what the edge actually is, not a
+                # stand-in for something else.
+    
+                # B9/B10: the real Person pair — see this file's own helper docstring for why neither
+                # cohort above can serve this, and why this pair is provably the same generator's own
+                # output.
+                b9_a_id, b9_b_id, b9_cluster_id, b9_score = await _seed_and_resolve_b9_b10_person_pair(
+                    graph, scheme=load_uk_le_scheme()
+                )
+    
+                # B15: the seizure record's device/SIM legs.
+                seizure_ids = await _write_seizure_device_legs(graph)
+    
+                return {
+                    "cohort_1_person_ids": cohort_1_person_ids,
+                    "cohort_2_person_ids": cohort_2_person_ids,
+                    "handle_id": handle_id,
+                    "b9_a_id": b9_a_id,
+                    "b9_b_id": b9_b_id,
+                    "b9_cluster_id": b9_cluster_id,
+                    "b9_score": b9_score,
+                    **seizure_ids,
+                }
+            finally:
+                await client.aclose()
+    
+        b_graph = asyncio.run(_build_b_graph())
+    
+        with TestClient(app) as client:
+            investigation_b = client.post("/v1/investigations", headers=headers, json=new_case())
+            assert investigation_b.status_code == 201, investigation_b.text
+            inv_b_id = investigation_b.json()["id"]
+    
+            async def _fetch(node_id: str) -> dict:
+                _client, graph = await _graph_client()
+                try:
+                    node = await graph.get_node(node_id, PRINCIPAL)
+                    assert node is not None
+                    return node.model_dump(mode="json")
+                finally:
+                    await _client.aclose()
+    
+            # === B4: seed the four first-cohort Person entities, no edges between them.
+            cohort_1_nodes = [asyncio.run(_fetch(pid)) for pid in b_graph["cohort_1_person_ids"]]
+            seeded_b4 = client.post(
+                f"/v1/investigations/{inv_b_id}/seed",
+                headers=headers,
+                json={"nodes": cohort_1_nodes, "edges": []},
+            )
+            assert seeded_b4.status_code == 200, seeded_b4.text
+>           assert len(seeded_b4.json()["delta"]["nodes"]) == 4
+E           assert 0 == 4
+E            +  where 0 = len([])
+
+../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py:768: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [09/Nov/2026 22:37:33] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  splink.linker:linker.py:971 
+ -- WARNING --
+You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+Comparison: 'family_name':
+    m values not fully trained
+Comparison: 'family_name':
+    u values not fully trained
+Comparison: 'given_names':
+    m values not fully trained
+Comparison: 'given_names':
+    u values not fully trained
+Comparison: 'date_of_birth':
+    m values not fully trained
+Comparison: 'date_of_birth':
+    u values not fully trained
+The 'probability_two_random_records_match' setting has been set to the default value (0.0001). 
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+____ test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds _____
+
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x7c1f42d0a7e0>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-214/test_a_snapshot_tells_its_load0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c1f42cd5c40>
+
+    async def test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds(
+        runs: RecipeRunStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       alone = await _told(runs, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:269: in _told
+    return await _three_runs(
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:281: in _three_runs
+    await world.run(loader, ours, [A, B])
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:160: in run
+    report = await run_module.run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py:149: in execute
+    return await run_published_recipe(
+services/api/studio_publish.py:523: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:523: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-214/test_a_snapshot_tells_its_load0/alone/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+_ test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live _
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-214/test_a_returning_rows_revert_i0')
+runs = <services.api.recipe_runs.RecipeRunStore object at 0x7c1f42d86180>
+
+    async def test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live(
+        tmp_path: Path, runs: RecipeRunStore
+    ) -> None:
+        """ADR-110 Amendment 16, rule 3, live: another case's refresh of the same pair merges into the
+        link after B came back (the raw adapter stamps no dataset, so the two share it). The returning
+        load's revert is refused, nothing changes, and the words name no other case or load."""
+        async with (
+            arcadedb_adapter(ONTOLOGY, SCHEME) as graph,
+            duckdb_adapter([], SCHEME) as analytics,
+        ):
+            ours = Refresh(tmp_path / "ours", runs, graph, analytics)
+            theirs = Refresh(tmp_path / "theirs", runs, graph, analytics)
+>           await ours.snapshot([A, B, C])
+
+../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py:112: in snapshot
+    report = await run_published_recipe(
+services/api/studio_publish.py:523: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:523: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-214/test_a_returning_rows_revert_i0/ours/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+_ test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x7c1fc0bf2cc0>, cases=<services.api.investigations....igationStore object at 0x7c1fc0638ad0>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7c1fbbf836b0>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-214/test_a_studio_load_tells_and_s0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c1fc06a1970>
+
+    async def test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+>       alone = await _loader_alone_or_beside(stores, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:240: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:231: in _loader_alone_or_beside
+    owner, said = await world.run(loader, ours, [PAIR])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:169: in run
+    report = await executor.run(owner, self.draft, case, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:11716: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:156: in execute
+    return await run_published_recipe(
+services/api/studio_publish.py:523: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:523: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-214/test_a_studio_load_tells_and_s0/alone/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+_ test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x7c1f7a3649e0>, cases=<services.api.investigations....igationStore object at 0x7c1fc0112b10>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7c1f42dfd040>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-214/test_two_cases_loading_into_on0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c1fc06a1d30>
+
+    async def test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        world, opened = await _in_a_world(stores, tmp_path, monkeypatch, "shared")
+        first, second, third = _loader("first"), _loader("second"), _loader("third")
+        shared = await _dataset(stores, first)
+        one, two = await _case(stores, first, shared), await _case(stores, second, shared)
+        elsewhere = await _case(stores, third, await _dataset(stores, third))
+        async with opened as raw:
+            world.graph = await _conduits_graph(raw, stores)
+>           one_owner, _ = await world.run(first, one, [PAIR])
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:264: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:169: in run
+    report = await executor.run(owner, self.draft, case, None)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:11716: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:156: in execute
+    return await run_published_recipe(
+services/api/studio_publish.py:523: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:523: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-214/test_two_cases_loading_into_on0/shared/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+______ test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset ______
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x7c1fc07f9d00>, cases=<services.api.investigations....igationStore object at 0x7c1fc004fef0>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7c1fc016fcb0>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-214/test_one_tick_stamps_each_sche0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c1fc06a3f20>
+
+    async def test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset(
+        stores: SimpleNamespace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The scheduler itself (`ScheduleExecutor.tick` and `run_now`) over the real `check_case` and
+        `run`: `run` scopes nothing of its own, so each run's stamp is whatever its own `_owner` set
+        just before it (`_consider_slot`, `run_now`). Two pipelines due in one tick, in two cases on two
+        datasets, and a third run now in a third, each read their own link alone. Red if owners are
+        resolved for every recipe before any runs (`L1.2a_RED_RECORD.md`). A source refresh through
+        `case_for_dataset` is not driven here: this fixture's pipeline names no dataset, which a watch
+        refuses."""
+        from services.api.config import ValkeyConfig
+        from services.api.scheduler import ScheduleExecutor
+        from valkey.asyncio import Valkey
+    
+        owners = [
+            Principal(id=f"owner-{new_id()}", clearance="SECRET", org_unit="unit-1",
+                      roles=["source_approver"])
+            for _ in range(3)
+        ]  # fmt: skip
+        cases = [await _case(stores, o, await _dataset(stores, o)) for o in owners]
+        set_at, slot = (
+            datetime(2026, 6, 1, 12, tzinfo=UTC),
+            datetime(2026, 6, 2, 5, tzinfo=UTC),
+        )
+        published = [fresh_published_draft(tmp_path / f"pipeline-{n}") for n in range(3)]
+        repos = {draft.recipe_id: repo for repo, draft in published}
+        drafts = [
+            draft.model_copy(update={
+                "schedule_cron": "0 6 * * *", "schedule_owner": o.id, "schedule_set_at": set_at,
+                "schedule_case": case,
+            })
+            for (_, draft), o, case in zip(published, owners, cases, strict=True)
+        ]  # fmt: skip
+        for draft in drafts:
+            _write(Path(draft.source_location), [PAIR])
+    
+        async def execute(deps: Any, **kwargs: Any) -> Any:
+            recipe = kwargs["recipe"]
+            return await run_published_recipe(
+                recipe, kwargs["principal"], graph=deps.graph, ontology=ONTOLOGY, load_id=new_id(),
+                investigation_scope=kwargs["investigation_id"], repo_root=repos[recipe.recipe_id],
+                analytics=None, media=kwargs["media"], scheme=SCHEME, sink=kwargs["sink"],
+            )  # fmt: skip
+    
+        monkeypatch.setattr(run_module, "_execute_recipe_run", execute)
+        monkeypatch.setattr(run_module, "resolve_source_handling", lambda draft: SOURCE)
+        monkeypatch.setattr(
+            "services.api.scheduler.resolve_source_handling", lambda draft: SOURCE
+        )
+    
+        class Due:
+            async def scheduled(self) -> list[Any]:
+                return drafts[:2]
+    
+            async def set_paused(self, *_: Any, **__: Any) -> None:
+                return None
+    
+        async def resolve(owner_id: str) -> Principal:
+            return next(o for o in owners if o.id == owner_id)
+    
+        async def notify(*_: Any) -> None:
+            return None
+    
+        config = ValkeyConfig.from_env()
+        valkey = Valkey(host=config.host, port=config.port)
+        world = World(stores, None, published[0][0], drafts[0], monkeypatch)
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as raw:
+                world.graph = await _conduits_graph(raw, stores)
+                closures = world.executor()
+                scheduler = ScheduleExecutor(
+                    recipes=Due(), runs=stores.runs, valkey=valkey, scheme=SCHEME,  # type: ignore[arg-type]
+                    resolve_owner=resolve, check_case=closures.check_case, run=closures.run,
+                    notify=notify, watch_files=None, source_watches=None, case_for_dataset=None,
+                )  # fmt: skip
+                await scheduler.tick(slot + timedelta(seconds=20))
+>               await scheduler.run_now(drafts[2])
+
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:361: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/api/scheduler.py:495: in run_now
+    return await self.run(owner, recipe, case, None)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:11716: in run
+    return await run_recipe_as(
+services/api/recipe_run.py:173: in run_recipe_as
+    report = await _execute_recipe_run(
+../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py:323: in execute
+    return await run_published_recipe(
+services/api/studio_publish.py:523: in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_publish.py:523: in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/studio_profile.py:191: in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+location = '/tmp/pytest-of-root/pytest-214/test_one_tick_stamps_each_sche0/pipeline-2/cash.csv'
+dataset_id = None
+
+    def _confined(location: str, dataset_id: str | None) -> str:
+        """The source file, only if it is one of `dataset_id`'s files in the ingest folder
+        (`ingest_sources.ingest_root`) — the one place the picker, an upload and the folder watch put a
+        file, and the files that dataset's listing offers (`list_source_files`). Resolved first, so a
+        `..` walk or a link to a file outside the folder, or into another dataset's, is judged by where
+        it really leads. Refused before anything is opened or stat'd, in words that do not depend on
+        whether the path exists or name it, so the refusal cannot be used to learn which files are on
+        the server (the security review, 18 October 2026). Every read of a recipe's source passes
+        through here: Profile, Map, Verify, a step's sample, a run and a publish all read with
+        `_read_rows`, and Verify and *Run now* hash with `run_source.identify`. The dataset is the
+        recipe's own (the orchestrator's review of L1.4: a source node naming another dataset's
+        uploaded file was read into this case)."""
+        root = ingest_root()
+        resolved = Path(location).resolve()
+        if not is_inside(root, resolved):
+            raise SourceUnreadableError(
+                "That file is not in the ingest folder. "
+                "Choose it from the folder's files, or upload it."
+            )
+        if resolved.parent not in _dataset_folders(root, dataset_id):
+>           raise SourceUnreadableError(NOT_THIS_DATASETS)
+E           services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+
+services/api/studio_profile.py:111: SourceUnreadableError
+------------------------------ Captured log call -------------------------------
+ERROR    services.api.scheduler:scheduler.py:386 scheduled run of recipe private-cash-01m717hgn7jhgs5pp77gr67fm9 failed
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/scheduler.py", line 384, in _consider_slot
+    await self.run(owner, recipe, case, latest)
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py", line 11716, in run
+    return await run_recipe_as(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/recipe_run.py", line 173, in run_recipe_as
+    report = await _execute_recipe_run(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py", line 323, in execute
+    return await run_published_recipe(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py", line 523, in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py", line 523, in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_profile.py", line 191, in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_profile.py", line 111, in _confined
+    raise SourceUnreadableError(NOT_THIS_DATASETS)
+services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+ERROR    services.api.scheduler:scheduler.py:386 scheduled run of recipe private-cash-01m717hgnknwy3sgf3pwxf57ve failed
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/scheduler.py", line 384, in _consider_slot
+    await self.run(owner, recipe, case, latest)
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/app.py", line 11716, in run
+    return await run_recipe_as(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/recipe_run.py", line 173, in run_recipe_as
+    report = await _execute_recipe_run(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py", line 323, in execute
+    return await run_published_recipe(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py", line 523, in run_published_recipe
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_publish.py", line 523, in <lambda>
+    rows = await asyncio.to_thread(lambda: list(_read_recipe_rows(read_from)))
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_profile.py", line 191, in _read_rows
+    source = _confined(recipe.source_location, recipe.dataset_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/api/studio_profile.py", line 111, in _confined
+    raise SourceUnreadableError(NOT_THIS_DATASETS)
+services.api.studio_profile.SourceUnreadableError: That file is not one of this dataset's files in the ingest folder. Choose it from the dataset's files, or upload it.
+_ test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds _
+
+stores = namespace(runs=<services.api.recipe_runs.RecipeRunStore object at 0x7c1fc0639b50>, cases=<services.api.investigations....igationStore object at 0x7c1fc0253bf0>, datasets=<services.api.datasets.PostgresDatasetStore object at 0x7c1fc065dbb0>)
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-214/test_run_now_tells_and_shows_i0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c1fc055f7a0>
+routed = None
+
+    async def test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds(
+        stores: SimpleNamespace,  # noqa: F811
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        routed: None,
+    ) -> None:
+>       alone = await _told(stores, tmp_path, monkeypatch, beside=False)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:199: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:188: in _told
+    said = await _run_now(world, client, accounts, loader, ours)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py:127: in _run_now
+    response = await client.post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1194: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:96: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py:151: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:91: in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+.venv/lib/python3.12/site-packages/starlette/middleware/cors.py:149: in simple_response
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:678: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2809: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1328: in handle
+    await super().handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:284: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:166: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:152: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:511: in app
+    solved_result = await solve_dependencies(
+.venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py:640: in solve_dependencies
+    solved_result = await solve_dependencies(
+.venv/lib/python3.12/site-packages/fastapi/dependencies/utils.py:674: in solve_dependencies
+    solved = await call(**solved_result.values)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:2252: in dependency
+    return await with_derived_packs(case, datasets, models)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/api/app.py:2224: in with_derived_packs
+    derived = await packs_of_case(case.id, datasets, models)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+investigation_id = '01M717HY8FMG5YTCFT2TYND3DT'
+datasets = <services.api.datasets.PostgresDatasetStore object at 0x7c1fc065dbb0>
+models = <tests.services.api.test_studio_run_now_stamps_its_case_dataset_live._Nothing object at 0x7c1fc064a9f0>
+
+    async def packs_of_case(
+        investigation_id: str, datasets: _ChosenOf, models: TargetModelStore
+    ) -> list[str] | None:
+        """A case's packs, derived (ADR-126 Amendment 2): its chosen dataset's live model's (a
+        composite's own). `None` while that dataset has no model yet (one `scripts.seed_target_models`
+        has not reached, ADR-126 Amendment 3), when the case's stored packs still stand."""
+        chosen = await datasets.chosen_of_case(investigation_id)
+        if not chosen:
+            return None
+        live = await models.live(chosen[0].id)
+>       return sorted(live.packs) if live is not None else None
+                      ^^^^^^^^^^
+E       AttributeError: 'list' object has no attribute 'packs'
+
+services/api/target_models.py:79: AttributeError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase8_exit_criterion_end_to_end.py::test_phase8_exit_criterion_end_to_end
+FAILED ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py::test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds
+FAILED ../OspreyFlow_Build/tests/services/api/test_source_refresh_snapshot_live.py::test_a_returning_rows_revert_is_refused_once_another_case_wrote_its_link_live
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py::test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+7 failed, 74 passed, 34 skipped, 1 warning in 592.94s (0:09:52)

@@ -1,0 +1,7 @@
+# head bb7dd32, the code before the lane review's round-3 fixes; the new tests, red first (the probe test's two new probes pass here: the index read and the swap were already under the lock)
+PASSED tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours
+PASSED tests/services/api/test_recipe_repository.py::test_a_rival_making_the_repository_first_is_joined_not_refused
+FAILED tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile] - Failed: DID NOT RAISE GitCommitError
+FAILED tests/services/api/test_recipe_repository.py::test_a_git_directory_that_is_not_the_root_s_own_is_refused[link] - Failed: DID NOT RAISE GitCommitError
+FAILED tests/services/api/test_recipe_repository.py::test_publishes_queued_behind_a_held_lock_share_one_wait - AssertionError: the second publish waited 2.07 s, a second wait
+FAILED tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept - AssertionError: assert ['.git', '.gi...d', 'recipes'] == ['.git', 'recipes']
