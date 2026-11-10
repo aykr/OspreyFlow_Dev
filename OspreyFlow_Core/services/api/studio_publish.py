@@ -513,6 +513,7 @@ def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str)
             # A refused publish leaves nothing ahead of `HEAD`: `load_published_recipe` reads the
             # working tree, so once the new bytes are in place, any failure puts the file and its
             # index entry back as `HEAD` holds them. A refusal before that wrote nothing.
+            _refuse_a_head_that_is_no_commit(repo)
             try:
                 written = _write_recipe_file(repo_root, relative_path, data)
             except _FailedAfterTheWrite as failed:
@@ -525,6 +526,18 @@ def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str)
                 raise
     finally:
         _REPOSITORY_LOCK.release()
+
+
+def _refuse_a_head_that_is_no_commit(repo: Repo) -> None:
+    """Refused before anything is written: a `HEAD` that names something other than a commit (an
+    annotated tag, say). What it holds is unknown, so a write could be neither committed nor put
+    back. A `HEAD` with no commit yet is a fresh repository's, and passes."""
+    try:
+        head_id = repo.refs[HEADREF]
+    except KeyError:
+        return
+    if not isinstance(repo[head_id], Commit):
+        raise GitCommitError("the recipe repository's HEAD is not a commit")
 
 
 def _put_back_as_head_holds(repo: Repo, repo_root: Path, relative_path: str) -> None:
