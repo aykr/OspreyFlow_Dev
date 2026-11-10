@@ -1,0 +1,20 @@
+# test_kyc_rules.py red on main (Studio, stack c), 10 November 2026: diagnosed as test isolation, not a product regression.
+# All under the rules lease on stack c (taken 21:30:45Z), main dd28a7e in worktree rules-kyc (lane/rules-kyc).
+RED, the unchanged file (main), alone: 3 failed, 13 passed (21:31Z, and the status test alone at 21:33Z, 21:35Z, 21:37Z):
+  test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate   assert 4 == 2 (alerts)
+  test_the_status_and_risk_are_computed_from_what_the_reader_sees                      owner_listed x4, expected x2
+  test_a_confirmed_screening_match_repoints_the_other_alert_citing_it                  assert 4 == 2 (alerts)
+WHY: each test's graph is its own (arcadedb_adapter makes a fresh database), so the graph is not shared; the
+  screening store (Postgres) is. Read-only on stack c's Postgres: two lists name the same synthetic people,
+  'Synthetic consolidated list (OspreyFlow demo)' (this file's) and 'Synthetic list' (test_screening_refresh.py's,
+  never removed), each 10 entries: 'PETROVA, Elena' and 'Elena Petrova', 'Priya NAIR' and 'Priya Nair'. The gate
+  screens against every list in the store, as a deployment does, so each listed owner matched twice. The
+  lane stacks keep every earlier run's rows: stack_lease.sh down/up stop and start the same containers.
+  My first hypothesis (accumulating graph rows, fixed company names) was wrong and is not in the fix: renaming
+  the applicants per test changed nothing (still 3 failed), since the graph is per test.
+FIX: the gate reads the real store through _OwnList, which answers `entries` (all the gate reads of it) with
+  this file's own list alone. Nothing stood in for.
+GREEN, the same stack, the same accumulated rows: 16 passed (twice). mypy: 31 errors, main's own 31; ruff: none in the hunk.
+CARRIES: (1) test_screening_refresh.py (and any other live file loading a list) removes what it writes in
+  teardown; (2) stack freshness: a reset verb for lane stacks, and an audit of live tests reading beyond their
+  own rows (admin's T1, the orchestrator's ruling).
