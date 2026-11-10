@@ -133,3 +133,19 @@ def test_another_deployments_set_in_a_shared_old_place_is_not_offered(
     assert restored == []
     said = capsys.readouterr().err
     assert other.name in said and str(rig["folder"] / "alpha") in said
+
+
+def test_a_set_in_the_git_roots_backups_folder_is_found(
+    rig: dict[str, Path], restored: list[Path], monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The git checkout's root, above the product, is an old place too (independent review)."""
+    product = rig["checkout"] / "OspreyFlow_Core"
+    product.mkdir()
+    (rig["checkout"] / ".git").write_text("gitdir: elsewhere\n")
+    monkeypatch.setattr(backup, "REPO_ROOT", product)
+    left = _set(rig["checkout"] / "backups", "20261101T000000Z-alpha-abc1234")
+    assert _main(rig) == 0
+    assert f"mv {left} {rig['folder'] / 'alpha'}/" in capsys.readouterr().out
+    assert _main(rig, left.name) == 2
+    assert restored == [left]

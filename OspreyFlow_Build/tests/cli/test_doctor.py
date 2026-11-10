@@ -468,6 +468,22 @@ def _a_set(folder: Path, name: str, size: int = 2048) -> Path:
     return made
 
 
+def test_doctor_names_sets_left_in_the_git_roots_backups_folder(
+    rig: Rig, capsys: pytest.CaptureFixture[str], tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """The git checkout's root is the checkout too (Amendment 38 decision 5), so a set left in its
+    `backups/` is named with its move command, as one in the product's is. Independent review."""
+    folder = tmp_path_factory.mktemp("outside") / "bk"  # outside the stand-in checkout
+    (rig.product / "osprey.yaml").write_text(yaml.safe_dump(
+        {**_BASE, "components": {"storage": {"backups": str(folder)}}}))  # fmt: skip
+    root = rig.product.parent
+    (root / ".git").mkdir()
+    left = _a_set(root / "backups", "20261101T000000Z-local-lite-abc1234")
+    assert rig("doctor") == 0
+    out = capsys.readouterr().out
+    assert f"mkdir -p {folder}/local-lite && mv {left} {folder}/local-lite/" in out, out
+
+
 def test_doctor_names_sets_left_in_the_checkout_with_the_move_command(
     rig: Rig, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

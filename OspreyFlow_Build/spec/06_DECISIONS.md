@@ -31022,7 +31022,8 @@ Platform-b took a recommended option for each and built it, and the orchestrator
 3. **`ospreyflow restore` with no set lists the deployment's sets**, newest first, each old one with
    its move command. A set's bare name is looked for in the deployment's folder first, then in the
    old places. A folder (any argument with a `/`, or starting `~` or `.`) is used as given, as before.
-4. **The old places, and whose sets they hold.** The old places are the checkout's `backups/`, a
+4. **The old places, and whose sets they hold.** The old places are the checkout's `backups/` (the
+   product's, and the git root's where it is above the product), a
    named deployment's `~/.ospreyflow/deployments/<name>/backups` (ADR-138), and the top of the
    backups folder (Amendment 33's server). The first and third held every deployment's sets, so only
    sets whose name carries this deployment's name (`<stamp>-<name>-<sha>`) are offered for it. The
@@ -31031,7 +31032,7 @@ Platform-b took a recommended option for each and built it, and the orchestrator
    subfolder.
 5. **The checkout is the git checkout**, the folder above `OspreyFlow_Core` that holds `.git`. So
    `OspreyFlow_Build/` and the root are refused as well (only `OspreyFlow_Core/backups/` was ever
-   gitignored). A folder is compared by what it is, not its spelling: a link, a bind mount, or another
+   gitignored). A folder is compared by what it is, not its spelling: a link, a mount of the checkout itself, or another
    letter case on macOS's case-insensitive disk is the folder it shows, and a link followed by `..`
    is the folder the system reaches, never a tidied spelling. A deployment's name in a set's folder
    is one folder's name, so it cannot climb out. `doctor` fails on a backups folder inside the

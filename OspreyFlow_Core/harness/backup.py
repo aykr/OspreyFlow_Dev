@@ -721,9 +721,11 @@ def old_places(config: OspreyConfig, name: str) -> list[tuple[Path, str | None]]
     """Where `name`'s sets were written before Amendment 37, each with the name its sets must carry
     to be this deployment's (None: every set there is): the checkout's `backups/` (every install
     off a server), a named deployment's own `backups/` (ADR-138), and the top of the backups folder
-    (Amendment 33's server)."""
+    (Amendment 33's server). The git checkout's root, where it is above the product, is checked
+    too (Amendment 38 decision 5)."""
+    roots = dict.fromkeys((REPO_ROOT, checkout_root()))
     return [
-        (REPO_ROOT / "backups", name),
+        *((root / "backups", name) for root in roots),
         (Path.home() / ".ospreyflow" / "deployments" / name / "backups", None),
         (backups_folder(config)[0], name),
     ]

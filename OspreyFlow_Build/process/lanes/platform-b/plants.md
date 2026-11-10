@@ -33,3 +33,4 @@ Amendments 37 and 38 give.
 - independent review (1): new_set_folder writing the unexpanded ~ -> tilde case red (set under cwd/~); main passing it unexpanded -> its second half red
 - independent review (5): install without the backups checks -> install_checks_the_backups_folder red (the install went on); the test run before the fix
 - independent review (2): the update's backup silent on the fallback -> never_written_inside_the_checkout red (no notice on stderr); the test run before the fix
+- independent review (8): the git root's backups/ not looked in -> doctor git_roots red, restore git_roots red; (9) backups-synced as a failure -> 8 cases red (6 sync roots, the answers' doctor, the install), restored; (10) the case-sensitive branch replaces the skip (runs on the server's disk)

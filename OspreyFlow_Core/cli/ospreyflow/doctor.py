@@ -1140,7 +1140,10 @@ def backups_checks(
         name = SET_NAME.match(set_name)["name"]  # type: ignore[index]
         return folders.get(name, next(iter(folders.values()), fallback)) / name
 
+    checkout = _git_checkout(product)
     places = [product / "backups"]
+    if checkout is not None:
+        places.append(checkout / "backups")
     places += [home / ".ospreyflow" / "deployments" / name / "backups" for name in folders]
     places += list(dict.fromkeys(folders.values()))
     for where in dict.fromkeys(places):
@@ -1148,7 +1151,6 @@ def backups_checks(
         for found in _sets_in(where):
             grouped.setdefault(home_of(found.name), []).append(found)
         checks += [_left_behind(where, sets, to) for to, sets in grouped.items()]
-    checkout = _git_checkout(product)
     for folder in dict.fromkeys(folders.values()):
         darwin = probes.system() == "Darwin"
         if checkout is not None and _is_inside(folder, checkout, ignore_case=darwin):

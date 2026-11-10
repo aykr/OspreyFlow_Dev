@@ -214,7 +214,12 @@ def test_the_checkout_spelt_another_way_is_still_the_checkout(
         backup.new_set_folder(tmp_path / "ok", "x/../../Checkout")
     other_case = tmp_path / "checkout"
     if not other_case.exists():
-        pytest.skip("this disk tells letter cases apart, so the other spelling is another folder")
+        # A disk that tells letter cases apart (Linux, the server): the other spelling is another
+        # folder, outside the checkout, so a set goes there and the checkout is untouched.
+        made = backup.new_set_folder(other_case / "backups", "local-lite")
+        assert made.parent == other_case / "backups"
+        assert not (stand_in / "backups").exists()
+        return
     with pytest.raises(backup.BackupFailed, match="inside the checkout"):
         backup.new_set_folder(other_case / "backups", "local-lite")
     assert not (stand_in / "backups").exists()
