@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.39** · 2026-11-09 · For OspreyFlow v0.4.12 · Issued
+**Version 1.40** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.40 | 2026-11-10 | Promotion as built (case lane's L3.4). §5.14: *Promote…*, its sheet and its checks, one load into the case's dataset, reviewed where the dataset asks; *Promotions from this board*; the board's Alerts panel and the canvas's alert badge. §7.1: the place's tabs as built, Connection strength in the Glass's rail. Still coming: Figures' Drawing panel (the Conduit does not count it yet). |
 | 1.39 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §1: the four places. §3: Home, the place switcher and the context banner. §4: no branches; the new-case form; home cases, a dataset's Authors, teams; levels and roles in the words the Glass's help uses; views in the Cases drawer. §5: the rail, the view switch and More views; §5.2 *Save as a view*; §5.3 the basemap switch and *Find a place*; new §5.13 case views, §5.14 drawing boards, §5.15 your own link types. §9: the case's Figures tab, Dashboards on the rail, the Alert monitoring board, and the Reports Viewer's journey. §7 and the alerts it describes wait for the alerts journey (one queue, what raises alerts, watches, team routing, Raise an alert, the rule editor); its place is now Rules and Monitoring. Coming, and said so: promoting drawn items, *What you can do* on Home. |
 | 1.38 | 2026-11-05 | Describes v0.4.12 (v0.4.11 was not released). No change to its content. |
 | 1.37 | 2026-11-05 | Describes v0.4.11. No change to its content. |
@@ -707,8 +708,27 @@ link**. A link may join a drawn item to a loaded one; the loaded item is untouch
 - **Who may draw.** You need the rights to draw on boards and to investigate, and only a board's
   creator draws on it.
 
-*Coming:* **Promote…**, sending drawn items into the dataset as one load, reviewed by a second person
-where the dataset asks for it; and an alert when new data meets a drawn item.
+**Promote…** sends what you drew into the case's dataset (it is not chosen: it is the dataset the case
+reads). It is offered to a board's creator; promoting also needs the case's Author level and the right
+to promote (`promote_to_dataset`), and without them you are told "You do not have the right to do
+that here." The sheet, **Promote into ‹dataset›**, says the dataset's highest marking and its policy
+("you promote it", or "a second person reviews it first"), and lists **What goes**: each item, link,
+picture and match decision with its type and marking. Each is checked (its marking within the
+dataset's highest, its type in the dataset's model, its grading, and, for a link, both its ends going
+too), and one that cannot go says why. **Promote** (or **Send for review**) sends what you ticked as
+**one load**, and you are told, for example, "Waiting for review 3 items and 2 links into ‹dataset›,
+load ‹id›. A second person reviews it in the Ingest Studio; nothing of it is in the dataset until
+then." Each item stays marked as drawn, with its marking and grading. **Promotions from this board**
+lists each one as *Waiting for review*, *Committed*, *Rejected* or *Reverted*. A case reading no
+dataset, a case reading a composite, and a drawing that is its own dataset promote nothing, and say
+so. A promotion is reviewed by one of the dataset's Authors who may review promotions, never by you,
+and taken back like any load (the developer guide, section 7.8).
+
+- **Alerts on a board.** A board shows an **Alerts** panel: the case's open alerts by source and age,
+  and the newest, counted for you. Nothing is opened from it. On the canvas, an entity with open
+  alerts carries a badge: **!** for one, **!3** for three.
+
+*Coming:* an alert when new data meets a drawn item.
 
 ### 5.15 Your own link types
 
@@ -793,13 +813,13 @@ To ask in words for a pattern rather than an answer, use **Ask to search** in th
 > journey (one queue, what raises alerts, watches, team routing, *Raise an alert* and the rule
 > editor), which is coming; where it says *Monitoring*, read Rules and Monitoring.
 
-### 7.1 The Monitoring place
+### 7.1 The Rules and Monitoring place
 
-![Monitoring: the one queue, with a hotlist alert open](images/user/09-monitoring.png)
+![Rules and Monitoring: the alerts, with a hotlist alert open](images/user/09-monitoring.png)
 
-The rail's **Monitoring** (its badge counts what is open or claimed) is the one place for alerts. Its
-tabs are **Queue**, **Rules**, **Watches**, **Lists** and **Connection strength**, and, by your level in the
-case, **Held rows** (an Editor or Author) and **Audit** (an Author or an administrator).
+**Rules and Monitoring** (key `R`) is the place for alerts. Its tabs are **Alerts**, **What raises
+alerts**, **Held rows** and **Changes**. **Connection strength** is not here: it is in the Glass's rail
+(section 5). What follows describes the alerts themselves, which the rewrite named above keeps.
 
 **The queue holds every kind of alert you may see**, in one list:
 
@@ -1096,7 +1116,7 @@ summary of the case's people, objects, locations and events, and held rows (for 
 **Download the figures (CSV)** is there for whoever may read the case's feed. Every figure is
 **counted for you**: anything you cannot see is in no figure. A period too long to count says to
 choose a shorter one; it never shows part of a chart. *Coming:* a **Drawing** panel (drawn, promoted,
-awaiting review, withdrawn), shown once promotions are recorded.
+awaiting review, withdrawn): the Glass has it, but the Conduit does not count it yet, so it is not shown.
 
 Beside Figures, as your rights allow: **Trends**, **Packs** (report packs, exported to PDF),
 **Published** and **Data feeds**.

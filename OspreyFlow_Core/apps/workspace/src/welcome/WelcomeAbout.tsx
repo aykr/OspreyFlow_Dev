@@ -76,12 +76,12 @@ const PLACES = (Object.keys(PLACE_WORDS) as (keyof typeof PLACE_WORDS)[]).map((k
   says: PLACE_SAYS[key],
 }));
 
-// ADR-143 as built (L3.3): drawing boards, in words. Promotion into a dataset is not built, so it is not
-// claimed here.
+// ADR-143 as built (L3.3, and L3.4's promotion, Amendment 5): drawing boards, in words.
 const DRAWING = [
   { title: "Declare and draw", says: "On a case's drawing board, declare a person, an account or a place and draw the links between them. Each drawn item is marked, graded and sourced." },
   { title: "Kept to the case", says: "What you draw goes into the case's own analyst layer, never into the loaded data, and no other case can see it or infer it." },
   { title: "Nothing merged", says: "A drawn item that looks like a loaded one is offered as a pair. The analyst says whether they are the same, and nothing is merged." },
+  { title: "Promoted as one load", says: "A case's Author sends what they drew into the dataset as one load, each item checked against its highest marking and its model, and reviewed by a second person where the dataset asks. It stays marked as drawn." },
 ]; // prettier-ignore
 
 const SAFEGUARDS = [

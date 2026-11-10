@@ -1,162 +1,47 @@
 # OspreyFlow
 
-> **Draft for the owner's approval (9 November 2026).** This page is published with the repository,
-> so what it claims is published too. It describes the product as built on `main`; anything not yet
-> built is marked *coming*. It replaces the earlier README once the owner approves it.
-
 OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering,
 fraud detection, and event monitoring and alerting, developed by Solirius Reply and released under the
 Apache License 2.0.
 
-## The problem it solves
-
-An analyst's picture of a network is usually spread across tools: one for the network, one for the
-map, one for the timeline, another for reports, and a separate system for alerts. Each holds its own
-copy of the data, each decides access its own way, and the picture is joined up by hand. OspreyFlow
-holds a case's people, organisations, accounts, phones, places, documents and events as **one
-graph**, and gives the analyst one workspace in which the network, the map, the timeline, the
-Matrix tables and the case's figures are views of the same working set. A filter in one view applies
-in all of them.
-
-It ingests structured records and unstructured material (text, audio, imagery), resolves records that
-look like the same person or organisation without ever merging them, and keeps where every element
-came from.
-
-## Who uses it
-
-| Role | What they do |
-| --- | --- |
-| **Analyst** | Investigates cases, works alerts and keeps watches. Reads figures and boards. |
-| **Data Engineer** | Builds and runs pipelines, reviews promotions into a dataset and decides held rows. |
-| **Administrator** | Looks after people, roles, teams, datasets and the deployment. Does not investigate by being one. |
-| **Reports Viewer** | Reads a case's figures and the dashboards, and sees the alerts on cases they can read. Never works an alert. |
-| **Rule author** | Writes the rules that raise alerts, and works the alerts in the queue. |
-
-An administrator can also define roles of their own from the same rights, and give a **Super user**
-(Analyst, Data Engineer and Rule author together). Nobody can give more than they hold.
-
-## What you see, where you work, what you may do
-
-- **What you see** is decided by your clearance, your unit, your handling codes and the cases you are
-  given. A record you may not see is not drawn, not counted and cannot be found by its links.
-- **Where you work** is one of **four places**, each with one job. You see only the places your
-  roles open:
-
-  | Place | For |
-  | --- | --- |
-  | **The Glass** | Investigate a case: search, expand, map, read its figures and its boards |
-  | **Ingest Studio** | Bring data in: sources, pipelines, the domain model and held rows |
-  | **Rules and Monitoring** | Work the alerts that rules and watches raise, and see what raises them |
-  | **Admin** | Run the deployment: people, roles, teams, datasets, models, maps and operations |
-
-- **What you may do** is your roles' rights, and your level in each case (Viewer, Editor or Author).
-  Seeing is not doing: a level never widens what you can see.
+It ingests structured records and unstructured material (text, audio, imagery), resolves entities across
+sources, persists them in a property graph, and gives an analyst a single workspace in which
+network, social-network, pattern, temporal and geospatial analysis are five views of one working
+set rather than five separate tools.
 
 ## What it does
 
-- **Intelligence mapping.** One case, read as a network, a map, a timeline, the Matrix (the graph as
-  tables a screen reader can walk) and the case's figures. Communities, centrality, paths between
-  two people, ownership traced through every layer, and connection strength, each counted only over
-  what the reader may see.
-- **Drawing boards.** On a case's board an analyst declares a person, an account or a place and draws
-  the links between them, each item marked, graded and sourced, in the case's own analyst layer. A
-  drawing begun with no case makes a dataset, a case and a board of its own. *Coming:* promoting drawn
-  items into a dataset as a reviewed load.
-- **Case views, not copies.** A saved view is a lens on a case: what was drawn, the filters and the
-  period. Opening one reads the case through it. There are no branches.
-- **Monitoring and alerting.** Alerts are worked in Rules and Monitoring: hotlists with review dates,
-  rules written as plain sentences and previewed on the last 90 days before they go live, typology and
-  anti-money-laundering templates, and screening lists (connectors for the UK Sanctions List, OFAC, the
-  EU, the UN and OpenSanctions, proven on synthetic files) re-screened when a new version arrives. Rules
-  run on each load, before or after it commits, or on a schedule. Closing an alert takes a reason, and a
-  second person approves a whole-deployment rule or a high-severity close. *Coming:* the rule editor
-  with its draft, test and live stages.
-- **Bringing data in.** The Ingest Studio's four steps (the domain model, sources, pipelines, runs)
-  load files, a watched folder and connections to SQL databases, HTTP APIs and JSON, with guided
-  mapping, staging steps, a live sample at each step, and rows a check could not judge held for a
-  person. *Coming:* releases between environments as YAML.
-- **Datasets and their Authors.** Every dataset has a home case, and its Authors answer for it. The
-  administrator sees each dataset's kind, unit, highest marking, Authors and linked cases.
-- **Models and maps, administered.** Model engines, each job's model and their keys (write-only, never
-  shown back), with usage and limits; map providers and their keys, the local basemap built and
-  checked, and prefetched areas. The local model answers by default; material leaves only when both its
-  handling code and its dataset allow it.
-- **Starters.** `ospreyflow install --starter <theme>-<domain>`: the OspreyFlow or GOV.UK theme with a
-  crime, anti-money-laundering, fraud, cyber or blank domain and its synthetic demo data. Several
-  deployments can run side by side, and `ospreyflow demo add public` loads a public dataset of your
-  choosing (you download it yourself).
-
-## Use cases
-
-- **Crime analysis**: networks, the rhythm of a case on the timeline, the people who join two groups,
-  and a prison intelligence picture of cell shares, visits, calls and payments.
-- **Anti-money-laundering**: screening on onboarding before a customer goes live, transaction
-  monitoring as typology rules, beneficial ownership traced layer by layer, and a decision on the
-  record.
-- **Fraud detection**: rings that share a phone, an address or an account drawn as one cluster.
-- **Event monitoring and alerting**: hotlists, watches and rules that find a match as new data arrives.
-
-## Reporting
-
-A case's own counts are on its **Figures** tab. Dashboards (Apache Superset, or another BI tool reading
-the same reporting database) are behind the Glass's **Dashboards**, including an **Alert monitoring**
-board. A Reports Viewer reads figures and boards and follows an alert to its case's figures, without
-working it. Every figure is counted as its reader, or the dashboard's own account, may see it, and
-every pull is recorded.
-
-## Guarantees and safeguards
-
-- **Access control is in the store.** The reader travels with every query, counts included, and the
-  filter is part of the query itself. Hiding a screen is never the control.
-- **Nothing is cut silently.** A result too large is refused with choices, never truncated.
-- **A model's findings are suggestions.** They stay *inferred* until a person confirms them; no
-  threshold promotes them.
-- **Records are never merged.** Matches are scored links, shown as one at the strictness you choose.
-- **What you draw stays in your case.** A case's analyst layer is never written into the dataset, and
-  no other case can see it or infer it.
-- **Every read and write is recorded.** Handling travels with the data and is checked again, item by
-  item, at export.
-- **A second person** approves the decisions that matter, and never the person who proposed them.
-- **No real data.** OspreyFlow ships synthetic data only.
-
-## How it is built
-
-Three tiers, separated by four typed ports so any one of them can be swapped without touching the
-others:
-
-- **The Glass**: the browser workspace and its four places.
-- **The Conduit**: stateless middleware: the API, the working-set service, extraction, entity
-  resolution, model routing and access control.
-- **The Vault**: the graph store, the analytics engine, graph compute, the models and the object
-  store.
-
-A port is a narrow interface (a Python `Protocol`) that everything above it is allowed to call and
-nothing else. Swapping the engine behind a port (a laptop's in-process DuckDB for ClickHouse shared
-by a cluster's Conduits, say) means writing one adapter and changing one line of configuration, and
-the adapter is supported only once it passes the conformance suite every adapter behind that port
-passes. The [Architecture Guide](docs/architecture-guide.md) draws it at two levels: level 0, the
-people, the tiers and what sits beside them; level 1, every component and the technology it is built
-on.
-
-**Licence traps avoided.** The build fails on a dependency whose licence is not on the allowlist; GPL
-and AGPL never pass. Redis 7.4 and later (Valkey instead), Elasticsearch (OpenSearch), Neo4j Community,
-ArangoDB and FalkorDB (ArcadeDB and rustworkx), MongoDB (PostgreSQL), Grafana (never bundled), Stanford
-CoreNLP (Stanza) and Terraform (OpenTofu) were each avoided for their licence. Two screening lists'
-licences are not confirmed for a customer's use (the UN list; OpenSanctions, non-commercial only), so
-their connectors read synthetic lists until they are.
-
-## Honest limits
-
-- No real-time streaming ingestion; loads are batches, on demand, on a schedule or from a folder.
-- No multi-tenancy: one deployment serves one organisation.
-- No mobile client: the workspace is for a desktop.
-- Designed to meet the GDS Service Standard, not assessed: an independent accessibility audit, a
-  penetration test and a DPIA are planned, and only a service assessment panel can say a service
-  meets the Standard.
-- Enterprise's in-cluster graph store and analytics database are not backed up by `ospreyflow backup`
-  yet; Small on a managed database is not updated by `ospreyflow update` yet.
-- Coming: promotion of drawn items into a dataset, the rule editor, releases between environments,
-  and backups to a folder the administrator names at setup.
+- **Intelligence mapping.** One case, read as a network, a map, a timeline and reports, with a
+  filter in one view applying in all of them; the network also as accessible tables (the Matrix
+  view). Every element keeps where it came from, and anything a model suggests stays *inferred*
+  until a person confirms it.
+- **Monitoring and alerting.** One queue for every alert an analyst may see: hotlists with review
+  dates, rules written as plain sentences and previewed on the last 90 days before they go live,
+  typology and anti-money-laundering templates, and screening lists (connectors for the UK Sanctions
+  List, OFAC, the EU, the UN and OpenSanctions, proven on synthetic files) re-screened when a new
+  version arrives. Rules run on each load, before or after it commits, or on a schedule; the data
+  engineer chooses each pipeline's checks and sees what a sample would raise. Closing an alert
+  takes a reason, and a second person approves a whole-deployment rule or a high-severity close.
+  Alerts go into report packs and alert trends, and their figures reach a monitoring dashboard.
+- **Connection strength.** How strong a link is drawn rests on its own count and recency, on
+  influencers that boost a kind of link (direct contact, or a record or dataset that evidences it),
+  and on how rare a shared value is. All of it is worked out over what each viewer may see, shown
+  in the legend, filtered in Metrics, explained in the Inspector and usable in a rule. An
+  installation can reproduce a client's own scoring (client parity); installation-wide changes need
+  a second person.
+- **Starters.** `ospreyflow install --starter <theme>-<domain>`: the OspreyFlow or GOV.UK theme with
+  a crime, anti-money-laundering, fraud, cyber or blank domain and its synthetic demo data. Several
+  deployments can run side by side (`--name`, `ospreyflow deployments`, `ospreyflow switch`), and
+  `ospreyflow demo add public` loads a public dataset of your choosing (the IEEE VAST Challenge
+  datasets are catalogued; you download them yourself).
+- **GOV.UK.** The GOV.UK theme (header, footer, crown, GDS Transport, phase banner and the service's
+  own name) is a deployment setting, not a fork. OspreyFlow is designed to meet the GDS Service
+  Standard; an independent accessibility audit, a penetration test and a DPIA are planned, and only
+  a service assessment panel can say a service meets the Standard. A gov.uk service is served over
+  HTTPS (Small or Enterprise); Lite answers on its own computer alone.
+- **Model engines.** The local model answers by default. An administrator may enable hosted engines
+  and give each its key (`ospreyflow models key <name>`); material leaves only when both its
+  handling code and its dataset allow it, and each engine shows whether a privacy contract covers it.
 
 ## Start here
 
@@ -165,12 +50,30 @@ Markdown and as a PDF with screenshots (`docs/pdf/`):
 
 | If you are… | Read | It covers |
 | --- | --- | --- |
-| **Installing or running it** | [Installation and Administration Guide](docs/administration-guide.md) ([PDF](docs/pdf/administration-guide.pdf)) | Choosing Lite, Small or Enterprise; what each needs; installing, running, people, roles and teams, datasets, models and maps, backups, updates; every setting |
-| **An analyst** | [User Guide](docs/user-guide.md) ([PDF](docs/pdf/user-guide.pdf)) | Signing in, the four places, cases and views, the graph, map, timeline and figures, drawing boards, alerts and watches, and how what you see is decided |
-| **A data engineer** | [Developer Guide](docs/developer-guide.md) ([PDF](docs/pdf/developer-guide.pdf)) | The Ingest Studio from a first pipeline to a scheduled one, the domain model, connectors, held rows, screening lists, the analyst layer, the API |
-| **Deciding whether it fits** | [Architecture Guide](docs/architecture-guide.md) ([PDF](docs/pdf/architecture-guide.pdf)) | The two architecture levels, the tiers and ports, cases and datasets, access control, every interface, the licence traps and the limits |
+| **Installing or running it** | [Installation and Administration Guide](docs/administration-guide.md) ([PDF](docs/pdf/administration-guide.pdf)) | How it is built; choosing Lite, Small or Enterprise; what each needs; installing, running, people and accounts, backups, updates; every setting |
+| **An analyst** | [User Guide](docs/user-guide.md) ([PDF](docs/pdf/user-guide.pdf)) | Signing in, cases, the graph, map, timeline and reports, alerts and watches, and how what you see is decided |
+| **A data engineer** | [Developer Guide](docs/developer-guide.md) ([PDF](docs/pdf/developer-guide.pdf)) | The Ingest Studio from a first pipeline to a scheduled one, the domain model, held rows, screening lists, the API |
 
-The rest of this page is the short version: what you need, and the commands to install it.
+The rest of this page is the short version: how it is built, what you need, and the commands to
+install it.
+
+## How it is built
+
+Three tiers, separated by four typed ports so any one of them can be swapped without touching the
+others:
+
+- **The Glass** — the analyst workspace: canvas, timeline, map, dossier, query.
+- **The Conduit** — stateless middleware: API, working-set service, extraction orchestration,
+  entity resolution, model routing, access control.
+- **The Vault** — persistence and compute: graph store, columnar analytics engine, graph compute
+  engine, model servers, object store.
+
+A port is a narrow interface (a Python `Protocol`) that everything above it is allowed to call and
+nothing else. Swapping the engine behind a port — a laptop's in-process DuckDB for ClickHouse shared
+by a cluster's Conduits, say — means writing one adapter and changing one line of configuration;
+nothing above the port changes, and the adapter is only supported once it passes the same
+conformance suite every other adapter behind that port passes. The guides above describe the
+architecture each reader needs.
 
 ## Before you install
 
@@ -210,7 +113,7 @@ rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup
 Every operator task is an `ospreyflow`
 verb; `make` targets are for developers working on OspreyFlow itself.
 
-**Demo packs** load into cases of their own: six synthetic ones generated here, and two you
+**Demo packs** load into cases of their own: three synthetic ones generated here, and two you
 download — PaySim (simulated) and the **Enron email corpus, which is real people's data**: you fetch
 it from Carnegie Mellon University yourself, and `ospreyflow demo add enron --file <file>` checks it,
 says what it is and loads it only once you accept. No install adds it. The administration guide's
@@ -285,7 +188,7 @@ ospreyflow update --from ospreyflow-v1.2.0.tar                         # on the 
   Small's server (`opentofu/small/aws`, `opentofu/small/azure`) and Enterprise's cluster
   (`opentofu/cluster/aws`, `opentofu/cluster/azure`), and the Superset image.
 - **`scripts/`** — the demo packs (`python -m scripts.demo_packs`) and their seeds.
-- **`docs/`** — the four guides, their screenshots, and their PDFs.
+- **`docs/`** — the three guides, their screenshots, and their PDFs.
 
 The full specification and the build's own record are kept in the developer repository, alongside
 the test suites and the release tooling.

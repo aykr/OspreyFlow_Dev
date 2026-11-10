@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.28** · 2026-11-09 · For OspreyFlow v0.4.12 · Issued
+**Version 1.29** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.29 | 2026-11-10 | Promotion as built (case lane's L3.4). §7.8: promotion as one load, the Studio's *Analyst promotions* in 4 Runs with its review, the revert command, and a removed case's layer merged or deleted. §9.1: an alert's address also asks Rules and Monitoring's gate. |
 | 1.28 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §1: the four places; the architecture has its own guide. §3: the Studio's four steps (1 Model, 2 Sources, 3 Pipelines, 4 Runs), the readiness strip, guided and expert mode; *Make live* and its owner step; SQL, API and JSON sources and screening lists in 2 Sources; staging steps with a live sample; expert steps coming. §6: held rows in Rules and Monitoring and 4 Runs; Admin → Operations. New §7.8: a case's analyst layer, drawn datasets, link types proposed by analysts, and promotion (coming). §9.1: the routes of views, boards, drawings, link types, an alert's address, dataset models, ownership, model and map administration and the grading scheme. §9.3: the commands. Coming, and said so: releases between environments. |
 | 1.27 | 2026-11-05 | Describes v0.4.12 (v0.4.11 was not released). No change to its content. |
 | 1.26 | 2026-11-05 | Describes v0.4.11. No change to its content. |
@@ -720,11 +721,34 @@ dataset decides it in 1 Model: **accept** writes it into the draft domain model 
 and it goes live with the next *Make live*; **decline** ends it. A proposal made before proposals named a
 dataset is decided in Admin → Proposed types, with `manage_ontology`.
 
-**Coming:** promoting drawn items into a dataset **as a load** (checked against the dataset's highest
-marking and its model, reviewed by a second person where the dataset's promotion policy asks for it,
-revertible like any load); merging a drawn dataset into another; and merging or deleting a removed
-case's layer, which Admin → Datasets offers as a dry run today. The settings are built: a dataset's
-promotion policy, and the days after which a waiting promotion is overdue.
+**Promotion.** An Author of a case who holds `promote_to_dataset` sends items from their own board into
+the case's dataset with **Promote…** (user guide, section 5.14). A promotion is **one load**, all or
+nothing, into the dataset the case reads; each item is checked against the dataset's highest marking
+and its live model, its grading and, for a link, both its ends going too, on the sheet and again when
+it is sent. Each promoted item stays marked as drawn. Under the dataset's promotion policy (Admin →
+Datasets) the load is committed at once (*Author promotes*) or waits (*Second person reviews*), and
+nothing of it is in the dataset until it is approved.
+
+**Analyst promotions**, under the grid in **4 Runs**, lists every promotion into the dataset: its load,
+what it adds, who sent it, the case and its status. It needs `review_promotions` ("You need Review
+promotions to see the analyst promotions into this dataset…"). **Review** opens one: one of the
+dataset's Authors holding `review_promotions`, never its sender, chooses **Approve and commit** or
+**Reject with a reason** (the reason is shown on the analyst's board); a reviewer who cannot see every
+item is told "Some of its items are not shown to you, so you may not approve it." A committed
+promotion is reverted by the operator command it shows, with the Conduit stopped:
+`python -m scripts.revert_promotion <load id> --reverted-by <your username>` (`--dry-run` first). There
+is no revert on screen.
+
+**A removed case's layer.** **Removed cases' layers**, also in 4 Runs and shown to the dataset's
+Authors, lists each removed case that read the dataset. **Merge into the dataset** opens a sheet that
+lets you read that one layer for that one merge (recorded in the audit, and ended when the merge is
+sent or cancelled); the merge is a promotion like any other, under the same policy. **Delete…** shows
+what it would do, then "Its items are withdrawn and kept in the audit." Both need `investigate`, so a
+Reports Viewer does neither. A composite case's layer is never merged, only deleted. Nothing deletes a
+layer on its own. Admin → Datasets offers the merge and the delete as a dry run only.
+
+**Coming:** merging a drawn dataset into another. A waiting promotion grows overdue after the days
+set in Admin → Operations (administration guide, section 9.11).
 
 ## 8. Screening lists
 
@@ -786,7 +810,7 @@ signed in like every other route. Its `info.version` is the release the deployme
 | `POST …/link-types`; `POST …/link-types/{proposal_id}/withdraw` | `propose_types`, Editor |
 | `GET /v1/datasets/{dataset_id}/model/proposals`; `POST …/proposals/{proposal_id}/accept`, `…/decline` | `accept_types`, behind the dataset's own gate |
 | `GET /v1/datasets/{dataset_id}/model`; `POST`, `PUT`, `DELETE …/model/draft`; `…/impact`; `…/make-live`; `…/revert` | `edit_target_model`, behind the dataset's own gate |
-| `GET /v1/alerts/{alert_id}` | `read_alert_queue`: an alert's own address, answered as a missing alert to anyone who may not open its case |
+| `GET /v1/alerts/{alert_id}` | `read_alert_queue` and Rules and Monitoring's own gate (403 `place_required` without it): an alert's own address, answered as a missing alert to anyone who may not open its case |
 | `GET …/ownership/{node_id}`; `POST …/ownership/{node_id}/canvas` | `trace_ownership` |
 | `GET /v1/admin/people/{user_id}/ownership` | `manage_people` |
 | `GET`, `POST /v1/admin/connections`; `POST …/connections/{id}/test`; `GET /v1/ingest/connections` | `administer_system`; the last `add_ingest_files` |

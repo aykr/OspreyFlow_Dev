@@ -16,10 +16,11 @@ installs and runs OspreyFlow, the [user guide](user-guide.md), for analysts, and
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.0** · 2026-11-09 · For OspreyFlow v0.4.12 · Issued
+**Version 1.1** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.1 | 2026-11-10 | Promotion as built (case lane's L3.4). One door in: Small on your own server publishes 443 alone. |
 | 1.0 | 2026-11-09 | First issue: the two architecture levels, the tiers and ports, the four places, cases and datasets (one dataset per case, home cases, the analyst layer, views instead of branches), access control in the store, where the data lives, every interface, the licence register's traps, and the limits. |
 
 <!-- document-control:end -->
@@ -86,7 +87,8 @@ The level 1 diagram names the technology in each component; versions are those t
 Small and Enterprise use the cloud's managed services where the diagram's last row says.
 
 **One door in.** A front proxy (Caddy) is the only published port: 80 on Lite (bound to the
-machine itself), 80 and 443 with HTTPS on Small and Enterprise. Behind it, at the deployment's
+machine itself), 80 and 443 with HTTPS on Enterprise and on Small in the cloud, and 443 alone on Small on your own server
+(80 too only with `redirect_http`, as a redirect). Behind it, at the deployment's
 address, are the Glass; sign-in at `id.`; and dashboards at `bi.`.
 
 **No route out by default.** Every container sits on an internal network with no route to the
@@ -138,8 +140,10 @@ dataset as before.
 **Drawing boards.** A board belongs to a case. On it an analyst declares a person, an account or a
 place and draws the links between them; each drawn item carries a marking, a grading in the
 deployment's scheme and a source. A drawing started with no case makes a **drawn dataset** of its
-own, with its home case and a board. **Coming:** promoting drawn items into a dataset as a reviewed
-load, and merging a drawn dataset into another.
+own, with its home case and a board. **Promotion** sends drawn items into the case's dataset as one
+load, checked against its highest marking and model, committed at once or reviewed by one of its
+Authors first, as the dataset's policy says; a removed case's layer is merged the same way or deleted.
+**Coming:** merging a drawn dataset into another.
 
 **Views, never branches.** A **case view** is a saved lens on a case: what was drawn, the filters and
 the period. Opening one reads the case through it, read-only. There are no branches and no copies of

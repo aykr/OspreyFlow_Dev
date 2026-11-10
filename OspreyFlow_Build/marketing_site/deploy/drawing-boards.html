@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Drawing boards · OspreyFlow</title>
-<meta name="description" content="Drawing boards in OspreyFlow: declare a node, draw a link, each item marked, graded and sourced, in a case's own analyst layer. Promotion into a dataset is coming.">
+<meta name="description" content="Drawing boards in OspreyFlow: declare a node, draw a link, each item marked, graded and sourced, in a case's own analyst layer, and promoted into a dataset as one reviewed load.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M4 6L25 11L45 26L25.5 30L9 42Z' fill='%23c08a34'/%3E%3C/svg%3E">
 <style>
@@ -126,7 +126,7 @@ footer.site p{margin:0}
 <h1>Drawing boards: declare a node, draw a link</h1>
 <p class="lead">Field analysts build a network by declaring a person, an account or a place and drawing the links between them. OspreyFlow has a drawing board for this, kept apart from loaded data, with every drawn item attributed, marked, graded and sourced.</p>
 <div class="note">
-<p><strong>Built, with parts still coming.</strong> Boards, drawing, the case's analyst layer, grading, pictures, matches and your own link types are built. Promotion into a dataset, and an alert when new data meets a drawn item, are still to come. Each section is marked <span class="built">Built</span> or <span class="coming">Coming</span>. Screenshots follow.</p>
+<p><strong>Built, with parts still coming.</strong> Boards, drawing, the case's analyst layer, grading, pictures, matches, your own link types and promotion into a dataset are built. An alert when new data meets a drawn item, and drawn items on the analysis canvas, are still to come. Each section is marked <span class="built">Built</span> or <span class="coming">Coming</span>. Screenshots follow.</p>
 </div>
 <nav aria-label="On this page">
 <ul class="points">
@@ -212,12 +212,13 @@ footer.site p{margin:0}
 </section>
 <section class="band" id="promote" aria-labelledby="promote-h">
 <div class="wrap">
-<h2 id="promote-h"><span class="coming">Coming</span>Promotion into a dataset, as a load</h2>
-<p>When drawn items are ready to join the shared data, <em>Promote…</em> is to list them, you tick what goes, and the whole set goes as one load.</p>
+<h2 id="promote-h"><span class="built">Built</span>Promotion into a dataset, as a load</h2>
+<p>When drawn items are ready to join the shared data, <em>Promote…</em> lists them, the case's Author ticks what goes, and the whole set goes into the case's dataset as one load.</p>
 <ul class="points">
-<li><span class="label">Checked before it goes.</span> Each marking against the dataset's highest allowed marking, each type against its model, and each item for a grade and a source. A link goes only when both its ends will be in the dataset. Anything left out is to be named, with the reason.</li>
-<li><span class="label">Per dataset, author promotes or a second person reviews.</span> This setting is built in Admin, with a warning when fewer than two people could approve. A reviewer is never the person who proposed it, and promotions waiting too long are to be flagged to the dataset's Authors and administrators.</li>
-<li><span class="label">Still marked as drawn.</span> A promoted item is to keep its drawn-by-an-analyst mark for good, and the audit record to name the board, the case and the person.</li>
+<li><span class="label">Checked before it goes, and again as it goes.</span> Each marking against the dataset's highest allowed marking, each type against its model, and each item for its grade. A link goes only when both its ends will be in the dataset. Anything left out is named, with the reason.</li>
+<li><span class="label">Per dataset, author promotes or a second person reviews.</span> Set in Admin, with a warning when fewer than two people could approve. The review is in the Ingest Studio, by one of the dataset's Authors who may review promotions, never the person who sent it; nothing reaches the dataset before it is approved. Promotions waiting too long are flagged to the dataset's Authors and administrators.</li>
+<li><span class="label">Still marked as drawn.</span> A promoted item keeps its drawn-by-an-analyst mark, its marking and its grading. A promotion is taken back like any load, and every promotion and decision is audited.</li>
+<li><span class="label">A removed case's layer.</span> When a case is removed, the dataset's Authors merge what it drew into the dataset, as a promotion, or delete it. Nothing deletes it on its own.</li>
 </ul>
 </div>
 </section>

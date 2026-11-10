@@ -888,11 +888,11 @@ Under the GOV.UK theme the list is a GOV.UK side navigation.
 **System → Acting for people** says "The Conduit cannot act for people: run `ospreyflow
 repair-sign-in`" when the identity provider refuses the Conduit's own credential.
 
-
 ### 9.2 Roles
 
-The words below are the Glass's own: Home, the help page *Roles, teams and Authors* and this guide
-take them from one source, so they say the same.
+The words below are the Glass's own, copied from `help/roles.ts`, the file the help page
+*Roles, teams and Authors* reads them from; a test (`test_guide_role_words.py`) fails if a copy here
+says anything different.
 
 | Role | What it is for | Places it opens |
 | --- | --- | --- |
@@ -988,7 +988,6 @@ clearance, a unit, handling codes and, for each role, **Invite as ‹role›**. 
 set their password. Otherwise you are shown a **one-time code** (sixteen letters in four groups) to
 give them in person; it is shown once, and at first sign-in they choose their own password.
 **Reset sign-in** works the same way.
-
 
 A mail server is set in `osprey.yaml`'s `mail:` (appendix A); if it signs in, its password is given
 once at install as `OSPREY_SMTP_PASSWORD` and kept only in `deployment.env`. With mail, the sign-in
@@ -1166,8 +1165,8 @@ its lead to hand out.
 
 **Disable…** on a person's row first reads what they answer for and asks who takes each item: "‹name›
 answers for N things. Choose who takes each one: nothing is deleted, and every transfer is audited."
-Each item has its own **Transfer to…**; then **Transfer and disable** and **Confirm disabling**. It
-lists:
+Each item has its own **Transfer to…**; then **Transfer and disable**, or **Confirm disabling** when
+they own nothing (and **Cancel**). It lists:
 
 - the cases of which they are the only Author, a dataset's home case among them;
 - the teams they lead;
@@ -1203,8 +1202,9 @@ marking it may hold** (or the deployment's highest), its **Egress** (section 10)
   *Make live* a dataset says "Not live yet: who answers for it is asked at its first Make live."
 - **Linked cases**: every case reading it, open or removed, with its analyst layer's items, links and
   size (never the layer's contents), the home case tagged. For a removed case's layer, **Merge ‹case›
-  into the dataset (dry run)** and **Delete ‹case›'s layer (dry run)** say what each would do. *Coming:*
-  the merge and the delete themselves, which arrive with promotion.
+  into the dataset (dry run)** and **Delete ‹case›'s layer (dry run)** say what each would do. The
+  merge and the delete themselves are done by the dataset's Authors in the Ingest Studio's 4 Runs
+  (developer guide, section 7.8); Admin offers the dry runs only.
 
 **Who may be an owner.** Admin → System's **Dataset owners may be** is *People and teams* (the default),
 *People only* or *Teams only*. It governs every naming of a dataset's owners; a client who wants no
@@ -1223,8 +1223,8 @@ run; **Pause**, **Resume**, **Run now**, **Save schedule**) and **Promotions wai
 the load, the dataset it goes into, who sent it, when, and how long it has waited. **Alert the
 reviewers and administrators after N days** (1 to 90) sets when a waiting promotion is overdue; an
 overdue one alerts the dataset's Authors who hold `review_promotions`, and administrators of its unit.
-A promotion is listed only to someone who may review it. Promotions are not recorded yet, so the list
-is empty and says so (coming, with promotion).
+A promotion is listed only to someone who may review it; with none, it says "No promotion you may see
+is waiting for review." Each overdue one raises its alert once, and its row reads "‹N› days, overdue".
 
 **Audit** (`read_audit`) reads the audit log. **Which entries** chooses the record (*Cases, people,
 datasets and loads*; the *Rule audit of one case*; or the *Engines' history*, which also needs

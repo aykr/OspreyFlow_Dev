@@ -116,7 +116,8 @@ def _architecture_landing_page() -> str:
         "Administration Guide</a> — install, run, back up and update it.</li>"
         "<li><a href=\"user-guide.html\">User Guide</a> — for analysts, using the workspace day to "
         "day.</li><li><a href=\"developer-guide.html\">Developer Guide</a> — for data engineers, "
-        "bringing data in.</li><li><a href=\"operator-guide.html\">Operator guide</a> — the "
+        "bringing data in.</li><li><a href=\"architecture-guide.html\">Architecture Guide</a> — "
+        "how it is built: the tiers, the ports, the four places and where the data lives.</li><li><a href=\"operator-guide.html\">Operator guide</a> — the "
         "deployment guide, the RUNBOOKs and the Preflight reference.</li></ul>"
         f"<h2>The full specification</h2><ul>{links}</ul>"
     )
