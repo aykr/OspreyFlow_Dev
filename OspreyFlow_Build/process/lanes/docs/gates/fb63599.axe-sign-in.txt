@@ -1,3 +1,6 @@
+# Scanned commit: fb63599, lane/docs before its rebase onto main 8e08f43 (that commit is no longer on the branch;
+# its tree was the welcome page after the lane review's fixes). Superseded by the records at this round's head.
+
   ✓   2 a11y/a11y.spec.ts:20:3 › dark theme sign-in screen has no automated wcag2aa violations (578ms)
   ✓   1 a11y/reflow.spec.ts:22:3 › the sign-in page reflows at 320px with no sideways scroll (812ms)
   ✓   4 a11y/a11y.spec.ts:32:3 › dark theme sign-in screen with organisation sign-in has no automated wcag2aa violations (467ms)

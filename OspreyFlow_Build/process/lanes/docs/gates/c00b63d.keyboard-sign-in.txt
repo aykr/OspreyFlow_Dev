@@ -1,3 +1,6 @@
+# Scanned commit: c00b63d, lane/docs before its rebase onto main 8e08f43 (that commit is no longer on the branch;
+# its tree was the welcome page at D2a's first round). Superseded by the records at this round's head.
+
 
 Running 6 tests using 1 worker
 

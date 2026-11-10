@@ -1,0 +1,43 @@
+# The welcome page's tests, each shown red by a plant at its call site (rule 15)
+
+Scanned commit: bfb8257 (lane/docs, on main 9d3fbf4). Each plant was written into
+WelcomeAbout.tsx, `npx vitest run src/welcome/WelcomeAbout.test.tsx` run, and the file restored; the
+last run is the restored file. Output lines kept: each test's verdict and the counts.
+
+## plant 1 PLACE_WORDS' sentence back at PLACE_SAYS (ingest)
+- at its call site: 'Bring data in: sources, pipelines, the domain model and held rows."' -> 'Bring data in: sources, pipelines, the domain model, held rows and releases."'
+- expected red: 'names the four places'
+- exit 1
+      Tests  1 failed | 2 passed (3)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/welcome/WelcomeAbout.test.tsx > WelcomeAbout > names the four places as the help page names them, claiming nothing not built
+
+## plant 2 one queue for the team in the monitoring words
+- at its call site: 'their alerts are worked in Rules and Monitoring.' -> 'their alerts go to one queue for the team.'
+- expected red: 'says nowhere that alerts are routed to a team'
+- exit 1
+      Tests  1 failed | 2 passed (3)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/welcome/WelcomeAbout.test.tsx > WelcomeAbout > says nowhere that alerts are routed to a team
+
+## plant 3a the promotion point removed
+- at its call site: '{ title: "Promoted as one load"' -> '{ title: "Sent on"'
+- expected red: 'describes drawing boards as built'
+- exit 1
+      Tests  1 failed | 2 passed (3)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/welcome/WelcomeAbout.test.tsx > WelcomeAbout > describes drawing boards as built, promotion as one load, and nothing still coming
+
+## plant 3b a coming feature claimed
+- at its call site: 'It stays marked as drawn.' -> 'It stays marked as drawn, and new data meets it with an alert.'
+- expected red: 'describes drawing boards as built'
+- exit 1
+      Tests  1 failed | 2 passed (3)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/welcome/WelcomeAbout.test.tsx > WelcomeAbout > describes drawing boards as built, promotion as one load, and nothing still coming
+
+## restored
+- exit 0
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+
