@@ -24,6 +24,10 @@ PLANTS = [
      "services/api/alerts.py",
      "\"WHEN rule_id LIKE 'drawn_watch:%' THEN 'drawn_watch' END)\"",
      "\"END)\"", Q, "reaches_its_owner_in_its_case"),
+    ("a drawn watch's alert counted in its owner's trends in every case",
+     "services/api/alerts.py",
+     "f\"AND {_KIND_SQL} IS NOT NULL AND {_IN_TRENDS_SQL}\",",
+     "f\"AND {_KIND_SQL} IS NOT NULL\",", Q, "never_counted_in_a_trend"),
 ]
 out = []
 for words, f, old, new, test, k in PLANTS:

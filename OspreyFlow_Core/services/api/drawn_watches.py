@@ -21,6 +21,10 @@ drawn item they may no longer see raises nothing. A pair already decided on the 
 *Not the same*) raises nothing either. What a reader of the queue is shown is the queue's own read
 (L2.10): the alert cites the drawn item, so it is withheld whole from a reader who may not see it.
 
+A drawn link's watch never matches: only nodes are loaded as matches. The run is inside the
+load's request, as the hotlists' and monitors' are, so its time grows with the live watches on the
+dataset (one owner resolution each), whatever they match.
+
 **The alert** (`drawn_watch_alert`): an ordinary watch alert, `rule_id` `drawn_watch:<watch id>`,
 the watch owner's, in the watch's case, on the watched dataset (ADR-146 decision 1; the queue's
 `queue_scope` reads it to its owner in that case alone). It cites the drawn item and the loaded

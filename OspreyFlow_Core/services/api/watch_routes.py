@@ -142,10 +142,18 @@ async def with_what_fired_it(
     1) and each matched node's files and rows. Only ever given an explanation already served to
     the reader whole (`alert_queue.explain`, rule 3), so every node here is one they may read."""
     alert = explanation.alert
-    if explanation.kind not in ("hotlist", "monitor") or alert.mode is not AlertMode.FULL:
+    if (
+        explanation.kind not in ("hotlist", "monitor", "drawn_watch")
+        or alert.mode is not AlertMode.FULL
+    ):
         return explanation
     nodes = {n.id: n for n in explanation.nodes}
-    fired_on = [_fired_on(nodes[i], principal) for i in alert.referent_node_ids if i in nodes]
+    # L3.6: a drawn watch fired on the loaded node; the drawn item it met was drawn, not loaded.
+    fired_on = [
+        _fired_on(nodes[i], principal)
+        for i in alert.referent_node_ids
+        if i in nodes and nodes[i].provenance.drawn is None
+    ]
     return explanation.model_copy(
         update={
             "fired_on": fired_on or None,

@@ -8,6 +8,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AlertQueue, alertTitle, drawnBoard } from "./AlertQueue";
+import { alertRuleGroup, groupName } from "../reports/figureParts";
 
 afterEach(() => {
   cleanup();
@@ -55,6 +56,8 @@ describe("a drawn watch's alert", () => {
     expect(alertTitle(row.alert as never, "drawn_watch")).toBe("A load met a drawn item");
     expect(drawnBoard([loaded, drawnItem] as never)).toBe("board-7");
     expect(drawnBoard([loaded] as never)).toBeNull();
+    // Counted in Figures and Home under the queue's own words, as the Conduit's `_RULE_GROUP` does.
+    expect(groupName(alertRuleGroup(row as never))).toBe("Drawn items");
   });
 
   it("opens the board its drawn item names, from the alert's detail", async () => {

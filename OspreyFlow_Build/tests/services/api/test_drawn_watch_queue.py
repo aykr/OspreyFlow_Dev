@@ -157,3 +157,45 @@ async def test_the_alert_is_the_watch_owners_in_the_watchs_case() -> None:
         and "Name of d-1" in named
         and "p-1" not in named.replace("Name of p-1", "")
     )
+
+
+async def test_what_fired_it_names_the_loaded_nodes_file_and_row_not_the_drawn_item() -> None:
+    """ADR-146 decision 1: *what fired it* on every watch alert, this kind's too — the loaded node's
+    file and row; the drawn item, drawn on a board, was loaded from no file."""
+    from services.api.watch_routes import with_what_fired_it
+
+    from schemas.domain import AlertExplanation, DrawnAssertion, Grading
+
+    match = _match("d-1", "p-1")
+    alert, _ = drawn_watch_alert(match)
+    drawn = _node("d-1", drawn=True)
+    assertion = DrawnAssertion(
+        item_id="i-1",
+        asserted_by="alice",
+        board_id="b-1",
+        case_id=CASE,
+        label="Tall",
+        grading=Grading(source="B", intelligence="2", handling="1"),
+        source_note="Seen at the gate.",
+    )
+    drawn = drawn.model_copy(
+        update={"provenance": drawn.provenance.model_copy(update={"drawn": assertion})}
+    )
+    explained = AlertExplanation(
+        alert=alert, summary="s", nodes=[drawn, _node("p-1")], kind="drawn_watch",
+        severity="medium", audience="owner",
+    )  # fmt: skip
+    told = await with_what_fired_it(explained, READER, None)
+    assert [(f.label, [(x.name, x.row) for x in f.files]) for f in told.fired_on or []] == [
+        ("Name of p-1", [("doc-1", 1)])
+    ]
+
+
+def test_reports_count_it_under_the_glass_s_group() -> None:
+    """Reports group it as the Glass's Figures do (`figureParts.tsx`'s `drawn_items`)."""
+    from types import SimpleNamespace
+
+    from services.api.reports import _group
+
+    row = SimpleNamespace(kind="drawn_watch", alert=SimpleNamespace(typology=None))
+    assert _group(row) == ("drawn_items", "")  # type: ignore[arg-type]

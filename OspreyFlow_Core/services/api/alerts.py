@@ -395,6 +395,10 @@ _FACT_COLUMNS = (
 )
 
 FactSink = Callable[[list[AlertFact]], Awaitable[None]]
+#: L3.6: a drawn watch's alert is its owner's in the watch's case alone (`queue_scope`), which an
+#: owner's trend, counted in every case they open, cannot say: it is kept out of the trends, so a
+#: trend counts fewer than the queue lists, never more (rule 3; carried: a case-bound audience).
+_IN_TRENDS_SQL = "rule_id NOT LIKE 'drawn_watch:%'"
 
 
 def _outcome(status: str, disposition: str | None) -> str:
@@ -670,7 +674,7 @@ class AlertStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 f"SELECT {_FACT_COLUMNS} FROM alerts WHERE id = ANY($1::text[]) "
-                f"AND {_KIND_SQL} IS NOT NULL",
+                f"AND {_KIND_SQL} IS NOT NULL AND {_IN_TRENDS_SQL}",
                 list(alert_ids),
             )
         try:

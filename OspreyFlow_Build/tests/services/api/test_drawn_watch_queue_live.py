@@ -136,3 +136,21 @@ async def test_its_owner_reads_nothing_once_the_drawn_item_is_hidden_from_them(
     await alerts.save(alert)
     assert await _ids(alerts, case, owner, {"d-1"}) == []
     assert await _ids(alerts, case, owner, {"p-1"}) == []
+
+
+async def test_a_drawn_watch_alert_is_never_counted_in_a_trend(alerts: AlertStore) -> None:
+    """An owner's trend counts their alerts in every case they open; this kind is theirs in one
+    case alone, so it is kept out of the trends (fewer than the queue, never more; rule 3)."""
+    kept: list[Any] = []
+
+    async def sink(facts: list[Any]) -> None:
+        kept.extend(facts)
+
+    alerts.fact_sink = sink
+    owner, case = _person(), f"case-{new_id()}"
+    drawn = _drawn_watch_alert(owner, case)
+    monitor = _alert(f"monitor:{new_id()}", owner, investigation_id=case, referent_node_ids=["n-3"])
+    await alerts.save(drawn)
+    await alerts.save(monitor)
+    await alerts.publish_facts([drawn.id, monitor.id])
+    assert {f.alert_id for f in kept} == {monitor.id}
