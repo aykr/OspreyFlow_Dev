@@ -46,13 +46,15 @@ from tools.route_coverage_check import APACHE_DOC_PATHS
 from tools.simple_markdown import render_markdown
 
 PREFLIGHT_DIR = REPO_ROOT / "harness" / "preflight"
-#: The install package's three guides (`06_DECISIONS.md` ADR-114 Amendment 15), each a page of this
-#: site with the images it shows copied beside it. Their own Markdown is the source, as the PDFs'.
+#: The install package's four guides (`06_DECISIONS.md` ADR-114 Amendment 15; the architecture guide
+#: added in D2a, 9 November 2026), each a page of this site with the images it shows copied beside it.
+#: Their own Markdown is the source, as the PDFs'.
 PACKAGE_DOCS = REPO_ROOT / "docs"
 GUIDES: tuple[tuple[str, str], ...] = (
     ("administration-guide", "Installation and Administration Guide"),
     ("user-guide", "User Guide"),
     ("developer-guide", "Developer Guide"),
+    ("architecture-guide", "Architecture Guide"),
 )
 _GUIDE_LINK = re.compile(
     r'href="(?:docs/)?(?:pdf/)?(' + "|".join(g for g, _ in GUIDES) + r')\.(?:md|pdf)"'
@@ -114,7 +116,8 @@ def _architecture_landing_page() -> str:
         "Administration Guide</a> — install, run, back up and update it.</li>"
         "<li><a href=\"user-guide.html\">User Guide</a> — for analysts, using the workspace day to "
         "day.</li><li><a href=\"developer-guide.html\">Developer Guide</a> — for data engineers, "
-        "bringing data in.</li><li><a href=\"operator-guide.html\">Operator guide</a> — the "
+        "bringing data in.</li><li><a href=\"architecture-guide.html\">Architecture Guide</a> — "
+        "how it is built: the tiers, the ports, the four places and where the data lives.</li><li><a href=\"operator-guide.html\">Operator guide</a> — the "
         "deployment guide, the RUNBOOKs and the Preflight reference.</li></ul>"
         f"<h2>The full specification</h2><ul>{links}</ul>"
     )

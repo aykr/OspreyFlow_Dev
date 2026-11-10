@@ -1,0 +1,14 @@
+# Scanned commit: c00b63d, lane/docs before its rebase onto main 8e08f43 (that commit is no longer on the branch;
+# its tree was the welcome page at D2a's first round). Superseded by the records at this round's head.
+
+
+Running 6 tests using 1 worker
+
+  ✓  1 keyboard/sign-in.spec.ts:58:1 › a keyboard-activated sign-in reaches a real OIDC discovery fetch and a real authorization redirect (286ms)
+  ✓  2 keyboard/sign-in.spec.ts:78:1 › organisation sign-in by keyboard names the organisation's provider to the identity provider (185ms)
+  ✓  3 keyboard/sign-in.spec.ts:92:1 › organisation sign-in named by its label goes to that provider by keyboard (183ms)
+  ✓  4 keyboard/sign-in.spec.ts:108:1 › an account beside the organisation's sign-in signs in by keyboard with no provider hint (181ms)
+  ✓  5 keyboard/sign-in.spec.ts:121:1 › the welcome page's theme switches by keyboard (166ms)
+  ✓  6 keyboard/sign-in.spec.ts:130:1 › every registered sign-in action has its own proving test case above (0ms)
+
+  6 passed (1.9s)

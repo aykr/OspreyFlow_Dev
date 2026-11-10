@@ -3,21 +3,25 @@
 OspreyFlow is an open-source intelligence mapping platform for crime analysis, anti-money-laundering,
 fraud detection, and event monitoring and alerting.
 
-For analysts: the people who investigate in OspreyFlow. It covers signing in, cases, the graph, the
-map, the timeline and the reports, monitoring and alerts, and how OspreyFlow decides what you can see.
-It describes what is built, and says plainly where something is not yet.
+For analysts: the people who investigate in OspreyFlow. It covers signing in, the four places,
+cases and their views, the graph, the map, the timeline, drawing boards and the case's figures,
+monitoring and alerts, and how OspreyFlow decides what you can see. It describes what is built, and
+says plainly where something is not yet ("coming").
 
 The other guides in this folder are the [administration guide](administration-guide.md), for
-whoever installs and runs OspreyFlow, and the [developer guide](developer-guide.md), for data
-engineers. The screenshots show the synthetic demonstration cases; no real data appears in them.
+whoever installs and runs OspreyFlow, the [developer guide](developer-guide.md), for data
+engineers, and the [architecture guide](architecture-guide.md), for how it is built. The screenshots show the synthetic demonstration cases; no real data appears in them.
 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.38** · 2026-11-05 · For OspreyFlow v0.4.12 · Issued
+**Version 1.41** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.41 | 2026-11-10 | Admin's L2.7 as built. §3: Home's *What you can do, and what you answer for*, with *Why can I do this?*; *Needs you* in the top bar. |
+| 1.40 | 2026-11-10 | Promotion as built (case lane's L3.4). §5.14: *Promote…*, its sheet and its checks, one load into the case's dataset, reviewed where the dataset asks; *Promotions from this board*; the board's Alerts panel and the canvas's alert badge. §7.1: the place's tabs as built, Connection strength in the Glass's rail. Still coming: Figures' Drawing panel (the Conduit does not count it yet). |
+| 1.39 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §1: the four places. §3: Home, the place switcher and the context banner. §4: no branches; the new-case form; home cases, a dataset's Authors, teams; levels and roles in the words the Glass's help uses; views in the Cases drawer. §5: the rail, the view switch and More views; §5.2 *Save as a view*; §5.3 the basemap switch and *Find a place*; new §5.13 case views, §5.14 drawing boards, §5.15 your own link types. §9: the case's Figures tab, Dashboards on the rail, the Alert monitoring board, and the Reports Viewer's journey. §7 and the alerts it describes wait for the alerts journey (one queue, what raises alerts, watches, team routing, Raise an alert, the rule editor); its place is now Rules and Monitoring. Coming, and said so: promoting drawn items, *What you can do* on Home. |
 | 1.38 | 2026-11-05 | Describes v0.4.12 (v0.4.11 was not released). No change to its content. |
 | 1.37 | 2026-11-05 | Describes v0.4.11. No change to its content. |
 | 1.36 | 2026-11-05 | The owner's rulings (build order step 33; ADR-112 Amendment 3): §2, when the sign-in page says your email already belongs to an OspreyFlow account, your administrator can join your organisation account to it, after which your organisation's sign-in takes you straight into that account. |
@@ -66,8 +70,17 @@ engineers. The screenshots show the synthetic demonstration cases; no real data 
 
 OspreyFlow holds a case's people, organisations, accounts, phones, places, documents and events as
 one graph, and gives you one workspace — the **Glass** — in which the network, the map, the
-timeline and the reports are views of the same working set. Selecting something on the graph selects
-it on the map; dimming a period on the timeline dims it everywhere.
+timeline, the Matrix and the case's figures are views of the same working set. Selecting something on
+the graph selects it on the map; dimming a period on the timeline dims it everywhere.
+
+OspreyFlow has **four places**, each with one job. You see only the places your roles open:
+
+| Place | Key | What it is for |
+| --- | --- | --- |
+| **The Glass** | `G` | Investigate a case: search, expand, map, read its figures and its boards. |
+| **Ingest Studio** | `I` | Bring data in: sources, pipelines, the domain model and held rows (developer guide). |
+| **Rules and Monitoring** | `R` | Work the alerts that rules and watches raise, and see what raises them (section 7). |
+| **Admin** | `A` | Run the deployment: people, roles, teams, datasets, models, maps and operations (administration guide). |
 
 Three things about the data run through everything below:
 
@@ -114,39 +127,91 @@ reached, it says so and offers **Try again**.
 
 **Signing out**: the account button at the top right (your name and clearance) has **Sign out**.
 
-## 3. Start
+## 3. Home
 
-![Start: the places your roles open, what needs your attention, and your recent cases](images/user/03-start.png)
+![Home: the places your roles open, what needs your attention, and your recent cases](images/user/03-start.png)
 
-After signing in you arrive at **Start**. It shows the places your roles open — for an analyst, the
-**Glass** — with what needs your attention (open alerts, alerts you have claimed) and your recent
-cases with your level on each. **G** opens the Glass from here. The OspreyFlow mark at the top left
-always brings you back.
+After signing in you arrive at **Home**. It greets you, says who you are signed in as, with your
+clearance and your roles, and then shows:
+
+- **a card for each place your roles open**, each with **Open ‹place›** and its key (`G`, `I`, `R`,
+  `A`). An analyst sees the Glass and Rules and Monitoring. With no place at all it says "Your account
+  opens no place yet. Ask an administrator to give you a role.";
+- **Needs your attention**: what is waiting for you, such as alerts on your cases ("Nothing needs you
+  now." when there is none);
+- **Recent cases**: up to six, with your level on each, how many entities each holds and when it was
+  made;
+- **Ways of working**: four short tips.
+
+Below them, **What you can do, and what you answer for** is worked out for you: **Places you can
+open**; **What you answer for** (each case you are an Author of, the datasets whose promotions you
+review, and proposed link types waiting for you, each with a *Why:* line), or "Nothing waits for
+you."; **Your level in each case**; and, folded, **What you can do, by place**, where each right has
+**Why can I do this?** ("Given by your Analyst role.").
+
+**Needs you**, in the top bar beside your account, appears when something waits for you: a promotion
+waiting past the days your administrator set (for one who may review it), and proposed link types to
+decide in a dataset you work on. Choosing one opens where it is decided, when your rights reach it.
+It is hidden when nothing waits.
+
+The OspreyFlow mark at the top left always brings you back.
+
+**Moving between places.** The **place switcher** in the top bar lists the same places; under the
+GOV.UK theme it sits inside the GOV.UK header. Under it, a **context banner** says where you are: in
+the Glass, "You are in the Glass · Case · Boards", with the case you are in and the dataset it
+reads; elsewhere "You are in the Ingest Studio", "You are in Rules and Monitoring" or "You are in
+Admin". If you can open both the Glass and the Ingest Studio, the banner offers **Open ‹dataset› in
+the Ingest Studio ↗**, and from there **← Back to case ‹name› in the Glass**, which brings you back
+to the same case and view.
 
 ## 4. Cases
 
 Everything happens inside a **case**. Your level on a case decides what you may do there:
 
-| Level | You may |
+| Level | What it means |
 | --- | --- |
-| **Viewer** | Open it, browse and query |
-| **Editor** | Also change it: add data, expand, edit links, triage alerts |
-| **Author** | Also decide who may open it, and which data it reads |
+| **Viewer** | Reads the case. Changes nothing in it. |
+| **Editor** | Works the case: adds, links, confirms and works its alerts, as their role allows. |
+| **Author** | Answers for the case: gives levels, and may remove it. A dataset's Authors are its home case's Authors. |
 
 Whoever creates a case is its first Author. **A level never widens what you can see**: a record above
 your clearance stays hidden in a case you author. A case you have no level on does not appear at all.
+What you may do in a case is your level and your **roles** together:
 
-The case menu at the top left lists your cases as a tree: each case with its **branches** beneath
-it (a branch is a case of its own, made from nodes you chose — section 5.2), named for how many nodes it
-was made from and when, until you rename it. On a branch, the menu's button reads *case › ⑂ branch*.
-Each branch's **⋯** offers **Open**, **Rename** and **Delete**; Delete asks once, and the branch leaves
-every list for everyone while the case it came from is untouched. Deleting the branch you are in takes
-you back to its case. Renaming and deleting are for the branch's Author (an administrator may also
-delete). The rail's **Cases** drawer shows the same tree, with **Who can open this case**, which the
-Author manages. A link to a case opens it directly. A case reads only its own
-**datasets**: search, paths, Explore and watches all stay within them. A record can belong to more than
-one dataset; you may see it through any one the case reads, but what it says of where it came from
-(its sources) is shown only when the case reads all of them (section 5.6).
+| Role | What it is for |
+| --- | --- |
+| **Analyst** | Investigates cases, works alerts and keeps watches. Reads figures and boards. |
+| **Data Engineer** | Builds and runs pipelines, reviews promotions into a dataset and decides held rows. |
+| **Administrator** | Looks after people, roles, teams, datasets and the deployment. Does not investigate by being one. |
+| **Reports Viewer** | Reads a case's figures and the dashboards, and sees the alerts on cases they can read. Never works an alert. |
+| **Rule author** | Writes the rules that raise alerts, and works the alerts in the queue. |
+
+Your administrator may also have given you a role of the deployment's own, or the **Super user**
+preset (Analyst, Data Engineer and Rule author together, still never the second person on your own
+work). The rail's **?** opens *Roles, teams and Authors*, which says the same in full: each place,
+role, right and level.
+
+**Starting a case.** **Create case** asks you to name the case and choose what it reads: **Use an
+existing dataset…**, or **Make a new dataset — empty, loaded in the Ingest Studio**. You may tick the
+case's domain packs here too. A third way starts from **Boards**: a drawing as a case of its own
+(section 5.14). **Remove**, for a case's Author or an administrator, asks "Remove this case from every
+list? Nothing is deleted."
+
+**One dataset, and its home case.** A case reads one **dataset**: search, paths, Explore and watches
+all stay within it. A record can belong to more than one dataset; you may see it through the one the
+case reads, but what it says of where it came from (its sources) is shown only when the case reads
+all of them (section 5.6). Every dataset also has one **home case**, named for it, which holds the
+dataset's own reports and its alerts that belong to no working case. A dataset's **Authors** are the
+Authors of its home case: they answer for the dataset. Owning is not acting: reviewing a promotion or
+accepting a type also needs that right.
+
+**Teams.** A team is a set of people with a lead, made by an administrator. A dataset's Authors may
+be a team as well as people: its members answer for the dataset while they are in the team, and not
+after. *Coming:* a case level given to a team, and alerts routed to a team and handed out by its lead.
+
+The case menu at the top left lists your cases. The rail's **Cases** drawer lists them too, with
+**Who can open this case**, which the Author manages, and the case's **views** (section 5.13). A link
+to a case opens it directly.
 
 **The case brief.** The **Cases** drawer also holds the case's **Brief**: what the case is for.
 
@@ -156,7 +221,7 @@ one dataset; you may see it through any one the case reads, but what it says of 
   and a model never does.
 - **Attach…** links a requirement to what answers it: a **Trend**, a **Saved pattern**, an **Assessment**
   or a **Canvas view**, up to ten to a requirement. Choosing an attachment's name opens it where it
-  lives: a canvas view opens as a case, a trend opens Reports on its Trends tab, and a pattern or
+  lives: a canvas view opens as a case, a trend opens Figures on its Trends tab, and a pattern or
   assessment takes you to its panel. **Detach** removes the link only.
 - Anyone who may read the case reads the brief. Only the case's **Author** edits it (**Edit the priority
   requirement**, **Add a requirement**, **Edit**, **Remove**). Ctrl/Cmd+Enter saves a box and Esc
@@ -166,7 +231,6 @@ one dataset; you may see it through any one the case reads, but what it says of 
 - Editing the priority, a requirement's text or status, adding one or removing one puts a step,
   "Edited the brief", in **History**. That step cannot be restored, since a brief is not a canvas.
   Attaching and detaching are recorded, but do not appear in History.
-- A branch does not inherit the brief.
 
 **The demonstration cases a deployment starts with.** Your administrator may have installed
 OspreyFlow from a **starter** (a theme and a domain; administration guide §1a). Each starter brings
@@ -193,9 +257,10 @@ added from outside, such as a VAST Challenge dataset, is a case of its own named
 
 | Part | What it is |
 | --- | --- |
-| **Top bar** | The case menu, search, the view switch (Graph, Map, Matrix, Reports), Export, and your account |
-| **Left rail** | The places: Explore, Monitoring (its Watches tab holds your watches), Ownership, Questions, History, Dashboards, Help — those your rights allow |
-| **Canvas** | The graph, the map, the Matrix or the reports |
+| **Top bar** | The place switcher, the case menu, search, the view switch (Graph and Map, with Matrix and Figures under **More views**), Export, and your account |
+| **Context banner** | Where you are: the Glass's **Case** and **Boards**, the case and the dataset it reads |
+| **Left rail** | Cases, Ownership, History, Explore, Questions, Dashboards and Connection strength, those your rights allow (some under **⋯ More**), and Help (**?**) |
+| **Canvas** | The graph, the map, the Matrix or the case's figures |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
 | **Timeline** | Folded at the bottom until opened |
 | **Status bar** | How many nodes and links are drawn, how many dimmed by a filter, and how many hidden by handling |
@@ -213,7 +278,7 @@ list** (section 5.5) is a fold here too.
 ![The graph, with its groups shown](images/user/05-canvas.png)
 
 **Selecting.** Click a node; Shift-, Ctrl- or Cmd-click adds or removes one; or draw a lasso. The
-selection bar then offers **Expand**, **Show links among these**, **Branch to a new case**,
+selection bar then offers **Expand**, **Show links among these**, **Save as a view** (section 5.13),
 **Remove from view** and **Clear** (Esc). Past one degree, **Show links among these** draws the routes
 between the selected nodes, says which pairs are not connected, and says when the routes are already
 drawn. **Remove from view** and **Clear view** take nodes off the canvas; a node you put back brings
@@ -221,10 +286,10 @@ its links in the view back with it.
 
 **Expanding.** Double-click, or press Enter, to draw a node's links. Right-click (or `\`) opens its
 menu: **Show links** lists each kind of relationship with how many there are, so you can draw just
-one; **Actions** holds Link to…, Split from…, Find paths to…, Explain cluster, View messages, Branch
-selected to a new tab, Set picture, and Mark for suppression. An expansion that would add more than
+one; **Actions** holds Link to…, Split from…, Find paths to…, Explain cluster, View messages, Expand
+group, Read full screen and Add files held by this…. An expansion that would add more than
 **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion
-past the working set's own limit is refused; reduce what is drawn, or branch, and try again.
+past the working set's own limit is refused; reduce what is drawn, or save a smaller view, and try again.
 
 **Reading a link.** A link's stroke says where it came from: **solid** from a record, **dashed**
 inferred by a model, **dotted** unresolved. Hovering names its type and how many such links join the
@@ -266,8 +331,8 @@ Strict, Balanced (the default) or Broad — and says how many merged and split.
 press `G` on a node in it. **Layout** offers Organic, Force-directed tree, and Clustered bubbles;
 **Arrange** lays everything out afresh. Drag nodes to move them; their positions belong to your view.
 
-**Branching** copies the selection, and the links between it, into a new case of which you are
-Author; the case you were in is unchanged.
+**Saving a view** keeps the selection, and the links between it, as a view of this case
+(section 5.13); the case itself is unchanged.
 
 ### 5.3 The map
 
@@ -279,6 +344,14 @@ a payment from an outside account into a prisoner's private cash, for instance. 
 on the map from four matched points and draws a grid whose cells become locations. **Draw boundary**
 filters to what falls inside it. **Hotspot cells** counts what is in each cell, and filters as you
 choose. If the deployment's basemap is not built, the map says so.
+
+**Basemap.** Where your administrator has made more than one map available, a **Basemap** switch
+chooses between them; a map served from outside the deployment is marked as a hosted provider.
+
+**Find a place.** Type at least two letters of a place's name and press **Find**. It searches only the
+places in the gazetteer datasets this case reads ("Places come from the gazetteer datasets this case
+reads"), never an outside geocoder, and finds a place by its name alone. If none matches, it says "No
+place called … is in the gazetteer this case reads".
 
 ### 5.4 The timeline
 
@@ -298,11 +371,8 @@ The selection bar says so ("Lit in 5 Jan – 30 Apr 2026: undated links are not 
 is still exactly the lit nodes. If nothing is lit, the selection is left alone and it says so. Dates
 are UTC. To reach it from the keyboard, set the period with **Set exact dates** in the **⋯** menu.
 
-**Branch to a new case**, pressed while the selection is still what was lit and the period unchanged,
-branches only the lit links and the nodes they touch, and the new case's timeline starts and ends
-inside the period. Its tab is named for the period, such as "5 Jan – 30 Apr 2026, selected". If the
-slice is over the canvas's limit, it says how many and that no tab was made; narrow the period or select
-fewer nodes. Change the selection and the branch is an ordinary one.
+**Save as a view**, pressed with the lit nodes selected, keeps them as a view of the case
+(section 5.13).
 
 ![Cyclical: weekday against hour of day](images/user/15-timeline-weekly.png)
 
@@ -579,8 +649,8 @@ compare the two on the same case, and back.
   link's rarity term, each boost added, and the **raw sum on the client's scale**, beside the strength
   it is drawn at. With two people selected, **What these two share** does the same for them.
 
-**Who changes influencers.** An installation-wide set is proposed in **Monitoring → Connection
-strength** by someone holding the right to manage influencers, and takes effect only when **another**
+**Who changes influencers.** An installation-wide set is proposed in the Glass's **Connection
+strength** (on the rail) by someone holding the right to manage influencers, and takes effect only when **another**
 person with that right approves it; the proposer can withdraw it but never approve it, and every
 version is kept; a version may also choose the composition and the rarity measure. A case's **Author**
 may add influencers for that case, switch off installation-wide ones in it, or choose its composition
@@ -593,6 +663,91 @@ strength figure is on the drawn scale (0 to 1) or **on the client's scale** (the
 client parity has: under the standard composition such a rule raises nothing). It is previewed like
 any other, and judged as its author, on what its author may see: it never raises an alert on evidence
 its author could not read.
+
+### 5.13 Case views
+
+A **view** is a saved lens on the case: what was drawn, its filters and its period. It is never a
+copy: there are no branches, and nothing in a view changes the case.
+
+- **Saving.** Select what matters and choose **Save as a view** in the selection bar; name it under
+  **View name** and **Save view**. A new view is yours alone.
+- **Finding them.** The rail's **Cases** drawer lists them under **Views in this case**, each with
+  **Open**, **Share with the case** and **Delete** ("Delete this view? Nothing on the case is deleted
+  with it."). Only the person who saved a view shares or deletes it. Before you have any it says "No
+  views yet. Select nodes on the canvas and choose *Save as a view*."
+- **Opening one** reads the case through it, read-only. A banner says "View: ‹name›", whether it is
+  shared or private, and "Nothing in a view changes the case.", with **Back to the case**. A view
+  opened from an alert also says "Opened from an alert" and offers **← Back to the alert**.
+
+### 5.14 Drawing boards
+
+A **drawing board** is where you write down what you know that the data does not yet say: you
+declare a person, an account or a place, and draw the links between them. What you draw goes into
+the case's own **analyst layer**: it is read with the case's dataset but never written into it, and
+no other case can see it or infer it. The analysis canvas never draws.
+
+**Opening a board.** Choose **Boards** in the context banner: "Drawing boards in case ‹name›".
+**New board** asks for a **Board name** and where to **Start from**: blank, **From a view of this
+case**, or **From the selection** (its items as live references); then **Make the board**. A new board
+is yours alone until you **Share with the case**; on a board someone else drew you read it, "Read
+only: drawn by ‹name›".
+
+**A drawing as a case of its own.** **New drawing as a case of its own** asks for a **Drawing name**,
+the **Highest marking it may hold** and a **Starter model** (the POLE core alone, FIBO, NIEM or
+STIX), then **Start the drawing**. It makes a drawn dataset, its case with you as Author, and its
+board.
+
+**Drawing.** Each item asks "What do you call it?", its type from the dataset's model, its marking,
+its **grading** in the deployment's scheme (5x5x5 by default: source, intelligence and handling) and
+where it comes from: a source note, a document the case holds, or both. Without a source it says "Give
+a source note or choose a document of the case: where this comes from." **Add to board** places it,
+"‹name› added to the board, with a watch for it". Dragging an item moves it. To draw a link, drag its
+⟶ handle onto another item, hold Alt while dragging, right-click and choose **Draw a link from
+here**, or use **Draw a link…** from the keyboard; a link asks the same questions, then **Draw the
+link**. A link may join a drawn item to a loaded one; the loaded item is untouched.
+
+- **The marking ceiling.** A board says the highest marking it may hold. An item, an edit or a
+  picture marked above it is refused, in words.
+- **Your own items only.** You edit the items you drew, and **Withdraw the item** (or **Keep it**)
+  instead of deleting it; withdrawing ends its watch, and the record of it is kept.
+- **Pictures.** **Add the picture** takes an upload, with **The picture's marking** and **Where the
+  picture comes from**, or an image document already on the board. A reader not cleared for the
+  picture sees none.
+- **Looks like a loaded item.** Where a drawn item resembles something loaded, the board lists the
+  pair: **Same: X is Y** keeps a link in this case ("Marked as the same: a link is kept in this
+  case, nothing is merged"), and **Not the same** says the opposite. Neither changes the loaded item.
+- **Who may draw.** You need the rights to draw on boards and to investigate, and only a board's
+  creator draws on it.
+
+**Promote…** sends what you drew into the case's dataset (it is not chosen: it is the dataset the case
+reads). It is offered to a board's creator; promoting also needs the case's Author level and the right
+to promote (`promote_to_dataset`), and without them you are told "You do not have the right to do
+that here." The sheet, **Promote into ‹dataset›**, says the dataset's highest marking and its policy
+("you promote it", or "a second person reviews it first"), and lists **What goes**: each item, link,
+picture and match decision with its type and marking. Each is checked (its marking within the
+dataset's highest, its type in the dataset's model, its grading, and, for a link, both its ends going
+too), and one that cannot go says why. **Promote** (or **Send for review**) sends what you ticked as
+**one load**, and you are told, for example, "Waiting for review 3 items and 2 links into ‹dataset›,
+load ‹id›. A second person reviews it in the Ingest Studio; nothing of it is in the dataset until
+then." Each item stays marked as drawn, with its marking and grading. **Promotions from this board**
+lists each one as *Waiting for review*, *Committed*, *Rejected* or *Reverted*. A case reading no
+dataset, a case reading a composite, and a drawing that is its own dataset promote nothing, and say
+so. A promotion is reviewed by one of the dataset's Authors who may review promotions, never by you,
+and taken back like any load (the developer guide, section 7.8).
+
+- **Alerts on a board.** A board shows an **Alerts** panel: the case's open alerts by source and age,
+  and the newest, counted for you. Nothing is opened from it. On the canvas, an entity with open
+  alerts carries a badge: **!** for one, **!3** for three.
+
+*Coming:* an alert when new data meets a drawn item.
+
+### 5.15 Your own link types
+
+When no type fits a link, an Editor may choose **Define a new type…** in the link's change form, say
+**Why does no type fit?** and **Propose type**. The type is usable in this case at once, marked
+proposed, while a data engineer of the dataset decides it in the Ingest Studio's **1 Model** (added to
+the draft domain model, or declined); the person who proposed it never decides it. Its links stay in
+the case's analyst layer.
 
 ## 6. Questions to the model
 
@@ -618,7 +773,7 @@ cites that was not in the account it was given is dropped and counted among the 
 
 The documents and the graph facts share one limit. Over it, the question is refused, saying how many
 characters each came to and the limit, and that nothing was sent: narrow the selection, narrow the timeline
-window, or branch the case, then ask again. Your question stays in the box. Nothing is trimmed. An
+window, or open a smaller view of the case, then ask again. Your question stays in the box. Nothing is trimmed. An
 answer is shown later only to someone who could see every item it was built from, so a reader cleared
 lower does not see an answer built on events above their clearance. An answer kept before that was
 recorded may still be shown as before.
@@ -662,13 +817,20 @@ To ask in words for a pattern rather than an answer, use **Ask to search** in th
 
 ## 7. Monitoring and alerts
 
-### 7.1 The Monitoring place
+> **Alerts are worked in Rules and Monitoring**, the fourth place (key `R`), which the Analyst and
+> Rule author roles open. Its tabs are **Alerts**, **What raises alerts**, **Held rows** and
+> **Changes**. An alert has its own address, and **Open the evidence** saves a private view of the
+> case and opens it with **← Back to the alert**. This section is being rewritten for the alerts
+> journey (one queue, what raises alerts, watches, team routing, *Raise an alert* and the rule
+> editor), which is coming; where it says *Monitoring*, read Rules and Monitoring.
 
-![Monitoring: the one queue, with a hotlist alert open](images/user/09-monitoring.png)
+### 7.1 The Rules and Monitoring place
 
-The rail's **Monitoring** (its badge counts what is open or claimed) is the one place for alerts. Its
-tabs are **Queue**, **Rules**, **Watches**, **Lists** and **Connection strength**, and, by your level in the
-case, **Held rows** (an Editor or Author) and **Audit** (an Author or an administrator).
+![Rules and Monitoring: the alerts, with a hotlist alert open](images/user/09-monitoring.png)
+
+**Rules and Monitoring** (key `R`) is the place for alerts. Its tabs are **Alerts**, **What raises
+alerts**, **Held rows** and **Changes**. **Connection strength** is not here: it is in the Glass's rail
+(section 5). What follows describes the alerts themselves, which the rewrite named above keeps.
 
 **The queue holds every kind of alert you may see**, in one list:
 
@@ -953,21 +1115,35 @@ diligence** gives the verification status, risk band and score with each factor'
 verifying documents. All of it is worked out as you read, from what you can see, and stored nowhere.
 **Show the structure on the canvas** needs Editor.
 
-## 9. Reports and dashboards
+## 9. Figures and dashboards
 
-![Reports → Figures](images/user/07-reports-figures.png)
+![The case's Figures](images/user/07-reports-figures.png)
 
-The view switch's **Reports** shows the case's figures over 4, 12, 26 or 52 weeks: alerts raised each
-week, open alerts by age, outcomes (open, claimed, each closing reason, and closed with no outcome),
-customers by status, held rows. Every figure is **counted for
-you**: anything you cannot see is in no figure. A period too long to count says to choose a shorter
-one; it never shows part of a chart. Other tabs, as your rights allow: **Trends**, **Packs** (report
-packs, exported to PDF), **Published**, **Data feeds** and **Dashboards**.
+**Figures** (under **More views** in the view switch; a Reports Viewer has it in the switch itself)
+shows the case's own counts over a **Period** of the last 4, 12, 26 or 52 weeks: an **Alerts** panel
+(open alerts by source and age, and the newest), alerts raised each week, open alerts by age,
+outcomes (open, claimed, each closing reason, and closed with no outcome), customers by KYC status, a
+summary of the case's people, objects, locations and events, and held rows (for Editors and above).
+**Download the figures (CSV)** is there for whoever may read the case's feed. Every figure is
+**counted for you**: anything you cannot see is in no figure. A period too long to count says to
+choose a shorter one; it never shows part of a chart. *Coming:* a **Drawing** panel (drawn, promoted,
+awaiting review, withdrawn): the Glass has it, but the Conduit does not count it yet, so it is not shown.
 
-![Reports → Dashboards: a board drawn inside the Glass](images/user/08-reports-dashboard.png)
+Beside Figures, as your rights allow: **Trends**, **Packs** (report packs, exported to PDF),
+**Published** and **Data feeds**.
 
-**Dashboards** draws the deployment's boards inside the Glass, showing only those you may open. The
-same boards are at `bi.` in front of the deployment's address, signed in the same way.
+![Dashboards: a board drawn inside the Glass](images/user/08-reports-dashboard.png)
+
+**Dashboards**, on the rail, is the one door to the deployment's boards, drawn inside the Glass and
+showing only those you may open. The same boards are at `bi.` in front of the deployment's address,
+signed in the same way. The first is **Alert monitoring**: alerts raised each week and by rule,
+closed by outcome, time to close, hotlist matches, and the team view.
+
+**For a Reports Viewer.** Home lists the alerts on the cases you can read, each with **Open in its
+case** and **Open the dashboard**; you never work an alert. **Open in its case** opens the case's
+Figures with the panel the alert concerns outlined; **Open the dashboard** opens Alert monitoring,
+filtered to the alert's rule and period. Both say "From alert: ‹title›", with **← Back to your
+alerts** to return Home.
 
 ![A report pack holding an open alert, a trend over alerts and a closed alert](images/user/21-alerts-in-reporting.png)
 
@@ -1041,7 +1217,7 @@ recorded. Report packs export to PDF from the Packs and Published tabs.
 
 | Where | Key | Does |
 | --- | --- | --- |
-| Start | `G` | Open the Glass |
+| Home | `G`, `I`, `R`, `A` | Open the Glass, the Ingest Studio, Rules and Monitoring or Admin, as your roles allow |
 | Anywhere | `/` | Search |
 | Anywhere | `?` | The welcome panel, with keys worth knowing |
 | Canvas | Tab, Shift+Tab | Move into and out of the canvas |

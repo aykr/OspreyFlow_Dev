@@ -1,6 +1,7 @@
 // The welcome page's About (ADR-115 decision 8; Amendment 4): what the product is for, with screens of
 // synthetic demonstration cases. Switched off by `welcome.about: false`.
 import { currentBrand } from "../brand/brand";
+import { PLACE_WORDS } from "../help/roles";
 import { MeshMark } from "../shell/BrandMark";
 import { PRODUCT_STATEMENT } from "./statement";
 import amlDecision from "./assets/screen-aml-decision.jpg";
@@ -57,8 +58,30 @@ const FRAUD = [
 
 const MONITORING = [
   { title: "Hotlists and watches", says: "Put a number, an account or a person on a hotlist with a review date. When a load matches it, an alert says what matched, and which file and row put it there." },
-  { title: "Rules on every load", says: "Typology rules run as the data arrives, before it is committed, and their alerts land in one queue for the team." },
+  { title: "Rules on every load", says: "Typology rules run as the data arrives, before it is committed, and their alerts are worked in Rules and Monitoring." },
   { title: "Each alert explains itself", says: "An alert names its rule or hotlist entry, the entity it matched and its evidence. It is closed with a reason, and the reason stays on the record." },
+]; // prettier-ignore
+
+// ADR-145 Amendment 4 decision 1: the four places, named as `help/roles.ts` names them. What each is for
+// is said as the guides say it (D2a): `PLACE_WORDS`' own sentences still name releases and one queue,
+// neither built yet, so they are not repeated here until they are.
+const PLACE_SAYS: Record<keyof typeof PLACE_WORDS, string> = {
+  glass: "Investigate a case: search, expand, map, read its figures and its boards.",
+  ingest: "Bring data in: sources, pipelines, the domain model and held rows.",
+  rules: "Work the alerts that rules and watches raise, and see what raises them.",
+  admin: "Run the deployment: people, roles, teams, datasets, models, maps and operations.",
+};
+const PLACES = (Object.keys(PLACE_WORDS) as (keyof typeof PLACE_WORDS)[]).map((key) => ({
+  title: PLACE_WORDS[key].name,
+  says: PLACE_SAYS[key],
+}));
+
+// ADR-143 as built (L3.3, and L3.4's promotion, Amendment 5): drawing boards, in words.
+const DRAWING = [
+  { title: "Declare and draw", says: "On a case's drawing board, declare a person, an account or a place and draw the links between them. Each drawn item is marked, graded and sourced." },
+  { title: "Kept to the case", says: "What you draw goes into the case's own analyst layer, never into the loaded data, and no other case can see it or infer it." },
+  { title: "Nothing merged", says: "A drawn item that looks like a loaded one is offered as a pair. The analyst says whether they are the same, and nothing is merged." },
+  { title: "Promoted as one load", says: "A case's Author sends what they drew into the dataset as one load, each item checked against its highest marking and its model, and reviewed by a second person where the dataset asks. It stays marked as drawn." },
 ]; // prettier-ignore
 
 const SAFEGUARDS = [
@@ -153,6 +176,16 @@ export function WelcomeAbout({ version = null }: { version?: string | null }) {
           <h3 className="welcome-about__heading">Event monitoring and alerting</h3>
           <p className="welcome-about__sub">For every team: the graph watches new data, so a match finds you.</p>
           <Points points={MONITORING} label="Event monitoring and alerting" />
+        </div>
+        <div className="welcome-about__part">
+          <h3 className="welcome-about__heading">Drawing boards</h3>
+          <p className="welcome-about__sub">For field analysts: what you know that the data does not yet say.</p>
+          <Points points={DRAWING} label="Drawing boards" />
+        </div>
+        <div className="welcome-about__part">
+          <h3 className="welcome-about__heading">Four places, each with one job</h3>
+          <p className="welcome-about__sub">You see only the places your roles open.</p>
+          <Points points={PLACES} label="The four places" />
         </div>
         <div className="welcome-about__part welcome-safeguards">
           <div>

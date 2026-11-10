@@ -1,0 +1,63 @@
+# test_guide_role_words.py, each kind of drift shown red by a plant in the file it reads (rule 15)
+
+Scanned commit: bfb8257 (lane/docs, on main 9d3fbf4). Each plant was written into the
+named file, `.venv/bin/pytest -q ../OspreyFlow_Build/tests/test_guide_role_words.py` run from OspreyFlow_Core on
+the closed ports, and the file restored (roles.ts, another lane's, only in the working tree, never committed).
+The last run is the restored tree. Output lines kept: each failure and the counts.
+
+## plant: a role's sentence in the user guide
+- OspreyFlow_Core/docs/user-guide.md: '| **Analyst** | Investigates cases, works alerts and keeps watches. Reads figures and boards. |' -> '| **Analyst** | Investigates cases and works alerts. Reads figures and boards. |'
+- expected red: test_each_role_row_says_what_roles_ts_says[user-guide.md]
+- exit 1
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_each_role_row_says_what_roles_ts_says[user-guide.md]
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_a_role_sentence_changed_is_caught
+2 failed, 42 passed in 0.30s
+
+## plant: a right reworded in spec 10
+- OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md: '| `create_case` | Start a case. |' -> '| `create_case` | Open a case. |'
+- expected red: test_the_rights_table_is_roles_ts_own[10_ADMINISTRATION_GUIDE.md]
+- exit 1
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_the_rights_table_is_roles_ts_own[10_ADMINISTRATION_GUIDE.md]
+1 failed, 43 passed in 0.25s
+
+## plant: a right dropped from the administration guide
+- OspreyFlow_Core/docs/administration-guide.md: '| `manage_models` | Choose the models and their keys. |' -> ''
+- expected red: test_the_rights_table_is_roles_ts_own[administration-guide.md]
+- exit 1
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_the_rights_table_is_roles_ts_own[administration-guide.md]
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_roles_ts_changed_is_caught
+2 failed, 42 passed in 0.26s
+
+## plant: a place a role does not open
+- OspreyFlow_Core/docs/administration-guide.md: '| Admin, the Glass |' -> '| Admin |'
+- expected red: test_each_role_row_opens_the_places_recorded[administration-guide.md]
+- exit 1
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_each_role_row_opens_the_places_recorded[administration-guide.md]
+1 failed, 43 passed in 0.26s
+
+## plant: a level reworded in the user guide
+- OspreyFlow_Core/docs/user-guide.md: '| **Viewer** | Reads the case. Changes nothing in it. |' -> '| **Viewer** | Reads the case. |'
+- expected red: test_each_level_row_says_what_roles_ts_says[user-guide.md]
+- exit 1
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_each_level_row_says_what_roles_ts_says[user-guide.md]
+1 failed, 43 passed in 0.26s
+
+## plant: roles.ts reworded, the copies left
+- OspreyFlow_Core/apps/workspace/src/help/roles.ts: 'draw_on_boards: "Draw on a case\'s boards."' -> 'draw_on_boards: "Draw on boards."'
+- expected red: test_the_rights_table_is_roles_ts_own
+- exit 1
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_the_rights_table_is_roles_ts_own[administration-guide.md]
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_the_rights_table_is_roles_ts_own[10_ADMINISTRATION_GUIDE.md]
+2 failed, 42 passed in 0.26s
+
+## plant: the welcome page's place sentence changed
+- OspreyFlow_Core/apps/workspace/src/welcome/WelcomeAbout.tsx: 'admin: "Run the deployment: people, roles, teams, datasets, models, maps and operations."' -> 'admin: "Run the deployment."'
+- expected red: test_the_welcome_page_says_each_place_as_the_guides_do
+- exit 1
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_the_welcome_page_says_each_place_as_the_guides_do[user-guide.md]
+FAILED ../OspreyFlow_Build/tests/test_guide_role_words.py::test_the_welcome_page_says_each_place_as_the_guides_do[architecture-guide.md]
+2 failed, 42 passed in 0.26s
+
+## restored
+- exit 0
+44 passed in 0.24s
