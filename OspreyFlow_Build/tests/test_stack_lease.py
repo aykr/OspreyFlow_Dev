@@ -718,3 +718,57 @@ def test_the_start_line_the_host_receives_runs_and_keeps_the_command_s_own_exit_
     assert lines[-1].startswith("Wall time: ") and "exit 7 (stack b, the lease case took at 20" in lines[-1], lines
     assert "set-up before it" in lines[-1], lines
     assert (run / "lease").read_text() == "holder=case\n"
+
+
+
+# --- live: the lane's live tests selected by its change (admin's T1 part 3, 10 November 2026) ----------------
+
+
+def _live(lease, tmp_path: Path, cwd: Path, picks: str, *args: str) -> subprocess.CompletedProcess[str]:
+    """`stack_lease.sh live` with the selector stood in for by a script printing `picks` (one path a line)."""
+    lease("status")
+    selector = tmp_path / "select.sh"
+    selector.write_text(f"#!/bin/sh\necho \"selector $*\" >> \"{tmp_path}/selector.log\"\nprintf '%s' '{picks}'\n")
+    selector.chmod(0o755)
+    env = {**os.environ, "OSPREY_LEASE_DIR": str(tmp_path / "lease"), "OSPREY_LIVE_SELECT": str(selector),
+           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+    return subprocess.run(["bash", str(SCRIPT), "live", *args], cwd=cwd, env=env, capture_output=True, text=True)
+
+
+def test_live_runs_the_selection_on_the_lane_s_stack_from_the_core_folder(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")  # stack b, on the server
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    picks = "tests/services/api/test_route_rights.py\ntests/conformance/graph_port/test_suite.py\n"
+    ran = _live(lease, tmp_path, wt / "OspreyFlow_Core", picks, "case")
+    assert ran.returncode == 0, ran.stderr
+    script = [l[len("stdin "):] for l in log.read_text().splitlines() if l.startswith("stdin ")]
+    assert "cd osprey-runs/case/OspreyFlow_Build/ || exit 1" in script, script  # wherever it was called from
+    run = next(l for l in script if "pytest" in l)
+    assert "../OspreyFlow_Build/tests/services/api/test_route_rights.py" in run, run
+    assert "../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py" in run, run
+    assert "cd\\ ../OspreyFlow_Core" in run or "cd ../OspreyFlow_Core" in run, run
+    assert "2 live test files" in ran.stderr, ran.stderr
+
+
+def test_live_all_asks_the_selector_for_the_full_set(lease, tmp_path: Path) -> None:
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    ran = _live(lease, tmp_path, wt, "tests/services/api/test_route_rights.py\n", "case", "--all")
+    assert ran.returncode == 0, ran.stderr
+    assert "selector --all" in (tmp_path / "selector.log").read_text()
+
+
+def test_live_refuses_an_empty_selection_and_a_lane_holding_no_stack(lease, tmp_path: Path) -> None:
+    log = _remote_tools(tmp_path)
+    wt = _lane_worktree(tmp_path)
+    none = _live(lease, tmp_path, wt, "tests/services/api/test_route_rights.py\n", "case")
+    assert none.returncode == 1 and "holds no stack" in none.stderr
+    lease("acquire", "studio", "a run")
+    lease("acquire", "case", "a run")
+    empty = _live(lease, tmp_path, wt, "", "case")
+    assert empty.returncode == 1 and "empty" in empty.stderr, empty.stderr
+    assert not log.exists() or "rsync" not in log.read_text()  # nothing sent for an empty selection

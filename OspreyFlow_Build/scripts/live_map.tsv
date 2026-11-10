@@ -1,0 +1,20 @@
+# The paths Python's imports cannot see, and the live test files each selects (scripts/live_select.py, admin's
+# T1 part 3). Columns: glob (from the repository root; ** crosses folders), then none, all or test paths (relative
+# to OspreyFlow_Build; a folder selects every live file under it), then why. The first rule that matches wins.
+# A Python file is decided by its imports, unless a rule here names it; any other path no rule covers selects the
+# full set. Add a rule only for a path whose reach you can name.
+OspreyFlow_Build/process/**	none	the build record: no test reads it as data
+OspreyFlow_Build/spec/**	none	the specification: its own checks are in make test
+**/*.md	none	documents
+OspreyFlow_Core/docs/**	none	the guides
+OspreyFlow_Core/apps/**	none	the Glass: its tests are vitest and Playwright, never the live pytest set
+OspreyFlow_Core/packages/schemas/generated/**	none	the TypeScript made from the schemas, which the Glass alone reads
+.github/**	none	CI's own workflow; the commands it runs are in the Makefile
+OspreyFlow_Core/osprey.yaml	all	every test's configuration
+OspreyFlow_Core/pyproject.toml	all	the Python dependencies
+OspreyFlow_Core/uv.lock	all	the Python dependencies
+OspreyFlow_Build/pytest.ini	all	every test's configuration
+OspreyFlow_Build/Makefile	all	the live set itself
+OspreyFlow_Core/deploy/**	all	the stores' images and their configuration
+OspreyFlow_Build/scripts/lane_stacks.tsv	all	the stacks' ports
+OspreyFlow_Build/scripts/live_map.tsv	none	this map: it chooses which live tests run, and no test reads it (test_live_select.py builds its own)
