@@ -10,7 +10,9 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 The workspace is rebuilt around four places, branches give way to case views, analysts draw on
 boards and promote what they draw, alerts arrive in one queue that can route to a team, and Admin
-becomes a place of its own. An existing deployment needs the steps below once.
+becomes a place of its own. Rules are written in a rule editor, a dataset's definitions move between
+environments as a release, and an outside scheduler can run a pipeline. A deployment installed from
+v0.4.12 is updated by the route in *Updating from v0.4.12*, below, once.
 
 **Before you update.**
 - **Back up first, and know where the backup goes.** Backups no longer go inside the checkout: a
@@ -43,30 +45,50 @@ becomes a place of its own. An existing deployment needs the steps below once.
   make a branch. A Data Engineer no longer opens Rules and Monitoring without a rule-writing or
   triage role.
 
-**After you update: once, on a deployment made before this release.** `ospreyflow update` runs
-none of these. Run each in this order, inside the deployment, first with `--dry-run` (which writes
-nothing and says what it would do), then without; a second run changes nothing. On Lite the
-container is `osprey-local-lite-api-1`; on a deployment installed by name, `docker ps` names its
-`api` container:
-`docker exec osprey-local-lite-api-1 python -m scripts.<name> --dry-run`
-1. `migrate_cases_to_one_dataset` places every case on one dataset (a case naming several reads a
-   composite of them, so it reads exactly what it read before) and gives it its analyst layer. A
-   case it cannot place is reported, never guessed.
-2. `migrate_branches_to_views` turns each branch into a view of its original case. A branch's own
-   drawn or added items move into the original's layer, tagged with the branch's name, so nothing
-   is lost; a case opened from an alert stays a case. Each view is private to the original case's
-   maker; the people the branch was shared with are listed, to share the view with them. Until it
-   runs, existing branches stay cases.
-3. `seed_target_models` gives each dataset its first domain model, live, from the packs its cases
-   chose, so no case loses a pack's figures. A pack the ontology no longer carries is named.
-4. `make_home_cases` gives each dataset its home case, its Author the dataset's maker. A dataset
-   whose maker is a service account, disabled or gone is named as needing an owner: give it one
-   in Admin › Datasets › *Change owner…*.
-5. `migrate_sources` registers each recipe's file as a source of its dataset and moves each
-   pipeline's folder watch onto it. Files read under different governance are named, for you to
-   register by hand on the Studio's Sources tab.
-6. `remark_alert_nodes` re-marks alerts written before this release no lower than the links they
-   cite. An alert resting on markings of different units is listed, not changed.
+**Updating from v0.4.12.** For a deployment installed from v0.4.12, with the checkout at v0.5.0, run
+these steps in this order. Each takes `--name <x>`, the deployment's own name.
+1. `ospreyflow backup --name <x>`.
+2. `ospreyflow apply --name <x>`. It brings the deployment's settings across, keeping every secret,
+   and reports the model keys not yet moved.
+3. `ospreyflow update --name <x>`.
+4. `ospreyflow apply --name <x>` again. This one moves the model keys into the model gateway.
+5. The seven one-off scripts, in this order, each first with `--dry-run` (which writes nothing and
+   says what it would do), then without; a second run changes nothing. They run inside the
+   deployment: on Lite the container is `osprey-local-lite-api-1`; on a deployment installed by
+   name, `docker ps` names its `api` container:
+   `docker exec osprey-local-lite-api-1 python -m scripts.<name> --dry-run`
+   1. `migrate_cases_to_one_dataset` places every case on one dataset (a case naming several reads a
+      composite of them, so it reads exactly what it read before) and gives it its analyst layer. A
+      case it cannot place is reported, never guessed.
+   2. `migrate_branches_to_views` turns each branch into a view of its original case. A branch's own
+      drawn or added items move into the original's layer, tagged with the branch's name, so nothing
+      is lost; a case opened from an alert stays a case. Each view is private to the original case's
+      maker; the people the branch was shared with are listed, to share the view with them. Until it
+      runs, existing branches stay cases.
+   3. `seed_target_models` gives each dataset its first domain model, live, from the packs its cases
+      chose, so no case loses a pack's figures. A pack the ontology no longer carries is named.
+   4. `make_home_cases` gives each dataset its home case, its Author the dataset's maker. A dataset
+      whose maker is a service account, disabled or gone is named as needing an owner.
+   5. `migrate_rules_to_datasets` turns each whole-deployment rule into one rule per dataset, in that
+      dataset's home case, with the same conditions, owner and name. A running rule stays running;
+      one still waiting for its first approval becomes a draft. A dataset with no home case is
+      reported, and its rule is left whole and running until a second run.
+   6. `migrate_sources` registers each recipe's file as a source of its dataset and moves each
+      pipeline's folder watch onto it. Files read under different governance are named, for you to
+      register by hand on the Studio's Sources tab.
+   7. `remark_alert_nodes` re-marks alerts written before this release no lower than the links they
+      cite. An alert resting on markings of different units is listed, not changed.
+6. Assign the **Rule author** role to someone in Admin, so that the converted rule drafts can be
+   tested and made live. No one is given it on update.
+7. Give an owner to each home case named "needs an owner": Admin › Datasets › *Change owner…*.
+
+- **Plain `ospreyflow update` first is refused.** Run on a v0.4.12 deployment before step 2, it
+  refuses in one line naming these steps, and changes nothing.
+- **If an apply leaves the model gateway unhealthy**, `ospreyflow start --name <x>` brings the whole
+  deployment up and recovers it.
+- **What was rehearsed.** The refusal, the first apply (step 2), the seven scripts and the end state
+  were rehearsed on a copy of a v0.4.12 deployment. The release's own update (step 3) and the second
+  apply's move of the model keys (step 4) follow from the code, and are checked after release.
 
 **The workspace has four places.**
 - **Four places, each with one job:** the Glass (investigate a case), the Ingest Studio (bring data in), Rules
@@ -101,10 +123,18 @@ container is `osprey-local-lite-api-1`; on a deployment installed by name, `dock
   the dataset's home case, read them, enforced in the query. The team's lead, or their cover, gives an alert
   to a member, or sets it aside with **Suppress until…** (up to 90 days; it stays open and counted).
 - **From the Glass:** **Save as a watch**, **Watch for this**, and **Raise an alert…** to the case or the dataset.
-- **Drawn watches.** Drawing an item watches for it: a load that writes something like it raises a *Drawn
-  items* alert, "A load met a drawn item", with **Open the board**; the load's result says how many.
+- **Drawn watches.** Drawing an item watches for it: every load that writes something like it, a release
+  of held rows included, raises a *Drawn items* alert, "A load met a drawn item", with **Open the
+  board**; the load's result says how many.
 - **A new role, Rule author**, writes the rules and works the alerts. Rules and Monitoring opens to whoever
   triages alerts or writes rules, and reads the queue.
+- **The rule editor.** A rule is declared on a dataset, chosen first and fixed once saved, and written
+  as a sentence whose conditions offer only the types in the dataset's live model. It is saved as a
+  draft, tested on the last 30 days (the count is of what you may see), and made live; where the
+  dataset asks for a second person, someone other than its author approves it. Every step is listed
+  under *Changes*. Each version keeps its BPMN and DMN files, to export or to show as BPMN. A rule can
+  read a reference list, and a refresh of that list starts the rules that name it. A new rule cannot
+  cover the whole deployment; the existing ones are converted by `migrate_rules_to_datasets`.
 
 **The Ingest Studio.**
 - **Pipelines in guided and expert mode**, with a drawer beside the pipeline and a Preview that marks nothing.
@@ -138,17 +168,43 @@ container is `osprey-local-lite-api-1`; on a deployment installed by name, `dock
 - **The gazetteer panel**: beside the place search, *Gazetteers in this case's dataset*, with **Add** and **Remove**.
 
 **The deployment.**
-- **A highest marking per deployment** (`deployment.highest_marking`): a load, an upload or a demonstration
-  pack marked above it is refused before anything is written. Admin › System shows it.
+- **A highest marking per deployment** (`deployment.highest_marking`): a load, an upload, a demonstration
+  pack, a promotion, or a merge of a case's layer or a drawn dataset marked above it is refused before
+  anything is written. Admin › System shows it.
 - **Backups in a folder you name**, never inside the checkout: see *Before you update*.
 - **Every image runs as the numeric user 10001:10001**: the workspace and Superset images were the last to
   change. See *Before you update* for the harness image.
 - **Git is no longer in the Conduit's image**: a pipeline's recipe is committed in-process.
 - **The preflight checks a named deployment's own published ports**, read from its `deployment.env`.
 
-**Placeholders, filled before this release is published:**
-- **The rule editor** (L2.11): *to be written once it merges.*
-- **Phase 10, operations and releases between environments** (L1.7): *to be written once it merges.*
+**Releases, and pipelines run from outside.**
+- **A dataset's release** (its domain model, published pipelines and reference lists) moves between
+  environments as a YAML bundle: `ospreyflow release export`, and `ospreyflow release import`, with
+  `--dry-run` first, or *Export* on the Ingest Studio's Releases tab. A bundle never carries a
+  credential, loaded data, an owner, a case's membership, a folder path or a licensed list's rows. A
+  bundle that does not match its own manifest is refused whole, and an import lands drafts only, each
+  pipeline judged as the Studio's own save is; nothing goes live until it is made live in the Studio.
+- **Run a pipeline from your own scheduler.** `ospreyflow run`, as the deployment's service identity,
+  triggers a deployed pipeline, which runs as its owner; the same external run id never loads twice.
+  `--wait` waits for the run, and `--fail-on` exits with a failure when held or rejected rows reach
+  the limit you give. A pipeline can be marked *Owned externally*, and the Runs tab offers an Airflow
+  DAG for it.
+- **Run quotas.** An administrator can limit how many runs a dataset or a unit has a day, whatever
+  starts them; a run past the quota is refused in words before anything is read. Admin › Operations
+  shows the day's runs, and an alert when a quota is nearly used, by unit.
+
+**Accessibility.** The accessibility checks now also measure colour contrast where the automated
+checker cannot decide it, so text too faint to read fails the build.
+
+**Known issues.**
+- **A failed or refused scheduled load's notice is recorded but not yet shown anywhere.** A fix is
+  coming.
+- **To move a release install onto a source checkout**, use `ospreyflow apply`, not
+  `ospreyflow start --build`.
+- **An install is refused at preflight if `127.0.0.1:2480` is already taken.** As a workaround, set
+  `OSPREY_ARCADEDB_PORT` to the graph port.
+- **Two v0.4.12 updates of different deployments within one hour are refused.** Update them one at a
+  time, each with `ospreyflow update --name <deployment>`.
 
 ## v0.4.12 — 2026-11-05
 

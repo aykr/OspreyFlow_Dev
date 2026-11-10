@@ -19,7 +19,7 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.43 | 2026-11-10 | Describes v0.5.0. No change to its content. |
+| 1.43 | 2026-11-10 | Describes v0.5.0. §7: the alerts journey, the rule editor included, built and no longer *coming*; the section is still to be rewritten for it. |
 | 1.42 | 2026-11-10 | Rules' L2.10, case's L3.6 and L3.H1 as built, no longer *coming*. §4: a rule's alerts routed to one team, read by its members and the home case's Authors, given out or suppressed by its lead. §5.14: a drawn item's watch, the *Drawn items* alert when a load meets it, and the load result's count |
 | 1.41 | 2026-11-10 | Admin's L2.7 as built. §3: Home's *What you can do, and what you answer for*, with *Why can I do this?*; *Needs you* in the top bar. |
 | 1.40 | 2026-11-10 | Promotion as built (case lane's L3.4). §5.14: *Promote…*, its sheet and its checks, one load into the case's dataset, reviewed where the dataset asks; *Promotions from this board*; the board's Alerts panel and the canvas's alert badge. §7.1: the place's tabs as built, Connection strength in the Glass's rail. Still coming: Figures' Drawing panel (the Conduit does not count it yet). |
@@ -830,9 +830,10 @@ To ask in words for a pattern rather than an answer, use **Ask to search** in th
 > **Alerts are worked in Rules and Monitoring**, the fourth place (key `R`), which the Analyst and
 > Rule author roles open. Its tabs are **Alerts**, **What raises alerts**, **Held rows** and
 > **Changes**. An alert has its own address, and **Open the evidence** saves a private view of the
-> case and opens it with **← Back to the alert**. This section is being rewritten for the alerts
-> journey (one queue, what raises alerts, watches, team routing, *Raise an alert* and the rule
-> editor), which is coming; where it says *Monitoring*, read Rules and Monitoring.
+> case and opens it with **← Back to the alert**. The alerts journey (one queue, what raises
+> alerts, watches, team routing, *Raise an alert* and the rule editor) is built, and the v0.5.0
+> release notes describe it; this section is still to be rewritten for it. Where it says
+> *Monitoring*, read Rules and Monitoring.
 
 ### 7.1 The Rules and Monitoring place
 

@@ -20,7 +20,7 @@ installs and runs OspreyFlow, the [user guide](user-guide.md), for analysts, and
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.2 | 2026-11-10 | Describes v0.5.0. No change to its content. |
+| 1.2 | 2026-11-10 | Describes v0.5.0. §4: releases between environments and the rule editor as built, no longer *coming*. |
 | 1.1 | 2026-11-10 | Promotion as built (case lane's L3.4). One door in: Small on your own server publishes 443 alone. |
 | 1.0 | 2026-11-09 | First issue: the two architecture levels, the tiers and ports, the four places, cases and datasets (one dataset per case, home cases, the analyst layer, views instead of branches), access control in the store, where the data lives, every interface, the licence register's traps, and the limits. |
 
@@ -114,8 +114,8 @@ them is one whose every route also refuses them, so hiding is never the control.
 | **Admin** | Run the deployment: people, roles, teams, datasets, models, maps and operations | Sections, each shown only to the holder of its right |
 
 A switcher in the top bar lists the places (keys G, I, R and A); under the GOV.UK theme the switch sits
-inside the GOV.UK header. **Coming:** releases between environments in the Ingest Studio, and the
-rule editor in Rules and Monitoring.
+inside the GOV.UK header. Releases between environments are made in the Ingest Studio, and rules are
+written in Rules and Monitoring's rule editor.
 
 ## 5. Cases and datasets
 
