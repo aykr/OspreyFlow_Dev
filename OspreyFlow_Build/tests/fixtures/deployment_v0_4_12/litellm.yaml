@@ -1,0 +1,25 @@
+model_list:
+- model_name: qwen2.5:7b-instruct
+  litellm_params:
+    model: ollama_chat/qwen2.5:7b-instruct
+    api_base: http://ollama:11434
+    num_ctx: 32768
+- model_name: qwen2.5:0.5b-instruct
+  litellm_params:
+    model: ollama_chat/qwen2.5:0.5b-instruct
+    api_base: http://ollama:11434
+- model_name: all-minilm:22m-l6-v2-fp16
+  litellm_params:
+    model: ollama/all-minilm:22m-l6-v2-fp16
+    api_base: http://ollama:11434
+- model_name: moondream:1.8b-v2-q4_K_M
+  litellm_params:
+    model: ollama_chat/moondream:1.8b-v2-q4_K_M
+    api_base: http://ollama:11434
+- model_name: Systran/faster-whisper-tiny.en
+  litellm_params:
+    model: openai/Systran/faster-whisper-tiny.en
+    api_base: http://whisper:8000/v1
+    api_key: not-needed
+general_settings:
+  master_key: sk-ospreyflow-dev

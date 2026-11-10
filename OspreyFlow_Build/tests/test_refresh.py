@@ -13,6 +13,7 @@ re-renders the deployment, so no secret is regenerated. Each test names what it 
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -208,7 +209,13 @@ def _rendered(repo: Path, extraction: str = "qwen2.5:7b-instruct") -> Path:
     env = "\n".join(
         line for line in artefacts["deployment.env"].splitlines() if "_MODEL=" not in line
     )
-    (out / "deployment.env").write_text(env + "\n" + SECRETS, encoding="utf-8")
+    # Every secret the compose file requires, held as an applied deployment holds them (`render`
+    # alone writes none, `harness.apply` mints them): refresh refuses a compose file Compose could
+    # not interpolate (ADR-114 Amendment 39), which no applied deployment is.
+    named = {line.partition("=")[0] for line in (env + "\n" + SECRETS).splitlines()}
+    required = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\?", compose))
+    held = "".join(f"{n}=held-{n.lower()}\n" for n in sorted(required - named))
+    (out / "deployment.env").write_text(env + "\n" + SECRETS + held, encoding="utf-8")
     (out / "litellm.yaml").write_text("model_list: []\n", encoding="utf-8")
     # Every rendered deployment has its routing table; it is not what these cases are about.
     (out / "Caddyfile").write_text(artefacts["Caddyfile"], encoding="utf-8")
@@ -525,6 +532,9 @@ def test_a_service_running_an_image_built_here_is_never_moved_to_a_registry(repo
     )
     compose = render(building, allow_unpinned=True).artefacts["compose.yaml"]
     (out / "compose.yaml").write_text(compose, encoding="utf-8")
+    required = sorted(set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\?", compose)))
+    with (out / "deployment.env").open("a", encoding="utf-8") as env:  # as applied: every secret
+        env.writelines(f"{name}=held-{name.lower()}\n" for name in required)
     assert yaml.safe_load(compose)["services"]["report-sync"]["image"] == "osprey/api:local"
 
     refresh.refresh(repo, run=Recorder(), register=Registrar())
