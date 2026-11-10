@@ -639,6 +639,9 @@ NON_JSON_ROUTES: dict[str, str] = {
     "GET /v1/map/local-source/{provider_id}": "a map source file's bytes",
     "GET /v1/investigations/{investigation_id}/sites/{site_id}/image": "an image's bytes",
     "POST /v1/admin/geospatial/build-basemap": "a stream of build progress text",
+    # L2.11a (ADR-146 decision 3, Amendment 5): a rule's own file, its sentence and limits as the
+    # author wrote them; it reads no record and states no figure of any case.
+    "GET /v1/investigations/{investigation_id}/rules/{rule_id}/export.{kind}": "a rule's .bpmn or .dmn file",
 }
 
 

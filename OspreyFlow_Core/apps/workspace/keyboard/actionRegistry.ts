@@ -710,6 +710,14 @@ export const CHECKS_ON_LOAD_ACTIONS = defineActionRegistry("CHECKS_ON_LOAD_ACTIO
   "read-the-alerts-a-sample-would-raise-by-keyboard",
 ] as const);
 
+/** *Show as BPMN* (ADR-146 decision 3, L2.11a): the rule's stored BPMN drawn read-only, opened and
+ * closed by keyboard, focus back on its button. `keyboard/rule-standards.spec.ts`. */
+export const RULE_STANDARDS_ACTIONS = defineActionRegistry("RULE_STANDARDS_ACTIONS", [
+  "open-show-as-bpmn-by-keyboard",
+  "close-show-as-bpmn-by-escape-focus-returns",
+  "close-show-as-bpmn-by-close-focus-returns",
+] as const);
+
 /** The Ownership place (ADR-109 phase C): find an entity, trace its beneficial owners, change the
  * threshold, read a party's chains, put the structure on the canvas. `keyboard/ownership.spec.ts`. */
 export const OWNERSHIP_ACTIONS = defineActionRegistry("OWNERSHIP_ACTIONS", [

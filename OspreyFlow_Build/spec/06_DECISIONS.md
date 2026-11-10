@@ -32634,3 +32634,93 @@ Each case is red on the shape it replaces:
 The records are `process/lanes/rules/l2.10/RED_RECORD.md` §12 to §12b.
 
 Open: none.
+
+### ADR-146, Amendment 5 (10 November 2026) — the rule's standards as built (L2.11a): the BPMN 2.0 and DMN files, their refusals, caps and rights; the files stored beside each rule version
+
+Status: accepted. Decision 3's "Stored to the standards" as built by rules-b (L2.11a). The shapes were agreed
+with the rules lane, and the storage is the orchestrator's ruling of 10 November 2026: option (a), decision
+3 and R2 as written, "each rule is saved as" BPMN 2.0 and DMN. ADR-146 is unchanged except where this says so.
+
+**Decision.**
+
+1. **The files.**
+   - **The process.** A rule's BPMN 2.0 process is exactly three elements: a start event (the *When*),
+     a business-rule task that calls the decision (the *If*), and an end event that raises the alert (the
+     *Then*). Two sequence flows join them, and BPMN DI gives the drawing.
+   - **The decision.** The DMN 1.3 decision is one decision table of one rule. The *If*'s conditions on
+     the subject's properties are its columns, each cell in one FEEL form: a quoted word, a list of them,
+     `> n` or `< n` (digits and a point, never an exponent), or a `date and time` range. A drawn area is
+     its column's own extension, with the cell `-`.
+   - **The extensions.** Everything else is an `osprey:` extension element (namespace
+     `https://ospreyflow.org/schema/rule/1`) in the place BPMN and DMN keep for it:
+     - the subject's type;
+     - a relationship, a frequency, a strength;
+     - when it runs and its schedule;
+     - its limits;
+     - its *Then* (severity, team, scope);
+     - the declared dataset, as `osprey:rule dataset`: an opaque OspreyFlow dataset id, never a
+       source-system identifier (rule 7).
+   - **The codec.** It is `packages/rule_standards` (`to_bpmn`, `to_dmn`, `from_files`; `rule_files` for
+     the save), pure, with one function per side. When L2.11's rule model replaces `SentenceRuleInput`,
+     the switch is one import.
+2. **Only what OspreyFlow runs** (decision 3). An import is refused, each item named
+   (`rule_file_unsupported`, 422), when it holds:
+   - any element or attribute of BPMN, DMN, `osprey:` or another vendor that OspreyFlow does not run;
+   - an element out of its place;
+   - an attribute the rule model would drop. Until the sentence names a team (L2.10), a file's `teamId`
+     is refused, never dropped.
+
+   A file that is not one rule's is refused in words (`rule_file_refused`): a second end event, flows
+   crossed, the two files of two rules, no dataset, a cell in a form OspreyFlow does not write, or a blank
+   the sentence refuses. A document type declaration is never read (`defusedxml`, `forbid_dtd`). A rule
+   the files cannot hold (a number no decision table holds) is refused at the save.
+3. **Stored beside each version (R2, option (a)).**
+   - Rules' L2.11 save calls `rule_files` and writes the two files' bytes beside the rule version, in the
+     same transaction, so a version never exists without its files.
+   - The rule model stays the source of truth, and the files are derived from it. *Export* serves the
+     stored bytes of the version the reader may see, never a fresh render.
+   - A rule saved before L2.11 has no stored files. Its files are rendered by the same `rule_files`, so
+     the two cannot differ.
+4. **Export.**
+   - `GET /v1/investigations/{id}/rules/{rule_id}/export.{bpmn|dmn}`, at `read_alert_queue` and Viewer,
+     behind the place's gate.
+   - It is read through the rules list's own read (`get_listed`, the reader's reach in its `WHERE`), so a
+     rule the reader may not see is the same 404 as a missing one. Audited as `export_rule_file`.
+   - A template rule, or a rule that names no dataset, is refused in words.
+5. **Import.**
+   - `POST /v1/investigations/{id}/rules/import`, at `author_rules` and the case's Author level (the
+     editor's draft right, ADR-112 Amendment 5), behind the place's gate.
+   - It takes `RuleFilesUpload` (the two files' text) and returns `ImportedRule` (the rule and its
+     declared dataset) for the editor to open as a draft. It writes nothing and reads no stored rule.
+   - The body is refused (413) over its cap, by its declared length before it is read and as it streams;
+     each file is refused over 256 KB before it is parsed.
+   - The declared dataset must be the case's chosen source or composite (`chosen_of_case`): never its
+     analyst layer, a layer it borrows, or a drawn dataset. Any other, whether it exists or not, is the
+     app's one `dataset_not_found` (rule 3).
+   - Its names are checked against the model as a sentence's are.
+   - A team a file names is checked at the save, by rules, as a missing team is (rule 3).
+6. ***Show as BPMN*** draws the stored `.bpmn` read-only (`alerts/ruleStandards/ShowAsBpmn`), and rules
+   mounts it in the editor.
+   - It is a dialog that holds focus.
+   - It takes Escape in the capture phase while open, and only then, so the editor's own Escape does not
+     also run.
+   - Escape or *Close* gives focus back to its button.
+   - A stored file that is not a rule's three elements in order is said so and not drawn.
+
+**Tests (each shown red by a plant; `process/lanes/rules-b/l2.11a/RED_RECORD.md`).**
+- **The codec:** `tests/rule_standards/test_codec.py`. A round trip per shape of every blank, and a
+  refusal per item above, each planted in a file the codec wrote.
+- **The routes:** `tests/services/api/test_rule_standards_routes.py`. Export's rights, place and case, and
+  the same 404; the stored bytes served, not a fresh render; import's right and level; the layer, borrowed
+  layer and drawn cases; both caps; nothing written.
+- **Live:** `tests/ingest/test_rule_standards_routes_live.py`, through the real store's reach (red with
+  it dropped).
+- **The tables:** `test_route_rights.py` and `test_investigation_levels.py`.
+- **The drawing:** `ShowAsBpmn.test.tsx`; `keyboard/rule-standards.spec.ts` (reached by Tab, opened,
+  closed by Escape and *Close* with focus back, Escape back to the editor after); axe in dark, light and
+  GOV.UK.
+- **Rules' L2.11:** at every version, the stored files equal `rule_files(rule)`; Export returns the
+  stored files of the version the reader may see, through `get_listed`.
+
+**Cost.** Two small text blobs per rule version (a few kilobytes). No new dependency: `defusedxml` was
+already one. The XML is written by hand for the three elements, as the Cost section allowed.

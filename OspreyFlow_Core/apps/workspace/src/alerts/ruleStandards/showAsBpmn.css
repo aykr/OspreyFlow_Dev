@@ -1,0 +1,20 @@
+/* *Show as BPMN* (ADR-146 decision 3). Colours from the tokens only (`src/design/tokens.css`). */
+.show-as-bpmn {
+  position: fixed; z-index: 20; left: 50%; top: calc(var(--h-top-bar) + var(--sp-24)); transform: translateX(-50%);
+  width: min(600px, calc(100% - var(--sp-16))); box-sizing: border-box;
+  max-height: calc(100vh - var(--h-top-bar) - var(--sp-32)); overflow-y: auto;
+  padding: var(--sp-16); background: var(--surface-raised); border-radius: var(--r-overlay);
+  box-shadow: var(--overlay-shadow); font-size: var(--fs-13); color: var(--text-primary);
+}
+.show-as-bpmn__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); }
+.show-as-bpmn__title { margin: 0; font-size: var(--fs-16); font-weight: 700; }
+.show-as-bpmn__why { margin: var(--sp-8) 0 var(--sp-12); color: var(--text-secondary); }
+.show-as-bpmn__svg { display: block; width: 100%; height: auto; }
+.show-as-bpmn__start, .show-as-bpmn__end, .show-as-bpmn__task { fill: var(--surface-panel); stroke: var(--text-primary); }
+.show-as-bpmn__start, .show-as-bpmn__task { stroke-width: 2; }
+.show-as-bpmn__end { stroke-width: 5; }
+.show-as-bpmn__flow { stroke: var(--text-secondary); stroke-width: 2; }
+.show-as-bpmn__arrowhead { fill: var(--text-secondary); }
+.show-as-bpmn__table rect, .show-as-bpmn__table line { fill: none; stroke: var(--text-secondary); stroke-width: 1.5; }
+.show-as-bpmn__label { fill: var(--text-primary); font-family: var(--ui); font-size: var(--fs-13); }
+.show-as-bpmn__elements { margin: var(--sp-12) 0 0; padding-left: var(--sp-20); display: grid; gap: var(--sp-4); }

@@ -1,0 +1,45 @@
+# Keyboard and axe for L2.11a at ed3e1d1 plus the harness fix below (uncommitted at run time, committed next), on this Mac in the orchestrator's local slot, 09:54–10:05Z, 10 November 2026
+# Closed ports (59991–59994), OSPREY_LANE unset, no Docker. Default ports 5185 (keyboard) and 5184 (a11y) were free (lsof, before each run), so no override config was made.
+# Applied for the run and reverted after: registry-L2.11a.patch, every-harness-L2.11a.patch
+
+## keyboard/rule-standards.spec.ts (first run)
+
+Running 4 tests using 1 worker
+
+[1/4] keyboard/rule-standards.spec.ts:21:1 › Show as BPMN is reached by Tab, opens the rule's drawing by keyboard, and it is read
+[2/4] keyboard/rule-standards.spec.ts:50:1 › Escape and Close each shut the drawing and give focus back to Show as BPMN
+[3/4] keyboard/rule-standards.spec.ts:74:1 › a stored file that is not a rule's process is said so, and not drawn
+[4/4] keyboard/rule-standards.spec.ts:85:1 › every registered Show as BPMN action has its own proving test case above
+  4 passed (2.0s)
+
+## keyboard reds, each handler removed in ShowAsBpmn.tsx, restored after: open (3 red), Escape, focus return, Close, Escape kept from the editor (each red, with the coverage case)
+
+## axe, rule-standards-harness in dark, light and GOV.UK, three states (first run: 12 passed)
+  ✓  12 a11y/every-harness.spec.ts:310:5 › rule-standards-harness.html open=1&file=other: every labelled field's name contains its visible label (2.5.3) (586ms)
+  12 passed (10.4s)
+
+## finding: the open=1 states were not scanning the open dialog
+A contrast plant and a nameless-dialog plant (best-practice, outside the WCAG tags) stayed green. A nameless Close (button-name, WCAG A) went red in GOV.UK alone:
+  ✘   7 a11y/every-harness.spec.ts:292:7 › rule-standards-harness.html open=1
+  ✘  11 a11y/every-harness.spec.ts:292:7 › rule-standards-harness.html open=1&file=other
+  2 failed
+  10 passed (12.3s)
+Cause: the harness clicked the button in a single animation frame, which raced React's first render. Fixed: the harness waits frame by frame for the button. With the same plant after the fix:
+  ✘   5 a11y/every-harness.spec.ts:292:7 › rule-standards-harness.html open=1
+  ✘   6 a11y/every-harness.spec.ts:292:7 › rule-standards-harness.html open=1
+  ✘   7 a11y/every-harness.spec.ts:292:7 › rule-standards-harness.html open=1
+  ✘   9 a11y/every-harness.spec.ts:292:7 › rule-standards-harness.html open=1&file=other
+  ✘  10 a11y/every-harness.spec.ts:292:7 › rule-standards-harness.html open=1&file=other
+  ✘  11 a11y/every-harness.spec.ts:292:7 › rule-standards-harness.html open=1&file=other
+  6 failed
+  6 passed (14.7s)
+
+## after the fix: axe 12 passed; keyboard 4 passed
+  12 passed (11.3s)
+[4/4] keyboard/rule-standards.spec.ts:85:1 › every registered Show as BPMN action has its own proving test case above
+  4 passed (1.9s)
+
+## gap: contrast inside the dialog is not measured by axe
+Dialog text set to its own background colour stayed green with the dialog open (axe leaves contrast in this fixed, transformed overlay incomplete):
+  12 passed (11.4s)
+The dialog uses the token pairs ViewOverCapDialog uses (text-primary and text-secondary on surface-raised).

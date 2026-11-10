@@ -942,6 +942,8 @@ POST   /v1/investigations/{id}/rules/{rule_id}/reject   reject (or, by its propo
 POST   /v1/investigations/{id}/rules/{rule_id}/change   a new version of a sentence rule: applied at once, or waiting for approval for a whole-deployment rule, deploy_rules and keep_watches
 GET    /v1/investigations/{id}/rules/{rule_id}/versions   every version of a rule, with who proposed and who decided each, Viewer
 GET    /v1/investigations/{id}/rules/{rule_id}/runs   a scheduled rule's schedule in words, its next run or why it will not run, its latest runs, Viewer
+GET    /v1/investigations/{id}/rules/{rule_id}/export.{kind}   the rule's `.bpmn` or `.dmn` (ADR-146 decision 3, Amendment 5): the files stored with its version; a rule the reader may not see is the same 404 as a missing one, read_alert_queue, Viewer
+POST   /v1/investigations/{id}/rules/import   a `.bpmn` and `.dmn` read back to a sentence rule and its dataset, never deployed; an unsupported element refused by name (422 `rule_file_unsupported`), each file capped at 256 KB (413), a dataset not the case's chosen source or composite refused as `dataset_not_found`, author_rules, Author
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/approve-close   a second member approves a proposed close of a high-severity alert (never its proposer), Editor; the same 409 `composite_read_only` as the disposition
 POST   /v1/investigations/{id}/alert-queue/{alert_id}/send-back   send a proposed close back to its proposer, with a reason, Editor
 GET    /v1/investigations/{id}/ingest/recipes/{recipe_id}/checks   the pipeline's "Checks on load" step: the rules it may attach and what was chosen, edit_pipelines, Editor
