@@ -1,9 +1,22 @@
-"""P5b's live driver (`process/lanes/platform-b/gates/p5b_live_update.py`) removes only the image
-tags it made, by the names it recorded when it made them. On 10 November 2026 its first cleanup
-removed "every tag new since the start" and deleted three images another lane built on the shared
-server while it ran. The fake `docker` here keeps a real tag table: another lane tags an image in
-the middle of the run, and that tag must survive the driver's teardown (rule 15: the fake refuses
-what docker refuses — `rmi` of a name it does not hold)."""
+"""P5b's live driver (`process/lanes/platform-b/gates/p5b_live_update.py`) on a shared server: what
+it removes, what it puts back, and what its after-check fails on (CARRIES' owed-proof row, the
+conditions the orchestrator set after its first cleanup deleted three of another lane's images, 10
+November 2026).
+
+The fake `docker` keeps a real table of tags and the image ID each names, and refuses what docker
+   refuses (rule 15: `rmi` of a name it does not hold). Another lane works on the same table while
+   the run goes on: it rebuilds a tag the run made, and it makes tags of its own.
+- A tag the run made is removed only while it still names the ID the run made —
+  `test_a_tag_the_run_made_is_removed_only_while_it_names_the_run_s_image`.
+- A tag that existed before is put back to its old ID —
+  `test_a_tag_that_existed_before_is_put_back`.
+- The after-check fails on a tag changed or left —
+  `test_the_after_check_fails_on_a_tag_changed_or_left`.
+- The guard: a removal names this project's own containers, volumes and project alone, and an image
+  is removed only through the run's record —
+  `test_the_guard_refuses_another_s_volume_container_project_or_image`; in teardown a refusal is
+  said and the cleanup goes on — `test_a_refusal_in_teardown_never_stops_the_cleanup`.
+"""
 
 from __future__ import annotations
 
@@ -17,9 +30,7 @@ from typing import Any
 
 import pytest
 
-DRIVER = (
-    Path(__file__).resolve().parents[1] / "process/lanes/platform-b/gates/p5b_live_update.py"
-)
+DRIVER = Path(__file__).resolve().parents[1] / "process/lanes/platform-b/gates/p5b_live_update.py"
 
 
 def _driver() -> ModuleType:
@@ -31,73 +42,132 @@ def _driver() -> ModuleType:
 
 
 class FakeDocker:
-    """`docker tag` and `docker rmi` over a table of tags; `rmi` of an unknown tag fails, as
-    docker's does."""
+    """`docker tag` and `rmi` over a table of tag -> image ID; `inspect` reads it."""
 
-    def __init__(self, tags: set[str]) -> None:
-        self.tags = set(tags)
-        self.removed: list[str] = []
+    def __init__(self, tags: dict[str, str]) -> None:
+        self.tags = dict(tags)
+        self.calls: list[list[str]] = []
+
+    def inspect(self, name: str) -> str | None:
+        return self.tags.get(name)
 
     def __call__(self, argv: Sequence[str], check: bool = False, **_: Any) -> Any:
-        verb, *rest = list(argv)[1:]
+        argv = list(argv)
+        self.calls.append(argv)
+        verb, *rest = argv[1:]
         if verb == "tag":
-            self.tags.add(rest[1])
+            source, target = rest
+            self.tags[target] = self.tags.get(source, source)
         elif verb == "rmi":
-            unknown = [t for t in rest if t not in self.tags]
-            if unknown and check:
-                raise subprocess.CalledProcessError(1, argv)
             for name in rest:
-                self.tags.discard(name)
-                self.removed.append(name)
+                if name not in self.tags:
+                    if check:
+                        raise subprocess.CalledProcessError(1, argv)
+                    continue
+                del self.tags[name]
         return subprocess.CompletedProcess(argv, 0)
 
 
-def test_the_teardown_leaves_a_tag_another_lane_made_while_the_run_was_going() -> None:
+BEFORE = {"osprey/superset:local": "sha256:old-superset", "python:3.12-slim": "sha256:py"}
+
+
+def _ran(docker: FakeDocker) -> Any:
+    """The run: its build makes `osprey/api:local` and rebuilds `osprey/superset:local`."""
+    images = _driver().OwnImages(dict(docker.tags), inspect=docker.inspect, runner=docker)
+    docker.tags["osprey/api:local"] = "sha256:ours-api"
+    docker.tags["osprey/superset:local"] = "sha256:ours-superset"
+    images.claim(["osprey/api:local", "osprey/superset:local"])
+    return images
+
+
+def test_a_tag_the_run_made_is_removed_only_while_it_names_the_run_s_image() -> None:
+    docker = FakeDocker(BEFORE)
+    images = _ran(docker)
+    # Mid-run, another lane builds osprey/api:local again, and tags an image of its own.
+    docker.tags["osprey/api:local"] = "sha256:another-lane"
+    docker.tags["localhost:5001/ospreyflow/api:9fa5b19a"] = "sha256:p7"
+    said = images.restore()
+    assert docker.tags["osprey/api:local"] == "sha256:another-lane"
+    assert docker.tags["localhost:5001/ospreyflow/api:9fa5b19a"] == "sha256:p7"
+    assert not any(c[1] == "rmi" and "osprey/api:local" in c for c in docker.calls)
+    assert any("osprey/api:local" in line and "another" in line for line in said), said
+
+
+def test_a_tag_that_existed_before_is_put_back() -> None:
+    docker = FakeDocker(BEFORE)
+    images = _ran(docker)
+    images.restore()
+    assert docker.tags["osprey/superset:local"] == "sha256:old-superset"
+    assert "osprey/api:local" not in docker.tags  # the run's own, new: removed
+    assert docker.tags["python:3.12-slim"] == "sha256:py"
+    assert images.made_ids() == {"sha256:ours-api", "sha256:ours-superset"}
+
+
+def test_the_after_check_fails_on_a_tag_changed_or_left() -> None:
     driver = _driver()
-    docker = FakeDocker({"osprey-small/workspace@sha256:abc", "python:3.12-slim"})
-    own = driver.OwnTags(runner=docker)
-
-    own.tag("sha256:abc", "osprey/workspace:local", existed=False)
-    # Mid-run: another lane builds on the same server.
-    docker.tags.add("localhost:5001/ospreyflow/api:9fa5b19a")
-    own.built("osprey/api:local", existed=False)
-    docker.tags.add("osprey/api:local")
-    # A tag that was there before the run is never the run's to remove.
-    own.built("python:3.12-slim", existed=True)
-
-    assert own.remove() == ["osprey/workspace:local", "osprey/api:local"]
-    assert docker.removed == ["osprey/workspace:local", "osprey/api:local"]
-    assert "localhost:5001/ospreyflow/api:9fa5b19a" in docker.tags
-    assert "python:3.12-slim" in docker.tags
+    made = {"sha256:ours"}
+    assert driver.tags_changed(BEFORE, dict(BEFORE), made) == []
+    # Another lane's new tag is its own business, not a failure.
+    assert driver.tags_changed(BEFORE, {**BEFORE, "theirs:1": "sha256:t"}, made) == []
+    moved = {**BEFORE, "osprey/superset:local": "sha256:ours"}
+    assert driver.tags_changed(BEFORE, moved, made) == ["osprey/superset:local"]
+    left = {**BEFORE, "osprey/api:local": "sha256:ours"}
+    assert driver.tags_changed(BEFORE, left, made) == ["osprey/api:local"]
+    gone = {"python:3.12-slim": "sha256:py"}
+    assert driver.tags_changed(BEFORE, gone, made) == ["osprey/superset:local"]
 
 
-def test_the_driver_never_removes_by_a_difference_of_the_machines_tags() -> None:
-    """The cleanup's only removal is `OwnTags.remove`, so a later edit that brings back
-    `image_tags() - tags_before` is caught here, not on a shared server."""
-    source = DRIVER.read_text(encoding="utf-8")
-    assert not re.search(r"image_tags\(\)\s*-(?!>)|-\s*tags_before", source)
-    assert source.count('"rmi"') == 1
+@pytest.fixture
+def home(tmp_path: Path) -> Path:
+    (tmp_path / "home" / "d").mkdir(parents=True)
+    (tmp_path / "home" / "d" / "compose.yaml").write_text("name: osprey-p5b-test\n")
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "compose.yaml").write_text("name: osprey-small\n")
+    return tmp_path / "home"
 
 
-@pytest.mark.parametrize("existed", [True, False])
-def test_a_tag_is_recorded_only_when_the_run_made_it(existed: bool) -> None:
+def test_the_guard_refuses_another_s_volume_container_project_or_image(home: Path) -> None:
     driver = _driver()
-    docker = FakeDocker({"osprey/ner:local"} if existed else set())
-    own = driver.OwnTags(runner=docker)
-    own.built("osprey/ner:local", existed=existed)
-    assert own.remove() == ([] if existed else ["osprey/ner:local"])
+    mine = str(home / "d" / "compose.yaml")
+    theirs = str(home.parent / "other" / "compose.yaml")
+    allowed = [
+        ["docker", "compose", "-f", mine, "down", "-v"],
+        ["docker", "compose", "--project-name", "osprey-p5b-test", "-f", mine, "down", "-v"],
+        ["docker", "volume", "rm", "osprey-p5b-test_osprey-data"],
+        ["docker", "rm", "-v", "osprey-p5b-test-api-1"],
+        ["docker", "compose", "-f", mine, "up", "-d"],  # nothing removed: passed as it is
+    ]
+    for argv in allowed:
+        assert driver.guarded(argv, home) is not None, argv
+    assert driver.guarded(allowed[0], home)[:4] == ["docker", "compose", "-p", "osprey-p5b-test"]
+    refused = [
+        ["docker", "compose", "-f", theirs, "down", "-v"],
+        ["docker", "compose", "-p", "osprey-small", "-f", mine, "down", "-v"],
+        ["docker", "compose", "--project-name", "osprey-small", "-f", mine, "down", "-v"],
+        ["docker", "compose", "down", "-v"],
+        ["docker", "volume", "rm", "osprey-p5b-test_osprey-data", "osprey-small_osprey-data"],
+        ["docker", "rm", "-v", "osprey-small-api-1"],
+        ["docker", "rm", "-f", "osprey-test-g-pg"],
+        ["docker", "rmi", "osprey/api:local"],
+        ["docker", "image", "rm", "osprey/api:local"],
+        ["docker", "volume", "prune", "-f"],
+    ]
+    for argv in refused:
+        with pytest.raises(SystemExit, match="REFUSED"):
+            driver.guarded(argv, home)
 
 
-def test_the_driver_refuses_to_run_until_the_owed_proof_is_closed(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_a_refusal_in_teardown_never_stops_the_cleanup(
+    home: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The orchestrator's decision: the driver exits non-zero before touching anything, until the
-    owed live proof's CARRIES row is closed."""
     driver = _driver()
+    assert driver.guarded(["docker", "rmi", "osprey/api:local"], home, teardown=True) is None
+    assert "REFUSED" in capsys.readouterr().out
 
-    def no_docker(*_: object, **__: object) -> None:
-        raise AssertionError("the driver ran a command")
 
-    monkeypatch.setattr(driver.subprocess, "run", no_docker)
-    assert driver.main() != 0
-    assert "not to be run until CARRIES' owed-proof row is closed" in capsys.readouterr().err
+def test_the_driver_removes_images_by_its_record_alone() -> None:
+    """No removal by a difference of the machine's tags, and `rmi` only in the record's restore."""
+    source = DRIVER.read_text(encoding="utf-8")
+    assert not re.search(r"image_tags\(\)\s*-(?!>)|-\s*tags_before|\.keys\(\)\s*-", source)
+    assert source.count('["docker", "rmi"') == 1  # sent once, by OwnImages.restore
+    assert "REFUSED: not to be run" not in source  # the owed proof's conditions are met
