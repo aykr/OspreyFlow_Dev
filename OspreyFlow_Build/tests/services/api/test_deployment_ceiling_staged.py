@@ -22,7 +22,10 @@ What a mistake would do, and the case that catches it:
   check's — `test_only_the_row_check_s_refusals_remove_the_step_tables`.
 
 The fixture is phase 7's staged pipeline (`test_staged_pipeline_run.py`, synthetic: rule 9), its
-bookings given a `marking` column the booking's classification is bound to.
+bookings given a `marking` column the booking's classification is bound to. The owners are marked
+too, each as the bookings it joins (`marked_inputs`): the Join never puts a row under another's
+differing marking (L1.7's `staging_catalogue.refuse_a_differing_marking`), so a SECRET booking meets
+a SECRET owner, and its refusal is the ceiling's, not the join's.
 """
 
 from __future__ import annotations
@@ -38,17 +41,55 @@ import pytest
 from services.api.pipeline_run import run_published_pipeline
 from services.api.studio_publish import write_and_commit_recipe
 from services.ingest.ceiling import CEILING_ENV, AboveTheDeploymentCeiling
+from services.ingest.staging_catalogue import source_table
 
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
 from tests.ingest.recipe_test_support import ValidatingGraph
 from tests.ingest.test_staged_pipeline_run import HANDLING, LOADER, STORAGE, store  # noqa: F401
-from tests.ingest.test_staged_run import ESTABLISHMENTS, FIXTURES, ONTOLOGY, RECIPE, SCHEME
+from tests.ingest.test_staged_run import ESTABLISHMENTS, ONTOLOGY, RECIPE, SCHEME, _rows, inputs
 from tests.services.api.test_studio_staging_routes import _Models, _pipeline
 
 # ruff: noqa: F811  (the imported fixture is every test's own same-named parameter)
 
-#: The booking a SECRET marking is planted on.
+#: The booking a SECRET marking is planted on, and the owner its number joins.
 PLANTED = "VB-2605-002"
+PLANTED_OWNER = "ELLERY"
+
+
+def marked_bookings(planted: str) -> list[dict[str, str]]:
+    """The bookings, each OFFICIAL but the planted one, which is `planted`."""
+    return [
+        {**row, "marking": planted if row["booking_id"] == PLANTED else "OFFICIAL"}
+        for row in _rows("visit_bookings.csv")
+    ]
+
+
+def marked_owners(planted: str) -> list[dict[str, str]]:
+    """The owners, each marked as the bookings its number joins: the planted booking's owner is
+    `planted`, every other OFFICIAL (WHITLOW's number is two OFFICIAL bookings')."""
+    return [
+        {**row, "marking": planted if row["owner_family_name"] == PLANTED_OWNER else "OFFICIAL"}
+        for row in _rows("number_owners.csv")
+    ]
+
+
+def marked_inputs(planted: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The staged engine's inputs with the bookings and owners marked alike where they join."""
+    sources, lists = inputs()
+    sources["visit_bookings"] = source_table(
+        "visit_bookings", marked_bookings(planted), load_id="ld-vb-1", key=["booking_id"]
+    )
+    sources["number_owners"] = source_table(
+        "number_owners", marked_owners(planted), load_id="ld-no-1", key=["number"]
+    )
+    return sources, lists
+
+
+def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 async def _published(
@@ -60,16 +101,19 @@ async def _published(
     repo.mkdir()
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
     bookings = tmp_path / f"visit_bookings_{name}.csv"
-    with (FIXTURES / "visit_bookings.csv").open(encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
-    with bookings.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, [*rows[0], "marking"])
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(
-                {**row, "marking": planted if row["booking_id"] == PLANTED else "OFFICIAL"}
-            )
+    _write_csv(bookings, marked_bookings(planted))
+    owners = tmp_path / f"number_owners_{name}.csv"  # in the ingest folder, as a run requires
+    _write_csv(owners, marked_owners(planted))
     pipeline = _pipeline(tmp_path)
+    pipeline = pipeline.model_copy(
+        update={
+            "nodes": [
+                n.model_copy(update={"config": {**n.config, "source_location": str(owners)}})
+                if n.id == "number_owners" else n
+                for n in pipeline.nodes
+            ]
+        }
+    )  # fmt: skip
     entities = [
         e.model_copy(update={"handling": {"classification": {"field": "marking"}}})
         if e.ref == "booking" else e
@@ -162,19 +206,9 @@ async def test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal(
     """`staged_run.run_staged_recipe`, the staged load without the Conduit's pipeline around it,
     removes its step tables on the refusal as the pipeline's branch does."""
     from services.ingest.staged_run import run_staged_recipe
-    from services.ingest.staging_catalogue import source_table
-
-    from tests.ingest.test_staged_run import _rows, inputs
 
     monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
-    sources, lists = inputs()
-    bookings = [
-        {**row, "marking": "SECRET" if row["booking_id"] == PLANTED else "OFFICIAL"}
-        for row in _rows("visit_bookings.csv")
-    ]
-    sources["visit_bookings"] = source_table(
-        "visit_bookings", bookings, load_id="ld-vb-1", key=["booking_id"]
-    )
+    sources, lists = marked_inputs("SECRET")
     entities = [
         e.model_copy(update={"handling": {"classification": {"field": "marking"}}})
         if e.ref == "booking" else e
@@ -190,24 +224,15 @@ async def test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal(
             recipe, sources=sources, lists=lists, dataset_id="pid",
             graph=graph, ontology=ONTOLOGY, tx=tx, principal=LOADER,  # type: ignore[arg-type]
             load_id="ld-run-r", investigation_scope="case-1", storage=STORAGE, scheme=SCHEME,
+            subscribed=(),
         )  # fmt: skip
     assert _step_tables(store, "ld-run-r") == [], "a refused staged load left its step tables"
 
 
 def _staged_engine_load(store: Path, load_id: str) -> Any:
     from services.ingest.staged_run import run_staged_recipe
-    from services.ingest.staging_catalogue import source_table
 
-    from tests.ingest.test_staged_run import _rows, inputs
-
-    sources, lists = inputs()
-    bookings = [
-        {**row, "marking": "SECRET" if row["booking_id"] == PLANTED else "OFFICIAL"}
-        for row in _rows("visit_bookings.csv")
-    ]
-    sources["visit_bookings"] = source_table(
-        "visit_bookings", bookings, load_id="ld-vb-1", key=["booking_id"]
-    )
+    sources, lists = marked_inputs("SECRET")
     entities = [
         e.model_copy(update={"handling": {"classification": {"field": "marking"}}})
         if e.ref == "booking" else e
@@ -224,6 +249,7 @@ def _staged_engine_load(store: Path, load_id: str) -> Any:
             recipe, sources=sources, lists=lists, dataset_id="pid",
             graph=graph, ontology=ONTOLOGY, tx=tx, principal=LOADER,  # type: ignore[arg-type]
             load_id=load_id, investigation_scope="case-1", storage=STORAGE, scheme=SCHEME,
+            subscribed=(),
         )  # fmt: skip
 
     return load()

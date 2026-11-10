@@ -16,7 +16,9 @@ skipped unless a lease pins the object store it may write (`test_phase7_exit_liv
 offline run never reaches a stack's store, since pyarrow's S3 client opens its own sockets, past the
 port guard).
 
-Synthetic rows (rule 9): phase 7's visits and contacts, a booking marked SECRET in a bound column.
+Synthetic rows (rule 9): phase 7's visits and contacts, a booking marked SECRET in a bound column,
+joined to an owner marked alike (`test_deployment_ceiling_staged.marked_inputs`), since a Join never
+puts a row under another's differing marking.
 """
 
 from __future__ import annotations
@@ -34,11 +36,11 @@ from services.ingest import staging
 from services.ingest.ceiling import CEILING_ENV, AboveTheDeploymentCeiling
 from services.ingest.staged_run import run_staged_recipe
 from services.ingest.staging import ObjectStorageConfig
-from services.ingest.staging_catalogue import source_table
 
 from schemas.domain import Principal
 from tests.ingest.recipe_test_support import ValidatingGraph
-from tests.ingest.test_staged_run import ONTOLOGY, RECIPE, SCHEME, _rows, inputs
+from tests.ingest.test_staged_run import ONTOLOGY, RECIPE, SCHEME
+from tests.services.api.test_deployment_ceiling_staged import marked_inputs
 
 LOADER = Principal(id="loader-1", clearance="SECRET", org_unit="unit-1")
 STEPS = ("with_establishment", "with_owner", "titled")
@@ -86,14 +88,7 @@ def _held(storage: ObjectStorageConfig, load_id: str) -> list[str]:
 
 
 async def _load(storage: ObjectStorageConfig, load_id: str, planted: str) -> Any:
-    sources, lists = inputs()
-    bookings = [
-        {**row, "marking": planted if index == 1 else "OFFICIAL"}
-        for index, row in enumerate(_rows("visit_bookings.csv"))
-    ]
-    sources["visit_bookings"] = source_table(
-        "visit_bookings", bookings, load_id=f"{load_id}-vb", key=["booking_id"]
-    )
+    sources, lists = marked_inputs(planted)  # owners marked as the bookings they join (L1.7)
     entities = [
         e.model_copy(update={"handling": {"classification": {"field": "marking"}}})
         if e.ref == "booking" else e
@@ -108,6 +103,7 @@ async def _load(storage: ObjectStorageConfig, load_id: str, planted: str) -> Any
         recipe, sources=sources, lists=lists, dataset_id="pid",
         graph=graph, ontology=ONTOLOGY, tx=tx, principal=LOADER,  # type: ignore[arg-type]
         load_id=load_id, investigation_scope="case-1", storage=storage, scheme=SCHEME,
+        subscribed=(),
     )  # fmt: skip
 
 
