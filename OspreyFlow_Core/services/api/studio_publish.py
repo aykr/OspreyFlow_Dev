@@ -23,7 +23,9 @@ import logging
 import os
 import re
 import secrets
+import shutil
 import stat
+import tempfile
 import threading
 import time
 from collections.abc import Collection, Iterator, Mapping, Sequence
@@ -32,6 +34,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
+from dulwich.config import ConfigFile, StackedConfig
 from dulwich.errors import NotGitRepository
 from dulwich.index import index_entry_from_stat, validate_path
 from dulwich.object_store import commit_tree_changes, tree_lookup_path
@@ -268,6 +271,13 @@ _RECIPE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,199}")
 #: from writing the recipe file to moving `HEAD`.
 PUBLISH_LOCK_NAME = "osprey-publish.lock"
 
+#: How long a publish waits for another to let the repository go before it is refused (a seed
+#: process stopped while holding the lock must not hang every publish; the re-review's minor).
+PUBLISH_LOCK_WAIT_SECONDS = 30.0
+
+#: A temporary file `_write_recipe_file` makes beside a recipe; one a crash left is swept.
+_TEMPORARY = re.compile(r"\.[A-Za-z0-9][A-Za-z0-9._-]*\.yaml\.[0-9a-f]{16}\.tmp")
+
 #: One publish at a time in this process, from writing the file to moving `HEAD`, and, with the
 #: `flock` on `PUBLISH_LOCK_NAME`, one at a time across processes (the Prison Intelligence seed
 #: beside a running Conduit): the index is read, changed and written under both, so neither loses
@@ -288,14 +298,43 @@ def _open_repository(repo_root: Path) -> Repo:
     is what `05_DEPLOYMENT.md` promises. `HEAD` names `refs/heads/main`, as
     `git init --initial-branch=main` made it before the dulwich swap; a repository the old code
     (or anyone) made is opened as it is, on whichever ref its `HEAD` names.
+
+    The first use cannot race another process's (the re-review, item 3): the git directory is
+    made beside the root's own, its `HEAD` already naming `refs/heads/main`, and renamed into
+    place in one step. If another process's lands first, the rename fails and that repository is
+    opened instead, so neither publish is refused and none lands on a ref `HEAD` then leaves. The
+    user's and the system's git config are not read for it (`init.defaultBranch` and the like).
+
+    The repository's own config is read when it is opened (its format, `core.bare` and
+    `core.worktree`); one that is bare or names a worktree other than `repo_root` is refused, so
+    the index can describe no tree but the one the file is written to.
     """
     try:
-        return Repo(str(repo_root))
+        repo = Repo(str(repo_root))
     except NotGitRepository:
-        repo_root.mkdir(parents=True, exist_ok=True)
-        repo = Repo.init(str(repo_root))
-        repo.refs.set_symbolic_ref(HEADREF, Ref(b"refs/heads/main"))
-        return repo
+        repo = _initialise(repo_root)
+    if repo.bare or Path(repo.path).resolve() != repo_root.resolve():
+        repo.close()
+        raise GitCommitError(
+            "the recipe repository is bare or its config names another working tree"
+        )
+    return repo
+
+
+def _initialise(repo_root: Path) -> Repo:
+    repo_root.mkdir(parents=True, exist_ok=True)
+    making = Path(tempfile.mkdtemp(prefix=".git-init-", dir=repo_root))
+    try:
+        with Repo.init(str(making), config=StackedConfig([ConfigFile()])) as made:
+            made.refs.set_symbolic_ref(HEADREF, Ref(b"refs/heads/main"))
+        try:
+            os.rename(making / ".git", repo_root / ".git")
+        except OSError:
+            if not (repo_root / ".git").is_dir():
+                raise  # not another process's repository: a real failure
+    finally:
+        shutil.rmtree(making, ignore_errors=True)
+    return Repo(str(repo_root))
 
 
 @contextmanager
@@ -309,7 +348,18 @@ def _publish_lock(repo: Repo) -> Iterator[None]:
             f"the recipe repository's {PUBLISH_LOCK_NAME} is a symbolic link or cannot be opened"
         ) from exc
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise GitCommitError(
+                        "another publish has held the recipe repository for over "
+                        f"{PUBLISH_LOCK_WAIT_SECONDS:g} s; publish again"
+                    ) from None
+                time.sleep(0.05)
         try:
             yield
         finally:
@@ -350,6 +400,11 @@ def _write_recipe_file(repo_root: Path, relative_path: str, data: bytes) -> os.s
                     f"{relative_path!r} in the recipe repository is a symbolic link or not a "
                     "file, so it is not written"
                 )
+        # A temporary file a crash left behind (under the lock, so it is no live publish's).
+        for left in os.listdir(fd):
+            if _TEMPORARY.fullmatch(left):
+                with suppress(FileNotFoundError):
+                    os.unlink(left, dir_fd=fd)
         temporary = f".{name}.{secrets.token_hex(8)}.tmp"
         out = os.open(
             temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o666, dir_fd=fd
@@ -357,7 +412,10 @@ def _write_recipe_file(repo_root: Path, relative_path: str, data: bytes) -> os.s
         try:
             with os.fdopen(out, "wb") as stream:
                 stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
             os.replace(temporary, name, src_dir_fd=fd, dst_dir_fd=fd)
+            os.fsync(fd)
         except BaseException:
             with suppress(FileNotFoundError):
                 os.unlink(temporary, dir_fd=fd)
@@ -373,7 +431,9 @@ def _commit_file(repo_root: Path, relative_path: str, data: bytes, message: str)
     owner's ruling of 9 November 2026). The commit object is built here rather than through
     dulwich's porcelain on purpose: porcelain reads the repository's config, and its config can
     name a hook, a signer, a file-system monitor, a filter or a credential helper, each an
-    executable it would run. Nothing here reads the config.
+    executable it would run. No config-driven program runs: the repository's own config is read
+    only for its format, `core.bare` and `core.worktree` (`_open_repository`), and the index is
+    opened with an empty config, not the user's or the system's.
 
     Only this one path changes between the parent's tree and the new one, so anything else staged
     in the index stays staged and out of the commit, as `git commit -- <path>` left it. A file
@@ -412,7 +472,7 @@ def _stage_and_commit(
     # What `git add` did: the index says the working-tree file is this blob, so `git status`
     # on the volume is clean once the commit lands.
     repo.object_store.add_object(blob)
-    index = repo.open_index()
+    index = repo.open_index(config=ConfigFile())  # its settings from no config, not the user's
     index[path] = index_entry_from_stat(written, blob.id)
     index.write()
 
