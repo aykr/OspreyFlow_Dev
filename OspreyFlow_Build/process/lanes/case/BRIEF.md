@@ -1,40 +1,24 @@
-# Case lane · brief L3.9 · merging a drawn dataset
+# Case lane · brief L3.6 · drawn watches in the one queue, and *Open the board*
 
-Written by the orchestrator, 9 November 2026, after L3.4's merge (`32c6f49`), for a **fresh case session on the
-default account** (`ayan`). Read `process/lanes/case/REPORT.md` (L3.4), and in `spec/06_DECISIONS.md` ADR-143
-Amendment 2 decisions 6 and 7 and **Amendment 3** (L5 and L6 answered (a): where a fresh drawing's items live, and
-who merges a drawn dataset), and Amendment 5 (L3.4 as built), first. Rebase onto `main`. Opus, medium. Size L.
-After it comes L3.6 (the `drawn_watch` kind's queue cases, once rules' L2.10 is on main).
+Written by the orchestrator, 10 November 2026, for the case session, **from main at 97e6689** (L3.9 merged). Size S.
+ADR-143 Amendment 2 decision 8 replaced L3.6's separate alert kind: what is left is the `drawn_watch` kind's cases in
+the one queue and *Open the board*. **It builds on rules' L2.10** (the one queue, team routing), which is re-gating
+now: read lane/rules for the queue's shape, write tests first, and rebase onto main as soon as the orchestrator says
+L2.10 has merged; touch no rules file before then.
 
-**The lane, the stacks, the merge rule.** Case's map; the Studio's *Merge into a dataset…* screen lives in
-`apps/workspace/src/ingest/**` **by agreement with Lane 1** (studio is finishing L1.5, then L1.7: tell the
-orchestrator which files before you edit them, so studio rebases past them). Test stacks are on the owner's server
-only (b to g); Docker and stack a are off on this Mac, so never start Docker. Ask the orchestrator for a stack, then
-use main's `stack_lease.sh` (acquire, up, `remote case -- …`, down, release; `remote-log case` reattaches). `make
-test` runs on the server: `stack_lease.sh offline case -- sh -c 'make -k test SKIP_JS=1; cd ../OspreyFlow_Core &&
-make test-js'`. Ask before `make -k ci` or any Playwright here (two heavy runs at most on this Mac). Never call
-remote or offline while one of your runs is alive. Prompt L's rules: never stop on a question, except that
-loosening access, real data or contradicting an accepted ADR stops the piece. Your own lane-reviewer, then the
-gates at a commit rebased onto main, saved under `gates/`, with one leased live run including
-`test_route_rights.py` and every live file the change reaches. **Re-gate after any code change.** Report to the
-orchestrator **by message**. The riskiest work in the plan: access and existence-leak tests first; the
-orchestrator's independent review before merge.
+**The lane, the stacks, the merge rule.** As L3.9's: stacks on the server only (b to g), Docker never started by a
+lane; ask for a stack and before `make -k ci` or Playwright here; `make test` through `stack_lease.sh offline case`;
+one server run at a time. Never stop on a question: the strict option for access, logged under "Decisions taken".
+Your own lane-reviewer, then the gates at a commit rebased onto main. Report **by message**.
 
-**Binds.** `process/CLAUDE.md` rules 1–15 (3, 4, 5, 6, 12 and 15 above all; rule 6: nothing is merged in storage,
-resolution writes scored `SAME_AS` edges); ADR-143 Amendments 2, 3 and 5; ADR-140 (one load); ADR-145 Amendment 4
-decision 11 (who reviews).
+**Build:**
+1. A drawn watch's match raises one alert per match per case in the one queue (`drawn_watch` kind), routed as the
+   queue routes, and **withheld from a reader who may not see the watched item** (rule 3: no count, no bucket, no
+   existence), red first at the adapter.
+2. *Open the board* from the alert, by keyboard (rule 13), axe in three themes.
+3. CARRIES' case rows that fit: board_store's item columns and row helper exported for the grading change (in place of
+   case-b's copy); link types a drawing cannot satisfy (ROLE_IN's role) not offered, or the property asked for.
+   Name any you leave.
 
-**Build** (the plan's row L3.9): the Studio's *Merge into a dataset…* with map, match, dry run and merge; a drawn
-dataset's items merged into a target dataset as one load under the target's policy and highest marking; matches
-proposed as scored inferred `SAME_AS`, never collapsed in storage, a person confirming (rules 5, 6); the drawing
-becomes a case view with its annotations; the merge reverted as a load is (L3.4's revert). Carried (CARRIES): the
-stale `test_valkey_store.py` branch case (rewrite for views, or remove, red first).
-
-**Tests first, each red by a plant at the real call site:** decisions 6 and 7's tests as ADR-143 names them; a merge
-into a dataset the merger may not write refused, and one above the target's highest marking refused, nothing
-written; no match proposed across a dataset the merger may not read, and a match's existence not revealed by a
-count, an order or a timing (rule 7); the dry run counts only what the merger may see; keyboard cases for every
-new action (rule 13), registry ids as a diff; axe in dark, light and GOV.UK.
-
-**Exit.** The row's exit (decisions 6 and 7's tests); `make ci` and `make test` green; live cases under a named lease
-and stack; a friction fragment (one row). Report in Prompt L's format, then stop.
+**Exit.** One alert per match per case, withheld from a reader who may not see the item; *Open the board* by
+keyboard; a friction row.
