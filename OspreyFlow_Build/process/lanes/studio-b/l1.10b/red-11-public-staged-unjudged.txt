@@ -1,4 +1,4 @@
-# head a3e3ea3; plant: a staged public dataset judged as an undeclared pack, its rows unread
+# head 5e8736b; plant: a staged public dataset judged as an undeclared pack, its rows unread
 # command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
 # must fail: test_a_staged_public_dataset_within_the_ceiling_is_seeded, test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts; all failed: yes
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
@@ -18,4 +18,4 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_dec
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts - assert "This load would write rows marked above this deployment's highest marking, OFFICIAL, so nothing was loaded. Mark the source no higher than OFFICIAL, or load it into a deployment cleared to hold it." in "the public demo pack declares no highes...
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_within_the_ceiling_is_seeded - scripts.seed_internal.SeedRefused: the public demo pack declares no highest marking, so it is judged as the scheme's highest, SECRET, above this deployment's highest marking, OFFICIAL, so nothing was loaded
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling - AssertionError: Regex pattern did not match.
-3 failed, 14 passed in 8.28s
+3 failed, 14 passed in 8.01s

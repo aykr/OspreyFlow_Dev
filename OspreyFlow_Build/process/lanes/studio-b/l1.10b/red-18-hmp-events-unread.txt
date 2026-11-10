@@ -1,4 +1,4 @@
-# head a3e3ea3; plant: HMP's incident events marked outside the scheme
+# head 5e8736b; plant: HMP's incident events marked outside the scheme
 # command: pytest -q -rA ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py
 # must fail: test_hmps_declaration_is_the_highest_it_writes; for the reason 'a write above the declaration'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
@@ -18,4 +18,4 @@ PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_enrons_decl
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
 PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
 FAILED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_hmps_declaration_is_the_highest_it_writes - AssertionError: a write above the declaration
-1 failed, 16 passed in 8.04s
+1 failed, 16 passed in 7.87s

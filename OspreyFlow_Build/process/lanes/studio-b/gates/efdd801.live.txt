@@ -1,0 +1,227 @@
+# live set at efdd801 on stack c (lease studio-b): the branch's own test files and test_route_rights, per the orchestrator's grant (the rebase changed fixtures only; no change-based selection)
+Test stack c up for studio-b: osprey-test-c-arcadedb osprey-test-c-pg osprey-test-c-valkey osprey-test-c-objectstore osprey-test-c-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Running on ospreyflow-test (stack c, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b.meta/runs/20261110T233314Z/log: sh -c for i in $(seq 60); do nc -z localhost ${MINIO_ENDPOINT##*:} && echo "minio answers" && break; sleep 2; done; cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -rA ../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py
+Connection to localhost (127.0.0.1) 9004 port [tcp/*] succeeded!
+minio answers
+FEF....................................                                  [100%]
+==================================== ERRORS ====================================
+_ ERROR at teardown of test_a_refused_staged_load_leaves_no_step_table_in_the_object_store _
+
+    @pytest.fixture
+    def storage() -> Iterator[ObjectStorageConfig]:
+        """The leased stack's object store, in a bucket of this test's own, removed whole afterwards.
+        Never the default store (localhost:9000 is stack a's)."""
+        endpoint = os.environ.get("MINIO_ENDPOINT", "")
+        if not endpoint or not os.environ.get("OSPREY_LANE") or not _answers(endpoint):
+            pytest.skip("live: run under a lease, with the MINIO_ENDPOINT and OSPREY_LANE it prints")
+        config = dataclasses.replace(
+            ObjectStorageConfig.from_env(), bucket=f"studio-b-ceiling-{uuid.uuid4().hex[:12]}"
+        )
+        yield config
+        fs = pa_fs.S3FileSystem(
+            endpoint_override=config.endpoint, access_key=config.access_key,
+            secret_key=config.secret_key, scheme="https" if config.use_ssl else "http",
+            allow_bucket_deletion=True,
+        )  # fmt: skip
+>       if fs.get_file_info(config.bucket).type != pa_fs.FileType.NotFound:
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py:74: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+pyarrow/_fs.pyx:616: in pyarrow._fs.FileSystem.get_file_info
+    ???
+pyarrow/error.pxi:155: in pyarrow.lib.pyarrow_internal_check_status
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   OSError: When getting information for bucket 'studio-b-ceiling-742cd85bb78c': AWS Error NETWORK_CONNECTION during HeadBucket operation: curlCode: 56, Failure when receiving data from the peer; Details: Recv failure: Connection reset by peer
+
+pyarrow/error.pxi:92: OSError
+=================================== FAILURES ===================================
+_____ test_a_refused_staged_load_leaves_no_step_table_in_the_object_store ______
+
+storage = ObjectStorageConfig(endpoint='localhost:9004', access_key='minioadmin', secret_key='minioadmin', bucket='studio-b-ceiling-742cd85bb78c', use_ssl=False, region=None)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x70234d8ce9c0>
+
+    async def test_a_refused_staged_load_leaves_no_step_table_in_the_object_store(
+        storage: ObjectStorageConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
+        load_id = f"ceiling-refused-{uuid.uuid4().hex[:12]}"
+        with pytest.raises(AboveTheDeploymentCeiling) as refused:
+>           await _load(storage, load_id, "SECRET")
+
+../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py:116: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py:101: in _load
+    await run_staged_recipe(
+services/ingest/staged_run.py:314: in run_staged_recipe
+    prepared = await prepare_staged_load(
+services/ingest/staged_run.py:221: in prepare_staged_load
+    paths[step.id], size = await asyncio.to_thread(
+/usr/lib/python3.12/asyncio/threads.py:25: in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/thread.py:58: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/ingest/staging_catalogue.py:893: in stage_table_counted
+    fs.create_dir(storage.bucket)
+pyarrow/_fs.pyx:638: in pyarrow._fs.FileSystem.create_dir
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+>   ???
+E   OSError: When creating bucket 'studio-b-ceiling-742cd85bb78c': AWS Error NETWORK_CONNECTION during HeadBucket operation: curlCode: 56, Failure when receiving data from the peer; Details: Recv failure: Connection reset by peer
+
+pyarrow/error.pxi:92: OSError
+_ test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store _
+
+storage = ObjectStorageConfig(endpoint='localhost:9004', access_key='minioadmin', secret_key='minioadmin', bucket='studio-b-ceiling-671e07a7cbf3', use_ssl=False, region=None)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7022f5c923f0>
+
+    async def test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store(
+        storage: ObjectStorageConfig, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
+        load_id = f"ceiling-passed-{uuid.uuid4().hex[:12]}"
+        graph = await _load(storage, load_id, "OFFICIAL")
+>       assert joined_owners(graph) == {"ELLERY", "WHITLOW"}, "the join met no marked owner"
+E       AssertionError: the join met no marked owner
+E       assert set() == {'ELLERY', 'WHITLOW'}
+E         
+E         Extra items in the right set:
+E         'WHITLOW'
+E         'ELLERY'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py:127: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/studio-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+==================================== PASSES ====================================
+_____ test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was ______
+------------------------------ Captured log call -------------------------------
+WARNING  services.ingest.staged_run:staged_run.py:270 a refused load's step table staging/loads/ld-run-s/staged/with_establishment.parquet was not removed
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/../OspreyFlow_Core/services/ingest/staged_run.py", line 268, in remove_step_tables
+    fs.delete_file(path)
+  File "/root/osprey-runs/studio-b/OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py", line 283, in stubborn
+    raise RuntimeError("the store would not remove it")
+RuntimeError: the store would not remove it
+___________ test_fixture_corps_declaration_is_the_highest_it_writes ____________
+------------------------------ Captured log call -------------------------------
+WARNING  splink.linker:linker.py:971 
+ -- WARNING --
+You have called predict(), but there are some parameter estimates which have neither been estimated or specified in your settings dictionary.  To produce predictions the following untrained trained parameters will use default values.
+Comparison: 'family_name':
+    m values not fully trained
+Comparison: 'family_name':
+    u values not fully trained
+Comparison: 'given_names':
+    m values not fully trained
+Comparison: 'given_names':
+    u values not fully trained
+Comparison: 'date_of_birth':
+    m values not fully trained
+Comparison: 'date_of_birth':
+    u values not fully trained
+The 'probability_two_random_records_match' setting has been set to the default value (0.0001). 
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+______ test_each_right_is_refused_without_it_and_needs_the_case_level_too ______
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 23:33:45] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 159 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_ test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route __
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 23:33:50] "GET /jwks.json HTTP/1.1" 200 -
+127.0.0.1 - - [10/Nov/2026 23:33:53] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 159 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+---------------------- 2 unmarked test(s) reached a store ----------------------
+tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too: ArcadeDB on port 2493, Postgres on port 55435, Valkey on port 6381
+============================= slowest 30 durations =============================
+9.85s call     tests/test_seed_internal_ceiling.py::test_prison_intelligences_declaration_holds_for_every_write
+6.35s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+4.97s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+2.81s call     tests/test_seed_internal_ceiling.py::test_the_scale_cohorts_declaration_holds_for_every_write
+2.11s call     tests/ingest/test_deployment_ceiling_staged_live.py::test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store
+2.03s call     tests/services/api/test_deployment_ceiling_verify.py::test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it
+1.88s call     tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample
+1.13s teardown tests/ingest/test_deployment_ceiling_staged_live.py::test_a_refused_staged_load_leaves_no_step_table_in_the_object_store
+0.70s call     tests/test_seed_internal_ceiling.py::test_hmps_declaration_is_the_highest_it_writes
+0.66s call     tests/ingest/test_deployment_ceiling_staged_live.py::test_a_refused_staged_load_leaves_no_step_table_in_the_object_store
+0.41s teardown tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.26s teardown tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.21s call     tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables
+0.14s call     tests/test_seed_internal_ceiling.py::test_ledgers_declaration_holds_for_every_write
+0.13s call     tests/test_seed_internal_ceiling.py::test_fixture_corps_declaration_is_the_highest_it_writes
+0.13s call     tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
+0.12s call     tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_without_steps
+0.11s call     tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
+0.11s call     tests/services/api/test_deployment_ceiling_staged.py::test_only_the_row_check_s_refusals_remove_the_step_tables
+0.10s call     tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables
+0.09s call     tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
+0.09s call     tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling
+0.07s call     tests/services/api/test_deployment_ceiling_verify.py::test_test_passes_a_file_at_the_ceiling
+0.07s call     tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
+0.07s call     tests/services/api/test_deployment_ceiling_verify.py::test_with_no_ceiling_set_test_passes_as_before
+0.06s teardown tests/ingest/test_deployment_ceiling_staged_live.py::test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store
+0.05s setup    tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+0.05s setup    tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+0.02s call     tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts
+0.02s call     tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_within_the_ceiling_is_seeded
+=========================== short test summary info ============================
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_refused_at_the_ceiling_leaves_no_step_table
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_removal_touches_no_other_run_s_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_staged_run_within_the_ceiling_keeps_its_step_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_the_staged_engine_s_own_load_leaves_no_step_table_on_the_refusal
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_a_table_the_store_will_not_remove_leaves_the_refusal_as_it_was
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_staged.py::test_only_the_row_check_s_refusals_remove_the_step_tables
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_passes_a_file_at_the_ceiling
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_with_no_ceiling_set_test_passes_as_before
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_row_past_the_sample_is_not_told_to_an_author_not_cleared_for_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_without_steps
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_the_withheld_guards_come_before_the_ceiling_on_a_staged_pipeline
+PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_rendered_every_pack_is_seeded_as_before
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_pack_that_declares_nothing_is_judged_as_the_scheme_s_highest
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_every_pack_declares_its_highest_marking
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_hmps_declaration_is_the_highest_it_writes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_fixture_corps_declaration_is_the_highest_it_writes
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_ledgers_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_prison_intelligences_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_the_scale_cohorts_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_above_the_ceiling_is_refused_before_its_seed_starts
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_within_the_ceiling_is_seeded
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_a_staged_public_dataset_that_cannot_be_read_is_refused_under_a_ceiling
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_with_no_ceiling_a_staged_public_dataset_is_seeded_as_before
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_enrons_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_cyber_intrusions_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/test_seed_internal_ceiling.py::test_paysims_declaration_holds_for_every_write
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_right_guards_at_least_one_route
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+PASSED ../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+ERROR ../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py::test_a_refused_staged_load_leaves_no_step_table_in_the_object_store
+FAILED ../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py::test_a_refused_staged_load_leaves_no_step_table_in_the_object_store
+FAILED ../OspreyFlow_Build/tests/ingest/test_deployment_ceiling_staged_live.py::test_a_staged_load_within_the_ceiling_keeps_its_step_tables_in_the_object_store
+2 failed, 36 passed, 1 warning, 1 error in 40.14s
+Wall time: 41 s, exit 1 (stack c, the lease studio-b took at 2026-11-10T23:32:50Z; set-up before it 9 s)
+# live exit 1
+Test stack c down for studio-b: osprey-test-c-arcadedb osprey-test-c-pg osprey-test-c-valkey osprey-test-c-objectstore osprey-test-c-clickhouse (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack c released by studio-b.
+c: free

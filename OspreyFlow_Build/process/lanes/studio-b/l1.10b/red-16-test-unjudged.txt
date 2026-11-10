@@ -1,4 +1,4 @@
-# head a3e3ea3; plant: Test judges nothing against the ceiling, in Verify or its dry run
+# head 5e8736b; plant: Test judges nothing against the ceiling, in Verify or its dry run
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py
 # must fail: test_test_refuses_a_file_with_a_row_above_the_ceiling_in_the_load_s_words, test_test_judges_every_row_of_the_file_not_only_its_sample, test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling; for the reason 'AssertionError: {"rows_read":'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_passes_a_file_at_the_ceiling
@@ -10,4 +10,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py:
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_judges_every_row_of_the_file_not_only_its_sample - AssertionError: {"rows_read":10000,"rows_deduplicated":0,"rows_already_loaded":0,"sample_is_whole_source":false,"values_masked":false,"entities_by_type":{"Endpoint":{"created":10000,"referenced":0}},"edges_by_type":{},"rejections":[],"nodes":[{"id":"01M73...
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_a_staged_pipeline_s_test_refuses_a_row_above_the_ceiling - AssertionError: {"rows_read":10,"rows_deduplicated":0,"rows_already_loaded":0,"sample_is_whole_source":true,"values_masked":false,"entities_by_type":{"Document":{"created":4,"referenced":0},"Endpoint":{"created":3,"referenced":1},"Person":{"created":2,...
 FAILED ../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_verify.py::test_test_refuses_an_unreadable_classification_in_the_load_s_words - AssertionError: {"rows_read":2,"rows_deduplicated":0,"rows_already_loaded":0,"sample_is_whole_source":true,"values_masked":false,"entities_by_type":{"Endpoint":{"created":1,"referenced":0}},"edges_by_type":{},"rejections":[{"reason":"column 'cls' ...
-4 failed, 5 passed, 1 warning in 4.28s
+4 failed, 5 passed, 1 warning in 4.17s

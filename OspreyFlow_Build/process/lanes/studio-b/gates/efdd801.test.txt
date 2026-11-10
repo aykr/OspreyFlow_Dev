@@ -1,0 +1,14 @@
+Running on ospreyflow-test (stack offline, osprey-runs/studio-b/OspreyFlow_Build/), logged at osprey-runs/studio-b.meta/runs/20261110T230410Z/log: sh -c make -k test SKIP_JS=1; a=$?; cd ../OspreyFlow_Core && make test-js; b=$?; echo "make test rc=$a test-js rc=$b"; [ $a -eq 0 ] && [ $b -eq 0 ]
+11.56s call     tests/test_seed_pid.py::test_a_failed_demo_number_makes_the_seed_exit_non_zero
+FAILED ../OspreyFlow_Build/tests/harness/test_render_memory.py::test_opensearch_starts_with_the_rendered_heap_and_is_killed_by_one_beyond_its_memory
+FAILED ../OspreyFlow_Build/tests/harness/test_webapp_preflight.py::test_gpu_is_skipped_on_this_platform_never_shown_as_a_pass
+FAILED ../OspreyFlow_Build/tests/services/api/test_valkey_config.py::test_the_deployments_own_valkey_is_reached_plainly
+==== 3 failed, 10853 passed, 13 skipped, 72 warnings in 1644.96s (0:27:24) =====
+     [33m[2m✓[22m[39m a consult_originator block renders the item's own label, not a generic export-failed message[33m 348[2mms[22m[39m
+ [31m❯[39m src/matrix/MatrixView.budget.test.tsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 8031[2mms[22m[39m
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m362 passed[39m[22m[90m (363)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m3030 passed[39m[22m[90m (3031)[39m
+npm error Lifecycle script `test` failed with error:
+npm error command failed
+make test rc=2 test-js rc=2
+# exit 0

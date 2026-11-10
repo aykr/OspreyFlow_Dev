@@ -9,7 +9,7 @@
 4. **Decisions taken:**
    - **The strict option** (rules 3 and 4; the orchestrator's finding 1): Verify judges past its sample only for an author cleared to read every row of the file. So an uncleared author's file that is above the ceiling past the sample passes Test and is refused only at Load, short of brief point 3 for that author.
    - **public** is judged by what it stages, not declared (finding 2). **Only the row check's refusals** ("load", "unreadable") remove step tables.
-5. **Plants:** 27 in `l1.10b/red_plants.py`, each red for its reason at a3e3ea3, none by the join guard; green 32.
+5. **Plants:** 27 in `l1.10b/red_plants.py`, each red for its reason at 5e8736b, none by the join guard; green 32.
 6. **Reviews:** my lane-reviewer's (twice, the second after the rebase), the orchestrator's and the merger's; every finding is fixed or carried.
 7. **Gates:** make test and make -k ci on the server; the live set on stack d. Files and explanation in `gates/` (named in the ready-to-merge).
 8. **Ratified:** `tests/ingest/recipe_test_support.py`'s `LocalStore.delete_file` (studio's file). The studio lane was told of it, and of the `engine.dry_run_recipe` and `studio_verify` edits.
