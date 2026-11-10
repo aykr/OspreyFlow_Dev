@@ -229,7 +229,7 @@ PLANTS = [
      [(ACQUIRE, "    if (repo_root / \".git\").is_dir():  # PLANT\n"
                 "        with Repo(str(repo_root)) as early:\n"
                 "            early.open_index(config=ConfigFile())\n" + ACQUIRE)],
-     [REPO_TESTS], [LOCK_PROBE], "'index read': False"),
+     [REPO_TESTS], [LOCK_PROBE], "outside the lock: ['index read']"),
 ]
 
 def run(files: list[str]) -> str:
