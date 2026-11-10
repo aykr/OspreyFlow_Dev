@@ -814,7 +814,7 @@ def test_update_moves_a_self_contained_small(
 
 
 def test_an_updates_backup_is_never_written_inside_the_checkout(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """ADR-114 Amendment 37 decision 2: the update's own backup of a lite deployment whose
     `osprey.yaml` names no folder (none, or the committed placeholder) goes to
@@ -843,6 +843,9 @@ def test_an_updates_backup_is_never_written_inside_the_checkout(
         made = update.real_host(directory, repo).backup()
         assert made.parent == fallback
         assert not made.resolve().is_relative_to(repo.resolve())
+        # Amendment 37 decision 2: the operator is told, as `ospreyflow backup` tells them.
+        said = capsys.readouterr().err
+        assert str(fallback.parent) in said and "folders.backups" in said, said
     (repo / "osprey.yaml").write_text(
         yaml.safe_dump({"components": {"storage": {"backups": str(tmp_path / "mine")}}})
     )
@@ -853,6 +856,7 @@ def test_an_updates_backup_is_never_written_inside_the_checkout(
         yaml.safe_dump({"components": {"storage": {"backups": str(tmp_path / "stale")}}})
     )
     assert update.real_host(directory, repo).backup().parent == tmp_path / "mine" / "local-lite"
+    assert "folders.backups" not in capsys.readouterr().err
     assert all("--config" not in argv and "--generated-root" not in argv for argv in ran)
 
 

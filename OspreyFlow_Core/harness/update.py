@@ -638,14 +638,16 @@ def _settings(directory: Path, repo: Path) -> tuple[Path, list[str]]:
     return config, ["--config", str(config), "--generated-root", str(directory.parent)]
 
 
-def _backup_root(directory: Path, config_path: Path) -> Path:
+def _backup_root(directory: Path, config_path: Path) -> tuple[Path, str | None]:
     """Where the update's backup is written: `harness.backup.default_out_root` for the settings
     the backup reads and the deployment's folder's name (ADR-114 Amendment 37), so never inside
-    the checkout, which `harness.backup` refuses."""
-    from harness.backup import default_out_root
+    the checkout, which `harness.backup` refuses; and the backup's notice when those settings name
+    no folder (decision 2), which an explicit `--out-root` keeps the backup itself from saying."""
+    from harness.backup import backups_folder, default_out_root
     from harness.render import load_config
 
-    return default_out_root(load_config(config_path), directory.name)
+    config = load_config(config_path)
+    return default_out_root(config, directory.name), backups_folder(config)[1]
 
 
 def real_host(
@@ -659,7 +661,9 @@ def real_host(
     config_path, pointed = _settings(directory, repo)
 
     def backup() -> Path:
-        root = _backup_root(directory, config_path)
+        root, notice = _backup_root(directory, config_path)
+        if notice:
+            print(f"ospreyflow: {notice}", file=sys.stderr)
         before = set(root.iterdir()) if root.is_dir() else set()
         _ok_real(run, [*python, "-m", "harness.backup", "--profile", directory.name, *pointed,
                        "--out-root", str(root)], "back up every store")  # fmt: skip
