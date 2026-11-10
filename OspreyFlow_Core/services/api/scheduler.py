@@ -18,7 +18,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -39,7 +39,7 @@ from .dataset_scope import CompositeReadOnlyError
 from .investigations import InsufficientAccessError, InvestigationNotFoundError
 from .recipe_runs import NotRunOutcome, RecipeRunStore, RunTrigger
 from .run_quotas import QuotaRefused
-from .schedule_notices import NOTICE_RULE_PREFIX
+from .schedule_notices import NOTICE_RULE_PREFIX, NoticeKind, notice_words
 from .studio_map import resolve_source_handling
 
 if TYPE_CHECKING:
@@ -159,8 +159,6 @@ def schedule_notice(owner_id: str, recipe: StudioRecipeDraft, words: str, now: d
     )
 
 
-
-
 # --- the executor --------------------------------------------------------------------------------
 
 #: A claimed slot is remembered a week; a run of one recipe holds its lock at most six hours.
@@ -247,37 +245,6 @@ _COMPOSITE_CASE = (
 )
 
 
-#: ADR-110 Amendment 19: what a notice may say, one fixed sentence per kind, naming only the run
-#: (its recipe and when it was due, or the file it was to read). Never an error's own text: that can
-#: carry a host, a table or a source row's key (rule 7), and it stays in the ledger and the log.
-NoticeKind = Literal[
-    "failed", "timed_out", "refused_reach", "refused_rights", "sign_in_unavailable",
-    "in_progress", "keyless_refresh",
-]  # fmt: skip
-
-_NOTICE_ENDINGS: dict[str, str] = {
-    "failed": "failed. Its pipeline's Runs, in the Ingest Studio, say why.",
-    "timed_out": (
-        "timed out before it finished. Its pipeline's Runs, in the Ingest Studio, say how far it "
-        "got."
-    ),
-    "refused_reach": "was refused: it no longer reaches its case or its dataset.",
-    "refused_rights": "was refused: its owner may no longer run it.",
-    "sign_in_unavailable": "could not run: the sign-in service did not answer.",
-    "in_progress": "did not run: an earlier run into its case was still going.",
-    "keyless_refresh": (
-        "was refused: its pipeline has no deduplication key, so a refresh would load its rows "
-        "again."
-    ),
-}  # fmt: skip
-
-
-def notice_words(lead: str, kind: NoticeKind) -> str:
-    """A notice's whole words: `lead` names the run (`The scheduled run of <recipe> due <time>`, or
-    `The run of <recipe> on the file <name>`), then the kind's fixed sentence."""
-    return f"{lead} {_NOTICE_ENDINGS[kind]}"
-
-
 def failure_kind(error: BaseException) -> NoticeKind:
     """The kind a run that raised is told as. Its own text is never read."""
     if isinstance(error, RowKeyRunInProgress):
@@ -292,9 +259,7 @@ class _Refused(Exception):
     refusal that says nothing about the owner (Amendment 3), which never pauses the schedule. `kind`
     is what its owner is told (Amendment 19); the words here go to the ledger alone."""
 
-    def __init__(
-        self, why: str, *, kind: NoticeKind = "refused_rights", about_the_owner: bool = True
-    ) -> None:
+    def __init__(self, why: str, *, kind: NoticeKind, about_the_owner: bool = True) -> None:
         super().__init__(why)
         self.about_the_owner = about_the_owner
         self.kind: NoticeKind = kind
@@ -593,15 +558,22 @@ class ScheduleExecutor:
                 )
             case = await self._case_into(owner_id, case, dataset)
         if owner_id is None or case is None:
-            raise _Refused("the schedule has no owner; set it again from the case it runs in")
+            raise _Refused(
+                "the schedule has no owner; set it again from the case it runs in",
+                kind="refused_rights",
+            )
         owner = await self._resolve(owner_id)
         if Right.SCHEDULE_PIPELINES not in rights_for(owner.roles):
-            raise _Refused(f"the schedule's owner, {owner_id}, no longer holds schedule_pipelines")
+            raise _Refused(
+                f"the schedule's owner, {owner_id}, no longer holds schedule_pipelines",
+                kind="refused_rights",
+            )
         try:
             owner = await self.check_case(owner, case)
         except (InsufficientAccessError, InvestigationNotFoundError) as error:
             raise _Refused(
-                f"the schedule's owner, {owner_id}, is no longer an Editor of its case"
+                f"the schedule's owner, {owner_id}, is no longer an Editor of its case",
+                kind="refused_rights",
             ) from error
         except CompositeReadOnlyError as error:
             # Every run, so a case switched to a composite after its schedule was set starts none;
@@ -610,7 +582,8 @@ class ScheduleExecutor:
             raise _Refused(_COMPOSITE_CASE, kind="refused_reach") from error
         if not principal_may_view(resolve_source_handling(recipe), owner, self.scheme):
             raise _Refused(
-                f"the source is marked above the clearance of the schedule's owner, {owner_id}"
+                f"the source is marked above the clearance of the schedule's owner, {owner_id}",
+                kind="refused_rights",
             )
         return owner, case
 
@@ -638,7 +611,9 @@ class ScheduleExecutor:
         try:
             return await self.resolve_owner(owner_id)
         except PrincipalRevoked as error:
-            raise _Refused(f"the schedule's owner, {owner_id}, can no longer sign in") from error
+            raise _Refused(
+                f"the schedule's owner, {owner_id}, can no longer sign in", kind="refused_rights"
+            ) from error
         except PrincipalExchangeUnavailable as error:
             raise _Refused(
                 "the identity provider could not be reached to act as the schedule's owner",
@@ -647,7 +622,8 @@ class ScheduleExecutor:
             ) from error
         except Exception as error:  # noqa: BLE001 - any other refusal of the exchange
             raise _Refused(
-                f"OspreyFlow could not act as the schedule's owner, {owner_id}"
+                f"OspreyFlow could not act as the schedule's owner, {owner_id}",
+                kind="refused_rights",
             ) from error
 
     async def _not_run(

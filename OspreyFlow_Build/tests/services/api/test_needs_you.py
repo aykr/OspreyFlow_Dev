@@ -421,13 +421,15 @@ def test_a_schedule_notice_is_served_to_its_owner_alone(world: SimpleNamespace) 
     world.alerts_store.held.append(
         Alert(id="nt-1", rule_id="schedule:SYN-recipe-1", owner_id="eng-1", mode=AlertMode.FULL,
               referent_node_ids=[], investigation_id="case-a", created_at=now - timedelta(hours=1),
-              words="The scheduled run of Daily export was refused: the file was not there.")
+              words="The scheduled run of Daily export due 2 June 2026 at 06:00 was refused: its owner "
+                    "may no longer run it.")
     )  # fmt: skip
     mine = _read(world, "eng-1")
     (served,) = mine["schedule_notices"]
     assert datetime.fromisoformat(served.pop("raised_at")) == world.alerts_store.held[0].created_at
     assert served == {"notice_id": "nt-1", "recipe_id": "SYN-recipe-1",
-                      "words": "The scheduled run of Daily export was refused: the file was not there."}
+                      "words": "The scheduled run of Daily export due 2 June 2026 at 06:00 was "
+                               "refused: its owner may no longer run it."}
     assert mine["schedule_notices_total"] == 1  # fmt: skip
     for other in ("rev-1", "adm-1"):
         theirs = _read(world, other)
@@ -462,3 +464,26 @@ def test_a_notice_older_than_seven_days_is_neither_listed_nor_counted(world: Sim
     mine = _read(world, "eng-1")
     assert [n["notice_id"] for n in mine["schedule_notices"]] == [fresh.id]
     assert mine["schedule_notices_total"] == 1
+
+
+def test_a_notice_from_before_the_amendment_is_served_fixed_words_not_its_error(
+    world: SimpleNamespace,
+) -> None:
+    """Rule 7, the merger's review: a notice written before ADR-110 Amendment 19 holds its error's
+    own text (`"<run> failed: <error>"`), here an `ArcadeDBError`'s whole reply naming a host, a type
+    and a row's key. It is served, as every notice of the window is, but in the fixed fallback words,
+    never its own."""
+    from services.api.schedule_notices import FALLBACK_WORDS
+
+    now = datetime.now(UTC)
+    world.alerts_store.held.append(
+        Alert(id="nt-old", rule_id="schedule:SYN-recipe-1", owner_id="eng-1", mode=AlertMode.FULL,
+              referent_node_ids=[], investigation_id="case-a", created_at=now - timedelta(days=1),
+              words='The scheduled run of Daily export due 9 November 2026 at 06:00 failed: ArcadeDB '
+                    'error 500: {"detail":"Duplicated key [ROW-7731] on Person[source_key] at '
+                    'arcadedb.internal:2480"}')
+    )  # fmt: skip
+    (served,) = _read(world, "eng-1")["schedule_notices"]
+    assert served["words"] == FALLBACK_WORDS
+    for leaked in ("ArcadeDB", "ROW-7731", "source_key", "arcadedb.internal"):
+        assert leaked not in served["words"]

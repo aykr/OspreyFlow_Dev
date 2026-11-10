@@ -19,7 +19,13 @@ from typing import get_args
 
 import pytest
 from adapters.graph_arcadedb.client import ArcadeDBError
-from services.api.scheduler import NoticeKind, failure_kind, notice_words
+from services.api.schedule_notices import (
+    FALLBACK_WORDS,
+    NoticeKind,
+    notice_words,
+    served_words,
+)
+from services.api.scheduler import failure_kind
 from services.ingest.engine import RowKeyRunInProgress
 
 LEAD = "The scheduled run of Daily export due 2 June 2026 at 06:00"
@@ -65,3 +71,14 @@ def test_an_error_is_told_by_its_kind_alone(
     assert str(error) == "" or str(error) not in words
     for leaked in ("ROW-7731", "db.internal", "column amount", "ArcadeDB"):
         assert leaked not in words
+
+
+def test_only_a_fixed_sentence_is_served_and_anything_else_is_the_fallback() -> None:
+    """The merger's review: a notice's stored words are served only when they end in one of the
+    fixed sentences; one from before the amendment, with its error's own text, is not."""
+    for kind in get_args(NoticeKind):
+        assert served_words(notice_words(LEAD, kind)) == notice_words(LEAD, kind)
+    for old in (f"{LEAD} failed: ArcadeDB error 500: Duplicated key [ROW-7731]",
+                f"{LEAD} was refused: the schedule's owner, approver-1, can no longer sign in",
+                "", None):  # fmt: skip
+        assert served_words(old) == FALLBACK_WORDS

@@ -30,6 +30,8 @@ from typing import Protocol
 from schemas.admin import NeedsYouProposals, ScheduleNoticeEntry
 from schemas.domain import Alert, Principal
 
+from .schedule_notices import served_words
+
 #: Amendment 19: how far back a notice stays in *Needs you*, and how many are listed at once.
 NOTICE_DAYS = 7
 NOTICE_LIMIT = 20
@@ -84,14 +86,16 @@ async def schedule_notices_for(
     principal: Principal, store: ScheduleNotices, now: datetime
 ) -> tuple[list[ScheduleNoticeEntry], int]:
     """The reader's own scheduled loads' notices (Amendment 19) and how many there are in all. The
-    store reads by owner in its query; this only shapes what it served."""
+    store reads by owner in its query; this shapes what it served, and serves a notice's words only
+    when they are one of the fixed sentences: one written before the amendment carries its error's
+    own text, and is served the fixed fallback instead (rule 7; the merger's review)."""
     notices, total = await store.list_schedule_notices(
         principal, since=now - timedelta(days=NOTICE_DAYS), limit=NOTICE_LIMIT
     )
     return [
         ScheduleNoticeEntry(
             notice_id=n.id, recipe_id=n.rule_id.split(":", 1)[-1], raised_at=n.created_at,
-            words=n.words or "A scheduled load did not finish.",
+            words=served_words(n.words),
         )
         for n in notices
     ], total  # fmt: skip
