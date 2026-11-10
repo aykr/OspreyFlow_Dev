@@ -474,6 +474,7 @@ class ArcadeDBClient:
         *,
         params: Mapping[str, Any] | None = None,
         session_id: str | None = None,
+        timeout: float | httpx.Timeout | None = None,
     ) -> list[dict[str, Any]]:
         # Every row (`-1`): left out, the server stops at 20,000 and says so only in `truncated`, so
         # a larger read came back cut as if whole (rule 2, measured on 26.10.1). The port's reads
@@ -482,8 +483,11 @@ class ArcadeDBClient:
         if params:
             body["params"] = dict(params)
         headers = {"arcadedb-session-id": session_id} if session_id else None
+        # `timeout`: a request that may run longer than the client's 30 s, the whole schema's DDL
+        # sent as one script (`schema.py`).
+        extra: dict[str, Any] = {"timeout": timeout} if timeout is not None else {}
         resp = await self._post(
-            f"/api/v1/command/{self._config.database}", json=body, headers=headers
+            f"/api/v1/command/{self._config.database}", json=body, headers=headers, **extra
         )
         self._raise_for_error(resp)
         answer = resp.json()

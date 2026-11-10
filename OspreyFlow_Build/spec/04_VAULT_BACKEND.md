@@ -116,6 +116,29 @@ Schema is generated from the ontology by `packages/ontology`, applied by a migra
 and versioned. An ontology change that requires reindexing must say so before it runs, not
 during.
 
+The ArcadeDB runner sends the schema's DDL as one `sqlscript` request, the same statements in the
+same order it once sent one at a time (admin's T1, 10 November 2026: a fresh database's schema had
+taken 15.8 s and takes 0.2 s, on the owner's test server under a lease: stack c, taken by the
+orchestrator at 2026-11-10T11:13:03Z). The copy-ups of indexed text fields run after it,
+one statement each, a refusal there logged as before. Its failures are the statement-by-statement
+apply's, never worse:
+
+- a parse error applies nothing, since ArcadeDB parses the whole script before running it;
+- a refusal while it runs leaves the statements before it applied, raises `SchemaApplyError` and
+  is never retried; the next apply, every statement being `IF NOT EXISTS`, completes the schema.
+  Nothing is dropped to undo it, since a drop could take a type another replica had just created
+  and written to (the cluster profile starts several Conduits and workers at once);
+- the script has its own read timeout (600 s, not a single statement's 30 s; connecting keeps
+  30 s); it is re-sent whole after a failure to connect and after a 5xx whose class is not a
+  known-permanent one, as a single statement was, and never after a read that timed out, since it
+  may still be running there: its outcome is unknown and the error says so.
+
+Proved by `test_schema_batch.py` (a golden statement list; an ArcadeDB stand-in that parses the
+whole script first and keeps what ran before a refusal) and `test_schema_batch_live.py`
+(the full ontology's schema dump, batched against one at a time, fresh and applied again).
+**Not yet run against the Raft cluster** (`ARCADEDB_HA`): no live test applies the batch through a
+leader.
+
 ## 2. Columnar analytics
 
 | | DuckDB | ClickHouse |

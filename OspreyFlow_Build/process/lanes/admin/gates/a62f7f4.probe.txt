@@ -1,0 +1,143 @@
+Running on ospreyflow-test (stack c, osprey-runs/orchestrator/OspreyFlow_Build/), logged at osprey-runs/orchestrator.meta/runs/20261110T114326Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -s -rA ../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py -k populated
+
+one_at_a_time: the statements naming t1_probe ['CREATE PROPERTY mx_Person.t1_probe IF NOT EXISTS STRING', 'CREATE INDEX IF NOT EXISTS ON mx_Person (t1_probe) NOTUNIQUE']; 1.2 s over 500 nodes
+indexes on mx_Person: [('mx_Person[pnc_id]', 'mx_Person', [['pnc_id']]), ('mx_Person_0_1282900398582224', 'mx_Person', [['owning_unit']]), ('mx_Person[nino]', 'mx_Person', [['nino']]), ('mx_Person[given_names]', 'mx_Person', [['given_names']]), ('mx_Person[t1_probe]', 'mx_Person', [['t1_probe']]), ('mx_Person_0_1282901195518904', 'mx_Person', [['t1_probe']]), ('mx_Person[originator]', 'mx_Person', [['originator']]), ('mx_Person[family_name]', 'mx_Person', [['family_name']]), ('mx_Person[handling_code]', 'mx_Person', [['handling_code']]), ('mx_Person_0_1282900408382198', 'mx_Person', [['datasets by item']]), ('mx_Person[id]', 'mx_Person', [['id']]), ('mx_Person[datasetsbyitem]', 'mx_Person', [['datasets by item']]), ('mx_Person_0_1282900411093768', 'mx_Person', [['pnc_id']]), ('mx_Person_0_1282900415021496', 'mx_Person', [['given_names']]), ('mx_Person[withdrawn_by_load]', 'mx_Person', [['withdrawn_by_load']]), ('mx_Person[prison_number]', 'mx_Person', [['prison_number']]), ('mx_Person_0_1282900412455224', 'mx_Person', [['prison_number']]), ('mx_Person_0_1282900413721270', 'mx_Person', [['family_name']]), ('mx_Person[handling_classification]', 'mx_Person', [['handling_classification']]), ('mx_Person_0_1282900400038128', 'mx_Person', [['originator']]), ('mx_Person_0_1282900395688106', 'mx_Person', [['handling_classification']]), ('mx_Person_0_1282900402557631', 'mx_Person', [['reverted']]), ('mx_Person_0_1282900409772863', 'mx_Person', [['nino']]), ('mx_Person_0_1282900405557378', 'mx_Person', [['withdrawn_by_load']]), ('mx_Person_0_1282900390394993', 'mx_Person', [['id']]), ('mx_Person[superseded_by]', 'mx_Person', [['superseded_by']]), ('mx_Person[owning_unit]', 'mx_Person', [['owning_unit']]), ('mx_Person[promoted_by_load]', 'mx_Person', [['promoted_by_load']]), ('mx_Person_0_1282900406775325', 'mx_Person', [['promoted_by_load']]), ('mx_Person_0_1282900404241473', 'mx_Person', [['superseded_by']]), ('mx_Person[reverted]', 'mx_Person', [['reverted']]), ('mx_Person_0_1282900397184629', 'mx_Person', [['handling_code']])]
+its properties: ['datasets', 'family_name', 'given_names', 'handling_classification', 'handling_code', 'id', 'nino', 'originator', 'owning_unit', 'pnc_id', 'prison_number', 'promoted_by_load', 'reverted', 'superseded_by', 't1_probe', 'withdrawn_by_load']
+F
+batched: the statements naming t1_probe ['CREATE PROPERTY mx_Person.t1_probe IF NOT EXISTS STRING', 'CREATE INDEX IF NOT EXISTS ON mx_Person (t1_probe) NOTUNIQUE']; 0.1 s over 500 nodes
+indexes on mx_Person: [('mx_Person_0_1282902613699170', 'mx_Person', [['handling_classification']]), ('mx_Person[pnc_id]', 'mx_Person', [['pnc_id']]), ('mx_Person[nino]', 'mx_Person', [['nino']]), ('mx_Person[given_names]', 'mx_Person', [['given_names']]), ('mx_Person[t1_probe]', 'mx_Person', [['t1_probe']]), ('mx_Person_0_1282902621623874', 'mx_Person', [['nino']]), ('mx_Person_0_1282902619960402', 'mx_Person', [['promoted_by_load']]), ('mx_Person_0_1282902620835832', 'mx_Person', [['datasets by item']]), ('mx_Person[originator]', 'mx_Person', [['originator']]), ('mx_Person_0_1282902614553261', 'mx_Person', [['handling_code']]), ('mx_Person_0_1282902917670930', 'mx_Person', [['t1_probe']]), ('mx_Person[family_name]', 'mx_Person', [['family_name']]), ('mx_Person[handling_code]', 'mx_Person', [['handling_code']]), ('mx_Person_0_1282902618163071', 'mx_Person', [['superseded_by']]), ('mx_Person[id]', 'mx_Person', [['id']]), ('mx_Person[datasetsbyitem]', 'mx_Person', [['datasets by item']]), ('mx_Person_0_1282902625233925', 'mx_Person', [['given_names']]), ('mx_Person[withdrawn_by_load]', 'mx_Person', [['withdrawn_by_load']]), ('mx_Person[prison_number]', 'mx_Person', [['prison_number']]), ('mx_Person[handling_classification]', 'mx_Person', [['handling_classification']]), ('mx_Person_0_1282902616289862', 'mx_Person', [['originator']]), ('mx_Person_0_1282902624389224', 'mx_Person', [['family_name']]), ('mx_Person_0_1282902612562022', 'mx_Person', [['id']]), ('mx_Person_0_1282902623485693', 'mx_Person', [['prison_number']]), ('mx_Person[superseded_by]', 'mx_Person', [['superseded_by']]), ('mx_Person_0_1282902619069041', 'mx_Person', [['withdrawn_by_load']]), ('mx_Person_0_1282902617198532', 'mx_Person', [['reverted']]), ('mx_Person_0_1282902622432015', 'mx_Person', [['pnc_id']]), ('mx_Person[owning_unit]', 'mx_Person', [['owning_unit']]), ('mx_Person[promoted_by_load]', 'mx_Person', [['promoted_by_load']]), ('mx_Person_0_1282902615408151', 'mx_Person', [['owning_unit']]), ('mx_Person[reverted]', 'mx_Person', [['reverted']])]
+its properties: ['datasets', 'family_name', 'given_names', 'handling_classification', 'handling_code', 'id', 'nino', 'originator', 'owning_unit', 'pnc_id', 'prison_number', 'promoted_by_load', 'reverted', 'superseded_by', 't1_probe', 'withdrawn_by_load']
+F
+=================================== FAILURES ===================================
+_ test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[one_at_a_time] _
+
+databases = <function databases.<locals>.fresh at 0x78524313db20>
+how = 'one_at_a_time'
+
+    @pytest.mark.parametrize("how", ["one_at_a_time", "batched"])
+    async def test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled(
+        databases: Any, how: str
+    ) -> None:
+        """The case the script's own read timeout is for: an index built over nodes already there, and
+        the copy-up after the script filling the field those nodes held only in their map. Run both
+        ways, one statement at a time (main's) and batched, so a difference is the batch's."""
+        client = await databases()
+        ontology = load_default_ontology()
+        await apply_schema(client, ontology)
+        entity = ontology.entity_types[0]
+        name = groovy_identifier(physical_type_name(entity.name))
+        rows = 500
+        await client.command(
+            "sqlscript",
+            ";\n".join(
+                f'INSERT INTO {name} SET id = \'t1-{i}\', properties = {{"t1_probe": "v{i % 5}"}}'
+                for i in range(rows)
+            ),
+        )
+        probe = PropertyDef(name="t1_probe", type=PropertyType.STRING, indexed=True)
+        changed = ontology.model_copy(
+            update={
+                "entity_types": [
+                    entity.model_copy(update={"properties": [*entity.properties, probe]}),
+                    *ontology.entity_types[1:],
+                ]
+            }
+        )
+        plan = schema_statements(changed)
+        mine = [st for st in plan.ddl if "t1_probe" in st]
+        started = time.perf_counter()
+        if how == "batched":
+            await apply_schema(client, changed)
+        else:
+            for statement in plan.ddl:
+                await client.sql(statement)
+            for type_name, prop in plan.backfills:
+                await schema_module._backfill_flattened_field(client, type_name, prop)
+        took = time.perf_counter() - started
+        indexes = await client.sql("SELECT FROM schema:indexes")
+        on_type = [i for i in indexes if name in str(i.get("typeName")) or name in str(i.get("name"))]
+        props = await client.sql(f"SELECT properties FROM schema:types WHERE name = '{name}'")
+        seen = [(i.get("name"), i.get("typeName"), i.get("properties")) for i in on_type]
+        names = [p.get("name") for r in props for p in (r.get("properties") or [])]
+        print(
+            f"\n{how}: the statements naming t1_probe {mine}; {took:.1f} s over {rows} nodes\n"
+            f"indexes on {name}: {seen}\nits properties: {names}"
+        )
+>       assert any(i.get("typeName") == name and i.get("properties") == ["t1_probe"] for i in indexes)
+E       assert False
+E        +  where False = any(<generator object test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled.<locals>.<genexpr> at 0x785243067e60>)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py:299: AssertionError
+_ test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[batched] _
+
+databases = <function databases.<locals>.fresh at 0x7852426f4680>
+how = 'batched'
+
+    @pytest.mark.parametrize("how", ["one_at_a_time", "batched"])
+    async def test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled(
+        databases: Any, how: str
+    ) -> None:
+        """The case the script's own read timeout is for: an index built over nodes already there, and
+        the copy-up after the script filling the field those nodes held only in their map. Run both
+        ways, one statement at a time (main's) and batched, so a difference is the batch's."""
+        client = await databases()
+        ontology = load_default_ontology()
+        await apply_schema(client, ontology)
+        entity = ontology.entity_types[0]
+        name = groovy_identifier(physical_type_name(entity.name))
+        rows = 500
+        await client.command(
+            "sqlscript",
+            ";\n".join(
+                f'INSERT INTO {name} SET id = \'t1-{i}\', properties = {{"t1_probe": "v{i % 5}"}}'
+                for i in range(rows)
+            ),
+        )
+        probe = PropertyDef(name="t1_probe", type=PropertyType.STRING, indexed=True)
+        changed = ontology.model_copy(
+            update={
+                "entity_types": [
+                    entity.model_copy(update={"properties": [*entity.properties, probe]}),
+                    *ontology.entity_types[1:],
+                ]
+            }
+        )
+        plan = schema_statements(changed)
+        mine = [st for st in plan.ddl if "t1_probe" in st]
+        started = time.perf_counter()
+        if how == "batched":
+            await apply_schema(client, changed)
+        else:
+            for statement in plan.ddl:
+                await client.sql(statement)
+            for type_name, prop in plan.backfills:
+                await schema_module._backfill_flattened_field(client, type_name, prop)
+        took = time.perf_counter() - started
+        indexes = await client.sql("SELECT FROM schema:indexes")
+        on_type = [i for i in indexes if name in str(i.get("typeName")) or name in str(i.get("name"))]
+        props = await client.sql(f"SELECT properties FROM schema:types WHERE name = '{name}'")
+        seen = [(i.get("name"), i.get("typeName"), i.get("properties")) for i in on_type]
+        names = [p.get("name") for r in props for p in (r.get("properties") or [])]
+        print(
+            f"\n{how}: the statements naming t1_probe {mine}; {took:.1f} s over {rows} nodes\n"
+            f"indexes on {name}: {seen}\nits properties: {names}"
+        )
+>       assert any(i.get("typeName") == name and i.get("properties") == ["t1_probe"] for i in indexes)
+E       assert False
+E        +  where False = any(<generator object test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled.<locals>.<genexpr> at 0x7852427426c0>)
+
+../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py:299: AssertionError
+============================= slowest 30 durations =============================
+2.55s call     tests/conformance/graph_port/test_schema_batch_live.py::test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[one_at_a_time]
+0.55s call     tests/conformance/graph_port/test_schema_batch_live.py::test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[batched]
+0.15s teardown tests/conformance/graph_port/test_schema_batch_live.py::test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[one_at_a_time]
+0.06s teardown tests/conformance/graph_port/test_schema_batch_live.py::test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[batched]
+0.05s setup    tests/conformance/graph_port/test_schema_batch_live.py::test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[one_at_a_time]
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py::test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[one_at_a_time]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py::test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled[batched]
+2 failed, 4 deselected in 3.49s
+Wall time: 4 s, exit 1 (stack c, the lease orchestrator took at 2026-11-10T11:43:14Z; set-up before it 10 s)
+exit 1

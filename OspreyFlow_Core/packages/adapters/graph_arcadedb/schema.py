@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import httpx
@@ -65,6 +67,9 @@ _NON_RETRYABLE_ARCADEDB_EXCEPTIONS = frozenset(
     {
         "com.arcadedb.exception.SchemaException",
         "com.arcadedb.query.sql.parser.ParseException",
+        # What a `sqlscript` that does not parse is refused as (the live proof at 366afad); sent
+        # once there, and named here so a 5xx for it is never retried either.
+        "com.arcadedb.exception.CommandSQLParsingException",
         "com.arcadedb.exception.ConcurrentModificationException",
     }
 )
@@ -77,9 +82,19 @@ async def _ddl(client: ArcadeDBClient, command: str) -> None:
     error whose `exception` class isn't a known-permanent one (see
     `_NON_RETRYABLE_ARCADEDB_EXCEPTIONS`) — never a real schema conflict,
     which fails immediately and loudly instead."""
+    await _with_ddl_retry(lambda: client.sql(command), transport=httpx.TransportError)
+
+
+async def _with_ddl_retry(
+    send: Callable[[], Awaitable[object]],
+    *,
+    transport: type[Exception] | tuple[type[Exception], ...],
+) -> None:
+    """`_ddl`'s retry policy, shared by one statement and the whole script: a permanent refusal
+    raises at once; a transient one (a 5xx not denylisted, or one of `transport`) is re-sent."""
     for attempt in range(1, _DDL_MAX_ATTEMPTS + 1):
         try:
-            await client.sql(command)
+            await send()
             return
         except ArcadeDBError as exc:
             non_retryable = (
@@ -89,7 +104,7 @@ async def _ddl(client: ArcadeDBClient, command: str) -> None:
             )
             if non_retryable or attempt == _DDL_MAX_ATTEMPTS:
                 raise
-        except httpx.TransportError:
+        except transport:
             if attempt == _DDL_MAX_ATTEMPTS:
                 raise
         await asyncio.sleep(_DDL_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
@@ -107,37 +122,122 @@ _SQL_TYPE: dict[PropertyType, str] = {
 }
 
 
-async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> SchemaReport:
-    applied_entity_types: list[str] = []
-    applied_edge_types: list[str] = []
-    indexes_created: list[str] = []
+class SchemaApplyError(ArcadeDBError):
+    """The schema's script was refused, or its outcome is unknown. A refusal that the script's
+    parse found applied nothing; one found while it ran left the statements before it applied, as
+    the statement-by-statement apply did; either way the next apply, each statement being
+    `IF NOT EXISTS`, completes the schema. Nothing is dropped to undo it (admin's T1 review: a drop
+    could take a type another process had just created and written to)."""
 
+    def __init__(
+        self, message: str, *, cause: ArcadeDBError | httpx.TransportError | None = None
+    ) -> None:
+        # `cause` defaults so the error can be unpickled (`cls(*args)`), as a job's error may be.
+        super().__init__(
+            message,
+            status_code=getattr(cause, "status_code", None),
+            exception_class=getattr(cause, "exception_class", None),
+        )
+
+
+@dataclass(frozen=True)
+class _Plan:
+    """Every DDL statement an ontology needs, in the order they run, and what the report names."""
+
+    ddl: list[str] = field(default_factory=list)
+    backfills: list[tuple[str, str]] = field(default_factory=list)
+    entity_types: list[str] = field(default_factory=list)
+    edge_types: list[str] = field(default_factory=list)
+    indexes: list[str] = field(default_factory=list)
+
+
+def schema_statements(schema: OntologySchema) -> _Plan:
+    """The statements `apply_schema` sends, built once: the Conduit's start-up and the test
+    fixture's fresh database run the same list (admin's T1, 10 November 2026)."""
+    plan = _Plan()
     for entity in schema.entity_types:
         name = groovy_identifier(physical_type_name(entity.name))
-        await _ddl(client, f"CREATE VERTEX TYPE {name} IF NOT EXISTS")
-        indexes_created += await _apply_common_indexes(client, name)
+        plan.ddl.append(f"CREATE VERTEX TYPE {name} IF NOT EXISTS")
+        _common_indexes(plan, name)
         for identifier in entity.identifiers:
-            indexes_created += await _apply_indexed_property(client, name, identifier, "STRING")
-        indexes_created += await _apply_indexed_declared_properties(client, name, entity)
-        applied_entity_types.append(entity.name)
-
+            _indexed_property(plan, name, identifier, "STRING")
+        _indexed_declared_properties(plan, name, entity)
+        plan.entity_types.append(entity.name)
     for edge in schema.edge_types:
         name = groovy_identifier(physical_type_name(edge.name))
-        await _ddl(client, f"CREATE EDGE TYPE {name} IF NOT EXISTS")
-        indexes_created += await _apply_common_indexes(client, name)
-        indexes_created += await _apply_indexed_declared_properties(client, name, edge)
+        plan.ddl.append(f"CREATE EDGE TYPE {name} IF NOT EXISTS")
+        _common_indexes(plan, name)
+        _indexed_declared_properties(plan, name, edge)
         if edge.temporal:
-            await _create_property(client, name, "valid_from", "DATETIME")
-            await _create_index(client, name, "valid_from", unique=False)
-            indexes_created.append(f"{name}.valid_from")
-        applied_edge_types.append(edge.name)
+            plan.ddl.append(_property(name, "valid_from", "DATETIME"))
+            plan.ddl.append(_index(name, "valid_from", unique=False))
+            plan.indexes.append(f"{name}.valid_from")
+        plan.edge_types.append(edge.name)
+    return plan
 
+
+async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> SchemaReport:
+    """Apply an ontology's schema as one `sqlscript` request, not one request per statement.
+
+    A fresh database's schema took 15.8 s one statement at a time and takes 0.2 s as one script
+    (the live proof at 366afad, stack c, the lease the orchestrator took at 2026-11-10T11:13:03Z),
+    paid by every live test that opens one. The statements and their order are unchanged
+    (`test_schema_batch.py`'s golden list).
+
+    A refusal raises `SchemaApplyError` and is never undone: ArcadeDB parses the whole script
+    first, so a parse error applies nothing; one found while the script runs leaves the
+    statements before it applied, as the statement-by-statement apply did, and the next apply
+    completes the schema. The whole script is re-sent after a failure to connect (it never reached
+    the server) and after a 5xx whose class is not a known-permanent one (`_with_ddl_retry`, as one
+    statement was); never after a read that timed out, since the script may still be running there:
+    its outcome is unknown and the error says so. The copy-up
+    of indexed text fields runs after the script, statement by statement: a refusal there is
+    logged and never stops the schema (`_backfill_flattened_field`)."""
+    plan = schema_statements(schema)
+    try:
+        await _ddl_script(client, plan.ddl)
+    except (ArcadeDBError, httpx.ConnectError, httpx.ConnectTimeout) as exc:
+        raise SchemaApplyError(
+            "the schema's script was refused, or the server could not be reached; any statement "
+            "before a refused one stays applied, and applying the schema again completes it: "
+            f"{exc!r}",
+            cause=exc,
+        ) from exc
+    except httpx.TransportError as exc:
+        # Sent, and then no whole answer (a read timed out, the connection dropped): the script may
+        # still be running on the server, so it is not sent again beside itself.
+        raise SchemaApplyError(
+            "the schema's script was sent and no answer came back; it may still be running on the "
+            f"server, so its outcome is unknown: apply the schema again once it is idle ({exc!r})",
+            cause=exc,
+        ) from exc
+    for type_name, prop in plan.backfills:
+        await _backfill_flattened_field(client, type_name, prop)
     return SchemaReport(
         migration_id=f"ontology-v{schema.version}-{datetime.now(UTC).isoformat()}",
-        applied_entity_types=applied_entity_types,
-        applied_edge_types=applied_edge_types,
-        indexes_created=indexes_created,
+        applied_entity_types=plan.entity_types,
+        applied_edge_types=plan.edge_types,
+        indexes_created=plan.indexes,
         reversible=True,
+    )
+
+
+#: The whole script's own read timeout: 585 statements, and an index built over a populated type,
+#: may take longer than one statement's 30 s. Connecting, writing and waiting for a pooled
+#: connection keep the client's 30 s, so a host that drops packets still fails in six short tries.
+_SCRIPT_READ_TIMEOUT_SECONDS = 600.0
+_SCRIPT_TIMEOUT = httpx.Timeout(30.0, read=_SCRIPT_READ_TIMEOUT_SECONDS)
+
+
+async def _ddl_script(client: ArcadeDBClient, statements: list[str]) -> None:
+    """The statements as one script, re-sent whole after a failure to connect or a transient 5xx,
+    never after a read that timed out, which may still be running there (`apply_schema`)."""
+    if not statements:
+        return
+    script = ";\n".join(statements)
+    await _with_ddl_retry(
+        lambda: client.command("sqlscript", script, timeout=_SCRIPT_TIMEOUT),
+        transport=(httpx.ConnectError, httpx.ConnectTimeout),
     )
 
 
@@ -160,68 +260,64 @@ async def _drop_type_if_present(client: ArcadeDBClient, type_name: str) -> None:
             raise
 
 
-async def _apply_common_indexes(client: ArcadeDBClient, type_name: str) -> list[str]:
+def _common_indexes(plan: _Plan, type_name: str) -> None:
     names = ["id", "handling_classification", "handling_code", "owning_unit", "originator"]
     for name in names:
-        await _create_property(client, type_name, name, "STRING")
-        await _create_index(client, type_name, name, unique=(name == "id"))
+        plan.ddl.append(_property(type_name, name, "STRING"))
+        plan.ddl.append(_index(type_name, name, unique=(name == "id")))
     # `reverted` — checked on every read alongside the access filter
     # (`access_filter.py`), so it needs the same treatment, not just a
     # schemaless property. Not unique: every non-reverted element shares
     # the value `false`.
-    await _create_property(client, type_name, "reverted", "BOOLEAN")
-    await _create_index(client, type_name, "reverted", unique=False)
+    plan.ddl.append(_property(type_name, "reverted", "BOOLEAN"))
+    plan.ddl.append(_index(type_name, "reverted", unique=False))
     # `superseded_by` — sparse (`01_DOMAIN_MODEL.md` §2.4): present only on
     # a node `supersede_node` has replaced. Declared here so `hasNot(...)`
     # and a direct lookup both have a real, indexed property to run
     # against rather than one that only ever appears schemaless.
-    await _create_property(client, type_name, "superseded_by", "STRING")
-    await _create_index(client, type_name, "superseded_by", unique=False)
+    plan.ddl.append(_property(type_name, "superseded_by", "STRING"))
+    plan.ddl.append(_index(type_name, "superseded_by", unique=False))
     # `withdrawn_by_load` — sparse, as `superseded_by` (ADR-110 Amendment 6 point 3): present only
     # on an element a full-snapshot refresh withdrew, and looked up by that refresh's load id when
     # its revert restores them.
-    await _create_property(client, type_name, "withdrawn_by_load", "STRING")
-    await _create_index(client, type_name, "withdrawn_by_load", unique=False)
+    plan.ddl.append(_property(type_name, "withdrawn_by_load", "STRING"))
+    plan.ddl.append(_index(type_name, "withdrawn_by_load", unique=False))
     # `promoted_by_load` — sparse (ADR-143 decision 8): present only on an element a promotion
     # added a dataset to, looked up by that promotion's load id when it is reverted.
-    await _create_property(client, type_name, "promoted_by_load", "STRING")
-    await _create_index(client, type_name, "promoted_by_load", unique=False)
+    plan.ddl.append(_property(type_name, "promoted_by_load", "STRING"))
+    plan.ddl.append(_index(type_name, "promoted_by_load", unique=False))
     # `datasets` (ADR-099 decision 2, Amendment 6): a list, indexed by each of its items, so a read
     # by dataset (`WHERE datasets CONTAINS ...`) is answered from the index. The access step's
     # Gremlin filter tests the list itself (`AccessFilter.gremlin_dataset_step`).
-    await _create_property(client, type_name, "datasets", "LIST OF STRING")
-    await _create_index(client, type_name, "datasets BY ITEM", unique=False)
-    return [
-        *(f"{type_name}.{name}" for name in names),
-        f"{type_name}.reverted",
-        f"{type_name}.superseded_by",
-        f"{type_name}.withdrawn_by_load",
-        f"{type_name}.promoted_by_load",
-        f"{type_name}.datasets",
-    ]
+    plan.ddl.append(_property(type_name, "datasets", "LIST OF STRING"))
+    plan.ddl.append(_index(type_name, "datasets BY ITEM", unique=False))
+    plan.indexes.extend(
+        [
+            *(f"{type_name}.{name}" for name in names),
+            f"{type_name}.reverted",
+            f"{type_name}.superseded_by",
+            f"{type_name}.withdrawn_by_load",
+            f"{type_name}.promoted_by_load",
+            f"{type_name}.datasets",
+        ]
+    )
 
 
-async def _apply_indexed_property(
-    client: ArcadeDBClient, type_name: str, prop_name: str, sql_type: str
-) -> list[str]:
+def _indexed_property(plan: _Plan, type_name: str, prop_name: str, sql_type: str) -> None:
     prop = groovy_identifier(prop_name)
-    await _create_property(client, type_name, prop, sql_type)
-    await _create_index(client, type_name, prop, unique=False)
-    return [f"{type_name}.{prop}"]
+    plan.ddl.append(_property(type_name, prop, sql_type))
+    plan.ddl.append(_index(type_name, prop, unique=False))
+    plan.indexes.append(f"{type_name}.{prop}")
 
 
-async def _apply_indexed_declared_properties(
-    client: ArcadeDBClient, type_name: str, type_def: EntityTypeDef | EdgeTypeDef
-) -> list[str]:
-    created: list[str] = []
+def _indexed_declared_properties(
+    plan: _Plan, type_name: str, type_def: EntityTypeDef | EdgeTypeDef
+) -> None:
     for prop in type_def.properties:
         if prop.indexed:
-            created += await _apply_indexed_property(
-                client, type_name, prop.name, _SQL_TYPE[prop.type]
-            )
+            _indexed_property(plan, type_name, prop.name, _SQL_TYPE[prop.type])
             if prop.type in _BACKFILLED_TYPES:
-                await _backfill_flattened_field(client, type_name, prop.name)
-    return created
+                plan.backfills.append((type_name, prop.name))
 
 
 #: The indexed types worth copying up. Text is what a suggestion or an exact search reads; a date or
@@ -240,8 +336,9 @@ async def _backfill_flattened_field(client: ArcadeDBClient, type_name: str, prop
 
     It fills a missing (or empty) field and never replaces one that has a value. It runs on every
     schema apply, so it also repairs a field that went missing some other way; once nothing is
-    missing it changes nothing. If ArcadeDB refuses it, the schema step carries on (every statement
-    before and after still runs, so the API starts) and the refusal is logged by name: the property
+    missing it changes nothing. It runs after the schema's whole script, one statement per
+    copy-up. If ArcadeDB refuses it, the schema step carries on (every other copy-up still runs,
+    so the API starts) and the refusal is logged by name: the property
     then stays unsearchable for old nodes until they are written again, which is what the log line
     says."""
     prop = groovy_identifier(prop_name)
@@ -265,14 +362,10 @@ async def _backfill_flattened_field(client: ArcadeDBClient, type_name: str, prop
         )
 
 
-async def _create_property(
-    client: ArcadeDBClient, type_name: str, prop_name: str, sql_type: str
-) -> None:
-    await _ddl(client, f"CREATE PROPERTY {type_name}.{prop_name} IF NOT EXISTS {sql_type}")
+def _property(type_name: str, prop_name: str, sql_type: str) -> str:
+    return f"CREATE PROPERTY {type_name}.{prop_name} IF NOT EXISTS {sql_type}"
 
 
-async def _create_index(
-    client: ArcadeDBClient, type_name: str, prop_name: str, *, unique: bool
-) -> None:
+def _index(type_name: str, prop_name: str, *, unique: bool) -> str:
     kind = "UNIQUE" if unique else "NOTUNIQUE"
-    await _ddl(client, f"CREATE INDEX IF NOT EXISTS ON {type_name} ({prop_name}) {kind}")
+    return f"CREATE INDEX IF NOT EXISTS ON {type_name} ({prop_name}) {kind}"
