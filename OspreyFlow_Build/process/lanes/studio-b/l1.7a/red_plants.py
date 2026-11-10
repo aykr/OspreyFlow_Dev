@@ -103,7 +103,7 @@ PLANTS = [
      "`fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)` -> `pass`",
      [("                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n", "                pass  # PLANT\n")],
      [REPO_TESTS],
-     ["test_the_index_is_read_and_written_under_a_lock_another_process_honours"]),
+     ["test_the_index_is_read_and_written_under_a_lock_another_process_honours"], "'commit', 'swap']"),
     ("porcelain-commit", "the commit made by dulwich's worktree commit, which reads the config "
      "and runs the hooks in .git/hooks (the independent review, item 2)",
      [("    if not unchanged:\n",

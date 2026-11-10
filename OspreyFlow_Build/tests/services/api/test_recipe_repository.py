@@ -689,8 +689,8 @@ async def test_publishes_queued_behind_a_held_lock_share_one_wait(
     monkeypatch.setattr(studio_publish, "PUBLISH_LOCK_WAIT_SECONDS", wait)
     other = (repo / ".git" / studio_publish.PUBLISH_LOCK_NAME).open("a")
     fcntl.flock(other, fcntl.LOCK_EX)
-    # A safety release, cancelled once the publishes return: a wait without limit then ends (and
-    # fails the bound below) rather than hangs.
+    # A safety release, cancelled once the publishes return: a wait without limit then ends (its
+    # publishes commit, failing the refusal asserted below) rather than hangs.
     safety = threading.Timer(4 * wait, lambda: fcntl.flock(other, fcntl.LOCK_UN))
     safety.start()
     try:
