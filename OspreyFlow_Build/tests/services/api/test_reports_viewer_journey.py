@@ -73,7 +73,9 @@ def _alert_routes() -> dict[str, tuple[str, str]]:
 #: The named ways into an alert the table must hold, so the derivation cannot quietly find none.
 NAMED = {"open_alert_at_address", "explain_alert", "alert_canvas", "claim_alert", "release_alert",
          "dispose_alert", "assign_alert", "approve_alert_close", "send_back_alert_close",
-         "get_alert_route", "list_alerts_route", "read_alert_assignees"}  # fmt: skip
+         "read_alert_assignees"}  # fmt: skip
+# The Watches inbox's `list_alerts_route` and `get_alert_route` are gone with the inbox (L2.10,
+# ADR-146 decision 1: one queue); the queue's own routes above are its ways into an alert.
 
 
 @pytest.fixture
