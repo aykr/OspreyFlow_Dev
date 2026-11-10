@@ -1,5 +1,10 @@
 import { defineConfig } from "@playwright/test";
 
+import { lanePort } from "../../lanePorts";
+
+// This lane's own port (T2, `apps/lanePorts.ts`): 5185 on main.
+const PORT = lanePort(5185);
+
 // `spec/00_ARCHITECTURE.md` §1.2.1's contrast-floor Verify check — a
 // separate Playwright project from `a11y/`'s (a different port, so both
 // can run without colliding), mirroring `a11y/playwright.config.ts`'s own
@@ -8,12 +13,12 @@ export default defineConfig({
   testDir: ".",
   timeout: 60_000,
   webServer: {
-    command: "npx vite --port 5185 --strictPort",
-    port: 5185,
+    command: `npx vite --port ${PORT} --strictPort`,
+    port: PORT,
     reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
     cwd: "..",
   },
   use: {
-    baseURL: "http://localhost:5185",
+    baseURL: `http://localhost:${PORT}`,
   },
 });

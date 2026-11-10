@@ -53,6 +53,10 @@ LANES_DIR="$ROOT/OspreyFlow_Build/process/lanes"
 HEARTBEAT="$ROOT/OspreyFlow_Build/scripts/lanes_heartbeat.sh"
 LEASE_SH="$ROOT/OspreyFlow_Build/scripts/stack_lease.sh"
 LEASE_DIR="${OSPREY_LEASE_DIR:-$HOME/.ospreyflow}"
+# Each lane's Playwright port slot (T2, lane_ports.tsv), by its exact row; "unlisted-<lane>" otherwise, which a
+# Playwright run refuses in words (OspreyFlow_Core/apps/lanePorts.ts).
+PORTS="$(cd "$(dirname "$0")" && pwd)/lane_ports.tsv"
+ports_slot() { awk -F'\t' -v l="$1" '!/^#/ && $1 == l { print $2; found = 1; exit } END { if (!found) print "unlisted-" l }' "$PORTS" 2>/dev/null || echo "unlisted-$1"; }
 mkdir -p "$WT" "$STATE"
 
 # The lanes (ADR-142 Amendment 3: glass split into admin and rules on 8 November 2026, platform added).
@@ -153,6 +157,7 @@ printf '\\033]0;OspreyFlow · %s · account %s\\007' "$lane" "$ACCOUNT_NAME"
 echo "OspreyFlow $lane lane on account $ACCOUNT_NAME."
 export CLAUDE_CONFIG_DIR="$ACCOUNT_DIR"
 export OSPREY_LANE="$lane"
+export OSPREY_PORTS_SLOT="$(ports_slot "$lane")"
 $CLAUDE_CMD --model "$model" "\$(cat "$pf")"
 EOF
   osascript -e "tell application \"Terminal\" to do script \"source '$start'\"" -e 'tell application "Terminal" to activate' >/dev/null
@@ -183,7 +188,7 @@ headless() {
   if alive "$lane" >/dev/null; then echo "A session is already running in $dir." >&2; exit 1; fi
   prompt_for "$lane" L > "$pf"
   echo "$ACCOUNT_NAME" > "$STATE/$lane.account"
-  ( cd "$dir" && CLAUDE_CONFIG_DIR="$ACCOUNT_DIR" OSPREY_LANE="$lane" PF="$pf" M="$model" nohup zsh -ic "$CLAUDE_CMD"' -p --model "$M" "$(cat "$PF")"' > "$STATE/$lane.headless.out" 2>&1 & )
+  ( cd "$dir" && CLAUDE_CONFIG_DIR="$ACCOUNT_DIR" OSPREY_LANE="$lane" OSPREY_PORTS_SLOT="$(ports_slot "$lane")" PF="$pf" M="$model" nohup zsh -ic "$CLAUDE_CMD"' -p --model "$M" "$(cat "$PF")"' > "$STATE/$lane.headless.out" 2>&1 & )
   echo "Started $lane headless ($model, account $ACCOUNT_NAME); output in $STATE/$lane.headless.out."
 }
 

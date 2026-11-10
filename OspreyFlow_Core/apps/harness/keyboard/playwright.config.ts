@@ -4,10 +4,19 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "@playwright/test";
+import {
+  API_PORT,
+  INSTALL_API_PORT,
+  INSTALL_VITE_PORT,
+  VITE_PORT,
+} from "./ports";
 
 // A scratch `osprey.yaml`, not this checkout's real one — `harness.webapp`'s own `Save` actions
 // really write to disk, and this suite must never touch the repository's own committed config.
-const SCRATCH_CONFIG = join(tmpdir(), `osprey-keyboard-spec-${process.pid}.yaml`);
+const SCRATCH_CONFIG = join(
+  tmpdir(),
+  `osprey-keyboard-spec-${process.pid}.yaml`,
+);
 // It builds from this checkout (`components.source_path`), so Generate renders without a published
 // release's digests: pull mode refuses an image no release has locked, and this commit has none
 // (CI found it, 15 October 2026). Generate's own refusal is `test_render.py`'s to prove.
@@ -20,19 +29,24 @@ writeFileSync(
 // reads/writes disk too, and `--real-data-exceptions`'s own default is
 // `scripts.real_data_exceptions.CONFIG_PATH`, the owner's real, gitignored local file. Never
 // touch that one from a test (`CLAUDE.md` rule 9 / ADR-035 §C3 / STANDING.md).
-const SCRATCH_RDE = join(tmpdir(), `real-data-exceptions-keyboard-spec-${process.pid}.yaml`);
+const SCRATCH_RDE = join(
+  tmpdir(),
+  `real-data-exceptions-keyboard-spec-${process.pid}.yaml`,
+);
 
 // A scratch `deploy/generated/` — the Preflight screen's own `Generate` really writes to disk,
 // and `--out-root`'s own default is this checkout's real `deploy/generated/` (gitignored, but
 // still real state a test run must not touch — the same reasoning as the two scratch paths
 // above).
-const SCRATCH_OUT_ROOT = join(tmpdir(), `osprey-generated-keyboard-spec-${process.pid}`);
+const SCRATCH_OUT_ROOT = join(
+  tmpdir(),
+  `osprey-generated-keyboard-spec-${process.pid}`,
+);
 
-// Not the real default (7100; it was 7000 until that was found to collide) — `vite.config.ts`'s
+// API_PORT (./ports.ts) is not the real default (7100; it was 7000 until that was found to collide) — `vite.config.ts`'s
 // own module docstring has the reason: 7000 collides with macOS's AirPlay Receiver on a real development
 // machine, which answered every proxied request with its own 403 while `reuseExistingServer`
 // quietly never started this suite's own server at all. A scratch port for a scratch server.
-const API_PORT = "7217";
 
 // `--apply-command`'s own real seam (`harness/webapp.py`'s own docstring) — a real, if tiny,
 // subprocess standing in for `python -m harness.apply`, so a keyboard-driven Launch click proves
@@ -50,9 +64,10 @@ const FAKE_APPLY_COMMAND = JSON.stringify([
 // `.venv/bin/python` is a stub that only echoes, so a keyboard-driven Install runs no real install
 // (the page runs `<product>/.venv/bin/python -m ospreyflow install …`). Its draft and answers are
 // scratch files too, never this checkout's `osprey.yaml`.
-const INSTALL_API_PORT = "7218";
-const INSTALL_VITE_PORT = 5192;
-const INSTALL_SCRATCH = join(tmpdir(), `osprey-install-keyboard-spec-${process.pid}`);
+const INSTALL_SCRATCH = join(
+  tmpdir(),
+  `osprey-install-keyboard-spec-${process.pid}`,
+);
 const INSTALL_TOKEN = "keyboard-spec-install-token"; // the same literal is in setup-screens.spec.ts
 const STUB_PYTHON = '#!/bin/sh\necho "stub $*"\n';
 
@@ -62,8 +77,8 @@ export default defineConfig({
   timeout: 60_000,
   webServer: [
     {
-      command: "npx vite --port 5191 --strictPort",
-      port: 5191,
+      command: `npx vite --port ${VITE_PORT} --strictPort`,
+      port: VITE_PORT,
       reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
       cwd: "..",
       env: { HARNESS_API_PORT: API_PORT },
@@ -106,6 +121,6 @@ export default defineConfig({
     },
   ],
   use: {
-    baseURL: "http://localhost:5191",
+    baseURL: `http://localhost:${VITE_PORT}`,
   },
 });
