@@ -137,7 +137,9 @@ def _persons(graph: ValidatingGraph) -> dict[str, list[Any]]:
 
 def test_the_step_keeps_every_left_row_and_scores_its_best_match() -> None:
     out, report = run_fuzzy_step(
-        FuzzyMatchStep.model_validate(_step(0.6)), *(_sources()[n] for n in ("visits", "owners"))
+        FuzzyMatchStep.model_validate(_step(0.6)),
+        *(_sources()[n] for n in ("visits", "owners")),
+        marked=(),
     )
     got = [(r.cells["family"], r.cells["matched_owner"], r.cells["match_score"]) for r in out.rows]
     assert [g[0] for g in got] == ["WHITLOW", "ELLERY", "OKAFOR", "PRICE", "ODEH"]
@@ -320,7 +322,7 @@ def test_a_step_with_too_many_pairs_and_no_blocking_key_is_refused() -> None:
     many = source_table("visits", [{"family": f"N{i}"} for i in range(1100)], load_id="L")
     owners = source_table("owners", [{"owner": f"N{i}"} for i in range(1000)], load_id="O")
     with pytest.raises(StagingError) as refused:
-        run_fuzzy_step(FuzzyMatchStep.model_validate(_step(0.6)), many, owners)
+        run_fuzzy_step(FuzzyMatchStep.model_validate(_step(0.6)), many, owners, marked=())
     assert any("block_on" in p for p in refused.value.problems)
     assert fuzzy_match.FUZZY_PAIR_LIMIT == 1_000_000
     # With a thousand owners the prior that any one pair matches is one in a thousand, so an exact
@@ -329,7 +331,7 @@ def test_a_step_with_too_many_pairs_and_no_blocking_key_is_refused() -> None:
         _step(0.4, block_on=[{"left": "family", "right": "owner", "method": "exact"}])
     )
     small = source_table("visits", [{"family": f"N{i}"} for i in range(1100)], load_id="L")
-    out, report = run_fuzzy_step(blocked, small, owners)
+    out, report = run_fuzzy_step(blocked, small, owners, marked=())
     assert report.matched == 1000 and report.unmatched == 100 and len(out.rows) == 1100
 
 
