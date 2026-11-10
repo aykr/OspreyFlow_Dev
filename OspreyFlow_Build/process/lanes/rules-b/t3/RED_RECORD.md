@@ -97,7 +97,7 @@ A listed finding no longer found fails. A listed title that is not a scanned loo
 - **Shell (L2.3's prototype variant b):** the rail's "⋯" sits on a transparent button over the rail, or over the GOV.UK banner.
 
 ## Limit, stated in the code
-The probe samples points across the text, not every pixel. Where axe saw part covered it takes a denser grid, and axe's own reading fails closed unless what axe named is a clip.
+The probe samples points across the text, not every pixel: the left, middle and right of up to five line boxes, spread first to last. A cover lying wholly between them passes unseen. That includes a partly covered text, since the 5 × 3 grid for those was dropped in round 3. It is carried to T3b with merger-c2's other carries.
 
 
 ## Round 3, the final form (9e8d51a): merger-c2's review of e94b18c

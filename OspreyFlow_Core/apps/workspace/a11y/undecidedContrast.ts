@@ -10,10 +10,11 @@
 // laid over it, and what `elementsFromPoint` finds under and over the text. `src/color/textContrast.ts`
 // judges it, in Node, unit-tested at every boundary. It fails closed: an element painted under or over
 // the text that is neither the node nor an ancestor (map tiles under a chip, an overlay, a drawn line),
-// axe's "partly covered" (its points cannot be ruled out here), a filter or blend, a colour it cannot
-// read, a node in a frame or shadow root are offenders, never passes. Its limit: the probe samples
-// points (the left, middle and right of up to five line boxes, the first, middle and last among them),
-// not every pixel.
+// a filter or blend, a colour it cannot read, a node in a frame or shadow root are offenders, never
+// passes. Text axe calls partly covered is measured when the probe finds nothing foreign at its points
+// (rules-b's T3 report, decision 3). Its limit: the probe samples points (the left, middle and right of
+// up to five line boxes, the first, middle and last among them), not every pixel; a cover lying wholly
+// between them is carried to T3b.
 import type { Page } from "@playwright/test";
 
 import {
