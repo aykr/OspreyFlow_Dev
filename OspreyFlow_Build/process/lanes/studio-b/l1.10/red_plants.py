@@ -23,11 +23,16 @@ APP = CORE / "services/api/app.py"
 SITE = CORE / "harness/site.py"
 SCOPE = CORE / "services/api/dataset_scope.py"
 SEEDS = CORE / "scripts/seed_internal.py"
+PAYSIM = CORE / "packages/demo_fixtures/paysim.py"
+CYBER = CORE / "scripts/seed_cyber_intrusion.py"
 LOADS = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling.py"
 UPLOADS = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_uploads.py"
 BACKSTOP = "../OspreyFlow_Build/tests/services/api/test_deployment_ceiling_backstop.py"
 PACKS = "../OspreyFlow_Build/tests/test_seed_internal_ceiling.py"
 BACKSTOP_LINE = "        refuse_writes_above_the_ceiling(stamped)  # ADR-148 decision 10, the backstop\n"
+CORRECTION_LINE = (
+    "        refuse_writes_above_the_ceiling([replacement])  # ADR-148 decision 10, the backstop\n"
+)
 
 CHECK_COMMENT = (
     "    # ADR-148 decision 10: the deployment's marking ceiling, judged over every row before raw\n"
@@ -116,6 +121,53 @@ PLANTS = [
      [(SEEDS, "    held = spec.highest_marking or scheme.classification[-1]\n",
        "    held = spec.highest_marking or scheme.classification[0]  # PLANT\n")], [PACKS],
      ["test_a_pack_above_the_ceiling_is_refused_before_its_seed_starts"], "DID NOT RAISE"),
+    ("whole-marking-widened", "the row judged by its whole marking, widened when any part fails "
+     "(the engine's `_resolve_markings`), not by its classification",
+     [(CEILING, "        found, cannot_read = _row_classifications(recipe, row, ceiling.scheme)\n",
+       "        from .engine import _resolve_markings  # PLANT\n\n"
+       "        found = {m.classification for m in _resolve_markings(recipe, row, ceiling.scheme)}\n"
+       "        cannot_read = False\n")],
+     [LOADS], ["test_a_row_whose_classification_reads_is_judged_by_it_alone",
+               "test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so"],
+     None),
+    ("bound-cell-ignored", "a column's classification never counted, only the element's default",
+     [(CEILING, "            found.add(cell)\n", "            pass  # PLANT\n")], [LOADS],
+     ["test_a_row_whose_units_conflict_is_still_judged",
+      "test_a_load_with_a_row_above_the_ceiling_is_refused_and_writes_nothing"], "DID NOT RAISE"),
+    ("unreadable-passes", "a row whose classification cannot be read never refused",
+     [(CEILING, "    if unreadable:\n        raise AboveTheDeploymentCeiling(ceiling.marking, "
+                "\"unreadable\")\n", "")], [LOADS],
+     ["test_a_row_whose_classification_cannot_be_read_is_refused_in_words_that_say_so"],
+     "DID NOT RAISE"),
+    ("element-literal-ignored", "an element's own fixed classification not judged, the defaults' alone",
+     [(CEILING,
+       "        fixed.append(str(literal.get(\"classification\") or defaults.get(\"classification\") "
+       "or \"\"))\n",
+       "        fixed.append(str(defaults.get(\"classification\") or \"\"))  # PLANT\n")], [LOADS],
+     ["test_an_element_whose_own_fixed_marking_is_above_the_ceiling_is_refused"], "DID NOT RAISE"),
+    ("detail-removed", "the 422 without the detail the Glass shows a person",
+     [(APP, "            \"detail\": exc.problems[0],\n", "")], [UPLOADS],
+     ["test_a_document_above_the_ceiling_is_refused_before_anything_is_stored",
+      "test_a_picture_above_the_ceiling_is_refused_before_anything_is_stored"], "KeyError"),
+    ("upload-said-as-a-load", "an upload refused in a load's words",
+     [(APP, "        raise AboveTheDeploymentCeiling(ceiling.marking, \"import\")\n",
+       "        raise AboveTheDeploymentCeiling(ceiling.marking)  # PLANT\n")], [UPLOADS],
+     ["test_a_document_above_the_ceiling_is_refused_before_anything_is_stored"], "not added"),
+    ("correction-backstop-removed", "a correction's new element not judged against the ceiling",
+     [(SCOPE, (CORRECTION_LINE, 2), None)], [BACKSTOP],
+     ["test_a_correction_above_the_ceiling_never_reaches_the_store"], "DID NOT RAISE"),
+    ("paysim-stray-marking", "one PaySim link written at the seed's marking, not the one given",
+     [(PAYSIM, "                provenance=_provenance(row.index),\n                handling=handling,\n"
+                "                created_by=created_by,\n",
+       "                provenance=_provenance(row.index),\n"
+       "                handling=handling.model_copy(update={\"classification\": \"SECRET\"}),\n"
+       "                created_by=created_by,\n")], [PACKS],
+     ["test_paysims_declaration_holds_for_every_write"],
+     "a write at another marking"),
+    ("cyber-stray-marking", "a cyber-intrusion node written above its declaration",
+     [(CYBER, "        handling=node.handling,",
+       "        handling=node.handling.model_copy(update={\"classification\": \"SECRET\"}),")],
+     [PACKS], ["test_cyber_intrusions_declaration_holds_for_every_write"], None),
 ]
 
 
@@ -139,7 +191,8 @@ def main() -> int:
         ["git", "rev-parse", "--short", "HEAD"], cwd=CORE, capture_output=True, text=True
     ).stdout.strip()
     originals = {
-        path: path.read_bytes() for path in {ENGINE, CEILING, PIPELINE, APP, SITE, SCOPE, SEEDS}
+        path: path.read_bytes()
+        for path in {ENGINE, CEILING, PIPELINE, APP, SITE, SCOPE, SEEDS, PAYSIM, CYBER}
     }
     missed: list[tuple[str, str]] = []
     for n, (slug, what, edits, files, must_fail, reason) in enumerate(PLANTS, start=1):
@@ -148,6 +201,11 @@ def main() -> int:
             if old is None:  # every backstop line in the file, removed
                 assert texts[path].count(BACKSTOP_LINE) == 3, (slug, path.name)
                 texts[path] = texts[path].replace(BACKSTOP_LINE, "")
+                continue
+            if isinstance(old, tuple):  # (a line, how many times it is there): each removed
+                line, count = old
+                assert texts[path].count(line) == count, (slug, path.name, line)
+                texts[path] = texts[path].replace(line, "")
                 continue
             assert texts[path].count(old) == 1, (slug, path.name, old)
             texts[path] = texts[path].replace(old, new)
