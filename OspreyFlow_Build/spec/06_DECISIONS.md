@@ -32897,3 +32897,58 @@ that would put an element above the new ceiling is refused. Data held above it i
 - **Decision 3:** `test_deployment_ceiling_uploads.py`.
 - **Decision 4:** `test_deployment_ceiling_backstop.py`.
 - **Decision 5:** `tests/test_seed_internal_ceiling.py`.
+
+### ADR-135, Amendment 4 (10 November 2026) — the model route on the `cloud-platform` profile: the client's own approved gateway, or Bedrock (P11)
+
+*The owner's decision of 10 November. Supersedes P11's "held until the client asks for AI": the client
+wants document extraction (Amendment 5), so a model route is part of the deployment.*
+
+1. **The gateway's upstream is the client's approved route.** On the `cloud-platform` profile (ADR-148), the
+   LiteLLM gateway is rendered by default and its engines point at one of: (a) **the client's own AI
+   gateway**, an OpenAI-compatible endpoint (base URL, and a token or the namespace's IAM role, whichever
+   the client's gateway accepts), or (b) **Bedrock in the client's London region**, authenticated by the
+   namespace's IAM role (IRSA), no stored key.
+2. **Nothing else changes in model administration.** Engines, each job's model, keys write-only, usage and
+   limits stay as ADR-135 Amendments 2 and 3 built them in *Admin › Models*; the client's gateway is an
+   engine like any other, with its privacy contract recorded.
+3. **Egress.** The route's host is the only model host in the profile's allow list (ADR-148 decision 7), and
+   only while an engine using it is enabled.
+4. **Local models stay off on this profile** (ADR-148 decision 12: no GPUs).
+
+### ADR-135, Amendment 5 (10 November 2026) — Laurium as a second extraction engine behind `ModelPort.extract`, chosen at setup (P12)
+
+*The owner's decision of 10 November.*
+
+**Context.** OspreyFlow already extracts structured fields from documents with a language model:
+`ModelPort.extract`, served by the LiteLLM adapter, shown in the Glass as *Deep read (model)* beside *Quick
+scan* (Stanza) (ADR-098). Laurium is an open-source Python library from a UK public sector analytical team
+that does the same job with LangChain, Pydantic and pandas, and is already trusted by the current client's
+teams, with their own extraction schemas and prompts.
+
+**Decisions.**
+
+1. **Laurium is an adapter, not a core dependency.** `packages/adapters/extract_laurium/` implements
+   `ModelPort.extract` only; the other `ModelPort` operations stay with the LiteLLM adapter. It is an
+   optional extra (`ospreyflow[laurium]`) and is built into the images that serve `ModelPort.extract` (the
+   Conduit and workers today; the lane confirms) only when selected; an image built without it contains no
+   LangChain.
+2. **Chosen at setup and in *Admin › Models*.** A new setting, the **extraction engine**: *OspreyFlow Deep
+   read* (the default everywhere) or *Laurium*. The set-up console offers it; a deployment pack can preset it.
+   **The `cloud-platform` profile's pack presets Laurium.** Changing it is audited behind `manage_models`.
+3. **Every call goes through our gateway.** Laurium's chat model is configured with the gateway's
+   OpenAI-compatible endpoint and nothing else; a Laurium configuration naming any other host is refused at
+   start. So per-dataset egress, each job's model, usage limits and audit apply exactly as for Deep read.
+4. **Same contract, same evidence rules.** The adapter maps the dataset's domain model to Laurium's schema,
+   and Laurium's output back to `ExtractionResult`: findings arrive *inferred*, traced to the document and
+   the span where the library gives one, for an analyst to accept or reject, as Deep read's do. The client's
+   own extraction schemas may be imported as a mapping, never replacing the domain model.
+5. **Licence first.** Laurium's documentation does not state a licence. The lane checks the repository's
+   licence and every dependency Laurium brings against the licence register **before writing the
+   adapter**. If anything fails the register (GPL or AGPL, or no licence), the lane stops and asks the owner.
+6. **Pinned and scanned.** Laurium and its dependencies pinned by hash in the lock file; the image scan
+   applies to the Laurium build as to the others.
+
+**Consequences.** Two engines behind one port, so `ModelPort.extract`'s conformance suite runs against both.
+Clients who do not choose Laurium carry none of it. The architecture page shared with the client shows
+Laurium beside the model gateway; if the lane places it other than in the Conduit and workers, the page is
+corrected in D2c.

@@ -103,8 +103,8 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-140 Amendment 18 | L1.7a's carries: a refused publish puts the file back as HEAD holds it; the aside sweep removes only an empty or .git-only aside; Amendment 17 point 6's sweep at first use corrected (under the in-process lock, before the flock exists) | studio-b | 2026-11-10 | written |
 | ADR-142 Amendment 5 | A lane's pre-merge live check is a selection by change (`stack_lease.sh live`, route rights always, the full set for an unmapped path), with the full live set nightly on main (T1 part 3, the owner's word on faster runs) | admin | 2026-11-10 | written |
 | ADR-148 Amendment 2 | The deployment's marking ceiling as built (L1.10, decision 10): the setting, loads and imports above it refused before a write, in words naming the limit; System shows it | studio-b | 2026-11-10 | written |
-| ADR-135 Amendment 4 | The model route on the cloud-platform profile: the client's own approved gateway, or Bedrock (P11) | platform | 2026-11-10 | reserved |
-| ADR-135 Amendment 5 | Laurium as a second extraction engine behind ModelPort.extract, chosen at setup (P12) | platform | 2026-11-10 | reserved |
+| ADR-135 Amendment 4 | The model route on the cloud-platform profile: the client's own approved gateway, or Bedrock (P11) | platform | 2026-11-10 | written |
+| ADR-135 Amendment 5 | Laurium as a second extraction engine behind ModelPort.extract, chosen at setup (P12) | platform | 2026-11-10 | written |
 
 ## Baseline
 
