@@ -146,6 +146,8 @@ async function serve(page: Page, level: "editor" | "author" = "author"): Promise
     // ADR-133 stage (b): the ontology the sentence builder offers its blanks from, the preview,
     // the drawn pattern and the deploy.
     if (url.pathname === "/v1/ontology") return json(200, ONTOLOGY);
+    // ADR-146 decision 3 (L2.11): the datasets the rule editor offers; none unless a case asks.
+    if (path === "rules/datasets") return json(200, []);
     if (path === "rules/preview")
       return json(200, { days: 90, would_raise: 2, words: "When a Person…", examples: [
         { node_id: "p1", name: "Callum Okafor", entity_type: "Person", words: "Callum Okafor (Person)" },
@@ -578,6 +580,56 @@ test("a rule is written as a sentence, shown as its drawn pattern and deployed, 
   expect(state.sent.find((s) => s.path === "rules/sentence")?.body).toEqual({ name: "Listed people seen often", sentence: WRITTEN });
   await expect(page.getByText(/When a Person whose listing is one of sanction, pep, 3 or more times by PRESENT_AT/)).toBeVisible();
   registerCovered(REGISTRY, "build-a-rule-as-a-sentence-by-keyboard");
+});
+
+test("a rule is written on a dataset, saved as a draft, tested and made live, by keyboard (ADR-146 decision 3)", async ({ page }) => {
+  const state = await serve(page);
+  const draft = {
+    id: "r-new", investigation_id: "inv-1", owner_id: "analyst-1", name: "Listed people on the prison records",
+    status: "draft", created_at: "2026-11-10T09:00:00Z", trigger: "post_commit", budget_ms: 5000, dataset_id: "ds-prison",
+    params: { typology: "sentence", pattern_id: "p", sentence: WRITTEN },
+  };  // prettier-ignore
+  const fulfil = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+  const record = (path: string) => (route: import("@playwright/test").Route) => {
+    state.sent.push({ method: "POST", path, body: route.request().postDataJSON() });
+  };
+  await page.route("**/*/v1/investigations/inv-1/rules/datasets", (route) =>
+    route.fulfill(fulfil([{ id: "ds-prison", name: "Prison records", kind: "source", second_person: false, ontology: ONTOLOGY, lists: [] }])),
+  );
+  await page.route("**/*/v1/investigations/inv-1/rules/drafts", (route) => {
+    record("rules/drafts")(route);
+    return route.fulfill(fulfil(draft, 201));
+  });
+  await page.route("**/*/v1/investigations/inv-1/rules/r-new/test", (route) => {
+    record("rules/r-new/test")(route);
+    return route.fulfill(fulfil({ rule_id: "r-new", version: 1, days: 30, would_raise: 2, words: "" }));
+  });
+  await page.route("**/*/v1/investigations/inv-1/rules/r-new/make-live", (route) => {
+    record("rules/r-new/make-live")(route);
+    return route.fulfill(fulfil({ ...draft, status: "active" }));
+  });
+  await page.goto("/keyboard/alerts-harness.html");
+  await press(page, page.getByRole("tab", { name: "What raises alerts" }));
+  await chooseByTyping(page, page.getByRole("combobox", { name: "The dataset this rule watches" }), "ds-prison");
+  await press(page, page.getByRole("button", { name: "Choose the dataset" }));
+  registerCovered(REGISTRY, "choose-a-rules-dataset-by-keyboard");
+  const form = page.getByRole("form", { name: "Write a rule on Prison records" });
+  await chooseByTyping(page, form.getByRole("combobox", { name: "Subject" }), "Person");
+  await expect(form.getByRole("status", { name: "Where its alerts go" })).toHaveText("Its alerts will appear in Alerts, seen by this case's team.");
+  await form.getByLabel("Name of the rule").focus();
+  await page.keyboard.type("Listed people on the prison records");
+  await press(page, form.getByRole("button", { name: "Save the draft" }));
+  await expect.poll(() => (state.sent.find((s) => s.path === "rules/drafts")?.body as { dataset_id?: string } | undefined)?.dataset_id).toBe("ds-prison");
+  registerCovered(REGISTRY, "save-a-rule-draft-by-keyboard");
+  const live = page.getByRole("button", { name: "Make live" });
+  await expect(live).toBeDisabled();
+  await press(page, page.getByRole("button", { name: "Test on the last 30 days" }));
+  await expect(page.getByRole("status", { name: "Test result" })).toContainText("It would have raised 2 alerts in the last 30 days.");
+  registerCovered(REGISTRY, "test-a-rule-draft-by-keyboard");
+  await press(page, live);
+  await expect(page.getByText("“Listed people on the prison records” is live.")).toBeVisible();
+  expect(state.sent.some((s) => s.path === "rules/r-new/make-live")).toBe(true);
+  registerCovered(REGISTRY, "make-a-rule-live-by-keyboard");
 });
 
 test("a sentence's alerts are sent to a named team, by keyboard (ADR-146 decision 8)", async ({ page }) => {
