@@ -32806,3 +32806,89 @@ with the rules lane, and the storage is the orchestrator's ruling of 10 November
 
 **Cost.** Two small text blobs per rule version (a few kilobytes). No new dependency: `defusedxml` was
 already one. The XML is written by hand for the three elements, as the Cost section allowed.
+
+### ADR-146, Amendment 6 (10 November 2026) — the rule editor as built (L2.11): a declared dataset, draft, *Test* and *Make live*, the stored rule files, the migration
+
+Status: built by the rules lane in L2.11 (ADR-146 decision 3), reserved in `ADR_RESERVATIONS.md`. The rule files' own
+shapes are rules-b's, in Amendment 5 (L2.11a). The decisions the lane took without a question (Prompt L; the owner's
+summary, item 13) are marked *decided*, each for the owner to overrule. ADR-146 and its Amendments 1 to 5 are
+unchanged except where this says so.
+
+1. **A declared dataset.**
+   - A new rule names one of its case's own datasets, a source or a composite (`datasets.chosen_of_case`), at its
+     first save. Anything else, a layer, a drawn dataset or another case's, is refused exactly as a dataset that does
+     not exist (404 `dataset_not_found`, rule 3). The dataset is never changed (409 `rule_dataset_fixed`).
+   - The conditions are offered and checked against that dataset's live domain model alone: the deployment's
+     ontology narrowed to the model's packs, as boards read it, a composite's members together. While the dataset
+     has no model yet, the whole ontology is offered.
+   - `GET …/rules/datasets` (`author_rules`, the case's Author level) offers each dataset with its model, the lists
+     it may read, and whether *Make live* waits for a second person.
+2. **Draft and live** (as a domain model, ADR-140 R12).
+   - A rule has at most one draft. *Save* (`POST …/rules/drafts`, `PUT …/rules/{id}/draft`; `author_rules`, Author)
+     writes the draft with its `.bpmn` and `.dmn` from the codec, in one transaction. Saving again replaces both,
+     and the draft's test.
+   - A new rule is a `draft` and never runs. A live rule keeps running as it stands while its draft waits.
+   - A whole-deployment scope is refused on a draft: such a rule is converted per dataset (decision 6 below).
+3. ***Test*, over 30 days** (*decided*: ADR-146 says 30; the older preview, 90, stays the builder's).
+   - `POST …/rules/{id}/test` (`author_rules`, Author) runs the draft over its dataset's last 30 days, as the person
+     testing, within that dataset alone, and says how many alerts it would have raised.
+   - The result is kept on the version it ran on. A test of a draft saved again while it ran is refused.
+   - **Rule 7:** the count is the tester's own, over what they may see. It is told to them alone: in *Test*'s answer
+     and on the draft as they read it. Anyone else reads that the draft was tested, and when. *Changes* lists the
+     test without a count.
+4. ***Make live*** (`POST …/rules/{id}/make-live`; `deploy_rules`, Author) is refused until the draft being made
+   live is the version tested (409 `rule_untested`).
+   - **The second person (*decided*, rule 11).** ADR-146 says *Make live* "needs a second person when the dataset's
+     policy asks (ADR-145 A3)", and names no policy. The only per-dataset policy is *Promotion of drawn items*
+     (`promotion_policy`), so it is read here too. *Second person reviews* asks for one; a composite asks when any
+     member does. If the owner wants the two apart, it is one column and one Admin control.
+   - Under that policy the draft waits; it is approved, or sent back to its draft with the reason, by another holder
+     of `deploy_rules` at the case's Author level. Never by its author, never by whoever asked for it to go live, and
+     not needing the administrator, who decides only a whole-deployment rule's change (ADR-133 decision 7).
+   - Without that policy it goes live at once. Either way the rule then runs as the draft's author.
+5. **Every change is audited and listed in *Changes*:** `rule_draft_saved`, `rule_tested` (no count),
+   `rule_made_live`, `rule_make_live_proposed`, then the existing `rule_change_approved` and `rule_change_rejected`.
+6. **`scripts.migrate_rules_to_datasets`**, dry run first.
+   - Each whole-deployment rule not yet retired becomes one rule per source dataset, in that dataset's home case,
+     with the same conditions, owner and name. A rule running is copied running; one never approved, as a draft.
+     The original is retired, and any change waiting on it is closed in words.
+   - A dataset with no home case is reported, never guessed. The rule is then left whole and running, converted to
+     no dataset: copies beside a running original would raise each alert twice.
+   - One transaction per rule. The dry run reads with `SELECT`s alone and records every write it would make. A
+     second run changes nothing.
+7. **Where its alerts go** is said before saving, from `GET …/alert-teams`'s new `member_count`: how many of the
+   team hold the case, said to whoever routes a rule's alerts, with no one named (members are still listed to the
+   team's own lead alone).
+8. **The rule files** are saved beside each version through rules-b's `rule_standards.rule_files`, and *Export*
+   returns what was stored (Amendment 5).
+
+**Still open within L2.11** (the step's own report says when each is built):
+- *When a screening list refreshes*: `runs: list_refresh`, a rule that reads a screening list, is saved and offered.
+  Running it on a list's refresh, and naming the list it reads (the list picker over `…/reference-lists/offered`), is
+  L2.11's next step.
+- The older sentence builder stays below the editor, for a rule just for its author and for rules saved before the
+  editor, until its keyboard cases move to the editor. Its whole-deployment choice, and the older route's, go then.
+
+### Tests that would fail (rule 12)
+
+- A rule declared on a drawn or another case's dataset, moved after saving, or saved for the whole deployment:
+  `test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved`;
+  `test_a_rule_is_declared_only_on_the_cases_own_source_or_composite`.
+- A condition offered from outside the dataset's live model (red with a second dataset's type offered):
+  `test_the_conditions_offer_no_type_outside_the_datasets_live_model`; the Glass's "offers the conditions from the
+  dataset's live model, never another dataset's or the deployment's".
+- A draft running, or saved without its files: `test_a_saved_draft_never_runs_and_keeps_its_files`;
+  `test_a_saved_draft_keeps_its_rule_files_and_never_runs`.
+- Live untested, or on an older draft's test: `test_a_draft_cannot_go_live_untested_nor_on_an_older_drafts_test`;
+  `test_a_test_of_a_draft_saved_again_meanwhile_is_refused`.
+- The count told to anyone but the tester: `test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone`.
+- A second-person policy ignored, or the author approving their own:
+  `test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval`;
+  `test_a_composite_asks_for_a_second_person_when_any_member_does`.
+- The migration: `test_a_dry_run_writes_nothing`;
+  `test_the_dry_run_at_its_real_call_site_changes_no_table_column_index_or_row`;
+  `test_the_real_run_leaves_no_whole_deployment_rule_and_one_per_dataset`;
+  `test_a_dataset_with_no_home_case_leaves_the_rule_whole_and_running`.
+- Keyboard: `keyboard/alerts.spec.ts`'s "a rule is written on a dataset, saved as a draft, tested and made live".
+
+The records are in `process/lanes/rules/l2.11/RED_RECORD.md`.
