@@ -1,8 +1,8 @@
 diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
-index 10f671e..343c007 100644
+index e980d5c..5706970 100644
 --- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 +++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
-@@ -788,6 +788,9 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
+@@ -789,6 +789,9 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
  | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
  | `ospreyflow grading change --to <scheme> --mapping <file> --dry-run` | Says how many drawn items each line of the mapping (every grade of the old scheme to one of the new) would move, writes nothing, and gives the token the change needs. `--to` is `5x5x5`, `3x5x2` or a scheme file: a YAML file with `scheme` (a name of its own), `source`, `intelligence` and `handling`, each its list of grades. Runs beside a running deployment |
  | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
@@ -13,10 +13,23 @@ index 10f671e..343c007 100644
  | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
  | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
 diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
-index d7d4961..4f1b13a 100644
+index 9185c8f..e4b3adc 100644
 --- a/OspreyFlow_Core/docs/administration-guide.md
 +++ b/OspreyFlow_Core/docs/administration-guide.md
-@@ -988,6 +988,9 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
+@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
+ <!-- document-control:begin -->
+ ## Document control
+ 
+-**Version 1.66** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
++**Version 1.67** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+ 
+ | Version | Date | What changed |
+ | --- | --- | --- |
++| 1.67 | 2026-11-10 | §8's commands: `ospreyflow release export` and `import [--dry-run]` (a dataset's release as a YAML bundle) and `ospreyflow run` (an orchestrator's trigger as a service identity), the studio lane's L1.7 (ADR-140 Amendment 9 decision 4, ADR-141). |
+ | 1.66 | 2026-11-10 | Appendix A: `deployment.highest_marking`, the deployment's marking ceiling (studio-b's L1.10, ADR-148 Amendment 2): a load or an import marked above it is refused before anything is written. |
+ | 1.65 | 2026-11-10 | §13: *Where sets are* names the checkout as the folder holding `OspreyFlow_Core`, since the guide ships in Core and never names the build folder. |
+ | 1.64 | 2026-11-10 | The backups folder as built (platform-b's P5b; ADR-114 Amendments 37 and 38). §13: every install's set in `<backups folder>/<deployment>/`, the folder asked at setup (`folders.backups`, the Folders screen's **Backups folder**, the prompt); new *Where sets are, and cleaning them up*, *A synced folder* and *Cleaning up*; Small on your own server's `server.backups` its older name. §1a.1, §5a.3, the files table, §14's update row and appendix A's `components.storage.backups` say where sets now go. §5: the answers file's `folders.backups`. No longer coming; appendix A's row is the schema's own. Admin's L2.5b and L2.5c as built: §9.9, *Disable…* lists and transfers views, boards, link-type proposals and drawn items' watches, the recipient cleared to the item's marking (ADR-145 Amendment 9) and holding its case's level, and refuses to disable someone who owns items you may not see; §9.10, Admin's own *Delete ‹case›'s layer now* after its dry run. |
+@@ -999,6 +1000,9 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
  | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
  | `ospreyflow grading change --to <scheme> --mapping <file> --dry-run` | Says how many drawn items each line of the mapping (every grade of the old scheme to one of the new) would move, writes nothing, and gives the token the change needs. `--to` is `5x5x5`, `3x5x2` or a scheme file: a YAML file with `scheme` (a name of its own), `source`, `intelligence` and `handling`, each its list of grades. Runs beside a running deployment |
  | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
