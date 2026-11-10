@@ -314,6 +314,7 @@ export type { OperationsAgeing } from "./OperationsAgeing";
 export type { PromotionOverdueAlert } from "./PromotionOverdueAlert";
 export type { PromotionOverdueNotice } from "./PromotionOverdueNotice";
 export type { NeedsYouProposals } from "./NeedsYouProposals";
+export type { ScheduleNoticeEntry } from "./ScheduleNoticeEntry";
 export type { NeedsYou } from "./NeedsYou";
 export type { ExtractionRequest } from "./ExtractionRequest";
 export type { ExtractionResult } from "./ExtractionResult";

@@ -10,15 +10,24 @@ export type DatasetId1 = string;
 export type DatasetName = string;
 export type ToDecide = number;
 export type Proposals = NeedsYouProposals[];
+export type NoticeId = string;
+export type RecipeId = string;
+export type RaisedAt1 = string;
+export type Words1 = string;
+export type ScheduleNotices = ScheduleNoticeEntry[];
+export type ScheduleNoticesTotal = number;
 
 /**
  * The reader's *Needs you* (L2.7): their overdue promotions, served only while they are still a
  * recipient (Amendment 4 decision 11), and the proposed link types of the datasets their cases
- * load into, for a holder of `accept_types`.
+ * load into, for a holder of `accept_types`; and their own scheduled loads' notices of the last
+ * seven days, newest first, at most twenty with the total said (ADR-110 Amendment 19).
  */
 export interface NeedsYou {
   promotions_overdue: PromotionsOverdue;
   proposals: Proposals;
+  schedule_notices?: ScheduleNotices;
+  schedule_notices_total?: ScheduleNoticesTotal;
   [k: string]: unknown;
 }
 /**
@@ -43,5 +52,17 @@ export interface NeedsYouProposals {
   dataset_id: DatasetId1;
   dataset_name: DatasetName;
   to_decide: ToDecide;
+  [k: string]: unknown;
+}
+/**
+ * One scheduled load's notice in its owner's *Needs you* (ADR-110 Amendment 19): a run of their
+ * schedule that failed or was refused, in its own words. Only ever its owner's (the read is
+ * filtered by owner in the query); it names the recipe, never another person.
+ */
+export interface ScheduleNoticeEntry {
+  notice_id: NoticeId;
+  recipe_id: RecipeId;
+  raised_at: RaisedAt1;
+  words: Words1;
   [k: string]: unknown;
 }
