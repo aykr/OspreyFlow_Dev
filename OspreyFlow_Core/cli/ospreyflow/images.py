@@ -28,16 +28,23 @@ def read_plan(product: Path, folder: Path | None = None) -> dict[str, Any]:
             f"No image plan at {path}: render the cloud-platform profile first "
             "(python -m harness.render)."
         )
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    plan: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return plan
 
 
-def steps(plan: dict[str, Any]) -> list[tuple[str, list[str]]]:
-    """Each step in order, in words and as its command: ours built and pushed, theirs copied."""
+#: The platform's nodes (ADR-148: a shared EKS cluster): an image of ours built for another
+#: platform, as on an arm64 Mac without one, never starts there (`exec format error`).
+PLATFORM = "linux/amd64"
+
+
+def steps(plan: dict[str, Any], platform: str = PLATFORM) -> list[tuple[str, list[str]]]:
+    """Each step in order, in words and as its command: ours built for the platform's nodes and
+    pushed, theirs copied (their index whole, so every platform it holds)."""
     out: list[tuple[str, list[str]]] = []
     for image in plan["images"]:
         target = image["target"]
         if "dockerfile" in image:
-            build = ["docker", "build", "-f", image["dockerfile"]]
+            build = ["docker", "build", "--platform", platform, "-f", image["dockerfile"]]
             for name, value in sorted(image.get("build_args", {}).items()):
                 build += ["--build-arg", f"{name}={value}"]
             out.append((f"build {target}", [*build, "-t", target, image["context"]]))
@@ -57,6 +64,7 @@ def push(
     registry: str,
     folder: Path | None = None,
     dry_run: bool = False,
+    platform: str = PLATFORM,
     say: Any = print,
 ) -> int:
     plan = read_plan(product, folder)
@@ -65,7 +73,7 @@ def push(
             f"The render names the registry {plan['registry']}, not {registry}: the values would "
             "pull from somewhere else. Set cloud_platform.registry and render again."
         )
-    todo = steps(plan)
+    todo = steps(plan, platform)
     for words, argv in todo:
         say(("would " if dry_run else "") + words)
         if dry_run:
@@ -74,7 +82,8 @@ def push(
         if code != 0:
             say(
                 f"The step '{words}' failed (exit {code}); nothing after it was run. If the "
-                "registry refused it, sign in to it first."
+                "registry refused it, sign in to it first, and apply the namespace's Terraform, "
+                "which makes each repository (a registry makes none on push)."
             )
             return code
     if not dry_run:
@@ -100,8 +109,20 @@ def add_parser(verbs: Any) -> None:
         type=Path,
         help="the render's folder (default: deploy/generated/cloud-platform)",
     )
+    push_verb.add_argument(
+        "--platform",
+        default=PLATFORM,
+        help=f"the platform ours are built for (default: {PLATFORM}, the platform's nodes)",
+    )
     push_verb.add_argument("--dry-run", action="store_true", help="say each step; run none")
 
 
 def main_action(args: Any, product: Path, run: Runner) -> int:
-    return push(product, run, registry=args.registry, folder=args.folder, dry_run=args.dry_run)
+    return push(
+        product,
+        run,
+        registry=args.registry,
+        folder=args.folder,
+        dry_run=args.dry_run,
+        platform=args.platform,
+    )

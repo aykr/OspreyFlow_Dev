@@ -18,7 +18,7 @@ import yaml
 from harness.render import load_config, render
 from tools.cp_policy_check import FIXTURES, _resolver
 
-from .conftest import Rig
+from .conftest import FakeRunner, Rig
 
 REGISTRY = "123456789012.dkr.ecr.eu-west-2.amazonaws.com"
 
@@ -109,3 +109,80 @@ def test_the_plan_names_every_image_the_values_run(plan: dict[str, object], rig:
     }
     planned = {str(i["target"]).split(":sha256-")[0] for i in plan["images"]}  # type: ignore[attr-defined]
     assert run == planned
+
+
+# ---- what a real registry refuses ---------------------------------------------------------------
+
+
+class RegistryRefuses(FakeRunner):
+    """ECR as it refuses (CLAUDE.md rule 15: a fake models the dependency's refusals): a push or a
+    copy into a repository that does not exist ("name unknown": ECR never makes one on push; the
+    namespace's Terraform does, `ecr.tf`), and anything at all before the person has signed in
+    ("no basic auth credentials")."""
+
+    def __init__(self, repositories: set[str], *, signed_in: bool = True) -> None:
+        super().__init__()
+        self.repositories, self.signed_in, self.refused = repositories, signed_in, []
+
+    def __call__(self, argv, *, env=None, cwd=None):  # type: ignore[no-untyped-def]
+        code = super().__call__(argv, env=env, cwd=cwd)
+        target = None
+        if argv[:2] == ["docker", "push"]:
+            target = argv[2]
+        elif argv[:4] == ["docker", "buildx", "imagetools", "create"]:
+            target = argv[argv.index("--tag") + 1]
+        if target is None:
+            return code
+        repository = target.removeprefix(REGISTRY + "/").split("@")[0].rsplit(":", 1)[0]
+        if not self.signed_in or repository not in self.repositories:
+            self.refused.append(target)
+            return 1
+        return code
+
+
+def _ecr_repositories() -> set[str]:
+    import re
+
+    text = render(load_config(FIXTURES / "production.yaml"), resolver=_resolver).artefacts[
+        "terraform/ecr.tf"
+    ]
+    return set(re.findall(r'^\s+"([a-z0-9._/-]+)",$', text, re.M))
+
+
+def test_every_image_goes_to_a_repository_the_terraform_makes(
+    rig: Rig, plan: dict[str, object]
+) -> None:
+    registry = RegistryRefuses(_ecr_repositories())
+    rig.runner = registry
+    assert rig("images", "push", "--registry", REGISTRY) == 0, registry.refused
+    assert registry.refused == []
+    assert len([c for c in registry.calls if c.argv[:2] != ["docker", "build"]]) == len(
+        plan["images"]  # type: ignore[arg-type]
+    )
+
+
+def test_a_registry_not_signed_in_to_stops_the_push_at_once_saying_so(
+    rig: Rig, plan: dict[str, object], capsys: pytest.CaptureFixture[str]
+) -> None:
+    registry = RegistryRefuses(_ecr_repositories(), signed_in=False)
+    rig.runner = registry
+    assert rig("images", "push", "--registry", REGISTRY) == 1
+    assert len(registry.refused) == 1
+    assert "sign in to it first" in capsys.readouterr().out
+
+
+def test_ours_are_built_for_the_platform_s_nodes(rig: Rig, plan: dict[str, object]) -> None:
+    """The platform's nodes are amd64: an image of ours built on an arm64 Mac without a platform
+    is arm64, and never starts there (`exec format error`)."""
+    assert rig("images", "push", "--registry", REGISTRY) == 0
+    builds = [c.argv for c in rig.runner.calls if c.argv[:2] == ["docker", "build"]]
+    assert builds and all(
+        argv[argv.index("--platform") + 1] == "linux/amd64"
+        for argv in builds
+        if "--platform" in argv
+    )
+    assert all("--platform" in argv for argv in builds)
+    rig.runner.calls.clear()
+    assert rig("images", "push", "--registry", REGISTRY, "--platform", "linux/arm64") == 0
+    builds = [c.argv for c in rig.runner.calls if c.argv[:2] == ["docker", "build"]]
+    assert all(argv[argv.index("--platform") + 1] == "linux/arm64" for argv in builds)
