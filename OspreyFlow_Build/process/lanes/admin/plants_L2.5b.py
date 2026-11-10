@@ -59,9 +59,16 @@ OFFLINE: list[Plant] = [
        "        raise UnknownDatasetEgressError(dataset_id)\n    row = next(",
        "    row = next(")],
      [f"{DRY}::test_a_dry_run_is_for_an_administrator_of_the_datasets_own_unit"]),
-    ("System's count asked for every unit", APP,
+    ("a cover ended before withheld is asked (so ended for a refused disable)", APP,
+     [("        # Only now, with nothing left elsewhere or withheld, do the person's covers end.\n"
+       "        await admin_people.end_covers(user_id, by=principal, audit=audit)\n", ""),
+      ("            await admin_people.refuse_if_withheld(user_id, admin=principal, scheme=scheme)\n",
+       "            await admin_people.end_covers(user_id, by=principal, audit=audit)\n"
+       "            await admin_people.refuse_if_withheld(user_id, admin=principal, scheme=scheme)\n")],
+     [f"{ROUTES}::test_disable_is_refused_while_an_item_is_withheld_and_the_visible_transfers_stand"]),
+    ("System's count asked for another unit than the administrator's", APP,
      [("            converted = await people_store.converted_views(principal.org_unit)\n",
-       "            converted = await people_store.converted_views(None)\n")],
+       "            converted = await people_store.converted_views(\"unit-other\")\n")],
      [f"{SYS}::test_the_system_screen_counts_the_cases_made_views_in_the_administrators_unit"]),
 ]
 
@@ -82,10 +89,28 @@ LIVE: list[Plant] = [
      [("        unit, cleared, top = reach(admin, scheme)\n",
        "        unit, _, top = reach(admin, scheme)\n        cleared = list(scheme.classification)\n")],
      [f"{LIVE_T}::test_an_item_above_the_administrator_is_never_offered_and_refuses_the_disable"]),
-    ("the covers ended while items are withheld", P,
-     [("            if await withheld(conn, person, admin_unit=admin_unit, cleared=cleared, top=top):\n",
-       "            if False:\n")],
+    ("the visible transfers rolled back when something is withheld (refused inside the transaction)", P,
+     [("                done.append((item, to))\n        return done, plan.elsewhere\n",
+       "                done.append((item, to))\n"
+       "            from .person_ownership import WITHHELD_ERROR, withheld as _held\n"
+       "            if await _held(conn, person, admin_unit=admin_unit, cleared=cleared, top=top):\n"
+       "                raise DisableRefused(WITHHELD_ERROR, \"\")\n"
+       "        return done, plan.elsewhere\n")],
      [f"{LIVE_T}::test_an_item_above_the_administrator_is_never_offered_and_refuses_the_disable"]),
+    ("the transfer ending the covers itself", P,
+     [("                done.append((item, to))\n        return done, plan.elsewhere\n",
+       "                done.append((item, to))\n"
+       "            await conn.execute(\"UPDATE teams SET cover = NULL WHERE cover = $1\", person)\n"
+       "        return done, plan.elsewhere\n")],
+     [f"{LIVE_T}::test_an_item_above_the_administrator_is_never_offered_and_refuses_the_disable"]),
+    ("a watch on an unmarked dataset, or none, read as unmarked", P,
+     [('"SELECT w.id, COALESCE(d.highest_marking, $2) AS marking FROM drawn_watches w "',
+       '"SELECT w.id, d.highest_marking || CASE WHEN $2::text IS NULL THEN \'\' ELSE \'\' END '
+       'AS marking FROM drawn_watches w "')],
+     [f"{LIVE_T}::test_an_unmarked_dataset_or_none_is_read_at_the_schemes_highest_for_the_recipient"]),
+    ("the case's unit-wide level not counted", P,
+     [('            "AND i.owning_unit = $3",\n', '            "AND i.owning_unit = $3 AND FALSE",\n')],
+     [f"{LIVE_T}::test_a_recipient_holding_the_cases_unit_wide_level_may_take_a_view"]),
     ("a level on the case not asked of L3.8's items", P,
      [("        needed = LEVEL_NEEDED.get(key[0], AccessLevel.AUTHOR)\n",
        "        needed = LEVEL_NEEDED.get(key[0], AccessLevel.AUTHOR)\n"

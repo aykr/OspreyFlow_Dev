@@ -175,6 +175,9 @@ class _OwnsNothing:
     async def refuse_if_withheld(self, person: str, **_: Any) -> None:
         """Nothing withheld: they own nothing anywhere (L2.5b)."""
 
+    async def end_covers(self, person: str, **_: Any) -> None:
+        """They cover for no team."""
+
 
 @pytest.fixture
 def client() -> Any:

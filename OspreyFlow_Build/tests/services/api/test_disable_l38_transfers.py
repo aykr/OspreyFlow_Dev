@@ -11,10 +11,15 @@ What a mistake would do, and the case that catches it (each shown red by a plant
   `test_each_of_the_four_kinds_is_offered_moved_and_audited`;
 - the plan reading L3.8's items without the administrator's unit or clearance (an item named that
   they may not see): `test_an_item_above_the_administrator_is_never_offered_and_refuses_the_disable`;
-- `withheld` asked before the transfers commit, or the transfers rolled back with it, or the
-  covers ended while something is withheld: the same case's "those stand" and cover assertions;
+- the transfers rolled back when something is withheld, or a cover ended by the transfer: the same
+  case's "those stand" and cover assertions (the route's order, `refuse_if_withheld` then
+  `end_covers`, is `test_admin_roles_routes.py`'s);
 - a recipient without a level on the item's case, or not cleared to its dataset's marking, given
-  it anyway: `test_a_recipient_without_the_case_level_or_the_marking_is_refused_and_nothing_moves`.
+  it anyway: `test_a_recipient_without_the_case_level_or_the_marking_is_refused_and_nothing_moves`;
+  a dataset with no marking, or a watch with none, read as cleared:
+  `test_an_unmarked_dataset_or_none_is_read_at_the_schemes_highest_for_the_recipient`;
+- the case's unit-wide level not counted (a unit member refused a view they hold Viewer on):
+  `test_a_recipient_holding_the_cases_unit_wide_level_may_take_a_view`.
 """
 
 from __future__ import annotations
@@ -243,6 +248,8 @@ async def test_an_item_above_the_administrator_is_never_offered_and_refuses_the_
                                 who, by=CLEARED, audit=world.audit, admin_unit=UNIT,
                                 scheme=SCHEME)  # fmt: skip
     await world.people.refuse_if_withheld("ana", admin=ADMIN, scheme=SCHEME)
+    assert await raw.fetchval("SELECT cover FROM teams WHERE role_id = $1", role.id) == "ana"
+    await world.people.end_covers("ana", by=ADMIN, audit=world.audit)
     assert await raw.fetchval("SELECT cover FROM teams WHERE role_id = $1", role.id) is None
 
 
@@ -301,4 +308,66 @@ async def test_a_recipient_made_its_cases_author_in_the_same_transfer_may_take_i
         "ana", [OwnedTransfer(kind=i.kind, id=i.id, to="bea") for i in plan.items], who,
         by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME,
     )  # fmt: skip
+    assert (await _owners(raw))[view] == "bea"
+
+
+@pytest.mark.parametrize("dataset", [None, "ds-unmarked"])
+async def test_an_unmarked_dataset_or_none_is_read_at_the_schemes_highest_for_the_recipient(
+    world: SimpleNamespace, dataset: str | None
+) -> None:
+    """Rule 12 for `_MARKING_SQL`'s COALESCE: a watch on a dataset with no marking, or on none,
+    goes only to a recipient cleared to the scheme's highest (the administrator reading it must be
+    too, as L3.8 reads it)."""
+    raw = world.raw
+    await _case(raw, "c-k", "Kestrel", {"ana": "editor", "bea": "editor", "cal": "editor"})
+    if dataset is not None:
+        await _dataset(raw, dataset, None)
+    item_id, watch = f"i-{uuid.uuid4().hex[:8]}", f"w-{uuid.uuid4().hex[:8]}"
+    await raw.execute(
+        "INSERT INTO board_items (item_id, board_id, case_id, kind, element_id, author, "
+        "dataset_id, created_at) VALUES ($1, 'b-1', 'c-k', 'node', 'el-1', 'ana', $2, $3)",
+        item_id, dataset or "ds-none", T0,
+    )  # fmt: skip
+    await raw.execute(
+        "INSERT INTO drawn_watches (id, item_id, element_id, case_id, dataset_id, owner, created_at) "
+        "VALUES ($1, $2, 'el-1', 'c-k', $3, 'ana', $4)",
+        watch, item_id, dataset, T0,
+    )  # fmt: skip
+    plan = await world.people.plan("ana", admin=CLEARED, scheme=SCHEME)
+    assert [i.id for i in plan.items] == [watch]
+    who = recipients([_person("ana", EVERY), _person("bea", EVERY, clearance="OFFICIAL-SENSITIVE"),
+                      _person("cal", EVERY)], {}, {})  # fmt: skip
+    with pytest.raises(DisableRefused) as refused:
+        await world.people.transfer("ana", [OwnedTransfer(kind="drawn_watch", id=watch, to="bea")],
+                                    who, by=CLEARED, audit=world.audit, admin_unit=UNIT,
+                                    scheme=SCHEME)  # fmt: skip
+    assert "cleared" in refused.value.words
+    await world.people.transfer("ana", [OwnedTransfer(kind="drawn_watch", id=watch, to="cal")],
+                                who, by=CLEARED, audit=world.audit, admin_unit=UNIT,
+                                scheme=SCHEME)  # fmt: skip
+    assert (await _owners(raw))[watch] == "cal"
+
+
+async def test_a_recipient_holding_the_cases_unit_wide_level_may_take_a_view(
+    world: SimpleNamespace,
+) -> None:
+    """The level `InvestigationStore` reads: a grant, or the case's unit-wide level for a member
+    of its unit (review finding 4). Editor through the unit is not asked of a view; a board, which
+    needs Editor, is still refused to a Viewer through the unit."""
+    raw = world.raw
+    await _case(raw, "c-k", "Kestrel", {"ana": "editor"})
+    await raw.execute("UPDATE investigations SET unit_level = 'viewer' WHERE id = 'c-k'")
+    view = await _view(raw, "c-k", "ana")
+    board = await _view(raw, "c-k", "ana", board=True)
+    who = recipients([_person("ana", EVERY), _person("bea", EVERY)], {}, {})
+    with pytest.raises(DisableRefused) as refused:
+        await world.people.transfer(
+            "ana", [OwnedTransfer(kind="view", id=view, to="bea"),
+                    OwnedTransfer(kind="board", id=board, to="bea")], who,
+            by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME,
+        )  # fmt: skip
+    assert "Editor" in refused.value.words and [i.kind for i in refused.value.items] == ["board"]
+    await raw.execute("DELETE FROM case_views WHERE id = $1", board)
+    await world.people.transfer("ana", [OwnedTransfer(kind="view", id=view, to="bea")], who,
+                                by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert (await _owners(raw))[view] == "bea"

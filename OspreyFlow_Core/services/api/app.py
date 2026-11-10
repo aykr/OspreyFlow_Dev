@@ -15356,6 +15356,8 @@ async def disable_person_route(
                     + refused.words,
                 },
             ) from None
+        # Only now, with nothing left elsewhere or withheld, do the person's covers end.
+        await admin_people.end_covers(user_id, by=principal, audit=audit)
         try:
             person = await identity_admin.set_enabled(user_id, False)
         except IdentityAdminRefused as error:

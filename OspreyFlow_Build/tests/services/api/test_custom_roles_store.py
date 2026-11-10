@@ -364,6 +364,10 @@ async def test_the_persons_covers_end_with_the_disable_and_are_audited(world: Si
     _, left = await world.people.transfer("ana", [], recipients(_directory(role_id), {}, {}),
                                           by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert left == 0
+    assert (await world.roles.team(role_id, date(2026, 11, 9))).cover == "ana", (
+        "the transfer ends no cover: the route ends them once the disable goes ahead (L2.5b)"
+    )
+    await world.people.end_covers("ana", by=ADMIN, audit=world.audit)
     team = await world.roles.team(role_id, date(2026, 11, 9))
     assert (team.cover, team.acting_lead) == (None, "bea")
     assert await world.raw.fetchval("SELECT count(*) FROM audit_log WHERE action = 'set_team_cover'") == 1

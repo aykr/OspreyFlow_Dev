@@ -221,6 +221,11 @@ class _AdminPeople:
         #: Whether each person owns items the administrator may not see (L3.8's `withheld`).
         self.withheld: dict[str, bool] = {}
         self.asked_withheld: list[str] = []
+        #: The store calls the route makes after the transfer, in order.
+        self.order: list[str] = []
+
+    async def end_covers(self, person: str, *, by: Principal, audit: Any) -> None:
+        self.order.append("end_covers")
 
     async def plan(self, person: str, *, admin: Principal, scheme: Any,
                    people: Any = None) -> DisablePlan:  # fmt: skip
@@ -237,10 +242,15 @@ class _AdminPeople:
                 self.hidden = hidden
 
             async def fetchval(self, sql: str, *args: Any) -> bool:
-                assert "EXISTS" in sql and args[0] == person and args[1] == admin.org_unit
+                # What the real `_WITHHELD_SQL` binds: the person, the administrator's unit, the
+                # markings they clear and the scheme's highest (review finding 10).
+                cleared = [m for m in scheme.classification if scheme.clears(admin.clearance, m)]
+                assert "EXISTS" in sql
+                assert args == (person, admin.org_unit, cleared, scheme.classification[-1]), args
                 return self.hidden
 
         self.asked_withheld.append(person)
+        self.order.append("refuse_if_withheld")
         await refuse_if_withheld(_Answers(self.withheld.get(person, False)), person,  # type: ignore[arg-type]
                                  admin=admin, scheme=scheme)  # fmt: skip
 
@@ -585,10 +595,12 @@ def test_disable_is_refused_while_an_item_is_withheld_and_the_visible_transfers_
     assert not any(ch.isdigit() for ch in said), "never how many"
     assert world.admin_people.moved == [("view", "v1", "ana-2")]
     assert world.admin_people.asked_withheld == ["ana-1"], "asked after the transfers"
+    assert world.admin_people.order == ["refuse_if_withheld"], "no cover ends while refused"
     assert world.directory.disabled == []
     assert "disable_person" not in [e["action"] for e in world.audit.entries]
     world.admin_people.withheld["ana-1"] = False
     assert _disable(world, []).status_code == 200 and world.directory.disabled == ["ana-1"]
+    assert world.admin_people.order[1:] == ["refuse_if_withheld", "end_covers"]
 
 
 def test_withheld_is_asked_only_once_the_transfers_are_accepted(world: SimpleNamespace) -> None:

@@ -141,7 +141,7 @@ describe("Admin › People's Disable… with L3.8's items (L2.5b, ADR-145 Amendm
   const OWNED = (withheld: boolean) => ({ person: "u1", items: [], counts: {}, withheld, not_yet_listed: [] });
   const WORDS = "2 transferred, and those stand; not disabled yet: they still own items you may not see: an administrator who may see them, or an Author of their case, transfers them, and then you can disable them";
 
-  it("offers a transfer for each view, board, proposed type and watch, and sends each by its kind", async () => {
+  it("offers a transfer for each of L3.8's items (a view and a watch here), and sends each by its kind", async () => {
     const sent = serve((path) => {
       if (path === "people/u1/disable-plan") return json(200, PLAN);
       if (path === "people/u1/ownership") return json(200, OWNED(false));
@@ -163,10 +163,14 @@ describe("Admin › People's Disable… with L3.8's items (L2.5b, ADR-145 Amendm
   });
 
   it("says, naming nothing, that items are withheld, and shows the Conduit's refusal after the transfers", async () => {
+    let posted = false;
     serve((path) => {
-      if (path === "people/u1/disable-plan") return json(200, PLAN);
+      if (path === "people/u1/disable-plan") return json(200, posted ? { ...PLAN, items: [] } : PLAN);
       if (path === "people/u1/ownership") return json(200, OWNED(true));
-      if (path === "people/u1/disable") return json(409, { detail: { error: "withheld_items", message: WORDS } });
+      if (path === "people/u1/disable") {
+        posted = true;
+        return json(409, { detail: { error: "withheld_items", message: WORDS } });
+      }
       return null;
     });
     place(["manage_people"]);
@@ -178,6 +182,21 @@ describe("Admin › People's Disable… with L3.8's items (L2.5b, ADR-145 Amendm
       fireEvent.change(within(panel).getByRole("combobox", { name: `Transfer to, for ${item.label}` }), { target: { value: "u2" } });
     fireEvent.click(within(panel).getByRole("button", { name: "Transfer and disable ana" }));
     expect((await within(panel).findByRole("alert")).textContent).toContain("2 transferred, and those stand");
+    // The plan is read again (review finding 5): the transferred items are no longer offered.
+    await waitFor(() => expect(within(panel).queryByRole("combobox", { name: `Transfer to, for ${PLAN.items[0]?.label}` })).toBeNull());
+  });
+
+  it("says it could not check when the ownership read fails, never that nothing blocks", async () => {
+    serve((path) => {
+      if (path === "people/u1/disable-plan") return json(200, PLAN);
+      if (path === "people/u1/ownership") return json(500, {});
+      return null;
+    });
+    place(["manage_people"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Disable ana" }));
+    const panel = await screen.findByRole("group", { name: "Disable ana" });
+    const note = await within(panel).findByRole("note", { name: "Items of ana you may not see" });
+    expect(note.textContent).toContain("Could not check whether ana owns items you may not see.");
   });
 });
 

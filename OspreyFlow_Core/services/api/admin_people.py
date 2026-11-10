@@ -403,11 +403,17 @@ async def _case_levels_hold(
             if r.startswith(CUSTOM_ROLE_PREFIX)
         ]
         needed = LEVEL_NEEDED.get(key[0], AccessLevel.AUTHOR)
+        # The level `InvestigationStore` reads (`_LEVEL_SQL`): the highest grant in their own
+        # name or a team's, or the case's unit-wide level for a member of its unit (the L2.5b
+        # review's finding 4; `check_transfers` has already held the recipient to the unit).
         levels = await conn.fetch(
-            "SELECT level FROM investigation_grants WHERE investigation_id = $1 "
-            "AND account_id = ANY($2::text[])",
+            "SELECT g.level FROM investigation_grants g WHERE g.investigation_id = $1 "
+            "AND g.account_id = ANY($2::text[]) UNION ALL SELECT i.unit_level FROM "
+            "investigations i WHERE i.id = $1 AND i.unit_level IS NOT NULL "
+            "AND i.owning_unit = $3",
             case_id,
             [to, *teams],
+            person.org_unit if person else None,
         )
         if any(AccessLevel(r["level"]).rank >= needed.rank for r in levels):
             continue
@@ -695,10 +701,10 @@ class AdminPeopleStore:
         """Every item of the administrator's unit to its recipient, in one transaction with an
         audit row for each; the plan is read again inside it, so an item gained since the
         administrator looked is refused too. Answers the transfers and how many items the person
-        still owns in another unit, which the disable is then refused for; the covers end only when
-        nothing is left elsewhere or withheld from the administrator, as the disable follows
-        (the route asks `refuse_if_withheld` again once this has committed)."""
-        from .person_ownership import cleared_markings, withheld
+        still owns in another unit, which the disable is then refused for. The covers are not
+        ended here: the route asks `refuse_if_withheld` once this has committed, and only then
+        `end_covers`, just before the identity provider."""
+        from .person_ownership import cleared_markings
 
         cleared, top = cleared_markings(by, scheme), scheme.classification[-1]
         async with self._pool.acquire() as conn, conn.transaction():
@@ -747,12 +753,15 @@ class AdminPeopleStore:
                     conn=conn,
                 )
                 done.append((item, to))
-            if plan.elsewhere:
-                return done, plan.elsewhere
-            if await withheld(conn, person, admin_unit=admin_unit, cleared=cleared, top=top):
-                # Refused by the route once this commits; the covers stay until the disable.
-                return done, 0
-            # A cover is no ownership: the person's covers end, each audited, and the lead acts.
+        return done, plan.elsewhere
+
+    async def end_covers(self, person: str, *, by: Principal, audit: AuditWriter) -> None:
+        """A cover is no ownership: the person's covers end, each audited, and the lead acts.
+        Called by the disable route only once nothing is left elsewhere or withheld, just before
+        the identity provider is asked, so a refused disable never ends a cover, and a cover never
+        outlives a disable that went ahead (the L2.5b review's finding 3: asked inside the
+        transfer, a withheld item transferred meanwhile left a disabled person covering)."""
+        async with self._pool.acquire() as conn, conn.transaction():
             for row in await conn.fetch(
                 "UPDATE teams SET cover = NULL, cover_until = NULL WHERE cover = $1 "
                 "RETURNING role_id",
@@ -770,7 +779,6 @@ class AdminPeopleStore:
                     },
                     conn=conn,
                 )
-        return done, 0
 
 
 def recipients(

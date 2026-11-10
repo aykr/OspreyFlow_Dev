@@ -272,13 +272,15 @@ function DisablePanel({
   const [problem, setProblem] = useState<string | null>(null);
   // ADR-145 Amendment 8: L3.8's ownership read says whether anything is withheld from this
   // administrator, never what; the plan already offers every item they may see.
-  const [withheld, setWithheld] = useState(false);
-  useEffect(() => {
+  // `null` when the read failed: the screen says it could not check, never that nothing blocks.
+  const [withheld, setWithheld] = useState<boolean | null>(false);
+  const read = () => {
     disablePlan(api, person.id).then(setPlan).catch((e: Error) => setProblem(e.message));
     personOwnership(api, person.id)
       .then((o) => setWithheld(o.withheld ?? false))
-      .catch(() => setWithheld(false));
-  }, [api, person.id]);
+      .catch(() => setWithheld(null));
+  };
+  useEffect(read, [api, person.id]);
   const who = person.username;
   const others = people.filter((p) => p.id !== person.id && p.enabled && !p.system_account);
   const key = (kind: string, id: string) => `${kind}:${id}`;
@@ -321,6 +323,11 @@ function DisablePanel({
               </Select>
             </label>
           ))}
+          {withheld === null ? (
+            <p role="note" aria-label={`Items of ${who} you may not see`} style={{ margin: 0 }}>
+              {`Could not check whether ${who} owns items you may not see. If they do, the disable is refused once the transfers you choose here are made.`}
+            </p>
+          ) : null}
           {withheld ? (
             <p role="note" aria-label={`Items of ${who} you may not see`} style={{ margin: 0 }}>
               {`${who} also owns items you may not see. The transfers you choose here go through, but ${who} stays enabled until an administrator who may see those items, or an Author of their case, transfers them.`}
@@ -339,7 +346,13 @@ function DisablePanel({
                   .map((i) => ({ kind: i.kind, id: i.id, to: to[key(i.kind, i.id)] ?? "" }));
                 void transferAndDisable(api, person.id, transfers)
                   .then(onDone)
-                  .catch((e: Error) => setProblem(e.message));
+                  .catch((e: Error) => {
+                    setProblem(e.message);
+                    // A refusal after the transfers (another unit's items, or withheld ones) leaves
+                    // those transfers standing: read the plan again, so they are not offered twice.
+                    setTo({});
+                    read();
+                  });
               }}
             >
               {plan.items.length ? "Transfer and disable" : "Confirm disabling"}

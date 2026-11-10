@@ -1504,9 +1504,13 @@ Intel" (R3); above the table, the unit's cases no enabled person is Author of, e
 Author*, Admin's own route, refused once the case has one (R1); since ADR-114 Amendment 5, each
 person's state — disabled, or invited and yet to set a password — with *Access* (clearance, unit and
 handling codes, edited in place), *Disable…* or *Enable*, and *Reset sign-in*; *Disable…* (A4) lists
-everything the person answers for today, each with *Transfer to…*, says which kinds are not listed yet
-(L2.5b: private views and boards, promotions and reviews waiting, proposed types), and *Transfer and
-disable* is refused in the Conduit's words while any item has no recipient or one who cannot take it;
+everything the person answers for today that the administrator may see, each with *Transfer to…*,
+their views, boards, proposed types and drawn watches among them (L2.5b, L3.8's ownership read), says
+which kinds are not listed yet (promotions and reviews waiting), says, naming nothing, when the person
+also owns items the administrator may not see (or that it could not check), and *Transfer and
+disable* is refused in the Conduit's words while any item has no recipient or one who cannot take it,
+and, after the transfers it made stand, while anything is withheld (ADR-145 Amendment 8), when the
+plan is read again;
 a person who owns nothing is disabled with *Confirm disabling*; and *Invite a person*, whose answer is
 either "an email went to …" or a one-time code shown once with what to do with it), *Roles* (L2.5,
 ADR-145 decision 7 and Amendment 5: the built-in roles and the *Super user* preset with their rights,
@@ -1520,7 +1524,9 @@ lead, hands it over, or names a cover until a last day, each from the team's mem
 case's Author grants Viewer to), *System* (each component asked as the section opens, with *Ask again*;
 each model engine with its privacy-contract mark, ADR-136; and, ADR-145 Amendment 4 decision 7,
 *Dataset owners may be*: people and teams, the default, people only or teams only, saved on its own
-and audited, governing *Make live*'s owner step and *Change owner…*), *Datasets* (ADR-136 decision 2:
+and audited, governing *Make live*'s owner step and *Change owner…*; and, ADR-144 decision 6, how
+many cases made from another became views, in how many cases of the administrator's unit, and how
+many still wait, whose reasons the operator's dry-run report gives), *Datasets* (ADR-136 decision 2:
 every dataset, its unit and its egress — none, contracted or any — each changed and saved on its own
 row, audited by the Conduit; and, L2.4 part 2, its kind — *Source*, *Composite* or *Drawn*, never a
 layer — and highest marking, with *Details for …* opening three parts. **Promotion of drawn items**
