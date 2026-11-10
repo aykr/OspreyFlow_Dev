@@ -313,6 +313,17 @@ class UpdateNotice(BaseModel):
     problem: str | None
 
 
+class ConvertedViews(BaseModel):
+    """ADR-144 decision 6 on *Admin › System*: how many cases made from another became views, in how
+    many cases; the migration's dry-run report names any it did not place. Counted in the
+    administrator's own unit only (rule 7)."""
+
+    views: int = 0
+    cases: int = 0
+    #: Said in words when the count could not be read, so the screen never draws nothing for it.
+    problem: str | None = None
+
+
 class SystemStatus(BaseModel):
     """The Admin area's *System* screen (ADR-110 Amendment 1): each component, asked as the screen
     opens — what the harness's preflight showed before launch, for a running deployment."""
@@ -327,6 +338,9 @@ class SystemStatus(BaseModel):
     model_notice: str | None = None
     #: ADR-114 Amendment 8: the last update check; none when there has been none.
     update: UpdateNotice | None = None
+    #: ADR-144 decision 6: what the migration made of cases made from another, in the
+    #: administrator's own unit; none when the case views' store is not reachable.
+    converted_views: ConvertedViews | None = None
 
 
 class EmbeddedDashboard(BaseModel):
@@ -540,6 +554,8 @@ class TeamCoverInput(BaseModel):
 OwnedKind = Literal[
     "case_author", "home_case_author", "team_lead", "hotlist", "monitor", "saved_pattern",
     "typology_rule", "pipeline_schedule", "list_schedule",
+    # L2.5b: the kinds L3.8's ownership route reads (`person_ownership.py`, ADR-145 Amendment 8).
+    "view", "board", "link_type_proposal", "drawn_watch",
 ]
 
 
@@ -551,6 +567,11 @@ class OwnedItem(BaseModel):
     id: str
     #: What it is, in words ("Kestrel (case)"), only what the administrator may already see.
     label: str
+    #: The case a view, a board, a proposed type or a watch is in (L3.8's items); none otherwise.
+    investigation_id: str | None = None
+    #: The marking its recipient must clear (ADR-145 Amendment 9): a view's or a board's case's
+    #: highest, a proposal's or a watch's dataset's; *Transfer to…* offers only people who do.
+    needs_clearance: str | None = None
 
 
 class DisablePlan(BaseModel):
@@ -738,7 +759,8 @@ class NeedsYou(BaseModel):
 
 ALL_MODELS: list[type[BaseModel]] = [
     PersonAccount, DashboardIdentity, RegisteredDashboard, RolesInput, DashboardInput,
-    ComponentHealth, UpdateNotice, SystemStatus, EmbeddedDashboard, DashboardGuestToken,
+    ComponentHealth, UpdateNotice, ConvertedViews, SystemStatus, EmbeddedDashboard,
+    DashboardGuestToken,
     AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
     ModelRoleStatus, EngineStatus, ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
     ChangeScheduleInput, AdminDataset, DatasetEgressInput, OrganisationArrival,
