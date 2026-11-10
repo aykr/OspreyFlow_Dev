@@ -98,4 +98,7 @@ passed). StageD's case for the retired schedule form is removed with the form.
 - ***Show as BPMN* mounted on the draft** (`RuleEditor.test.tsx`): 8 passed. Red with the dialog not mounted:
   only "shows the saved draft as BPMN, drawn from the files saved beside it".
 - **The stored files are the real codec's at every saved version**
-  (`test_the_stored_files_are_the_codecs_at_every_saved_version`): live, at the next leased run.
+  (`test_the_stored_files_are_the_codecs_at_every_saved_version`). Live on stack c (the rules lease) at 6c80b31,
+  with the store, route and migration cases and the rule tests they touch: 53 passed (`gates/6c80b31.live.txt`).
+  Red with the draft's files not rewritten on a second save: that case and the store's
+  `test_saving_again_replaces_the_one_draft`, nothing else. Released and down.
