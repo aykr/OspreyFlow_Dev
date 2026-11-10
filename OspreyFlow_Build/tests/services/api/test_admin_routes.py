@@ -172,6 +172,9 @@ class _OwnsNothing:
         assert list(transfers) == []
         return [], 0
 
+    async def refuse_if_withheld(self, person: str, **_: Any) -> None:
+        """Nothing withheld: they own nothing anywhere (L2.5b)."""
+
 
 @pytest.fixture
 def client() -> Any:
@@ -355,6 +358,35 @@ def _system(client: Any, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     response = client.get("/v1/admin/system")
     assert response.status_code == 200, response.text
     return response
+
+
+def test_the_system_screen_counts_the_cases_made_views_in_the_administrators_unit(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-144 decision 6: *Admin › System* says how many cases made from another became views, in
+    how many cases, and how many wait, asked of the store with the administrator's own unit
+    (`test_admin_converted_views.py` runs its SQL); and the screen still answers when the store
+    does not."""
+    from schemas.admin import ConvertedViews
+
+    asked: list[str | None] = []
+
+    class _Store:
+        async def converted_views(self, unit: str | None) -> ConvertedViews:
+            asked.append(unit)
+            return ConvertedViews(views=3, cases=2, waiting=1)
+
+    monkeypatch.setattr(app.state, "admin_people", _Store(), raising=False)
+    body = _system(client, monkeypatch).json()
+    assert body["converted_views"] == {"views": 3, "cases": 2, "waiting": 1}
+    assert asked == [ADMIN.org_unit]
+
+    class _Down:
+        async def converted_views(self, unit: str | None) -> ConvertedViews:
+            raise OSError("Postgres unreachable")
+
+    monkeypatch.setattr(app.state, "admin_people", _Down(), raising=False)
+    assert _system(client, monkeypatch).json()["converted_views"] is None
 
 
 def test_the_system_screen_shows_each_roles_model_and_where_it_runs(

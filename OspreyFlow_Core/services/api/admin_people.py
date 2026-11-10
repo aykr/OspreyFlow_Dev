@@ -12,10 +12,13 @@ watches (saved-pattern monitors) and saved patterns; their active typology rules
 runs act as them (ADR-133 stage (d)); and the pipeline and screening-list schedules whose runs act
 as them (ADR-110 decision 3).
 
-**Not yet listed, L2.5b's seam** (`L38_OWNED_KINDS`, `l38_owned_items`): private views and boards,
-promotions they proposed that wait for review, reviews waiting on them, and proposed types. Their
-owner reads are the case lane's ownership route (L3.8); until it is on main the plan says, in words,
-that they are not yet listed, and `l38_owned_items` returns none.
+**What the case lane keeps** (`l38_owned_items`, L2.5b): the views and boards they made, their
+link-type proposals waiting for a decision and their open drawn-item watches, read by L3.8's own SQL
+(`person_ownership.owned_items`) in the administrator's unit and within the markings they clear
+(ADR-145 Amendment 8). An item they may not see is never offered: *Transfer and disable* is refused
+for it after the visible transfers commit (409 `withheld_items`, `refuse_if_withheld`), naming
+nothing. Promotions waiting for review, and reviews waiting on them, are still named as not yet
+listed (`L38_OWNED_KINDS`, L3.4's seam `person_ownership.promotion_items`).
 
 **Refused, in words, while any item is untransferred** (409 `untransferred`), or given to someone
 who cannot take it (409 `recipient_refused`: the person themselves, a disabled account, an account
@@ -34,15 +37,17 @@ owner column it changes and nothing else.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, cast
 
 import asyncpg
 
+from ontology.handling import HandlingScheme
 from schemas.admin import (
     AdminPeopleRows,
     AdminPersonRow,
     CaseWithoutAuthor,
+    ConvertedViews,
     DisablePlan,
     OwnedItem,
     OwnedTransfer,
@@ -55,25 +60,36 @@ from schemas.rights import CUSTOM_ROLE_PREFIX, Right, rights_for
 from .audit import AuditWriter
 from .investigations import TEAM_GRANT_PREFIX, AccessLevel, InvestigationStore
 
-#: L2.5b's seam: the kinds a person owns that are read through the case lane's ownership route
-#: (L3.8), not yet on main. Said in the plan, so an administrator is never told the list is whole.
-L38_OWNED_KINDS: tuple[str, ...] = (
-    "private views",
-    "boards",
-    "promotions waiting for review",
-    "reviews waiting on them",
-    "proposed types",
-)
+#: The kinds a person owns that the plan cannot list yet (L3.4's promotions, through L3.8's seam).
+#: Said in the plan, so an administrator is never told the list is whole.
+L38_OWNED_KINDS: tuple[str, ...] = ("promotions waiting for review", "reviews waiting on them")
 
-#: The right an item's runs are checked against, which its recipient must hold (`scheduler.py`,
-#: `rule_schedule.py`, `list_schedule.py`; the watches' and hotlists' `keep_watches`).
-NEEDS: Mapping[str, Right] = {
-    "typology_rule": Right.DEPLOY_RULES,
-    "pipeline_schedule": Right.SCHEDULE_PIPELINES,
-    "list_schedule": Right.LOAD_SCREENING_LISTS,
-    "hotlist": Right.KEEP_WATCHES,
-    "monitor": Right.KEEP_WATCHES,
-    "saved_pattern": Right.KEEP_WATCHES,
+#: The rights an item's runs, or its own routes, are checked against, which its recipient must hold
+#: (`scheduler.py`, `rule_schedule.py`, `list_schedule.py`; the watches' and hotlists'
+#: `keep_watches`; for L3.8's kinds, the view's save (`investigate`), the boards' `_DRAWS` and the
+#: proposal route's `propose_types`).
+NEEDS: Mapping[str, tuple[Right, ...]] = {
+    "typology_rule": (Right.DEPLOY_RULES,),
+    "pipeline_schedule": (Right.SCHEDULE_PIPELINES,),
+    "list_schedule": (Right.LOAD_SCREENING_LISTS,),
+    "hotlist": (Right.KEEP_WATCHES,),
+    "monitor": (Right.KEEP_WATCHES,),
+    "saved_pattern": (Right.KEEP_WATCHES,),
+    "view": (Right.INVESTIGATE,),
+    "board": (Right.DRAW_ON_BOARDS, Right.INVESTIGATE),
+    "drawn_watch": (Right.DRAW_ON_BOARDS, Right.INVESTIGATE),
+    "link_type_proposal": (Right.PROPOSE_TYPES,),
+}
+
+#: L3.8's kinds: each in a case of the administrator's unit, so held only within it.
+CASE_KINDS: frozenset[str] = frozenset({"view", "board", "link_type_proposal", "drawn_watch"})
+#: The level on its case each needs, as its own route asks it (Viewer saves a view; Editor draws and
+#: proposes); a rule and a pipeline schedule need Author (`_case_levels_hold`).
+LEVEL_NEEDED: Mapping[str, AccessLevel] = {
+    "view": AccessLevel.VIEWER,
+    "board": AccessLevel.EDITOR,
+    "drawn_watch": AccessLevel.EDITOR,
+    "link_type_proposal": AccessLevel.EDITOR,
 }
 
 
@@ -85,11 +101,34 @@ class DisableRefused(Exception):
         self.items = list(items)
 
 
-async def l38_owned_items(conn: asyncpg.Connection, person: str) -> list[OwnedItem]:
-    """L2.5b's seam: what the case lane's ownership route (L3.8) will say the person owns. None
-    until that route is on main; the plan names the kinds in `not_yet_listed` meanwhile."""
-    del conn, person
-    return []
+async def l38_owned_items(
+    conn: asyncpg.Connection, person: str, *, admin_unit: str | None, cleared: list[str], top: str
+) -> list[OwnedItem]:
+    """What the case lane's ownership route (L3.8) says the person owns, read by its own SQL with
+    the administrator's unit and the markings they clear (`person_ownership.reach`), each placed by
+    its case. Imported here, not at the top: `person_ownership` imports `DisableRefused` from this
+    module."""
+    from .person_ownership import owned_items
+
+    found = await owned_items(conn, person, admin_unit=admin_unit, cleared=cleared, top=top)
+    return [
+        OwnedItem(kind=i.kind, id=i.id, label=i.label, investigation_id=i.investigation_id)
+        for i in found
+    ]
+
+
+#: The marking a proposal's or a watch's recipient must clear: its dataset's highest, or the
+#: scheme's highest where none is set or there is none (`$2`), as L3.8 reads it.
+_MARKING_SQL: Mapping[str, str] = {
+    "link_type_proposal": (
+        "SELECT p.id, COALESCE(d.highest_marking, $2) AS marking FROM link_type_proposals p "
+        "LEFT JOIN datasets d ON d.id = p.dataset_id WHERE p.id = ANY($1::text[])"
+    ),
+    "drawn_watch": (
+        "SELECT w.id, COALESCE(d.highest_marking, $2) AS marking FROM drawn_watches w "
+        "LEFT JOIN datasets d ON d.id = w.dataset_id WHERE w.id = ANY($1::text[])"
+    ),
+}
 
 
 _AUTHOR_ONLY_SQL = """
@@ -124,10 +163,13 @@ SELECT
 @dataclass(frozen=True)
 class _Plan:
     items: list[OwnedItem]
-    #: The case a rule's or a pipeline schedule's runs are judged against, by item.
+    #: The case a rule's or a pipeline schedule's runs are judged against, by item; and the case
+    #: of each of L3.8's items, whose level its recipient must hold (`LEVEL_NEEDED`).
     case_of: dict[tuple[str, str], str]
     #: Items of the same kinds in another unit, counted only.
     elsewhere: int
+    #: The marking each proposal's and watch's recipient must clear.
+    marking_of: dict[tuple[str, str], str] = field(default_factory=dict)
 
 
 def answering(
@@ -161,6 +203,9 @@ async def _plan_items(
     person: str,
     admin_unit: str | None,
     answers: Callable[[str], bool] | None = None,
+    *,
+    cleared: list[str],
+    top: str,
 ) -> _Plan:
     """Everything the person owns in the administrator's unit, each read with the unit in its own
     statement (rule 3); hotlists, watches, saved patterns, team leads and list schedules have no
@@ -250,9 +295,18 @@ async def _plan_items(
                 label=f"The refresh schedule of the list {row['list_name']}",
             )
         )
-    items.extend(await l38_owned_items(conn, person))
+    l38 = await l38_owned_items(conn, person, admin_unit=admin_unit, cleared=cleared, top=top)
+    marking_of: dict[tuple[str, str], str] = {}
+    for kind, sql in _MARKING_SQL.items():
+        ids = [i.id for i in l38 if i.kind == kind]
+        for row in await conn.fetch(sql, ids, top) if ids else []:
+            marking_of[(kind, row["id"])] = row["marking"]
+    for item in l38:
+        if item.investigation_id is not None:
+            case_of[(item.kind, item.id)] = item.investigation_id
+    items.extend(l38)
     elsewhere = int(await conn.fetchval(_ELSEWHERE_SQL, person, admin_unit) or 0)
-    return _Plan(items=items, case_of=case_of, elsewhere=elsewhere)
+    return _Plan(items=items, case_of=case_of, elsewhere=elsewhere, marking_of=marking_of)
 
 
 _RANK = {level.value: level.rank for level in AccessLevel}
@@ -348,18 +402,57 @@ async def _case_levels_hold(
             for r in (person.roles if person else [])
             if r.startswith(CUSTOM_ROLE_PREFIX)
         ]
-        held = await conn.fetchval(
-            "SELECT 1 FROM investigation_grants WHERE investigation_id = $1 "
-            "AND account_id = ANY($2::text[]) AND level = 'author'",
+        needed = LEVEL_NEEDED.get(key[0], AccessLevel.AUTHOR)
+        levels = await conn.fetch(
+            "SELECT level FROM investigation_grants WHERE investigation_id = $1 "
+            "AND account_id = ANY($2::text[])",
             case_id,
             [to, *teams],
         )
-        if not held:
-            item = next(i for i in plan.items if _key(i.kind, i.id) == key)
+        if any(AccessLevel(r["level"]).rank >= needed.rank for r in levels):
+            continue
+        item = next(i for i in plan.items if _key(i.kind, i.id) == key)
+        if needed is AccessLevel.AUTHOR:
+            words = (
+                f"{item.label}: {to} is not an Author of its case, so its runs would be refused: "
+                "make them its Author first, or in this same transfer"
+            )
+        else:
+            words = (
+                f"{item.label}: {to} holds no {needed.value.title()} level or higher on its case, "
+                "which it needs: give them one first, or make them its Author in this same transfer"
+            )
+        raise DisableRefused("recipient_refused", words, [item])
+
+
+def markings_hold(
+    plan_markings: Mapping[tuple[str, str], str],
+    items: Sequence[OwnedItem],
+    chosen: Mapping[tuple[str, str], str],
+    who: Recipients,
+    scheme: HandlingScheme,
+) -> None:
+    """A proposal or a watch goes only to someone cleared to its dataset's marking (rule 3: a watch
+    tells its owner of changes to an item they could not otherwise read). The words name the
+    recipient's clearance, never the item's marking, which the administrator may know but the
+    label never says."""
+    for item in items:
+        key = _key(item.kind, item.id)
+        marking = plan_markings.get(key)
+        if marking is None:
+            continue
+        to = chosen[key]
+        account = who.people.get(to)
+        clearance = account.clearance if account else None
+        if (
+            clearance is None
+            or clearance not in scheme.classification
+            or not scheme.clears(clearance, marking)
+        ):
             raise DisableRefused(
                 "recipient_refused",
-                f"{item.label}: {to} is not an Author of its case, so its runs would be refused: "
-                "make them its Author first, or in this same transfer",
+                f"{item.label}: {to} is not cleared to its dataset's marking; "
+                "choose someone who is",
                 [item],
             )
 
@@ -437,12 +530,17 @@ def check_transfers(
             why = f"{to} is a service account, which owns nothing"
         elif not account.enabled:
             why = f"{to} is disabled"
-        elif item.kind in ("case_author", "home_case_author") and account.org_unit != unit:
+        elif (
+            item.kind in ("case_author", "home_case_author") or item.kind in CASE_KINDS
+        ) and account.org_unit != unit:
             why = f"{to} is of another unit, and a case's level is held only within its unit"
         elif item.kind == "team_lead" and to not in who.team_members.get(item.id, frozenset()):
             why = f"{to} is not a member of the team"
-        elif item.kind in NEEDS and NEEDS[item.kind] not in who.rights.get(to, frozenset()):
-            why = f"{to} does not hold {NEEDS[item.kind].value}, which its runs need"
+        elif lacking := [
+            r.value for r in NEEDS.get(item.kind, ()) if r not in who.rights.get(to, frozenset())
+        ]:
+            needs = "it needs" if item.kind in CASE_KINDS else "its runs need"
+            why = f"{to} does not hold {' and '.join(lacking)}, which {needs}"
         if why is not None:
             raise DisableRefused("recipient_refused", f"{item.label}: {why}", [item])
     return chosen
@@ -461,6 +559,20 @@ _TRANSFER_SQL: Mapping[str, str] = {
     "list_schedule": (
         "UPDATE screening_lists SET schedule_owner = $2 "
         "WHERE list_name = $1 AND schedule_owner = $3"
+    ),
+    # L3.8's kinds: the creator, the proposer while it waits, the owner while it is open.
+    "view": (
+        "UPDATE case_views SET created_by = $2 WHERE id = $1 AND created_by = $3 AND NOT drawing"
+    ),
+    "board": (
+        "UPDATE case_views SET created_by = $2 WHERE id = $1 AND created_by = $3 AND drawing"
+    ),
+    "link_type_proposal": (
+        "UPDATE link_type_proposals SET proposed_by = $2 "
+        "WHERE id = $1 AND proposed_by = $3 AND status = 'pending'"
+    ),
+    "drawn_watch": (
+        "UPDATE drawn_watches SET owner = $2 WHERE id = $1 AND owner = $3 AND ended_at IS NULL"
     ),
     "team_lead": (
         "UPDATE teams SET lead = $2, "
@@ -509,19 +621,65 @@ class AdminPeopleStore:
         self,
         person: str,
         *,
-        admin_unit: str | None,
+        admin: Principal,
+        scheme: HandlingScheme,
         people: Sequence[PersonAccount] | None = None,
     ) -> DisablePlan:
-        """The plan of the administrator's own unit; another unit's items are counted at the
-        disable (`transfer` answers `elsewhere`), never listed."""
+        """The plan of the administrator's own unit, within the markings they clear; another
+        unit's items are counted at the disable (`transfer` answers `elsewhere`), and an item they
+        may not see is never listed (`refuse_if_withheld` answers for it)."""
+        from .person_ownership import reach
+
+        unit, cleared, top = reach(admin, scheme)
         async with self._pool.acquire() as conn:
             plan = await _plan_items(
                 conn,
                 person,
-                admin_unit,
-                None if people is None else answering(people, person, admin_unit),
+                unit,
+                None if people is None else answering(people, person, unit),
+                cleared=cleared,
+                top=top,
             )
         return DisablePlan(person=person, items=plan.items, not_yet_listed=list(L38_OWNED_KINDS))
+
+    async def converted_views(self, unit: str | None) -> ConvertedViews:
+        """*Admin › System*'s line for ADR-144 decision 6: how many views the migration made from
+        cases made from another, in how many cases, and how many such cases are still waiting
+        (the migration's dry run says why each was not placed). Counted in SQL within the
+        administrator's own unit, open cases only (rule 7: never another unit's count)."""
+        async with self._pool.acquire() as conn:
+            made = await conn.fetchrow(
+                "SELECT count(*) AS views, count(DISTINCT v.case_id) AS cases FROM case_views v "
+                "JOIN investigations i ON i.id = v.case_id AND i.removed_at IS NULL "
+                "AND i.owning_unit = $1 WHERE v.converted_from_case IS NOT NULL",
+                unit,
+            )
+            branched = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = "
+                "current_schema() AND table_name = 'investigations' AND column_name = "
+                "'branched_from')"
+            )
+            waiting = (
+                await conn.fetchval(
+                    "SELECT count(*) FROM investigations WHERE branched_from IS NOT NULL "
+                    "AND removed_at IS NULL AND owning_unit = $1",
+                    unit,
+                )
+                if branched
+                else 0
+            )
+        return ConvertedViews(views=made["views"], cases=made["cases"], waiting=int(waiting or 0))
+
+    async def refuse_if_withheld(
+        self, person: str, *, admin: Principal, scheme: HandlingScheme
+    ) -> None:
+        """Asked by *Transfer and disable* after the visible transfers commit (ADR-145 Amendment
+        8 decision 3): L3.8's `refuse_if_withheld`, on a connection of its own, so what it reads is
+        what was committed. Raises `DisableRefused` (`withheld_items`), naming nothing."""
+        from .person_ownership import refuse_if_withheld
+
+        async with self._pool.acquire() as conn:
+            await refuse_if_withheld(conn, person, admin=admin, scheme=scheme)
 
     async def transfer(
         self,
@@ -532,20 +690,31 @@ class AdminPeopleStore:
         by: Principal,
         audit: AuditWriter,
         admin_unit: str | None,
+        scheme: HandlingScheme,
     ) -> tuple[list[tuple[OwnedItem, str]], int]:
         """Every item of the administrator's unit to its recipient, in one transaction with an
         audit row for each; the plan is read again inside it, so an item gained since the
         administrator looked is refused too. Answers the transfers and how many items the person
         still owns in another unit, which the disable is then refused for; the covers end only when
-        nothing is left elsewhere, as the disable follows."""
+        nothing is left elsewhere or withheld from the administrator, as the disable follows
+        (the route asks `refuse_if_withheld` again once this has committed)."""
+        from .person_ownership import cleared_markings, withheld
+
+        cleared, top = cleared_markings(by, scheme), scheme.classification[-1]
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute("LOCK TABLE investigation_grants IN SHARE ROW EXCLUSIVE MODE")
             plan = await _plan_items(
-                conn, person, admin_unit, answering(list(who.people.values()), person, admin_unit)
+                conn,
+                person,
+                admin_unit,
+                answering(list(who.people.values()), person, admin_unit),
+                cleared=cleared,
+                top=top,
             )
             items = plan.items
             chosen = check_transfers(person, items, transfers, who, admin_unit)
             await _case_levels_hold(conn, plan, chosen, who)
+            markings_hold(plan.marking_of, items, chosen, who, scheme)
             await _watch_clash(conn, items, chosen)
             done: list[tuple[OwnedItem, str]] = []
             for item in items:
@@ -580,6 +749,9 @@ class AdminPeopleStore:
                 done.append((item, to))
             if plan.elsewhere:
                 return done, plan.elsewhere
+            if await withheld(conn, person, admin_unit=admin_unit, cleared=cleared, top=top):
+                # Refused by the route once this commits; the covers stay until the disable.
+                return done, 0
             # A cover is no ownership: the person's covers end, each audited, and the lead acts.
             for row in await conn.fetch(
                 "UPDATE teams SET cover = NULL, cover_until = NULL WHERE cover = $1 "
@@ -617,6 +789,8 @@ def recipients(
 
 
 __all__ = [
+    "CASE_KINDS",
+    "LEVEL_NEEDED",
     "OTHER_UNIT",
     "L38_OWNED_KINDS",
     "NEEDS",
@@ -626,5 +800,6 @@ __all__ = [
     "check_transfers",
     "people_rows",
     "l38_owned_items",
+    "markings_hold",
     "recipients",
 ]

@@ -218,13 +218,35 @@ class _AdminPeople:
         self.moved: list[tuple[str, str, str]] = []
         #: How many items each person owns in another unit (the real store counts them in SQL).
         self.elsewhere: dict[str, int] = {}
+        #: Whether each person owns items the administrator may not see (L3.8's `withheld`).
+        self.withheld: dict[str, bool] = {}
+        self.asked_withheld: list[str] = []
 
-    async def plan(self, person: str, *, admin_unit: str | None, people: Any = None) -> DisablePlan:
+    async def plan(self, person: str, *, admin: Principal, scheme: Any,
+                   people: Any = None) -> DisablePlan:  # fmt: skip
         return DisablePlan(person=person, items=self.items.get(person, []),
                            not_yet_listed=list(admin_people_module.L38_OWNED_KINDS))  # fmt: skip
 
+    async def refuse_if_withheld(self, person: str, *, admin: Principal, scheme: Any) -> None:
+        """The real `person_ownership.refuse_if_withheld`, its one read answered as the real
+        `_WITHHELD_SQL` would for this person (`test_disable_l38_transfers.py` runs the real one)."""
+        from services.api.person_ownership import refuse_if_withheld
+
+        class _Answers:
+            def __init__(self, hidden: bool) -> None:
+                self.hidden = hidden
+
+            async def fetchval(self, sql: str, *args: Any) -> bool:
+                assert "EXISTS" in sql and args[0] == person and args[1] == admin.org_unit
+                return self.hidden
+
+        self.asked_withheld.append(person)
+        await refuse_if_withheld(_Answers(self.withheld.get(person, False)), person,  # type: ignore[arg-type]
+                                 admin=admin, scheme=scheme)  # fmt: skip
+
     async def transfer(self, person: str, transfers: Any, who: Any, *, by: Principal, audit: Any,
-                       admin_unit: str | None) -> tuple[list[tuple[OwnedItem, str]], int]:  # fmt: skip
+                       admin_unit: str | None,
+                       scheme: Any) -> tuple[list[tuple[OwnedItem, str]], int]:  # fmt: skip
         items = self.items.get(person, [])
         chosen = check_transfers(person, items, transfers, who, admin_unit)
         for item in items:
@@ -520,7 +542,108 @@ def test_the_plan_names_what_is_not_yet_listed(world: SimpleNamespace) -> None:
     world.admin_people.items["ana-1"] = ITEMS
     plan = world.client.get("/v1/admin/people/ana-1/disable-plan", headers=_as("adm-1")).json()
     assert [i["id"] for i in plan["items"]] == ["c1", "t1", "r1"]
-    assert "proposed types" in plan["not_yet_listed"]
+    # L2.5b: views, boards, proposed types and drawn watches are listed now (L3.8's route); only
+    # the promotions' kinds are still to come.
+    assert plan["not_yet_listed"] == ["promotions waiting for review", "reviews waiting on them"]
+
+
+# --- L2.5b: Disable's full transfer list (ADR-145 Amendment 8) ---------------------------------------
+
+L38_ITEMS = [
+    OwnedItem(kind="view", id="v1", label="A private view of the case Kestrel", investigation_id="c1"),
+    OwnedItem(kind="board", id="b1", label="A private board of the case Kestrel", investigation_id="c1"),
+    OwnedItem(kind="link_type_proposal", id="p1", investigation_id="c1",
+              label="A proposed link type in the case Kestrel, waiting for a decision"),
+    OwnedItem(kind="drawn_watch", id="w1", investigation_id="c1",
+              label="A watch on an item they drew in the case Kestrel"),
+]  # fmt: skip
+
+
+def test_the_plan_offers_each_of_l38s_items_with_its_case(world: SimpleNamespace) -> None:
+    world.admin_people.items["ana-1"] = L38_ITEMS
+    plan = world.client.get("/v1/admin/people/ana-1/disable-plan", headers=_as("adm-1")).json()
+    assert [(i["kind"], i["investigation_id"]) for i in plan["items"]] == [
+        ("view", "c1"), ("board", "c1"), ("link_type_proposal", "c1"), ("drawn_watch", "c1")]  # fmt: skip
+
+
+def test_disable_is_refused_while_an_item_is_withheld_and_the_visible_transfers_stand(
+    world: SimpleNamespace,
+) -> None:
+    """ADR-145 Amendment 8 decision 3 (the owner's ruling of 9 November 2026): asked after the
+    visible transfers commit, which stand; 409 `withheld_items`, in words naming nothing of the
+    items, and the identity provider never asked. Once nothing is withheld, the disable goes."""
+    world.admin_people.items["ana-1"] = L38_ITEMS[:1]
+    world.admin_people.withheld["ana-1"] = True
+    answer = _disable(world, [{"kind": "view", "id": "v1", "to": "ana-2"}])
+    assert answer.status_code == 409, answer.text
+    detail = answer.json()["detail"]
+    assert detail["error"] == "withheld_items"
+    assert "1 transferred, and those stand" in detail["message"]
+    said = detail["message"].lower().replace("1 transferred", "")
+    for word in ("view", "board", "proposal", "type", "watch", "secret", "official", "kestrel"):
+        assert word not in said, word
+    assert not any(ch.isdigit() for ch in said), "never how many"
+    assert world.admin_people.moved == [("view", "v1", "ana-2")]
+    assert world.admin_people.asked_withheld == ["ana-1"], "asked after the transfers"
+    assert world.directory.disabled == []
+    assert "disable_person" not in [e["action"] for e in world.audit.entries]
+    world.admin_people.withheld["ana-1"] = False
+    assert _disable(world, []).status_code == 200 and world.directory.disabled == ["ana-1"]
+
+
+def test_withheld_is_asked_only_once_the_transfers_are_accepted(world: SimpleNamespace) -> None:
+    """A refused transfer (an item untransferred) answers its own refusal; nothing is asked after
+    it, so a person never learns from the order of refusals that withheld items exist."""
+    world.admin_people.items["ana-1"] = L38_ITEMS[:2]
+    world.admin_people.withheld["ana-1"] = True
+    answer = _disable(world, [{"kind": "view", "id": "v1", "to": "ana-2"}])
+    assert answer.json()["detail"]["error"] == "untransferred"
+    assert world.admin_people.asked_withheld == []
+
+
+def test_other_units_items_are_answered_before_withheld_ones(world: SimpleNamespace) -> None:
+    world.admin_people.items["ana-1"] = []
+    world.admin_people.elsewhere["ana-1"] = 1
+    world.admin_people.withheld["ana-1"] = True
+    assert _disable(world, []).json()["detail"]["error"] == "other_unit"
+
+
+@pytest.mark.parametrize(
+    ("kind", "right"),
+    [("board", "draw_on_boards"), ("drawn_watch", "draw_on_boards"),
+     ("link_type_proposal", "propose_types"), ("view", "investigate")],
+)  # fmt: skip
+def test_each_l38_item_needs_the_right_its_own_route_asks(kind: str, right: str) -> None:
+    """The right each item's own route checks (`_DRAWS`, the proposal route, the views' save),
+    which its recipient must hold or the item is theirs and they cannot use it."""
+    from services.api.admin_people import Recipients
+
+    item = next(i for i in L38_ITEMS if i.kind == kind)
+    bea = PersonAccount(id="bea", username="bea", name="Bea", enabled=True, roles=["data_engineer"],
+                        org_unit="unit-1")  # fmt: skip
+    held = frozenset(r for r in Right if r.value != right)
+    who = Recipients(people={"bea": bea}, rights={"bea": held}, team_members={})
+    with pytest.raises(DisableRefused) as raised:
+        check_transfers("ana-1", [item], [OwnedTransfer(kind=kind, id=item.id, to="bea")], who,
+                        "unit-1")  # type: ignore[arg-type]  # fmt: skip
+    assert raised.value.error == "recipient_refused" and right in raised.value.words
+    who_all = Recipients(people={"bea": bea}, rights={"bea": frozenset(Right)}, team_members={})
+    assert check_transfers("ana-1", [item], [OwnedTransfer(kind=kind, id=item.id, to="bea")],  # type: ignore[arg-type]
+                           who_all, "unit-1") == {(kind, item.id): "bea"}  # fmt: skip
+
+
+@pytest.mark.parametrize("kind", ["view", "board", "link_type_proposal", "drawn_watch"])
+def test_an_l38_item_never_goes_to_a_person_of_another_unit(kind: str) -> None:
+    from services.api.admin_people import Recipients
+
+    item = next(i for i in L38_ITEMS if i.kind == kind)
+    far = PersonAccount(id="far", username="far", name="Far", enabled=True, roles=["analyst"],
+                        org_unit="unit-2")  # fmt: skip
+    who = Recipients(people={"far": far}, rights={"far": frozenset(Right)}, team_members={})
+    with pytest.raises(DisableRefused) as raised:
+        check_transfers("ana-1", [item], [OwnedTransfer(kind=kind, id=item.id, to="far")], who,
+                        "unit-1")  # type: ignore[arg-type]  # fmt: skip
+    assert "another unit" in raised.value.words
 
 
 def test_disable_is_refused_while_an_item_is_untransferred(world: SimpleNamespace) -> None:

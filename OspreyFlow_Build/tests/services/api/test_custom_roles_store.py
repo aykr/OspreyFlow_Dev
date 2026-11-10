@@ -35,6 +35,7 @@ from services.api.screening import ScreeningListStore
 from services.api.studio_recipes import StudioRecipeStore
 from services.api.typology_rules import TypologyRuleStore
 
+from ontology.handling import load_uk_le_scheme
 from schemas.admin import OwnedTransfer, PersonAccount, TeamInput
 from schemas.domain import Principal
 from schemas.rights import Right
@@ -42,6 +43,7 @@ from schemas.rights import Right
 T0 = datetime(2026, 11, 8, tzinfo=UTC)
 UNIT = "unit-1"
 ADMIN = Principal(id="adm-1", clearance="SECRET", org_unit=UNIT, roles=["osprey-admin"])
+SCHEME = load_uk_le_scheme()
 
 
 def _who(pid: str, roles: list[str]) -> Principal:
@@ -209,23 +211,23 @@ async def _team(world: SimpleNamespace) -> str:
 async def test_the_plan_lists_every_kind_owned_today_and_not_a_shared_case(world: SimpleNamespace) -> None:
     role_id = await _team(world)
     ids = await _owns_one_of_each(world, role_id)
-    plan = await world.people.plan("ana", admin_unit=UNIT)
+    plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
     assert sorted((i.kind, i.id) for i in plan.items) == sorted([
         ("case_author", ids["case"]), ("team_lead", role_id), ("hotlist", "h1"), ("monitor", "m1"),
         ("saved_pattern", "p1"), ("typology_rule", "t1"), ("pipeline_schedule", "feed"),
         ("list_schedule", "ofsi")])  # fmt: skip
     assert not any("07700" in i.label for i in plan.items), "a hotlist's identifier is never named"
-    assert "proposed types" in plan.not_yet_listed
+    assert plan.not_yet_listed == ["promotions waiting for review", "reviews waiting on them"]
 
 
 async def test_disable_moves_every_item_and_audits_each(world: SimpleNamespace) -> None:
     role_id = await _team(world)
     ids = await _owns_one_of_each(world, role_id)
-    plan = await world.people.plan("ana", admin_unit=UNIT)
+    plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
     who = recipients(_directory(role_id), {}, {role_id: frozenset({"ana", "bea"})})
     transfers = [OwnedTransfer(kind=i.kind, id=i.id, to="bea") for i in plan.items]
     moved, left = await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit,
-                                              admin_unit=UNIT)  # fmt: skip
+                                              admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert len(moved) == len(plan.items) == 8 and left == 0
     raw = world.raw
     owners = {
@@ -244,25 +246,25 @@ async def test_disable_moves_every_item_and_audits_each(world: SimpleNamespace) 
     assert grants == {"ana": AccessLevel.AUTHOR, "bea": AccessLevel.AUTHOR}, "nothing is deleted"
     audited = await raw.fetch("SELECT resolved_query FROM audit_log WHERE action = 'transfer_owned_item'")
     assert len(audited) == 8
-    assert (await world.people.plan("ana", admin_unit=UNIT)).items == []
+    assert (await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)).items == []
 
 
 async def test_a_refused_transfer_changes_nothing(world: SimpleNamespace) -> None:
     role_id = await _team(world)
     await _owns_one_of_each(world, role_id)
-    plan = await world.people.plan("ana", admin_unit=UNIT)
+    plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
     who = recipients(_directory(role_id), {}, {role_id: frozenset({"ana", "bea"})})
     # Every item to bea but the rule, which goes to someone without deploy_rules.
     transfers = [OwnedTransfer(kind=i.kind, id=i.id, to="viewer" if i.kind == "typology_rule" else "bea")
                  for i in plan.items]  # fmt: skip
     with pytest.raises(DisableRefused) as raised:
-        await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT)
+        await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)
     assert raised.value.error == "recipient_refused" and "deploy_rules" in raised.value.words
     assert await world.raw.fetchval("SELECT owner_id FROM hotlists WHERE id = 'h1'") == "ana"
     assert await world.raw.fetchval("SELECT count(*) FROM audit_log") == 0
     with pytest.raises(DisableRefused) as untransferred:
         await world.people.transfer("ana", transfers[:-1], who, by=ADMIN, audit=world.audit,
-                                    admin_unit=UNIT)  # fmt: skip
+                                    admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert untransferred.value.error == "untransferred"
     assert await world.raw.fetchval("SELECT lead FROM teams WHERE role_id = $1", role_id) == "ana"
 
@@ -273,7 +275,7 @@ async def test_a_lead_is_handed_to_a_member_only(world: SimpleNamespace) -> None
     who = recipients(_directory(role_id), {}, {role_id: frozenset({"ana", "bea"})})
     with pytest.raises(DisableRefused) as raised:
         await world.people.transfer("ana", [OwnedTransfer(kind="team_lead", id=role_id, to="viewer")],
-                                    who, by=ADMIN, audit=world.audit, admin_unit=UNIT)  # fmt: skip
+                                    who, by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert "not a member" in raised.value.words
 
 
@@ -302,18 +304,19 @@ async def test_two_units_each_transfer_their_share_and_only_then_is_nothing_left
     from services.api.admin_people import _plan_items
 
     async with world.people._pool.acquire() as conn:
-        listed = await _plan_items(conn, "ana", UNIT)
+        listed = await _plan_items(conn, "ana", UNIT, cleared=list(SCHEME.classification),
+                                    top=SCHEME.classification[-1])
     assert listed.elsewhere == 1 and [i.id for i in listed.items] == [here.id]
     directory = [_person("bea", ["analyst"]), _person("bob", ["analyst"], unit="unit-2")]
     who = recipients(directory, {}, {})
     moved, left = await world.people.transfer(
         "ana", [OwnedTransfer(kind="case_author", id=here.id, to="bea")], who, by=ADMIN,
-        audit=world.audit, admin_unit=UNIT)  # fmt: skip
+        audit=world.audit, admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert (len(moved), left) == (1, 1)
     admin_2 = Principal(id="adm-9", clearance="SECRET", org_unit="unit-2", roles=["osprey-admin"])
     moved, left = await world.people.transfer(
         "ana", [OwnedTransfer(kind="case_author", id=there.id, to="bob")], who, by=admin_2,
-        audit=world.audit, admin_unit="unit-2")  # fmt: skip
+        audit=world.audit, admin_unit="unit-2", scheme=SCHEME)  # fmt: skip
     assert (len(moved), left) == (1, 0)
     assert (await world.cases.list_grants(there.id))["bob"] is AccessLevel.AUTHOR
 
@@ -321,23 +324,23 @@ async def test_two_units_each_transfer_their_share_and_only_then_is_nothing_left
 async def test_a_rule_goes_only_to_an_author_of_its_case(world: SimpleNamespace) -> None:
     role_id = await _team(world)
     ids = await _owns_one_of_each(world, role_id)
-    plan = await world.people.plan("ana", admin_unit=UNIT)
+    plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
     # The case to cas, who is not bea; the rule of that case to bea, who is no Author of it.
     directory = [*_directory(role_id), _person("cas", ["analyst"])]
     who = recipients(directory, {}, {role_id: frozenset({"ana", "bea"})})
     transfers = [OwnedTransfer(kind=i.kind, id=i.id, to="cas" if i.kind == "case_author" else "bea")
                  for i in plan.items]  # fmt: skip
     with pytest.raises(DisableRefused) as raised:
-        await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT)
+        await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)
     assert raised.value.error == "recipient_refused" and "not an Author of its case" in raised.value.words
     # With bea an Author of the case, ana is no longer its only Author: the plan drops the case,
     # and the rule may go to bea.
     await world.cases.set_grant(ids["case"], "bea", AccessLevel.AUTHOR, by=_who("ana", []))
-    again = await world.people.plan("ana", admin_unit=UNIT)
+    again = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
     assert "case_author" not in {i.kind for i in again.items}
     moved, _ = await world.people.transfer(
         "ana", [OwnedTransfer(kind=i.kind, id=i.id, to="bea") for i in again.items], who,
-        by=ADMIN, audit=world.audit, admin_unit=UNIT)  # fmt: skip
+        by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert len(moved) == len(again.items)
 
 
@@ -349,7 +352,7 @@ async def test_a_watch_never_goes_to_someone_already_watching_its_pattern(
     who = recipients(_directory("r0"), {}, {})
     with pytest.raises(DisableRefused) as raised:
         await world.people.transfer("ana", [OwnedTransfer(kind="monitor", id="m1", to="bea")], who,
-                                    by=ADMIN, audit=world.audit, admin_unit=UNIT)  # fmt: skip
+                                    by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert "already watches" in raised.value.words
     assert await world.raw.fetchval("SELECT owner_id FROM monitors WHERE id = 'm1'") == "ana"
 
@@ -359,7 +362,7 @@ async def test_the_persons_covers_end_with_the_disable_and_are_audited(world: Si
     await world.roles.set_lead(role_id, "bea", date(2026, 11, 8))
     await world.roles.set_cover(role_id, "ana", date(2026, 11, 30), date(2026, 11, 8))
     _, left = await world.people.transfer("ana", [], recipients(_directory(role_id), {}, {}),
-                                          by=ADMIN, audit=world.audit, admin_unit=UNIT)  # fmt: skip
+                                          by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)  # fmt: skip
     assert left == 0
     team = await world.roles.team(role_id, date(2026, 11, 9))
     assert (team.cover, team.acting_lead) == (None, "bea")
@@ -373,7 +376,7 @@ async def test_a_write_that_finds_its_item_changed_rolls_every_transfer_back(
     transfer) leaves every earlier write of the same transaction undone."""
     role_id = await _team(world)
     await _owns_one_of_each(world, role_id)
-    plan = await world.people.plan("ana", admin_unit=UNIT)
+    plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME)
     who = recipients(_directory(role_id), {}, {role_id: frozenset({"ana", "bea"})})
     transfers = [OwnedTransfer(kind=i.kind, id=i.id, to="bea") for i in plan.items]
     # The list schedule is the last item written; another session moves it first, after the plan
@@ -384,7 +387,7 @@ async def test_a_write_that_finds_its_item_changed_rolls_every_transfer_back(
         "$$ LANGUAGE plpgsql; CREATE TRIGGER steal AFTER UPDATE ON studio_recipes "
         "FOR EACH ROW EXECUTE FUNCTION steal()")  # fmt: skip
     with pytest.raises(DisableRefused) as raised:
-        await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT)
+        await world.people.transfer("ana", transfers, who, by=ADMIN, audit=world.audit, admin_unit=UNIT, scheme=SCHEME)
     assert raised.value.error == "changed_meanwhile"
     assert await world.raw.fetchval("SELECT owner_id FROM hotlists WHERE id = 'h1'") == "ana"
     assert await world.raw.fetchval("SELECT count(*) FROM audit_log") == 0
@@ -408,7 +411,7 @@ async def test_a_case_whose_other_author_answers_for_nothing_is_still_the_person
     await world.cases.set_grant(shared.id, "bea", AccessLevel.AUTHOR, by=ana)
     people = [_person("ana", [f"role:{role_id}"]), _person("bea", ["analyst"]),
               _person("gone", ["analyst"], enabled=False)]  # fmt: skip
-    plan = await world.people.plan("ana", admin_unit=UNIT, people=people)
+    plan = await world.people.plan("ana", admin=ADMIN, scheme=SCHEME, people=people)
     listed = {i.id for i in plan.items if i.kind == "case_author"}
     assert listed == {left.id, teamed.id}
 
