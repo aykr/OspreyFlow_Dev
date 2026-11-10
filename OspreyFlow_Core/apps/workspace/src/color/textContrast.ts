@@ -36,10 +36,11 @@ export interface Sample {
   chain: Layer[];
   /** A painted element under or over the text that is not the node nor an ancestor, or null. */
   overlappedBy: string | null;
-  /** For each probed point, colours (computed `fill`, opacity applied) of SVG shapes lying under the
-   * text there and above its own element's surface, nearest first: an SVG label's box. Absent or
-   * shorter than the points means none. */
-  under?: string[][];
+  /** For each probed point, the plain SVG shapes lying under an SVG label's words there (its box),
+   * nearest first: each shape's fill as a colour (its own branch's opacities folded in) and `at`, the
+   * index in `chain` of the ancestor it shares with the words. It lies under the words' own branch
+   * (`chain[0 … at-1]`) and over that ancestor. Absent or shorter than the points means none. */
+  under?: { fill: string; at: number }[][];
   /** The browser's canvas under everything, as computed (`Canvas`); white when absent. */
   page?: string;
   /** axe's own reason for leaving it undecided (`messageKey`), kept for the message. */
@@ -248,14 +249,14 @@ function onOwnSurfaces(sample: Sample, fg: Rgba): number | string {
       pairs = pairs.flatMap(([ink, bg]) => surfaces.map((s): [Rgba, Rgba] => [over(ink, s), over(bg, s)]));
       return null;
     };
-    // An SVG label's shapes lie between its words and its own element's surface.
-    for (const fill of sample.under?.[p] ?? []) {
-      const colour = parseColour(fill);
-      if (!colour) return `an unread shape fill ${fill}`;
-      const refused = lay([colour]);
-      if (refused) return refused;
-    }
-    for (const layer of sample.chain) {
+    for (const [i, layer] of sample.chain.entries()) {
+      // A label's shapes lie under its own branch and over the ancestor they share with it.
+      for (const shape of (sample.under?.[p] ?? []).filter((u) => u.at === i)) {
+        const colour = parseColour(shape.fill);
+        if (!colour) return `an unread shape fill ${shape.fill}`;
+        const refused = lay([colour]);
+        if (refused) return refused;
+      }
       if (layer.filter !== "none" || layer.backdropFilter !== "none" || layer.mixBlendMode !== "normal") {
         return `a filter or blend on <${layer.name}>`;
       }

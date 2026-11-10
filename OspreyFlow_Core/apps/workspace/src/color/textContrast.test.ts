@@ -169,10 +169,24 @@ describe("gradients", () => {
 
   it("skips a `none` layer among gradients, and fails a spread too large to measure", () => {
     expect(gradientSurfaces("none, linear-gradient(rgb(0, 0, 0), rgb(0, 0, 0))", [255, 255, 255, 1])).not.toBeNull();
-    const many = Array.from({ length: 4 }, () => "linear-gradient(rgb(0, 0, 0), rgb(255, 255, 255), rgb(0, 0, 0))").join(", ");
+    // Eight layers of 18 samples each: refused, named as the spread, not as an unread gradient. (A count
+    // after each product would refuse it too, by the fourth layer: the count before only bounds what is
+    // built, and no result tells the two apart.)
+    const many = Array.from({ length: 8 }, () => "linear-gradient(rgb(0, 0, 0), rgb(255, 255, 255), rgb(0, 0, 0))").join(", ");
     expect(gradientSurfaces(many, [255, 255, 255, 1])).toBe("more than 20000 possible backgrounds");
     const spread = judge(sample({ chain: [layer({ backgroundColor: WHITE, backgroundImage: many })] }));
     expect(spread.why).toMatch(/not measurable: more than 20000 possible backgrounds on <div>/);
+  });
+
+  it("refuses a spread across the tree's layers before building it, too", () => {
+    // Three elements up the tree, each with two crossing gradient layers (100 backgrounds each), are
+    // 10^6 together: past the cap, though each is under it.
+    const grid = "linear-gradient(rgb(0, 0, 0), rgb(255, 255, 255)), linear-gradient(rgb(255, 255, 255), rgb(0, 0, 0))";
+    const deep = judge(
+      sample({ chain: [1, 2, 3].map(() => layer({ backgroundColor: WHITE, backgroundImage: grid })) }),
+    );
+    expect(deep.ratio).toBeNull();
+    expect(deep.why).toBe("not measurable: more than 20000 possible backgrounds");
   });
 
   it("fails a stop it cannot read, and a picture, rather than dropping them", () => {
@@ -186,14 +200,29 @@ describe("gradients", () => {
 
 describe("what lies under the text", () => {
   it("measures an SVG label's words on the shape under them, point by point", () => {
-    // Show as BPMN's task: words in fill rgb(232, 236, 237) on a task box filled rgb(40, 44, 46), the
-    // drawing's own element a white dialog; the second point is past the box, on the dialog.
-    const label = (under: string[][]) =>
-      judge(sample({ color: "rgb(232, 236, 237)", chain: [layer({ backgroundColor: WHITE })], under }));
-    expect(label([["rgb(40, 44, 46)"]]).why).toBe("");
-    expect(label([["rgb(40, 44, 46)"], []]).why).toMatch(/< 4\.5:1/);
-    expect(label([["rgb(225, 229, 230)"]]).why).toMatch(/^1\.\d\d:1/);
-    expect(label([["url(#hatch)"]]).why).toMatch(/unread shape fill/);
+    // Show as BPMN's task: words in fill rgb(232, 236, 237) on a task box filled rgb(40, 44, 46) that
+    // shares the <svg> (chain[1]) with them, in a white dialog; the second point is past the box.
+    const label = (under: { fill: string; at: number }[][]) =>
+      judge(sample({ color: "rgb(232, 236, 237)", chain: [layer({ name: "text" }), layer({ name: "svg" }), layer({ backgroundColor: WHITE })], under }));
+    expect(label([[{ fill: "rgb(40, 44, 46)", at: 1 }]]).why).toBe("");
+    expect(label([[{ fill: "rgb(40, 44, 46)", at: 1 }], []]).why).toMatch(/< 4\.5:1/);
+    expect(label([[{ fill: "rgb(225, 229, 230)", at: 1 }]]).why).toMatch(/^1\.\d\d:1/);
+    expect(label([[{ fill: "url(#hatch)", at: 1 }]]).why).toMatch(/unread shape fill/);
+  });
+
+  it("lays a shape under the words' own branch, so the words' opacity fades the words alone", () => {
+    // A black dialog; <rect fill="#fff"> and <text fill="#000" opacity=".5"> in one <svg>: the rect is
+    // under the text's branch, so the half opacity greys the words over white: 3.98:1, a fail. Laid
+    // under the text element itself, the opacity would fade both, and the words would pass at 5.28:1.
+    const faded = judge(
+      sample({
+        color: "rgb(0, 0, 0)",
+        chain: [layer({ name: "text", opacity: "0.5" }), layer({ name: "svg" }), layer({ backgroundColor: "rgb(0, 0, 0)" })],
+        under: [[{ fill: "rgb(255, 255, 255)", at: 1 }]],
+      }),
+    );
+    expect(faded.ratio as number).toBeCloseTo(3.98, 2);
+    expect(faded.why).toMatch(/^3\.98:1 < 4\.5:1/);
   });
 
   it("lays everything on the browser's own canvas, not on white", () => {

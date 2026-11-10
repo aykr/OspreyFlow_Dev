@@ -87,24 +87,27 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
     document.documentElement.append(canvas);
     const pageColour = getComputedStyle(canvas).backgroundColor;
     canvas.remove();
-    // Every outer box-shadow on the page, as the box it may reach (offsets, blur and spread added).
-    const shadows: { e: Element; reach: DOMRect }[] = [];
+    // Every element with an outer box-shadow, and each shadow's offset, blur and spread; the box each
+    // reaches is taken per node, after any scroll (`reachOf`).
+    const shadowed: { e: Element; parts: [number, number, number, number][] }[] = [];
     for (const e of document.querySelectorAll("*")) {
       const shadow = getComputedStyle(e).boxShadow;
       if (shadow === "none") continue;
+      const parts: [number, number, number, number][] = [];
       for (const one of shadow.split(/,(?![^(]*\))/)) {
         if (/inset/.test(one)) continue;
         const lengths = (one.replace(/(rgba?|color|oklab|oklch)\([^)]*\)/g, "").match(/-?[\d.]+px/g) ?? []).map(parseFloat);
         const [dx = 0, dy = 0, blur = 0, spread = 0] = lengths;
-        const r = e.getBoundingClientRect();
-        const grow = blur + Math.max(0, spread);
-        shadows.push({
-          e,
-          reach: new DOMRect(r.left + Math.min(0, dx) - grow, r.top + Math.min(0, dy) - grow,
-                             r.width + Math.abs(dx) + 2 * grow, r.height + Math.abs(dy) + 2 * grow),
-        });
+        parts.push([dx, dy, blur, spread]);
       }
+      if (parts.length) shadowed.push({ e, parts });
     }
+    // The box a shadow reaches: the element's box moved by its offset, grown (or shrunk) by its spread,
+    // then grown by its blur radius.
+    const reachOf = (r: DOMRect, [dx, dy, blur, spread]: [number, number, number, number]) => {
+      const grow = spread + blur;
+      return { left: r.left + dx - grow, right: r.right + dx + grow, top: r.top + dy - grow, bottom: r.bottom + dy + grow };
+    };
     // A foreign element that changes what is seen at the point (x, y): a replaced element or an SVG
     // shape, a background, a filter or blend, a shadow, a painted pseudo-element, a border under the
     // point, or words of its own there.
@@ -136,12 +139,40 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       }
       return true;
     };
+    // An SVG shape under an SVG label's words that is a plain surface there: a rect, circle, ellipse,
+    // polygon or path whose fill (a colour, not a pattern or gradient) covers the point and whose
+    // stroke does not, with no filter, mask or blend from it up to the ancestor it shares with the
+    // words. It is laid at that ancestor's place under the words, with every opacity on its own branch.
+    // Anything else under the words is a cover. `chainOf` is the words' node, then its ancestors.
+    const PLAIN = new Set(["RECT", "CIRCLE", "ELLIPSE", "POLYGON", "PATH"]);
+    let chainOf: Element[] = [];
+    const underShape = (e: Element, x: number, y: number): { fill: string; at: number } | null => {
+      if (!PLAIN.has(e.tagName.toUpperCase()) || !(e instanceof SVGGeometryElement)) return null;
+      const ctm = e.getScreenCTM();
+      if (!ctm) return null;
+      const pt = new DOMPoint(x, y).matrixTransform(ctm.inverse());
+      const f = getComputedStyle(e);
+      if (!e.isPointInFill(pt)) return null;
+      if (f.stroke !== "none" && parseFloat(f.strokeWidth) > 0 && e.isPointInStroke(pt)) return null;
+      const at = chainOf.findIndex((a) => a.contains(e));
+      if (at < 1) return null;
+      const shared = chainOf[at] as Element;
+      let alpha = parseFloat(f.fillOpacity);
+      for (let up: Element | null = e; up && up !== shared; up = up.parentElement) {
+        const u = getComputedStyle(up);
+        if (u.filter !== "none" || u.mask !== "none" || u.mixBlendMode !== "normal") return null;
+        alpha *= parseFloat(u.opacity);
+      }
+      if (!/^(rgb|color|oklab|oklch)/.test(f.fill)) return null;
+      return { fill: withAlpha(f.fill, alpha), at };
+    };
     const blank = (unreadable: string, selector: string, axeReason: string | null) => ({
       selector, unreadable, text: "", color: "", fontSize: "", fontWeight: "", chain: [],
       overlappedBy: null, axeReason, page: pageColour,
     });
     const MAX_POINTS = 600;
-    const out = nodes.map(({ selector, unreadable, axeReason }) => {
+    try {
+    return nodes.map(({ selector, unreadable, axeReason }) => {
       if (unreadable || !selector) return blank(unreadable ?? "no selector", selector ?? "?", axeReason);
       let el: Element | null = null;
       try {
@@ -169,12 +200,14 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         node.scrollIntoView({ block: "center", inline: "center" });
         rects = boxes();
       }
-      // Points along every box: every 8px across (wider on long text, to stay within MAX_POINTS), at
-      // mid-height, or at a fifth, a half and four fifths where axe saw part of the text covered.
+      // Points along every box: every 8px across, at mid-height, or at a fifth, a half and four fifths
+      // where axe saw part of the text covered. Past MAX_POINTS the words are unmeasurable, never
+      // sampled more thinly.
       const partly = axeReason === "elmPartiallyObscured" || axeReason === "elmPartiallyObscuring";
       const rows = partly ? [0.2, 0.5, 0.8] : [0.5];
-      const span = rects.reduce((sum, r) => sum + r.width, 0);
-      const step = Math.max(8, (span * rows.length) / MAX_POINTS);
+      const step = 8;
+      const needed = rects.reduce((sum, r) => sum + (Math.floor(Math.max(0, r.width - 4) / step) + 1) * rows.length, 0);
+      if (needed > MAX_POINTS) return blank(`more than ${MAX_POINTS} probe points (${needed})`, selector, axeReason);
       const points: [number, number][] = [];
       for (const r of rects) {
         const inset = Math.min(2, r.width / 4);
@@ -206,6 +239,8 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
           mixBlendMode: s.mixBlendMode, paintedPseudo, covers: points.map(([x, y]) => within(x, y, box)),
         });
       }
+      chainOf = [];
+      for (let at: Element | null = node; at; at = at.parentElement) chainOf.push(at);
       if (axeReason === "pseudoContent" && !chain.some((l) => l.paintedPseudo) && chain[0]) {
         chain[0].paintedPseudo = "::before or ::after (axe: pseudoContent)";
       }
@@ -216,12 +251,12 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
       // none` or is inert, so for the probe every element takes pointer events (a style sheet) and
       // loses `inert`, both put back straight after.
       let overlappedBy: string | null = null;
-      const under: string[][] = points.map(() => []);
+      const under: { fill: string; at: number }[][] = points.map(() => []);
       const lift = document.createElement("style");
       lift.textContent = "*, *::before, *::after { pointer-events: auto !important; }";
       document.head.append(lift);
-      const inert = [...document.querySelectorAll("[inert]")];
-      for (const e of inert) e.removeAttribute("inert");
+      const inert = [...document.querySelectorAll("[inert]")].map((e) => [e, e.getAttribute("inert") ?? ""] as const);
+      for (const [e] of inert) e.removeAttribute("inert");
       try {
         points.forEach(([x, y], p) => {
           if (overlappedBy) return;
@@ -236,20 +271,26 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
               if (opaque(e)) break;
               continue;
             }
-            if (svgText && below && e instanceof SVGElement && SHAPES.has(e.tagName.toUpperCase()) &&
+            if (svgText && below && e instanceof SVGElement &&
                 (e as SVGGraphicsElement).ownerSVGElement === (node as SVGGraphicsElement).ownerSVGElement) {
-              const f = getComputedStyle(e);
-              if (f.fill !== "none") under[p]?.push(withAlpha(f.fill, parseFloat(f.fillOpacity) * parseFloat(f.opacity)));
-              continue;
+              const laid = underShape(e, x, y);
+              if (laid) {
+                under[p]?.push(laid);
+                continue;
+              }
+              overlappedBy = name(e);
+              return;
             }
             if (painted(e, x, y)) {
               overlappedBy = name(e);
               return;
             }
           }
-          for (const { e, reach } of shadows) {
+          for (const { e, parts } of shadowed) {
             if (e === node || e.contains(node) || node.contains(e)) continue;
-            if (within(x, y, reach) && !within(x, y, e.getBoundingClientRect())) {
+            const box = e.getBoundingClientRect();
+            if (within(x, y, box)) continue;
+            if (parts.some((part) => within(x, y, reachOf(box, part)))) {
               overlappedBy = `the shadow of ${name(e)}`;
               return;
             }
@@ -257,7 +298,7 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         });
       } finally {
         lift.remove();
-        for (const e of inert) e.setAttribute("inert", "");
+        for (const [e, value] of inert) e.setAttribute("inert", value);
       }
       const style = getComputedStyle(node);
       // The ink: an SVG label's `fill` (its opacity folded in), else what the text is painted with,
@@ -271,8 +312,9 @@ async function read(page: Page, asked: Asked[]): Promise<Sample[]> {
         color: ink, fontSize: style.fontSize, fontWeight: style.fontWeight,
       };
     });
-    probeColour.remove();
-    return out;
+    } finally {
+      probeColour.remove();
+    }
   }, asked);
 }
 

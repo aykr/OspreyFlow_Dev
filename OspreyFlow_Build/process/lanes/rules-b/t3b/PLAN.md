@@ -9,7 +9,7 @@
 ## The probe (`a11y/undecidedContrast.ts`)
 1. **Points along the text, not three per box.**
    - Sample every 8px along each of the node's own text boxes, at mid-height. Where axe says partly obscured, take three rows (20%, 50%, 80%).
-   - All line boxes, capped at 400 points per node. Over the cap, the node is unmeasurable.
+   - All line boxes, capped at 600 points per node (amended in the fix pass: first written as 400, and the first build widened the spacing past it). Over the cap, the node is unmeasurable, never sampled more thinly.
    - Points come from the node's own direct text nodes, so a descendant's background under that text is seen.
 2. **What paints, more fully:**
    - an SVG root's filter, border or shadow;
@@ -20,7 +20,9 @@
 4. **SVG ink:**
    - SVG text is read from `fill` (and `fill-opacity`);
    - HTML text from `-webkit-text-fill-color` when it is set apart from `color`.
-5. **SVG shapes under SVG text** (Show as BPMN's task box) are surfaces at that point, by their computed `fill` and `fill-opacity`, not covers. A shape over the text, or one whose fill cannot be read (a gradient or pattern `url(#…)`), stays a cover.
+5. **SVG shapes under SVG text** (Show as BPMN's task box): after merger-c2's review, a fail-closed allowlist.
+   - Only a rect, circle, ellipse, polygon or path counts, and only where its colour fill covers the point and its stroke does not, with no filter, mask or blend from it up to the ancestor it shares with the words.
+   - It is laid at that ancestor's place in the chain, with its own branch's opacities. Anything else is a cover.
 
 ## The judgement (`src/color/textContrast.ts`)
 6. **The pairs cap** is checked before each flatMap, from the product of the counts. `gradientSurfaces` says why it refused (a picture, an unread stop, too many backgrounds), and judge words each.
