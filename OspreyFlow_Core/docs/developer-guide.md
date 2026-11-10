@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.30** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.31** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.31 | 2026-11-10 | Studio's L1.5 and platform's P5 as built. §3.2: the expert steps offered by + Step in expert mode, with `write_sql_transforms`; new §3.4b: the SQL transform and the fuzzy match, their sandbox and limits, disclosed in Test, runs and 4 Runs; Admin → Connections' four kinds. §7.8: proposed link types only on 1 Model (Admin's Proposed types removed), its count and *Needs you*. §9.1: a dataset's gazetteers. |
 | 1.30 | 2026-11-10 | §3: 4 Runs lists Analyst promotions and Removed cases' layers. §9.1: the routes of promotion, its review and a removed case's layer, and Admin's delete of one. §7.8: Admin's screen offers dry runs, though its delete route exists. |
 | 1.29 | 2026-11-10 | Promotion as built (case lane's L3.4). §7.8: promotion as one load, the Studio's *Analyst promotions* in 4 Runs with its review, the revert command, and a removed case's layer merged or deleted. §9.1: an alert's address also asks Rules and Monitoring's gate. |
 | 1.28 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §1: the four places; the architecture has its own guide. §3: the Studio's four steps (1 Model, 2 Sources, 3 Pipelines, 4 Runs), the readiness strip, guided and expert mode; *Make live* and its owner step; SQL, API and JSON sources and screening lists in 2 Sources; staging steps with a live sample; expert steps coming. §6: held rows in Rules and Monitoring and 4 Runs; Admin → Operations. New §7.8: a case's analyst layer, drawn datasets, link types proposed by analysts, and promotion (coming). §9.1: the routes of views, boards, drawings, link types, an alert's address, dataset models, ownership, model and map administration and the grading scheme. §9.3: the commands. Coming, and said so: releases between environments. |
@@ -155,8 +156,10 @@ A pipeline is a chain of steps, each with one job:
   domain model.
 - Every change is saved as you make it. A pipeline with a cycle, a second domain model, a source
   that reaches no load, or an extract not fed by a map is refused, in words, before it is saved.
-- *Coming:* the **expert steps**, a SQL transform and a fuzzy match. The canvas names them and
-  shows them read-only; their editor is not built.
+- **The expert steps**, a **SQL transform** and a **Fuzzy match** (section 3.4b), are offered by
+  **+ Step** in expert mode only, and only to a holder of `write_sql_transforms`, a right no
+  built-in role holds and an administrator gives on its own. Guided mode shows them read-only
+  ("Expert step, read-only here"). **Show YAML** opens the pipeline as YAML.
 
 ### 3.3 Domain model
 
@@ -203,8 +206,8 @@ named by an administrator (`/v1/admin/connections`, with a test), and its secret
 Conduit alone (`OSPREY_CONNECTION_SECRET_<NAME>`), never written into a recipe. A connector reaches no
 private host, this machine or the cloud's metadata service unless the operator admits that host or
 network in `osprey.yaml`'s `connectors.private_hosts` (administration guide, appendix A). A source's
-refresh can be paused and resumed. *Coming:* defining a database or API connection on Admin
-→ Connections' screen, which today names file connections.
+refresh can be paused and resumed. Admin → Connections names a connection of each kind: *Files*,
+*SQL database*, *HTTP API* or *JSON files*, with its read-only login and the name of its secret.
 
 **File connectors.** The catalogue lists every kind of source OspreyFlow is designed for —
 communications records, mobile-device extractions, financial records, vehicle and movement data,
@@ -220,6 +223,31 @@ the pipeline with a drawer of typed settings (no expressions in guided mode): **
 normalise), **union** and **dedupe**. Each drawer shows a **live sample** over the first ten rows of
 each source, refused in the same words a save would be, and the Map maps the last step's table,
 profiled. A run records each step's counts; *coming:* drawing them on the run's report.
+
+### 3.4b The expert steps
+
+An expert step is for what the guided steps cannot say. Its drawer says "An expert step: it needs the
+right to write SQL transforms, and every run report and Test disclose it." Without
+`write_sql_transforms` the step is read-only, and a change to it is refused ("…which needs the right
+to write SQL transforms (write_sql_transforms), granted by an administrator. The pipeline's other
+steps can be edited without it.").
+
+- **SQL transform** asks for a **Step name**, the **Tables it reads**, one **SELECT**, and **What it
+  does, in plain words**; **Check SQL** checks it. It runs in a private, locked DuckDB with no file,
+  network or temporary folder, one thread, 512 MB of memory and 30 seconds, and returns at most
+  1,000,000 rows or 256 MB. What the sandbox refuses is said in words: a SELECT that "reads a file or
+  the network, which is disabled by configuration", that "cannot be read as SQL", that "names a table
+  or function that does not exist in the sandbox", or more than one statement.
+- **Fuzzy match** compares a **Left table** with a **Right table**, each comparison by *Name
+  similarity (Jaro-Winkler)*, *Spelling distance (Levenshtein)* or *Exactly the same*, within a
+  **Blocking key** (exact, soundex or year), above a **Threshold** (0.85 unless you choose; part of
+  the pipeline's version), with a **Column to bring across**. It is always the last staging step, and
+  more than a million pairs without a blocking key is refused. It writes an **inferred** `SAME_AS`
+  between two elements of the map, never a merge: a person confirms it.
+
+**Disclosed everywhere.** *Test* lists **Expert steps in this test**, each run's report **Expert
+steps in this run**, and 4 Runs **Expert steps in this pipeline**, each by its name, what it reads
+and its plain words.
 
 ### 3.5 Profile
 
@@ -719,8 +747,9 @@ No pipeline loads into it and no rule runs on it.
 **Link types proposed by analysts.** An analyst who finds no link type that fits proposes one in the
 case; it is usable there at once, marked proposed. A holder of `accept_types` who may work on the
 dataset decides it in 1 Model: **accept** writes it into the draft domain model (never by its proposer),
-and it goes live with the next *Make live*; **decline** ends it. A proposal made before proposals named a
-dataset is decided in Admin → Proposed types, with `manage_ontology`.
+and it goes live with the next *Make live*; **decline** ends it, with a reason. The tab reads **1 Model ·
+‹n› proposed** while proposals wait for you, and the top bar's **Needs you** lists them (user guide,
+section 3).
 
 **Promotion.** An Author of a case who holds `promote_to_dataset` sends items from their own board into
 the case's dataset with **Promote…** (user guide, section 5.14). A promotion is **one load**, all or
@@ -813,6 +842,7 @@ signed in like every other route. Its `info.version` is the release the deployme
 | `GET /v1/datasets/{dataset_id}/promotions`, `…/promotions/{promotion_id}`; `POST …/promotions/{promotion_id}/decision` | `review_promotions`; deciding, one of the dataset's Authors, never the promotion's sender |
 | `GET /v1/datasets/{dataset_id}/removed-cases`; `GET …/layer-merges/{grant_id}` | one of the dataset's Authors (owning needs no right) |
 | `POST …/removed-cases/{case_id}/merge-sheet`; `POST`, `DELETE …/layer-merges/{grant_id}` (merge, cancel); `POST …/removed-cases/{case_id}/delete/dry-run`; `DELETE …/removed-cases/{case_id}/layer` | `investigate`, as one of the dataset's Authors |
+| `GET …/map/gazetteers` (the gazetteers a case's map searches, by name); `PUT`, `DELETE /v1/datasets/{dataset_id}/gazetteers/{gazetteer_id}` (a gazetteer of the dataset's own unit, its places copied in) | `investigate`; adding and removing, `run_pipelines` |
 | `POST /v1/admin/datasets/{dataset_id}/cases/{investigation_id}/delete` | `administer_system`, within the dataset's own unit (another unit's administrator is answered as for no such dataset) |
 | `GET …/link-types`; `POST …/link-types/promotable` | `investigate` |
 | `POST …/link-types`; `POST …/link-types/{proposal_id}/withdraw` | `propose_types`, Editor |

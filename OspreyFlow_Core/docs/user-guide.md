@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.40** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
+**Version 1.41** · 2026-11-10 · For OspreyFlow v0.4.12 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.41 | 2026-11-10 | Admin's L2.7 as built. §3: Home's *What you can do, and what you answer for*, with *Why can I do this?*; *Needs you* in the top bar. |
 | 1.40 | 2026-11-10 | Promotion as built (case lane's L3.4). §5.14: *Promote…*, its sheet and its checks, one load into the case's dataset, reviewed where the dataset asks; *Promotions from this board*; the board's Alerts panel and the canvas's alert badge. §7.1: the place's tabs as built, Connection strength in the Glass's rail. Still coming: Figures' Drawing panel (the Conduit does not count it yet). |
 | 1.39 | 2026-11-09 | Brought up to the product as built (docs lane, D2a). §1: the four places. §3: Home, the place switcher and the context banner. §4: no branches; the new-case form; home cases, a dataset's Authors, teams; levels and roles in the words the Glass's help uses; views in the Cases drawer. §5: the rail, the view switch and More views; §5.2 *Save as a view*; §5.3 the basemap switch and *Find a place*; new §5.13 case views, §5.14 drawing boards, §5.15 your own link types. §9: the case's Figures tab, Dashboards on the rail, the Alert monitoring board, and the Reports Viewer's journey. §7 and the alerts it describes wait for the alerts journey (one queue, what raises alerts, watches, team routing, Raise an alert, the rule editor); its place is now Rules and Monitoring. Coming, and said so: promoting drawn items, *What you can do* on Home. |
 | 1.38 | 2026-11-05 | Describes v0.4.12 (v0.4.11 was not released). No change to its content. |
@@ -142,8 +143,18 @@ clearance and your roles, and then shows:
   made;
 - **Ways of working**: four short tips.
 
-The OspreyFlow mark at the top left always brings you back. *Coming:* a section saying what you can
-do and what you answer for, worked out for you.
+Below them, **What you can do, and what you answer for** is worked out for you: **Places you can
+open**; **What you answer for** (each case you are an Author of, the datasets whose promotions you
+review, and proposed link types waiting for you, each with a *Why:* line), or "Nothing waits for
+you."; **Your level in each case**; and, folded, **What you can do, by place**, where each right has
+**Why can I do this?** ("Given by your Analyst role.").
+
+**Needs you**, in the top bar beside your account, appears when something waits for you: a promotion
+waiting past the days your administrator set (for one who may review it), and proposed link types to
+decide in a dataset you work on. Choosing one opens where it is decided, when your rights reach it.
+It is hidden when nothing waits.
+
+The OspreyFlow mark at the top left always brings you back.
 
 **Moving between places.** The **place switcher** in the top bar lists the same places; under the
 GOV.UK theme it sits inside the GOV.UK header. Under it, a **context banner** says where you are: in

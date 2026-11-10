@@ -791,7 +791,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
 | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
 | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
-| `ospreyflow map build <region> [--planetiler-jar <path>]` | Builds the tier-1 basemap in the Conduit (the jar copied into the tiles folder first); while the Conduit's image carries no Java, it says so and builds nothing |
+| `ospreyflow map build <region> --unit <unit> [--planetiler-jar <path>]` | Builds the tier-1 basemap in the Conduit (the jar copied into the tiles folder first), and its place names as the gazetteer dataset `gazetteer-osm-<region>`, held by `--unit` (required; an unknown unit, or a re-build for another unit, is refused) |
 | `ospreyflow uninstall [--keep-data] [--yes]` | Removes the containers; with `--keep-data` the data volumes stay, and the next install of the same deployment finds them; without it cases, accounts and indexes go too. Your checkout, `osprey.yaml` and your own folders are never touched. (Before the stores had named volumes, section 13, a reinstall did not find the stores' data) |
 
 Every command takes `--name <name>` to act on a deployment kept by name, or `--name default` for the
@@ -873,13 +873,12 @@ Under the GOV.UK theme the list is a GOV.UK side navigation.
 | People | **Roles** | `manage_people` | The built-in roles and their rights; custom roles; teams, their leads and cover (sections 9.2 and 9.8) |
 | People | **Dashboard identities** | `manage_dashboards` | Register a dashboard's account (its secret shown once), see when it last pulled, remove it |
 | Data | **Datasets** | `administer_system` | Every dataset's kind, unit, highest marking, egress, promotion policy, Authors and linked cases (section 9.10) |
-| Data | **Connections** | `administer_system` | The named connections pipelines read files through |
-| Data | **Proposed types** | `manage_ontology` | Relationship types analysts proposed with no dataset named: promote, reject or retire |
+| Data | **Connections** | `administer_system` | The named connections pipelines read through: files, a SQL database, an HTTP API or JSON files |
 | Running | **Operations** | `operate_schedules` | Every scheduled or watched pipeline (pause, resume, run now, change its time, its runs), and promotions waiting for review (section 9.11) |
 | Running | **System** | `administer_system` | Each component's health, the models in use, the version and whether an update exists, and who dataset owners may be |
 | Running | **Models** | `manage_models` | Model engines, each job's model, their keys, limits and usage (section 10.1) |
 | Running | **Maps** | `manage_geospatial` | Map providers and their keys, the local basemap, prefetch areas (section 10a) |
-| Policies | **Grading scheme** (coming) | `administer_system` | The deployment's grading scheme, read-only, with the command that changes it (section 8 has the command today) |
+| Policies | **Grading scheme** | `administer_system` | The deployment's grading scheme, read-only, with **Copy the grading change command** (section 8) |
 | Policies | **Approval rights** (coming) | `administer_system` | Who may approve each kind of decision, and a warning where fewer than two can |
 | Policies | **Uploads** (coming) | `administer_system` | The largest picture an analyst may add, and the formats accepted |
 | Audit | **Audit** | `read_audit` | The audit log, filtered by who, what and when (section 9.11) |
@@ -908,8 +907,12 @@ role**) and the deployment's own under **Custom roles**, each with **Edit**, **C
 who holds it. **New role** asks for a **Role name** and its rights, grouped as Cases, Investigation (the
 Glass), Alerts and rules, Ingest Studio, Reporting, Administration and Other. **Nobody can give more
 than the person giving it holds** — clearance included — which is why the first administrator holds
-the highest clearance. A single right can also be given on its own. *Coming:* a short tip beside each
-role and right in Admin, and a refusal that names the roles that could take an action.
+the highest clearance. A single right can also be given on its own. Each built-in role, a custom
+role, a team and its lead have a short tip in Roles, and People folds open **What each role and level
+lets a person do**. A refusal for a missing right names the roles that have it: "You need ‹Right›; the
+‹Role› role has it. Ask an administrator to give it to you." (in Admin, after "Not done.").
+`write_sql_transforms`, the Ingest Studio's expert steps, is in no built-in role: give it on its own
+(developer guide, section 3.4b).
 
 Each right, in plain words:
 
