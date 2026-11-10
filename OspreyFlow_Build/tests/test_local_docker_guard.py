@@ -41,10 +41,15 @@ INNER = {
         "    subprocess.run(['sh', '-c', 'docker version'], check=True)\n"
     ),
     "test_in_a_child.py": (
-        "import subprocess\n"
+        "import subprocess, sys\n"
         "def test_child():\n"
-        "    done = subprocess.run(['env', 'docker', 'version'], capture_output=True, text=True)\n"
-        "    assert done.returncode == 1 and 'refused: a server-only test' in done.stderr\n"
+        "    done = subprocess.run(['make', '-v'], capture_output=True, text=True)\n"
+        "    assert done.returncode == 0\n"
+        "def test_a_python_child():\n"
+        "    # The real shape: a child Python process (python -m harness.apply) shelling out.\n"
+        '    code = \'import subprocess; print(subprocess.run(["docker", "info"]).returncode)\'\n'
+        "    done = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)\n"
+        "    assert done.stdout.strip() == '1' and 'refused: a server-only test' in done.stderr\n"
     ),
 }
 
@@ -89,9 +94,12 @@ def test_a_docker_call_skips_in_words_and_starts_nothing(tmp_path: Path) -> None
     done, ran = _inner(tmp_path, switch=True)
     out = done.stdout + done.stderr
     assert not ran.exists(), f"the docker stand-in was started: {ran.read_text()}\n{out}"
-    assert "1 passed, 3 skipped" in out, out  # the child's refusal is the one passed
-    said = [line for line in out.splitlines() if line.startswith("SKIPPED [3]")]
-    assert said and "a server-only test: it calls the docker CLI" in said[0], out
+    assert "2 passed, 3 skipped" in out, out  # the child refused, and a call not docker's run
+    said = [line for line in out.splitlines() if line.startswith("SKIPPED")]
+    assert len(said) == 3 and all(
+        "a server-only test: it calls the docker CLI" in x for x in said
+    ), out
+    assert "(docker build -q .)" in out and "(sh -c docker version)" in out, out  # the call, named
     assert "no-local-stacks" in out and "stack_lease.sh offline|live" in out, out
 
 
@@ -100,8 +108,8 @@ def test_without_the_switch_the_call_goes_through(tmp_path: Path) -> None:
     out = done.stdout + done.stderr
     assert ran.exists(), out
     assert "skipped" not in out, out
-    # The stand-in answers 0 throughout; the child test expects a refusal and so fails.
-    assert "3 passed, 1 failed" in out or "1 failed, 3 passed" in out, out
+    # The stand-in answers 0 throughout; the Python child expects a refusal and so fails.
+    assert "1 failed, 4 passed" in out, out
 
 
 @pytest.mark.parametrize(
@@ -114,6 +122,18 @@ def test_without_the_switch_the_call_goes_through(tmp_path: Path) -> None:
         (["sh", "-c", "docker build -q ."], True),
         (["bash", "-c", "docker info"], True),
         ([Path("/usr/local/bin/docker"), "info"], True),
+        (["env", "FOO=1", "docker", "info"], True),
+        (["sudo", "-u", "ci", "docker", "ps"], True),
+        (["timeout", "60", "docker", "build", "."], True),
+        (["timeout", "-s", "KILL", "60", "env", "docker", "info"], True),
+        (["bash", "-e", "-o", "pipefail", "-c", "set -e; docker info"], True),
+        (["sh", "-lc", "cd x && docker build ."], True),
+        ("DOCKER_BUILDKIT=1 docker build .", True),
+        ("make x | docker load", True),
+        (["env", "git", "status"], False),
+        (["timeout", "5", "sleep", "1"], False),
+        (["sh", "-c", "echo docker"], False),
+        (["sudo", "-u", "docker", "id"], False),
         (["git", "status"], False),
         (["sh", "-c", "make test"], False),
         (["dockerd-rootless.sh"], False),
@@ -130,3 +150,22 @@ def test_the_switch_is_read_where_stack_lease_reads_it(tmp_path: Path) -> None:
         tmp_path / "no-local-stacks"
     )
     assert local_docker_guard.switch_path({}) == Path.home() / ".ospreyflow" / "no-local-stacks"
+
+
+def test_the_guard_puts_back_what_it_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "no-local-stacks").touch()
+    monkeypatch.setenv("OSPREY_LEASE_DIR", str(tmp_path))
+    monkeypatch.setattr(local_docker_guard, "_installed", {})  # this session's own guard left alone
+    popen, path = subprocess.Popen, os.environ["PATH"]
+    try:
+        local_docker_guard.install()
+        shim_dir = Path(os.environ["PATH"].split(os.pathsep)[0])
+        assert (shim_dir / "docker").is_file() and subprocess.Popen is not popen
+        local_docker_guard.uninstall()
+        assert not shim_dir.exists()
+        assert os.environ["PATH"] == path and subprocess.Popen is popen
+    finally:
+        local_docker_guard.uninstall()
+        subprocess.Popen, os.environ["PATH"] = popen, path  # type: ignore[misc]

@@ -19,7 +19,9 @@ process the test starts (`python -m harness.apply`, `make`) is past the wrapper,
 from __future__ import annotations
 
 import os
+import re
 import shlex
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Sequence
@@ -36,40 +38,90 @@ def switch_path(environ: os._Environ[str] | dict[str, str] | None = None) -> Pat
     return Path(env.get("OSPREY_LEASE_DIR") or Path.home() / ".ospreyflow") / SWITCH
 
 
-def why(switch: Path) -> str:
+def why(switch: Path, call: str = "") -> str:
+    named = f" ({call})" if call else ""
     return (
-        f"a server-only test: it calls the docker CLI, and local stacks are off on this machine "
-        f"({switch}); run it on the test server (scripts/stack_lease.sh offline|live <lane>)"
+        f"a server-only test: it calls the docker CLI{named}, and local stacks are off on this "
+        f"machine ({switch}); run it on the test server "
+        "(scripts/stack_lease.sh offline|live <lane>)"
     )
 
 
-def _program(args: Any) -> str | None:
-    """The program a Popen call starts: the first word of a command string, or of an argv."""
+#: Programs that run the command after their own options: `env FOO=1 docker …`,
+#: `sudo -u x docker …`, `timeout 60 docker …` (the independent review's shapes).
+_WRAPPERS = {"env", "sudo", "timeout", "nice", "nohup", "stdbuf", "exec", "command"}
+#: A wrapper's option that takes the next word as its value.
+_VALUED = {
+    "sudo": {"-u", "-g", "-C", "-D", "-h", "-p", "-r", "-t", "-U"},
+    "nice": {"-n"},
+    "timeout": {"-s", "-k", "--signal", "--kill-after"},
+    "env": {"-u", "-C", "-S"},
+}
+_SHELLS = {"sh", "bash", "zsh", "dash", "ksh"}
+_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def _words(args: Any) -> list[str] | None:
+    """A Popen call's argv as words; None for a command string."""
     if isinstance(args, (str, bytes)):
-        text = args.decode() if isinstance(args, bytes) else args
-        try:
-            words = shlex.split(text)
-        except ValueError:
-            words = text.split()
-        return os.path.basename(words[0]) if words else None
-    if isinstance(args, Sequence) and args:
-        first = args[0]
-        if isinstance(first, (str, bytes, Path)):
-            return os.path.basename(os.fsdecode(first))
         return None
     if isinstance(args, os.PathLike):
-        return os.path.basename(os.fsdecode(args))
-    return None
+        return [os.fsdecode(args)]
+    if isinstance(args, Sequence):
+        return [os.fsdecode(a) if isinstance(a, (str, bytes, os.PathLike)) else "" for a in args]
+    return []
+
+
+def _docker_in_argv(words: list[str]) -> bool:
+    while words and _ASSIGNMENT.match(words[0]):
+        words = words[1:]
+    while words and os.path.basename(words[0]) in _WRAPPERS:
+        wrapper, words = os.path.basename(words[0]), words[1:]
+        while words and (words[0].startswith("-") or _ASSIGNMENT.match(words[0])):
+            takes = words[0] in _VALUED.get(wrapper, set())
+            words = words[2:] if takes else words[1:]
+        if wrapper == "timeout" and words:
+            words = words[1:]  # its duration
+    if not words:
+        return False
+    program = os.path.basename(words[0])
+    if program == "docker":
+        return True
+    if program in _SHELLS:
+        for i, word in enumerate(words[1:], start=1):
+            if word.startswith("-") and not word.startswith("--") and "c" in word[1:]:
+                return i + 1 < len(words) and _docker_in_command(words[i + 1])
+    return False
+
+
+def _docker_in_command(text: str) -> bool:
+    """Whether any simple command in a shell string starts the docker CLI."""
+    for segment in re.split(r"&&|\|\||[;|&\n()]", text):
+        try:
+            words = shlex.split(segment)
+        except ValueError:
+            words = segment.split()
+        if _docker_in_argv(words):
+            return True
+    return False
 
 
 def starts_docker(args: Any) -> bool:
-    """Whether a Popen call's `args` start the docker CLI, directly or as `sh -c "docker …"`."""
-    if _program(args) == "docker":
-        return True
-    if isinstance(args, Sequence) and not isinstance(args, (str, bytes)) and len(args) >= 3:
-        if _program(args) in {"sh", "bash", "zsh"} and args[1] == "-c":
-            return _program(args[2]) == "docker"
-    return False
+    """Whether a Popen call's `args` start the docker CLI: directly, behind a wrapper (`env`,
+    `sudo`, `timeout` …), or anywhere in a shell's command string (`sh -c "cd x && docker …"`)."""
+    words = _words(args)
+    if words is None:
+        text = args.decode() if isinstance(args, bytes) else args
+        return _docker_in_command(text)
+    return _docker_in_argv(words)
+
+
+def _named(args: Any) -> str:
+    words = _words(args)
+    text = (
+        (args.decode() if isinstance(args, bytes) else args) if words is None else " ".join(words)
+    )
+    return text if len(text) <= 60 else text[:57] + "..."
 
 
 def guarded_popen(popen: type[subprocess.Popen[Any]], switch: Path) -> type[subprocess.Popen[Any]]:
@@ -78,7 +130,7 @@ def guarded_popen(popen: type[subprocess.Popen[Any]], switch: Path) -> type[subp
     class Guarded(popen):  # type: ignore[valid-type, misc]
         def __init__(self, args: Any, *rest: Any, **kwargs: Any) -> None:
             if switch.exists() and starts_docker(args):
-                pytest.skip(why(switch), allow_module_level=True)
+                pytest.skip(why(switch, _named(args)), allow_module_level=True)
             super().__init__(args, *rest, **kwargs)
 
     return Guarded
@@ -95,15 +147,33 @@ def refusing_docker(directory: Path, switch: Path) -> Path:
     return shim
 
 
+_installed: dict[str, Any] = {}
+
+
 def install() -> None:
     switch = switch_path()
     if not switch.exists():
         return
-    subprocess.Popen = guarded_popen(subprocess.Popen, switch)  # type: ignore[assignment, misc]
     shim_dir = Path(tempfile.mkdtemp(prefix="osprey-no-docker-"))
+    _installed.update(popen=subprocess.Popen, path=os.environ.get("PATH", ""), shim_dir=shim_dir)
+    subprocess.Popen = guarded_popen(subprocess.Popen, switch)  # type: ignore[assignment, misc]
     refusing_docker(shim_dir, switch)
-    os.environ["PATH"] = f"{shim_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+    os.environ["PATH"] = f"{shim_dir}{os.pathsep}{_installed['path']}"
+
+
+def uninstall() -> None:
+    """Put back what `install` changed, and remove its folder."""
+    if not _installed:
+        return
+    subprocess.Popen = _installed["popen"]  # type: ignore[misc]
+    os.environ["PATH"] = _installed["path"]
+    shutil.rmtree(_installed["shim_dir"], ignore_errors=True)
+    _installed.clear()
 
 
 def pytest_configure(config: pytest.Config) -> None:
     install()
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    uninstall()
