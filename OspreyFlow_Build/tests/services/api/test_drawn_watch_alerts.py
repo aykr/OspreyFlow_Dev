@@ -260,3 +260,62 @@ async def test_a_failing_drawn_watch_run_is_audited_never_the_loads_failure(
     assert failed["resolved_query"] == {"load_id": "load-9", "drawn_watches": True,
                                         "error": "the alert store is down"}  # fmt: skip
 
+
+async def test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`run_recipe_as`, the one run path (the route, the scheduler and the seed), runs the drawn
+    watches after the other watches, on the recipe's dataset, with what the load published."""
+    import dataclasses
+    from unittest.mock import MagicMock
+
+    from services.api import recipe_run as run_module
+
+    from adapters.media_objectstore.testing import InMemoryMediaStore
+    from schemas.ingest import LoadReport
+
+    seen: list[dict[str, Any]] = []
+
+    async def nothing(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def loaded(*args: Any, **kwargs: Any) -> LoadReport:
+        return LoadReport(load_id="load-7", recipe_id="r", recipe_version=1, nodes_created=1)
+
+    async def published(*args: Any, **kwargs: Any) -> ChangeStreamEntry:
+        return _entry("p-new")
+
+    async def drawn_run(deps: Any, entry: ChangeStreamEntry, **kwargs: Any) -> None:
+        seen.append({"node_ids": entry.node_ids, **kwargs})
+
+    async def started(**kwargs: Any) -> str:
+        return "run-1"
+
+    monkeypatch.setattr(run_module, "run_published_recipe", loaded)
+    monkeypatch.setattr(run_module, "_rule_gate", nothing)
+    monkeypatch.setattr(
+        run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", nothing
+    )
+    monkeypatch.setattr(
+        run_module, "ChangeStreamWriter", lambda valkey: SimpleNamespace(publish=published)
+    )
+    monkeypatch.setattr(run_module, "_evaluate_watches_best_effort", nothing)
+    monkeypatch.setattr(run_module, "_run_drawn_watches_best_effort", drawn_run)
+    monkeypatch.setattr(run_module, "resolve_source_handling", lambda recipe: None)
+    runs = MagicMock()
+    runs.start, runs.finish = started, nothing
+    stand_ins: dict[str, Any] = {
+        "recipe_runs": runs, "audit": SimpleNamespace(record=nothing),
+        "media": InMemoryMediaStore(), "config": SimpleNamespace(post_ingest_resolution=False),
+    }  # fmt: skip
+    names = [f.name for f in dataclasses.fields(run_module.RecipeRunDeps)]
+    deps = run_module.RecipeRunDeps(**{n: stand_ins.get(n, object()) for n in names})
+    recipe = SimpleNamespace(recipe_id="r", version=1, pipeline=None, row_template=None,
+                             dataset_id="src")  # fmt: skip
+    await run_module.run_recipe_as(
+        deps, principal=LOADER, recipe=recipe,  # type: ignore[arg-type]
+        investigation_id=K, source_location="x.csv", trigger="manual",
+    )  # fmt: skip
+    (call,) = seen
+    assert (call["node_ids"], call["dataset_id"], call["investigation_id"]) == (["p-new"], "src", K)
+    assert call["principal"] is LOADER and call["load_id"]
