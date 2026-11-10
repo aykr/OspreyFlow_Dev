@@ -97,6 +97,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-145 Amendment 9 | Disable's full transfer list as built (L2.5b): a view's or board's recipient held to the case's ceiling until a view's count is per reader (rule 3, decided on the strict reading); Admin › System's count said when it cannot be read, and the dry-run report's place | admin | 2026-11-10 | written |
 | ADR-147 Amendment 3 | Gazetteer-only identifiers (osm_id, os_place_id, gss_code, gnis_feature_id, tiger_geoid, nad_address_id) withheld from every node for every request reader, whatever dataset it sits in, and a Location matched on its name alone when it carries one; uprn kept on a case's own Location (Amendment 1 point 3a); decided on the strict reading (CARRIES row 23) | platform-b | 2026-11-10 | reserved |
 | ADR-148 Amendment 1 | The cloud-platform profile as built (P7); the context table's six Dockerfiles corrected to eight | platform | 2026-11-10 | reserved |
+| ADR-141 Amendment 1 | Phase 10 as built (L1.7): open question 1 (the grant per pipeline, by Owned externally), open question 2 (a quota refusal not counted toward a pause), the run API, Operations' runs and quotas, and what is left | studio | 2026-11-10 | reserved |
 
 ## Baseline
 
