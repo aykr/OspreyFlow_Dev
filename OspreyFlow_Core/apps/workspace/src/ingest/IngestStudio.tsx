@@ -245,6 +245,7 @@ function Studio({
             runs={data.runs}
             level={servingCase?.level ?? null}
             canRevert={rights?.has("revert_loads") ?? false}
+            canSchedule={rights?.has("schedule_pipelines") ?? false}
             username={username ?? null}
             onChanged={data.reload}
           />

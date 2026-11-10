@@ -46,6 +46,7 @@ ROUTE_RIGHTS = {
     "export_dataset_release": "edit_target_model",
     "import_dataset_release": "edit_target_model",
     # ADR-141 (phase 10): owned externally, the run API, the quota bar and Operations' figures.
+    "read_pipeline_owned_externally": "schedule_pipelines",
     "mark_pipeline_owned_externally": "schedule_pipelines",
     "clear_pipeline_owned_externally": "schedule_pipelines",
     # A service identity's routes: no person's right, since no person calls them; the client's

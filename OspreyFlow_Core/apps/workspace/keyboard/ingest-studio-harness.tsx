@@ -254,6 +254,11 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   if (path === "/v1/handling-scheme") return reply(SCHEME);
   // ADR-140 Amendment 9 decision 4 (L1.7): Studio › Releases. The export's files; an import's plan,
   // a dry run when asked, the drafts it wrote otherwise.
+  // ADR-141 (L1.7): a deployed pipeline's quota and whether it is owned externally.
+  if (path.endsWith("/quota") && method === "GET")
+    return reply({ quota: { scope: "dataset", key: "harbour-extract", runs_per_day: 4, alert_at_share: 0.8 }, runs_today: 1 });
+  if (path.endsWith("/owned-externally") && method === "GET") return reply(null);
+  if (path.endsWith("/owned-externally") && method === "PUT") return reply(JSON.parse(String(init?.body)));
   if (path === "/v1/datasets/harbour-extract/release" && method === "GET")
     return reply({ files: { "release.yaml": "apiVersion: ospreyflow.io/v1\n", "model.yaml": "packs: {}\n" }, left_out: 0 });
   if (path === "/v1/datasets/harbour-extract/release/import" && method === "POST") {

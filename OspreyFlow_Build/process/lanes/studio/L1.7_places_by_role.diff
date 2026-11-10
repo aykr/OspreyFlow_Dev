@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
-index a585883..4869fae 100644
+index a585883..061212a 100644
 --- a/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
 +++ b/OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json
 @@ -93,6 +93,7 @@
@@ -10,7 +10,15 @@ index a585883..4869fae 100644
      "recipe_runs_route",
      "remove_dataset_gazetteer_route",
      "run_studio_recipe"
-@@ -568,6 +569,7 @@
+@@ -130,6 +131,7 @@
+     "add_deployment_list",
+     "list_deployment_list_imports",
+     "list_deployment_lists",
++    "read_pipeline_owned_externally",
+     "refresh_deployment_list",
+     "set_deployment_list_schedule"
+    ]
+@@ -568,6 +570,7 @@
     "places": [],
     "answered_hidden": [
      "add_dataset_gazetteer_route",
@@ -18,7 +26,18 @@ index a585883..4869fae 100644
      "recipe_runs_route",
      "remove_dataset_gazetteer_route",
      "run_studio_recipe"
-@@ -643,6 +645,8 @@
+@@ -578,7 +581,9 @@
+     "schedule_pipelines"
+    ],
+    "places": [],
+-   "answered_hidden": []
++   "answered_hidden": [
++    "read_pipeline_owned_externally"
++   ]
+   },
+   "right:share_case": {
+    "rights": [
+@@ -643,8 +648,11 @@
     ],
     "places": [],
     "answered_hidden": [
@@ -26,4 +45,7 @@ index a585883..4869fae 100644
 +    "mark_pipeline_owned_externally",
      "pause_recipe_schedule",
      "publish_studio_recipe",
++    "read_pipeline_owned_externally",
      "resume_recipe_schedule",
+     "update_studio_recipe_schedule"
+    ]

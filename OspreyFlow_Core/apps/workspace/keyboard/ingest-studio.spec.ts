@@ -1070,6 +1070,31 @@ test("a release is checked, then imported as drafts, by keyboard", async ({ page
   registerCovered(REGISTRY, "check-and-import-a-release-by-keyboard");
 });
 
+// ADR-141 decisions 6, 9 and 11 (L1.7): the Runs tab's quota bar, Owned externally, and the DAG.
+test("a pipeline is handed to an orchestrator by keyboard, its quota and DAG read", async ({ page }) => {
+  await page.goto(HARNESS);
+  await tab(page, "4 Runs");
+  const region = page.getByRole("region", { name: "External orchestration" });
+  await expect(region.getByText("1 of 4 runs a day")).toBeVisible();
+  const pipeline = region.getByRole("combobox", { name: "Pipeline to orchestrate" });
+  await pipeline.focus();
+  const first = await pipeline.inputValue();
+  await region.getByLabel("The orchestrator's client").focus();
+  await page.keyboard.type("syn-airflow");
+  await region.getByRole("button", { name: "Mark owned externally" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(region.getByRole("status")).toContainText("only syn-airflow may trigger it");
+  const put = (await asked(page)).find((a) => a.method === "PUT" && a.path.endsWith(`/${first}/owned-externally`));
+  expect(JSON.parse(put?.body ?? "{}")).toEqual({ client_id: "syn-airflow" });
+  registerCovered(REGISTRY, "hand-a-pipeline-to-an-orchestrator-by-keyboard");
+  const pin = region.getByLabel("The DAG runs");
+  await pin.focus();
+  await pin.selectOption("this");
+  await expect(region.getByLabel("The Airflow DAG")).toContainText(`ospreyflow run harbour-extract ${first} --version `);
+  await expect(region.getByLabel("The Airflow DAG")).not.toContainText("--version latest");
+  registerCovered(REGISTRY, "read-a-pipelines-airflow-dag-by-keyboard");
+});
+
 test("every registered Ingest Studio action has its own proving test case above", () => {
   assertAllCovered("INGEST_STUDIO_ACTIONS", INGEST_STUDIO_ACTIONS);
 });

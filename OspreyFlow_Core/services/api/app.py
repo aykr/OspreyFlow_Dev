@@ -17346,6 +17346,21 @@ _NO_SUCH_PIPELINE = (
 )
 
 
+@app.get(
+    "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/owned-externally",
+    dependencies=[Depends(require_right(Right.SCHEDULE_PIPELINES))],
+)
+async def read_pipeline_owned_externally(
+    investigation: InvestigationViewerDep,
+    recipe: AuthorizedStudioRecipeDep,
+    studio_recipes: StudioRecipesDep,
+) -> ExternallyOwnedInput | None:
+    """Whether the pipeline is owned externally, and by which client (ADR-141 decision 11); `null`
+    when it is not. The owner is not named here: the Runs tab shows the client alone."""
+    owner = await studio_recipes.external_owner(recipe.recipe_id)
+    return None if owner is None else ExternallyOwnedInput(client_id=owner.client_id)
+
+
 @app.put(
     "/v1/investigations/{investigation_id}/ingest/recipes/{recipe_id}/owned-externally",
     dependencies=_HANDS_A_SCHEDULE,

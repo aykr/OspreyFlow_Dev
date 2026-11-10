@@ -5,6 +5,7 @@
 // decision 14: Deploy neither runs nor schedules). Held rows are the Monitoring tab's panel, reached
 // here with the same rights. *Revert this load* is the operator's command, never a button: a revert
 // runs with the Conduit quiesced (ADR-127 Amendment 9; ADR-140 Amendment 2, the owner's ruling).
+import { ExternalOrchestration } from "./ExternalOrchestration";
 import { useState } from "react";
 
 import { ExpertDisclosure, disclosuresOf } from "../dag/ExpertStepDrawer";
@@ -70,6 +71,8 @@ export interface RunsTabProps {
   onChanged: () => void;
   /** The day the grid ends on; the current day when left out (tests fix it). */
   today?: Date;
+  /** Holds `schedule_pipelines`: may hand a pipeline to an orchestrator (ADR-141 decision 11). */
+  canSchedule?: boolean;
 }
 
 function dayInWords(day: string): string {
@@ -267,6 +270,16 @@ export function RunsTab(props: RunsTabProps) {
       {/* ADR-143 Amendment 2 decision 6 (case's L3.9, by agreement): drawn only for a drawn dataset. */}
       {props.datasetId && <DrawnMerge apiBaseUrl={props.apiBaseUrl} bearerToken={props.bearerToken} datasetId={props.datasetId} onChanged={props.onChanged} />}
 
+      {deployed.length > 0 && (
+        <ExternalOrchestration
+          apiBaseUrl={props.apiBaseUrl}
+          bearerToken={props.bearerToken}
+          investigationId={props.investigationId}
+          datasetId={props.datasetId}
+          deployed={deployed}
+          canSchedule={props.canSchedule ?? false}
+        />
+      )}
       {deployed.length > 0 && (
         <section aria-label="Schedules and folder watches" style={{ display: "grid", gap: "var(--sp-8)" }}>
           <h3 style={{ margin: 0, fontSize: "var(--fs-14)" }}>Schedules and folder watches</h3>
