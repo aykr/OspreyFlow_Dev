@@ -125,21 +125,21 @@ describe("Needs you", () => {
       proposals: [],
       schedule_notices: [
         { notice_id: "nt-2", recipe_id: "r-1", raised_at: "2026-11-10T08:00:00Z",
-          words: "The scheduled run of Daily export was refused: the file was not there." },
+          words: "The scheduled run of Daily export due 10 November 2026 at 06:00 was refused: it no longer reaches its case or its dataset." },
         { notice_id: "nt-1", recipe_id: "r-1", raised_at: "2026-11-09T08:00:00Z",
-          words: "The scheduled run of Daily export failed: the database did not answer." },
+          words: "The scheduled run of Daily export due 9 November 2026 at 06:00 failed. Its pipeline's Runs, in the Ingest Studio, say why." },
       ],
       schedule_notices_total: 2,
     }; // prettier-ignore
     await open(notices);
     fireEvent.click(await screen.findByRole("button", { name: /Needs you · 2/ }));
-    const first = screen.getByText(/was refused: the file was not there/);
+    const first = screen.getByText(/at 06:00 was refused: it no longer reaches its case or its dataset/);
     expect(first.tagName).toBe("SPAN"); // said, focusable, not a button: there is nowhere to open
     expect(first.getAttribute("tabindex")).toBe("0");
     expect(document.getElementById(first.getAttribute("aria-describedby")!)?.textContent).toBe(
       NEEDS_YOU_WORDS.noticeTip,
     );
-    expect(screen.getByText(/the database did not answer/)).toBeTruthy();
+    expect(screen.getByText(/due 9 November 2026 at 06:00 failed/)).toBeTruthy();
     expect(screen.queryByText(/more notice/)).toBeNull();
   });
 

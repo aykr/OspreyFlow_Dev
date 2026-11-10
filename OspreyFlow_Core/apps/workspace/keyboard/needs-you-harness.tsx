@@ -29,9 +29,9 @@ if (new URLSearchParams(location.search).get("notices") === "1") {
   Object.assign(NEEDS, {
     schedule_notices: [
       { notice_id: "SYN-nt-2", recipe_id: "SYN-recipe-1", raised_at: "2026-11-10T06:00:00Z",
-        words: "The scheduled run of Harbour visits export (synthetic) was refused: the file was not there." },
+        words: "The scheduled run of Harbour visits export (synthetic) due 10 November 2026 at 06:00 was refused: it no longer reaches its case or its dataset." },
       { notice_id: "SYN-nt-1", recipe_id: "SYN-recipe-1", raised_at: "2026-11-09T06:00:00Z",
-        words: "The scheduled run of Harbour visits export (synthetic) failed: the database did not answer." },
+        words: "The scheduled run of Harbour visits export (synthetic) due 9 November 2026 at 06:00 failed. Its pipeline's Runs, in the Ingest Studio, say why." },
     ],
     schedule_notices_total: 23,
   });

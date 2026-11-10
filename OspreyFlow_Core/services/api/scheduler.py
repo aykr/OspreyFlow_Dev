@@ -560,7 +560,8 @@ class ScheduleExecutor:
         if owner_id is None or case is None:
             raise _Refused(
                 "the schedule has no owner; set it again from the case it runs in",
-                kind="refused_rights",
+                # No owner: who may run it is gone. An owner with no case to run in: its reach.
+                kind="refused_rights" if owner_id is None else "refused_reach",
             )
         owner = await self._resolve(owner_id)
         if Right.SCHEDULE_PIPELINES not in rights_for(owner.roles):
@@ -623,7 +624,7 @@ class ScheduleExecutor:
         except Exception as error:  # noqa: BLE001 - any other refusal of the exchange
             raise _Refused(
                 f"OspreyFlow could not act as the schedule's owner, {owner_id}",
-                kind="refused_rights",
+                kind="failed",  # a network fault or a bug, not the owner's rights (Admin's review)
             ) from error
 
     async def _not_run(

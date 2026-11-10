@@ -207,7 +207,7 @@ class _Notices:
         self.asked: list[str] = []
 
     async def list_schedule_notices(
-        self, principal: Principal, *, since: datetime, limit: int = 20
+        self, principal: Principal, *, since: datetime, limit: int
     ) -> tuple[list[Alert], int]:
         self.asked.append(principal.id)
         mine = sorted(
@@ -442,7 +442,9 @@ def _notices(world: SimpleNamespace, owner: str, ages: list[timedelta]) -> list[
     made = [
         Alert(id=f"nt-{owner}-{i}", rule_id=f"schedule:SYN-recipe-{i}", owner_id=owner,
               mode=AlertMode.FULL, referent_node_ids=[], investigation_id="case-a",
-              created_at=now - age, words=f"Notice {i}.")
+              created_at=now - age,
+              words=f"The scheduled run of Daily export due {i} November 2026 at 06:00 failed. Its "
+                    "pipeline's Runs, in the Ingest Studio, say why.")
         for i, age in enumerate(ages)
     ]  # fmt: skip
     world.alerts_store.held.extend(made)

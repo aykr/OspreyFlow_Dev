@@ -7,18 +7,35 @@
 # The reviews (merger, Admin) found the store's SQL never planted, the reach unruled, and the total,
 # limit and window unpinned at the route; all of round 2 below answers them.
 #
-# == Round 2: the route (test_needs_you.py, 13 cases)
-# --- plant (needs_you.schedule_notices_for: the total taken as the number listed)
+# == Round 2: the route (test_needs_you.py, 14 cases; Admin's round-2 review: the stand-in's limit has no
+#    default, and each plant's own diff line is shown)
+# --- plant (the total taken as the number listed)
+#     -    ], total  # fmt: skip
+#     +    ], len(notices)  # fmt: skip
 FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_twenty_newest_notices_are_listed_and_the_true_total_said
-1 failed, 12 passed, 1 warning in 1.64s
-# --- plant (needs_you.schedule_notices_for: the limit dropped)
+1 failed, 13 passed, 1 warning in 1.77s
+# --- plant (the limit no longer passed (the stand-in, like the store's caller, has no default))
+#     -        principal, since=now - timedelta(days=NOTICE_DAYS), limit=NOTICE_LIMIT
+#     +        principal, since=now - timedelta(days=NOTICE_DAYS)
+        No one else sees it, and nobody is told who else was alerted. Red with `still` bypassed
+E       TypeError: _Notices.list_schedule_notices() missing 1 required keyword-only argument: 'limit'
+services/api/needs_you.py:92: TypeError
+        bypassed."""
+# --- plant (the limit widened)
+#     -        principal, since=now - timedelta(days=NOTICE_DAYS), limit=NOTICE_LIMIT
+#     +        principal, since=now - timedelta(days=NOTICE_DAYS), limit=1000
 FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_twenty_newest_notices_are_listed_and_the_true_total_said
-1 failed, 12 passed, 1 warning in 1.61s
-# --- plant (needs_you.schedule_notices_for: the window widened)
+1 failed, 13 passed, 1 warning in 1.54s
+# --- plant (the window widened)
+#     -        principal, since=now - timedelta(days=NOTICE_DAYS), limit=NOTICE_LIMIT
+#     +        principal, since=now - timedelta(days=30), limit=NOTICE_LIMIT
 FAILED ../OspreyFlow_Build/tests/services/api/test_needs_you.py::test_a_notice_older_than_seven_days_is_neither_listed_nor_counted
-1 failed, 12 passed, 1 warning in 1.62s
+1 failed, 13 passed, 1 warning in 1.54s
 # --- green after each was reverted
-13 passed, 1 warning in 1.56s
+14 passed, 1 warning in 1.52s
+# Note: "the limit no longer passed" fails with a TypeError, not for its stated reason, and is not a
+# defect: the store's own default limit is 20, NOTICE_LIMIT's value. "The limit widened" is the plant that
+# stands for a limit lost, red for its reason.
 
 # == Round 2: the words (test_schedule_notice_words.py, 12 cases, offline)
 # --- plant (scheduler.failure_kind: a timeout told as a plain failure)
@@ -66,7 +83,45 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notice_words.py::tes
 # --- green after each was reverted
       Tests  17 passed (17)
 
-# == Live, under the rules lease (to come at the gates): the store's SQL (owner filter dropped from the list, from the total; typology, status and window dropped; a dataset reach put back), and the executor's ArcadeDB-shaped plant (the error's text put back into the words).
+# == Live, under the rules lease on stack b (taken 21:57:46Z), driver process/lanes/rules/hyg/live_plants.py
+# --- plant (the owner filter dropped from the list and the total) in services/api/alerts.py: exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_only_the_owner_reads_or_counts_a_notice
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_a_stamped_notice_and_an_unstamped_one_are_both_served
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_a_notice_is_any_schedule_alert_and_nothing_else
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_the_window_and_the_status_bound_it
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_more_than_the_limit_is_said_by_the_total
+5 failed in 1.79s
+# --- plant (the total counted over every owner) in services/api/alerts.py: exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_only_the_owner_reads_or_counts_a_notice
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_a_stamped_notice_and_an_unstamped_one_are_both_served
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_a_notice_is_any_schedule_alert_and_nothing_else
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_the_window_and_the_status_bound_it
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_more_than_the_limit_is_said_by_the_total
+5 failed in 1.42s
+# --- plant (typology IS NULL dropped) in services/api/alerts.py: exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_a_notice_is_any_schedule_alert_and_nothing_else
+1 failed, 4 passed in 1.34s
+# --- plant (status = 'open' dropped) in services/api/alerts.py: exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_the_window_and_the_status_bound_it
+1 failed, 4 passed in 1.32s
+# --- plant (the window dropped) in services/api/alerts.py: exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_the_window_and_the_status_bound_it
+1 failed, 4 passed in 1.32s
+# --- plant (a dataset reach put back, as reach_clause gives a reader outside any case) in services/api/alerts.py: exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_only_the_owner_reads_or_counts_a_notice
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py::test_a_stamped_notice_and_an_unstamped_one_are_both_served
+2 failed, 3 passed in 1.32s
+# --- plant (the error's text put back into the words) in services/api/scheduler.py: exit 1
+>       assert words == f"{lead} failed. Its pipeline's Runs, in the Ingest Studio, say why."
+E         - :00 failed. Its pipeline's Runs, in the Ingest Studio, say why.
+E         + :00 failed: ArcadeDB error 500: {"error":"Internal error","exception":"com.arcadedb.exception.DuplicatedKeyException","detail":"Duplicated key [ROW-7731] on Person[source_key] at arcadedb.internal:2480"}
+ERROR    services.api.scheduler:scheduler.py:395 scheduled run of recipe 01M73QG377GBBKECQKNYGK5F4B failed
+FAILED ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py::test_a_graph_store_error_never_reaches_the_owners_words
+1 failed in 1.28s
+# --- green, every plant put back
+5 passed in 1.25s
+1 passed in 1.11s
+Wall time: 19 s, exit 0 (stack b, the lease rules took at 2026-11-10T21:57:46Z; set-up before it 12 s)
 
 # == Round 3 (the merger's review of round 2): an old notice's error text, at read
 # --- plant (needs_you.schedule_notices_for: the stored words served as they are, the check removed)

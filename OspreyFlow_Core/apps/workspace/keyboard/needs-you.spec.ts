@@ -45,11 +45,11 @@ test("the reader's scheduled loads' notices are reached by Tab, each read with i
   await expect(page.getByRole("group", { name: "Needs you" })).toBeVisible();
   await page.keyboard.press("Tab"); // the overdue promotion
   await page.keyboard.press("Tab");
-  const refused = page.getByText(/was refused: the file was not there/);
+  const refused = page.getByText(/due 10 November 2026 at 06:00 was refused: it no longer reaches/);
   await expect(refused).toBeFocused();
   await expect(refused).toHaveAccessibleDescription(/Its pipeline's Runs, in the Ingest Studio, say what happened/);
   await page.keyboard.press("Tab");
-  await expect(page.getByText(/failed: the database did not answer/)).toBeFocused();
+  await expect(page.getByText(/due 9 November 2026 at 06:00 failed\. Its pipeline's Runs/)).toBeFocused();
   await page.keyboard.press("Tab");
   const more = page.getByText(/21 more notices of your scheduled loads, not listed here/);
   await expect(more).toBeFocused();
