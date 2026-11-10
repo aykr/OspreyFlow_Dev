@@ -111,6 +111,14 @@ availability, container runtime version, and for `cluster` connectivity to every
 failure explains what is wrong and what to do about it, with a **Re-check** button rather than a
 loop of edit-and-rerun. Preflight must pass before Launch is enabled.
 
+**Port availability checks the ports the deployment will publish, resolved as Compose resolves
+them** (10 November 2026, found on a named install beside another deployment): a published port
+written `${VARIABLE:-default}` takes its value from the deployment's own `deployment.env`, which
+Compose reads with `--env-file`, under the shell's environment, which Compose lets win. A
+deployment kept by name names its graph port there (ADR-138 decision 2), so checking the shell's
+environment alone checked 2480. Tests: `test_named_render.py::test_the_preflight_checks_the_deployments_own_graph_port`,
+`::test_the_ports_check_reads_an_env_file_as_compose_does`.
+
 **Memory and disk verdict on the container runtime's own daemon, not the operator's shell.**
 The host running Preflight and the Docker Desktop VM every container actually
 runs inside can have very different resources (this document's own memory and disk figures below
