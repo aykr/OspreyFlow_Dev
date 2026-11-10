@@ -1,0 +1,35 @@
+# head acdd7ac; plant: the index never written: `index.write()` -> `pass`
+# command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
+# must fail: test_publish_writes_a_commit_real_git_reads, test_the_file_is_committed_at_the_path_the_registry_row_will_name; all failed: yes
+ERROR    services.api.studio_publish:studio_publish.py:484 committing recipes/alpha.yaml in /private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-978/test_a_failed_write_is_a_typed0/repo failed
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_republishing_identical_bytes_makes_no_commit
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_never_execs_a_binary
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_concurrent_publishes_each_commit_their_own_bytes
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_root_inside_another_repository_gets_its_own
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failed_write_is_a_typed_error_not_a_bare_500
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_dulwich_is_admitted_by_the_licence_gate_through_its_apache_alternative
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipes_directory_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_symlinked_recipe_file_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours
+PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_in_the_repository_is_the_bytes_given
+PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_committing_the_same_bytes_again_is_not_an_error
+PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_changed_bytes_are_a_second_commit
+PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_a_failed_commit_is_an_error_not_a_quiet_success
+PASSED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_write_and_commit_recipe_goes_through_the_same_commit
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_second_publish_keeps_the_first_in_the_history
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_commits_on_top_of_a_repository_real_git_made
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_detached_head_moves_as_git_commit_moved_it
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[../x]
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[.git/x]
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[../../outside]
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[a/b]
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[..]
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[.hidden]
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[]
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipe_id_that_is_not_one_file_name_is_refused[x\x00y]
+FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_is_committed_at_the_path_the_registry_row_will_name
+14 failed, 16 passed in 2.87s
