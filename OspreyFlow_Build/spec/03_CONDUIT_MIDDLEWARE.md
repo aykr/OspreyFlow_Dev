@@ -322,8 +322,11 @@ reviewer's *Details* list the merge's matches as they read them, and each retype
 waits, its original with `goes_in_as`; once committed, its copy), and an approval checks each again:
 one changed since (an end withdrawn or raised, the target's highest lowered, an original's marking,
 properties or drawn assertion edited, a mapped type gone from the target's model, a copy the adapter
-refuses) rejects the merge, never leaves it waiting. The merge, its approval and its revert audit the
-mapping and the copies. Before the graph commits, the matches' link ids are kept and the drawing's one merge
+refuses, a target no longer a source dataset of the drawing's unit) rejects the merge, never leaves
+it waiting. A link retyped between two items going in as themselves is refused (it could join a
+loaded link the revert would then revert). The sheet and the merge audit the mapping chosen; the
+merge, its approval and its revert audit the copies. The revert takes its reverted copies out of
+every case's working set; the grading change regrades the copies too. Before the graph commits, the matches' link ids are kept and the drawing's one merge
 claimed (`DatasetStore.merge_drawn`, moving the case onto the target in the same Postgres
 transaction): of two merges at once one commits and the other is refused 409 `already_merged` with
 nothing written; a graph commit that fails after it undoes the claim. Once committed (decision 7) the

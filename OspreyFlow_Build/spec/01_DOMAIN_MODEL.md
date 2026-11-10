@@ -1083,7 +1083,8 @@ conformance fixture, a manual `SAME_AS`, a Splink write.
 
 **`reverted`** is a universal axis, not principal-dependent: a reverted element is invisible to
 every read, any clearance, the same way a classification a principal cannot see is invisible to
-them — `services/ingest`'s `revert_load` is the only writer, via `GraphPort.revert_elements`. It
+them — `services/ingest`'s `revert_load` writes it, via `GraphPort.revert_elements`, as does a drawn
+merge's operator revert for its own copies and links (`scripts.revert_promotion`, ADR-143 Amendment 7). It
 is never deleted, only flagged, so the audit trail stays intact and the same element ID can be
 cited in an audit query after the fact.
 
@@ -1890,7 +1891,8 @@ are on the port too, each taking the principal like every other read.
   link for an analyst moves its notes to the new id in the same step; the old link and the change
   between them stay readable through the change history.
 - **`revert_elements(node_ids, edge_ids, tx) -> None`.** Sets `AuditStub.reverted` on existing
-  elements; `services/ingest`'s `revert_load` is the only caller. No `principal` argument, unlike
+  elements; `services/ingest`'s `revert_load` calls it, and so does a drawn merge's operator revert for
+  its own writes (`scripts.revert_promotion`, ADR-143 Amendment 7). No `principal` argument, unlike
   every read method — this is a backend write attributed by the caller's own audit trail (the
   load ledger), not a principal-scoped read. A reverted element is invisible to every read
   afterwards, any clearance, and is never actually deleted. It also clears `withdrawn_by_load`.
