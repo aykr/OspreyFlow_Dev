@@ -1,4 +1,4 @@
-# head 748c071; plant: the aside sweep at first use only, not under the lock
+# head b345ce6; plant: the aside sweep at first use only, not under the lock
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_an_aside_directory_left_after_the_repository_exists_is_swept; for the reason 'is still there'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept - AssertionError: the aside directory left beside the repository is still there
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept - AssertionError: an empty stale aside is still there
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock - AssertionError: the later sweep ran with (lock, flock file) (True, False)
-3 failed, 46 passed in 9.49s
+3 failed, 46 passed in 9.58s

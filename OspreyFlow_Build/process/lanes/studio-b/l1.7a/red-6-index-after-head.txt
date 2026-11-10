@@ -1,4 +1,4 @@
-# head 748c071; plant: the index written after HEAD moves (the order the review flagged)
+# head b345ce6; plant: the index written after HEAD moves (the order the review flagged)
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_failure_after_staging_leaves_nothing_committed; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -49,5 +49,5 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipes_file_in_head_counts_as_holding_no_recipe
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - AssertionError: assert '5833a1bbd240...c86ffdff380\n' == 'b696a5c35e3d...98d25a15cad\n'
-1 failed, 48 passed in 9.72s
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - AssertionError: assert '3993da946da4...d6b5a40e9ab\n' == '5d4135aeb707...c7e4ef9b7e7\n'
+1 failed, 48 passed in 9.62s

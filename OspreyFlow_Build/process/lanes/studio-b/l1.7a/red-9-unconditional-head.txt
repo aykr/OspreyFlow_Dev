@@ -1,4 +1,4 @@
-# head 748c071; plant: HEAD set whatever it holds: `set_if_equals(HEADREF, <head>, …)` -> `set_if_equals(HEADREF, None, …)`, which dulwich takes as no comparison
+# head b345ce6; plant: HEAD set whatever it holds: `set_if_equals(HEADREF, <head>, …)` -> `set_if_equals(HEADREF, None, …)`, which dulwich takes as no comparison
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_real_writer_moving_head_mid_commit_is_refused; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_th
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_real_writer_moving_head_mid_commit_is_refused - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to - Failed: DID NOT RAISE GitCommitError
-3 failed, 46 passed in 9.53s
+3 failed, 46 passed in 9.31s

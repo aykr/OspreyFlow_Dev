@@ -1,4 +1,4 @@
-# head 748c071; plant: a HEAD that is no commit refused only after the write
+# head b345ce6; plant: a HEAD that is no commit refused only after the write
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_head_that_is_not_a_commit_is_refused_before_the_write; for the reason 'written before'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_is_refused_before_the_write - AssertionError: written before
-1 failed, 48 passed in 9.40s
+1 failed, 48 passed in 9.69s

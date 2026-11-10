@@ -1,4 +1,4 @@
-# head 748c071; plant: the commit made by dulwich's worktree commit, which reads the config and runs the hooks in .git/hooks (the independent review, item 2)
+# head b345ce6; plant: the commit made by dulwich's worktree commit, which reads the config and runs the hooks in .git/hooks (the independent review, item 2)
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_publish_never_execs_a_binary; for the reason "'.git/hooks/pre-commit'"; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written - Failed: DID NOT RAISE GitCommitError
-10 failed, 39 passed in 10.15s
+10 failed, 39 passed in 10.08s

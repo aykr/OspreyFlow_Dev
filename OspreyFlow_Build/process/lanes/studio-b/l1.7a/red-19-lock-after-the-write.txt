@@ -1,4 +1,4 @@
-# head 748c071; plant: the publish flock taken after the recipe file is written: over the index and the commit only
+# head b345ce6; plant: the publish flock taken after the recipe file is written: over the index and the commit only
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_the_index_is_read_and_written_under_a_lock_another_process_honours; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_index_is_read_and_written_under_a_lock_another_process_honours - AssertionError: outside the lock: ['write']
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock - AssertionError: the later sweep ran with (lock, flock file) (True, False)
-2 failed, 47 passed in 9.88s
+2 failed, 47 passed in 10.14s

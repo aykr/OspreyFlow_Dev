@@ -1,4 +1,4 @@
-# head 748c071; plant: an aside directory never swept, at first use or after
+# head b345ce6; plant: an aside directory never swept, at first use or after
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_an_aside_directory_a_crashed_first_use_left_is_swept, test_an_aside_directory_left_after_the_repository_exists_is_swept; for the reason 'is still there'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_th
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_a_crashed_first_use_left_is_swept - AssertionError: the crashed first use's aside directory is still there
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_directory_left_after_the_repository_exists_is_swept - AssertionError: the aside directory left beside the repository is still there
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept - AssertionError: an empty stale aside is still there
-3 failed, 46 passed in 9.51s
+3 failed, 46 passed in 9.84s

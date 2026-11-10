@@ -1,4 +1,4 @@
-# head 748c071; plant: the put-back reads the parent the publish read at the start, not the current HEAD: a rival's commit of the same recipe undone
+# head b345ce6; plant: the put-back reads the parent the publish read at the start, not the current HEAD: a rival's commit of the same recipe undone
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to; for the reason 'not to the current HEAD'; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written - assert 'HEAD holds no file there' in 'ERROR    services.api.studio_publish:studio_publish.py:581 putting recipes/alpha.yaml back as HEAD holds it in /priva...y.py", line 859, in broken\n    raise OSError("[Errno 5] Input/output error")\nOSError...
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too - AssertionError: the file is ahead
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipes_file_in_head_counts_as_holding_no_recipe - AssertionError: the refused recipe's file is left
-6 failed, 43 passed in 9.50s
+6 failed, 43 passed in 9.80s

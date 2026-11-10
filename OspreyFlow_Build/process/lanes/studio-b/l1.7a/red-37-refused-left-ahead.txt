@@ -1,4 +1,4 @@
-# head 748c071; plant: a refused publish leaves its file and index as it wrote them, ahead of HEAD (L1.7a's carry): neither put-back called
+# head b345ce6; plant: a refused publish leaves its file and index as it wrote them, ahead of HEAD (L1.7a's carry): neither put-back called
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it, test_a_new_recipe_refused_is_not_left_on_the_volume, test_a_failure_after_staging_leaves_nothing_committed, test_a_failure_after_the_rename_is_put_back_too; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written - assert 'HEAD holds no file there' in 'ERROR    services.api.studio_publish:studio_publish.py:693 committing recipes/alpha.yaml in /private/var/folders/wn/c...y.py", line 859, in broken\n    raise OSError("[Errno 5] Input/output error")\nOSError...
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too - AssertionError: the file is ahead
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipes_file_in_head_counts_as_holding_no_recipe - AssertionError: the refused recipe's file is left
-7 failed, 42 passed in 9.52s
+7 failed, 42 passed in 9.90s

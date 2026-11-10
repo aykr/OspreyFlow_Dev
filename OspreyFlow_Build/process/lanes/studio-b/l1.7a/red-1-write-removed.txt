@@ -1,4 +1,4 @@
-# head 748c071; plant: the commit never written: `if not unchanged:` -> `if False:`
+# head b345ce6; plant: the commit never written: `if not unchanged:` -> `if False:`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 # must fail: test_publish_writes_a_commit_real_git_reads, test_a_second_publish_keeps_the_first_in_the_history, test_the_file_is_committed_at_the_path_the_registry_row_will_name; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_module_names_no_process_api
@@ -51,9 +51,9 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to - Failed: DID NOT RAISE GitCommitError
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_is_refused_before_the_write - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', '-c', 'user.name=Op', '-c', 'user.email=op@localhost', 'tag', '-a', '-m', 'a tag', 'v1']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_head_holding_a_directory_at_the_recipe_s_path_leaves_the_file_as_written - Failed: DID NOT RAISE GitCommitError
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too - FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2986/test_a_failure_after_the_renam0/repo/recipes/alpha.yaml'
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too - FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-3044/test_a_failure_after_the_renam0/repo/recipes/alpha.yaml'
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_is_committed_at_the_path_the_registry_row_will_name - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_committing_the_same_bytes_again_is_not_an_error - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_changed_bytes_are_a_second_commit - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'log', '--format=%s']' returned non-zero exit status 128.
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_a_failed_commit_is_an_error_not_a_quiet_success - subprocess.CalledProcessError: Command '['/opt/homebrew/bin/git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
-39 failed, 16 passed in 9.46s
+39 failed, 16 passed in 9.48s

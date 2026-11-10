@@ -1,4 +1,4 @@
-# head 748c071; plant: the file put back, its index entry not: the index half alone removed
+# head b345ce6; plant: the file put back, its index entry not: the index half alone removed
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -50,4 +50,4 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_the_first_use_sweep_runs_under_the_in_process_lock
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it - AssertionError: assert 'MM recipes/alpha.yaml\n' == ''
-1 failed, 48 passed in 9.60s
+1 failed, 48 passed in 9.93s

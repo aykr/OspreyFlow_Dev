@@ -1,4 +1,4 @@
-# head 748c071; plant: the index never written: `index.write()` -> `pass`
+# head b345ce6; plant: the index never written: `index.write()` -> `pass`
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py
 # must fail: test_publish_writes_a_commit_real_git_reads, test_the_file_is_committed_at_the_path_the_registry_row_will_name; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_republishing_identical_bytes_makes_no_commit
@@ -56,4 +56,4 @@ FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume - AssertionError: assert 'D  recipes/a...?? recipes/\n' == ''
 FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to - AssertionError: the file went back to the parent read at the start, not to the current HEAD
 FAILED ../OspreyFlow_Build/tests/services/api/test_studio_publish_commit_file.py::test_the_file_is_committed_at_the_path_the_registry_row_will_name - AssertionError: assert [] == ['recipes/r-one.yaml']
-23 failed, 32 passed in 9.84s
+23 failed, 32 passed in 9.70s
