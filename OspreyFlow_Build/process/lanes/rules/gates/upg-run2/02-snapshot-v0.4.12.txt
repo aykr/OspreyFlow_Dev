@@ -1,0 +1,19 @@
+investigations: 3
+investigation_datasets: 3
+datasets: 2
+alerts: 0
+typology_rules: 2
+typology_rule_versions: 2
+studio_recipes: 0
+recipe_runs: 0
+hotlists: 0
+monitors: 0
+saved_patterns: 1
+-- cases
+01M73FG1Y9SQB1FKRQ37MP7P0V | Fixture Corp (synthetic demo) | - | fixture-corp-seed-worker
+01M73FH3VJJFZJ9YGAZNXSJDED | Operation Ledger (synthetic demo) | - | ledger-seed-worker
+01M73FJ450NV683FZZEF4AE1TM | Branch of Fixture Corp (synthetic demo) | 01M73FG1Y9SQB1FKRQ37MP7P0V | 7a91f221-433f-4d1e-9f44-7306b72dfe9a
+-- rules
+01M73FH9D6HRPJE5G0B1JKJDDP | Screen customers against the lists | active | 01M73FH3VJJFZJ9YGAZNXSJDED | 87290612-eb3e-41f4-b177-df66e0f60d86 | ledger |  | kyc_screening
+01M73FJ4F563ZEX4AF41K5GN4K | UPG whole-deployment: Okafor | pending | 01M73FG1Y9SQB1FKRQ37MP7P0V | 87290612-eb3e-41f4-b177-df66e0f60d86 | - | deployment | sentence
+-- alerts by state

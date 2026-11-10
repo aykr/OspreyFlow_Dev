@@ -1,0 +1,128 @@
+UPG — the v0.4.12 -> v0.5.0 upgrade rehearsed on ospreyflow-test (rules lane, 10 November 2026, 18:20-19:50 UTC)
+
+Slot: one live slot, the named deployment osprey-upg (project osprey-upg, volumes osprey-upg_*), taken
+without the orchestrator's word because its socket (8906) was gone; told by heartbeat and, once found, at
+uds 14277. Throwaway HOME /root/osprey-runs/rules-upg/home; synthetic packs only (fixture-corp,
+operation-ledger, prison-intelligence in run 1; the first two in run 2). No lease of stacks b-g touched.
+Guards: upg_guard.sh (compose only as -p osprey-upg with the run's own compose file; volume removal
+osprey-upg_* only; no prune; no image removal) shown red in upg-guard-red.txt; image tags through P5b's
+OwnImages (upg_images.py); deployment.env compared by per-key hashes only (upg_envdiff.py, shown red in
+upg-envdiff-red.txt). Every log: upg-run1/ and upg-run2/ (secret lines hidden by the install itself; a
+scan for PASSWORD=/SECRET=/sk- found none). Passwords read from deployment.env inside the server, never
+printed.
+
+== What could not be rehearsed, and why
+`ospreyflow update` moves only to a signed release (find_release, a cosign-verified lock, GHCR pull).
+main's head is no release, so the update itself cannot target it before v0.5.0 is tagged. Stood in:
+v0.4.12 installed from the user repository's tag (422833c = from 964a2a9, its signed images), then the
+same clone moved to `make publish-user-repo COMMIT=<head>`'s export (a commit "OspreyFlow — from <sha>"),
+and the update's own steps run by hand: `ospreyflow backup` (v0.4.12's code), then update.py's files step
+`python -m scripts.refresh --files-only`, then the code moved by `harness.apply --build`. Not exercised:
+update's pull of v0.5.0's signed images, pin_images, verify_running, its rollback. OWED once v0.5.0 is
+tagged: one real `ospreyflow update` from a fresh v0.4.12 on this server, before the owner's own.
+
+== Run 1 — main 5df2a3e
+1  install v0.4.12  (01-install-v0.4.12.log)
+   $ git clone https://github.com/aykr/OspreyFlow repo && git checkout v0.4.12 && uv sync --frozen --all-extras
+   $ OSPREY_ARCADEDB_PORT=2500 HOME=<throwaway> PYTHONPATH=.:packages:cli \
+       python -m ospreyflow install --mode lite --name osprey-upg --config answers.yaml --yes
+   FINDING (v0.4.12, still in main's site.py): refused at preflight, "2480 (proxy) already in use"
+     (01a). The proxy publishes ${OSPREY_ARCADEDB_PORT:-2480}; preflight reads it before deployment.env
+     exists, so a named deployment on a host whose 127.0.0.1:2480 is held (osprey-small's proxy) is
+     refused, though it runs on its graph_port (2500, as deployment.env then says). Workaround: export
+     OSPREY_ARCADEDB_PORT=<graph port>. And a refused install leaves osprey.yaml, so its re-run is
+     refused "already exists and differs" (01b): remove the deployment folder first.
+   v0.4.12 answers take no folders.backups (refused); uv must be on PATH.
+   Result: installed, 3 cases, 19 recipes, the Ledger's live kyc_screening rule (owner: demo admin).
+2  v0.4.12 fixtures through v0.4.12's own routes (a PKCE sign-in through Keycloak's form, upg_check.py)
+   POST /v1/investigations/<Fixture Corp>/branch (analyst) -> 201
+   POST .../rules/sentence, scope deployment (admin, the case's Author) -> 201, pending.
+     DECISION: left pending. Approval needs a second Author with administer_system and the demo admin
+     is the proposer; a pending rule exercises migrate_rules_to_datasets' "copied as a draft".
+   python -m scripts.seed_internal ledger --release-list-update (host, OSPREYFLOW_DEPLOYMENT_DIR);
+   POST /v1/admin/screening-lists/UK%20Sanctions%20List%20(synthetic)/refresh (admin) -> alerts=1 (K1)
+   Snapshot 02: 4 cases (1 branch), 3 datasets, 2 rules (active case rule; pending deployment rule),
+   1 open alert, 19 recipes, 15 runs.
+3  backup with v0.4.12's code: `ospreyflow backup --name osprey-upg` -> rc 0 (03). v0.4.12 put the set
+   inside the deployment folder.
+4  checkout moved to 5df2a3e's export; `ospreyflow start --build --name osprey-upg` -> FAILED (04):
+     "required variable OSPREY_LITELLM_MASTER_SECRET is missing a value" (and OSPREY_LITELLM_DB_PASSWORD).
+   CAUSE: scripts/refresh.py adds litellm-db and the Conduit's LITELLM_API_KEY but never writes a
+     secret; only apply mints the gateway's (gateway_secret_lines, ADR-135 Amendment 2). update.py's
+     files() IS `scripts.refresh --files-only`, so `ospreyflow update` would fail at its next compose
+     call (pull) and roll back: the release-blocking finding, sent to the orchestrator 19:20; fix
+     assigned to platform-b (ADR-114 Amendment 39).
+   Also: on a release-installed deployment refresh re-pins the owned images to
+     ghcr.io/aykr/<svc>:<checkout commit> with no build: sections, so start --build builds nothing
+     (harmless for update, which pins the release's digests; carried by platform-b).
+5  `ospreyflow apply --name osprey-upg` -> FAILED at preflight (05): "8090 (proxy), 2500 (proxy) already
+     in use". apply's own_published_ports runs `compose ps` on the refreshed compose file, which cannot
+     be interpolated, so it sees none of its own ports; `stop` fails the same way (carried by platform-b).
+   Way out that worked: the backup set's config/compose.yaml copied over compose.yaml, then
+   `ospreyflow stop --name osprey-upg` (06a).
+6  `python -m harness.apply --build --config <deployment>/osprey.yaml --out-root <deployments>` (the
+   install's own step; keep_existing_secrets) -> 12 services healthy, verify 3/3 (06), version
+   dev-11b13bc; the gateway's three secrets minted, every older secret kept. Data unchanged (07 = 02
+   plus main's new empty tables).
+7  the seven one-off migrations, each `docker exec osprey-upg-api-1 python -m scripts.<name> --dry-run`,
+   then without, then again (08-<n>-<name>.{dry-run,run,rerun}.txt). ORDER THAT WORKED:
+   1 migrate_cases_to_one_dataset  4 kept, 4 layers made (1 for the branch, named); re-run 0 writes
+   2 migrate_branches_to_views     the branch -> a private view of Fixture Corp, 0 items moved; re-run 0
+   3 seed_target_models            3 datasets given v1 live (POLE core / fibo / niem); re-run 0
+   4 make_home_cases               3 made; 2 "need an owner" (Fixture Corp, Ledger: made by seed workers,
+                                   Admin > Datasets > Change owner...); re-run 0
+   5 migrate_rules_to_datasets     1 whole-deployment rule -> 3 drafts (one per dataset, scope this
+                                   case, in each home case), the original retired; re-run 0.
+                                   PLACE SETTLED: after make_home_cases (it needs the home cases; a
+                                   dataset without one is reported and its rule left whole)
+   6 migrate_sources               19 registered, 0 watches to move; re-run 19 already registered
+   7 remark_alert_nodes            1 node checked, 0 re-marked; re-run the same
+   Every dry run wrote nothing and said what the run then did.
+8  checks (09-checks-after.txt), through the front door as each demo account:
+   sign-in (PKCE form) OK for analyst, engineer, admin; Home's /v1/me/needs-you 200; /v1/investigations
+   3 (the branch is gone, a view now); Fixture Corp opens, views 1, boards 0; Ledger's alert-queue 1
+   (K1 open, counts open=1); Studio recipe-registry 19, a pipeline's runs 200; Admin /v1/admin/system
+   200 (version dev-11b13bc, highest_marking SECRET).
+   ADR-146 Am. 6 decision 13: the Ledger rule's owner (demo admin) holds deploy_rules -> it keeps
+   running. Nobody holds author_rules after the upgrade (Rule author is new and given to no one), so the
+   three converted drafts cannot be tested (403 right_required author_rules) or made live until an
+   administrator assigns Rule author. A second list refresh found no new version (outcome unchanged),
+   so a pre-L2.11 rule raising an alert under the new code was not re-proven in run 1; run 2 holds the
+   list's version 2 back for after the upgrade.
+9  teardown (10-teardown-run1.txt): down -v on osprey-upg only; volumes left none; images: 3 of the
+   run's own removed, osprey/superset:local put back to its old ID; check: nothing of the run's left;
+   others' tags changed meanwhile listed (ospreyflow/*:ci, osprey-test-workspace:proxy), not touched.
+
+== Run 2 — platform-b's fix, lane/platform-b-upgfix 0b45910 (tree affb11d), fresh v0.4.12
+1-3 as run 1 (fixture-corp and operation-ledger only: run 1 covered the prison pack's recipes); the list
+   refreshed at version 1 (28/09/2026, 0 alerts) before the upgrade; backup rc 0.
+4  checkout moved to 0b45910's export; update's files step twice (04-refresh-files-only.txt):
+   $ OSPREYFLOW_DEPLOYMENT_DIR=<deployment> python -m scripts.refresh --files-only
+   pass 1: added OSPREY_LITELLM_DB_PASSWORD only; OSPREY_RELEASE_VERSION changed; 75/75 others byte
+           for byte; mode 600
+   pass 2: added OSPREY_LITELLM_MASTER_SECRET; 77/77 others the same
+   OSPREY_LITELLM_SALT_SECRET: never added
+   $ docker compose ... config -q -> `service "api" refers to undefined volume map-settings`
+   VERDICT: FAIL. (a) not once: MASTER only on a second pass, so a one-pass update still fails
+   interpolation; (b) api's map-settings and model-settings volumes are added without their
+   top-level declarations; (c) the existing litellm service keeps v0.4.12's LITELLM_MASTER_KEY
+   (sk-ospreyflow-dev), no salt, no database, while the Conduit is given the newly minted master key:
+   the gateway would refuse the Conduit. Sent to platform-b and the orchestrator 19:45.
+   osprey-upg kept up at this state for platform-b's next head.
+
+== The CHANGELOG's upgrade steps, as proven (for docs)
+- The seven one-off scripts run in the order: migrate_cases_to_one_dataset, migrate_branches_to_views,
+  seed_target_models, make_home_cases, migrate_rules_to_datasets, migrate_sources, remark_alert_nodes;
+  each `--dry-run` first; a second run changes nothing (all seven proven so).
+- On a named deployment the container is `<name>-api-1` (osprey-upg-api-1); the scripts need no host
+  environment.
+- make_home_cases names datasets made by a seed or service account as needing an owner: give each one in
+  Admin > Datasets > Change owner... It need not come before migrate_rules_to_datasets: a home case with
+  no Author still takes the rule copies (run 1, Fixture Corp and Ledger).
+- After migrate_rules_to_datasets, a whole-deployment rule's copies are drafts in each dataset's home
+  case; an administrator must give someone Rule author (author_rules) before they can be tested and made
+  live. A live case rule keeps running while its owner holds deploy_rules or author_rules (decision 13):
+  check each rule's owner still holds one, in Admin > People.
+- NOT YET PROVEN: that `ospreyflow update` itself gets from v0.4.12 to v0.5.0 (the gateway defects
+  above); the CHANGELOG must not say it does until platform-b's fix passes this rehearsal's refresh
+  check and one real update runs after the tag.

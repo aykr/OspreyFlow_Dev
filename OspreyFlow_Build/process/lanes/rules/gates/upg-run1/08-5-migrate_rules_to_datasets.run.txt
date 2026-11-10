@@ -1,0 +1,5 @@
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_rules_to_datasets 
+Converting rules per dataset.
+1 whole-deployment rules; 3 copies made, 1 retired; 0 not converted; 12 writes made.
+Done.
+exit 0

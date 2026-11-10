@@ -1,0 +1,4 @@
+
+apply: FAILED at stage 'preflight'
+  ports: 2 of 2 port(s) this deployment publishes are already in use: 8090 (proxy), 2500 (proxy). Launch would fail partway through, leaving some containers up. — Stop whatever holds them — `lsof -nP -iTCP -sTCP:LISTEN | grep <port>` names the process — or change the published ports in osprey.yaml and re-render. Another OspreyFlow deployment on this machine is the usual culprit: `ospreyflow stop` in its checkout frees them.
+ospreyflow: The step 'apply the changed settings' failed (exit 1); nothing after it was run.

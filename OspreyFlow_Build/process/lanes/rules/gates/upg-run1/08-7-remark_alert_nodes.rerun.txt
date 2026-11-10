@@ -1,0 +1,5 @@
+$ docker exec osprey-upg-api-1 python -m scripts.remark_alert_nodes 
+1 alert node(s) checked; 0 re-marked.
+0 superseded node(s) removed from the working sets.
+Nothing needed changing.
+exit 0

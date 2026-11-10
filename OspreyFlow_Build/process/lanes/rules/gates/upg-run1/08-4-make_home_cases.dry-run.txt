@@ -1,0 +1,8 @@
+$ docker exec osprey-upg-api-1 python -m scripts.make_home_cases --dry-run
+Dry run: nothing will be written.
+  Fixture Corp (fixture-corp): home case made, needs an owner (made by fixture-corp-seed-worker)
+  Operation Ledger (ledger): home case made, needs an owner (made by ledger-seed-worker)
+  Prison Intelligence Dataset (synthetic) (prison-intelligence): home case made, its Author c34d2e13-6425-4cd2-b520-7ba905d895f9
+  2 home cases need an owner, for Admin › Datasets' Change owner…: Fixture Corp (fixture-corp), Operation Ledger (ledger)
+3 home cases to make, 2 needing an owner, 0 already had one; 12 writes planned.
+exit 0

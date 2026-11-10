@@ -1,0 +1,7 @@
+$ docker exec osprey-upg-api-1 python -m scripts.seed_target_models --dry-run
+Dry run: nothing will be written.
+  Fixture Corp (fixture-corp): version 1, live, the POLE core alone
+  Operation Ledger (ledger): version 1, live, fibo
+  Prison Intelligence Dataset (synthetic) (prison-intelligence): version 1, live, niem
+3 to give a first model, 0 already had one; 9 writes planned.
+exit 0

@@ -1,0 +1,10 @@
+$ docker exec osprey-upg-api-1 python -m scripts.migrate_cases_to_one_dataset 
+Placing every case on one dataset.
+  Fixture Corp (synthetic demo) (01M73BQVP206H9HK0E7A7S2PYD): reads Fixture Corp, kept
+  Operation Ledger (synthetic demo) (01M73BS1AH14HAHKJG53CT42DF): reads Operation Ledger, kept
+  Prison Intelligence Dataset (synthetic demo) (01M73BSY9PQFTW7B3VQY8Y75Q2): reads Prison Intelligence Dataset (synthetic), kept
+  Branch of Fixture Corp (synthetic demo) (01M73E7BVVPRB8E6Y1MKKSRADZ): reads Fixture Corp, kept
+One dataset per case is now a rule of the store.
+4 kept, 0 on a composite (0 made), 0 layers made, 0 not placed; 0 writes made.
+Done.
+exit 0
