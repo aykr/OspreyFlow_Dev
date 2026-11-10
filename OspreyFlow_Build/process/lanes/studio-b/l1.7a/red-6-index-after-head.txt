@@ -1,4 +1,4 @@
-# head 5806e30; plant: the index written after HEAD moves (the order the review flagged)
+# head 0963ad7; plant: the index written after HEAD moves (the order the review flagged)
 # command: pytest -q -rA ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py
 # must fail: test_a_failure_after_staging_leaves_nothing_committed; all failed: yes
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_publish_writes_a_commit_real_git_reads
@@ -42,5 +42,10 @@ PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_publish_refused_by_a_rival_leaves_the_file_as_head_holds_it
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_new_recipe_refused_is_not_left_on_the_volume
 PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_aside_holding_more_than_a_git_directory_is_kept
-FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - AssertionError: assert '3956d2da551f...080f206833f\n' == '17f26b9aefa0...97e7504eaf5\n'
-1 failed, 41 passed in 9.35s
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_rival_s_commit_of_the_same_recipe_is_what_the_file_goes_back_to
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_head_that_is_not_a_commit_leaves_the_file_rather_than_removing_it
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_the_rename_is_put_back_too
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_recipes_file_in_head_counts_as_holding_no_recipe
+PASSED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_an_empty_stale_aside_is_swept
+FAILED ../OspreyFlow_Build/tests/services/api/test_recipe_repository.py::test_a_failure_after_staging_leaves_nothing_committed - AssertionError: assert '1673da58a06d...804aba1441d\n' == 'ac0f554243c5...fdafba7cd97\n'
+1 failed, 46 passed in 9.71s
