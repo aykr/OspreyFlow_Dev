@@ -136,16 +136,18 @@ def test_the_preflight_checks_the_deployments_own_graph_port(
 ) -> None:
     """The compose file publishes `${OSPREY_ARCADEDB_PORT:-2480}` and the deployment's own
     `deployment.env` names its port, which Compose reads with `--env-file`; the preflight resolved
-    it against this process's environment alone, so it checked 2480. Called as `harness.apply`'s
-    install calls it: the ports check on a `PreflightContext` over the staged folder, the shell's
-    own value still winning as Compose's does. The port guard keeps a real socket off 2480, so the
-    held ports are given to the check's bind test."""
+    it against this process's environment alone, so it checked 2480 and refused the install
+    wherever another deployment held 2480. Called through `harness.apply.preflight` on the context
+    the install builds (`PreflightContext(config=config, out_dir=stage)`), with the ports check as
+    its one check; the shell's own value still wins, as Compose's does. The port guard keeps a real
+    socket off 2480, so the held ports are given to the check's bind test."""
+    from harness import apply
     from harness.preflight import PreflightContext, ports
-    from harness.preflight.result import Status
 
     config, path = _named_config(tmp_path, graph_port=2503)
     stage = _stage(config, path)
     monkeypatch.delenv("OSPREY_ARCADEDB_PORT", raising=False)
+    monkeypatch.setattr(apply, "ALL_CHECKS", [ports])
     held: set[int] = {2480}
     checked: list[int] = []
 
@@ -155,15 +157,39 @@ def test_the_preflight_checks_the_deployments_own_graph_port(
 
     monkeypatch.setattr(ports, "_is_bindable", bindable)
     context = PreflightContext(config=config, out_dir=stage)
-    result = ports.check(context)
-    assert result.status is not Status.FAIL, result
+    apply.preflight(context)
     assert 2503 in checked and 2480 not in checked, checked
     # Its own port held is refused, by that port.
     held = {2503}
-    result = ports.check(context)
-    assert result.status is Status.FAIL and "2503" in result.what_is_wrong, result
+    with pytest.raises(apply.ApplyFailed, match="2503"):
+        apply.preflight(context)
     # The shell's value wins over the env file, as it does for Compose.
+    held = set()
     monkeypatch.setenv("OSPREY_ARCADEDB_PORT", "2511")
     checked.clear()
-    ports.check(context)
+    apply.preflight(context)
     assert 2511 in checked and 2503 not in checked, checked
+
+
+def test_the_ports_check_reads_an_env_file_as_compose_does(tmp_path: Path) -> None:
+    """`deployment.env` as render writes it is bare `NAME=value`; the reader takes the other shapes
+    Compose takes the same way, so a hand-edited file is not read otherwise than `up` reads it."""
+    from harness.preflight.ports import read_env_file
+
+    env = tmp_path / "deployment.env"
+    env.write_text(
+        "# a comment\n\n"
+        "PLAIN=2503\n"
+        "export EXPORTED=2504\n"
+        "COMMENTED=2505 # the graph store\n"
+        "SINGLE='2506'\n"
+        'DOUBLE="2507"\n'
+        "HASH_INSIDE='25#08'\n"
+        "EQUALS=a=b\n"
+        "BLANK=\n",
+        encoding="utf-8",
+    )
+    assert read_env_file(env) == {
+        "PLAIN": "2503", "EXPORTED": "2504", "COMMENTED": "2505", "SINGLE": "2506",
+        "DOUBLE": "2507", "HASH_INSIDE": "25#08", "EQUALS": "a=b", "BLANK": "",
+    }  # fmt: skip

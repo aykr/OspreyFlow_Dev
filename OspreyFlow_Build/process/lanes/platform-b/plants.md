@@ -35,3 +35,4 @@ Amendments 37 and 38 give.
 - independent review (2): the update's backup silent on the fallback -> never_written_inside_the_checkout red (no notice on stderr); the test run before the fix
 - independent review (8): the git root's backups/ not looked in -> doctor git_roots red, restore git_roots red; (9) backups-synced as a failure -> 8 cases red (6 sync roots, the answers' doctor, the install), restored; (10) the case-sensitive branch replaces the skip (runs on the server's disk)
 - independent review (6): guided page saving the placeholder off a server -> 'refuses the schema's backups placeholder' vitest red (onSave called); the test run before the fix
+- preflight ports (after P5b): the check resolving against os.environ only -> own_graph_port red (2480 checked, the install refused as on the server); the env file over the shell -> the same red (2511 not checked); export kept, an inline comment kept, quotes kept -> as_compose red, each; all restored
