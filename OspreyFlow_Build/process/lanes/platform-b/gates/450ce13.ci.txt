@@ -1,0 +1,990 @@
+/Applications/Xcode.app/Contents/Developer/usr/bin/make -C ../OspreyFlow_Core check
+.venv/bin/ruff check .
+All checks passed!
+npm run lint
+
+> ospreyflow@0.0.0 lint
+> eslint .
+
+.venv/bin/mypy packages services harness
+Success: no issues found in 425 source files
+npm run typecheck
+
+> ospreyflow@0.0.0 typecheck
+> tsc --noEmit
+
+trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .
+2026-11-10T11:20:52Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-10T11:20:52Z	INFO	[secret] Secret scanning is enabled
+2026-11-10T11:20:52Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-10T11:20:52Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-10T11:20:55Z	INFO	[npm] Run "npm install" to collect the license information of packages	dir="node_modules"
+2026-11-10T11:20:55Z	INFO	Number of language-specific files	num=3
+2026-11-10T11:20:55Z	INFO	[npm] Detecting vulnerabilities...
+2026-11-10T11:20:55Z	INFO	[pip] Detecting vulnerabilities...
+2026-11-10T11:20:55Z	INFO	[uv] Detecting vulnerabilities...
+2026-11-10T11:20:55Z	INFO	Some vulnerabilities have been ignored/suppressed. Use the "--show-suppressed" flag to display them.
+
+Report Summary
+
+┌───────────────────────────────┬──────┬─────────────────┬─────────┐
+│            Target             │ Type │ Vulnerabilities │ Secrets │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ package-lock.json             │ npm  │        0        │    -    │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ services/ner/requirements.txt │ pip  │        0        │    -    │
+├───────────────────────────────┼──────┼─────────────────┼─────────┤
+│ uv.lock                       │  uv  │        0        │    -    │
+└───────────────────────────────┴──────┴─────────────────┴─────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)
+
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+docker build --pull -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
+ERROR: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-ingest] Error 1
+docker build --pull -f services/api/Dockerfile -t ospreyflow/api:ci .
+ERROR: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-api] Error 1
+docker build --pull -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+ERROR: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-workspace] Error 1
+docker build --pull -f harness/Dockerfile -t ospreyflow/harness:ci .
+ERROR: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-harness] Error 1
+docker build --pull -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+ERROR: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-ner] Error 1
+docker build --pull -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+ERROR: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-worker] Error 1
+docker build --pull -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+ERROR: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-report-sync] Error 1
+docker build --pull -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+ERROR: failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make[1]: *** [trivy-image-superset] Error 1
+npm run test:a11y --workspace apps/harness
+
+> @ospreyflow/harness@0.0.0 test:a11y
+> playwright test --config a11y/playwright.config.ts
+
+[WebServer] INFO:     Started server process [69890]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:7219 (Press CTRL+C to quit)
+
+Running 34 tests using 2 workers
+
+  ✓   2 a11y/a11y.spec.ts:36:5 › dark theme Profile screen has no automated wcag2aa violations (609ms)
+  ✓   1 a11y/install-page.spec.ts:55:5 › install page Mode screen (dark) has no automated WCAG 2.2 A or AA violations (663ms)
+  ✓   3 a11y/a11y.spec.ts:36:5 › dark theme Components screen has no automated wcag2aa violations (430ms)
+  ✓   4 a11y/install-page.spec.ts:55:5 › install page Folders screen (dark) has no automated WCAG 2.2 A or AA violations (461ms)
+  ✓   5 a11y/a11y.spec.ts:36:5 › dark theme Models screen has no automated wcag2aa violations (397ms)
+  ✓   6 a11y/install-page.spec.ts:55:5 › install page Profile screen (dark) has no automated WCAG 2.2 A or AA violations (442ms)
+  ✓   7 a11y/a11y.spec.ts:36:5 › dark theme Governance screen has no automated wcag2aa violations (411ms)
+  ✓   8 a11y/install-page.spec.ts:55:5 › install page Components screen (dark) has no automated WCAG 2.2 A or AA violations (456ms)
+  ✓   9 a11y/a11y.spec.ts:36:5 › dark theme Geospatial screen has no automated wcag2aa violations (400ms)
+  ✓  10 a11y/install-page.spec.ts:55:5 › install page Map screen (dark) has no automated WCAG 2.2 A or AA violations (446ms)
+  ✓  11 a11y/a11y.spec.ts:36:5 › dark theme Preflight screen has no automated wcag2aa violations (422ms)
+  ✓  12 a11y/install-page.spec.ts:55:5 › install page Models screen (dark) has no automated WCAG 2.2 A or AA violations (446ms)
+  ✓  13 a11y/a11y.spec.ts:36:5 › light theme Profile screen has no automated wcag2aa violations (376ms)
+  ✓  14 a11y/install-page.spec.ts:55:5 › install page Governance screen (dark) has no automated WCAG 2.2 A or AA violations (452ms)
+  ✓  15 a11y/a11y.spec.ts:36:5 › light theme Components screen has no automated wcag2aa violations (402ms)
+  ✓  16 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (dark) has no automated WCAG 2.2 A or AA violations (452ms)
+  ✓  17 a11y/a11y.spec.ts:36:5 › light theme Models screen has no automated wcag2aa violations (381ms)
+  ✓  19 a11y/a11y.spec.ts:36:5 › light theme Governance screen has no automated wcag2aa violations (418ms)
+  ✓  18 a11y/install-page.spec.ts:55:5 › install page Review screen (dark) has no automated WCAG 2.2 A or AA violations (433ms)
+  ✓  20 a11y/a11y.spec.ts:36:5 › light theme Geospatial screen has no automated wcag2aa violations (387ms)
+  ✓  21 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (dark) has no automated WCAG 2.2 A or AA violations (417ms)
+  ✓  22 a11y/a11y.spec.ts:36:5 › light theme Preflight screen has no automated wcag2aa violations (401ms)
+  ✓  23 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (dark) has no automated WCAG 2.2 A or AA violations (426ms)
+  ✓  24 a11y/install-page.spec.ts:55:5 › install page Mode screen (light) has no automated WCAG 2.2 A or AA violations (423ms)
+  ✓  25 a11y/install-page.spec.ts:55:5 › install page Folders screen (light) has no automated WCAG 2.2 A or AA violations (426ms)
+  ✓  26 a11y/install-page.spec.ts:55:5 › install page Profile screen (light) has no automated WCAG 2.2 A or AA violations (420ms)
+  ✓  27 a11y/install-page.spec.ts:55:5 › install page Components screen (light) has no automated WCAG 2.2 A or AA violations (432ms)
+  ✓  28 a11y/install-page.spec.ts:55:5 › install page Map screen (light) has no automated WCAG 2.2 A or AA violations (425ms)
+  ✓  29 a11y/install-page.spec.ts:55:5 › install page Models screen (light) has no automated WCAG 2.2 A or AA violations (422ms)
+  ✓  30 a11y/install-page.spec.ts:55:5 › install page Governance screen (light) has no automated WCAG 2.2 A or AA violations (435ms)
+  ✓  31 a11y/install-page.spec.ts:55:5 › install page Demo packs screen (light) has no automated WCAG 2.2 A or AA violations (435ms)
+  ✓  32 a11y/install-page.spec.ts:55:5 › install page Review screen (light) has no automated WCAG 2.2 A or AA violations (422ms)
+  ✓  33 a11y/install-page.spec.ts:72:5 › install page Mode screen with the ospreyflow-crime starter (light) has no automated WCAG 2.2 A or AA violations (406ms)
+  ✓  34 a11y/install-page.spec.ts:72:5 › install page Mode screen with the govuk-crime starter (light) has no automated WCAG 2.2 A or AA violations (405ms)
+
+  34 passed (12.4s)
+make[1]: Target `check' not remade because of errors.
+make: *** [core-check] Error 2
+../OspreyFlow_Core/node_modules/.bin/eslint -c ../OspreyFlow_Core/eslint.config.js tools
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.licence_check
+licence-check: 76 packages, all allowed (0 image runtime(s) not yet passed, named above) (8 demo data licence(s) checked, all allowed or undeclared); this project's own LICENSE/NOTICE present and correct.
+cd ../OspreyFlow_Core && node ~/dev/osprey-wt/platform-b/OspreyFlow_Build/tools/licence_check.mjs
+licence-check: 354 packages, all allowed.
+cd ../OspreyFlow_Core && node --test ~/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/licence_check/*.test.mjs
+✔ a GPL-3.0 licence is rejected (0.903792ms)
+✔ a GNU General Public License, spelled out, is rejected (0.146041ms)
+✔ an MIT licence is allowed (0.06875ms)
+✔ an Apache-2.0 licence is allowed (0.072333ms)
+✔ LGPL-3.0 is refused for a package with no recorded exception (0.053916ms)
+✔ an LGPL term never carries an AGPL one through (0.052208ms)
+✔ an OR is a choice, so one allowed alternative is enough, but AND needs every term (0.09825ms)
+✔ terms match by whole words, and CC-BY-SA is not CC-BY (0.369875ms)
+✔ the four licences added on 19 October 2026 pass (0.066583ms)
+✔ a dual-licensed package naming both an allowed licence and GPL is rejected -- the real shape main() produces via licenses.join(" AND "), where an allowed marker elsewhere in the string must not let a GPL term slip through (0.078083ms)
+✔ an OFL-1.1 licence, by its SPDX short form, is allowed (0.048875ms)
+✔ OFL-1.1 beside GPL is still rejected (0.038834ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 43.9665
+licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.design_check
+design-check: no finding outside DESIGN.md §9, and Core's DESIGN.md is the contract
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.colour_drift_check
+colour-drift-check: every colour in the Glass is one DESIGN.md holds
+cd ../OspreyFlow_Core && node --test ~/dev/osprey-wt/platform-b/OspreyFlow_Build/tests/keycloak_theme/*.test.mjs
+✔ under GOV.UK the page is light whatever was chosen, with no theme button (49.163459ms)
+✔ without a brand the saved choice and the button are as before (10.435333ms)
+✔ the GOV.UK header, skip link and footer are added in reading order (16.117958ms)
+✔ no service-name band is drawn, and the page title names the service (10.658292ms)
+✔ without a service name the title falls back as the Glass's does (6.832708ms)
+✔ the skip link's target is the page's main content, focusable (5.669917ms)
+✔ a service name is text, never markup (5.805208ms)
+✔ under GOV.UK the card's words name no product; without it they say OspreyFlow (9.703166ms)
+✔ the sign-in page is marked English (ospreyflow brand) (5.168459ms)
+✔ the sign-in page is marked English (govuk brand) (4.331333ms)
+✔ a lang Keycloak wrote is kept (3.25975ms)
+﹣ without a mail server: the card's words, no reset link, the administrator named, validation before any request (0.318958ms) # needs throwaway Keycloaks (see the file's header)
+﹣ with a mail server: reset your password, then check your email, and the mail is sent (0.051291ms) # needs throwaway Keycloaks (see the file's header)
+✔ an empty form says what each field needs, and is not sent (54.728875ms)
+✔ an address that is not one, and a username with a space, are named as such (7.611125ms)
+✔ a well-formed address or username and a password are sent, and earlier errors cleared (5.952875ms)
+✔ nothing is said while typing, only on submit (4.636208ms)
+✔ with no mail server, the way back is the administrator, said where the link would be (12.465167ms)
+✔ the card ends with how accounts are made (4.223917ms)
+✔ the reset page checks the address or username, and its button says what it sends (5.83025ms)
+✔ after a reset is sent, the card says to check your email, with a way back to sign in (5.145458ms)
+✔ a refused submit gives Keycloak's button back, so the corrected form can be sent (5.575042ms)
+✔ a field's error sits directly under the field, before any help beneath it (4.975542ms)
+✔ the reset page's instruction leads the card, under its title, as the handoff has it (3.416583ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 615.916458
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.ui_words_check
+ui-words-check: no "target model" in the Glass's copy (tests/test_ui_words_check.py holds the proof)
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/platform-b/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_ui_words_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 8 items
+
+../OspreyFlow_Build/tests/test_ui_words_check.py ........                [100%]
+
+============================== 8 passed in 0.62s ===============================
+docker run --rm -v "~/dev/osprey-wt/platform-b/OspreyFlow_Build/../OspreyFlow_Core/deploy/opentofu:/w" ghcr.io/opentofu/opentofu:1.10.6 -chdir=/w fmt -check -recursive
+failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make: *** [opentofu-check] Error 1
+docker run --rm -v "~/dev/osprey-wt/platform-b/OspreyFlow_Build/../OspreyFlow_Core/deploy/helm/ospreyflow:/chart:ro" alpine/helm:3.16.3 lint /chart
+failed to connect to the docker API at unix://~/.docker/run/docker.sock; check if the path is correct and if the daemon is running: dial unix ~/.docker/run/docker.sock: connect: no such file or directory
+make: *** [chart-check] Error 1
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.schemas_check
+schemas-check: 565 generated types match committed output.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.authorized_query_check
+authorized-query-check: 152 files under services/api, no offenders.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.demo_guide_check
+demo-guide-check: 12 registered demo(s), all documented.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.domain_model_coverage_check
+domain-model-coverage-check: 104 class(es), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.route_coverage_check
+route-coverage-check: 398 route(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.product_tree_link_check
+product-tree-link-check: 0 known (allowlisted) reference(s), 0 new. Round 14b's own rewrite pass emptied every real citation; the one remaining entry describes the repository's own layout, not a citation, and does not shrink further.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.decision_log_publication_check
+decision-log-publication-check: 2 known (allowlisted) reference(s), 0 new. Allowlist shrinks to zero as the decision log's own prose is edited to state each constraint without the private pointer.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.provenance_annotation_check
+provenance-annotation-check: 15 known (allowlisted) false positive(s), 0 new build-calendar annotation(s).
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
+test-file-coverage-check: 904 test file(s), 0 allowlisted, no new drift.
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.doc_citations_check
+doc-citations-check: 2312 file(s) scanned, every cited path exists.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/platform-b/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/conformance -k test_guard
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 734 items / 720 deselected / 14 selected
+
+../OspreyFlow_Build/tests/conformance/analytics_port/test_guard.py ..    [ 14%]
+../OspreyFlow_Build/tests/conformance/compute_port/test_guard.py ..      [ 28%]
+../OspreyFlow_Build/tests/conformance/graph_port/test_guard.py ...       [ 50%]
+../OspreyFlow_Build/tests/conformance/media_store/test_guard.py ..       [ 64%]
+../OspreyFlow_Build/tests/conformance/model_port/test_guard.py ..        [ 78%]
+../OspreyFlow_Build/tests/conformance/recognise_port/test_guard.py ...   [100%]
+
+====================== 14 passed, 720 deselected in 0.67s ======================
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/platform-b/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 111 items
+
+../OspreyFlow_Build/tests/test_stack_lease.py .......................... [ 23%]
+..............                                                           [ 36%]
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py .FFFFFF.F.FF.FFFFFFFFF [ 55%]
+.....                                                                    [ 60%]
+../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 82%]
+...                                                                      [ 85%]
+../OspreyFlow_Build/tests/test_friction_assemble.py ......               [ 90%]
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 97%]
+../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [100%]
+
+=================================== FAILURES ===================================
+____________________ test_fresh_working_lanes_need_nothing _____________________
+
+hb = <function hb.<locals>.run at 0x103ec19e0>
+
+    def test_fresh_working_lanes_need_nothing(hb) -> None:
+        _all_beat(hb)
+>       assert _needs(hb("show")) == []
+                      ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...n  orchestrator release refresh your deployment, publish the product r after Track A, ~21:30\n\n\nNothing needs you.\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 902-903: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+_____ test_a_working_beat_older_than_the_quiet_limit_is_the_orchestrators ______
+
+hb = <function hb.<locals>.run at 0x103ef2520>
+
+    def test_a_working_beat_older_than_the_quiet_limit_is_the_orchestrators(hb) -> None:
+        _all_beat(hb)
+        hb.age("glass", 46)
+>       show = hb("show")
+               ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:106: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...ORCHESTRATOR (it acts on these; nothing for you):\n  - glass has been quiet since 2026-11-10T10:36:52Z while working\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 903-904: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+___________________ test_a_waiting_for_owner_beat_needs_you ____________________
+
+hb = <function hb.<locals>.run at 0x103ef2e80>
+
+    def test_a_waiting_for_owner_beat_needs_you(hb) -> None:
+        _all_beat(hb)
+        hb("beat", "case", "waiting-for-owner", "the owner's ruling on open question 1")
+>       assert _needs(hb("show")) == ["case is waiting for you: the owner's ruling on open question 1"]
+                      ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x... product r after Track A, ~21:30\n\n\nNEEDS YOU:\n  - case is waiting for you: the owner's ruling on open question 1\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 918-919: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+_________ test_a_waiting_beat_that_names_no_owner_is_the_orchestrators _________
+
+hb = <function hb.<locals>.run at 0x103ef3560>
+
+    def test_a_waiting_beat_that_names_no_owner_is_the_orchestrators(hb) -> None:
+        """Lanes beat waiting-for-owner while they wait on the orchestrator (a merge, a slot, a stack): on
+        10 November 2026 the owner was shown "case is waiting for you: L3.6 ... waiting for L2.10 to merge"
+        under Needs you. A waiting note that does not name the owner is the orchestrator's, never notified."""
+        _all_beat(hb)
+        hb("beat", "case", "waiting-for-owner", "L3.6 plan ratified; waiting for L2.10 to merge")
+>       show = hb("show")
+               ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...n these; nothing for you):\n  - case is waiting for the orchestrator: L3.6 plan ratified; waiting for L2.10 to merge\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 918-919: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+____________ test_a_lease_older_than_its_limit_is_the_orchestrators ____________
+
+hb = <function hb.<locals>.run at 0x103ef3ce0>
+
+    def test_a_lease_older_than_its_limit_is_the_orchestrators(hb) -> None:
+        _all_beat(hb)
+        hb.hold_lease("studio", 121)
+>       show = hb("show")
+               ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:132: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...hese; nothing for you):\n  - Test stack a has been leased by studio since 2026-11-10T09:21:53Z (phase 6 route tests)\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 953-954: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+____________________ test_a_lane_that_never_beat_needs_you _____________________
+
+hb = <function hb.<locals>.run at 0x1045c4360>
+
+    def test_a_lane_that_never_beat_needs_you(hb) -> None:
+        hb("beat", "studio", "working", "x")
+        hb("beat", "glass", "working", "x")
+>       assert _needs(hb("show")) == ["case has never sent a heartbeat"]
+                      ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:141: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...sh your deployment, publish the product r after Track A, ~21:30\n\n\nNEEDS YOU:\n  - case has never sent a heartbeat\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 853-854: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+______________ test_a_needs_line_reads_the_same_ten_minutes_later ______________
+
+hb = <function hb.<locals>.run at 0x1045c4540>
+
+    def test_a_needs_line_reads_the_same_ten_minutes_later(hb) -> None:
+        """What watch compares from pass to pass: a line that carried its own age would be new on every
+        pass and notify every time."""
+        _all_beat(hb)
+        hb.age("glass", 46)
+        hb("beat", "case", "ready-to-merge", "L3.1 done")
+        hb("beat", "studio", "waiting-for-owner", "the owner's answer on open question 1")
+        hb.age("studio", 46)
+        now = int(datetime.now(UTC).timestamp())
+>       first = _needs(hb("show", OSPREY_NOW=str(now)))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:160: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...ass has been quiet since 2026-11-10T10:36:54Z while working\n  - case is ready to merge (since 2026-11-10T11:22:54Z)\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 922-923: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+__ test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge[2-True] __
+
+hb = <function hb.<locals>.run at 0x103ef3f60>
+tmp_path = PosixPath('<tmp>
+ahead = 2, flagged = True
+
+    @pytest.mark.parametrize(("ahead", "flagged"), [(2, True), (0, False)])
+    def test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge(
+        hb, tmp_path, ahead, flagged
+    ) -> None:
+        """A merged lane (nothing ahead of main) is not asked to rebase however far main has moved."""
+        worktrees = _repo_with_lane(tmp_path, ahead=ahead, behind=6)
+        _all_beat(hb)
+>       out = hb("show", OSPREY_WORKTREES=str(worktrees)).stdout
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:212: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...\n\nFOR THE ORCHESTRATOR (it acts on these; nothing for you):\n  - glass is 5 or more commits behind main: to rebase\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 916-917: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+_ test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge[0-False] __
+
+hb = <function hb.<locals>.run at 0x103ef2340>
+tmp_path = PosixPath('<tmp>
+ahead = 0, flagged = False
+
+    @pytest.mark.parametrize(("ahead", "flagged"), [(2, True), (0, False)])
+    def test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge(
+        hb, tmp_path, ahead, flagged
+    ) -> None:
+        """A merged lane (nothing ahead of main) is not asked to rebase however far main has moved."""
+        worktrees = _repo_with_lane(tmp_path, ahead=ahead, behind=6)
+        _all_beat(hb)
+>       out = hb("show", OSPREY_WORKTREES=str(worktrees)).stdout
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:212: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...n  orchestrator release refresh your deployment, publish the product r after Track A, ~21:30\n\n\nNothing needs you.\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 912-913: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+______________ test_only_what_needs_the_owner_is_under_needs_you _______________
+
+hb = <function hb.<locals>.run at 0x1045c49a0>
+
+    def test_only_what_needs_the_owner_is_under_needs_you(hb) -> None:
+        """A lane ready to merge, or behind main, is the orchestrator's to act on, not the owner's: it is
+        listed under FOR THE ORCHESTRATOR and is never notified. A lane waiting for the owner stays under
+        NEEDS YOU and is notified."""
+        _all_beat(hb)
+        hb("beat", "glass", "ready-to-merge", "done")
+        hb("beat", "case", "waiting-for-owner", "a question for the owner")
+>       out = hb("show").stdout
+              ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:249: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...nFOR THE ORCHESTRATOR (it acts on these; nothing for you):\n  - glass is ready to merge (since 2026-11-10T11:23:00Z)\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 916-917: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+___ test_a_paused_lane_is_shown_paused_with_its_account_and_never_as_stalled ___
+
+hb = <function hb.<locals>.run at 0x1045c42c0>
+tmp_path = PosixPath('<tmp>
+
+    def test_a_paused_lane_is_shown_paused_with_its_account_and_never_as_stalled(hb, tmp_path) -> None:
+        """ADR-142 Amendment 1 decision 7: the monitor shows the paused state, how long, and the account;
+        a lane paused for hours is not quiet (red with `paused` handled as `working`)."""
+        _all_beat(hb)
+        assert hb("beat", "case", "paused", "paused at L3.1 fix 7").returncode == 0
+        (tmp_path / "lanes" / "case.account").write_text("client\n")
+        hb.age("case", 300)
+>       show = hb("show")
+               ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:265: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...n  orchestrator release refresh your deployment, publish the product r after Track A, ~21:30\n\n\nNothing needs you.\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 905-906: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+________ test_a_lane_at_its_usage_limit_names_its_account_for_the_owner ________
+
+hb = <function hb.<locals>.run at 0x1045c5440>
+tmp_path = PosixPath('<tmp>
+
+    def test_a_lane_at_its_usage_limit_names_its_account_for_the_owner(hb, tmp_path) -> None:
+        _all_beat(hb)
+        (tmp_path / "lanes" / "glass.account").write_text("ayan\n")
+        assert hb("beat", "glass", "blocked", "usage limit").returncode == 0
+>       [line] = _needs(hb("show"))
+                        ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:277: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x... its usage limit on account ayan: switch it (lanes_launch.sh switch glass --account <name>) or write a fallback line\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 897-898: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+__ test_a_lane_blocked_only_on_the_lease_is_the_orchestrators_not_the_owners ___
+
+hb = <function hb.<locals>.run at 0x1045c5e40>
+
+    def test_a_lane_blocked_only_on_the_lease_is_the_orchestrators_not_the_owners(hb) -> None:
+        """The orchestrator passes the lease; a lane waiting for it needs nothing from the owner (found
+        7 November 2026: studio and glass both under Needs you while case held the lease)."""
+        _all_beat(hb)
+        assert hb("beat", "glass", "blocked", "L2.8: waiting for the glass lease for the live round").returncode == 0
+        assert hb("beat", "studio", "blocked", "a real block: the fixture repository is gone").returncode == 0
+>       show = hb("show")
+               ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:287: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...n these; nothing for you):\n  - glass is waiting for the lease: L2.8: waiting for the glass lease for the live round\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 945-946: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+_ test_a_lane_waiting_for_the_lease_is_the_orchestrators_whatever_state_it_beats _
+
+hb = <function hb.<locals>.run at 0x103ef2d40>
+
+    def test_a_lane_waiting_for_the_lease_is_the_orchestrators_whatever_state_it_beats(hb) -> None:
+        """Found 7 November 2026, 23:40: glass beat waiting-for-owner while it waited only for the lease,
+        which the orchestrator passes; the owner was shown it under Needs you."""
+        _all_beat(hb)
+        assert hb("beat", "glass", "waiting-for-owner", "round 1 fixes in; waiting for the glass lease for the live reds").returncode == 0
+        assert hb("beat", "case", "waiting-for-owner", "Q1 for the owner: which of a, b or c?").returncode == 0
+>       show = hb("show")
+               ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:299: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...thing for you):\n  - glass is waiting for the lease: round 1 fixes in; waiting for the glass lease for the live reds\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 978-979: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+________________ test_shows_run_at_once_do_not_mix_their_lines _________________
+
+hb = <function hb.<locals>.run at 0x1045c6b60>
+
+    def test_shows_run_at_once_do_not_mix_their_lines(hb) -> None:
+        """Found 7 November 2026, 23:45: the owner's running `watch` and the orchestrator's `show` wrote the
+        same temporary files, so a line appeared twice, and the old script's line beside the new one's."""
+        import concurrent.futures
+    
+        _all_beat(hb)
+        assert hb("beat", "glass", "ready-to-merge", "L2.8 done").returncode == 0
+        assert hb("beat", "case", "waiting-for-owner", "Q1 for the owner: which of a, b or c?").returncode == 0
+        with concurrent.futures.ThreadPoolExecutor(8) as pool:
+>           outs = list(pool.map(lambda _: hb("show").stdout, range(16)))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:313: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../miniconda3/lib/python3.12/concurrent/futures/_base.py:619: in result_iterator
+    yield _result_or_cancel(fs.pop())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/concurrent/futures/_base.py:317: in _result_or_cancel
+    return fut.result(timeout)
+           ^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+../../../../miniconda3/lib/python3.12/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:313: in <lambda>
+    outs = list(pool.map(lambda _: hb("show").stdout, range(16)))
+                                   ^^^^^^^^^^
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...nFOR THE ORCHESTRATOR (it acts on these; nothing for you):\n  - glass is ready to merge (since 2026-11-10T11:23:02Z)\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 921-922: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+__________ test_the_lanes_shown_by_default_are_the_six_of_amendment_3 __________
+
+hb = <function hb.<locals>.run at 0x1045c5b20>
+
+    def test_the_lanes_shown_by_default_are_the_six_of_amendment_3(hb) -> None:
+        """With no OSPREY_LANES, the heartbeat shows the lanes scripts/lanes.conf lists, in its order, and not
+        the retired glass lane (red against the four-lane default)."""
+>       out = hb("show", OSPREY_LANES="").stdout
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:326: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x... platform has never sent a heartbeat\n  - platform-b has never sent a heartbeat\n  - docs has never sent a heartbeat\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 1838-1839: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+________________ test_each_test_stack_is_shown_with_its_holder _________________
+
+hb = <function hb.<locals>.run at 0x1045c7d80>
+
+    def test_each_test_stack_is_shown_with_its_holder(hb) -> None:
+        _all_beat(hb)
+>       out = hb("show").stdout
+              ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:336: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...n  orchestrator release refresh your deployment, publish the product r after Track A, ~21:30\n\n\nNothing needs you.\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 902-903: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+________ test_a_stack_b_lease_older_than_its_limit_is_the_orchestrators ________
+
+hb = <function hb.<locals>.run at 0x1045c4fe0>
+
+    def test_a_stack_b_lease_older_than_its_limit_is_the_orchestrators(hb) -> None:
+        _all_beat(hb)
+        hb.hold_lease("rules", 121, "b")
+>       show = hb("show")
+               ^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:348: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py:47: in run
+    return subprocess.run(
+../../../../miniconda3/lib/python3.12/subprocess.py:550: in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:1209: in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../../miniconda3/lib/python3.12/subprocess.py:2153: in _communicate
+    stdout = self._translate_newlines(stdout,
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Popen: returncode: 0 args: ['bash', '~/dev/osprey-wt/platform-...>
+data = b"OVERALL: [\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x...these; nothing for you):\n  - Test stack b has been leased by rules since 2026-11-10T09:22:03Z (phase 6 route tests)\n"
+encoding = 'UTF-8', errors = 'strict'
+
+    def _translate_newlines(self, data, encoding, errors):
+>       data = data.decode(encoding, errors)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 952-953: invalid continuation byte
+
+../../../../miniconda3/lib/python3.12/subprocess.py:1086: UnicodeDecodeError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_fresh_working_lanes_need_nothing
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_working_beat_older_than_the_quiet_limit_is_the_orchestrators
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_waiting_for_owner_beat_needs_you
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_waiting_beat_that_names_no_owner_is_the_orchestrators
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_lease_older_than_its_limit_is_the_orchestrators
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_lane_that_never_beat_needs_you
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_needs_line_reads_the_same_ten_minutes_later
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge[2-True]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_lane_behind_main_is_flagged_only_while_it_has_work_to_merge[0-False]
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_only_what_needs_the_owner_is_under_needs_you
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_paused_lane_is_shown_paused_with_its_account_and_never_as_stalled
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_lane_at_its_usage_limit_names_its_account_for_the_owner
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_lane_blocked_only_on_the_lease_is_the_orchestrators_not_the_owners
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_lane_waiting_for_the_lease_is_the_orchestrators_whatever_state_it_beats
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_the_lanes_shown_by_default_are_the_six_of_amendment_3
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_each_test_stack_is_shown_with_its_holder
+FAILED ../OspreyFlow_Build/tests/test_lanes_heartbeat.py::test_a_stack_b_lease_older_than_its_limit_is_the_orchestrators
+======================== 18 failed, 93 passed in 48.75s ========================
+make: *** [lanes-check] Error 1
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/platform-b/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 10 items
+
+../OspreyFlow_Build/tests/test_unfiltered_node_lookup_confined.py ...... [ 60%]
+....                                                                     [100%]
+
+============================== 10 passed in 8.35s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.no_branches_check
+no-branches-check: 1556 files, no branch named.
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/platform-b/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_no_branches_check.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 12 items
+
+../OspreyFlow_Build/tests/test_no_branches_check.py ............         [100%]
+
+============================== 12 passed in 0.64s ==============================
+cd ../OspreyFlow_Core && PYTHONPATH=packages:~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.osprey_bundle --profile local-lite --out ~/dev/osprey-wt/platform-b/OspreyFlow_Build/dist
+osprey bundle: 80 file(s) -> ~/dev/osprey-wt/platform-b/OspreyFlow_Build/dist/osprey-bundle-local-lite.tar.gz
+make: Target `ci' not remade because of errors.

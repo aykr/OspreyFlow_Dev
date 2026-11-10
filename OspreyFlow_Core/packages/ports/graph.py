@@ -377,7 +377,10 @@ class GraphPort(Protocol):
         A node in a `gazetteer-*` dataset matches a request reader on its
         `name` alone, never on its gazetteer's source identifiers (rule 7,
         ADR-147 Amendment 1 decision 3b), inside the traversal, so neither
-        a hit nor its absence tells the reader an identifier."""
+        a hit nor its absence tells the reader an identifier. No node of any
+        dataset matches a request reader on an identifier only a gazetteer
+        carries (`GAZETTEER_ONLY_IDENTIFIERS`, Amendment 3), as none is sent
+        one; a search on those alone matches nothing."""
         ...
 
     async def suggest_locations(
@@ -433,7 +436,9 @@ class GraphPort(Protocol):
 
         A node in a `gazetteer-*` dataset matches a request reader on its `name` alone, never on
         its gazetteer's source identifiers (rule 7, ADR-147 Amendment 1 decision 3b), inside the
-        traversal, so the rows, `more` and any count follow it."""
+        traversal, so the rows, `more` and any count follow it. No node of any dataset matches a
+        request reader on an identifier only a gazetteer carries (`GAZETTEER_ONLY_IDENTIFIERS`,
+        Amendment 3)."""
         ...
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph: ...

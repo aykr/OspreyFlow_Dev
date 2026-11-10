@@ -1,0 +1,62 @@
+ADR-147 Am 3 live GREEN at ba7e215, stack g (platform-b's lease), the orchestrator's narrowed set, --durations=30:
+Running on ospreyflow-test (stack g, osprey-runs/platform-b/OspreyFlow_Build/), logged at osprey-runs/platform-b.meta/runs/20261110T110105Z/log: sh -c cd ../OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q --durations=30 ../OspreyFlow_Build/tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py ../OspreyFlow_Build/tests/ingest/test_gazetteer_ids_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_gazetteer_place_search_live.py ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_copies_live.py ../OspreyFlow_Build/tests/ingest/test_case_gazetteer_routes_live.py ../OspreyFlow_Build/tests/ingest/test_osm_gazetteer_connector.py ../OspreyFlow_Build/tests/ingest/test_osm_gazetteer_recipe_end_to_end.py ../OspreyFlow_Build/tests/ingest/test_remaining_gazetteers.py ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_sources_withheld_live.py ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_element_map_withholds_sources.py ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_every_read_withholds_by_its_principal.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -q --durations=30 ../OspreyFlow_Build/tests/conformance/graph_port/test_suite.py ../OspreyFlow_Build/tests/conformance/graph_port/test_analyst_layer.py -k 'search or suggest'
+..........................................................               [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  ~/osprey-runs/platform-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+29.19s call     tests/ingest/test_case_gazetteer_copies_live.py::test_a_region_is_copied_in_bounded_pages_and_timed
+19.16s call     tests/adapters/graph_arcadedb/test_sources_withheld_live.py::test_the_remaining_read_paths_withhold_and_name_by_the_readers_scope
+19.15s call     tests/ingest/test_remaining_gazetteers.py::test_usgs_gnis_locations_carry_a_geometry_ref
+19.15s call     tests/ingest/test_remaining_gazetteers.py::test_nad_locations_carry_a_geometry_ref
+19.10s call     tests/ingest/test_remaining_gazetteers.py::test_open_uprn_locations_carry_a_geometry_ref
+19.04s call     tests/adapters/graph_arcadedb/test_sources_withheld_live.py::test_every_read_path_withholds_sources_of_an_element_in_a_dataset_the_case_lacks
+19.03s call     tests/ingest/test_remaining_gazetteers.py::test_os_open_names_locations_carry_a_geometry_ref
+18.41s setup    tests/ingest/test_gazetteer_place_search_live.py::test_a_rebuild_writes_no_second_copy_of_a_place
+18.05s call     tests/ingest/test_osm_gazetteer_recipe_end_to_end.py::test_osm_places_load_as_location_entities_with_a_resolvable_geometry
+17.95s setup    tests/ingest/test_gazetteer_place_search_live.py::test_the_case_s_own_searches_match_a_gazetteer_place_on_its_name_alone
+17.34s call     tests/ingest/test_remaining_gazetteers.py::test_code_point_open_locations_carry_a_geometry_ref
+17.17s setup    tests/ingest/test_gazetteer_place_search_live.py::test_an_identifier_fragment_finds_no_place_and_no_more
+16.70s call     tests/adapters/graph_arcadedb/test_sources_withheld_live.py::test_withholding_changes_what_is_sent_never_what_is_stored
+16.50s call     tests/ingest/test_remaining_gazetteers.py::test_tiger_line_locations_carry_a_representative_point
+16.28s call     tests/adapters/graph_arcadedb/test_sources_withheld_live.py::test_a_case_reading_both_datasets_is_named_the_sources
+16.18s setup    tests/ingest/test_gazetteer_place_search_live.py::test_a_case_that_added_the_gazetteer_finds_its_place_and_one_that_did_not_finds_nothing
+16.08s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_a_case_finds_its_copy_of_a_place_by_name_at_its_point
+15.91s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_a_restricted_case_load_on_a_copy_is_still_the_case_s_at_a_rebuild
+15.87s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_a_re_copy_writes_no_second_copy_and_keeps_a_place_gone
+15.83s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_a_region_is_copied_in_bounded_pages_and_timed
+15.82s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_no_copy_s_identifier_is_sent_on_any_node_read
+15.82s call     tests/ingest/test_remaining_gazetteers.py::test_boundary_line_locations_carry_no_geometry_ref
+15.79s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_the_case_s_own_searches_never_match_a_copy_by_an_identifier
+15.66s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_a_retracted_copy_is_still_a_copy_and_its_identifiers_still_withheld
+15.62s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_a_rebuild_after_a_case_s_load_keeps_what_the_case_wrote
+15.54s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_a_real_case_load_then_a_refresh_keeps_one_copy_and_its_links
+14.52s setup    tests/ingest/test_case_gazetteer_copies_live.py::test_a_case_s_load_writing_onto_a_copy_keeps_it_a_copy_and_the_case_s
+14.25s call     tests/ingest/test_case_gazetteer_routes_live.py::test_a_case_that_adds_a_gazetteer_reads_copies_without_identifiers_and_still_loads
+11.39s call     tests/ingest/test_gazetteer_ids_withheld_live.py::test_a_case_reading_the_gazetteer_is_sent_its_places_without_their_identifiers
+9.12s call     tests/ingest/test_gazetteer_only_ids_withheld_everywhere_live.py::test_the_exact_search_finds_no_node_by_a_gazetteer_only_identifier
+58 passed, 1 warning in 628.06s (0:10:28)
+...............                                                          [100%]
+============================= slowest 30 durations =============================
+19.40s call     tests/conformance/graph_port/test_suite.py::test_search_nodes_matches_an_identifier_declared_on_any_entity_type[graph_arcadedb[gremlin]]
+19.12s call     tests/conformance/graph_port/test_suite.py::test_suggest_nodes_finds_an_account_by_the_start_of_its_normalised_value[graph_arcadedb[gremlin]]
+19.04s call     tests/conformance/graph_port/test_suite.py::test_suggest_nodes_contains_and_exact_modes[graph_arcadedb[gremlin]]
+18.75s call     tests/conformance/graph_port/test_suite.py::test_suggest_locations_matches_a_substring_of_the_name[graph_arcadedb[gremlin]]
+18.27s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_search_matches_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+18.12s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_suggest_locations_matches_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+18.03s call     tests/conformance/graph_port/test_suite.py::test_suggest_locations_respects_the_limit[graph_arcadedb[gremlin]]
+17.88s call     tests/conformance/graph_port/test_suite.py::test_suggest_nodes_typed_regex_characters_are_text_not_a_pattern[graph_arcadedb[gremlin]]
+17.72s call     tests/conformance/graph_port/test_suite.py::test_suggest_nodes_ignoring_case_finds_either_case_and_the_default_does_not[graph_arcadedb[gremlin]]
+17.58s call     tests/conformance/graph_port/test_suite.py::test_search_suggestions_and_lookups_find_only_the_cases_datasets[graph_arcadedb[gremlin]]
+17.58s call     tests/conformance/graph_port/test_suite.py::test_suggest_locations_with_no_match_returns_empty[graph_arcadedb[gremlin]]
+17.33s call     tests/conformance/graph_port/test_suite.py::test_unauthorised_suggestions_match_a_graph_where_the_node_never_existed[graph_arcadedb[gremlin]]
+16.82s call     tests/conformance/graph_port/test_suite.py::test_suggest_nodes_says_when_more_matched_and_never_returns_more_than_the_limit[graph_arcadedb[gremlin]]
+16.42s call     tests/conformance/graph_port/test_suite.py::test_suggest_nodes_ignoring_case_still_hides_what_the_principal_may_not_see[graph_arcadedb[gremlin]]
+15.70s call     tests/conformance/graph_port/test_suite.py::test_search_nodes_finds_an_endpoint_in_the_shape_the_engine_actually_writes[graph_arcadedb[gremlin]]
+0.09s setup    tests/conformance/graph_port/test_suite.py::test_search_nodes_matches_an_identifier_declared_on_any_entity_type[graph_arcadedb[gremlin]]
+
+(14 durations < 0.005s hidden.  Use -vv to show these durations.)
+15 passed, 271 deselected in 268.35s (0:04:28)

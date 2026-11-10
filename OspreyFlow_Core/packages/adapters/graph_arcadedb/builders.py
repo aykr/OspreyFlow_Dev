@@ -22,7 +22,7 @@ from schemas.domain import (
     Principal,
     PropertyType,
 )
-from schemas.mapconfig import GAZETTEER_DATASET_PREFIX
+from schemas.mapconfig import GAZETTEER_DATASET_PREFIX, GAZETTEER_ONLY_IDENTIFIERS
 
 from .access_filter import AccessFilter
 from .gremlin_literals import (
@@ -83,16 +83,23 @@ def match_any_field(
     on its name alone, never an identifier (`osm_id`, `uprn`, …: source-system identifiers, rule
     7; the orchestrator's ruling of 9 November 2026). Inside the traversal, so the rows, the
     `limit + 1` row that says `more`, and any count follow it: a run of prefix searches cannot
-    rebuild a place's `osm_id`. An unlimited principal (`datasets is None`, which no request
-    carries, ADR-099) matches every field, as before. A load's lookups and a rebuild do not pass
-    here: `find_node` (`FindByIdentifierBuilder`) matches its one named field unguarded."""
+    rebuild a place's `osm_id`. Amendment 3: for a request reader no node of any dataset is matched
+    on an identifier only a gazetteer carries (`GAZETTEER_ONLY_IDENTIFIERS`), as none is sent one;
+    a case's own `uprn` is matched still. An unlimited principal (`datasets is None`, which no
+    request carries, ADR-099) matches every field, as before. A load's lookups and a rebuild do
+    not pass here: `find_node` (`FindByIdentifierBuilder`) matches its one named field unguarded."""
     every = [clause(field) for field in fields]
     if principal.datasets is None:
         return f"or({','.join(every)})"
-    names = [clause(field) for field in fields if field in GAZETTEER_MATCH_FIELDS]
-    others = [clause(field) for field in fields if field not in GAZETTEER_MATCH_FIELDS]
+    # ADR-147 Amendment 3: the six only a gazetteer carries are sent to no request reader on any
+    # node, so no node is found by one either: a prefix search would otherwise rebuild one.
+    shown = [field for field in fields if field not in GAZETTEER_ONLY_IDENTIFIERS]
+    if not shown:
+        return "or(__.not(__.identity()))"  # nothing to match on: no node, and no `more`
+    names = [clause(field) for field in shown if field in GAZETTEER_MATCH_FIELDS]
+    others = [clause(field) for field in shown if field not in GAZETTEER_MATCH_FIELDS]
     if not others:
-        return f"or({','.join(every)})"
+        return f"or({','.join(names)})"
     prefix = groovy_string_literal(GAZETTEER_DATASET_PREFIX)
     # A gazetteer's place (`ontology.handling.is_gazetteer_held`): in a gazetteer dataset, or a
     # case's own copy of one, named by its provenance (ADR-147 Amendment 2, the owner's ruling 6).

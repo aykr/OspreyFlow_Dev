@@ -18,7 +18,11 @@ import yaml
 from pydantic import BaseModel, ValidationError
 
 from schemas.domain import Edge, Handling, Node, Principal
-from schemas.mapconfig import GAZETTEER_DATASET_PREFIX, GAZETTEER_SOURCE_IDENTIFIERS
+from schemas.mapconfig import (
+    GAZETTEER_DATASET_PREFIX,
+    GAZETTEER_ONLY_IDENTIFIERS,
+    GAZETTEER_SOURCE_IDENTIFIERS,
+)
 
 from .errors import HandlingSchemeError
 
@@ -357,18 +361,24 @@ def _gazetteer_identifiers_withheld[Element: (Node, Edge)](
     """ADR-147 Amendment 1 (rule 7, the orchestrator's ruling of 9 November 2026): a gazetteer's
     place (a node in a `gazetteer-*` dataset, or a case's copy of one: `is_gazetteer_held`) comes to
     a request reader without its gazetteer's own
-    identifiers (`osm_id`, `uprn`, …), which are source-system identifiers. A case that adds the
+    identifiers (`osm_id`, `uprn`, …), which are source-system identifiers. Amendment 3: every
+    other node comes without the six only a gazetteer carries (`GAZETTEER_ONLY_IDENTIFIERS`), and
+    keeps a `uprn`, which is a case's own. A case that adds the
     gazetteer reads its places through search, expansion and every other node read, all of which
     pass here. The Conduit's own work (`datasets is None`: resolution) keeps them, and so does a
     read inside `sources_in_full`: a read written back, and a gazetteer load, which reads its places
     whole (`load_gazetteer`). A rebuild matches a place by its `osm_id` inside the store anyway."""
     if principal.datasets is None or not isinstance(element, Node):
         return element
-    if not is_gazetteer_held(element):
+    # ADR-147 Amendment 3 (CARRIES row 23, the strict reading): the six only a gazetteer carries
+    # leave every node, whatever dataset it is in, as a gazetteer loaded through the Studio sits in
+    # a case's own dataset unmarked; a gazetteer's place loses `uprn` too, a case's own keeps it.
+    withheld = (
+        GAZETTEER_SOURCE_IDENTIFIERS if is_gazetteer_held(element) else GAZETTEER_ONLY_IDENTIFIERS
+    )
+    if not any(name in element.properties for name in withheld):
         return element
-    if not any(name in element.properties for name in GAZETTEER_SOURCE_IDENTIFIERS):
-        return element
-    kept = {k: v for k, v in element.properties.items() if k not in GAZETTEER_SOURCE_IDENTIFIERS}
+    kept = {k: v for k, v in element.properties.items() if k not in withheld}
     return element.model_copy(update={"properties": kept})
 
 

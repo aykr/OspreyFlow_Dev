@@ -1,0 +1,24 @@
+lanes-check alone at a033ffa (450ce13 rebased onto main 865e097, which carries the character cut), on the closed ports as make -k ci runs; everything else in make -k ci as at 450ce13:
+cd ../OspreyFlow_Core && .venv/bin/pytest -c ~/dev/osprey-wt/platform-b/OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: ~/dev/osprey-wt/platform-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 112 items
+
+../OspreyFlow_Build/tests/test_stack_lease.py .......................... [ 23%]
+..............                                                           [ 35%]
+../OspreyFlow_Build/tests/test_lanes_heartbeat.py ...................... [ 55%]
+......                                                                   [ 60%]
+../OspreyFlow_Build/tests/test_lanes_launch.py ......................... [ 83%]
+...                                                                      [ 85%]
+../OspreyFlow_Build/tests/test_friction_assemble.py ......               [ 91%]
+../OspreyFlow_Build/tests/test_adr_reservations.py .......               [ 97%]
+../OspreyFlow_Build/tests/test_spec_doc_paths.py ...                     [100%]
+
+============================= 112 passed in 44.23s =============================
+cd ../OspreyFlow_Core && PYTHONPATH=~/dev/osprey-wt/platform-b/OspreyFlow_Build .venv/bin/python -m tools.adr_reservations_check
+adr-reservations-check: every heading above the baseline is reserved.
