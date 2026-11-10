@@ -104,6 +104,7 @@ async def _load(storage: ObjectStorageConfig, load_id: str, planted: str) -> Val
         load_id=load_id, investigation_scope="case-1", storage=storage, scheme=SCHEME,
         subscribed=(),
     )  # fmt: skip
+    await graph.commit_transaction(tx)  # the caller commits, as the staged engine's own tests do
     return graph
 
 
