@@ -38,6 +38,7 @@ FAKE_REFUSAL = "test_a_failed_commit_is_an_error_not_a_quiet_success"
 LOCK_PROBE = "test_the_index_is_read_and_written_under_a_lock_another_process_honours"
 LOCKED = (
     "        with _open_repository(repo_root) as repo, _publish_lock(repo, deadline):\n"
+    "            _sweep_asides(repo_root)\n"
     "            written = _write_recipe_file(repo_root, relative_path, data)\n"
     "            _stage_and_commit(repo, path, written, data, message)\n"
 )
@@ -46,8 +47,11 @@ ACQUIRE = (
     "    if not _REPOSITORY_LOCK.acquire(timeout=PUBLISH_LOCK_WAIT_SECONDS):\n"
     "        raise _held_off()\n"
 )
-GIT_DIR_CHECK = "        or Path(repo.controldir()).resolve() != own.resolve()\n"
-LSTAT_CHECK = "        if not stat.S_ISDIR(os.lstat(own).st_mode):\n"
+GIT_DIR_CHECK = (
+    "    if not own_is_a_directory or Path(repo.commondir()).resolve() != own.resolve():\n"
+)
+AT_ONCE = "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS\n"
+OWN_GIT = "test_a_git_directory_that_is_not_the_root_s_own_is_refused"
 
 #: (slug, what the plant does, [(old, new)], test files, the tests that must go red)
 PLANTS = [
@@ -175,7 +179,8 @@ PLANTS = [
      [REPO_TESTS], ["test_a_fresh_repository_is_on_main_whatever_the_user_s_config_says"],
      "read the user's or the system's git config"),
     ("worktree-unchecked", "a config naming another worktree not refused",
-     [("        or Path(repo.path).resolve() != repo_root.resolve()\n", "")],
+     [("    if repo.bare or Path(repo.path).resolve() != repo_root.resolve():\n",
+       "    if repo.bare:  # PLANT\n")],
      [REPO_TESTS], ["test_a_repository_whose_config_names_another_tree_is_refused"]),
     ("lock-waits-forever", "the publish flock waited for without limit: `LOCK_NB` dropped",
      [("fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)", "fcntl.flock(fd, fcntl.LOCK_EX)  # PLANT")],
@@ -193,18 +198,38 @@ PLANTS = [
      [(ACQUIRE, "    if not _REPOSITORY_LOCK.acquire():  # PLANT\n        raise _held_off()\n"
                 "    deadline = time.monotonic() + PUBLISH_LOCK_WAIT_SECONDS\n")],
      [REPO_TESTS], ["test_publishes_queued_behind_a_held_lock_share_one_wait"], "a second wait"),
-    ("git-dir-unchecked", "neither the `.git` lstat nor the control-directory check asked",
-     [(LSTAT_CHECK, "        if False:  # PLANT\n"), (GIT_DIR_CHECK, "")], [REPO_TESTS],
-     ["test_a_git_directory_that_is_not_the_root_s_own_is_refused[gitfile]",
-      "test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]"], "DID NOT RAISE"),
-    ("git-dir-lstat-only-removed", "the `.git` lstat not asked, the control-directory check kept: "
-     "a link at `.git` resolves to the same directory it names, so only the lstat refuses it",
-     [(LSTAT_CHECK, "        if False:  # PLANT\n")], [REPO_TESTS],
-     ["test_a_git_directory_that_is_not_the_root_s_own_is_refused[link]"], "DID NOT RAISE"),
-    ("aside-sweep-removed", "a crashed first use's aside directory never swept",
-     [("            if time.time() - left.lstat().st_mtime > _ASIDE_STALE_SECONDS:\n",
-       "            if False:  # PLANT\n")], [REPO_TESTS],
-     ["test_an_aside_directory_a_crashed_first_use_left_is_swept"], "is still there"),
+    ("git-dir-unchecked", "neither the `.git` lstat nor the common-directory check asked",
+     [(GIT_DIR_CHECK, "    if False:  # PLANT\n")], [REPO_TESTS],
+     [f"{OWN_GIT}[{how}]" for how in ("gitfile", "link", "commondir")], "DID NOT RAISE"),
+    ("commondir-unchecked", "the `.git` lstat asked, its common directory not: a linked "
+     "worktree's layout",
+     [(GIT_DIR_CHECK, "    if not own_is_a_directory:  # PLANT\n")], [REPO_TESTS],
+     [f"{OWN_GIT}[commondir]"], "DID NOT RAISE"),
+    ("git-dir-lstat-only-removed", "the common directory compared, the `.git` lstat not asked: a "
+     "link at `.git` resolves to the directory it names on both sides",
+     [(GIT_DIR_CHECK,
+       "    if Path(repo.commondir()).resolve() != own.resolve():  # PLANT\n")], [REPO_TESTS],
+     [f"{OWN_GIT}[link]"], "DID NOT RAISE"),
+    ("aside-sweep-removed", "an aside directory never swept, at first use or after",
+     [("        if _ASIDE.fullmatch(left.name):\n", "        if False:  # PLANT\n")], [REPO_TESTS],
+     ["test_an_aside_directory_a_crashed_first_use_left_is_swept",
+      "test_an_aside_directory_left_after_the_repository_exists_is_swept"], "is still there"),
+    ("aside-swept-at-first-use-only", "the aside sweep at first use only, not under the lock",
+     [("            _sweep_asides(repo_root)\n", "")], [REPO_TESTS],
+     ["test_an_aside_directory_left_after_the_repository_exists_is_swept"], "is still there"),
+    ("aside-shape-broad", "every `.git-init-*` swept, not only mkdtemp's shape",
+     [('re.escape(_ASIDE_PREFIX) + r"[a-z0-9_]{8}"', 're.escape(_ASIDE_PREFIX) + r".*"')],
+     [REPO_TESTS], ["test_an_aside_directory_a_crashed_first_use_left_is_swept"],
+     "not of the aside shape"),
+    ("refused-at-once", "a contended publish refused without waiting: the deadline already past",
+     [(AT_ONCE, "    deadline = time.monotonic()  # PLANT\n")], [REPO_TESTS],
+     ["test_a_publish_waits_for_a_lock_held_briefly_then_commits",
+      "test_publishes_queued_behind_a_held_lock_share_one_wait"]),
+    ("index-read-before-the-lock", "the index read before either lock is taken",
+     [(ACQUIRE, "    if (repo_root / \".git\").is_dir():  # PLANT\n"
+                "        with Repo(str(repo_root)) as early:\n"
+                "            early.open_index(config=ConfigFile())\n" + ACQUIRE)],
+     [REPO_TESTS], [LOCK_PROBE], "'index read': False"),
 ]
 
 def run(files: list[str]) -> str:
@@ -239,10 +264,13 @@ def main() -> int:
         failed = {line.split("::")[-1].split(" ")[0] for line in out.splitlines()
                   if line.startswith("FAILED")}  # fmt: skip
         absent = [t for t in must_fail if t not in failed]
-        # Where a plant names the reason, a failure for any other reason does not count (rule 15).
-        if reason and not any(reason[0] in line for line in out.splitlines()
-                              if line.startswith("FAILED")):  # fmt: skip
-            absent.append(f"the reason {reason[0]!r}")
+        # Where a plant names the reason, each named test must fail for it (rule 15).
+        if reason:
+            for t in must_fail:
+                lines_of = [line for line in out.splitlines()
+                            if line.startswith("FAILED") and f"::{t} " in line]  # fmt: skip
+                if not any(reason[0] in line for line in lines_of):
+                    absent.append(f"{t}: the reason {reason[0]!r}")
         missed += [(slug, t) for t in absent]
         (HERE / f"red-{n}-{slug}.txt").write_text(
             f"# head {head}; plant: {what}\n# command: pytest -q -rA {' '.join(files)}\n"
