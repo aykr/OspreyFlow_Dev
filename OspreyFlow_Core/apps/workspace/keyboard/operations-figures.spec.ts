@@ -21,8 +21,10 @@ async function fill(page: Page, label: string, text: string) {
 test("a unit's run quota is saved by keyboard, and the figures read again", async ({ page }) => {
   await page.goto(HARNESS);
   await expect(page.getByRole("table", { name: "Runs by day, pipeline and trigger" })).toBeVisible();
+  // A native select chosen by typed letters, as `keyboard.spec.ts`'s `chooseOption` chooses (macOS
+  // opens the menu on an arrow key).
   await page.getByLabel("Quota for").focus();
-  await page.keyboard.press("ArrowDown");
+  await page.keyboard.type("a u");
   await expect(page.getByLabel("Quota for")).toHaveValue("unit");
   await fill(page, "Unit", "unit-1");
   await fill(page, "Runs a day", "5");

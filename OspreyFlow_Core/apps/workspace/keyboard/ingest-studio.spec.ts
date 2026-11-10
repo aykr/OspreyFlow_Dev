@@ -2,7 +2,9 @@
 // 2; `CLAUDE.md` rule 13): the tabs, the dataset switcher, the Runs tab's grid, held rows and Run now,
 // Sources' Add files, and Deploy as vN with Deploy and run now — no `page.mouse`, no `.click()`. The
 // harness serves itself and records every request, so each case proves its action reached its route.
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
@@ -1058,9 +1060,10 @@ test("a release is checked, then imported as drafts, by keyboard", async ({ page
   await tab(page, "5 Releases");
   // A folder is chosen in the system's own picker, which the page cannot drive; the files are set on
   // the input as the picker sets them, and every step after is the keyboard's.
-  await page.getByLabel("Choose the release's folder").setInputFiles([
-    { name: "release.yaml", mimeType: "application/yaml", buffer: Buffer.from("apiVersion: ospreyflow.io/v1\n") },
-  ]);
+  // A folder input takes a directory, as the picker hands one over (Playwright refuses loose files).
+  const folder = mkdtempSync(join(tmpdir(), "ospreyflow-release-"));
+  writeFileSync(join(folder, "release.yaml"), "apiVersion: ospreyflow.io/v1\n");
+  await page.getByLabel("Choose the release's folder").setInputFiles(folder);
   await expect(page.getByRole("button", { name: "Check the release" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Import as drafts" })).toBeDisabled();
   await press(page, "Check the release");
@@ -1074,7 +1077,14 @@ test("a release is checked, then imported as drafts, by keyboard", async ({ page
 
 // ADR-141 decisions 6, 9 and 11 (L1.7): the Runs tab's quota bar, Owned externally, and the DAG.
 test("a pipeline is handed to an orchestrator by keyboard, its quota and DAG read", async ({ page }) => {
+  // The default deployed pipeline watches a folder, so it is refused in words; one with no schedule
+  // of its own is handed over.
   await page.goto(HARNESS);
+  await tab(page, "4 Runs");
+  const watched = page.getByRole("region", { name: "External orchestration" });
+  await expect(watched.getByRole("button", { name: "Mark owned externally" })).toBeDisabled();
+  await expect(watched).toContainText("This pipeline has a schedule of its own: clear it first");
+  await page.goto(`${HARNESS}?unscheduled=1`);
   await tab(page, "4 Runs");
   const region = page.getByRole("region", { name: "External orchestration" });
   await expect(region.getByText("1 of 4 runs a day")).toBeVisible();
@@ -1091,7 +1101,7 @@ test("a pipeline is handed to an orchestrator by keyboard, its quota and DAG rea
   registerCovered(REGISTRY, "hand-a-pipeline-to-an-orchestrator-by-keyboard");
   const pin = region.getByLabel("The DAG runs");
   await pin.focus();
-  await page.keyboard.press("ArrowDown");
+  await page.keyboard.type("v"); // typed letters, as `chooseOption` (macOS opens the menu on an arrow)
   await expect(pin).toHaveValue("this");
   await expect(region.getByLabel("The Airflow DAG")).toContainText(`ospreyflow run harbour-extract ${first} --version `);
   await expect(region.getByLabel("The Airflow DAG")).not.toContainText("--version latest");

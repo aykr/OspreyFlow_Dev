@@ -57,6 +57,12 @@ let deployed: Record<string, unknown> = {
   schedule_owner: "engineer-1", schedule_paused: true,
   schedule_paused_reason: "waiting for its chapter 9 step: resume it on the Studio's Runs tab",
 };  // prettier-ignore
+// ADR-141 decision 11 (L1.7): `?unscheduled=1` deploys it with no schedule of its own, so it may be
+// marked owned externally (a pipeline with a schedule is refused, as the harness's default one is).
+if (startParams.get("unscheduled")) {
+  deployed = { ...deployed };
+  for (const key of ["schedule_watch", "schedule_owner", "schedule_paused", "schedule_paused_reason"]) delete deployed[key];
+}
 // Phase 6 (ADR-140 decision 3): `?expert=1` gives the draft an expert step, which guided mode reads
 // read-only. The step's kind is phase 8's; the harness only needs guided mode to meet one.
 const WITH_EXPERT_STEP = {
