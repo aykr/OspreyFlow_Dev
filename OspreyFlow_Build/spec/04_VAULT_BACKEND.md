@@ -116,6 +116,14 @@ Schema is generated from the ontology by `packages/ontology`, applied by a migra
 and versioned. An ontology change that requires reindexing must say so before it runs, not
 during.
 
+The ArcadeDB runner sends the schema's statements as one `sqlscript` request, in the same order
+it once sent them one at a time (admin's T1, 10 November 2026: a fresh database's schema had
+taken about 30 s). ArcadeDB's schema changes are not transactional, so a refused statement would
+leave the ones before it applied; the runner reads the schema first and, on a refusal, drops what
+the batch added and reads it back, so a refused apply leaves the schema as it was and raises
+`SchemaApplyError` (`test_schema_batch.py`, and `test_schema_batch_live.py` against a real
+ArcadeDB).
+
 ## 2. Columnar analytics
 
 | | DuckDB | ClickHouse |

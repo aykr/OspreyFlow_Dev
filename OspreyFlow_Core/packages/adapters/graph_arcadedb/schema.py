@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import httpx
@@ -107,38 +108,185 @@ _SQL_TYPE: dict[PropertyType, str] = {
 }
 
 
-async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> SchemaReport:
-    applied_entity_types: list[str] = []
-    applied_edge_types: list[str] = []
-    indexes_created: list[str] = []
+class SchemaApplyError(ArcadeDBError):
+    """The schema's statements were refused, and the database's schema is left as it was before the
+    apply: every type, property and index the batch had created before the refusal is dropped again,
+    and the schema read back to prove it. ``restored`` is False only when that proof failed, and the
+    message then names what is left over."""
 
+    def __init__(
+        self, message: str, *, cause: ArcadeDBError | httpx.TransportError, restored: bool
+    ) -> None:
+        super().__init__(
+            message,
+            status_code=getattr(cause, "status_code", None),
+            exception_class=getattr(cause, "exception_class", None),
+        )
+        self.restored = restored
+
+
+@dataclass(frozen=True)
+class _Plan:
+    """Every DDL statement an ontology needs, in the order they run, and what the report names."""
+
+    ddl: list[str] = field(default_factory=list)
+    backfills: list[tuple[str, str]] = field(default_factory=list)
+    entity_types: list[str] = field(default_factory=list)
+    edge_types: list[str] = field(default_factory=list)
+    indexes: list[str] = field(default_factory=list)
+
+
+def schema_statements(schema: OntologySchema) -> _Plan:
+    """The statements `apply_schema` sends, built once: the Conduit's start-up and the test
+    fixture's fresh database run the same list (admin's T1, 10 November 2026)."""
+    plan = _Plan()
     for entity in schema.entity_types:
         name = groovy_identifier(physical_type_name(entity.name))
-        await _ddl(client, f"CREATE VERTEX TYPE {name} IF NOT EXISTS")
-        indexes_created += await _apply_common_indexes(client, name)
+        plan.ddl.append(f"CREATE VERTEX TYPE {name} IF NOT EXISTS")
+        _common_indexes(plan, name)
         for identifier in entity.identifiers:
-            indexes_created += await _apply_indexed_property(client, name, identifier, "STRING")
-        indexes_created += await _apply_indexed_declared_properties(client, name, entity)
-        applied_entity_types.append(entity.name)
-
+            _indexed_property(plan, name, identifier, "STRING")
+        _indexed_declared_properties(plan, name, entity)
+        plan.entity_types.append(entity.name)
     for edge in schema.edge_types:
         name = groovy_identifier(physical_type_name(edge.name))
-        await _ddl(client, f"CREATE EDGE TYPE {name} IF NOT EXISTS")
-        indexes_created += await _apply_common_indexes(client, name)
-        indexes_created += await _apply_indexed_declared_properties(client, name, edge)
+        plan.ddl.append(f"CREATE EDGE TYPE {name} IF NOT EXISTS")
+        _common_indexes(plan, name)
+        _indexed_declared_properties(plan, name, edge)
         if edge.temporal:
-            await _create_property(client, name, "valid_from", "DATETIME")
-            await _create_index(client, name, "valid_from", unique=False)
-            indexes_created.append(f"{name}.valid_from")
-        applied_edge_types.append(edge.name)
+            plan.ddl.append(_property(name, "valid_from", "DATETIME"))
+            plan.ddl.append(_index(name, "valid_from", unique=False))
+            plan.indexes.append(f"{name}.valid_from")
+        plan.edge_types.append(edge.name)
+    return plan
 
+
+async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> SchemaReport:
+    """Apply an ontology's schema as one `sqlscript` request, not one request per statement.
+
+    A fresh database's schema took about 30 s one statement at a time, paid by every live test
+    that opens one (T1's measured run, 10 November 2026). ArcadeDB runs a script's statements in
+    order and stops at the first it refuses; schema changes are not transactional, so those before
+    it stay.
+    The batch is therefore wrapped: the schema is read first, and on a refusal everything the batch
+    added is dropped again and the schema read back, so a refused apply leaves the schema as it was
+    and raises `SchemaApplyError`. A transient failure re-sends the whole script (each statement is
+    `IF NOT EXISTS`, so re-running one that already ran is a no-op), under `_ddl`'s retry policy.
+
+    One process's restore could drop a type another process applying the same ontology at the same
+    moment had just created; that process's own apply has then already returned, so its next read
+    fails loudly rather than quietly, which is no worse than the half-applied schema a refusal left
+    before. The copy-up of indexed text fields still runs statement by statement afterwards: a
+    refusal there is logged and never stops the schema (`_backfill_flattened_field`)."""
+    plan = schema_statements(schema)
+    before = await schema_shape(client)
+    try:
+        await _ddl_script(client, plan.ddl)
+    except (ArcadeDBError, httpx.TransportError) as exc:
+        left = await _restore(client, before)
+        if left:
+            raise SchemaApplyError(
+                f"the schema was refused and could not be put back as it was; left over: {left}. "
+                f"The refusal: {exc}",
+                cause=exc,
+                restored=False,
+            ) from exc
+        raise SchemaApplyError(
+            f"the schema was refused, and is left as it was before this apply: {exc}",
+            cause=exc,
+            restored=True,
+        ) from exc
+    for type_name, prop in plan.backfills:
+        await _backfill_flattened_field(client, type_name, prop)
     return SchemaReport(
         migration_id=f"ontology-v{schema.version}-{datetime.now(UTC).isoformat()}",
-        applied_entity_types=applied_entity_types,
-        applied_edge_types=applied_edge_types,
-        indexes_created=indexes_created,
+        applied_entity_types=plan.entity_types,
+        applied_edge_types=plan.edge_types,
+        indexes_created=plan.indexes,
         reversible=True,
     )
+
+
+async def _ddl_script(client: ArcadeDBClient, statements: list[str]) -> None:
+    """The statements as one script, retried whole on a transient failure, as `_ddl` retries one."""
+    if not statements:
+        return
+    script = ";\n".join(statements)
+    for attempt in range(1, _DDL_MAX_ATTEMPTS + 1):
+        try:
+            await client.command("sqlscript", script)
+            return
+        except ArcadeDBError as exc:
+            non_retryable = (
+                exc.status_code is None
+                or exc.status_code < 500
+                or exc.exception_class in _NON_RETRYABLE_ARCADEDB_EXCEPTIONS
+            )
+            if non_retryable or attempt == _DDL_MAX_ATTEMPTS:
+                raise
+        except httpx.TransportError:
+            if attempt == _DDL_MAX_ATTEMPTS:
+                raise
+        await asyncio.sleep(_DDL_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
+
+
+@dataclass(frozen=True)
+class SchemaShape:
+    """What a restore compares: the types, each type's properties, and each index by name."""
+
+    types: frozenset[str]
+    properties: frozenset[tuple[str, str]]
+    indexes: frozenset[tuple[str, str]]
+
+
+async def schema_shape(client: ArcadeDBClient) -> SchemaShape:
+    rows = await client.sql("SELECT name, properties FROM schema:types")
+    indexes = await client.sql("SELECT name, typeName FROM schema:indexes")
+    return SchemaShape(
+        types=frozenset(str(r["name"]) for r in rows),
+        properties=frozenset(
+            (str(r["name"]), str(p["name"])) for r in rows for p in (r.get("properties") or [])
+        ),
+        indexes=frozenset((str(i.get("typeName")), str(i["name"])) for i in indexes),
+    )
+
+
+async def _restore(client: ArcadeDBClient, before: SchemaShape) -> str:
+    """Drop what the batch added, then read the schema back: nothing (the empty string) when it is
+    as it was, otherwise what is left over, in words. A drop that fails is left for the read to
+    name."""
+    after = await schema_shape(client)
+    for type_name, index in sorted(after.indexes - before.indexes):
+        if type_name in before.types:
+            await _quiet(client, f"DROP INDEX `{index}`")
+    for type_name, prop in sorted(after.properties - before.properties):
+        if type_name in before.types:
+            await _quiet(client, f"DROP PROPERTY {type_name}.{prop} FORCE")
+    for type_name in sorted(after.types - before.types):
+        await _quiet(client, f"DROP TYPE {type_name} UNSAFE")
+    now = await schema_shape(client)
+    if now == before:
+        return ""
+    return "; ".join(
+        part
+        for part in (
+            f"types {sorted(now.types ^ before.types)}" if now.types != before.types else "",
+            f"properties {sorted(now.properties ^ before.properties)}"
+            if now.properties != before.properties
+            else "",
+            f"indexes {sorted(now.indexes ^ before.indexes)}"
+            if now.indexes != before.indexes
+            else "",
+        )
+        if part
+    )
+
+
+async def _quiet(client: ArcadeDBClient, statement: str) -> None:
+    try:
+        await client.sql(statement)
+    except (ArcadeDBError, httpx.TransportError) as exc:
+        _log.warning("restoring the schema after a refused apply: %s failed (%s)", statement, exc)
 
 
 async def drop_schema(client: ArcadeDBClient, schema: OntologySchema) -> None:
@@ -160,68 +308,64 @@ async def _drop_type_if_present(client: ArcadeDBClient, type_name: str) -> None:
             raise
 
 
-async def _apply_common_indexes(client: ArcadeDBClient, type_name: str) -> list[str]:
+def _common_indexes(plan: _Plan, type_name: str) -> None:
     names = ["id", "handling_classification", "handling_code", "owning_unit", "originator"]
     for name in names:
-        await _create_property(client, type_name, name, "STRING")
-        await _create_index(client, type_name, name, unique=(name == "id"))
+        plan.ddl.append(_property(type_name, name, "STRING"))
+        plan.ddl.append(_index(type_name, name, unique=(name == "id")))
     # `reverted` — checked on every read alongside the access filter
     # (`access_filter.py`), so it needs the same treatment, not just a
     # schemaless property. Not unique: every non-reverted element shares
     # the value `false`.
-    await _create_property(client, type_name, "reverted", "BOOLEAN")
-    await _create_index(client, type_name, "reverted", unique=False)
+    plan.ddl.append(_property(type_name, "reverted", "BOOLEAN"))
+    plan.ddl.append(_index(type_name, "reverted", unique=False))
     # `superseded_by` — sparse (`01_DOMAIN_MODEL.md` §2.4): present only on
     # a node `supersede_node` has replaced. Declared here so `hasNot(...)`
     # and a direct lookup both have a real, indexed property to run
     # against rather than one that only ever appears schemaless.
-    await _create_property(client, type_name, "superseded_by", "STRING")
-    await _create_index(client, type_name, "superseded_by", unique=False)
+    plan.ddl.append(_property(type_name, "superseded_by", "STRING"))
+    plan.ddl.append(_index(type_name, "superseded_by", unique=False))
     # `withdrawn_by_load` — sparse, as `superseded_by` (ADR-110 Amendment 6 point 3): present only
     # on an element a full-snapshot refresh withdrew, and looked up by that refresh's load id when
     # its revert restores them.
-    await _create_property(client, type_name, "withdrawn_by_load", "STRING")
-    await _create_index(client, type_name, "withdrawn_by_load", unique=False)
+    plan.ddl.append(_property(type_name, "withdrawn_by_load", "STRING"))
+    plan.ddl.append(_index(type_name, "withdrawn_by_load", unique=False))
     # `promoted_by_load` — sparse (ADR-143 decision 8): present only on an element a promotion
     # added a dataset to, looked up by that promotion's load id when it is reverted.
-    await _create_property(client, type_name, "promoted_by_load", "STRING")
-    await _create_index(client, type_name, "promoted_by_load", unique=False)
+    plan.ddl.append(_property(type_name, "promoted_by_load", "STRING"))
+    plan.ddl.append(_index(type_name, "promoted_by_load", unique=False))
     # `datasets` (ADR-099 decision 2, Amendment 6): a list, indexed by each of its items, so a read
     # by dataset (`WHERE datasets CONTAINS ...`) is answered from the index. The access step's
     # Gremlin filter tests the list itself (`AccessFilter.gremlin_dataset_step`).
-    await _create_property(client, type_name, "datasets", "LIST OF STRING")
-    await _create_index(client, type_name, "datasets BY ITEM", unique=False)
-    return [
-        *(f"{type_name}.{name}" for name in names),
-        f"{type_name}.reverted",
-        f"{type_name}.superseded_by",
-        f"{type_name}.withdrawn_by_load",
-        f"{type_name}.promoted_by_load",
-        f"{type_name}.datasets",
-    ]
+    plan.ddl.append(_property(type_name, "datasets", "LIST OF STRING"))
+    plan.ddl.append(_index(type_name, "datasets BY ITEM", unique=False))
+    plan.indexes.extend(
+        [
+            *(f"{type_name}.{name}" for name in names),
+            f"{type_name}.reverted",
+            f"{type_name}.superseded_by",
+            f"{type_name}.withdrawn_by_load",
+            f"{type_name}.promoted_by_load",
+            f"{type_name}.datasets",
+        ]
+    )
 
 
-async def _apply_indexed_property(
-    client: ArcadeDBClient, type_name: str, prop_name: str, sql_type: str
-) -> list[str]:
+def _indexed_property(plan: _Plan, type_name: str, prop_name: str, sql_type: str) -> None:
     prop = groovy_identifier(prop_name)
-    await _create_property(client, type_name, prop, sql_type)
-    await _create_index(client, type_name, prop, unique=False)
-    return [f"{type_name}.{prop}"]
+    plan.ddl.append(_property(type_name, prop, sql_type))
+    plan.ddl.append(_index(type_name, prop, unique=False))
+    plan.indexes.append(f"{type_name}.{prop}")
 
 
-async def _apply_indexed_declared_properties(
-    client: ArcadeDBClient, type_name: str, type_def: EntityTypeDef | EdgeTypeDef
-) -> list[str]:
-    created: list[str] = []
+def _indexed_declared_properties(
+    plan: _Plan, type_name: str, type_def: EntityTypeDef | EdgeTypeDef
+) -> None:
     for prop in type_def.properties:
         if prop.indexed:
-            created += await _apply_indexed_property(
-                client, type_name, prop.name, _SQL_TYPE[prop.type]
-            )
+            _indexed_property(plan, type_name, prop.name, _SQL_TYPE[prop.type])
             if prop.type in _BACKFILLED_TYPES:
-                await _backfill_flattened_field(client, type_name, prop.name)
-    return created
+                plan.backfills.append((type_name, prop.name))
 
 
 #: The indexed types worth copying up. Text is what a suggestion or an exact search reads; a date or
@@ -265,14 +409,10 @@ async def _backfill_flattened_field(client: ArcadeDBClient, type_name: str, prop
         )
 
 
-async def _create_property(
-    client: ArcadeDBClient, type_name: str, prop_name: str, sql_type: str
-) -> None:
-    await _ddl(client, f"CREATE PROPERTY {type_name}.{prop_name} IF NOT EXISTS {sql_type}")
+def _property(type_name: str, prop_name: str, sql_type: str) -> str:
+    return f"CREATE PROPERTY {type_name}.{prop_name} IF NOT EXISTS {sql_type}"
 
 
-async def _create_index(
-    client: ArcadeDBClient, type_name: str, prop_name: str, *, unique: bool
-) -> None:
+def _index(type_name: str, prop_name: str, *, unique: bool) -> str:
     kind = "UNIQUE" if unique else "NOTUNIQUE"
-    await _ddl(client, f"CREATE INDEX IF NOT EXISTS ON {type_name} ({prop_name}) {kind}")
+    return f"CREATE INDEX IF NOT EXISTS ON {type_name} ({prop_name}) {kind}"

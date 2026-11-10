@@ -38,7 +38,15 @@ class RecordingClient:
         self.statements: list[str] = []
         self._refuse_updates = refuse_updates
 
+    async def command(self, language: str, command: str, **_: object) -> list[dict[str, object]]:
+        # The schema's DDL arrives as one `sqlscript` (admin's T1): recorded statement by statement.
+        assert language == "sqlscript", language
+        self.statements.extend(command.split(";\n"))
+        return []
+
     async def sql(self, command: str, **_: object) -> list[dict[str, object]]:
+        if command.startswith("SELECT ") and "FROM schema:" in command:
+            return []  # the schema read before the batch, for its restore
         self.statements.append(command)
         if self._refuse_updates and command.startswith("UPDATE"):
             raise ArcadeDBError(
