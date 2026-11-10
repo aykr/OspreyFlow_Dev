@@ -233,6 +233,8 @@ export type { OfferedList } from "./OfferedList";
 export type { SubscribableList } from "./SubscribableList";
 export type { DatasetSubscriptions } from "./DatasetSubscriptions";
 export type { ListImports } from "./ListImports";
+export type { RuleDatasetOffer } from "./RuleDatasetOffer";
+export type { RuleTestResult } from "./RuleTestResult";
 export type { PatternMatch } from "./PatternMatch";
 export type { ColumnProfile } from "./ColumnProfile";
 export type { ProfileAnomaly } from "./ProfileAnomaly";

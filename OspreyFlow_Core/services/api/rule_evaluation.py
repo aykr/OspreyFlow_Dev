@@ -33,7 +33,7 @@ import hashlib
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from services.ingest.typologies import (
     MoneyFlow,
@@ -275,6 +275,12 @@ RULE_AUDIT_ACTIONS: tuple[str, ...] = (
     "load_checks_set",
     # L2.10's carry: the daily sweep's failure for a rule, said where a person sees it (*Changes*).
     "rule_evaluation_failed",
+    # ADR-146 decision 3 (L2.11): "every change is audited and listed in *Changes*" — a draft
+    # saved, tested (never its count, rule 7), made live, or asked to go live.
+    "rule_draft_saved",
+    "rule_tested",
+    "rule_made_live",
+    "rule_make_live_proposed",
 )
 
 
@@ -790,6 +796,12 @@ class RuleGate:
     #: ontology a sentence's drawn pattern is read back against.
     hotlists: HotlistStore | None = None
     ontology: OntologySchema | None = None
+    #: ADR-146 decision 3 (L2.11's list picker): a sentence's named Studio list, read within the
+    #: rule's own dataset (`rule_editor.rule_list_reader`). None where no run reads one.
+    rule_lists: Callable[[TypologyRule, str, str], Awaitable[list[Any]]] | None = None
+    #: ADR-146 decision 3: what a rule on a declared dataset reads, its composite's members with it
+    #: (`rule_editor.rule_reach_of`). None: the rule's dataset id alone, as before L2.11.
+    rule_reach: Callable[[TypologyRule], Awaitable[list[str] | None]] | None = None
     #: ADR-133 decision 6, stage (d): what a hit of a rule does at this pipeline, as its "Checks on
     #: load" step chose ("alert" or "hold"), by rule id. A rule not named keeps its author's choice.
     on_hit: dict[str, str] = field(default_factory=dict)
@@ -828,11 +840,23 @@ class RuleGate:
         return await self.expiries.record(self.investigation_id, pairs)
 
     async def _deployer(self, rule: TypologyRule) -> Principal | None:
-        deployer = await self.principal_for_owner(rule.owner_id)
-        if deployer is not None and rule.dataset_id is not None:
-            deployer = deployer.model_copy(update={"datasets": [rule.dataset_id]})
+        from .rule_schedule import holds_a_writing_right
         from .sentence_rules import is_deployment_wide
 
+        deployer = await self.principal_for_owner(rule.owner_id)
+        if deployer is not None and not is_deployment_wide(rule) and not holds_a_writing_right(
+            deployer
+        ):
+            # ADR-146 Amendment 6 decision 13: a rule runs as its author only while they hold a
+            # right to have written it, at a load as on a schedule (a whole-deployment rule is the
+            # administrator's, approved by a second person: its own rights, ADR-133 decision 7).
+            return None
+        if deployer is not None and rule.dataset_id is not None:
+            reach: list[str] | None = [rule.dataset_id]
+            if self.rule_reach is not None:
+                reach = await self.rule_reach(rule)
+            # A case that no longer reads the rule's dataset reads nothing through it (rule 3).
+            deployer = deployer.model_copy(update={"datasets": reach or []})
         if deployer is not None and is_deployment_wide(rule):
             # ADR-133 decision 1: a deployment-wide sentence judges each case's loads within that
             # case's datasets (the loader's), as its administrator author may read them.

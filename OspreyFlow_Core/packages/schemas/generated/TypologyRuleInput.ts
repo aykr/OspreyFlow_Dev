@@ -249,6 +249,7 @@ export type LinkType1 = string;
 export type Kind3 = "on_hotlist";
 export type Kind4 = "on_screening_list";
 export type MinScore1 = number;
+export type ListId = string | null;
 export type Frequency = (CountFrequency | AmountFrequency | FirstTimeFrequency) | null;
 export type Kind5 = "count";
 export type LinkType2 = string;
@@ -273,7 +274,7 @@ export type Scope = "dataset" | "case";
 export type Severity = "low" | "medium" | "high";
 export type Team = "case" | "my_team" | "team";
 export type TeamId = string | null;
-export type Runs = "pre_commit" | "post_commit" | "schedule";
+export type Runs = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type OnHit = "load" | "hold";
 export type Scope1 = "just_me" | "this_case" | "deployment";
 export type Every = "daily" | "weekly";
@@ -300,8 +301,9 @@ export type BaselineDays = number;
 export type Factor = number;
 export type MinRecent = number;
 export type Measure = "count" | "amount";
-export type Trigger = "pre_commit" | "post_commit" | "schedule";
+export type Trigger = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type BudgetMs = number;
+export type JustMe = boolean;
 
 /**
  * What a case Author deploys (ADR-109 ruling 4): a typology with its parameters and the
@@ -313,6 +315,7 @@ export interface TypologyRuleInput {
   params: Params;
   trigger?: Trigger;
   budget_ms?: BudgetMs;
+  just_me?: JustMe;
   [k: string]: unknown;
 }
 export interface StructuringParams {
@@ -511,6 +514,7 @@ export interface OnHotlistRelationship {
 export interface OnScreeningListRelationship {
   kind?: Kind4;
   min_score?: MinScore1;
+  list_id?: ListId;
   [k: string]: unknown;
 }
 /**

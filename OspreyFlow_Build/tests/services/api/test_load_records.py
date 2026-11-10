@@ -798,7 +798,7 @@ async def test_the_change_stream_entry_does_not_carry_a_rules_alert(
         hotlists_store=1, monitors_store=1,
         patterns_store=1, alerts_store=1, principal_resolver=1, extraction_candidates=1,
         recogniser_for=1, online_geocode=1, typology_rules=1, held_rows=1, screening_lists=1,
-        compute=1, kyc_expiries=1, recipe_runs=1, influencers=None,
+        compute=1, kyc_expiries=1, recipe_runs=1, influencers=None, rule_lists=None, rule_reach=None,
     )  # fmt: skip
     await run_module._execute_recipe_run(
         deps,  # type: ignore[arg-type]

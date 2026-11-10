@@ -1,0 +1,50 @@
+## L2.11 run-path delta at 291787c (the orchestrator's ask, after RED_RECORD §13's fix): the scheduler and run-path live files, the rule store and route live files, and the run-path offline files; the rules lease, stack b, by stack_lease.sh remote, start 2026-11-10T16:06:28Z
+Running on ospreyflow-test (stack b, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261110T160641Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py ../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py ../OspreyFlow_Build/tests/services/api/test_recipe_run_path.py ../OspreyFlow_Build/tests/services/api/test_run_resources.py ../OspreyFlow_Build/tests/services/api/test_load_records.py ../OspreyFlow_Build/tests/services/api/test_composite_schedules.py ../OspreyFlow_Build/tests/services/api/test_rule_list_refresh.py
+........................................................................ [ 25%]
+........................................................................ [ 51%]
+........................................................................ [ 77%]
+..............................................................           [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_rule_editor_routes.py::test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+5.63s call     tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py::test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds
+1.60s call     tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_a_studio_load_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+1.34s call     tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py::test_run_now_tells_and_shows_its_case_the_same_whatever_another_dataset_holds
+1.11s call     tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_one_tick_stamps_each_scheduled_run_with_its_own_cases_dataset
+1.03s call     tests/services/api/test_schedule_executor.py::test_two_replicas_ticking_together_run_a_slot_once
+0.99s call     tests/services/api/test_schedule_executor.py::test_two_replicas_ticking_together_take_a_watched_file_once
+0.93s call     tests/services/api/test_studio_load_stamps_its_case_dataset_live.py::test_two_cases_loading_into_one_dataset_read_one_link_and_a_third_reads_none
+0.19s call     tests/services/api/test_studio_recipes_store.py::test_the_backfill_stamps_legacy_recipes_at_the_last_version_before_pinning
+0.19s call     tests/test_migrate_rules_to_datasets_store.py::test_the_real_run_leaves_no_whole_deployment_rule_and_one_per_dataset
+0.17s call     tests/services/api/test_studio_recipes_store.py::test_reconcile_recipe_pins_stamps_then_flags_against_real_files
+0.15s call     tests/test_migrate_rules_to_datasets_store.py::test_the_dry_run_at_its_real_call_site_changes_no_table_column_index_or_row
+0.14s call     tests/services/api/test_rule_editor_routes.py::test_each_editor_route_needs_its_right_the_case_and_its_level
+0.13s call     tests/services/api/test_studio_recipes_store.py::test_a_pin_stored_as_a_numeric_string_is_flagged_at_start_up
+0.13s call     tests/services/api/test_studio_recipes_store.py::test_a_pin_stored_as_a_decimal_one_is_flagged_at_start_up
+0.11s call     tests/services/api/test_studio_recipes_store.py::test_the_backfill_leaves_a_row_superseded_while_it_was_being_read_unchanged
+0.10s call     tests/services/api/test_studio_recipes_store.py::test_a_non_object_pack_versions_value_reads_as_unpinned_and_does_not_break_flagging
+0.09s call     tests/services/api/test_load_records.py::test_an_enrich_stage_that_wrote_links_or_online_points_marks_its_branch
+0.09s call     tests/services/api/test_studio_recipes_store.py::test_reconcile_recipe_pins_writes_nothing_under_the_recipe_root
+0.07s call     tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+0.07s call     tests/services/api/test_studio_recipes_store.py::test_a_pin_object_with_a_non_integer_value_reads_as_unpinned_and_is_flagged_at_start_up
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved
+0.07s call     tests/services/api/test_rule_editor_routes.py::test_neither_the_author_nor_the_asker_sends_a_make_live_back
+0.07s setup    tests/services/api/test_rule_editor_routes.py::test_another_cases_author_reaches_none_of_this_cases_rule
+0.06s setup    tests/services/api/test_rule_editor_routes.py::test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused
+0.06s call     tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+0.06s setup    tests/services/api/test_rule_editor_routes.py::test_each_editor_route_needs_its_right_the_case_and_its_level
+0.06s setup    tests/services/api/test_rule_editor_routes.py::test_the_stored_files_are_the_codecs_at_every_saved_version
+0.06s setup    tests/services/api/test_rule_editor_routes.py::test_a_saved_draft_keeps_its_rule_files_and_never_runs
+0.06s setup    tests/services/api/test_rule_editor_routes.py::test_with_a_second_person_policy_it_goes_live_only_on_another_authors_approval
+0.06s setup    tests/services/api/test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone
+278 passed, 2 warnings in 25.04s
+Wall time: 26 s, exit 0 (stack b, the lease rules took at 2026-11-10T16:06:16Z; set-up before it 13 s)
+# exit 0 end 2026-11-10T16:07:09Z

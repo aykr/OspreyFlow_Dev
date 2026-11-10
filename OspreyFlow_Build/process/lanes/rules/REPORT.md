@@ -1,3 +1,74 @@
+# rules lane · report · L2.11, the rule editor: declared dataset, draft, Test and Make live, the rule files, the migration (10 November 2026; resumed once; the review's must-fixes, gated at 0f319d4)
+
+**What is done, half-done and untouched**
+
+| Brief item | State | Proving test |
+| --- | --- | --- |
+| The declared dataset: chosen first, fixed once saved, only the case's own source or composite | done | `test_rule_editor.py::test_a_rule_is_declared_only_on_the_cases_own_source_or_composite`; `test_rule_editor_routes.py::test_a_rule_is_saved_only_on_the_cases_own_dataset_and_never_moved` |
+| Conditions narrowed to the dataset's live model | done | `test_rule_editor.py::test_the_conditions_offer_no_type_outside_the_datasets_live_model`; the save, `test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused` |
+| Draft and live; Test over 30 days, its count the tester's alone (rule 7) | done | `test_rule_drafts_store.py`; `test_rule_editor_routes.py::test_a_rule_goes_live_only_once_tested_and_its_count_is_the_testers_alone` |
+| Make live with the second person, from the dataset's `promotion_policy` | done | `test_rule_editor.py::test_a_composite_asks_for_a_second_person_when_any_member_does`; `test_rule_editor_routes.py::test_neither_the_author_nor_the_asker_sends_a_make_live_back`; `RuleEditor.test.tsx` (deploy_rules) |
+| Changes: every step audited and listed | done | `test_rule_editor_routes.py`; `test_rule_maker_checker_routes.py` |
+| Per-version .bpmn/.dmn via rules-b's `rule_files()`; Export with `stored=`; Show as BPMN | done | `test_rule_editor_routes.py` (codec equality); `test_rule_standards_routes.py`; `keyboard/alerts.spec.ts` (Escape) |
+| The list picker (`list_id`) and `runs: list_refresh` that actually runs | done | `test_rule_editor.py::test_a_rule_reads_only_a_list_its_dataset_may_and_its_subjects_rows`; `test_rule_list_refresh.py` (9, the three call sites) |
+| `migrate_rules_to_datasets`, dry run first | done | `test_migrate_rules_to_datasets.py` (7); `test_migrate_rules_to_datasets_store.py` (live) |
+| The older routes kept for just_me only | done | `test_rule_sentence_routes.py` (409 `use_the_rule_editor`) |
+| The Lists tab read-only (carry) | done | `ListsPanel.test.tsx`; `keyboard/alerts.spec.ts` |
+| Keyboard (rule 13), axe, registry | done | `keyboard/alerts.spec.ts`, 8 ids in `registry-L2.11.patch`, each red with its handler removed; `a11y/every-harness.spec.ts` |
+| Spec: ADR-146 Amendment 6, spec 03's six routes | done | — |
+| ci.yml and Makefile wiring | half-done, by design | `L2.11_ci_yml.diff` for the orchestrator to apply; `test-file-coverage-check` green with it applied |
+
+1. **Decisions taken under Prompt L, logged in MORNING.md** (PLAN.md has the reasons):
+   - *Make live* reads the dataset's `promotion_policy`, and a composite asks for a second person when any member does.
+   - Test runs over the stored draft, as its author, and goes no wider than the dataset's reach.
+   - One draft and one live version per rule.
+   - New rules can't take the whole-deployment scope; the migration converts the rules that already have it.
+2. **Live, the rules lease, stack c, on the server:**
+   - **The delta at 56e3c73** was `stack_lease.sh live rules` plus the lane's named files: 3305 passed and 38 failed. 36 of the failures were the server's, in files the diff doesn't touch (RED_RECORD §11 names them). Two were the lane's:
+     - a send-back by a make-live's author or asker answered 409, not 403 `own_change`;
+     - `test_schedule_notice` asserted behaviour main doesn't have.
+   - **Both were fixed and shown red** at their call sites (`gates/5a1fb61.plants.txt`). The delta at 5a1fb61 passed 31, and each file passes alone too (`gates/5a1fb61.live.txt`).
+   - Earlier deltas: `5fa7b83`, `953b7a1` and `6c80b31`. Stack c is down and released.
+3. **Local, at 7ee2d56 / eae4092** (code identical; the latter adds records only):
+   - **glass-keyboard**, with the registry patch: 747 passed and 4 failed. The four were in connections and ingest-studio and were caused by load; retaken alone, 55 of 55 passed. The eight new actions were each red with their handler removed.
+   - **glass-a11y:** 963 passed.
+   - **test-js:** 2970 of 2971. The miss was MatrixView's first-frame budget under load; it passed alone.
+   - **`make -k ci`:** green apart from the Docker scans (trivy-image ×8, opentofu, chart) and `test-file-coverage-check`, which goes green with `L2.11_ci_yml.diff`.
+4. **`make test` offline on the server:** 10,527 passed, with 12 failed and 13 errors, all expected (`gates/05ec309.test.txt`, at the head):
+   - the three new live files (22 cases) run because their Makefile ignores are in the unapplied `L2.11_ci_yml.diff`, and `test_test_file_coverage_check` fails for the same reason;
+   - the server's usual pair: valkey_config (main's own) and the webapp's GPU preflight.
+
+   The first take, at eae4092, found a real defect, fixed at 05ec309 (RED_RECORD §13). The scheduled, folder-watched and command-line runs never had the rule's list reader or reach: `from_state` read them as state attributes no Conduit holds, and `RunResources` never built them. So on those paths a composite's rule read only the composite's own id, and a rule naming a list could not run. Both paths now build them from their own stores. The test is red with that building removed. Proven live at 291787c on stack b, at the orchestrator's ask: 278 passed, none failed (`gates/291787c.runpath.live.txt`).
+5. **Reviews:**
+   - My lane-reviewer's 29 findings were all built, with plants (RED_RECORD §10).
+   - The orchestrator's conditions were met: list_refresh runs, the ci wiring is a diff, registries are passed by their literal names, test_schedule_notice is repointed, and Make live is gated on deploy_rules.
+   - rules-b's L2.11a codec is integrated (RED_RECORD §8).
+6. **The orchestrator's independent review at 291787c: four must-fixes, built** (RED_RECORD §14; Amendment 6 point 11, decisions 12 and 13). Each is red by a plant at its call site.
+   1. **Rule 3.** A scheduled or refreshed rule now reads its declared dataset alone, never the author's whole case scope (the layer included). Once its case stops reading that dataset, it is refused in words.
+   2. **`POST …/rules`.** It keeps a pattern or template rule just for its author: the author's own alerts, no `Alert` node. A case-wide one is refused, 409 `use_the_rule_editor`. The form says so, and its five keyboard cases end at a just-for-me rule.
+   3. **Who a rule runs as.** On a load, a slot and a refresh, the author must hold `author_rules` or `deploy_rules`. So a Rule author's scheduled rule runs.
+   4. **Rule 12.** Whoever asked for a make-live can't approve it; this is now tested.
+   - **Re-gated:**
+     - offline: the rule files pass, and the five offline plants are red;
+     - live, at 5b4c6ba on a fresh stack b: 666 passed, and the two live plants are red. The three KYC failures are an existing order dependence; they fail alike without this change;
+     - `make -k ci` and `make test`: make -k ci on the server at 0f319d4 (`gates/0f319d4.ci-server.txt`) is green apart from `test-file-coverage-check`, which waits on `L2.11_ci_yml.diff`. The eight trivy image scans, opentofu and chart ran for real and passed. make test on the server at 877971a (`gates/877971a.test.txt`): 10,531 passed, with 15 failed and 13 errors:
+       - the new live files the unapplied diff leaves in, and the coverage test;
+       - valkey_config and the GPU preflight;
+       - two `test_alerts_and_the_layer` cases, the same fixture gap as decision 13's others. Fixed at 0f319d4; the file passes, 12 of 12.
+7. **Ratification list:** files this step changed outside the rules lane's own (`apps/workspace/src/alerts/**`, and the alerts, rules, watches and monitoring modules and routes):
+   - Ratified earlier: `scripts/migrate_rules_to_datasets.py`, `services/api/audit_section.py`'s actions, the Studio list routes' refresh hooks in `app.py`, `recipe_run.py`'s fields, and the schemas (`sentences.py`, `domain.py`, `monitoring.py`, the new `rule_editor.py`, `generate_ts.py` and `generated/`).
+   - New since: `run_resources.py`'s `rule_lists` and `rule_reach` (§13); `domain.py`'s `TypologyRuleInput.just_me` (decision 12); the keyboard harnesses and `a11y/every-harness.spec.ts`.
+   - Ingest's test fixtures, given a role so that their rules run (decision 13): `tests/ingest/{test_typology_rules,test_kyc_rules,test_rule_writes_in_the_record,test_typology_rule_routes}.py`.
+   - `tests/services/api/{test_schedule_notice,test_load_records,test_recipe_run_path,test_run_resources}.py`.
+8. **Carries for tomorrow** (the orchestrator's no-new-scope note):
+   - **The template-to-draft path.** The editor's draft, *Test* and *Make live* for a pattern or template rule (decision 12's open point). *Test* previews sentences only.
+   - **The composite list ambiguity** (the review's item 5).
+   - **`test_kyc_rules.py`'s order dependence.** Three cases read the screening matches that earlier cases left in the shared ArcadeDB graph. Seen on main's gates too.
+   - **Does a scheduled run's notice still reach a screen after L2.10?** The one queue gives a notice no kind (`alerts._KIND_SQL`), so it sits only in its owner's own list (`AlertStore.list_authorized`). Whether the Glass still shows that list is unverified. It loses a notice; it is not an access problem.
+   - **Main's test-file `ruff` drift**, seen while fixing: `test_rule_editor_routes.py` and several app.py `# fmt: skip` blocks don't pass `ruff format --check` run from Core. They pass the project's own lint.
+
+---
+
 # rules lane · report · L2.10, one queue, watches, team routing, Raise an alert (9 November 2026; resumed twice, regated at 8e8b9ff)
 
 1. **Team routing, the new rule 3 read: met.** Read in the query, never after it (the queue's list, counts, detail, address and triage writes; a pack's alert item; trends; the rule audit). A routed alert writes no `Alert` node. Red with the check opened at `_routed_sql`: `test_monitoring_queue.py`'s three routing cases and `test_pack_alert_item.py`; trends in the analytics suite; the audit in `test_typology_rules.py` (RED_RECORD §1, §5, §6).

@@ -4,6 +4,7 @@ export type RoleId = string;
 export type DisplayName = string;
 export type Lead = boolean;
 export type Members = string[];
+export type MemberCount = number;
 
 /**
  * A team a rule's alerts may go to (ADR-146 decision 8), and for its lead today the members
@@ -15,6 +16,7 @@ export interface AlertTeam {
   lead?: Lead;
   members?: Members;
   member_names?: MemberNames;
+  member_count?: MemberCount;
   [k: string]: unknown;
 }
 export interface MemberNames {

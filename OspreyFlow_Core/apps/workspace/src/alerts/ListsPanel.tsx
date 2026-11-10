@@ -12,17 +12,12 @@ import type {
   ScreeningListStatus,
   ScreeningSubscriptionInput,
 } from "../../../../packages/schemas/generated";
-import { Button, Input, Select } from "../design/primitives";
 import {
   listScreeningLists,
   manageScreeningLists,
-  refreshScreeningList,
-  setListSchedule,
-  subscribeScreeningList,
   type ListsApi,
 } from "./api";
 import { when } from "./names";
-import { WEEKDAY_WORDS } from "./sentence";
 
 /** ADR-133 stage (d): a list's refresh schedule in words, or that it is refreshed by hand. */
 export function scheduleState(list: ScreeningListStatus): string {
@@ -63,20 +58,12 @@ export const LICENCE_NOT_CONFIRMED: Partial<Record<Source, string>> = {
     "OpenSanctions is CC BY-NC 4.0, and screening in a business is commercial use, which needs OpenSanctions' own data licence",
 };
 
-/** A connector as the subscribe form offers it: its list, and whether its licence is confirmed. */
-function connectorOption(source: Source): string {
-  if (CLOSED_LISTS[source]) return `${CONNECTORS[source]}: reads a closed list`;
-  return LICENCE_NOT_CONFIRMED[source] ? `${CONNECTORS[source]} (licence not confirmed)` : CONNECTORS[source];
-}
-
 /** A list's state in words: never read, failing, or read at its version. */
 export function listState(list: ScreeningListStatus): string {
   if (list.failure) return list.failure;
-  if (!list.version) return "Not yet read: refresh it to load its first version.";
+  if (!list.version) return "Not yet read: it is refreshed in the Ingest Studio's Sources.";
   return "Up to date with its last refresh.";
 }
-
-const FIELD = { display: "grid", gap: "var(--sp-4)" } as const;
 
 export interface ListsPanelProps extends ListsApi {
   /** ADR-112: holds `load_screening_lists`. */
@@ -89,8 +76,6 @@ export function ListsPanel(props: ListsPanelProps) {
   const [found, setFound] = useState<Pick<ScreeningListsOverview, "lists"> | null>(null);
   const [refreshes, setRefreshes] = useState<ScreeningLists["updates"]>([]);
   const [problem, setProblem] = useState<string | null>(null);
-  const [said, setSaid] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     const api = { apiBaseUrl, bearerToken };
@@ -103,18 +88,6 @@ export function ListsPanel(props: ListsPanelProps) {
     read.then(setFound).catch((e: Error) => setProblem(e.message));
   }, [apiBaseUrl, bearerToken, canManage]);
   useEffect(reload, [reload]);
-
-  const refresh = (listName: string) => {
-    setProblem(null);
-    setBusy(listName);
-    refreshScreeningList({ apiBaseUrl, bearerToken }, listName)
-      .then((update) => {
-        setSaid(`${listName}: ${update.words}`);
-        reload();
-      })
-      .catch((e: Error) => setProblem(e.message))
-      .finally(() => setBusy(null));
-  };
 
   const lists = found?.lists ?? [];
   return (
@@ -133,11 +106,6 @@ export function ListsPanel(props: ListsPanelProps) {
             {problem}
           </p>
         )}
-        {said && (
-          <p role="status" className="label" style={{ margin: 0 }}>
-            {said}
-          </p>
-        )}
         {found !== null && lists.length === 0 && <p className="label">No screening list is subscribed yet.</p>}
         {lists.length > 0 && (
           <table className="table" aria-label="Screening lists and their versions">
@@ -149,7 +117,6 @@ export function ListsPanel(props: ListsPanelProps) {
                 <th>Last update</th>
                 <th>State</th>
                 <th>Schedule</th>
-                {canManage && <th>Refresh</th>}
               </tr>
             </thead>
             <tbody>
@@ -186,49 +153,20 @@ export function ListsPanel(props: ListsPanelProps) {
                   <td>{list.updated_at ? when(list.updated_at) : "—"}</td>
                   <td style={list.failure ? { color: "var(--error)" } : undefined}>{listState(list)}</td>
                   <td>{scheduleState(list)}</td>
-                  {canManage && (
-                    <td>
-                      <Button
-                        aria-label={`Refresh now: ${list.list_name}`}
-                        disabled={busy !== null}
-                        onClick={() => refresh(list.list_name)}
-                      >
-                        {busy === list.list_name ? "Refreshing…" : "Refresh now"}
-                      </Button>
-                    </td>
-                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </section>
-      {canManage ? (
-        <>
-          <Refreshes updates={refreshes} />
-          {lists.length > 0 && (
-            <ScheduleForm
-              {...props}
-              lists={lists}
-              onSaved={(words) => {
-                setSaid(words);
-                reload();
-              }}
-            />
-          )}
-          <SubscribeForm
-            {...props}
-            onSubscribed={(listName) => {
-              setSaid(`Subscribed to “${listName}”. Refresh it to read its first version.`);
-              reload();
-            }}
-          />
-        </>
-      ) : (
-        <p className="label" style={{ margin: 0 }}>
-          An administrator or a data engineer subscribes to a list and refreshes it.
-        </p>
-      )}
+      {/* ADR-133 Amendment 9 (the owner's ruling of 9 November 2026; L2.11's carry): lists are the
+          Studio's now, imported, mapped and refreshed in Sources. This tab reads them, and no longer
+          adds, imports, refreshes or schedules one; it goes once rules and re-screening read the
+          Studio's lists. */}
+      <p className="label" style={{ margin: 0 }}>
+        Screening lists are imported, mapped and refreshed in the Ingest Studio&apos;s Sources. This tab shows them; it no longer adds or refreshes one.
+      </p>
+      {canManage && <Refreshes updates={refreshes} />}
     </div>
   );
 }
@@ -262,181 +200,6 @@ function Refreshes({ updates }: { updates: ScreeningLists["updates"] }) {
           ))}
         </ul>
       )}
-    </section>
-  );
-}
-
-function SubscribeForm(props: ListsPanelProps & { onSubscribed: (listName: string) => void }) {
-  const [name, setName] = useState("");
-  const [source, setSource] = useState<Source>("ofac_sdn");
-  const [location, setLocation] = useState("");
-  const [dataset, setDataset] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
-  return (
-    <form
-      aria-label="Subscribe to a list"
-      onSubmit={(e) => {
-        e.preventDefault();
-        setProblem(null);
-        subscribeScreeningList(props, {
-          list_name: name.trim(),
-          source,
-          location: location.trim(),
-          dataset: dataset.trim() || null,
-          use: "local_development",
-        })
-          .then((made) => {
-            setName("");
-            setLocation("");
-            setDataset("");
-            props.onSubscribed(made.list_name);
-          })
-          .catch((err: Error) => setProblem(err.message));
-      }}
-      style={{ border: "1px solid var(--border-subtle)", padding: "var(--sp-12)", display: "grid", gap: "var(--sp-8)", maxWidth: 520 }}
-    >
-      <h3 className="value" style={{ margin: 0 }}>
-        Subscribe to a list
-      </h3>
-      <label className="label" style={FIELD}>
-        List name
-        <Input aria-label="List name" value={name} onChange={(e) => setName(e.target.value)} required />
-      </label>
-      <label className="label" style={FIELD}>
-        Connector
-        <Select aria-label="Connector" value={source} onChange={(e) => setSource(e.target.value as Source)}>
-          {(Object.keys(CONNECTORS) as Source[]).map((key) => (
-            <option key={key} value={key}>
-              {connectorOption(key)}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <label className="label" style={FIELD}>
-        File in the ingest folder
-        <Input
-          aria-label="File in the ingest folder"
-          placeholder="lists/SDN.CSV"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          required
-        />
-      </label>
-      <label className="label" style={FIELD}>
-        Real dataset it is (empty for one of OspreyFlow&apos;s synthetic lists)
-        <Input aria-label="Real dataset it is" placeholder="ofac_sdn" value={dataset} onChange={(e) => setDataset(e.target.value)} />
-      </label>
-      {CLOSED_LISTS[source] && (
-        <p className="label" style={{ margin: 0, fontWeight: 600 }}>
-          {`Closed list: ${CLOSED_LISTS[source]}. Subscribe to the UK Sanctions List (FCDO) for UK designations.`}
-        </p>
-      )}
-      {LICENCE_NOT_CONFIRMED[source] && (
-        <p className="label" style={{ margin: 0, fontWeight: 600 }}>
-          {`Licence not confirmed: ${LICENCE_NOT_CONFIRMED[source]}. Only OspreyFlow's synthetic list may be read through this connector.`}
-        </p>
-      )}
-      <p className="label" style={{ margin: 0 }}>
-        A real list loads only on a device whose own exceptions file names its dataset; check its licence first.
-      </p>
-      {problem && (
-        <p role="alert" style={{ color: "var(--error)", margin: 0 }}>
-          {problem}
-        </p>
-      )}
-      <Button type="submit" variant="primary" disabled={!name.trim() || !location.trim()}>
-        Subscribe
-      </Button>
-    </form>
-  );
-}
-
-/** ADR-133 Amendment 3 item 4, built with stage (d): a list refreshed every day or every week at an
- * hour, as the person who sets it. Each slot is refused, in words, if they no longer may load lists. */
-function ScheduleForm(props: ListsApi & { lists: ScreeningListStatus[]; onSaved: (words: string) => void }) {
-  const [listName, setListName] = useState(props.lists[0]?.list_name ?? "");
-  const [every, setEvery] = useState<"none" | "daily" | "weekly">("daily");
-  const [weekday, setWeekday] = useState("1");
-  const [hour, setHour] = useState("5");
-  const [problem, setProblem] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const save = () => {
-    setBusy(true);
-    setProblem(null);
-    const schedule =
-      every === "none"
-        ? null
-        : { every, hour: Number(hour), weekday: every === "weekly" ? Number(weekday) : null };
-    setListSchedule(props, listName, schedule)
-      .then((status) =>
-        props.onSaved(
-          status.schedule_words
-            ? `“${listName}” is refreshed ${status.schedule_words}, as you.`
-            : `“${listName}” is refreshed by hand only.`,
-        ),
-      )
-      .catch((e: Error) => setProblem(e.message))
-      .finally(() => setBusy(false));
-  };
-  return (
-    <section aria-label="Refresh schedule" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520 }}>
-      <h3 className="value" style={{ margin: 0 }}>
-        Refresh schedule
-      </h3>
-      <p className="label" style={{ margin: 0 }}>
-        A scheduled refresh runs as you. If you no longer hold the right to load screening lists, each
-        refresh is refused and says so in the list&apos;s refreshes; nothing is read.
-      </p>
-      <label className="label" style={FIELD}>
-        List
-        <Select aria-label="List to schedule" value={listName} onChange={(e) => setListName(e.target.value)}>
-          {props.lists.map((l) => (
-            <option key={l.list_name} value={l.list_name}>
-              {l.list_name}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <label className="label" style={FIELD}>
-        Refreshed
-        <Select aria-label="Refreshed" value={every} onChange={(e) => setEvery(e.target.value as typeof every)}>
-          <option value="none">by hand only</option>
-          <option value="daily">every day</option>
-          <option value="weekly">every week</option>
-        </Select>
-      </label>
-      {every === "weekly" && (
-        <label className="label" style={FIELD}>
-          On
-          <Select aria-label="On (refresh day)" value={weekday} onChange={(e) => setWeekday(e.target.value)}>
-            {WEEKDAY_WORDS.map((day, i) => (
-              <option key={day} value={String(i + 1)}>
-                {day}
-              </option>
-            ))}
-          </Select>
-        </label>
-      )}
-      {every !== "none" && (
-        <label className="label" style={FIELD}>
-          At (Europe/London)
-          <Select aria-label="At (refresh hour, Europe/London)" value={hour} onChange={(e) => setHour(e.target.value)}>
-            {Array.from({ length: 24 }, (_, h) => (
-              <option key={h} value={String(h)}>
-                {`${String(h).padStart(2, "0")}:00`}
-              </option>
-            ))}
-          </Select>
-        </label>
-      )}
-      {problem && (
-        <p role="alert" style={{ color: "var(--error)", margin: 0 }}>
-          {problem}
-        </p>
-      )}
-      <Button disabled={busy || !listName} onClick={save}>
-        Save the schedule
-      </Button>
     </section>
   );
 }

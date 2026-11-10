@@ -1057,10 +1057,12 @@ TypologyName = Literal[
 #: the load (a hit loads with its alert; a failure holds the rows); `post_commit` runs on the
 #: change stream after the load commits, best-effort.
 #: ADR-133 stage (d): a rule written as a sentence may also run on a schedule, never at a load.
-RuleTrigger = Literal["pre_commit", "post_commit", "schedule"]
+#: ADR-146 decision 3 (*When*, L2.11): or when a screening list it reads refreshes.
+RuleTrigger = Literal["pre_commit", "post_commit", "schedule", "list_refresh"]
 #: ADR-133 decision 7, stage (d): a whole-deployment rule is `pending` until a second person
-#: approves it, and runs only once `active`.
-RuleStatus = Literal["pending", "active", "retired"]
+#: approves it, and runs only once `active`. ADR-146 decision 3 (L2.11): a rule saved and never yet
+#: made live is a `draft`, and never runs.
+RuleStatus = Literal["draft", "pending", "active", "retired"]
 #: What a change to a rule did: deployed it, changed it, or retired it (decision 7's maker–checker).
 RuleChangeAction = Literal["deploy", "change", "retire"]
 #: ADR-133 decision 7, stage (d): `closing` is a high-severity alert someone has proposed to close,
@@ -1257,6 +1259,10 @@ class TypologyRuleInput(BaseModel):
     params: TypologyParams
     trigger: RuleTrigger = "post_commit"
     budget_ms: int = Field(default=5000, ge=100, le=60000)
+    #: ADR-146 Amendment 6 decision 12: a pattern or template rule (`POST …/rules`) raises alerts
+    #: for its author alone, never the case's queue or a team; a case-wide rule is written in the
+    #: rule editor, drafted, tested and made live. A sentence's own scope says this for a sentence.
+    just_me: bool = False
 
     @model_validator(mode="after")
     def _a_drawn_pattern_runs_after_commit(self) -> TypologyRuleInput:
@@ -1303,6 +1309,12 @@ class TypologyRule(TypologyRuleInput):
     pending_action: RuleChangeAction | None = None
     pending_by: str | None = None
     pending_version: int | None = None
+    #: ADR-146 decision 3: the change waiting is a tested draft asked to go live under its
+    #: dataset's second-person policy, which another Author with `deploy_rules` decides, not the
+    #: administrator.
+    pending_make_live: bool = False
+    #: Who asked for that draft to go live (never offered its approval).
+    pending_asked_by: str | None = None
     #: ADR-106: `pending_by`'s display name, resolved when the rules list is served and never
     #: stored (step 9d finding 1: the waiting change named its proposer by an identity-provider id).
     pending_by_name: str | None = None
@@ -1843,6 +1855,9 @@ class AlertTeam(BaseModel):
     #: ADR-106: the members by name (id -> name), resolved at read time for the members served
     #: (the lead's own team alone); never stored. The Glass shows these, an id only where unnamed.
     member_names: dict[str, str] = Field(default_factory=dict)
+    #: ADR-146 decision 3: how many of the team hold this case, for the editor's "Its alerts will
+    #: appear in Alerts, seen by the 6 members of …" said before saving. People, never data.
+    member_count: int = Field(default=0, ge=0)
 
 
 class HotlistAudienceInput(BaseModel):

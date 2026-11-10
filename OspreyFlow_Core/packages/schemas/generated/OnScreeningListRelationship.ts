@@ -2,6 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type Kind = "on_screening_list";
 export type MinScore = number;
+export type ListId = string | null;
 
 /**
  * The subject's name screens against the deployment's screening lists (ADR-109 phase F's
@@ -10,5 +11,6 @@ export type MinScore = number;
 export interface OnScreeningListRelationship {
   kind?: Kind;
   min_score?: MinScore;
+  list_id?: ListId;
   [k: string]: unknown;
 }

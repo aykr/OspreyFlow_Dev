@@ -307,20 +307,6 @@ describe("a screening list's refresh schedule (Amendment 3 item 4)", () => {
     );
   });
 
-  it("sets a weekly schedule for whoever may load lists", async () => {
-    const calls = serve({
-      "GET /v1/admin/screening-lists": () => json(200, { lists: [LIST], updates: [], can_manage: true }),
-      "PUT /v1/admin/screening-lists/Synthetic%20list/schedule": (body) =>
-        json(200, { ...LIST, schedule: (body as { schedule: unknown }).schedule, schedule_words: "every Monday at 05:00 (Europe/London)" }),
-    });
-    render(<ListsPanel apiBaseUrl="http://api" bearerToken="t" canManage />);
-    fireEvent.change(await screen.findByLabelText("Refreshed"), { target: { value: "weekly" } });
-    fireEvent.change(screen.getByLabelText("On (refresh day)"), { target: { value: "1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save the schedule" }));
-    await screen.findByText("“Synthetic list” is refreshed every Monday at 05:00 (Europe/London), as you.");
-    expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ schedule: { every: "weekly", hour: 5, weekday: 1 } });
-  });
-
   it("offers a reader no schedule to set", async () => {
     serve({ "GET /v1/screening-lists": () => json(200, { lists: [LIST], can_manage: false }) });
     render(<ListsPanel apiBaseUrl="http://api" bearerToken="t" canManage={false} />);

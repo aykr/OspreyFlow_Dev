@@ -179,3 +179,4 @@ Amendment headings in another form at the baseline: 15
 | ADR-138 | 1 |
 | ADR-139 | 3 |
 | ADR-140 | 6 |
+| ADR-146 Amendment 6 | The rule editor as built (L2.11): a declared dataset fixed at creation, draft, Test over 30 days and Make live with the dataset's second-person policy (ADR-145 A3), the per-version stored rule files, when a screening list refreshes, and the migration of whole-deployment rules; the template form just for its author, and who a rule runs as | rules | 2026-11-10 | written |

@@ -28,7 +28,7 @@ STATE_NAMES = {
 
 
 #: Built by `from_state` from the state's own stores, never read from a state attribute of its own.
-BUILT = {"watch_reach"}
+BUILT = {"watch_reach", "rule_lists", "rule_reach"}
 
 
 def test_the_scheduler_reads_every_run_dependency_from_where_the_route_does() -> None:
@@ -72,6 +72,35 @@ async def test_a_scheduled_run_checks_a_watchs_owner_reach_through_the_states_ow
     assert await reach(owner, "ds-2") is False
 
 
+async def test_a_scheduled_run_reads_a_rules_list_and_a_composites_members_through_the_states_stores() -> None:
+    """ADR-146 decision 3 (L2.11; found by the gate's `make test` at eae4092): the scheduled and
+    folder-watched runs build their dependencies with `from_state`, over a state holding no
+    `rule_lists` or `rule_reach` of its own. Both are built from its stores, so a rule on a
+    composite reads the composite's members and a rule naming a list can read it. Red with
+    `from_state`'s building removed: both None, so a composite's rule read only the composite's
+    own id and a rule naming a list could not run."""
+    from datetime import UTC, datetime
+
+    from services.api.datasets import COMPOSITE, Dataset, InMemoryDatasetStore
+
+    t0 = datetime(2026, 11, 10, tzinfo=UTC)
+    datasets = InMemoryDatasetStore()
+    for d in (Dataset(id="ds-a", name="a", owning_unit="u", created_at=t0, created_by="e"),
+              Dataset(id="ds-b", name="b", owning_unit="u", created_at=t0, created_by="e"),
+              Dataset(id="ds-ab", name="ab", owning_unit="u", created_at=t0, created_by="e",
+                      kind=COMPOSITE, members=["ds-a", "ds-b"])):  # fmt: skip
+        datasets.add(d)
+    datasets.cases["case-1"] = ["ds-ab"]
+    fields = [f.name for f in dataclasses.fields(RecipeRunDeps) if f.name not in BUILT]
+    state = SimpleNamespace(**{STATE_NAMES.get(name, name): object() for name in fields})
+    state.datasets, state.target_models, state.list_store, state.list_rows = datasets, None, None, None
+    assert not hasattr(state, "rule_lists") and not hasattr(state, "rule_reach")
+    deps = RecipeRunDeps.from_state(state)
+    assert deps.rule_lists is not None and deps.rule_reach is not None
+    rule = SimpleNamespace(dataset_id="ds-ab", investigation_id="case-1")
+    assert set(await deps.rule_reach(rule) or []) >= {"ds-a", "ds-b"}  # type: ignore[arg-type]
+
+
 class _NothingVerified:
     """The registry of a recipe no Verify recorded files for (published before step 30)."""
 
@@ -108,6 +137,8 @@ async def test_the_run_route_runs_through_run_recipe_as_as_a_manual_run(
         "influencers": given["influencers"],
         # L2.10 review item 4: whether a watch's owner still reaches its dataset.
         "watch_reach": given["watch_reach"],
+        # ADR-146 decision 3 (L2.11): a rule's named list, and its dataset's reach.
+        "rule_lists": given["rule_lists"], "rule_reach": given["rule_reach"],
         # ADR-140 Amendment 12: a staged pipeline's lists and the store their rows are kept in.
         "models": given["target_models"], "staging_storage": given["staging_storage"],
         # ADR-140 Amendment 13: the deployment-wide lists a staged run's Lookups may subscribe to.

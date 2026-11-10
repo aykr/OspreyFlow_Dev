@@ -113,9 +113,17 @@ def _base(w: _World) -> str:
 
 
 def _deploy(w: _World, client: TestClient, scope: str = "deployment", **sentence: Any) -> dict[str, Any]:
-    made = client.post(f"{_base(w)}/sentence", json={"name": "Okafor", "sentence": {**LISTED, "scope": scope, **sentence}})
-    assert made.status_code == 201, made.text
-    return made.json()  # type: ignore[no-any-return]
+    """A rule as one deployed before the rule editor (ADR-146 Amendment 6): through the store, as
+    the older route made it, since that route now keeps rules just for their author. Maker-checker
+    still decides such a rule's waiting deploy, change and retirement."""
+    from schemas.domain import TypologyRuleInput
+    from schemas.sentences import RuleSentence, SentenceRuleParams
+
+    spec = TypologyRuleInput(name="Okafor", params=SentenceRuleParams(
+        pattern_id="p", sentence=RuleSentence.model_validate({**LISTED, "scope": scope, **sentence})))  # fmt: skip
+    store = client.portal.call(w.rules_store)  # type: ignore[union-attr]
+    rule = client.portal.call(store.create, w.as_, w.case, spec)  # type: ignore[union-attr]
+    return rule.model_dump(mode="json")
 
 
 def _active_ids(w: _World, client: TestClient) -> set[str]:
@@ -129,7 +137,6 @@ def test_a_deployment_scope_rule_deployed_by_one_person_is_pending_until_a_secon
     rule = _deploy(w, client)
     assert (rule["status"], rule["pending_action"], rule["pending_by"]) == ("pending", "deploy", w.maker.id)
     assert rule["id"] not in _active_ids(w, client)
-    assert w.audit.actions[-1] == "rule_change_proposed"
     w.as_ = w.checker
     approved = client.post(f"{_base(w)}/{rule['id']}/approve")
     assert approved.status_code == 200, approved.text
@@ -165,12 +172,12 @@ def test_a_change_and_a_retirement_of_a_deployment_rule_wait_and_are_kept_as_ver
     rule = _deploy(w, client)
     w.as_ = w.checker
     client.post(f"{_base(w)}/{rule['id']}/approve")
+    # ADR-146 Amendment 6: a whole-deployment rule is no longer changed here; it is converted per
+    # dataset, and its retirement still waits for a second person.
     changed = client.post(f"{_base(w)}/{rule['id']}/change",
                           json={"name": "Okafor, low", "sentence": {**LISTED, "scope": "deployment", "severity": "low"}})  # fmt: skip
-    assert changed.status_code == 200, changed.text
-    assert (changed.json()["pending_action"], changed.json()["name"]) == ("change", "Okafor")
+    assert (changed.status_code, changed.json()["error"]) == (409, "use_the_rule_editor")
     w.as_ = w.maker
-    assert client.post(f"{_base(w)}/{rule['id']}/approve").json()["name"] == "Okafor, low"
     retiring = client.post(f"{_base(w)}/{rule['id']}/retire")
     assert retiring.status_code == 200 and retiring.json()["pending_action"] == "retire"
     w.as_ = w.checker
@@ -180,16 +187,19 @@ def test_a_change_and_a_retirement_of_a_deployment_rule_wait_and_are_kept_as_ver
     versions = client.get(f"{_base(w)}/{rule['id']}/versions")
     assert versions.status_code == 200
     assert [(v["action"], v["status"], v["proposed_by_name"] is not None) for v in versions.json()] == [
-        ("deploy", "approved", True), ("change", "approved", True), ("retire", "rejected", True)]  # fmt: skip
+        ("deploy", "approved", True), ("retire", "rejected", True)]  # fmt: skip
     assert versions.json()[-1]["words"] == "still needed"
 
 
 def test_a_case_rule_is_live_at_once(world: tuple[_World, TestClient]) -> None:
+    """A case rule deployed before the editor was live at once, and still is. A new one is the
+    editor's: the older route refuses it (ADR-146 Amendment 6, the lane-reviewer's item 2)."""
     w, client = world
     w.as_ = w.analyst
     rule = _deploy(w, client, scope="this_case")
     assert rule["status"] == "active" and rule["pending_action"] is None
-    assert w.audit.actions[-1] == "rule_deployed"
+    refused = client.post(f"{_base(w)}/sentence", json={"name": "n", "sentence": {**LISTED, "scope": "this_case"}})
+    assert (refused.status_code, refused.json()["error"]) == (409, "use_the_rule_editor")
 
 
 def test_an_engineer_cannot_author_an_analyst_rule(world: tuple[_World, TestClient]) -> None:

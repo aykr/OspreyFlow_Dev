@@ -252,6 +252,7 @@ export type LinkType1 = string;
 export type Kind3 = "on_hotlist";
 export type Kind4 = "on_screening_list";
 export type MinScore1 = number;
+export type ListId = string | null;
 export type Frequency = (CountFrequency | AmountFrequency | FirstTimeFrequency) | null;
 export type Kind5 = "count";
 export type LinkType2 = string;
@@ -276,7 +277,7 @@ export type Scope = "dataset" | "case";
 export type Severity = "low" | "medium" | "high";
 export type Team = "case" | "my_team" | "team";
 export type TeamId = string | null;
-export type Runs = "pre_commit" | "post_commit" | "schedule";
+export type Runs = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type OnHit = "load" | "hold";
 export type Scope1 = "just_me" | "this_case" | "deployment";
 export type Every = "daily" | "weekly";
@@ -303,14 +304,18 @@ export type BaselineDays = number;
 export type Factor = number;
 export type MinRecent = number;
 export type Measure = "count" | "amount";
-export type Trigger = "pre_commit" | "post_commit" | "schedule";
+export type Trigger = "pre_commit" | "post_commit" | "schedule" | "list_refresh";
 export type BudgetMs = number;
 export type ProposedBy = string;
 export type ProposedAt = string;
-export type Status = "pending" | "approved" | "rejected" | "applied";
+export type Status = "draft" | "pending" | "approved" | "rejected" | "applied";
 export type DecidedBy = string | null;
 export type DecidedAt = string | null;
 export type Words = string | null;
+export type TestedAt = string | null;
+export type TestedBy = string | null;
+export type TestedDays = number | null;
+export type WouldRaise = number | null;
 export type ProposedByName = string | null;
 export type DecidedByName = string | null;
 
@@ -333,6 +338,10 @@ export interface RuleVersion {
   decided_by?: DecidedBy;
   decided_at?: DecidedAt;
   words?: Words;
+  tested_at?: TestedAt;
+  tested_by?: TestedBy;
+  tested_days?: TestedDays;
+  would_raise?: WouldRaise;
   proposed_by_name?: ProposedByName;
   decided_by_name?: DecidedByName;
   [k: string]: unknown;
@@ -533,6 +542,7 @@ export interface OnHotlistRelationship {
 export interface OnScreeningListRelationship {
   kind?: Kind4;
   min_score?: MinScore1;
+  list_id?: ListId;
   [k: string]: unknown;
 }
 /**

@@ -102,7 +102,8 @@ def _gate(rule: TypologyRule, graph: Any, monkeypatch: pytest.MonkeyPatch, make_
     fake = _Fake()
 
     async def owner(_: str) -> Principal:
-        return LOADER
+        # The rule's author, who may have written a rule (ADR-146 Amendment 6 decision 13).
+        return LOADER.model_copy(update={"roles": ["analyst"]})
 
     gate = RuleGate(
         rules=[rule], investigation_id="case-1", graph=graph, analytics=None, scheme=SCHEME,

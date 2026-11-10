@@ -1,0 +1,4 @@
+## test-file-coverage-check at 7ee2d56 with L2.11_ci_yml.diff applied (then restored), 2026-11-10T15:14:32Z
+cd ../OspreyFlow_Core && PYTHONPATH=/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build .venv/bin/python -m tools.test_file_coverage_check
+test-file-coverage-check: 916 test file(s), 0 allowlisted, no new drift.
+# exit 0

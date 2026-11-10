@@ -1,24 +1,34 @@
 """ADR-110 decision 10 and Amendment 3, point 1: a failed or refused scheduled run tells its owner,
-as an alert with no typology in the owner's own inbox — with its words on the personal alert view —
-and never in the case team's queue. Against the throwaway Postgres; the view through its own
-function."""
+as an alert with no typology in the owner's own list, with its words — and never in the case's
+queue, the one queue of ADR-146 decision 1 included. Against the throwaway Postgres; the queue
+through its own function."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from services.api.alert_queue import monitoring_queue
 from services.api.alerts import AlertStore
 from services.api.config import PostgresConfig
 from services.api.scheduler import schedule_notice
-from services.api.watch_routes import alert_to_view
 
 from conduit_common.identity import new_id
 from schemas.domain import Principal
 from schemas.ingest import StudioRecipeDraft, StudioRecipeStatus
-
 from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 NOW = datetime(2026, 6, 2, 5, tzinfo=UTC)
+
+
+class _NothingReadable:
+    """A graph in which the reader may read nothing: a queued alert citing any node or link is left
+    out whole, so only an alert citing none, as the notice, can be listed."""
+
+    async def get_nodes(self, ids: object, reader: object) -> list[object]:
+        return []
+
+    async def get_edges(self, ids: object, reader: object) -> list[object]:
+        return []
 
 
 def _recipe(case: str) -> StudioRecipeDraft:
@@ -40,10 +50,16 @@ async def test_a_notice_reaches_the_owners_inbox_with_its_words_and_no_case_queu
         (mine,) = await store.list_authorized(reader)
         assert mine.id == notice.id and mine.typology is None
         assert await store.list_case_queue(case, reader) == []
-        view = await alert_to_view(mine, reader, graph=None, analytics=NO_TRANSACTIONS, case="inbox-case")  # type: ignore[arg-type]
-        assert view.words == "The scheduled run of Daily export was refused: x"
-        assert view.rule_id == f"schedule:{recipe.recipe_id}" and view.referent_node_ids == []
+        assert mine.words == "The scheduled run of Daily export was refused: x"
+        assert (mine.rule_id, mine.referent_node_ids) == (f"schedule:{recipe.recipe_id}", [])
+        # L2.10 (ADR-146 decision 1): the one queue holds no notice, its owner's or anyone's — a
+        # notice is no kind (`alerts._KIND_SQL`), in its owner's own list alone. The database is
+        # shared, so the queue is asked only whether this notice is in it.
+        nothing = _NothingReadable()
         someone_else = reader.model_copy(update={"id": f"other-{new_id()}"})
+        for who in (reader, someone_else):
+            queued = await monitoring_queue(store, nothing, NO_TRANSACTIONS, case, who)  # type: ignore[arg-type]
+            assert notice.id not in {q.alert.id for q in queued}
         assert await store.list_authorized(someone_else) == []
     finally:
         await store.close()

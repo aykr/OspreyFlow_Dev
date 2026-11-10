@@ -46,6 +46,8 @@ export interface SentenceDraft {
   steps: string;
   area: AreaBox;
   minScore: string;
+  /** ADR-146 decision 3 (the rule editor's list picker): the one Studio list it screens against. */
+  listId?: string;
   frequency: FrequencyKind;
   frequencyLink: string;
   atLeast: string;
@@ -67,7 +69,8 @@ export interface SentenceDraft {
    * before teams, kept only for the rules saved with it (gap map Q5 (B)). */
   team: "case" | "my_team" | "team";
   teamId?: string;
-  runs: "pre_commit" | "post_commit" | "schedule";
+  /** ADR-146 decision 3: or when a screening list it reads refreshes (the rule editor's). */
+  runs: "pre_commit" | "post_commit" | "schedule" | "list_refresh";
   onHit: "load" | "hold";
   scope: Scope;
   /** ADR-133 stage (d): a scheduled rule's cadence, its hour (Europe/London) and, weekly, its day. */
@@ -286,7 +289,7 @@ export function toSentence(draft: SentenceDraft): RuleSentence {
       relationship = { kind: "on_hotlist" };
       break;
     case "on_screening_list":
-      relationship = { kind: "on_screening_list", min_score: Number(draft.minScore) };
+      relationship = { kind: "on_screening_list", min_score: Number(draft.minScore), ...(draft.listId ? { list_id: draft.listId } : {}) };
       break;
   }
   let frequency: Record<string, unknown> | null = null;
@@ -378,6 +381,7 @@ export function fromSentence(sentence: RuleSentence): SentenceDraft {
     if (r.other_type) draft.otherType = String(r.other_type);
     if (r.steps) draft.steps = String(r.steps);
     if (r.min_score) draft.minScore = String(r.min_score);
+    if (r.list_id) draft.listId = String(r.list_id);
     if (r.area) draft.area = boxOf(r.area as { name?: string; points: { lon: number; lat: number }[] });
   }
   const f = sentence.frequency as unknown as Loose | null | undefined;

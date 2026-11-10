@@ -29,7 +29,8 @@ from schemas.sentences import RuleCadence
 
 #: What became of a proposed change: waiting for a second person, approved by one, rejected (or
 #: withdrawn by the person who proposed it), or applied at once (a change that needs no approval).
-RuleChangeStatus = Literal["pending", "approved", "rejected", "applied"]
+#: ADR-146 decision 3 (L2.11): `draft`, saved and not yet asked to go live; at most one per rule.
+RuleChangeStatus = Literal["draft", "pending", "approved", "rejected", "applied"]
 
 
 class RuleVersion(BaseModel):
@@ -51,6 +52,12 @@ class RuleVersion(BaseModel):
     decided_at: datetime | None = None
     #: Why, in words: the reason given for a rejection, or what the change awaited.
     words: str | None = None
+    #: ADR-146 decision 3: *Test* of this version over the dataset's last `tested_days` days, by
+    #: whom, and how many alerts it would have raised. A version goes live only once tested.
+    tested_at: datetime | None = None
+    tested_by: str | None = None
+    tested_days: int | None = None
+    would_raise: int | None = Field(default=None, ge=0)
     #: Resolved when the read is served, never stored (ADR-106).
     proposed_by_name: str | None = None
     decided_by_name: str | None = None
@@ -69,7 +76,8 @@ class RuleChangeRejection(BaseModel):
 #: What became of one scheduled slot: run; refused (in words, the rule's author could not act);
 #: missed (the deployment was not running then); failed (it ran and could not finish).
 RuleRunOutcome = Literal["ran", "refused", "missed", "failed"]
-RuleScheduleState = Literal["scheduled", "stopped", "waiting_for_approval"]
+#: ADR-146 decision 3 (L2.11): `draft`, a rule not yet made live, which has not run.
+RuleScheduleState = Literal["draft", "scheduled", "stopped", "waiting_for_approval"]
 
 
 class RuleRun(BaseModel):

@@ -607,6 +607,9 @@ async def test_the_teams_a_rule_may_go_to_list_members_to_the_lead_alone() -> No
     assert names.asked == ["lead", "member"]
     deployer = Principal(id="deployer", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
     assert await ask(deployer) == {"team-7": (False, []), "team-8": (False, [])}
+    # ADR-146 decision 3 (L2.11): how many of each team hold the case, said to the deployer before
+    # saving ("seen by the 2 members of Prison intel"), with no one named.
+    assert {t.role_id: t.member_count for t in served[-2:]} == {"team-7": 2, "team-8": 1}
     asked = directory.asked
     viewer = Principal(id="rv", clearance="OFFICIAL", org_unit="unit-1", roles=["reports_viewer"])
     assert await ask(viewer) == {}

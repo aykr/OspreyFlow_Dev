@@ -70,8 +70,8 @@ RECIPE = load_recipe(
 )
 T0 = datetime(2026, 9, 1, 9, 0, tzinfo=UTC)
 
-ANALYST = Principal(id="analyst-rules", clearance="OFFICIAL", org_unit="verify")
-SECRET_LOADER = Principal(id="loader-secret", clearance="SECRET", org_unit="verify")
+ANALYST = Principal(id="analyst-rules", clearance="OFFICIAL", org_unit="verify", roles=["analyst"])  # deploy_rules: may have written a rule (ADR-146 Amendment 6 decision 13)
+SECRET_LOADER = Principal(id="loader-secret", clearance="SECRET", org_unit="verify", roles=["analyst"])  # deploys rules too: deploy_rules (ADR-146 Amendment 6 decision 13)
 
 
 def _row(payer: str, payee: str, amount: float, at: datetime) -> dict[str, str]:

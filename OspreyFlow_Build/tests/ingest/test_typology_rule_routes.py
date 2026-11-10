@@ -48,6 +48,8 @@ RULE = {
     "params": {"typology": "structuring", "threshold": 10000, "window_days": 7,
                "minimum_count": 3},
     "trigger": "pre_commit",
+    # ADR-146 Amendment 6 decision 12: this form keeps a rule just for its author.
+    "just_me": True,
 }  # fmt: skip
 
 
@@ -115,6 +117,13 @@ def test_only_an_author_deploys_and_retires_a_rule(
         assert made.status_code == 201, made.text
         rule_id = made.json()["id"]
         assert made.json()["owner_id"] == AUTHOR.id and made.json()["trigger"] == "pre_commit"
+        assert made.json()["just_me"] is True
+        # A template made case-wide here is refused: a rule for the case is written in the rule
+        # editor, drafted, tested and past its second person (decision 12). Red with the route's
+        # refusal removed: it went live at once for the whole case, untested.
+        wide = client.post(f"/v1/investigations/{case}/rules", headers=_as(key, AUTHOR.id),
+                           json={**RULE, "just_me": False})  # fmt: skip
+        assert (wide.status_code, wide.json()["error"]) == (409, "use_the_rule_editor"), wide.text
 
         # An expression smuggled into the closed vocabulary is refused at the schema (rule 8).
         bad = {**RULE, "params": {"typology": "custom", "expression": "amount > 1"}}
@@ -433,7 +442,7 @@ def test_only_a_pattern_the_author_saved_is_deployed_as_a_rule(
 
     with TestClient(app) as client:
         path = f"/v1/investigations/{case}/rules"
-        body = {"name": "Drawn", "params": {"typology": "pattern", "pattern_id": theirs}}
+        body = {"name": "Drawn", "params": {"typology": "pattern", "pattern_id": theirs}, "just_me": True}
         refused = client.post(path, headers=_as(key, AUTHOR.id), json=body)
         assert refused.status_code == 422 and "only a pattern you saved" in refused.json()["detail"]
         made = client.post(path, headers=_as(key, AUTHOR.id), json={**body, "params": {"typology": "pattern", "pattern_id": mine}})

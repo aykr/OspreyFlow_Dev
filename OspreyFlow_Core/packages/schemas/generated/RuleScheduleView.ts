@@ -2,7 +2,7 @@
 // Source: packages/schemas/domain.py, analytics.py, ingest.py, profile.py, model.py and compute.py, via generate_ts.py
 export type RuleId = string;
 export type Schedule = string;
-export type State = "scheduled" | "stopped" | "waiting_for_approval";
+export type State = "draft" | "scheduled" | "stopped" | "waiting_for_approval";
 export type Words = string | null;
 export type NextRun = string | null;
 export type Id = string;

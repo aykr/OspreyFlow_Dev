@@ -75,7 +75,7 @@ ONTOLOGY = load_deployment_ontology()
 NOW = datetime(2026, 11, 1, 12, tzinfo=UTC)
 CASE = "case-sentences"
 
-AUTHOR = Principal(id="author", clearance="OFFICIAL", org_unit="unit-1")
+AUTHOR = Principal(id="author", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])  # deploy_rules: a right to have written a rule (ADR-146 Amendment 6 decision 13)
 CLEARED = Principal(id="cleared", clearance="SECRET", org_unit="unit-1")
 
 

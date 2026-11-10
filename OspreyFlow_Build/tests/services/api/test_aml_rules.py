@@ -51,8 +51,9 @@ from schemas.domain import (
 SCHEME = load_uk_le_scheme()
 CASE = "case-ledger"
 NOW = datetime(2026, 9, 1, 12, tzinfo=UTC)
-AUTHOR = Principal(id="aml-author", clearance="OFFICIAL", org_unit="unit-a")
-CLEARED = Principal(id="aml-cleared", clearance="SECRET", org_unit="unit-a")
+# Each holds a right to have written a rule (ADR-146 Amendment 6 decision 13): Analyst's deploy_rules.
+AUTHOR = Principal(id="aml-author", clearance="OFFICIAL", org_unit="unit-a", roles=["analyst"])
+CLEARED = Principal(id="aml-cleared", clearance="SECRET", org_unit="unit-a", roles=["analyst"])
 
 
 def _handling(classification: str = "OFFICIAL") -> Handling:

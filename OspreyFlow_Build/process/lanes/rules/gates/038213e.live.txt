@@ -1,0 +1,2302 @@
+## L2.11 after the orchestrator's review, at 038213e: every live file touching rules, schedules and loads that run them (50 files), the rules lease, stack b, by stack_lease.sh remote, start 2026-11-10T16:48:01Z
+Running on ospreyflow-test (stack b, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261110T164814Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_handling_from_columns_live.py ../OspreyFlow_Build/tests/ingest/test_handling_from_columns_review.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_pid_monitoring_storyline_live.py ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py ../OspreyFlow_Build/tests/ingest/test_rule_standards_routes_live.py ../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_aml_rules.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_disable_l38_transfers.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_list_refresh.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule_reach.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py ../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_screening_list_store.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py ../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py ../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py 
+FFFFFF.......FF.FFF.FFFFFFFFFFF...FFFF.................................. [ 10%]
+........................................F.FF..FF.FF.FFFFFFFF............ [ 21%]
+F.............F............FFFF.F..........F...FFF..FFF...F.FFFFFF...... [ 32%]
+..............................F......................................... [ 43%]
+........................................................................ [ 53%]
+........................................................................ [ 64%]
+...............................F........................................ [ 75%]
+........................................................................ [ 86%]
+........................................................................ [ 96%]
+.....................                                                    [100%]
+=================================== FAILURES ===================================
+_____ test_the_loader_writes_a_link_and_its_transactions_above_their_ends ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a9e2720>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9a5b63f0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a1917f0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a184350>
+
+    async def test_the_loader_writes_a_link_and_its_transactions_above_their_ends(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """The measurement: what the loader itself can produce. Its alert is withheld whole, and by its
+        own SECRET node too, which is why the cases below raise rows without one."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, events = await _hidden_world(stores, graph, analytics, case, "LW")
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:126: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a9e2720>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9a5b63f0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a1917f0>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e9a178290>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a184350>
+case = 'case-01M735RMTYKTRYF8WRXRW9CCNA', tag = 'LW'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_an_alert_raised_without_its_node_over_a_hidden_link_or_transactions_is_withheld_whole _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a1916a0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9a192660>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a11b380>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e90726c90>
+
+    async def test_an_alert_raised_without_its_node_over_a_hidden_link_or_transactions_is_withheld_whole(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Two no-node rows over what the loader wrote: one citing only the SECRET link, one only the
+        SECRET transactions; each between the two OFFICIAL accounts the teammate can read. The teammate
+        is told of neither, and each is refused as a missing id; the SECRET deployer has both. Red with
+        nodes alone: the teammate was listed both and could open each."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           loaded, events = await _hidden_world(stores, graph, analytics, case, "NN")
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:150: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a1916a0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9a192660>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a11b380>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e9a172b70>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e90726c90>
+case = 'case-01M735RR7VB4JHDQSF75EYJ2DQ', tag = 'NN'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_a_row_raised_over_a_link_reverted_since_the_judgement_is_listed_for_no_one _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90731ca0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90730b60>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a0a5490>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a0e9c70>
+
+    async def test_a_row_raised_over_a_link_reverted_since_the_judgement_is_listed_for_no_one(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """b21f316's fallback through the real gate: the finding cites a link the loader wrote and a
+        revert then took back; `raise_committed` raises the row with no node. A reverted link is hidden
+        from every reader, so the row is listed for no one and refused to each as missing. Red with
+        nodes alone: both readers were listed it and could open it."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           loaded, _ = await _hidden_world(stores, graph, analytics, case, "RV")
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:184: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90731ca0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90730b60>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a0a5490>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e90726300>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a0e9c70>
+case = 'case-01M735RSETMCD3DY3497E46ESY', tag = 'RV'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+__ test_an_alert_over_a_link_marked_above_its_ends_is_not_readable_as_a_node ___
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90744650>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e907453a0>, 'audit': <services.api.audit.AuditWriter object at 0x732e907465d0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e907c5b20>
+
+    async def test_an_alert_over_a_link_marked_above_its_ends_is_not_readable_as_a_node(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Item ii live. The loader cannot write a link marked above its own transactions (above), so
+        the finding is the shape a KYC finding has, nodes and links and no transactions: the two
+        OFFICIAL accounts and the loader's SECRET link between them, raised by the real gate. Its node
+        is SECRET: the teammate cannot read it by id, nor find it among the `Alert` nodes listed to them
+        (`list_nodes`, the bulk read; `search_nodes` matches declared identifiers, and `Alert` declares
+        none), nor open it on the canvas. Red with the links left out of the marking: the node was
+        OFFICIAL, and read and listed to the teammate, the finding's words with it."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           loaded, _ = await _hidden_world(stores, graph, analytics, case, "MK")
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:221: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90744650>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e907453a0>, 'audit': <services.api.audit.AuditWriter object at 0x732e907465d0>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e907c7f50>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e907c5b20>
+case = 'case-01M735RTRZAXQ0MZYPXDA8ACW0', tag = 'MK'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_still_raises_the_row _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90747da0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90745eb0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a1decf0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e907c76e0>
+
+    async def test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_still_raises_the_row(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """`_alert_node_in_load`'s own contract, the companion the orchestrator asked for: in the
+        load's transaction, a cited link whose marking cannot be read and no highest marking to stand
+        in (`unseen=None`) writes no node, rather than one marked below the link; the row is still
+        raised after the commit, and the audit says why. No real load reaches this today: every load
+        that runs rules passes `unseen` (`studio_publish.py`, `recipe_handlings`), and a link the load
+        writes stands in at its marking as written (the test below). Red with the fallback removed
+        (the link skipped, not refused): a node was written at the accounts' OFFICIAL."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           loaded, _ = await _hidden_world(stores, graph, analytics, case, "IL")
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:259: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90747da0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90745eb0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a1decf0>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e907c6a50>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e907c76e0>
+case = 'case-01M735RVZ0WRMGW80Y46D16F4V', tag = 'IL'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_in_a_load_a_link_the_load_writes_is_marked_as_written_not_at_the_recipes_highest _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a0eb5f0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e907c56a0>, 'audit': <services.api.audit.AuditWriter object at 0x732e907c6ff0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a185250>
+
+    async def test_in_a_load_a_link_the_load_writes_is_marked_as_written_not_at_the_recipes_highest(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """The lane-reviewer's finding 2, at the real call site (`load_with_rules` → `pre_commit`,
+        `unseen` set from the recipe): the link a load writes cannot be read back before the commit, so
+        its marking as written stands in, as a node's does. Red before the fix: `known` held the
+        nodes' markings alone, the link took the recipe's highest (SECRET), and the alert's node with
+        it, so a teammate who may read every account, link and transaction the alert cites was told
+        nothing of it."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            quiet = _gate(stores, graph, analytics, [], case)
+            await _load(graph, analytics, quiet,
+                        [_row("GBOVMULE", "GBOVX", 10, T0 - timedelta(days=30)),
+                         _row("GBOVY", "GBOVHUB", 10, T0 - timedelta(days=30))])  # fmt: skip
+            rule = await stores["rules"].create(ANALYST, case, _structuring("pre_commit"))
+            rows = [_row("GBOVMULE", "GBOVHUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)]
+            await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case), rows,
+                        recipe=_referencing_with_a_secret_override())  # fmt: skip
+>           (alert,) = await _case_alerts(stores, ANALYST, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:310: ValueError
+_ test_a_firing_over_a_hidden_link_or_transaction_is_withheld_from_the_rule_audit _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a190b90>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80567830>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a178ef0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a178800>
+
+    async def test_a_firing_over_a_hidden_link_or_transaction_is_withheld_from_the_rule_audit(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """The loader's SECRET structuring between two OFFICIAL accounts: its `rule_fired` entry names
+        the two accounts (both readable to the OFFICIAL teammate) and, since L2.8b, the SECRET link and
+        transactions it cites. The teammate is given neither the entry nor its words, and the total
+        does not count it; the SECRET loader reads it. Red with the audit checking nodes alone: the
+        teammate read the entry, words included."""
+        from services.api.rule_holds import readable_rule_audit
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, _ = await _hidden_world(stores, graph, analytics, case, "RA")
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:718: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a190b90>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80567830>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a178ef0>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e8048cf80>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a178800>
+case = 'case-01M735SEJSR5P2MFPJ6XQSEZE9', tag = 'RA'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_its_words _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80564a40>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e805664b0>, 'audit': <services.api.audit.AuditWriter object at 0x732e907c5220>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e80567ec0>
+
+    async def test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_its_words(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """An entry as `RuleGate._raise_row` wrote it before L2.8b (rule, alert, trigger, words, nodes;
+        no links or transactions): whether the reader may see what its alert cites cannot be known, so
+        the entry is kept and its words withheld, from every reader (fail closed). Red with the words
+        shown."""
+        from services.api.rule_holds import readable_rule_audit
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           loaded, _ = await _hidden_world(stores, graph, analytics, case, "OS")
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:745: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80564a40>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e805664b0>, 'audit': <services.api.audit.AuditWriter object at 0x732e907c5220>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e907eaa50>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e80567ec0>
+case = 'case-01M735SFJCXQHND13J7B1HB3SP', tag = 'OS'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+___ test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marking ___
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8053bcb0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80538dd0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a17adb0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a187050>
+
+    async def test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marking(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """An alert as the code before `7fac778` left it: its node marked by its two OFFICIAL accounts
+        alone, while the alert cites the loader's SECRET link between them, so the OFFICIAL teammate
+        reads the node and the finding's words on it. `--dry-run` lists it and changes nothing; the run
+        supersedes the node at SECRET and points the alert at the revision, which the teammate cannot
+        read; a second run changes nothing. Red with the re-mark not written (the run left as a dry
+        run): the teammate still read the node; and with the purge left out, the case's working set
+        still held the old node's OFFICIAL copy, served from the store to the teammate."""
+        from scripts.remark_alert_nodes import remark
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           loaded, _ = await _hidden_world(stores, graph, analytics, case, "RM")
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:803: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8053bcb0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80538dd0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a17adb0>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e8053bb90>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a187050>
+case = 'case-01M735SGHQ6RT96J7VE4SXNWSR', tag = 'RM'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80566060>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e805659d0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a118200>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e804ff8c0>
+
+    async def test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """G2's hidden-link row through the real paths, replacing the hand-planted one: an OFFICIAL load
+        raises the alert (its node, accounts, link and transactions all OFFICIAL); an analyst cleared
+        for SECRET then raises the link's handling to SECRET through the link change route's service
+        (ADR-102), which since L2.8b repoints the alert to the successor (ADR-109 Amendment 10). The
+        OFFICIAL teammate, who may still read both accounts and every transaction, is told nothing of
+        the alert, and its explanation is refused as a missing id. Red with the queue checking nodes
+        alone: the teammate was listed it, and could open it."""
+        from services.api.link_changes import LinkChangeRequest, LinkChangeService
+        from services.api.working_set.service import WorkingSetService
+    
+        from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+        from tests.services.api.working_set.fakes import FakeWorkingSetStore
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "LC")
+>           (alert,) = await _case_alerts(stores, ANALYST, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:872: ValueError
+____ test_the_file_finds_its_own_rule_whatever_else_is_active_in_the_store _____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80538e00>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90726030>, 'audit': <services.api.audit.AuditWriter object at 0x732e90726450>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e80538890>
+
+    async def test_the_file_finds_its_own_rule_whatever_else_is_active_in_the_store(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Found by the case lane on a shared database: `list_active_for_case` lists every active
+        deployment-wide rule with the case's own, so a `(rule,) =` unpack of it failed ("too many values
+        to unpack") once another live file had left one. With one planted first, `_rule_of` still finds
+        the rule that raised this test's alert, by its id. Red with the unpack by position. The planted
+        rule is retired at the end, so this test leaves nothing behind."""
+        from schemas.sentences import RuleSentence, SentenceRuleParams
+    
+        elsewhere = f"case-{new_id()}"
+        sentence = RuleSentence.model_validate({"subject": "Person", "scope": "deployment", "conditions": [
+            {"op": "one_of", "property": "listing", "values": ["sanction", "pep"]}]})  # fmt: skip
+        planted = await stores["rules"].create(SECRET_LOADER, elsewhere, TypologyRuleInput(
+            name="A deployment-wide rule another file left", trigger="post_commit",
+            params=SentenceRuleParams(pattern_id=f"pat-{new_id()}", sentence=sentence)))  # fmt: skip
+        # A deployment-wide rule waits for a second person (ADR-133 decision 7) before it is active.
+        planted = await stores["rules"].approve(planted.id, elsewhere, ANALYST)
+        try:
+            case = f"case-{new_id()}"
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>               loaded, _ = await _hidden_world(stores, graph, analytics, case, "AL")
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:931: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80538e00>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90726030>, 'audit': <services.api.audit.AuditWriter object at 0x732e90726450>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e804cd340>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e80538890>
+case = 'case-01M735SJ8HCSY80FZRWG1C1EFD', tag = 'AL'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_an_entry_saying_an_alerts_node_was_withheld_is_withheld_with_the_alert __
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80498380>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80498620>, 'audit': <services.api.audit.AuditWriter object at 0x732e907253d0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e90726600>
+
+    async def test_an_entry_saying_an_alerts_node_was_withheld_is_withheld_with_the_alert(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """B2: a row raised with no node over a link a revert took back writes `alert_node_withheld`,
+        naming its alert and its accounts, which the teammate may read. The queue withholds that alert
+        from everyone; so does the audit, checking the entry by what its alert cites. Red with the
+        entry checked by the nodes it names: the teammate learnt an alert existed over the accounts."""
+        from services.api.rule_holds import readable_rule_audit
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           loaded, _ = await _hidden_world(stores, graph, analytics, case, "WH")
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:995: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80498380>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80498620>, 'audit': <services.api.audit.AuditWriter object at 0x732e907253d0>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e907c62a0>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e90726600>
+case = 'case-01M735SK6MR9V7E3FP6KX8DDW7', tag = 'WH'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_a_firing_stays_in_the_audit_when_its_alert_follows_a_link_to_its_successor _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80538b00>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80539eb0>, 'audit': <services.api.audit.AuditWriter object at 0x732e907ebad0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e8053b200>
+
+    async def test_a_firing_stays_in_the_audit_when_its_alert_follows_a_link_to_its_successor(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """B7: an analyst changes the link an OFFICIAL alert cites (its details, not its marking): the
+        alert follows the successor (ADR-109 Amendment 10), and its firing stays in the audit, read by
+        what the alert cites now. Red with the entry checked by the link it named when raised: the
+        firing vanished for every reader, and from the total."""
+        from services.api.link_changes import LinkChangeRequest, LinkChangeService
+        from services.api.rule_holds import readable_rule_audit
+        from services.api.working_set.service import WorkingSetService
+    
+        from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+        from tests.services.api.working_set.fakes import FakeWorkingSetStore
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "FS")
+>           (alert,) = await _case_alerts(stores, ANALYST, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1029: ValueError
+_ test_an_evaluations_count_is_withheld_from_a_reader_who_cannot_see_every_finding _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80509d60>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8050a210>, 'audit': <services.api.audit.AuditWriter object at 0x732e80566f00>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e80508560>
+
+    async def test_an_evaluations_count_is_withheld_from_a_reader_who_cannot_see_every_finding(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """B2's count: the SECRET rule's evaluation counted one finding, which the OFFICIAL teammate may
+        not see. The teammate is given the evaluation without its count; the SECRET loader, who sees
+        every finding, keeps the figure. Red with the count served to both."""
+        from services.api.rule_holds import readable_rule_audit
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           loaded, _ = await _hidden_world(stores, graph, analytics, case, "CT")
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1054: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80509d60>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8050a210>, 'audit': <services.api.audit.AuditWriter object at 0x732e80566f00>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e907e9010>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e80508560>
+case = 'case-01M735SMXQSFWE55C35XR6CHXC', tag = 'CT'
+
+    async def _hidden_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                            tag: str) -> tuple[Alert, list[Any]]:  # fmt: skip
+        """An OFFICIAL load writes two accounts (each with a quiet payment elsewhere); a SECRET load of
+        structuring between them raises its alert, as a SECRET deployer's pre-commit rule does. The
+        alert and the SECRET transactions it cites, as the loader wrote them."""
+        quiet = _gate(stores, graph, analytics, [], case)
+        await _load(graph, analytics, quiet,
+                    [_row(f"GB{tag}MULE", f"GB{tag}X", 10, T0 - timedelta(days=30)),
+                     _row(f"GB{tag}HUB", f"GB{tag}Y", 10, T0 - timedelta(days=30))])  # fmt: skip
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        rows = [
+            _row(f"GB{tag}MULE", f"GB{tag}HUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)
+        ]
+        await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER),
+                    rows, recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>       (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:81: ValueError
+_ test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[timeout] _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8048fe60>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8048f530>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a187230>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e8048e9f0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e8048ffe0>
+interruption = 'timeout'
+
+    @pytest.mark.parametrize("interruption", ["timeout", "cancellation"])
+    async def test_a_commit_that_lands_after_the_writer_failed_is_still_repointed(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch, interruption: str
+    ) -> None:
+        """B3: the graph's commit is reported failed (a timeout; or the request cancelled) and lands
+        afterwards. The writer never drops its record, so the next read finds the link superseded and
+        repoints the alert. A cancellation stays a cancellation. Red with the record dropped on the
+        writer's failure path (it read the link still live and dropped it): the alert stayed on the
+        superseded link, hidden from every reader."""
+        import asyncio
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, link, service, _ = await _changing_world(stores, graph, analytics, case, "AM")
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8048fe60>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8048f530>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a187230>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e804ccfb0>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e8048e9f0>
+case = 'case-01M735SNTEXMZBSS86QT9MG61P', tag = 'AM'
+
+    async def _changing_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                              tag: str) -> tuple[Alert, Any, Any, Any]:  # fmt: skip
+        """An OFFICIAL alert over a loader-written link, and a link-change service over the real graph and
+        alert store, with the case's working set holding the accounts, the link and the alert's node."""
+        from services.api.link_changes import LinkChangeService
+        from services.api.working_set.service import WorkingSetService
+    
+        from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+        from tests.services.api.working_set.fakes import FakeWorkingSetStore
+    
+        await _raised(stores, graph, analytics, case, tag)
+>       (alert,) = await _case_alerts(stores, ANALYST, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1085: ValueError
+_ test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[cancellation] _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e804b4170>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e804b5ee0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a797890>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e804b5400>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e804b7200>
+interruption = 'cancellation'
+
+    @pytest.mark.parametrize("interruption", ["timeout", "cancellation"])
+    async def test_a_commit_that_lands_after_the_writer_failed_is_still_repointed(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch, interruption: str
+    ) -> None:
+        """B3: the graph's commit is reported failed (a timeout; or the request cancelled) and lands
+        afterwards. The writer never drops its record, so the next read finds the link superseded and
+        repoints the alert. A cancellation stays a cancellation. Red with the record dropped on the
+        writer's failure path (it read the link still live and dropped it): the alert stayed on the
+        superseded link, hidden from every reader."""
+        import asyncio
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, link, service, _ = await _changing_world(stores, graph, analytics, case, "AM")
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1115: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e804b4170>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e804b5ee0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a797890>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e9ab1c350>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e804b5400>
+case = 'case-01M735SPRH16ZB50604DS8F9GD', tag = 'AM'
+
+    async def _changing_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                              tag: str) -> tuple[Alert, Any, Any, Any]:  # fmt: skip
+        """An OFFICIAL alert over a loader-written link, and a link-change service over the real graph and
+        alert store, with the case's working set holding the accounts, the link and the alert's node."""
+        from services.api.link_changes import LinkChangeService
+        from services.api.working_set.service import WorkingSetService
+    
+        from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+        from tests.services.api.working_set.fakes import FakeWorkingSetStore
+    
+        await _raised(stores, graph, analytics, case, tag)
+>       (alert,) = await _case_alerts(stores, ANALYST, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1085: ValueError
+________ test_a_chain_of_writes_brings_the_alert_to_the_newest_revision ________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e907c7110>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e907c6930>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a1728d0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e907c4380>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e907c5220>
+
+    async def test_a_chain_of_writes_brings_the_alert_to_the_newest_revision(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """B4: a first change's graph commit lands and its repoint fails; a second change then supersedes
+        the first's revision and applies (moving nothing: the alert still cites the original). The next
+        read follows the recorded successors to the newest revision. Red with one-level renames and no
+        kept successors: the alert was moved onto the first revision, itself superseded, and hidden."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, link, service, working = await _changing_world(stores, graph, analytics, case, "CH")
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1143: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e907c7110>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e907c6930>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a1728d0>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e804b7890>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e907c4380>
+case = 'case-01M735SQJ07EF4PBM51QT7Z16Z', tag = 'CH'
+
+    async def _changing_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                              tag: str) -> tuple[Alert, Any, Any, Any]:  # fmt: skip
+        """An OFFICIAL alert over a loader-written link, and a link-change service over the real graph and
+        alert store, with the case's working set holding the accounts, the link and the alert's node."""
+        from services.api.link_changes import LinkChangeService
+        from services.api.working_set.service import WorkingSetService
+    
+        from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+        from tests.services.api.working_set.fakes import FakeWorkingSetStore
+    
+        await _raised(stores, graph, analytics, case, tag)
+>       (alert,) = await _case_alerts(stores, ANALYST, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1085: ValueError
+____________ test_a_re_mark_that_fails_is_retried_by_the_next_read _____________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732ef235c410>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e907c7b60>, 'audit': <services.api.audit.AuditWriter object at 0x732ef30e5cd0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732ef287b7d0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e9a190920>
+
+    async def test_a_re_mark_that_fails_is_retried_by_the_next_read(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """B5: an analyst raises the cited link to SECRET; the repoint applies and the re-mark commits
+        the node's SECRET revision in the graph, and then pointing the alert at it fails. The re-mark was
+        recorded before its commit, so the next read renames the alert's node to the revision the graph
+        holds, which the OFFICIAL teammate cannot read. Red with the re-mark unrecorded (no
+        `on_supersede`): the alert named the superseded OFFICIAL node, gone from every read."""
+        from services.api.link_changes import LinkChangeRequest
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, link, service, _ = await _changing_world(stores, graph, analytics, case, "RT")
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1174: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732ef235c410>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e907c7b60>, 'audit': <services.api.audit.AuditWriter object at 0x732ef30e5cd0>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732ef2c59550>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732ef287b7d0>
+case = 'case-01M735SR9X4GZ652PE5N287KB0', tag = 'RT'
+
+    async def _changing_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                              tag: str) -> tuple[Alert, Any, Any, Any]:  # fmt: skip
+        """An OFFICIAL alert over a loader-written link, and a link-change service over the real graph and
+        alert store, with the case's working set holding the accounts, the link and the alert's node."""
+        from services.api.link_changes import LinkChangeService
+        from services.api.working_set.service import WorkingSetService
+    
+        from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+        from tests.services.api.working_set.fakes import FakeWorkingSetStore
+    
+        await _raised(stores, graph, analytics, case, tag)
+>       (alert,) = await _case_alerts(stores, ANALYST, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1085: ValueError
+__ test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read ___
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a5a7740>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9a5a6ea0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a5a6f00>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a1df9b0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732ef287ad80>
+
+    async def test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """R2: the re-mark ran on a read path's settle (the link change's own repoint failed), which holds
+        no working sets; the node's OFFICIAL copy stays in the case's working set until the next
+        working-set read, which purges it (`purge_remarked_copies`) and closes the record. Red with the
+        purge left out: the copy was still stored, served to the teammate."""
+        from services.api.alerts import purge_remarked_copies
+        from services.api.link_changes import LinkChangeRequest
+        from services.api.working_set.service import WorkingSetService
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, link, service, working = await _changing_world(stores, graph, analytics, case, "PG")
+                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1206: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e9a5a7740>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9a5a6ea0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a5a6f00>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e9070b320>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a1df9b0>
+case = 'case-01M735SS0S0R4Y0C9PM0NEWYHC', tag = 'PG'
+
+    async def _changing_world(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                              tag: str) -> tuple[Alert, Any, Any, Any]:  # fmt: skip
+        """An OFFICIAL alert over a loader-written link, and a link-change service over the real graph and
+        alert store, with the case's working set holding the accounts, the link and the alert's node."""
+        from services.api.link_changes import LinkChangeService
+        from services.api.working_set.service import WorkingSetService
+    
+        from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+        from tests.services.api.working_set.fakes import FakeWorkingSetStore
+    
+        await _raised(stores, graph, analytics, case, tag)
+>       (alert,) = await _case_alerts(stores, ANALYST, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1085: ValueError
+________ test_a_record_another_test_left_never_breaks_an_unrelated_read ________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e804fd2e0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9a353aa0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a1184d0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e804fc5c0>
+
+    async def test_a_record_another_test_left_never_breaks_an_unrelated_read(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """The journal lives in a shared store: a record another test or run left (its links in no
+        graph this read reaches) waits for the stale threshold and never breaks a read. An unrelated
+        queue read answers as ever, with the real graph and with one whose stored-state lookup refuses
+        outright (the settle logs it and leaves the record). Red with the settle letting a record's
+        failure through: the read failed."""
+        left = await _plant_record(stores, {f"gone-{new_id()}": f"gone-{new_id()}-new"})
+        try:
+            case = f"case-{new_id()}"
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+                await _raised(stores, graph, analytics, case, "LO")
+>               (alert,) = await _case_alerts(stores, ANALYST, case)
+                ^^^^^^^^
+E               ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1236: ValueError
+________ test_a_close_never_puts_back_the_node_its_own_record_re_marked ________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8047ecf0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732ef30e5bb0>, 'audit': <services.api.audit.AuditWriter object at 0x732ef2e03e90>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a186ed0>
+
+    async def test_a_close_never_puts_back_the_node_its_own_record_re_marked(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Round 3, item 1: an alert whose link sits above its node (a link superseded outside the
+        journal, as L2.8c's paths still leave it) is closed a true positive. The close confirms the node
+        (N to C) in its record, the record's re-mark raises C to the link's marking (C to R) and points
+        the alert at R; the triage write then names no node, so the alert stays on R. Red with the
+        triage writing the confirmed node back: the alert named C, superseded, hidden from every read."""
+        from conduit_common.identity import new_edge_id
+        from schemas.domain import EdgeWrite
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "PB")
+>           (alert,) = await _case_alerts(stores, ANALYST, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1271: ValueError
+_______ test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on _______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8048d310>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8048c410>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a9e0c80>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a11b320>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e8048eab0>
+
+    async def test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on(
+        stores: dict[str, Any], analytics: AnalyticsPort, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """L2.8b's D1: a true positive confirms the alert's node (N to C); its settle re-marks C above
+        the alert's evidence (C to R), recording the pair first, and that re-mark's graph commit is
+        refused and never lands. The next read re-runs the re-mark, so the alert names a live SECRET
+        node. Red with the re-mark's pair kept as the write's own: every settle waited on C, which
+        never becomes superseded, and the alert stayed on C at OFFICIAL for good."""
+        from conduit_common.identity import new_edge_id
+        from schemas.domain import EdgeWrite
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "RL")
+>           (alert,) = await _case_alerts(stores, ANALYST, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1336: ValueError
+____ test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds _____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732ef24a84d0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732ef24a8470>, 'audit': <services.api.audit.AuditWriter object at 0x732e9070a4b0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732ef24abdd0>
+
+    async def test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Round 3, item 2 (the node half of item 4): a record holds an alert's node rename (N to C),
+        and C is then superseded to R by a write outside the record (as `retract_node` and
+        `supersede_node`'s other callers still do until L2.8c). The next read follows the graph's own
+        `superseded_by` from N (`stored_writes`, unfiltered) to R, and the alert names R. Red with the
+        recorded successor trusted: the alert named C, superseded, which no read answers."""
+        from datetime import UTC, datetime
+    
+        from conduit_common.identity import new_node_id
+        from schemas.domain import NodeWrite
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "NC")
+>           (alert,) = await _case_alerts(stores, ANALYST, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1489: ValueError
+_______ test_two_settles_of_one_record_at_once_leave_one_live_alert_node _______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90747200>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90747ad0>, 'audit': <services.api.audit.AuditWriter object at 0x732ef2cace00>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e90744cb0>
+
+    async def test_two_settles_of_one_record_at_once_leave_one_live_alert_node(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Round 3, item 3: two reads settle the same record at once. The record is settled under a lock
+        (a settle another holds is skipped), so its re-mark runs once: one live revision of the alert's
+        node, the alert naming it. Red with the lock released as soon as it is taken (the settles
+        overlapping, neither waiting on the other): both re-marked, two live Alert revisions. A hang
+        fails at `SETTLE_TIMEOUT` rather than stalling the run."""
+        import asyncio
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, old, raised = await _link_above_node(stores, graph, analytics, case, "LK")
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1525: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90747200>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90747ad0>, 'audit': <services.api.audit.AuditWriter object at 0x732ef2cace00>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732ef2e227b0>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e90744cb0>
+case = 'case-01M735T0CE6JCHBQHQT5X0NCGJ', tag = 'LK'
+
+    async def _link_above_node(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                               tag: str) -> tuple[Alert, str, str]:  # fmt: skip
+        """An OFFICIAL alert whose cited link is then superseded at SECRET outside the journal (as
+        L2.8c's paths still do): the alert cites the SECRET revision, its node still OFFICIAL. Returns
+        the alert, the old link and the SECRET revision."""
+        from conduit_common.identity import new_edge_id
+        from schemas.domain import EdgeWrite
+    
+        await _raised(stores, graph, analytics, case, tag)
+>       (alert,) = await _case_alerts(stores, ANALYST, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1299: ValueError
+_ test_more_records_settled_at_once_than_the_store_holds_connections_all_finish _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90733170>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8048fc20>, 'audit': <services.api.audit.AuditWriter object at 0x732eadf25250>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e8047f980>
+
+    async def test_more_records_settled_at_once_than_the_store_holds_connections_all_finish(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Round 3, item 3, found by the hang of its first red: a settle holds its record's lock while
+        its steps take connections from the store's pool. Six reads settling six records at once each
+        hold a lock and finish, every alert moved to its link's newest revision, within
+        `SETTLE_TIMEOUT`. Red with the locks drawn from the store's own pool (four connections): four
+        settles each held one for a lock and waited for another, for ever, so the run timed out."""
+        import asyncio
+    
+        cases = [f"case-{new_id()}" for _ in range(6)]
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           moved = [await _link_above_node(stores, graph, analytics, case, f"MR{i}") for i, case in enumerate(cases)]
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1548: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90733170>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8048fc20>, 'audit': <services.api.audit.AuditWriter object at 0x732eadf25250>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732e90747560>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e8047f980>
+case = 'case-01M735T13XZN2C0ANHAEKRMWCZ', tag = 'MR0'
+
+    async def _link_above_node(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                               tag: str) -> tuple[Alert, str, str]:  # fmt: skip
+        """An OFFICIAL alert whose cited link is then superseded at SECRET outside the journal (as
+        L2.8c's paths still do): the alert cites the SECRET revision, its node still OFFICIAL. Returns
+        the alert, the old link and the SECRET revision."""
+        from conduit_common.identity import new_edge_id
+        from schemas.domain import EdgeWrite
+    
+        await _raised(stores, graph, analytics, case, tag)
+>       (alert,) = await _case_alerts(stores, ANALYST, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1299: ValueError
+_____ test_a_record_follows_what_the_graph_committed_not_what_it_recorded ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8048e240>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80509910>, 'audit': <services.api.audit.AuditWriter object at 0x732ef30e5700>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a185610>
+
+    async def test_a_record_follows_what_the_graph_committed_not_what_it_recorded(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Round 3, item 4: a record names a successor its write never committed (a writer that recorded
+        then failed), while the graph holds the link superseded by another write that did. The settle
+        follows the graph's own `superseded_by`, so the alert cites the revision the graph holds. Red
+        with the recorded successor trusted: the alert cited a link no store holds, hidden from all."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+>           alert, old, raised = await _link_above_node(stores, graph, analytics, case, "GT")
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1568: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8048e240>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80509910>, 'audit': <services.api.audit.AuditWriter object at 0x732ef30e5700>, ...}
+graph = <adapters.graph_arcadedb.adapter.GraphArcadeDBAdapter object at 0x732ef2a8c800>
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e9a185610>
+case = 'case-01M735T1WX9ETNG91V2NA5CK3G', tag = 'GT'
+
+    async def _link_above_node(stores: dict[str, Any], graph: Any, analytics: AnalyticsPort, case: str,
+                               tag: str) -> tuple[Alert, str, str]:  # fmt: skip
+        """An OFFICIAL alert whose cited link is then superseded at SECRET outside the journal (as
+        L2.8c's paths still do): the alert cites the SECRET revision, its node still OFFICIAL. Returns
+        the alert, the old link and the SECRET revision."""
+        from conduit_common.identity import new_edge_id
+        from schemas.domain import EdgeWrite
+    
+        await _raised(stores, graph, analytics, case, tag)
+>       (alert,) = await _case_alerts(stores, ANALYST, case)
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py:1299: ValueError
+_ test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e80566150>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732ef2c85880>, 'audit': <services.api.audit.AuditWriter object at 0x732ef2c84950>, ...}
+
+    async def test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate(
+        stores: dict[str, Any],
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            report = await _onboard(graph, _gate(stores, graph, [rule], case), [_application("Halcyon Marine Ltd")])
+>           assert report.nodes_created >= 1 and report.rows_held == 0, "the applicant loads, with its alerts"
+E           AssertionError: the applicant loads, with its alerts
+E           assert (0 >= 1)
+E            +  where 0 = LoadReport(load_id='01M735TFK3AQR20FHCHNKWD2FP', recipe_id='ledger-onboarding', recipe_version=1, rows_read=1, rows_de...incrime', owning_unit='verify', review_date=None, legal_basis=None)], metering=None, staging_steps=[], expert_steps=[]).nodes_created
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:151: AssertionError
+_________________ test_a_shared_phone_is_flagged_at_the_count __________________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732ef2a8d7c0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e881326c0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a080500>, ...}
+
+    async def test_a_shared_phone_is_flagged_at_the_count(stores: dict[str, Any]) -> None:
+        """Three customers already use the phone. The first applicant makes a fourth user: at a
+        threshold of four others it is not flagged (three others). The second applicant then finds four
+        others, the first applicant among them, and is flagged at the same threshold."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(SharedAttributesParams(min_others=4)))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            await _customers_sharing(graph, 3)
+            await _onboard(graph, _gate(stores, graph, [rule], case),
+                           [_application("Seaborne Atlas Ltd", phone=SHARED_PHONE)])  # fmt: skip
+            assert await _alerts(stores, case) == []
+            await _onboard(graph, _gate(stores, graph, [rule], case),
+                           [_application("Halcyon Marine Ltd", phone=SHARED_PHONE)])  # fmt: skip
+>           (alert,) = await _alerts(stores, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:207: ValueError
+___________________ test_an_expired_document_verifies_no_one ___________________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e804c2330>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732ef2ab4cb0>, 'audit': <services.api.audit.AuditWriter object at 0x732eadab84a0>, ...}
+
+    async def test_an_expired_document_verifies_no_one(stores: dict[str, Any]) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(DocumentVerificationParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            await _onboard(graph, _gate(stores, graph, [rule], case), [_application(
+                "Halcyon Marine Ltd", document_title="Certificate of incorporation",
+                document_kind="certificate_of_incorporation", document_expires="2025-01-31")])  # fmt: skip
+>           (alert,) = await _alerts(stores, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:221: ValueError
+_____________________ test_the_gate_runs_after_commit_too ______________________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e804e0320>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9016cf50>, 'audit': <services.api.audit.AuditWriter object at 0x732e8053bf20>, ...}
+
+    async def test_the_gate_runs_after_commit_too(stores: dict[str, Any]) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(DocumentVerificationParams(), "post_commit"))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _onboard(graph, _gate(stores, graph, [rule], case), [_application("Halcyon Marine Ltd", owner_company="")])
+>           (alert,) = await _alerts(stores, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:253: ValueError
+_______ test_the_status_and_risk_are_computed_from_what_the_reader_sees ________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e900d97c0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8819bc80>, 'audit': <services.api.audit.AuditWriter object at 0x732e900da870>, ...}
+
+    async def test_the_status_and_risk_are_computed_from_what_the_reader_sees(
+        stores: dict[str, Any],
+    ) -> None:
+        """Halcyon onboarded with an expired certificate, a phone three others use, registered in
+        Cyprus in ship management, owned through the trust by two listed people: unverified, and every
+        factor named. Nothing is stored: the same read tomorrow could differ, and that is the point."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            await _customers_sharing(graph, 3)
+            await _onboard(graph, _gate(stores, graph, [rule], case), [_application(
+                "Halcyon Marine Ltd", phone=SHARED_PHONE, document_title="Certificate of incorporation",
+                document_kind="certificate_of_incorporation", document_expires="2025-01-31")])  # fmt: skip
+            halcyon = await graph.find_node("Organisation", "name", "Halcyon Marine Ltd", OFFICER)
+>           assert halcyon is not None
+E           assert None is not None
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:279: AssertionError
+________ test_a_document_that_lapses_is_caught_by_the_daily_sweep_once _________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e907c4ef0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732ef24a9b50>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a11a000>, ...}
+
+    async def test_a_document_that_lapses_is_caught_by_the_daily_sweep_once(stores: dict[str, Any]) -> None:
+        """Valid when loaded (no alert then); the day after it lapses the sweep raises a review; a
+        second sweep raises nothing more. A customer with a second, valid document is not raised."""
+        await stores["valkey"].delete("kyc:sweep:last")
+        expiries = await KycExpiryStore.connect(PostgresConfig.from_env().dsn)
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(DocumentVerificationParams()))
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+                gate = _gate(stores, graph, [rule], case)
+                gate.expiries = expiries
+                # A month ahead of today, not a fixed day: written as "2026-10-12", this test began
+                # failing on 13 October 2026, when the document had already lapsed at loading.
+                lapses = datetime.now(UTC).date() + timedelta(days=30)
+                lapsing = lapses.isoformat()
+                await _onboard(graph, gate, [
+                    _application("Halcyon Marine Ltd", owner_company="", document_title="Passport",
+                                 document_kind="passport", document_expires=lapsing),
+                    _application("Steady Freight Ltd", owner_company="", document_title="Register extract",
+                                 document_kind="register_extract", document_expires=lapsing),
+                ])  # fmt: skip
+                # Steady Freight also holds a document valid long after.
+                steady = await graph.find_node("Organisation", "name", "Steady Freight Ltd", OFFICER)
+>               assert steady is not None
+E               assert None is not None
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:362: AssertionError
+_ test_a_link_reverted_between_the_judgement_and_the_raise_leaves_one_alert_without_its_node_and_the_sweep_goes_on _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e900820c0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e88129e20>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a1dd490>, ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e90116960>
+
+    async def test_a_link_reverted_between_the_judgement_and_the_raise_leaves_one_alert_without_its_node_and_the_sweep_goes_on(
+        stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """b21f316 live (L2.8): the sweep judges each lapsed customer and then raises; a load revert can
+        take back a link the finding cites in between. That alert is raised without its node (no node
+        rather than one marked by a guess), the next customer's alert with its node, and the sweep
+        finishes. Red with ed8b0aa's raise: `raise_committed` raised, and the whole day's sweep stopped
+        at the first customer (`kyc_sweep.sweep` catches nothing)."""
+        import services.api.kyc_sweep as kyc_sweep
+    
+        await stores["valkey"].delete("kyc:sweep:last")
+        expiries = await KycExpiryStore.connect(PostgresConfig.from_env().dsn)
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(DocumentVerificationParams()))
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+                gate = _gate(stores, graph, [rule], case)
+                gate.expiries = expiries
+                lapses = datetime.now(UTC).date() + timedelta(days=30)
+                await _onboard(graph, gate, [
+                    _application(name, owner_company="", document_title="Passport", document_kind="passport",
+                                 document_expires=lapses.isoformat())
+                    for name in ("Reverted Shipping Ltd", "Kept Haulage Ltd")
+                ])  # fmt: skip
+                reverted = await graph.find_node("Organisation", "name", "Reverted Shipping Ltd", OFFICER)
+>               assert reverted is not None
+E               assert None is not None
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:407: AssertionError
+_ test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e88160c80>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e88162ae0>, 'audit': <services.api.audit.AuditWriter object at 0x732e90115910>, ...}
+
+    async def test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not(
+        stores: dict[str, Any],
+    ) -> None:
+        """Owner ruling, 11 October 2026 (ADR-109 Amendment 7): closing a screening alert as a true
+        positive is the analyst's confirmation of the match it found — the scored `SAME_AS` becomes
+        asserted, the alert still opens (its cited link follows the new revision), and due diligence
+        says "confirmed". A false positive leaves its match inferred (rule 5: only the person decides).
+        Red with `approve_close` not calling `_close`: the match stayed inferred; and with `_close`
+        confirming a false positive too: Nair's match was asserted."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            alerts = await _alerts(stores, case)
+>           petrov = next(a for a in alerts if "Petrov" in (a.words or ""))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           StopIteration
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:472: StopIteration
+
+The above exception was the direct cause of the following exception:
+
+self = <Coroutine test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:569: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:905: in inner
+    runner.run(coro, context=context)
+/usr/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+future = <Task finished name='Task-6330' coro=<test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positiv...ns/rules/OspreyFlow_Build/tests/ingest/test_kyc_rules.py:456> exception=RuntimeError('coroutine raised StopIteration')>
+
+    def run_until_complete(self, future):
+        """Run until the Future is done.
+    
+        If the argument is a coroutine, it is wrapped in a Task.
+    
+        WARNING: It would be disastrous to call run_until_complete()
+        with the same coroutine twice -- it would wrap it in two
+        different Tasks and that can't be good.
+    
+        Return the Future's result, or raise its exception.
+        """
+        self._check_closed()
+        self._check_running()
+    
+        new_task = not futures.isfuture(future)
+        future = tasks.ensure_future(future, loop=self)
+        if new_task:
+            # An exception is raised if the future didn't complete, so there
+            # is no need to log the "destroy pending task" message
+            future._log_destroy_pending = False
+    
+        future.add_done_callback(_run_until_complete_cb)
+        try:
+            self.run_forever()
+        except:
+            if new_task and future.done() and not future.cancelled():
+                # The coroutine raised a BaseException. Consume the exception
+                # to not log a warning, the caller doesn't have access to the
+                # local task.
+                future.exception()
+            raise
+        finally:
+            future.remove_done_callback(_run_until_complete_cb)
+        if not future.done():
+            raise RuntimeError('Event loop stopped before Future completed.')
+    
+>       return future.result()
+               ^^^^^^^^^^^^^^^
+E       RuntimeError: coroutine raised StopIteration
+
+/usr/lib/python3.12/asyncio/base_events.py:687: RuntimeError
+_____ test_a_confirmed_screening_match_repoints_the_other_alert_citing_it ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e881aab10>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e88129b50>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a173c20>, ...}
+
+    async def test_a_confirmed_screening_match_repoints_the_other_alert_citing_it(stores: dict[str, Any]) -> None:
+        """ADR-109 Amendments 9 and 10 through the real screening path (L2.8b item 8, replacing the
+        hand-written SAME_AS): two applicants owned through the same trust by Elena Petrov, onboarded one
+        after the other, each raise a screening alert citing the one match the screening wrote between
+        Petrov and the listed PETROVA (a pair of one audience is one link). A true positive on the first
+        confirms the match into a new revision; the second alert cites that revision and stays in the
+        queue. Red without the repoint: the second alert cited the superseded match and was withheld."""
+        from services.api import alert_queue
+    
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            await _onboard(graph, gate, [_application("Halcyon Two Ltd")])
+            petrov = [a for a in await _alerts(stores, case) if "Petrov" in (a.words or "")]
+>           assert len(petrov) == 2, [a.words for a in petrov]
+E           AssertionError: []
+E           assert 0 == 2
+E            +  where 0 = len([])
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:525: AssertionError
+__ test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record ___
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e88162d80>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e801764b0>, 'audit': <services.api.audit.AuditWriter object at 0x732e9010e480>, ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e881a9eb0>
+
+    async def test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record(
+        stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A second person approves a true positive whose match the graph refuses inside the close's
+        transaction, after the alert's node was confirmed and its pair recorded: the close is rolled
+        back before any commit was sent, so its repoint record is closed with it, none left waiting for
+        the stale threshold, and the alert is as it was (its node, its match, closing). Red with the
+        record settled as for a commit reported failed: the record, holding the node's pair, was left."""
+        from services.api import alert_queue
+    
+        class Refused(LookupError):
+            """The graph refusing a confirm (as any adapter refusal inside the transaction)."""
+    
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+>           petrov = next(a for a in await _alerts(stores, case) if "Petrov" in (a.words or ""))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           StopIteration
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:561: StopIteration
+
+The above exception was the direct cause of the following exception:
+
+self = <Coroutine test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:569: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:905: in inner
+    runner.run(coro, context=context)
+/usr/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+future = <Task finished name='Task-6498' coro=<test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record() done...ns/rules/OspreyFlow_Build/tests/ingest/test_kyc_rules.py:542> exception=RuntimeError('coroutine raised StopIteration')>
+
+    def run_until_complete(self, future):
+        """Run until the Future is done.
+    
+        If the argument is a coroutine, it is wrapped in a Task.
+    
+        WARNING: It would be disastrous to call run_until_complete()
+        with the same coroutine twice -- it would wrap it in two
+        different Tasks and that can't be good.
+    
+        Return the Future's result, or raise its exception.
+        """
+        self._check_closed()
+        self._check_running()
+    
+        new_task = not futures.isfuture(future)
+        future = tasks.ensure_future(future, loop=self)
+        if new_task:
+            # An exception is raised if the future didn't complete, so there
+            # is no need to log the "destroy pending task" message
+            future._log_destroy_pending = False
+    
+        future.add_done_callback(_run_until_complete_cb)
+        try:
+            self.run_forever()
+        except:
+            if new_task and future.done() and not future.cancelled():
+                # The coroutine raised a BaseException. Consume the exception
+                # to not log a warning, the caller doesn't have access to the
+                # local task.
+                future.exception()
+            raise
+        finally:
+            future.remove_done_callback(_run_until_complete_cb)
+        if not future.done():
+            raise RuntimeError('Event loop stopped before Future completed.')
+    
+>       return future.result()
+               ^^^^^^^^^^^^^^^
+E       RuntimeError: coroutine raised StopIteration
+
+/usr/lib/python3.12/asyncio/base_events.py:687: RuntimeError
+_ test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8049a000>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90747140>, 'audit': <services.api.audit.AuditWriter object at 0x732e8812b440>, ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e80499760>
+
+    async def test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node(
+        stores: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """L2.8b's B6, through the real screening path, whose alerts have their own node: a second person
+        approves a true positive, which confirms the alert's node and its match in the graph, and the
+        triage write is then refused (another member's at the same moment). The alert's node rename is
+        in the close's own record, so the alert names its confirmed node and stays in the queue. Red
+        with only the match recorded: the alert named a superseded node, hidden from every reader."""
+        from services.api import alert_queue
+        from services.api.alerts import AlertTriageConflict
+    
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+>           petrov = next(a for a in await _alerts(stores, case) if "Petrov" in (a.words or ""))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           StopIteration
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:610: StopIteration
+
+The above exception was the direct cause of the following exception:
+
+self = <Coroutine test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node>
+
+    def runtest(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        runner = self._request.getfixturevalue(runner_fixture_id)
+        context = contextvars.copy_context()
+        synchronized_obj = _synchronize_coroutine(
+            getattr(*self._synchronization_target_attr), runner, context
+        )
+        with MonkeyPatch.context() as c:
+            c.setattr(*self._synchronization_target_attr, synchronized_obj)
+>           super().runtest()
+
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:569: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:905: in inner
+    runner.run(coro, context=context)
+/usr/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <_UnixSelectorEventLoop running=False closed=False debug=False>
+future = <Task finished name='Task-6579' coro=<test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_no...ns/rules/OspreyFlow_Build/tests/ingest/test_kyc_rules.py:593> exception=RuntimeError('coroutine raised StopIteration')>
+
+    def run_until_complete(self, future):
+        """Run until the Future is done.
+    
+        If the argument is a coroutine, it is wrapped in a Task.
+    
+        WARNING: It would be disastrous to call run_until_complete()
+        with the same coroutine twice -- it would wrap it in two
+        different Tasks and that can't be good.
+    
+        Return the Future's result, or raise its exception.
+        """
+        self._check_closed()
+        self._check_running()
+    
+        new_task = not futures.isfuture(future)
+        future = tasks.ensure_future(future, loop=self)
+        if new_task:
+            # An exception is raised if the future didn't complete, so there
+            # is no need to log the "destroy pending task" message
+            future._log_destroy_pending = False
+    
+        future.add_done_callback(_run_until_complete_cb)
+        try:
+            self.run_forever()
+        except:
+            if new_task and future.done() and not future.cancelled():
+                # The coroutine raised a BaseException. Consume the exception
+                # to not log a warning, the caller doesn't have access to the
+                # local task.
+                future.exception()
+            raise
+        finally:
+            future.remove_done_callback(_run_until_complete_cb)
+        if not future.done():
+            raise RuntimeError('Event loop stopped before Future completed.')
+    
+>       return future.result()
+               ^^^^^^^^^^^^^^^
+E       RuntimeError: coroutine raised StopIteration
+
+/usr/lib/python3.12/asyncio/base_events.py:687: RuntimeError
+_____________ test_a_drawn_pattern_raises_when_a_load_completes_it _____________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e804fc140>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e804fc260>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a0eb740>, ...}
+
+    async def test_a_drawn_pattern_raises_when_a_load_completes_it(stores: dict[str, Any]) -> None:
+        case = f"case-{new_id()}"
+        rule, patterns = await _deployed(stores, case)
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+                await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+                gate = _gate(stores, graph, [rule], case)
+                gate.patterns = patterns
+                await _onboard(graph, gate, [_application("Halcyon Marine Ltd", owner_company="",
+                                                          phone="447700900999")])  # fmt: skip
+>               (alert,) = await _alerts(stores, case)
+                ^^^^^^^^
+E               ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_pattern_rules.py:69: ValueError
+_________________ test_an_unchanged_match_is_not_raised_again __________________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8806b080>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e9010e060>, 'audit': <services.api.audit.AuditWriter object at 0x732e9010cc50>, ...}
+
+    async def test_an_unchanged_match_is_not_raised_again(stores: dict[str, Any]) -> None:
+        case = f"case-{new_id()}"
+        rule, patterns = await _deployed(stores, case)
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+                gate = _gate(stores, graph, [rule], case)
+                gate.patterns = patterns
+                await _onboard(graph, gate, [_application("Halcyon Marine Ltd", owner_company="",
+                                                          phone="447700900999")])  # fmt: skip
+>               assert len(await _alerts(stores, case)) == 1
+E               assert 0 == 1
+E                +  where 0 = len([])
+
+../OspreyFlow_Build/tests/ingest/test_pattern_rules.py:86: AssertionError
+_____ test_a_match_past_its_bound_is_refused_in_words_not_alerted_in_part ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8806fe00>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8806d4c0>, 'audit': <services.api.audit.AuditWriter object at 0x732e881be690>, ...}
+
+    async def test_a_match_past_its_bound_is_refused_in_words_not_alerted_in_part(stores: dict[str, Any]) -> None:
+        case = f"case-{new_id()}"
+        rule, patterns = await _deployed(stores, case, max_matches=1)
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+                gate = _gate(stores, graph, [rule], case)
+                gate.patterns = patterns
+                report = await _onboard(graph, gate, [_application("Halcyon Marine Ltd", owner_company="",
+                                                                   phone="447700900999")])  # fmt: skip
+                assert await _alerts(stores, case) == []
+>               assert any("more than 1 nodes match" in n and "not alerted on in part" in n
+                           for n in report.rule_notes)  # fmt: skip
+E                          assert False
+E                           +  where False = any(<generator object test_a_match_past_its_bound_is_refused_in_words_not_alerted_in_part.<locals>.<genexpr> at 0x732e1c6b8790>)
+
+../OspreyFlow_Build/tests/ingest/test_pattern_rules.py:104: AssertionError
+____________ test_a_pattern_no_longer_the_deployers_stops_the_rule _____________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e90083320>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e90081220>, 'audit': <services.api.audit.AuditWriter object at 0x732e88190dd0>, ...}
+
+    async def test_a_pattern_no_longer_the_deployers_stops_the_rule(stores: dict[str, Any]) -> None:
+        case = f"case-{new_id()}"
+        rule, patterns = await _deployed(stores, case)
+        try:
+            async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+                moved = rule.model_copy(update={"owner_id": "someone-else"})
+                gate = _gate(stores, graph, [moved], case)
+                gate.patterns = patterns
+                known = gate.principal_for_owner
+    
+                async def as_someone_else(owner_id: str):  # type: ignore[no-untyped-def]
+                    found = await known(OFFICER.id)
+                    return found.model_copy(update={"id": "someone-else"}) if found else None
+    
+                gate.principal_for_owner = as_someone_else
+                report = await _onboard(graph, gate, [_application("Halcyon Marine Ltd", owner_company="",
+                                                                   phone="447700900999")])  # fmt: skip
+                assert await _alerts(stores, case) == []
+>               assert any("no longer its deployer's" in n for n in report.rule_notes)
+E               assert False
+E                +  where False = any(<generator object test_a_pattern_no_longer_the_deployers_stops_the_rule.<locals>.<genexpr> at 0x732e93d47e00>)
+
+../OspreyFlow_Build/tests/ingest/test_pattern_rules.py:128: AssertionError
+__ test_a_purge_of_a_re_marked_alert_node_is_published_to_the_cases_canvases ___
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8a0a9ee0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2f9678f0>, 'audit': <services.api.audit.AuditWriter object at 0x732e881ab980>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e8bd70740>
+
+    async def test_a_purge_of_a_re_marked_alert_node_is_published_to_the_cases_canvases(
+        stores: dict[str, Any], analytics: Any
+    ) -> None:
+        """An analyst raises a cited link to SECRET through the link change route's service; the alert
+        follows it and its node is re-marked, so the OFFICIAL copy leaves the case's working set. The
+        removal is published on the case's channel at once (`notify.publish_delta`), naming that node,
+        so a connected canvas drops it now rather than at its next resynchronisation. Red with the
+        purge's publish removed: nothing reached the channel."""
+        import json
+    
+        from services.api.link_changes import LinkChangeRequest, LinkChangeService
+        from services.api.notify import notify_channel
+        from services.api.working_set.service import WorkingSetService
+    
+        from tests.ingest.test_typology_rules import SECRET_LOADER, _case_alerts, _raised
+        from tests.services.api.test_link_changes import InMemoryChanges, MovedNotes
+        from tests.services.api.working_set.fakes import FakeWorkingSetStore
+    
+        case = f"case-{new_id()}"
+        valkey = stores["valkey"]
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "PB")
+>           (alert,) = await _case_alerts(stores, ANALYST, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:399: ValueError
+__ test_an_alert_node_carries_only_its_alerted_on_links_which_no_alert_cites ___
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2f1a9970>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8a481b50>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a179310>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e2c4d7620>
+
+    async def test_an_alert_node_carries_only_its_alerted_on_links_which_no_alert_cites(
+        stores: dict[str, Any], analytics: Any
+    ) -> None:
+        """Carry (b). Amendment 11 point 3 exempts `remark_alerts`' supersede of an alert's own node from
+        the journal because that node carries only `ALERTED_ON` links, which no alert cites. The
+        ontology does not guarantee it (`MENTIONED_IN` runs from any type, `Alert` included): the rule's
+        writer (`write_alert_node`) does. An alert raised through the real rule gate: every live link
+        at its node is an `ALERTED_ON` from it, and no alert cites one. Red with the writer also linking
+        the node to a document by `MENTIONED_IN`."""
+        from tests.ingest.test_typology_rules import _case_alerts, _raised
+    
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "AO")
+>           (alert,) = await _case_alerts(stores, ANALYST, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py:839: ValueError
+________ test_a_pre_commit_alert_and_its_links_are_in_the_loads_record _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e5d9b6390>
+
+    async def test_a_pre_commit_alert_and_its_links_are_in_the_loads_record(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        graph = RuleGraph(ONTOLOGY)
+        gate = _gate(_rule("pre_commit"), graph, monkeypatch, _finding)
+        report = await _load(graph, gate, [_row("SYN-1", "SYN-2", 1)], "load-1")
+>       (alert,) = [n for n in graph.committed_nodes if n.type == "Alert"]
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py:160: ValueError
+_ test_the_lists_the_stream_and_enrich_read_are_the_same_with_or_without_a_rules_alert _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e8a4c36b0>
+
+    async def test_the_lists_the_stream_and_enrich_read_are_the_same_with_or_without_a_rules_alert(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Monitors must not see an `Alert` as a new ingest node: the report's `created_node_ids` and
+        `touched_edge_ids` hold what the recipe wrote, whatever the rules add beside it."""
+        plain_graph = RuleGraph(ONTOLOGY)
+        quiet = _gate(_rule("pre_commit"), plain_graph, monkeypatch, _finding)
+        quiet.rules = []
+        plain = await _load(plain_graph, quiet, [_row("SYN-1", "SYN-2", 1)], "load-1")
+    
+        graph = RuleGraph(ONTOLOGY)
+        gate = _gate(_rule("pre_commit"), graph, monkeypatch, _finding)
+        ruled = await _load(graph, gate, [_row("SYN-1", "SYN-2", 1)], "load-1")
+>       assert [n for n in graph.committed_nodes if n.type == "Alert"], "the rule did write an alert"
+E       AssertionError: the rule did write an alert
+E       assert []
+
+../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py:190: AssertionError
+_______ test_what_a_finding_writes_alongside_its_alert_is_in_the_record ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e5e27ff50>
+
+    async def test_what_a_finding_writes_alongside_its_alert_is_in_the_record(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        graph = RuleGraph(ONTOLOGY)
+        doc = NodeWrite(
+            id=new_node_id(), type="Document", properties={"title": "screening hit"},
+            provenance=_provenance(), handling=MARKING, created_by="loader-1", created_at=NOW,
+        )  # fmt: skip
+    
+        def finding(rule: Any, deployer: Any, written: Any) -> Finding:
+            endpoint = next(w.id for w in written if isinstance(w, NodeWrite) and w.type == "Endpoint")
+            holds = EdgeWrite(
+                id=new_edge_id(), type="HOLDS", source=endpoint, target=doc.id,
+                provenance=_provenance(), handling=MARKING, created_by="loader-1", created_at=NOW,
+            )  # fmt: skip
+            return _finding(rule, deployer, written, pending=(doc, holds))
+    
+        gate = _gate(_rule("pre_commit"), graph, monkeypatch, finding)
+        report = await _load(graph, gate, [_row("SYN-1", "SYN-2", 1)], "load-1")
+>       (holds,) = [e for e in graph.committed_edges if e.type == "HOLDS"]
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py:218: ValueError
+______ test_a_pending_link_that_merges_into_another_loads_link_is_merged _______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e2f6e0f50>
+
+    async def test_a_pending_link_that_merges_into_another_loads_link_is_merged(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        graph = RuleGraph(ONTOLOGY)
+        quiet = _gate(_rule("pre_commit"), graph, monkeypatch, lambda *a: (_ for _ in ()).throw(AssertionError))
+        quiet.rules = []
+        first = await _load(graph, quiet, [_row("SYN-1", "SYN-2", 1)], "load-1")
+        (earlier,) = first.created_edge_ids
+    
+        def finding(rule: Any, deployer: Any, written: Any) -> Finding:
+            # The pair the first load linked, which this load did not write: a pending link between
+            # them is that link, and the store returns the first load's id.
+            old = [n for n in graph.committed_nodes if n.type == "Endpoint"][:2]
+            same = EdgeWrite(
+                id=new_edge_id(), type="TRANSACTED", source=old[0].id, target=old[1].id,
+                provenance=_provenance(), handling=MARKING, created_by="loader-1", created_at=NOW,
+            )  # fmt: skip
+            return _finding(rule, deployer, written, pending=(same,))
+    
+        gate = _gate(_rule("pre_commit"), graph, monkeypatch, finding)
+        second = await _load(graph, gate, [_row("SYN-5", "SYN-6", 2)], "load-2")
+>       assert earlier in second.rule_merged_edge_ids
+E       AssertionError: assert '01M7362D23EKVEYN1N49B2T304' in []
+E        +  where [] = LoadReport(load_id='load-2', recipe_id='private-cash', recipe_version=1, rows_read=1, rows_deduplicated=0, rows_alread...'unit-1', owning_unit='unit-1', review_date=None, legal_basis=None)], metering=None, staging_steps=[], expert_steps=[]).rule_merged_edge_ids
+
+../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py:246: AssertionError
+_________ test_an_alert_raised_after_the_commit_is_added_to_the_record _________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x732e5e27ff50>
+
+    async def test_an_alert_raised_after_the_commit_is_added_to_the_record(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        graph = RuleGraph(ONTOLOGY)
+        gate = _gate(_rule("post_commit"), graph, monkeypatch, _finding)
+        report = await _load(graph, gate, [_row("SYN-1", "SYN-2", 1)], "load-1")
+        assert [n for n in graph.committed_nodes if n.type == "Alert"] == []
+    
+        told: dict[str, Any] = {}
+    
+        class Sink:
+            async def rule_writes(self, load_id: str, **kwargs: Any) -> None:
+                told.update(kwargs, load_id=load_id)
+    
+        notes = await post_commit_notes(gate, [], load_id="load-1", sink=Sink())  # type: ignore[arg-type]
+>       (alert,) = [n for n in graph.committed_nodes if n.type == "Alert"]
+        ^^^^^^^^
+E       ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py:291: ValueError
+__________ test_only_a_pattern_the_author_saved_is_deployed_as_a_rule __________
+
+api_env = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x732e2eb2b830>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x732e2eb297d0>)
+
+    def test_only_a_pattern_the_author_saved_is_deployed_as_a_rule(
+        api_env: None, keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey]
+    ) -> None:
+        key, _ = keypair
+        case = asyncio.run(_case())
+        from services.api.pattern_store import PatternStore
+    
+        from schemas.domain import PatternEdge, PatternNode, PatternQuery
+    
+        async def saved_by(owner: Principal) -> str:
+            store = await PatternStore.connect(PostgresConfig.from_env().dsn)
+            try:
+                pattern = await store.save(owner, pattern_id=None, name="Company with a phone",
+                    definition=PatternQuery(
+                        nodes=[PatternNode(var="o", entity_type="Organisation"), PatternNode(var="p", entity_type="Endpoint")],
+                        edges=[PatternEdge(edge_type="USES", from_var="o", to_var="p")]))  # fmt: skip
+                return pattern.pattern_id
+            finally:
+                await store.close()
+    
+        mine = asyncio.run(saved_by(AUTHOR))
+        theirs = asyncio.run(saved_by(Principal(id=EDITOR, clearance="OFFICIAL", org_unit="unit-1")))
+        from services.api.app import app
+    
+        with TestClient(app) as client:
+            path = f"/v1/investigations/{case}/rules"
+            body = {"name": "Drawn", "params": {"typology": "pattern", "pattern_id": theirs}}
+            refused = client.post(path, headers=_as(key, AUTHOR.id), json=body)
+>           assert refused.status_code == 422 and "only a pattern you saved" in refused.json()["detail"]
+E           assert (409 == 422)
+E            +  where 409 = <Response [409 Conflict]>.status_code
+
+../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py:447: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 16:54:03] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 4 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+________ test_a_pre_commit_hit_loads_with_its_alert_node_and_queue_row _________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2f6e1b50>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2dc8a570>, 'audit': <services.api.audit.AuditWriter object at 0x732e2c0b5700>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e93ad0b00>
+
+    async def test_a_pre_commit_hit_loads_with_its_alert_node_and_queue_row(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(ANALYST, case, _structuring("pre_commit"))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            report = await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case),
+                                 _deposits("A"))  # fmt: skip
+    
+>           assert report.edges_created == 1 and report.rows_held == 0
+E           AssertionError: assert (0 == 1)
+E            +  where 0 = LoadReport(load_id='01M736398JM1YN9H32YJ2R1YX7', recipe_id='ledger-transactions', recipe_version=1, rows_read=4, rows_...incrime', owning_unit='verify', review_date=None, legal_basis=None)], metering=None, staging_steps=[], expert_steps=[]).edges_created
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:218: AssertionError
+__________ test_a_pre_commit_rule_that_should_not_fire_raises_nothing __________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2f8b0590>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2f8b3920>, 'audit': <services.api.audit.AuditWriter object at 0x732e8054c800>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e2f8b0800>
+
+    async def test_a_pre_commit_rule_that_should_not_fire_raises_nothing(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(ANALYST, case, _structuring("pre_commit", minimum_count=5))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            report = await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case),
+                                 _deposits("B"))  # fmt: skip
+>           assert report.edges_created == 1 and report.rows_held == 0
+E           AssertionError: assert (0 == 1)
+E            +  where 0 = LoadReport(load_id='01M7363A6ZHKJ5FS13DPXRKTWP', recipe_id='ledger-transactions', recipe_version=1, rows_read=4, rows_...incrime', owning_unit='verify', review_date=None, legal_basis=None)], metering=None, staging_steps=[], expert_steps=[]).edges_created
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:248: AssertionError
+________ test_a_failing_pre_commit_rule_holds_its_rows_out_of_the_graph ________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732ea82134a0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80539790>, 'audit': <services.api.audit.AuditWriter object at 0x732e9a179310>, ...}
+
+    async def test_a_failing_pre_commit_rule_holds_its_rows_out_of_the_graph(
+        stores: dict[str, Any],
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(ANALYST, case, _structuring("pre_commit"))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            gate = _gate(stores, graph, _Outage(), [rule], case)
+            report = await _load(graph, _Outage(), gate, _deposits("C"))  # type: ignore[arg-type]
+    
+            assert report.rows_held == 4
+            assert report.edges_created == 0 and report.nodes_created == 0, "nothing judged, loaded"
+            assert any("held for review" in n for n in report.rule_notes)
+            held = await stores["held"].list_authorized(case, ANALYST)
+            assert sorted(h.row_index for h in held) == [0, 1, 2, 3]
+>           assert all(h.rule_id == rule.id and "failed" in h.reason for h in held)
+E           assert False
+E            +  where False = all(<generator object test_a_failing_pre_commit_rule_holds_its_rows_out_of_the_graph.<locals>.<genexpr> at 0x732e907c9080>)
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:266: AssertionError
+__________ test_a_rule_never_fires_on_events_its_deployer_cannot_read __________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e5d9b5a60>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8050ac30>, 'audit': <services.api.audit.AuditWriter object at 0x732e8bd0e0f0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e5d9b4950>
+
+    async def test_a_rule_never_fires_on_events_its_deployer_cannot_read(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(ANALYST, case, _structuring("pre_commit"))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            gate = _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER)
+            report = await _load(graph, analytics, gate, _deposits("E"),
+                                 recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>           assert report.edges_created == 1
+E           AssertionError: assert 0 == 1
+E            +  where 0 = LoadReport(load_id='01M7363D7FAJF851PHFHWDY0YZ', recipe_id='ledger-transactions', recipe_version=1, rows_read=4, rows_...incrime', owning_unit='verify', review_date=None, legal_basis=None)], metering=None, staging_steps=[], expert_steps=[]).edges_created
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:338: AssertionError
+___________ test_an_alert_node_is_marked_no_lower_than_its_referents ___________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e8a4c1970>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e8a4c39b0>, 'audit': <services.api.audit.AuditWriter object at 0x732e804b5880>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e881ab980>
+
+    async def test_an_alert_node_is_marked_no_lower_than_its_referents(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            gate = _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER)
+            await _load(graph, analytics, gate, _deposits("F"),
+                        recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+>           (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:352: ValueError
+_______________ test_a_post_commit_rule_alerts_once_per_finding ________________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2c119fa0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2df03770>, 'audit': <services.api.audit.AuditWriter object at 0x732e80123ec0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e88069700>
+
+    async def test_a_post_commit_rule_alerts_once_per_finding(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(
+            ANALYST,
+            case,
+            TypologyRuleInput(
+                name="Pass-through",
+                params=RapidMovementParams(within_hours=24, keep_fraction=0.8),
+                trigger="post_commit",
+            ),
+        )
+        rows = [
+            _row("GBGPAYER", "GBGCONDUIT", 50_000, T0),
+            _row("GBGCONDUIT", "GBGOFFSHORE", 48_000, T0 + timedelta(hours=3)),
+        ]
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            first = await _load(graph, analytics, _gate(stores, graph, analytics, [rule], case), rows)
+>           assert any("raised 1 alert" in n for n in first.rule_notes)
+E           assert False
+E            +  where False = any(<generator object test_a_post_commit_rule_alerts_once_per_finding.<locals>.<genexpr> at 0x732e2c071b10>)
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:381: AssertionError
+_ test_a_rule_audit_entry_naming_a_hidden_node_is_withheld_from_page_and_total _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2f8c3fb0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2f8763c0>, 'audit': <services.api.audit.AuditWriter object at 0x732e2f877e60>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e2f875340>
+
+    async def test_a_rule_audit_entry_naming_a_hidden_node_is_withheld_from_page_and_total(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        open_rule = await stores["rules"].create(ANALYST, case, _structuring("pre_commit"))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _load(graph, analytics, _gate(stores, graph, analytics, [open_rule], case),
+                        _deposits("H"))  # fmt: skip
+            secret_rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+            await _load(graph, analytics,
+                        _gate(stores, graph, analytics, [secret_rule], case, loader=SECRET_LOADER),
+                        _deposits("J"), recipe=_marked(RECIPE, "SECRET"),
+                        loader=SECRET_LOADER)  # fmt: skip
+    
+            seen_by_secret = await readable_rule_audit(stores["audit"], graph, case, SECRET_LOADER, analytics=analytics, alerts=stores["alerts"])
+            seen_by_official = await readable_rule_audit(stores["audit"], graph, case, ANALYST, analytics=analytics, alerts=stores["alerts"])
+            fired = [e for e in seen_by_secret.entries if e.action == "rule_fired"]
+>           assert len(fired) == 2
+E           assert 0 == 2
+E            +  where 0 = len([])
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:485: AssertionError
+_______ test_an_alert_on_official_flows_into_a_secret_account_is_secret ________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2deba000>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2f766660>, 'audit': <services.api.audit.AuditWriter object at 0x732e2dc0b2f0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e2f767980>
+
+    async def test_an_alert_on_official_flows_into_a_secret_account_is_secret(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """The flows are OFFICIAL, one account they touch is SECRET: the alert must be SECRET, or an
+        OFFICIAL reader learns through it that the SECRET account exists (rule 3)."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            quiet = _gate(stores, graph, analytics, [], case, loader=SECRET_LOADER)
+            await _load(graph, analytics, quiet, [_row("GBKHUB", "GBKELSEWHERE", 10, T0 - timedelta(days=30))],
+                        recipe=_marked(RECIPE, "SECRET"), loader=SECRET_LOADER)  # fmt: skip
+            rule = await stores["rules"].create(SECRET_LOADER, case, _structuring("pre_commit"))
+            rows = [_row("GBKMULE", "GBKHUB", 9_500, T0 + timedelta(hours=6 * i)) for i in range(4)]
+            await _load(graph, analytics,
+                        _gate(stores, graph, analytics, [rule], case, loader=SECRET_LOADER), rows,
+                        loader=SECRET_LOADER)  # fmt: skip
+>           (alert,) = await _case_alerts(stores, SECRET_LOADER, case)
+            ^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:576: ValueError
+______________ test_a_rule_alert_is_in_the_whole_case_teams_queue ______________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2f766840>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2f766570>, 'audit': <services.api.audit.AuditWriter object at 0x732e90924da0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e80551dc0>
+
+    async def test_a_rule_alert_is_in_the_whole_case_teams_queue(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        """Ruling 3: a teammate who deployed nothing sees the alert; before phase B only the
+        deployer's own inbox held it."""
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "Q")
+            queued = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
+>           assert len(queued) == 1
+E           assert 0 == 1
+E            +  where 0 = len([])
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:610: AssertionError
+___ test_an_alert_the_reader_cannot_wholly_see_is_neither_queued_nor_opened ____
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732ef287ad20>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2de4a3c0>, 'audit': <services.api.audit.AuditWriter object at 0x732e880d2f60>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e2f877950>
+
+    async def test_an_alert_the_reader_cannot_wholly_see_is_neither_queued_nor_opened(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "S", deployer=SECRET_LOADER,
+                          recipe=_marked(RECIPE, "SECRET"))  # fmt: skip
+>           (secret,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, SECRET_LOADER)
+            ^^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:627: ValueError
+______ test_an_alert_explains_itself_with_its_transactions_links_and_node ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2df00050>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2f8c24e0>, 'audit': <services.api.audit.AuditWriter object at 0x732e8bd723f0>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e2df03f80>
+
+    async def test_an_alert_explains_itself_with_its_transactions_links_and_node(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "X")
+>           (queued,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
+            ^^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:642: ValueError
+_____ test_triage_claims_once_and_a_true_positive_confirms_the_alert_node ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2dfcee70>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e80060f80>, 'audit': <services.api.audit.AuditWriter object at 0x732e5c7a7770>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e80062480>
+
+    async def test_triage_claims_once_and_a_true_positive_confirms_the_alert_node(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "T")
+>           (queued,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
+            ^^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:659: ValueError
+_____ test_a_false_positive_closes_the_alert_and_leaves_its_node_inferred ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x732e2debaba0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x732e2f965a90>, 'audit': <services.api.audit.AuditWriter object at 0x732e90083950>, ...}
+analytics = <adapters.analytics_duckdb.adapter.AnalyticsDuckDBAdapter object at 0x732e2f9669c0>
+
+    async def test_a_false_positive_closes_the_alert_and_leaves_its_node_inferred(
+        stores: dict[str, Any], analytics: AnalyticsPort
+    ) -> None:
+        case = f"case-{new_id()}"
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await _raised(stores, graph, analytics, case, "U")
+>           (queued,) = await alert_queue.queue(stores["alerts"], graph, analytics, case, TEAMMATE)
+            ^^^^^^^^^
+E           ValueError: not enough values to unpack (expected 1, got 0)
+
+../OspreyFlow_Build/tests/ingest/test_typology_rules.py:692: ValueError
+_ test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not _
+
+api_env_with_exchange = None
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x732e93ebbb50>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x732e93eb99d0>)
+token_exchange_registry = <tests.conftest.TokenExchangeRegistry object at 0x732e5c7f0740>
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-430/test_a_hotlist_on_a_number_a_r0')
+git_repo = PosixPath('/tmp/pytest-of-root/pytest-430/test_a_hotlist_on_a_number_a_r0/repo')
+
+    def test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not(
+        api_env_with_exchange: None,
+        keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+        token_exchange_registry: TokenExchangeRegistry,
+        tmp_path: Path,
+        git_repo: Path,
+    ) -> None:
+        """ADR-127 decisions 7 and 8 over the real app, ArcadeDB, Postgres and Valkey: the number is an
+        `Endpoint` an earlier load wrote into the case's dataset, so the run matches it by reference and
+        creates nothing. The hotlists are made in the case's dataset, one typed in national form and one
+        in E.164, and both fire; the matched node names the file it was loaded from."""
+        private_key, _ = keypair
+        typed, canonical = _drama_number()
+        analyst_a = Principal(id="analyst-a", clearance="OFFICIAL", org_unit="unit-1")
+        loader = Principal(
+            id="analyst-b",
+            clearance="OFFICIAL",
+            org_unit="unit-1",
+            roles=["source_author", "source_approver", "loader"],
+        )
+        _exchange_for(token_exchange_registry, analyst_a)
+    
+        async def _seed() -> tuple[str, dict[str, str], list[str]]:
+            preloaded = await _preload_endpoints([canonical])
+            hotlists = await _hotlists_for(analyst_a, [typed, canonical])
+            recipe_id = await _publish_a_recipe_touching(
+                canonical, author=loader, approver=loader, tmp_path=tmp_path, git_repo=git_repo
+            )
+            return recipe_id, preloaded, hotlists
+    
+        recipe_id, preloaded, (national, plain) = asyncio.run(_seed())
+        report = _run_through_the_route(
+            private_key=private_key, git_repo=git_repo, recipe_id=recipe_id, loader=loader
+        )
+        assert report["nodes_created"] == 0 and report["nodes_referenced"] == 1, report
+        assert "referenced_node_ids" not in report, "the ids are for the change stream alone"
+    
+        by_rule = {a.rule_id: a for a in asyncio.run(_alerts_of(analyst_a))}
+        node_id = preloaded[canonical]
+        for hotlist_id in (national, plain):
+            alert = by_rule.get(f"hotlist:{hotlist_id}")
+            assert alert is not None, f"no alert for hotlist {hotlist_id}: {sorted(by_rule)}"
+>           assert alert.referent_node_ids == [node_id]
+E           AssertionError: assert ['01M726RF706M4M12A0D08H5KNX'] == ['01M7364EDA9QVMW6X8NM3NM6J0']
+E             
+E             At index 0 diff: '01M726RF706M4M12A0D08H5KNX' != '01M7364EDA9QVMW6X8NM3NM6J0'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py:948: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [10/Nov/2026 16:54:50] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+WARNING  services.api.hotlists:hotlists.py:124 6 hotlist row(s) hold an identifier no Knowledge Adapter accepted: kept as written, still matched as before, not canonical
+_______ test_an_author_without_the_right_or_the_case_is_refused_in_words _______
+
+rules = <services.api.typology_rules.TypologyRuleStore object at 0x732e5d9b59a0>
+
+    async def test_an_author_without_the_right_or_the_case_is_refused_in_words(rules: TypologyRuleStore) -> None:
+        w = _World(rules)
+        rule = await w.deploy()
+        w.owner = AUTHOR.model_copy(update={"roles": ["reports_viewer"]})
+        await w.executor().tick(_after_first_slot(rule))
+        w.owner, w.case_refused = AUTHOR, True
+        await w.executor().tick(_after_first_slot(rule) + timedelta(days=1))
+        words = sorted(r.words for r in await rules.rule_runs(rule.id))
+>       assert words == [
+            f"Refused: the rule's author, {AUTHOR.id}, is no longer an Author of its case.",
+            f"Refused: the rule's author, {AUTHOR.id}, no longer holds deploy_rules.",
+        ]
+E       assert ['Refused: th...eploy_rules.'] == ['Refused: th...eploy_rules.']
+E         
+E         At index 1 diff: "Refused: the rule's author, sched-author, no longer holds author_rules or deploy_rules." != "Refused: the rule's author, sched-author, no longer holds deploy_rules."
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_rule_schedule.py:213: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_rule_editor_routes.py::test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+158.84s call     tests/ingest/test_pid_monitoring_storyline_live.py::test_chapter_nine_raises_exactly_these_alerts_on_the_real_store
+36.40s call     tests/services/api/test_scheduler_lifespan.py::test_the_conduits_own_tick_judges_a_due_schedule_and_writes_the_ledger
+13.32s setup    tests/scenarios/test_pid_monitoring_storyline.py::test_chapter_nine_raises_exactly_these_alerts_in_this_order
+7.35s call     tests/ingest/test_handling_from_columns_live.py::test_the_reports_files_own_markings_are_stored_and_enforced
+5.87s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+4.90s call     tests/ingest/test_repoint_journal_callers_live.py::test_a_record_whose_writer_is_still_writing_past_the_stale_limit_is_kept[job]
+4.40s call     tests/ingest/test_repoint_journal_callers_live.py::test_a_record_whose_writer_is_still_writing_past_the_stale_limit_is_kept[enrich]
+3.85s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+3.85s call     tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+3.85s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable
+3.48s call     tests/ingest/test_kyc_rules.py::test_an_owner_below_the_threshold_is_not_screened
+3.31s call     tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+3.30s call     tests/ingest/test_kyc_rules.py::test_a_shared_phone_is_flagged_at_the_count
+3.29s call     tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+3.27s call     tests/ingest/test_pattern_rules.py::test_a_drawn_pattern_raises_when_a_load_completes_it
+3.23s call     tests/ingest/test_alert_evidence_withheld_live.py::test_the_loader_writes_a_link_and_its_transactions_above_their_ends
+3.21s call     tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py::test_a_snapshot_tells_its_loader_the_same_whatever_another_case_holds
+3.21s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_writes_back_a_list_another_close_has_repointed_since
+3.20s call     tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record
+3.19s call     tests/ingest/test_kyc_rules.py::test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node
+3.19s call     tests/ingest/test_kyc_rules.py::test_an_expired_document_verifies_no_one
+3.18s call     tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+3.18s call     tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_citing_a_link_the_pipelines_online_point_clones_stays_listed
+3.17s call     tests/ingest/test_kyc_rules.py::test_a_valid_document_raises_nothing
+3.14s call     tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_citing_a_link_supersede_py_clones_stays_listed[job]
+3.14s call     tests/ingest/test_repoint_journal_callers_live.py::test_a_change_lowering_a_cited_link_admits_the_lower_reader_to_an_alert_with_no_node
+3.12s call     tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_citing_a_link_the_closes_confirm_clones_stays_listed
+3.11s call     tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_citing_a_link_a_routes_correction_clones_stays_listed[confirm]
+3.11s call     tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_citing_a_split_a_resolution_run_annotates_stays_listed
+3.10s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_triage_refused_after_the_graph_commit_still_repoints_every_citing_alert
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_the_loader_writes_a_link_and_its_transactions_above_their_ends
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_raised_without_its_node_over_a_hidden_link_or_transactions_is_withheld_whole
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_row_raised_over_a_link_reverted_since_the_judgement_is_listed_for_no_one
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_over_a_link_marked_above_its_ends_is_not_readable_as_a_node
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_in_a_load_a_cited_link_that_cannot_be_read_writes_no_node_and_still_raises_the_row
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_in_a_load_a_link_the_load_writes_is_marked_as_written_not_at_the_recipes_highest
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_over_a_hidden_link_or_transaction_is_withheld_from_the_rule_audit
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_recorded_before_its_links_were_keeps_its_entry_without_its_words
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_the_re_marking_script_raises_an_old_alert_node_to_its_links_marking
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_alert_whose_link_an_analyst_re_marks_above_the_reader_is_withheld_whole
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_the_file_finds_its_own_rule_whatever_else_is_active_in_the_store
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_entry_saying_an_alerts_node_was_withheld_is_withheld_with_the_alert
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_firing_stays_in_the_audit_when_its_alert_follows_a_link_to_its_successor
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_an_evaluations_count_is_withheld_from_a_reader_who_cannot_see_every_finding
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[timeout]
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[cancellation]
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_chain_of_writes_brings_the_alert_to_the_newest_revision
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_that_fails_is_retried_by_the_next_read
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_another_test_left_never_breaks_an_unrelated_read
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_puts_back_the_node_its_own_record_re_marked
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_two_settles_of_one_record_at_once_leave_one_live_alert_node
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_more_records_settled_at_once_than_the_store_holds_connections_all_finish
+FAILED ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_what_the_graph_committed_not_what_it_recorded
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_shared_phone_is_flagged_at_the_count
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_an_expired_document_verifies_no_one
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_the_gate_runs_after_commit_too
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_document_that_lapses_is_caught_by_the_daily_sweep_once
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_link_reverted_between_the_judgement_and_the_raise_leaves_one_alert_without_its_node_and_the_sweep_goes_on
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node
+FAILED ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py::test_a_drawn_pattern_raises_when_a_load_completes_it
+FAILED ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py::test_an_unchanged_match_is_not_raised_again
+FAILED ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py::test_a_match_past_its_bound_is_refused_in_words_not_alerted_in_part
+FAILED ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py::test_a_pattern_no_longer_the_deployers_stops_the_rule
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_a_purge_of_a_re_marked_alert_node_is_published_to_the_cases_canvases
+FAILED ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py::test_an_alert_node_carries_only_its_alerted_on_links_which_no_alert_cites
+FAILED ../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py::test_a_pre_commit_alert_and_its_links_are_in_the_loads_record
+FAILED ../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py::test_the_lists_the_stream_and_enrich_read_are_the_same_with_or_without_a_rules_alert
+FAILED ../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py::test_what_a_finding_writes_alongside_its_alert_is_in_the_record
+FAILED ../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py::test_a_pending_link_that_merges_into_another_loads_link_is_merged
+FAILED ../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py::test_an_alert_raised_after_the_commit_is_added_to_the_record
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py::test_only_a_pattern_the_author_saved_is_deployed_as_a_rule
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_pre_commit_hit_loads_with_its_alert_node_and_queue_row
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_pre_commit_rule_that_should_not_fire_raises_nothing
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_failing_pre_commit_rule_holds_its_rows_out_of_the_graph
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_rule_never_fires_on_events_its_deployer_cannot_read
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_an_alert_node_is_marked_no_lower_than_its_referents
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_post_commit_rule_alerts_once_per_finding
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_rule_audit_entry_naming_a_hidden_node_is_withheld_from_page_and_total
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_an_alert_on_official_flows_into_a_secret_account_is_secret
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_rule_alert_is_in_the_whole_case_teams_queue
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_an_alert_the_reader_cannot_wholly_see_is_neither_queued_nor_opened
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_an_alert_explains_itself_with_its_transactions_links_and_node
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_triage_claims_once_and_a_true_positive_confirms_the_alert_node
+FAILED ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_a_false_positive_closes_the_alert_and_leaves_its_node_inferred
+FAILED ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_hotlist_on_a_number_a_run_only_references_fires_whether_typed_nationally_or_not
+FAILED ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py::test_an_author_without_the_right_or_the_case_is_refused_in_words
+64 failed, 605 passed, 2 warnings in 546.32s (0:09:06)
+Wall time: 548 s, exit 1 (stack b, the lease rules took at 2026-11-10T16:47:49Z; set-up before it 13 s)
+# exit 1 end 2026-11-10T16:57:24Z

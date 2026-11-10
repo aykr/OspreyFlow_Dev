@@ -8,8 +8,9 @@ clock changes (`scheduler.due_slots`, ADR-110 Amendment 2).
 - **one replica per slot**: the latest due slot is claimed with Valkey `SET NX`; the slots before
   it, after downtime, are recorded *missed*, not run;
 - **as its author, resolved afresh**: the author must still be able to sign in, still hold
-  `deploy_rules`, and still be an Author of the rule's case (an Editor, for a rule just for them);
-  otherwise the slot is *refused*, in words;
+  `author_rules` or `deploy_rules` (ADR-146 Amendment 6 decision 13), and still be an Author of
+  the rule's case (an Editor, for a rule just for them); the slot reads the rule's declared dataset
+  alone, as its case still reads it; otherwise the slot is *refused*, in words;
 - **three refusals in a row stop the schedule**, said in words on the rule (`schedule_view`) until
   the rule is changed (a new version starts the count again); an identity provider that cannot be
   reached is a *failure*, which says nothing about the author and never stops it;
@@ -67,7 +68,9 @@ def _schedule_of(rule: TypologyRule) -> RuleSchedule | None:
 
 
 def _just_me(rule: TypologyRule) -> bool:
-    return isinstance(rule.params, SentenceRuleParams) and rule.params.sentence.scope == "just_me"
+    return rule.just_me or (
+        isinstance(rule.params, SentenceRuleParams) and rule.params.sentence.scope == "just_me"
+    )
 
 
 def _refused_in_a_row(rule: TypologyRule, runs: Sequence[RuleRun]) -> list[RuleRun]:
@@ -95,10 +98,17 @@ def schedule_view(
     """The rule's schedule as the rules list says it: in words, with its next run, or why it will
     not run."""
     schedule = _schedule_of(rule)
-    if schedule is None:
+    on_refresh = rule.trigger == "list_refresh"
+    if schedule is None and not on_refresh:
         raise ValueError("this rule runs as data loads, not on a schedule")
-    said = schedule_words(schedule)
+    # ADR-146 decision 3: a rule run as its screening list refreshes says so, with its runs.
+    said = "when its screening list refreshes" if schedule is None else schedule_words(schedule)
     newest_first = sorted(runs, key=lambda r: (r.slot, r.ran_at), reverse=True)
+    if rule.status == "draft":
+        return RuleScheduleView(
+            rule_id=rule.id, schedule=said, state="draft",
+            words="A draft: it runs on this schedule once it is made live.", runs=newest_first,
+        )  # fmt: skip
     if rule.status == "pending":
         return RuleScheduleView(
             rule_id=rule.id, schedule=said, state="waiting_for_approval",
@@ -117,6 +127,11 @@ def schedule_view(
             words=("Stopped after three refused runs in a row; the last: "
                    f"{_core(refusals[0].words)}. Change the rule to start it again."),
             runs=newest_first,
+        )  # fmt: skip
+    if schedule is None:
+        return RuleScheduleView(
+            rule_id=rule.id, schedule=said, state="scheduled",
+            words="Runs each time its screening list keeps a new version.", runs=newest_first,
         )  # fmt: skip
     return RuleScheduleView(
         rule_id=rule.id, schedule=said, state="scheduled",
@@ -148,6 +163,7 @@ def runs_for_reader(
 
 class ScheduledRules(Protocol):
     async def scheduled_rules(self) -> list[TypologyRule]: ...
+    async def list_refresh_rules(self, list_id: str) -> list[TypologyRule]: ...
     async def rule_runs(self, rule_id: str, *, limit: int = 20) -> list[RuleRun]: ...
     async def last_rule_slot(self, rule_id: str) -> datetime | None: ...
     async def record_rule_run(self, run: RuleRun) -> None: ...
@@ -157,6 +173,14 @@ class _Refused(Exception):
     def __init__(self, why: str, *, outcome: RuleRunOutcome = "refused") -> None:
         super().__init__(why)
         self.outcome = outcome
+
+
+def holds_a_writing_right(author: Principal) -> bool:
+    """ADR-146 Amendment 6 decision 13: a rule runs as its author only while they hold a right to
+    have written it — `author_rules` (the rule editor's) or `deploy_rules` (the sentence builder's,
+    before the editor) — on every path it runs by: a load, a slot, a list's refresh."""
+    rights = rights_for(author.roles)
+    return Right.AUTHOR_RULES in rights or Right.DEPLOY_RULES in rights
 
 
 @dataclass
@@ -171,6 +195,64 @@ class RuleScheduleExecutor:
     check_case: Callable[[Principal, str, AccessLevel], Awaitable[Principal]]
     #: Judges the slot as the author and raises what it finds; returns how many alerts it raised.
     judge: Callable[[TypologyRule, Principal, datetime], Awaitable[int]]
+    #: ADR-146 decision 3: judges a rule as its screening list refreshes, as the author.
+    judge_on_refresh: Callable[[TypologyRule, Principal, datetime], Awaitable[int]] | None = None
+    #: Whether a rule reads the list refreshed, kept by that owner (a dataset, or the
+    #: deployment): list ids repeat across datasets, so the id alone never decides
+    #: (`rule_editor.reads_the_list`).
+    reads_list: Callable[[TypologyRule, str, str], Awaitable[bool]] | None = None
+    #: ADR-146 decision 3 and Amendment 6 point 11: what the rule reads, its declared dataset
+    #: (a composite's members) as its case still reads it (`rule_editor.rule_reach_of`); `None`
+    #: from it is a case that no longer reads the dataset. Every slot and refresh is judged within
+    #: it alone, never the author's whole case scope (its layer with it).
+    reach: Callable[[TypologyRule], Awaitable[list[str] | None]] | None = None
+
+    async def on_list_refreshed(self, list_id: str, owner: str, now: datetime) -> int:
+        """ADR-146 decision 3, *When* a screening list refreshes: each running rule that names the
+        list is judged once, as its author resolved afresh, and the run recorded with the rule's
+        runs in words, whatever became of it. One rule's trouble never stops the others. Returns
+        how many rules ran."""
+        if self.judge_on_refresh is None or self.reads_list is None:
+            return 0
+        ran = 0
+        for rule in await self.rules.list_refresh_rules(list_id):
+            if not await self.reads_list(rule, list_id, owner):
+                continue  # another dataset's list of the same id
+            runs = await self.rules.rule_runs(rule.id, limit=REFUSALS_BEFORE_STOP + 1)
+            if len(_refused_in_a_row(rule, runs)) >= REFUSALS_BEFORE_STOP:
+                continue  # stopped, and said so on the rule, as a schedule is
+            claim = f"rule-refresh:claim:{rule.id}:{list_id}:{now.isoformat()}"
+            if not await reply(self.valkey.set(claim, "1", nx=True, ex=_CLAIM_SECONDS)):
+                continue
+            try:
+                author = await self._author(rule)
+            except _Refused as refused:
+                prefix = "Refused" if refused.outcome == "refused" else "Not run"
+                await self._record(
+                    rule, now, rule.owner_id, refused.outcome, f"{prefix}: {refused}."
+                )
+                continue
+            try:
+                raised = await self.judge_on_refresh(rule, author, now)
+            except PartlyRaised as partly:
+                log.exception("rule %s failed part-way as its list refreshed", rule.id)
+                await self._record(
+                    rule, now, author.id, "failed",
+                    f"Failed after {partly.raised:,} alert(s) raised: {partly.cause}.",
+                    alerts=partly.raised,
+                )  # fmt: skip
+                continue
+            except Exception as error:  # noqa: BLE001 - recorded as failed, in words
+                log.exception("rule %s failed as its list refreshed", rule.id)
+                await self._record(rule, now, author.id, "failed", f"Failed: {error}.")
+                continue
+            ran += 1
+            await self._record(
+                rule, now, author.id, "ran",
+                f"Ran as {author.id} as its screening list refreshed: {raised:,} alert(s) raised.",
+                alerts=raised,
+            )  # fmt: skip
+        return ran
 
     async def tick(self, now: datetime) -> None:
         for rule in await self.rules.scheduled_rules():
@@ -241,19 +323,27 @@ class RuleScheduleExecutor:
             ) from error
         except Exception as error:  # noqa: BLE001 - any other refusal of the exchange
             raise _Refused(f"OspreyFlow could not act as the rule's author, {owner}") from error
-        if Right.DEPLOY_RULES not in rights_for(author.roles):
-            raise _Refused(f"the rule's author, {owner}, no longer holds deploy_rules")
+        if not holds_a_writing_right(author):
+            raise _Refused(
+                f"the rule's author, {owner}, no longer holds author_rules or deploy_rules"
+            )
         level, said = (
             (AccessLevel.EDITOR, "an Editor")
             if _just_me(rule)
             else (AccessLevel.AUTHOR, "an Author")
         )
         try:
-            return await self.check_case(author, rule.investigation_id, level)
+            scoped = await self.check_case(author, rule.investigation_id, level)
         except (InsufficientAccessError, InvestigationNotFoundError) as error:
             raise _Refused(
                 f"the rule's author, {owner}, is no longer {said} of its case"
             ) from error
+        if self.reach is None:
+            return scoped
+        reach = await self.reach(rule)
+        if reach is None:
+            raise _Refused("the rule's case no longer reads its dataset")
+        return scoped.model_copy(update={"datasets": reach})
 
     async def _record(
         self,

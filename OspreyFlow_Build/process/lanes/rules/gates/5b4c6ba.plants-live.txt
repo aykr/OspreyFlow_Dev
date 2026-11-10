@@ -1,0 +1,7 @@
+## the review's two live plants at 5b4c6ba, the rules lease, stack b, by stack_lease.sh remote; each restored from git after
+### plant F (item 4): approve's asked_by clause removed (TypologyRuleStore.approve)
+E       KeyError: 'detail'
+1 failed, 1 warning in 2.92s
+### plant G (item 2): POST …/rules's refusal of a case-wide rule removed
+E           KeyError: 'error'
+1 failed, 1 warning in 5.08s

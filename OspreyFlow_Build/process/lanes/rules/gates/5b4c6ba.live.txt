@@ -1,0 +1,142 @@
+## L2.11 after the orchestrator's review, at 5b4c6ba: every live file touching rules, schedules and the loads that run them (50 files), on a fresh stack b, the rules lease, by stack_lease.sh remote, start 2026-11-10T17:14:33Z
+Running on ospreyflow-test (stack b, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261110T171444Z/log: sh -c cd OspreyFlow_Core && .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rfE ../OspreyFlow_Build/tests/ingest/test_alert_evidence_withheld_live.py ../OspreyFlow_Build/tests/ingest/test_handling_from_columns_live.py ../OspreyFlow_Build/tests/ingest/test_handling_from_columns_review.py ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py ../OspreyFlow_Build/tests/ingest/test_pattern_rules.py ../OspreyFlow_Build/tests/ingest/test_pid_monitoring_storyline_live.py ../OspreyFlow_Build/tests/ingest/test_repoint_journal_callers_live.py ../OspreyFlow_Build/tests/ingest/test_rule_standards_routes_live.py ../OspreyFlow_Build/tests/ingest/test_rule_writes_in_the_record.py ../OspreyFlow_Build/tests/ingest/test_typology_rule_routes.py ../OspreyFlow_Build/tests/ingest/test_typology_rules.py ../OspreyFlow_Build/tests/scenarios/test_ledger_monitoring_storyline.py ../OspreyFlow_Build/tests/scenarios/test_phase7_stage6c_watch_routes.py ../OspreyFlow_Build/tests/scenarios/test_pid_monitoring_storyline.py ../OspreyFlow_Build/tests/services/api/test_alerts.py ../OspreyFlow_Build/tests/services/api/test_aml_rules.py ../OspreyFlow_Build/tests/services/api/test_custom_roles_store.py ../OspreyFlow_Build/tests/services/api/test_disable_l38_transfers.py ../OspreyFlow_Build/tests/services/api/test_evaluation.py ../OspreyFlow_Build/tests/services/api/test_list_refresh_schedule.py ../OspreyFlow_Build/tests/services/api/test_load_checks.py ../OspreyFlow_Build/tests/services/api/test_monitoring_queue.py ../OspreyFlow_Build/tests/services/api/test_pack_alert_item.py ../OspreyFlow_Build/tests/services/api/test_packs.py ../OspreyFlow_Build/tests/services/api/test_recipe_run_ledger.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_rule_drafts_store.py ../OspreyFlow_Build/tests/services/api/test_rule_editor_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_list_refresh.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_routes.py ../OspreyFlow_Build/tests/services/api/test_rule_maker_checker_store.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule_reach.py ../OspreyFlow_Build/tests/services/api/test_rule_schedule.py ../OspreyFlow_Build/tests/services/api/test_run_metering_ledger.py ../OspreyFlow_Build/tests/services/api/test_schedule_executor.py ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py ../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py ../OspreyFlow_Build/tests/services/api/test_screening_list_routes.py ../OspreyFlow_Build/tests/services/api/test_screening_list_store.py ../OspreyFlow_Build/tests/services/api/test_screening_refresh.py ../OspreyFlow_Build/tests/services/api/test_sentence_rule_store.py ../OspreyFlow_Build/tests/services/api/test_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_snapshot_withdrawal_tells_nothing_live.py ../OspreyFlow_Build/tests/services/api/test_source_watermark_ledger.py ../OspreyFlow_Build/tests/services/api/test_strength_sentence_rules.py ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/services/api/test_studio_recipes_store.py ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py ../OspreyFlow_Build/tests/test_migrate_rules_to_datasets_store.py ../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py 
+........................................................................ [ 10%]
+........................................F......F.....F.................. [ 21%]
+........................................................................ [ 32%]
+........................................................................ [ 43%]
+........................................................................ [ 53%]
+........................................................................ [ 64%]
+........................................................................ [ 75%]
+........................................................................ [ 86%]
+........................................................................ [ 96%]
+.....................                                                    [100%]
+=================================== FAILURES ===================================
+_ test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate _
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x71eaf27cf8c0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x71eaf27ccd10>, 'audit': <services.api.audit.AuditWriter object at 0x71ea6810ecf0>, ...}
+
+    async def test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate(
+        stores: dict[str, Any],
+    ) -> None:
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            report = await _onboard(graph, _gate(stores, graph, [rule], case), [_application("Halcyon Marine Ltd")])
+            assert report.nodes_created >= 1 and report.rows_held == 0, "the applicant loads, with its alerts"
+            alerts = await _alerts(stores, case)
+            words = sorted(a.words for a in alerts)
+>           assert len(alerts) == 2, words
+E           AssertionError: ['Halcyon Marine Ltd is ultimately owned 32% by Priya Nair: Priya Nair matches “Priya NAIR” on a politically exposed p...a sanctions list (Synthetic consolidated list (OspreyFlow demo)), score 0.98 — a suggestion to confirm, not a finding']
+E           assert 4 == 2
+E            +  where 4 = len([Alert(id='01M737DEFN81E66KKCKBKGGXZV', rule_id='typology:01M737D9TFXB2Z9B47V5TRTX1H', owner_id='kyc-officer', mode=<A..._at=None, severity=None, team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None)])
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:154: AssertionError
+_______ test_the_status_and_risk_are_computed_from_what_the_reader_sees ________
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x71eafc09b950>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x71eb876650d0>, 'audit': <services.api.audit.AuditWriter object at 0x71eaf27cec60>, ...}
+
+    async def test_the_status_and_risk_are_computed_from_what_the_reader_sees(
+        stores: dict[str, Any],
+    ) -> None:
+        """Halcyon onboarded with an expired certificate, a phone three others use, registered in
+        Cyprus in ship management, owned through the trust by two listed people: unverified, and every
+        factor named. Nothing is stored: the same read tomorrow could differ, and that is the point."""
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            await _customers_sharing(graph, 3)
+            await _onboard(graph, _gate(stores, graph, [rule], case), [_application(
+                "Halcyon Marine Ltd", phone=SHARED_PHONE, document_title="Certificate of incorporation",
+                document_kind="certificate_of_incorporation", document_expires="2025-01-31")])  # fmt: skip
+            halcyon = await graph.find_node("Organisation", "name", "Halcyon Marine Ltd", OFFICER)
+            assert halcyon is not None
+            status = await assess(graph, ComputeRustworkxAdapter(), halcyon.id, OFFICER, today=date(2026, 10, 10))
+            assert status.status == "unverified"
+            assert [d.state for d in status.documents] == ["expired"]
+            factors = sorted(f.factor for f in status.factors)
+>           assert factors == ["country_medium", "industry_medium", "owner_listed", "owner_listed",
+                               "shared_attribute", "unverified"]  # fmt: skip
+E           AssertionError: assert ['country_med..._listed', ...] == ['country_med... 'unverified']
+E             
+E             At index 4 diff: 'owner_listed' != 'shared_attribute'
+E             Left contains 2 more items, first extra item: 'shared_attribute'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:284: AssertionError
+_____ test_a_confirmed_screening_match_repoints_the_other_alert_citing_it ______
+
+stores = {'rules': <services.api.typology_rules.TypologyRuleStore object at 0x71eaff0b64e0>, 'held': <services.api.held_rows.He...i.alerts.AlertStore object at 0x71eafec08a10>, 'audit': <services.api.audit.AuditWriter object at 0x71eaff3658e0>, ...}
+
+    async def test_a_confirmed_screening_match_repoints_the_other_alert_citing_it(stores: dict[str, Any]) -> None:
+        """ADR-109 Amendments 9 and 10 through the real screening path (L2.8b item 8, replacing the
+        hand-written SAME_AS): two applicants owned through the same trust by Elena Petrov, onboarded one
+        after the other, each raise a screening alert citing the one match the screening wrote between
+        Petrov and the listed PETROVA (a pair of one audience is one link). A true positive on the first
+        confirms the match into a new revision; the second alert cites that revision and stays in the
+        queue. Red without the repoint: the second alert cited the superseded match and was withheld."""
+        from services.api import alert_queue
+    
+        case = f"case-{new_id()}"
+        rule = await stores["rules"].create(OFFICER, case, _rule(KycScreeningParams()))
+        async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:
+            await build_ledger_graph(graph=graph, ontology=ONTOLOGY, principal=OFFICER)
+            gate = _gate(stores, graph, [rule], case)
+            await _onboard(graph, gate, [_application("Halcyon Marine Ltd")])
+            await _onboard(graph, gate, [_application("Halcyon Two Ltd")])
+            petrov = [a for a in await _alerts(stores, case) if "Petrov" in (a.words or "")]
+>           assert len(petrov) == 2, [a.words for a in petrov]
+E           AssertionError: ['Halcyon Two Ltd is ultimately owned 48% by Elena Petrov: Elena Petrov matches “Elena Petrova” on a sanctions list (S...a sanctions list (Synthetic consolidated list (OspreyFlow demo)), score 0.98 — a suggestion to confirm, not a finding']
+E           assert 4 == 2
+E            +  where 4 = len([Alert(id='01M737EPASW6EXEKFCQD6GFSYM', rule_id='typology:01M737EGGVHXHPTFZW4W04YKG8', owner_id='kyc-officer', mode=<A..._at=None, severity=None, team=None, routed_team=None, suppressed_until=None, suppress_reason=None, suppressed_by=None)])
+
+../OspreyFlow_Build/tests/ingest/test_kyc_rules.py:525: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/api/test_rule_editor_routes.py::test_a_save_naming_a_type_outside_the_datasets_live_model_is_refused
+  /root/osprey-runs/rules/OspreyFlow_Core/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+160.00s call     tests/ingest/test_pid_monitoring_storyline_live.py::test_chapter_nine_raises_exactly_these_alerts_on_the_real_store
+57.17s call     tests/services/api/test_scheduler_lifespan.py::test_the_conduits_own_tick_judges_a_due_schedule_and_writes_the_ledger
+13.65s setup    tests/scenarios/test_pid_monitoring_storyline.py::test_chapter_nine_raises_exactly_these_alerts_in_this_order
+7.52s call     tests/ingest/test_handling_from_columns_live.py::test_the_reports_files_own_markings_are_stored_and_enforced
+7.17s call     tests/ingest/test_kyc_rules.py::test_a_true_positive_on_a_screening_alert_confirms_its_match_and_a_false_positive_does_not
+6.67s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_a_run_referencing_over_two_hundred_nodes_still_alerts_for_the_two_hundred_and_fiftieth
+6.55s call     tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+6.50s call     tests/ingest/test_kyc_rules.py::test_a_close_refused_after_its_graph_commit_leaves_the_alert_on_its_confirmed_node
+6.39s call     tests/ingest/test_alert_evidence_withheld_live.py::test_more_records_settled_at_once_than_the_store_holds_connections_all_finish
+5.47s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_what_the_graph_committed_not_what_it_recorded
+5.42s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_chain_of_writes_brings_the_alert_to_the_newest_revision
+5.42s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_follows_its_node_to_the_newest_revision_the_graph_holds
+5.40s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_record_another_test_left_never_breaks_an_unrelated_read
+5.40s call     tests/ingest/test_alert_evidence_withheld_live.py::test_two_settles_of_one_record_at_once_leave_one_live_alert_node
+5.36s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_node_a_settle_re_marked_leaves_the_working_sets_at_their_next_read
+5.22s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_never_puts_back_the_node_its_own_record_re_marked
+5.08s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_whose_commit_never_landed_is_re_run_not_waited_on
+5.04s call     tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+5.03s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_re_mark_that_fails_is_retried_by_the_next_read
+5.00s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_commit_is_reported_failed_but_landed_keeps_its_record
+4.95s call     tests/ingest/test_kyc_rules.py::test_a_close_the_graph_refuses_before_its_commit_leaves_no_repoint_record
+4.86s call     tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+4.82s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[cancellation]
+4.69s call     tests/scenarios/test_phase7_stage6c_watch_routes.py::test_alert_list_redacts_a_full_alert_whose_evidence_has_since_become_unavailable
+4.59s call     tests/ingest/test_alert_evidence_withheld_live.py::test_the_loader_writes_a_link_and_its_transactions_above_their_ends
+4.42s call     tests/ingest/test_repoint_journal_callers_live.py::test_a_record_whose_writer_is_still_writing_past_the_stale_limit_is_kept[job]
+4.39s call     tests/ingest/test_repoint_journal_callers_live.py::test_a_record_whose_writer_is_still_writing_past_the_stale_limit_is_kept[enrich]
+4.33s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+3.61s call     tests/ingest/test_kyc_rules.py::test_a_shared_phone_is_flagged_at_the_count
+3.41s call     tests/ingest/test_repoint_journal_callers_live.py::test_a_correction_raising_the_node_above_its_link_withholds_the_alert_below_and_re_marks_its_node
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_an_applicant_owned_through_a_trust_by_a_listed_person_is_stopped_at_the_gate
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_the_status_and_risk_are_computed_from_what_the_reader_sees
+FAILED ../OspreyFlow_Build/tests/ingest/test_kyc_rules.py::test_a_confirmed_screening_match_repoints_the_other_alert_citing_it
+3 failed, 666 passed, 2 warnings in 695.23s (0:11:35)
+Wall time: 697 s, exit 1 (stack b, the lease rules took at 2026-11-10T16:47:49Z; set-up before it 11 s)
+# exit 1 end 2026-11-10T17:26:22Z

@@ -10,7 +10,9 @@ import type {
   AlertTeam,
   CompiledSentence,
   OntologySchema,
+  RuleDatasetOffer,
   RulePreview,
+  RuleSentence,
   SavedPattern,
   TypologyRule,
 } from "../../../../packages/schemas/generated";
@@ -23,6 +25,7 @@ import {
   previewRule,
   readOntology,
   readSentence,
+  saveRuleDraft,
   type AlertsApi,
 } from "./api";
 import {
@@ -58,6 +61,26 @@ export interface SentenceBuilderProps extends AlertsApi {
   isAdministrator: boolean;
   patterns: SavedPattern[];
   onDeployed: (rule: TypologyRule) => void;
+  /** ADR-146 decision 3, the rule editor: the declared dataset, its live model's ontology, and the
+   * rule whose draft this is (none for a new rule). Saving writes a draft instead of deploying. */
+  editor?: {
+    dataset: RuleDatasetOffer;
+    ruleId?: string;
+    initial?: { name: string; sentence: RuleSentence };
+    onSaved: (rule: TypologyRule) => void;
+  };
+}
+
+/** ADR-146 decision 3: "Its alerts will appear in Alerts, seen by the 6 members of Prison intel data
+ * team and the home case's Authors" — said before saving. */
+export function whereAlertsGo(draft: SentenceDraft, teams: AlertTeam[]): string {
+  if (draft.team === "team") {
+    const team = teams.find((t) => t.role_id === draft.teamId);
+    if (!team) return "Choose the team its alerts go to.";
+    const n = team.member_count ?? 0;
+    return `Its alerts will appear in Alerts, seen by the ${n.toLocaleString("en-GB")} member${n === 1 ? "" : "s"} of ${team.display_name} who hold this case and the home case's Authors.`;
+  }
+  return "Its alerts will appear in Alerts, seen by this case's team.";
 }
 
 function AreaBlanks(props: { label: string; area: AreaBox; onChange: (area: AreaBox) => void }) {
@@ -198,9 +221,14 @@ function ConditionRow(props: {
 
 export function SentenceBuilder(props: SentenceBuilderProps) {
   const api = { apiBaseUrl: props.apiBaseUrl, bearerToken: props.bearerToken, investigationId: props.investigationId };
-  const [ontology, setOntology] = useState<OntologySchema | null>(null);
-  const [draft, setDraft] = useState<SentenceDraft>(emptyDraft());
-  const [name, setName] = useState("");
+  const editor = props.editor;
+  const [ontology, setOntology] = useState<OntologySchema | null>(editor ? editor.dataset.ontology : null);
+  const [draft, setDraft] = useState<SentenceDraft>(() =>
+    // ADR-146 Amendment 6: the older form keeps rules just for their author; the editor's are the
+    // case's.
+    editor?.initial ? fromSentence(editor.initial.sentence) : { ...emptyDraft(), scope: editor ? ("this_case" as const) : ("just_me" as const) },
+  );
+  const [name, setName] = useState(editor?.initial?.name ?? "");
   const [compiled, setCompiled] = useState<CompiledSentence | null>(null);
   const [preview, setPreview] = useState<RulePreview | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -219,12 +247,17 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
   }, [props.apiBaseUrl, props.bearerToken, props.investigationId]);
 
   useEffect(() => {
+    // The rule editor's conditions come from its dataset's live model alone (ADR-146 decision 3).
+    if (editor) {
+      setOntology(editor.dataset.ontology);
+      return;
+    }
     readOntology(api)
       .then(setOntology)
       .catch((e: Error) => setProblem(e.message));
     // The ontology is the deployment's: read once per builder.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.apiBaseUrl, props.bearerToken]);
+  }, [props.apiBaseUrl, props.bearerToken, editor?.dataset.id]);
 
   const change = (next: Partial<SentenceDraft>) => {
     setDraft((d) => ({ ...d, ...next }));
@@ -244,7 +277,11 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
   const missing = unfinished(draft);
   const graphLink = ["linked", "within_steps", "at_location"].includes(draft.relationship);
   const justMe = draft.scope === "just_me";
-  const allowedToDeploy = draft.scope === "just_me" ? canDeploy : canDeployCase && (draft.scope !== "deployment" || props.isAdministrator);
+  const allowedToDeploy = editor
+    ? canDeployCase
+    : draft.scope === "just_me"
+      ? canDeploy
+      : canDeployCase && (draft.scope !== "deployment" || props.isAdministrator);
 
   const run = (what: () => Promise<void>) => {
     if (missing) {
@@ -260,10 +297,15 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
 
   return (
     <form
-      aria-label="Write a rule as a sentence"
+      aria-label={editor ? `Write a rule on ${editor.dataset.name}` : "Write a rule as a sentence"}
       onSubmit={(e) => {
         e.preventDefault();
         run(async () => {
+          if (editor) {
+            const saved = await saveRuleDraft(api, { name: name.trim(), sentence: toSentence(draft), dataset_id: editor.dataset.id }, editor.ruleId);
+            editor.onSaved(saved);
+            return;
+          }
           const rule = await deploySentence(api, name.trim(), toSentence(draft));
           setName("");
           props.onDeployed(rule);
@@ -275,7 +317,9 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
         Write a rule as a sentence
       </h3>
       <p className="label" style={{ margin: 0 }}>
-        Fill each blank from the lists. Preview it on the last 90 days before you deploy it.
+        {editor
+          ? "Fill each blank from the lists, offered from this dataset's own model."
+          : "A rule just for you: fill each blank from the lists. Preview it on the last 90 days before you deploy it. A rule for the case is written above, on its dataset."}
       </p>
 
       <fieldset style={GROUP}>
@@ -401,6 +445,23 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
                 </Select>
               </label>
             </>
+          )}
+          {editor && draft.relationship === "on_screening_list" && (
+            <label className="label" style={BLANK}>
+              {/* ADR-146 decision 3: the lists this rule's dataset may read, its own and those it
+                  subscribes to; never another dataset's. */}
+              Screening list
+              <Select aria-label="Screening list" value={draft.listId ?? ""} onChange={(e) => change({ listId: e.target.value || undefined })}>
+                <option value="">Choose a list…</option>
+                {(editor.dataset.lists ?? [])
+                  .filter((l) => l.kind === "screening")
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.deployment_wide ? `${l.name} (subscribed)` : l.name}
+                    </option>
+                  ))}
+              </Select>
+            </label>
           )}
           {draft.relationship === "on_screening_list" && (
             <label className="label" style={BLANK}>
@@ -589,9 +650,10 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
                 change({ scope, ...(offered ? {} : { runs: "post_commit", onHit: "load" }) });
               }}
             >
-              <option value="just_me">just me</option>
-              <option value="this_case">this case</option>
-              {props.isAdministrator && <option value="deployment">the whole deployment</option>}
+              {/* ADR-146 decision 3: a rule on a declared dataset goes to a named team or its case;
+                  a rule for the whole deployment is converted per dataset. */}
+              {!editor && <option value="just_me">just me</option>}
+              {editor && <option value="this_case">this case</option>}
             </Select>
           </label>
           {!justMe && (
@@ -626,6 +688,8 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
               {/* ADR-133 stage (d): daily or weekly; never for the whole deployment, which is
                   judged within each case as its data loads. */}
               {draft.scope !== "deployment" && <option value="schedule">on a schedule</option>}
+              {/* ADR-146 decision 3, *When*: a rule that reads a screening list may run as it refreshes. */}
+              {editor && draft.relationship === "on_screening_list" && <option value="list_refresh">when a screening list refreshes</option>}
             </Select>
           </label>
           {draft.runs === "schedule" && draft.scope !== "deployment" && (
@@ -778,7 +842,24 @@ export function SentenceBuilder(props: SentenceBuilderProps) {
         </span>
       )}
 
-      {canDeploy ? (
+      {editor && (
+        <p className="value" role="status" aria-label="Where its alerts go" style={{ margin: 0 }}>
+          {whereAlertsGo(draft, teams)}
+        </p>
+      )}
+
+      {editor ? (
+        <span style={ROW}>
+          <label className="label" style={BLANK}>
+            Name
+            <Input aria-label="Name of the rule" value={name} onChange={(e) => setName(e.target.value)} style={{ width: 280 }} />
+          </label>
+          <Button type="submit" disabled={!name.trim() || busy || !allowedToDeploy}>
+            Save the draft
+          </Button>
+          {!allowedToDeploy && <span className="label">A case Author writes the case's rules.</span>}
+        </span>
+      ) : canDeploy ? (
         <span style={ROW}>
           <label className="label" style={BLANK}>
             Name

@@ -212,7 +212,7 @@ async def test_an_author_without_the_right_or_the_case_is_refused_in_words(rules
     words = sorted(r.words for r in await rules.rule_runs(rule.id))
     assert words == [
         f"Refused: the rule's author, {AUTHOR.id}, is no longer an Author of its case.",
-        f"Refused: the rule's author, {AUTHOR.id}, no longer holds deploy_rules.",
+        f"Refused: the rule's author, {AUTHOR.id}, no longer holds author_rules or deploy_rules.",
     ]
 
 
