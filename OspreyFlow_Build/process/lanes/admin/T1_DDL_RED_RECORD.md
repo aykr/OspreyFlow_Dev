@@ -2,7 +2,7 @@
 
 Each check was planted out at its real call site, its test run red, and the file put back and green. These plants were
 run by hand, one at a time. Offline: closed ports, no lane. The file is `OspreyFlow_Core/packages/adapters/graph_arcadedb/schema.py`
-throughout. The tests are `OspreyFlow_Build/tests/adapters/graph_arcadedb/test_schema_batch.py` and `test_schema_backfill.py` (14 cases).
+throughout. The tests are `OspreyFlow_Build/tests/adapters/graph_arcadedb/test_schema_batch.py` and `test_schema_backfill.py` (20 cases at the last row's head; each row's count is as it was run).
 
 | Plant | Red |
 | --- | --- |
@@ -12,6 +12,12 @@ throughout. The tests are `OspreyFlow_Build/tests/adapters/graph_arcadedb/test_s
 | A permanent refusal retried (the denylist check removed) | 4 failed: the three parse errors and the run-time refusal (each sent 6 times) |
 | No re-send on a failure to connect | 1 failed: `…failure_to_connect_re_sends_the_whole_script` |
 | `CommandSQLParsingException` off the denylist (added after the live proof named it) | 1 failed: `…does_not_parse_is_never_retried_even_as_a_5xx` |
+| **After my reviewer's second pass**, 20 cases: | |
+| `**extra` dropped in `client.py`, so the script's timeout never reaches the request | 1 failed: `…real_client_sends_the_script_with_a_600_s_read_and_a_30_s_connect` (a real `ArcadeDBClient` over `httpx.MockTransport`) |
+| A bare 600 s for every timeout (connect included) | 1 failed: the same |
+| `ConnectTimeout` not re-sent | 1 failed: `…connect_timeout_is_re_sent_as_a_failure_to_connect` |
+| No 5xx ever retried | 2 failed: `…transient_5xx_re_sends_the_whole_script`, `…six_transient_5xx_in_a_row_raise_typed` |
+| `cause` required, so the error cannot be unpickled | 1 failed: `…error_survives_pickling` |
 
 **The design changed under review.** My first version undid a refused script by dropping what it had added. My
 lane-reviewer found that the cluster profile starts several Conduits and workers at once. One of them, refused,
@@ -35,6 +41,7 @@ same 585 statements in the same order with the same 8 copy-ups; that was checked
   - a fresh database: 15.8 s one at a time, 0.2 s batched;
   - the schema applied again (the Conduit's start-up): 0.8 s one at a time, 0.1 s batched;
   - `arcadedb_adapter`'s open (create and apply): 0.3 s.
-- The real classes. A parse error is refused as `com.arcadedb.exception.CommandSQLParsingException`, which is not on
-  the denylist. A run-time refusal is refused as `com.arcadedb.exception.SchemaException`. Each script was sent
-  once (`client.scripts == 1`).
+- The real classes. A parse error is refused as `com.arcadedb.exception.CommandSQLParsingException`, which was not
+  then on the denylist. A run-time refusal is refused as `com.arcadedb.exception.SchemaException`. Each script was
+  sent once (`client.scripts == 1`). 8697fc0 added the parse class to the denylist after this run; the next live run
+  asserts both classes and prints their status codes.

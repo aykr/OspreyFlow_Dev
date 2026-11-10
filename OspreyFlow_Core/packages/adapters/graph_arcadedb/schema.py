@@ -129,7 +129,10 @@ class SchemaApplyError(ArcadeDBError):
     `IF NOT EXISTS`, completes the schema. Nothing is dropped to undo it (admin's T1 review: a drop
     could take a type another process had just created and written to)."""
 
-    def __init__(self, message: str, *, cause: ArcadeDBError | httpx.TransportError) -> None:
+    def __init__(
+        self, message: str, *, cause: ArcadeDBError | httpx.TransportError | None = None
+    ) -> None:
+        # `cause` defaults so the error can be unpickled (`cls(*args)`), as a job's error may be.
         super().__init__(
             message,
             status_code=getattr(cause, "status_code", None),
@@ -176,16 +179,18 @@ def schema_statements(schema: OntologySchema) -> _Plan:
 async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> SchemaReport:
     """Apply an ontology's schema as one `sqlscript` request, not one request per statement.
 
-    A fresh database's schema took about 30 s one statement at a time on the owner's test server
-    (T1's measured run, stack b, 10 November 2026), paid by every live test that opens one. The
-    statements and their order are unchanged (`test_schema_batch.py`'s golden list).
+    A fresh database's schema took 15.8 s one statement at a time and takes 0.2 s as one script
+    (the live proof at 366afad, stack c, the lease the orchestrator took at 2026-11-10T11:13:03Z),
+    paid by every live test that opens one. The statements and their order are unchanged
+    (`test_schema_batch.py`'s golden list).
 
     A refusal raises `SchemaApplyError` and is never undone: ArcadeDB parses the whole script
     first, so a parse error applies nothing; one found while the script runs leaves the
     statements before it applied, as the statement-by-statement apply did, and the next apply
-    completes the schema. Re-sent only when the request never reached the server (a failure to
-    connect) or the server called it transient; a timed-out script may still be running there, so
-    it is not sent again beside itself: its outcome is unknown and the error says so. The copy-up
+    completes the schema. The whole script is re-sent after a failure to connect (it never reached
+    the server) and after a 5xx whose class is not a known-permanent one (`_with_ddl_retry`, as one
+    statement was); never after a read that timed out, since the script may still be running there:
+    its outcome is unknown and the error says so. The copy-up
     of indexed text fields runs after the script, statement by statement: a refusal there is
     logged and never stops the schema (`_backfill_flattened_field`)."""
     plan = schema_statements(schema)
@@ -217,19 +222,21 @@ async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> Schema
     )
 
 
-#: The whole script's own timeout: 585 statements, and an index built over a populated type, take
-#: longer than one statement's 30 s.
-_SCRIPT_TIMEOUT_SECONDS = 600.0
+#: The whole script's own read timeout: 585 statements, and an index built over a populated type,
+#: may take longer than one statement's 30 s. Connecting, writing and waiting for a pooled
+#: connection keep the client's 30 s, so a host that drops packets still fails in six short tries.
+_SCRIPT_READ_TIMEOUT_SECONDS = 600.0
+_SCRIPT_TIMEOUT = httpx.Timeout(30.0, read=_SCRIPT_READ_TIMEOUT_SECONDS)
 
 
 async def _ddl_script(client: ArcadeDBClient, statements: list[str]) -> None:
-    """The statements as one script. Only a failure to connect is re-sent: a read that timed out
-    may still be running there (`apply_schema`)."""
+    """The statements as one script, re-sent whole after a failure to connect or a transient 5xx,
+    never after a read that timed out, which may still be running there (`apply_schema`)."""
     if not statements:
         return
     script = ";\n".join(statements)
     await _with_ddl_retry(
-        lambda: client.command("sqlscript", script, timeout=_SCRIPT_TIMEOUT_SECONDS),
+        lambda: client.command("sqlscript", script, timeout=_SCRIPT_TIMEOUT),
         transport=(httpx.ConnectError, httpx.ConnectTimeout),
     )
 

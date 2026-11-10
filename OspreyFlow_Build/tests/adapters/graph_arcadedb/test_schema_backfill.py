@@ -45,8 +45,6 @@ class RecordingClient:
         return []
 
     async def sql(self, command: str, **_: object) -> list[dict[str, object]]:
-        if command.startswith("SELECT ") and "FROM schema:" in command:
-            return []  # the schema read before the batch, for its restore
         self.statements.append(command)
         if self._refuse_updates and command.startswith("UPDATE"):
             raise ArcadeDBError(

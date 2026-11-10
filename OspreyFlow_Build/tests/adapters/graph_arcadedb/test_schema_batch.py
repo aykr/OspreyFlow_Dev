@@ -11,6 +11,8 @@ live proof, a schema dump compared on a real ArcadeDB, is
 
 from __future__ import annotations
 
+import json
+import pickle
 import re
 from typing import Any
 
@@ -18,7 +20,7 @@ import httpx
 import pytest
 
 from adapters.graph_arcadedb import schema as schema_module
-from adapters.graph_arcadedb.client import ArcadeDBError
+from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig, ArcadeDBError
 from adapters.graph_arcadedb.schema import SchemaApplyError, apply_schema, schema_statements
 from schemas.domain import (
     EdgeTypeDef,
@@ -29,7 +31,10 @@ from schemas.domain import (
     PropertyType,
 )
 
-_PARSE = "com.arcadedb.query.sql.parser.ParseException"
+# What real ArcadeDB refuses an unparsable `sqlscript` as (the live proof at 366afad). Its status
+# was not recorded there; it was sent once while the class was not on the denylist, so below 500.
+_PARSE = "com.arcadedb.exception.CommandSQLParsingException"
+_PARSE_STATUS = 400
 _SCHEMA = "com.arcadedb.exception.SchemaException"
 
 _FORMS = (
@@ -108,7 +113,9 @@ class FakeArcade:
         for form in _FORMS:
             if m := form.fullmatch(statement.strip()):
                 return m
-        raise ArcadeDBError(f"cannot parse {statement!r}", status_code=500, exception_class=_PARSE)
+        raise ArcadeDBError(
+            f"cannot parse {statement!r}", status_code=_PARSE_STATUS, exception_class=_PARSE
+        )
 
     def _run(self, m: re.Match[str]) -> None:
         if m.re is _FORMS[0]:
@@ -151,6 +158,21 @@ class FakeArcade:
 
     def scripts(self) -> int:
         return sum(1 for r in self.requests if r[0] == "sqlscript")
+
+
+@pytest.fixture(autouse=True)
+def _no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The retry's waits (0.5 s doubling) are not what these cases test."""
+    monkeypatch.setattr(schema_module, "_DDL_BACKOFF_BASE_SECONDS", 0.0)
+
+
+def _transient() -> ArcadeDBError:
+    # `IndexException` under heap pressure: a 5xx whose class is not on the denylist (schema.py).
+    return ArcadeDBError(
+        "ArcadeDB error 500",
+        status_code=500,
+        exception_class="com.arcadedb.exception.IndexException",
+    )
 
 
 def _ontology() -> OntologySchema:
@@ -196,7 +218,7 @@ async def test_the_statements_are_main_s_in_main_s_order_sent_as_one_script() ->
     assert schema_statements(_ontology()).ddl == GOLDEN
     scripts = [r for r in fake.requests if r[0] == "sqlscript"]
     assert len(scripts) == 1 and scripts[0][1].split(";\n") == GOLDEN
-    assert scripts[0][2] == schema_module._SCRIPT_TIMEOUT_SECONDS  # its own timeout, not 30 s
+    assert scripts[0][2] is schema_module._SCRIPT_TIMEOUT  # its own timeout, not the client's 30 s
     assert report.applied_entity_types == ["Person"] and report.applied_edge_types == ["KNOWS"]
     # the copy-up still runs after the script, one statement each, so a refused one never stops it
     assert [r[1] for r in fake.requests if r[0] == "sql"] == [
@@ -261,3 +283,55 @@ async def test_a_script_that_timed_out_is_not_sent_again_beside_itself() -> None
     with pytest.raises(SchemaApplyError) as raised:
         await apply_schema(fake, _ontology())  # type: ignore[arg-type]
     assert fake.scripts() == 1 and "outcome is unknown" in str(raised.value)
+
+
+async def test_a_transient_5xx_re_sends_the_whole_script() -> None:
+    fake = FakeArcade(failures=[_transient()])
+    await apply_schema(fake, _ontology())  # type: ignore[arg-type]
+    assert fake.scripts() == 2 and "mx_KNOWS" in fake.types
+
+
+async def test_six_transient_5xx_in_a_row_raise_typed() -> None:
+    fake = FakeArcade(failures=[_transient() for _ in range(6)])
+    with pytest.raises(SchemaApplyError) as raised:
+        await apply_schema(fake, _ontology())  # type: ignore[arg-type]
+    assert fake.scripts() == 6 and raised.value.status_code == 500
+
+
+async def test_a_connect_timeout_is_re_sent_as_a_failure_to_connect() -> None:
+    fake = FakeArcade(failures=[httpx.ConnectTimeout("no route")])
+    await apply_schema(fake, _ontology())  # type: ignore[arg-type]
+    assert fake.scripts() == 2
+
+
+async def test_six_failures_to_connect_raise_typed_and_say_the_server_was_not_reached() -> None:
+    fake = FakeArcade(failures=[httpx.ConnectError("refused") for _ in range(6)])
+    with pytest.raises(SchemaApplyError) as raised:
+        await apply_schema(fake, _ontology())  # type: ignore[arg-type]
+    assert fake.scripts() == 6 and "could not be reached" in str(raised.value)
+
+
+async def test_the_real_client_sends_the_script_with_a_600_s_read_and_a_30_s_connect() -> None:
+    """At the real call site: `apply_schema`, through `ArcadeDBClient.command`, to the request."""
+    seen: list[httpx.Request] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"result": []})
+
+    client = ArcadeDBClient(ArcadeDBConfig(database="t1"), transport=httpx.MockTransport(answer))
+    try:
+        await apply_schema(client, _ontology())
+    finally:
+        await client.aclose()
+    (script,) = [r for r in seen if json.loads(r.content).get("language") == "sqlscript"]
+    timeout = script.extensions["timeout"]
+    assert timeout["read"] == 600.0 and timeout["connect"] == 30.0, timeout
+    other = next(r for r in seen if json.loads(r.content).get("language") == "sql")
+    assert other.extensions["timeout"]["read"] == 30.0  # every other request keeps the client's
+
+
+def test_the_error_survives_pickling() -> None:
+    """A job's error may be pickled (`cls(*args)` on the way back)."""
+    again = pickle.loads(pickle.dumps(SchemaApplyError("refused")))
+    assert isinstance(again, SchemaApplyError) and str(again) == "refused"

@@ -3,10 +3,14 @@
 - The full ontology's schema, applied as one `sqlscript`, dumps identically to the same statements
   sent one at a time, on a fresh database and when applied again over itself (the Conduit's
   start-up). Only an index's `name` is relaxed, and only its allocation number (below).
-- A parse error planted anywhere applies nothing: ArcadeDB parses the whole script first.
-- A refusal while the script runs (an index on a type that does not exist) is typed, sent once and
-  never retried, leaves what the statement-by-statement apply left, and the next apply completes the
-  schema to the same dump. Nothing is dropped to undo it (a drop could take another replica's type).
+- A parse error planted mid-script applies nothing (ArcadeDB parses the whole script first), and is
+  refused as `CommandSQLParsingException`, sent once.
+- A refusal while the script runs (an index on a type that does not exist, mid-script) is refused
+  as `SchemaException`, sent once and never retried; the statements before it stay applied, and the
+  next apply completes the schema to the same dump. Nothing is dropped to undo it (a drop could take
+  another replica's type).
+- A new indexed property on a type that already holds nodes is indexed by the script, and the
+  copy-up after it fills the field, so the nodes are found by it (ADR-074's case).
 - The first case prints the times: one at a time and batched, fresh and applied again, and the test
   fixture's own open (`testing.arcadedb_adapter`).
 
@@ -27,9 +31,12 @@ import pytest
 from adapters.graph_arcadedb import schema as schema_module
 from adapters.graph_arcadedb import testing
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
+from adapters.graph_arcadedb.naming import physical_type_name
 from adapters.graph_arcadedb.schema import SchemaApplyError, apply_schema, schema_statements
 from ontology.handling import load_uk_le_scheme
 from ontology.loader import load_default_ontology
+from schemas.domain import PropertyDef, PropertyType
 
 # Counts and files that differ between two databases holding the same schema.
 _VOLATILE = {"records", "buckets", "bucketId", "associatedBucketId", "fileId", "size", "pages"}
@@ -119,11 +126,11 @@ async def databases() -> AsyncIterator[Any]:
     made: list[tuple[str, ArcadeDBClient]] = []
 
     async def fresh() -> _Counting:
-        name = f"conformance_{int(time.time())}_{uuid.uuid4().hex[:12]}"
+        name = f"{testing._STALE_DATABASE_PREFIX}{int(time.time())}_{uuid.uuid4().hex[:12]}"
         client = _Counting(ArcadeDBConfig.from_env(name))
-        made.append((name, client))
-        testing._LIVE_CONFORMANCE_DATABASES.add(name)
+        made.append((name, client))  # closed, and dropped if it was made, whatever happens next
         await client.create_database_if_absent()
+        testing._LIVE_CONFORMANCE_DATABASES.add(name)  # as testing.arcadedb_adapter does
         return client
 
     yield fresh
@@ -216,7 +223,8 @@ async def test_a_parse_error_applies_nothing_and_is_sent_once(
     _plant(monkeypatch, "CREATE PROPERTY NOT VALID SQL")
     with pytest.raises(SchemaApplyError) as raised:
         await apply_schema(client, load_default_ontology())
-    print(f"\na parse error is refused as {raised.value.exception_class}")
+    print(f"\na parse error: {raised.value.exception_class}, status {raised.value.status_code}")
+    assert raised.value.exception_class == "com.arcadedb.exception.CommandSQLParsingException"
     assert client.scripts == 1, "a permanent refusal was re-sent"
     _same(await _dump(client), before)
 
@@ -228,7 +236,8 @@ async def test_a_refusal_while_running_is_sent_once_and_a_re_apply_completes(
     _plant(monkeypatch, "CREATE INDEX IF NOT EXISTS ON NoSuchType (id) UNIQUE")
     with pytest.raises(SchemaApplyError) as raised:
         await apply_schema(client, load_default_ontology())
-    print(f"\na refusal while running is refused as {raised.value.exception_class}")
+    print(f"\na refusal while running: {raised.value.exception_class}, {raised.value.status_code}")
+    assert raised.value.exception_class == "com.arcadedb.exception.SchemaException"
     assert client.scripts == 1, "a permanent refusal was re-sent"
     half = await _dump(client)
     assert half["types"], "nothing ran before the refusal: this did not test a run-time refusal"
@@ -236,3 +245,40 @@ async def test_a_refusal_while_running_is_sent_once_and_a_re_apply_completes(
     await apply_schema(client, load_default_ontology())
     await apply_schema(whole, load_default_ontology())
     _same(await _dump(client), await _dump(whole))
+
+
+async def test_a_new_indexed_property_on_a_populated_type_is_indexed_and_filled(
+    databases: Any,
+) -> None:
+    """The case the script's own read timeout is for: an index built over nodes already there, and
+    the copy-up after the script filling the field those nodes held only in their map."""
+    client = await databases()
+    ontology = load_default_ontology()
+    await apply_schema(client, ontology)
+    entity = ontology.entity_types[0]
+    name = groovy_identifier(physical_type_name(entity.name))
+    rows = 500
+    await client.command(
+        "sqlscript",
+        ";\n".join(
+            f'INSERT INTO {name} SET id = \'t1-{i}\', properties = {{"t1_probe": "v{i % 5}"}}'
+            for i in range(rows)
+        ),
+    )
+    probe = PropertyDef(name="t1_probe", type=PropertyType.STRING, indexed=True)
+    changed = ontology.model_copy(
+        update={
+            "entity_types": [
+                entity.model_copy(update={"properties": [*entity.properties, probe]}),
+                *ontology.entity_types[1:],
+            ]
+        }
+    )
+    started = time.perf_counter()
+    await apply_schema(client, changed)
+    took = time.perf_counter() - started
+    indexes = await client.sql("SELECT name, typeName, properties FROM schema:indexes")
+    assert any(i.get("typeName") == name and i.get("properties") == ["t1_probe"] for i in indexes)
+    found = await client.sql(f"SELECT count(*) AS n FROM {name} WHERE t1_probe = 'v1'")
+    assert found[0]["n"] == rows // 5, found
+    print(f"\na new index over {rows} nodes, applied with the whole schema: {took:.1f} s")

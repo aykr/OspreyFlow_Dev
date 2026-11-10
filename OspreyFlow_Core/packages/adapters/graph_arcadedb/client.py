@@ -474,7 +474,7 @@ class ArcadeDBClient:
         *,
         params: Mapping[str, Any] | None = None,
         session_id: str | None = None,
-        timeout: float | None = None,
+        timeout: float | httpx.Timeout | None = None,
     ) -> list[dict[str, Any]]:
         # Every row (`-1`): left out, the server stops at 20,000 and says so only in `truncated`, so
         # a larger read came back cut as if whole (rule 2, measured on 26.10.1). The port's reads

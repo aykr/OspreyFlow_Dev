@@ -118,7 +118,8 @@ during.
 
 The ArcadeDB runner sends the schema's DDL as one `sqlscript` request, the same statements in the
 same order it once sent one at a time (admin's T1, 10 November 2026: a fresh database's schema had
-taken about 30 s on the owner's test server). The copy-ups of indexed text fields run after it,
+taken 15.8 s and takes 0.2 s, on the owner's test server under a lease: stack c, taken by the
+orchestrator at 2026-11-10T11:13:03Z). The copy-ups of indexed text fields run after it,
 one statement each, a refusal there logged as before. Its failures are the statement-by-statement
 apply's, never worse:
 
@@ -127,9 +128,10 @@ apply's, never worse:
   is never retried; the next apply, every statement being `IF NOT EXISTS`, completes the schema.
   Nothing is dropped to undo it, since a drop could take a type another replica had just created
   and written to (the cluster profile starts several Conduits and workers at once);
-- the script has its own timeout (600 s, not a single statement's 30 s); it is re-sent only when
-  it never reached the server, and one that timed out is not sent again beside itself, since it may
-  still be running there: its outcome is unknown and the error says so.
+- the script has its own read timeout (600 s, not a single statement's 30 s; connecting keeps
+  30 s); it is re-sent whole after a failure to connect and after a 5xx whose class is not a
+  known-permanent one, as a single statement was, and never after a read that timed out, since it
+  may still be running there: its outcome is unknown and the error says so.
 
 Proved by `test_schema_batch.py` (a golden statement list; an ArcadeDB stand-in that parses the
 whole script first and keeps what ran before a refusal) and `test_schema_batch_live.py`
