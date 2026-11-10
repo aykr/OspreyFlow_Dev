@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -78,9 +79,19 @@ async def _ddl(client: ArcadeDBClient, command: str) -> None:
     error whose `exception` class isn't a known-permanent one (see
     `_NON_RETRYABLE_ARCADEDB_EXCEPTIONS`) — never a real schema conflict,
     which fails immediately and loudly instead."""
+    await _with_ddl_retry(lambda: client.sql(command), transport=httpx.TransportError)
+
+
+async def _with_ddl_retry(
+    send: Callable[[], Awaitable[object]],
+    *,
+    transport: type[Exception] | tuple[type[Exception], ...],
+) -> None:
+    """`_ddl`'s retry policy, shared by one statement and the whole script: a permanent refusal
+    raises at once; a transient one (a 5xx not denylisted, or one of `transport`) is re-sent."""
     for attempt in range(1, _DDL_MAX_ATTEMPTS + 1):
         try:
-            await client.sql(command)
+            await send()
             return
         except ArcadeDBError as exc:
             non_retryable = (
@@ -90,7 +101,7 @@ async def _ddl(client: ArcadeDBClient, command: str) -> None:
             )
             if non_retryable or attempt == _DDL_MAX_ATTEMPTS:
                 raise
-        except httpx.TransportError:
+        except transport:
             if attempt == _DDL_MAX_ATTEMPTS:
                 raise
         await asyncio.sleep(_DDL_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
@@ -109,20 +120,18 @@ _SQL_TYPE: dict[PropertyType, str] = {
 
 
 class SchemaApplyError(ArcadeDBError):
-    """The schema's statements were refused, and the database's schema is left as it was before the
-    apply: every type, property and index the batch had created before the refusal is dropped again,
-    and the schema read back to prove it. ``restored`` is False only when that proof failed, and the
-    message then names what is left over."""
+    """The schema's script was refused, or its outcome is unknown. A refusal that the script's
+    parse found applied nothing; one found while it ran left the statements before it applied, as
+    the statement-by-statement apply did; either way the next apply, each statement being
+    `IF NOT EXISTS`, completes the schema. Nothing is dropped to undo it (admin's T1 review: a drop
+    could take a type another process had just created and written to)."""
 
-    def __init__(
-        self, message: str, *, cause: ArcadeDBError | httpx.TransportError, restored: bool
-    ) -> None:
+    def __init__(self, message: str, *, cause: ArcadeDBError | httpx.TransportError) -> None:
         super().__init__(
             message,
             status_code=getattr(cause, "status_code", None),
             exception_class=getattr(cause, "exception_class", None),
         )
-        self.restored = restored
 
 
 @dataclass(frozen=True)
@@ -164,37 +173,35 @@ def schema_statements(schema: OntologySchema) -> _Plan:
 async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> SchemaReport:
     """Apply an ontology's schema as one `sqlscript` request, not one request per statement.
 
-    A fresh database's schema took about 30 s one statement at a time, paid by every live test
-    that opens one (T1's measured run, 10 November 2026). ArcadeDB runs a script's statements in
-    order and stops at the first it refuses; schema changes are not transactional, so those before
-    it stay.
-    The batch is therefore wrapped: the schema is read first, and on a refusal everything the batch
-    added is dropped again and the schema read back, so a refused apply leaves the schema as it was
-    and raises `SchemaApplyError`. A transient failure re-sends the whole script (each statement is
-    `IF NOT EXISTS`, so re-running one that already ran is a no-op), under `_ddl`'s retry policy.
+    A fresh database's schema took about 30 s one statement at a time on the owner's test server
+    (T1's measured run, stack b, 10 November 2026), paid by every live test that opens one. The
+    statements and their order are unchanged (`test_schema_batch.py`'s golden list).
 
-    One process's restore could drop a type another process applying the same ontology at the same
-    moment had just created; that process's own apply has then already returned, so its next read
-    fails loudly rather than quietly, which is no worse than the half-applied schema a refusal left
-    before. The copy-up of indexed text fields still runs statement by statement afterwards: a
-    refusal there is logged and never stops the schema (`_backfill_flattened_field`)."""
+    A refusal raises `SchemaApplyError` and is never undone: ArcadeDB parses the whole script
+    first, so a parse error applies nothing; one found while the script runs leaves the
+    statements before it applied, as the statement-by-statement apply did, and the next apply
+    completes the schema. Re-sent only when the request never reached the server (a failure to
+    connect) or the server called it transient; a timed-out script may still be running there, so
+    it is not sent again beside itself: its outcome is unknown and the error says so. The copy-up
+    of indexed text fields runs after the script, statement by statement: a refusal there is
+    logged and never stops the schema (`_backfill_flattened_field`)."""
     plan = schema_statements(schema)
-    before = await schema_shape(client)
     try:
         await _ddl_script(client, plan.ddl)
-    except (ArcadeDBError, httpx.TransportError) as exc:
-        left = await _restore(client, before)
-        if left:
-            raise SchemaApplyError(
-                f"the schema was refused and could not be put back as it was; left over: {left}. "
-                f"The refusal: {exc}",
-                cause=exc,
-                restored=False,
-            ) from exc
+    except (ArcadeDBError, httpx.ConnectError, httpx.ConnectTimeout) as exc:
         raise SchemaApplyError(
-            f"the schema was refused, and is left as it was before this apply: {exc}",
+            "the schema's script was refused, or the server could not be reached; any statement "
+            "before a refused one stays applied, and applying the schema again completes it: "
+            f"{exc!r}",
             cause=exc,
-            restored=True,
+        ) from exc
+    except httpx.TransportError as exc:
+        # Sent, and then no whole answer (a read timed out, the connection dropped): the script may
+        # still be running on the server, so it is not sent again beside itself.
+        raise SchemaApplyError(
+            "the schema's script was sent and no answer came back; it may still be running on the "
+            f"server, so its outcome is unknown: apply the schema again once it is idle ({exc!r})",
+            cause=exc,
         ) from exc
     for type_name, prop in plan.backfills:
         await _backfill_flattened_field(client, type_name, prop)
@@ -207,86 +214,21 @@ async def apply_schema(client: ArcadeDBClient, schema: OntologySchema) -> Schema
     )
 
 
+#: The whole script's own timeout: 585 statements, and an index built over a populated type, take
+#: longer than one statement's 30 s.
+_SCRIPT_TIMEOUT_SECONDS = 600.0
+
+
 async def _ddl_script(client: ArcadeDBClient, statements: list[str]) -> None:
-    """The statements as one script, retried whole on a transient failure, as `_ddl` retries one."""
+    """The statements as one script. Only a failure to connect is re-sent: a read that timed out
+    may still be running there (`apply_schema`)."""
     if not statements:
         return
     script = ";\n".join(statements)
-    for attempt in range(1, _DDL_MAX_ATTEMPTS + 1):
-        try:
-            await client.command("sqlscript", script)
-            return
-        except ArcadeDBError as exc:
-            non_retryable = (
-                exc.status_code is None
-                or exc.status_code < 500
-                or exc.exception_class in _NON_RETRYABLE_ARCADEDB_EXCEPTIONS
-            )
-            if non_retryable or attempt == _DDL_MAX_ATTEMPTS:
-                raise
-        except httpx.TransportError:
-            if attempt == _DDL_MAX_ATTEMPTS:
-                raise
-        await asyncio.sleep(_DDL_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
-
-
-@dataclass(frozen=True)
-class SchemaShape:
-    """What a restore compares: the types, each type's properties, and each index by name."""
-
-    types: frozenset[str]
-    properties: frozenset[tuple[str, str]]
-    indexes: frozenset[tuple[str, str]]
-
-
-async def schema_shape(client: ArcadeDBClient) -> SchemaShape:
-    rows = await client.sql("SELECT name, properties FROM schema:types")
-    indexes = await client.sql("SELECT name, typeName FROM schema:indexes")
-    return SchemaShape(
-        types=frozenset(str(r["name"]) for r in rows),
-        properties=frozenset(
-            (str(r["name"]), str(p["name"])) for r in rows for p in (r.get("properties") or [])
-        ),
-        indexes=frozenset((str(i.get("typeName")), str(i["name"])) for i in indexes),
+    await _with_ddl_retry(
+        lambda: client.command("sqlscript", script, timeout=_SCRIPT_TIMEOUT_SECONDS),
+        transport=(httpx.ConnectError, httpx.ConnectTimeout),
     )
-
-
-async def _restore(client: ArcadeDBClient, before: SchemaShape) -> str:
-    """Drop what the batch added, then read the schema back: nothing (the empty string) when it is
-    as it was, otherwise what is left over, in words. A drop that fails is left for the read to
-    name."""
-    after = await schema_shape(client)
-    for type_name, index in sorted(after.indexes - before.indexes):
-        if type_name in before.types:
-            await _quiet(client, f"DROP INDEX `{index}`")
-    for type_name, prop in sorted(after.properties - before.properties):
-        if type_name in before.types:
-            await _quiet(client, f"DROP PROPERTY {type_name}.{prop} FORCE")
-    for type_name in sorted(after.types - before.types):
-        await _quiet(client, f"DROP TYPE {type_name} UNSAFE")
-    now = await schema_shape(client)
-    if now == before:
-        return ""
-    return "; ".join(
-        part
-        for part in (
-            f"types {sorted(now.types ^ before.types)}" if now.types != before.types else "",
-            f"properties {sorted(now.properties ^ before.properties)}"
-            if now.properties != before.properties
-            else "",
-            f"indexes {sorted(now.indexes ^ before.indexes)}"
-            if now.indexes != before.indexes
-            else "",
-        )
-        if part
-    )
-
-
-async def _quiet(client: ArcadeDBClient, statement: str) -> None:
-    try:
-        await client.sql(statement)
-    except (ArcadeDBError, httpx.TransportError) as exc:
-        _log.warning("restoring the schema after a refused apply: %s failed (%s)", statement, exc)
 
 
 async def drop_schema(client: ArcadeDBClient, schema: OntologySchema) -> None:
@@ -384,8 +326,9 @@ async def _backfill_flattened_field(client: ArcadeDBClient, type_name: str, prop
 
     It fills a missing (or empty) field and never replaces one that has a value. It runs on every
     schema apply, so it also repairs a field that went missing some other way; once nothing is
-    missing it changes nothing. If ArcadeDB refuses it, the schema step carries on (every statement
-    before and after still runs, so the API starts) and the refusal is logged by name: the property
+    missing it changes nothing. It runs after the schema's whole script, one statement per
+    copy-up. If ArcadeDB refuses it, the schema step carries on (every other copy-up still runs,
+    so the API starts) and the refusal is logged by name: the property
     then stays unsearchable for old nodes until they are written again, which is what the log line
     says."""
     prop = groovy_identifier(prop_name)

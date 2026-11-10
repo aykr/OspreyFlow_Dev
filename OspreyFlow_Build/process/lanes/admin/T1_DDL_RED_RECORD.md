@@ -1,0 +1,31 @@
+# admin · T1's batched schema red record (10 November 2026)
+
+Each check was planted out at its real call site, its test run red, and the file put back and green. These plants were
+run by hand, one at a time. Offline: closed ports, no lane. The file is `OspreyFlow_Core/packages/adapters/graph_arcadedb/schema.py`
+throughout. The tests are `OspreyFlow_Build/tests/adapters/graph_arcadedb/test_schema_batch.py` and `test_schema_backfill.py` (13 cases).
+
+| Plant | Red |
+| --- | --- |
+| The same statements sent singly, each its own request (the orchestrator's plant) | 5 failed: the golden one-script case, the parse error in the middle and last, the run-time refusal, the re-send on a failure to connect |
+| A timed-out script re-sent (every `TransportError` retried) | 1 failed: `…timed_out_is_not_sent_again_beside_itself` |
+| No timeout of the script's own | 1 failed: the golden case (`timeout == 600`) |
+| A permanent refusal retried (the denylist check removed) | 4 failed: the three parse errors and the run-time refusal (each sent 6 times) |
+| No re-send on a failure to connect | 1 failed: `…failure_to_connect_re_sends_the_whole_script` |
+
+**The design changed under review.** My first version undid a refused script by dropping what it had added. My
+lane-reviewer found that the cluster profile starts several Conduits and workers at once. One of them, refused,
+would drop with `UNSAFE` a type another had just created and written to. The orchestrator accepted the change:
+there is no restore, and the failure semantics are main's own. The restore's cases and plants went with it.
+
+**The golden list.** `GOLDEN` in `test_schema_batch.py` is the 48 statements main 17c202d's `apply_schema` sent one at
+a time for the test ontology. For the full default ontology, main's own code, recorded against a stand-in, sent the
+same 585 statements in the same order with the same 8 copy-ups; that was checked once, not committed.
+
+**Live** (`OspreyFlow_Build/tests/conformance/graph_port/test_schema_batch_live.py`, run by the orchestrator under its own lease):
+- At 62072cf on stack c, the dump comparison was red, with only the index `name` differing. At ebc74d8 on stack c, all
+  39 differences were a bucket index name's allocation number (`mx_ALERTED_ON_0_1280514856246682` against
+  `…_1280508458223250`), none in any other field. Only that number is now relaxed (`_ALLOCATION`), and the
+  type and bucket part is kept.
+- The comparison's own red, `test_the_dump_comparison_names_a_missing_index`, passed at ebc74d8: one
+  `CREATE INDEX … BY ITEM` left out of the batch is named as missing.
+- The timings and the whole `graph_port` run at the new head are recorded when they arrive.

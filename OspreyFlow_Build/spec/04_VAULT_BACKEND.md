@@ -116,13 +116,26 @@ Schema is generated from the ontology by `packages/ontology`, applied by a migra
 and versioned. An ontology change that requires reindexing must say so before it runs, not
 during.
 
-The ArcadeDB runner sends the schema's statements as one `sqlscript` request, in the same order
-it once sent them one at a time (admin's T1, 10 November 2026: a fresh database's schema had
-taken about 30 s). ArcadeDB's schema changes are not transactional, so a refused statement would
-leave the ones before it applied; the runner reads the schema first and, on a refusal, drops what
-the batch added and reads it back, so a refused apply leaves the schema as it was and raises
-`SchemaApplyError` (`test_schema_batch.py`, and `test_schema_batch_live.py` against a real
-ArcadeDB).
+The ArcadeDB runner sends the schema's DDL as one `sqlscript` request, the same statements in the
+same order it once sent one at a time (admin's T1, 10 November 2026: a fresh database's schema had
+taken about 30 s on the owner's test server). The copy-ups of indexed text fields run after it,
+one statement each, a refusal there logged as before. Its failures are the statement-by-statement
+apply's, never worse:
+
+- a parse error applies nothing, since ArcadeDB parses the whole script before running it;
+- a refusal while it runs leaves the statements before it applied, raises `SchemaApplyError` and
+  is never retried; the next apply, every statement being `IF NOT EXISTS`, completes the schema.
+  Nothing is dropped to undo it, since a drop could take a type another replica had just created
+  and written to (the cluster profile starts several Conduits and workers at once);
+- the script has its own timeout (600 s, not a single statement's 30 s); it is re-sent only when
+  it never reached the server, and one that timed out is not sent again beside itself, since it may
+  still be running there: its outcome is unknown and the error says so.
+
+Proved by `test_schema_batch.py` (a golden statement list; an ArcadeDB stand-in that parses the
+whole script first and keeps what ran before a refusal) and `test_schema_batch_live.py`
+(the full ontology's schema dump, batched against one at a time, fresh and applied again).
+**Not yet run against the Raft cluster** (`ARCADEDB_HA`): no live test applies the batch through a
+leader.
 
 ## 2. Columnar analytics
 
